@@ -1,0 +1,118 @@
+import { useTerminalStore } from '../stores/useTerminalStore'
+import { useToast } from './useToast'
+
+export function useTerminalStreams() {
+  const store     = useTerminalStore()
+  const { toast } = useToast()
+
+  function startLogStream(tab, previous = false) {
+    store.stopStream(tab)
+    tab.streaming = true
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws    = new WebSocket(`${proto}//${location.host}/ws/logs`)
+    tab.ws = ws
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({
+        action: 'start',
+        namespace:  tab.ns,
+        pod:        tab.pod,
+        container:  tab.container || null,
+        previous,
+        tailLines:  500,
+      }))
+      store.pushLine(tab, `▶ Streaming ${tab.pod}${tab.container ? ' / ' + tab.container : ''}`, 'sys')
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'log') {
+        _appendLog(tab, msg.data)
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+      } else if (msg.type === 'done') {
+        tab.streaming = false
+        store.pushLine(tab, '■ Stream ended', 'sys')
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket connection error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  function startExecStream(tab) {
+    store.stopStream(tab)
+    tab.streaming = true
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws    = new WebSocket(`${proto}//${location.host}/ws/exec`)
+    tab.ws = ws
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({
+        action:    'start',
+        namespace: tab.ns,
+        pod:       tab.pod,
+        container: tab.container || null,
+      }))
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'connected') {
+        store.pushLine(tab, `▶ Shell ${tab.pod}${tab.container ? ' / ' + tab.container : ''}`, 'sys')
+      } else if (msg.type === 'out') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'err') {
+        _appendRaw(tab, msg.data, 'err')
+      } else if (msg.type === 'done') {
+        tab.streaming = false
+        store.pushLine(tab, '■ Session ended', 'sys')
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  function _appendLog(tab, raw) {
+    raw.split('\n').forEach(line => {
+      if (!line.trim()) return
+      let cls = ''
+      if (/error|exception|fatal|panic/i.test(line)) cls = 'err'
+      else if (/warn/i.test(line)) cls = 'warn'
+      else if (/\b(info|debug)\b/i.test(line)) cls = 'info'
+      store.pushLine(tab, line, cls)
+    })
+  }
+
+  function _appendRaw(tab, raw, cls) {
+    // Strip ANSI escape codes
+    const clean = raw.replace(/\x1b\[[0-9;]*[mGKHFABCDSTJu]/g, '')
+    clean.split('\n').forEach(line => {
+      if (!line) return
+      store.pushLine(tab, line, cls)
+    })
+  }
+
+  return { startLogStream, startExecStream }
+}
