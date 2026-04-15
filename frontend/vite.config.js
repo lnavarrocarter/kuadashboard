@@ -8,5 +8,10 @@ export default defineConfig({
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
       '/ws':  { target: 'ws://localhost:3000',   ws: true, changeOrigin: true },
     }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/tests/setup.js',
   }
 })
