@@ -12,6 +12,11 @@
 
     <div class="table-wrap">
       <div v-if="store.loading" class="loading-state">Loading...</div>
+      <div v-else-if="store.error" class="error-state">
+        <i data-lucide="alert-triangle"></i>
+        <span>{{ store.error }}</span>
+        <button class="btn sm" @click="store.loadResources()">Retry</button>
+      </div>
       <div v-else-if="!filtered.length" class="empty-state">No resources found</div>
       <table v-else class="rtable">
         <thead>
@@ -36,8 +41,6 @@
         </tbody>
       </table>
     </div>
-
-    <div v-if="store.error" class="status-error">{{ store.error }}</div>
   </div>
 </template>
 

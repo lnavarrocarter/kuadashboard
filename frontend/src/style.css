@@ -318,6 +318,21 @@ input, select, textarea { font: inherit; color: var(--text); }
   animation: spin .7s linear infinite; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.error-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  margin: 16px;
+  background: rgba(239,68,68,.08);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 13px;
+}
+.error-state svg { width: 18px; height: 18px; flex-shrink: 0; }
+.error-state span { flex: 1; }
+
 /* ── Overlay / Modals ────────────────────────────────────────────────────────── */
 .overlay {
   display: none;

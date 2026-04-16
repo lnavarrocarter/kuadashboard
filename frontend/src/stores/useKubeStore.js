@@ -22,6 +22,11 @@ export const useKubeStore = defineStore('kube', () => {
       const data = await api('GET', '/api/contexts')
       contexts.value = data.contexts
       currentContext.value = data.current
+      // Initialize namespace from active context (respects kubeconfig namespace field)
+      const activeCtx = data.contexts.find(c => c.name === data.current)
+      if (activeCtx?.namespace && activeCtx.namespace !== namespace.value) {
+        namespace.value = activeCtx.namespace
+      }
     } catch (e) {
       error.value = e.message
     }
@@ -31,6 +36,12 @@ export const useKubeStore = defineStore('kube', () => {
     await api('POST', '/api/contexts/switch', { context: name })
     currentContext.value = name
     await loadNamespaces()
+    // Apply context's preferred namespace only if it exists on the cluster
+    const ctx = contexts.value.find(c => c.name === name)
+    const ctxNs = ctx?.namespace
+    if (ctxNs && namespaces.value.includes(ctxNs)) {
+      namespace.value = ctxNs
+    }
     await loadResources()
   }
 

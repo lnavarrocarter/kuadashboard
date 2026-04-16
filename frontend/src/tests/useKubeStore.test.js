@@ -28,12 +28,30 @@ describe('useKubeStore', () => {
   describe('loadContexts()', () => {
     it('sets contexts and currentContext from API', async () => {
       vi.spyOn(ApiModule, 'api').mockResolvedValue({
-        contexts: ['ctx-a', 'ctx-b'],
+        contexts: [{ name: 'ctx-a', namespace: 'default' }, { name: 'ctx-b', namespace: 'staging' }],
         current:  'ctx-a',
       })
       await store.loadContexts()
-      expect(store.contexts).toEqual(['ctx-a', 'ctx-b'])
+      expect(store.contexts).toHaveLength(2)
       expect(store.currentContext).toBe('ctx-a')
+    })
+
+    it('sets namespace from active context kubeconfig namespace', async () => {
+      vi.spyOn(ApiModule, 'api').mockResolvedValue({
+        contexts: [{ name: 'prod', namespace: 'production' }],
+        current: 'prod',
+      })
+      await store.loadContexts()
+      expect(store.namespace).toBe('production')
+    })
+
+    it('keeps namespace as "default" if active context has no namespace field', async () => {
+      vi.spyOn(ApiModule, 'api').mockResolvedValue({
+        contexts: [{ name: 'ctx', namespace: 'default' }],
+        current: 'ctx',
+      })
+      await store.loadContexts()
+      expect(store.namespace).toBe('default')
     })
 
     it('sets error when API throws', async () => {
@@ -118,12 +136,26 @@ describe('useKubeStore', () => {
 
   describe('switchContext()', () => {
     it('updates currentContext and calls namespace + resource API endpoints', async () => {
+      store.contexts = [{ name: 'prod', namespace: 'production' }]
       const spy = vi.spyOn(ApiModule, 'api').mockResolvedValue([])
       await store.switchContext('prod')
       expect(store.currentContext).toBe('prod')
-      // switchContext calls loadNamespaces (/api/namespaces) then loadResources
       const paths = spy.mock.calls.map(c => c[1])
       expect(paths).toContain('/api/namespaces')
+    })
+
+    it('sets namespace from context when that namespace is available on cluster', async () => {
+      store.contexts = [{ name: 'staging', namespace: 'staging-ns' }]
+      vi.spyOn(ApiModule, 'api').mockResolvedValue([{ name: 'default' }, { name: 'staging-ns' }])
+      await store.switchContext('staging')
+      expect(store.namespace).toBe('staging-ns')
+    })
+
+    it('keeps "default" namespace when context namespace is not on cluster', async () => {
+      store.contexts = [{ name: 'bare', namespace: 'missing-ns' }]
+      vi.spyOn(ApiModule, 'api').mockResolvedValue([{ name: 'default' }, { name: 'kube-system' }])
+      await store.switchContext('bare')
+      expect(store.namespace).toBe('default')
     })
   })
 
