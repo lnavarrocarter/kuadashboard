@@ -52,17 +52,20 @@
 
     <!-- Exec input bar (only for exec tabs) -->
     <div v-if="isExecTab && !minimised" class="term-input-bar">
-      <span class="term-prompt">$ </span>
+      <span class="term-prompt" :class="{ inactive: !activeTab?.streaming }">❯</span>
       <input
         ref="inputRef"
         v-model="cmdInput"
         class="term-input-field"
         autocomplete="off"
         spellcheck="false"
-        placeholder="Type command and press Enter..."
+        :placeholder="activeTab?.streaming ? 'Type command and press Enter...' : 'Session ended — open a new shell tab'"
+        :disabled="!activeTab?.streaming"
         @keydown.enter="sendInput"
+        @keydown.up="historyUp"
+        @keydown.down="historyDown"
       />
-      <button class="btn sm danger" title="Send Ctrl+C" @click="sendCtrlC">&#x2715;</button>
+      <button class="btn btn-icon" title="Send Ctrl+C (interrupt)" @click="sendCtrlC"><i data-lucide="x-circle"></i></button>
     </div>
 
     <!-- Footer -->
@@ -158,11 +161,34 @@ function popOut() {
 }
 
 // ── Exec input ─────────────────────────────────────────────────────────────
+const cmdHistory = ref([])
+const historyIdx = ref(-1)
+
 function sendInput() {
   const tab = activeTab.value
   if (!tab?.ws || tab.ws.readyState !== 1) return
+  const cmd = cmdInput.value.trim()
+  if (cmd) {
+    cmdHistory.value.unshift(cmd)
+    if (cmdHistory.value.length > 100) cmdHistory.value.pop()
+  }
+  historyIdx.value = -1
   tab.ws.send(JSON.stringify({ action: 'stdin', data: cmdInput.value + '\n' }))
+  // Echo the command locally so user sees what was sent
+  store.pushLine(tab, '❯ ' + cmdInput.value, 'sys')
   cmdInput.value = ''
+}
+
+function historyUp() {
+  if (!cmdHistory.value.length) return
+  historyIdx.value = Math.min(historyIdx.value + 1, cmdHistory.value.length - 1)
+  cmdInput.value = cmdHistory.value[historyIdx.value]
+}
+
+function historyDown() {
+  if (historyIdx.value <= 0) { historyIdx.value = -1; cmdInput.value = ''; return }
+  historyIdx.value--
+  cmdInput.value = cmdHistory.value[historyIdx.value]
 }
 
 function sendCtrlC() {

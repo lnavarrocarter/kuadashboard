@@ -980,55 +980,46 @@ wssExec.on('connection', ws => {
     if (msg.action === 'start') {
       stopExec();
       const { namespace, pod, container } = msg;
-      // Try shells in order of preference
-      const shellCandidates = ['/bin/bash', '/bin/sh', '/bin/ash'];
-      let lastErr = null;
+      try {
+        const exec   = new k8s.Exec(currentKc);
+        const stdout = new stream.PassThrough();
+        const stderr = new stream.PassThrough();
+        stdin = new stream.PassThrough();
 
-      for (const shell of shellCandidates) {
-        try {
-          const exec   = new k8s.Exec(currentKc);
-          const stdout = new stream.PassThrough();
-          const stderr = new stream.PassThrough();
-          stdin = new stream.PassThrough();
-
-          stdout.on('data', chunk => {
-            if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'out', data: chunk.toString('utf-8') }));
-          });
-          stderr.on('data', chunk => {
-            if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'err', data: chunk.toString('utf-8') }));
-          });
-
-          execWs = await exec.exec(
-            namespace, pod, container || null, [shell],
-            stdout, stderr, stdin, true,
-            status => {
-              if (ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({ type: 'done', code: status?.status === 'Success' ? 0 : 1 }));
-            }
-          );
-
-          execWs.on('error', err => {
-            if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'error', data: err.message }));
-          });
-          execWs.on('close', () => {
-            stdin = null; execWs = null;
-          });
-
+        stdout.on('data', chunk => {
           if (ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'connected', pod, container, shell }));
-          lastErr = null;
-          break; // success — stop trying shells
-        } catch (err) {
-          lastErr = err;
-          stdin = null; execWs = null;
-        }
-      }
+            ws.send(JSON.stringify({ type: 'out', data: chunk.toString('utf-8') }));
+        });
+        stderr.on('data', chunk => {
+          if (ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: 'err', data: chunk.toString('utf-8') }));
+        });
 
-      if (lastErr && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'error', data: `No shell available (tried bash/sh/ash): ${lastErr.message}` }));
+        // tty: false — pipe mode, no TTY. Avoids immediate shell exit caused by
+        // missing terminal resize when tty:true is used without a real PTY.
+        execWs = await exec.exec(
+          namespace, pod, container || null, ['/bin/sh'],
+          stdout, stderr, stdin, false,
+          status => {
+            if (ws.readyState === WebSocket.OPEN)
+              ws.send(JSON.stringify({ type: 'done', code: status?.status === 'Success' ? 0 : 1 }));
+          }
+        );
+
+        execWs.on('error', err => {
+          if (ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: 'error', data: err.message }));
+        });
+        execWs.on('close', () => {
+          stdin = null; execWs = null;
+        });
+
+        if (ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: 'connected', pod, container }));
+      } catch (err) {
+        if (ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: 'error', data: err.message }));
+      }
     }
   });
 

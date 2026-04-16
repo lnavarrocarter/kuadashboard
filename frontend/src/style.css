@@ -826,11 +826,13 @@ kbd {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
-.term-prompt { color: var(--green); font-family: monospace; font-size: 12px; user-select: none; }
+.term-prompt { color: var(--green); font-family: monospace; font-size: 13px; user-select: none; transition: color .2s; }
+.term-prompt.inactive { color: var(--text-dim); }
 .term-input-field {
   flex: 1; background: transparent; border: none; outline: none;
   color: var(--text); font-family: monospace; font-size: 12px; padding: 2px 0;
 }
+.term-input-field:disabled { color: var(--text-dim); cursor: not-allowed; }
 .term-input-field::placeholder { color: var(--text-dim); }
 
 /* -- Port-Forward Panel (right drawer) -------------------------------------- */
