@@ -1,5 +1,16 @@
+import { markRaw } from 'vue'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { useToast } from './useToast'
+
+// In dev, Vite proxies HTTP fine but path-specific WS servers break the upgrade
+// handshake ("Invalid frame header"). Connect directly to the backend port instead.
+function wsUrl(path) {
+  if (import.meta.env.DEV) {
+    return `ws://localhost:3000${path}`
+  }
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${location.host}${path}`
+}
 
 export function useTerminalStreams() {
   const store     = useTerminalStore()
@@ -9,8 +20,7 @@ export function useTerminalStreams() {
     store.stopStream(tab)
     tab.streaming = true
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws    = new WebSocket(`${proto}//${location.host}/ws/logs`)
+    const ws = markRaw(new WebSocket(wsUrl('/ws/logs')))
     tab.ws = ws
 
     ws.addEventListener('open', () => {
@@ -54,8 +64,7 @@ export function useTerminalStreams() {
     store.stopStream(tab)
     tab.streaming = true
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws    = new WebSocket(`${proto}//${location.host}/ws/exec`)
+    const ws = markRaw(new WebSocket(wsUrl('/ws/exec')))
     tab.ws = ws
 
     ws.addEventListener('open', () => {
@@ -76,6 +85,9 @@ export function useTerminalStreams() {
         _appendRaw(tab, msg.data, '')
       } else if (msg.type === 'err') {
         _appendRaw(tab, msg.data, 'err')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
       } else if (msg.type === 'done') {
         tab.streaming = false
         store.pushLine(tab, '■ Session ended', 'sys')

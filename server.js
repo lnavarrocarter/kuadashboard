@@ -13,8 +13,21 @@ const yaml       = require('js-yaml');
 
 const app    = express();
 const server = http.createServer(app);
-const wss        = new WebSocket.Server({ server, path: '/ws/logs' });
-const wssExec    = new WebSocket.Server({ server, path: '/ws/exec' });
+// Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
+// where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
+const wss     = new WebSocket.Server({ noServer: true });
+const wssExec = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  const { pathname } = new URL(request.url, 'http://localhost');
+  if (pathname === '/ws/logs') {
+    wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
+  } else if (pathname === '/ws/exec') {
+    wssExec.handleUpgrade(request, socket, head, ws => wssExec.emit('connection', ws, request));
+  } else {
+    socket.destroy();
+  }
+});
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -966,45 +979,56 @@ wssExec.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopExec();
-      const { namespace, pod, container, command = ['/bin/sh'] } = msg;
-      try {
-        const exec   = new k8s.Exec(currentKc);
-        const stdout = new stream.PassThrough();
-        const stderr = new stream.PassThrough();
-        stdin = new stream.PassThrough();
+      const { namespace, pod, container } = msg;
+      // Try shells in order of preference
+      const shellCandidates = ['/bin/bash', '/bin/sh', '/bin/ash'];
+      let lastErr = null;
 
-        stdout.on('data', chunk => {
-          if (ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'out', data: chunk.toString('utf-8') }));
-        });
-        stderr.on('data', chunk => {
-          if (ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'err', data: chunk.toString('utf-8') }));
-        });
+      for (const shell of shellCandidates) {
+        try {
+          const exec   = new k8s.Exec(currentKc);
+          const stdout = new stream.PassThrough();
+          const stderr = new stream.PassThrough();
+          stdin = new stream.PassThrough();
 
-        execWs = await exec.exec(
-          namespace, pod, container || null, command,
-          stdout, stderr, stdin, true,
-          status => {
+          stdout.on('data', chunk => {
             if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'done', code: status?.status === 'Success' ? 0 : 1 }));
-          }
-        );
+              ws.send(JSON.stringify({ type: 'out', data: chunk.toString('utf-8') }));
+          });
+          stderr.on('data', chunk => {
+            if (ws.readyState === WebSocket.OPEN)
+              ws.send(JSON.stringify({ type: 'err', data: chunk.toString('utf-8') }));
+          });
 
-        execWs.on('error', err => {
+          execWs = await exec.exec(
+            namespace, pod, container || null, [shell],
+            stdout, stderr, stdin, true,
+            status => {
+              if (ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'done', code: status?.status === 'Success' ? 0 : 1 }));
+            }
+          );
+
+          execWs.on('error', err => {
+            if (ws.readyState === WebSocket.OPEN)
+              ws.send(JSON.stringify({ type: 'error', data: err.message }));
+          });
+          execWs.on('close', () => {
+            stdin = null; execWs = null;
+          });
+
           if (ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'error', data: err.message }));
-        });
-        execWs.on('close', () => {
+            ws.send(JSON.stringify({ type: 'connected', pod, container, shell }));
+          lastErr = null;
+          break; // success — stop trying shells
+        } catch (err) {
+          lastErr = err;
           stdin = null; execWs = null;
-        });
-
-        if (ws.readyState === WebSocket.OPEN)
-          ws.send(JSON.stringify({ type: 'connected', pod, container }));
-      } catch (err) {
-        if (ws.readyState === WebSocket.OPEN)
-          ws.send(JSON.stringify({ type: 'error', data: err.message }));
+        }
       }
+
+      if (lastErr && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'error', data: `No shell available (tried bash/sh/ash): ${lastErr.message}` }));
     }
   });
 

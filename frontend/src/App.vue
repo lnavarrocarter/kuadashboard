@@ -13,13 +13,12 @@
         </select>
       </div>
       <div class="header-right">
-        <span class="header-status">{{ store.currentContext }}</span>
-        <button class="btn sm" :class="{ primary: pfPanelVisible }" @click="pfPanelVisible = !pfPanelVisible">
-          <i data-lucide="cable"></i> Forwards
+        <button class="btn sm" :class="{ primary: pfPanelVisible }" @click="pfPanelVisible = !pfPanelVisible" title="Port Forwards">
+          <i data-lucide="cable"></i> Ports
           <span v-if="pfStore.list.length" class="badge-count">{{ pfStore.list.length }}</span>
         </button>
-        <button class="btn sm" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i> Import</button>
-        <button class="btn sm" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
+        <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
+        <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" title="Help"><i data-lucide="help-circle"></i></button>
       </div>
     </header>
@@ -175,9 +174,9 @@ function handleAction(fn, args) {
   h[fn]?.(args)
 }
 
-function openLogs(ns, pod, containers) { const tab = termStore.openLogsTab(ns, pod, containers); startLogStream(tab) }
+function openLogs(ns, pod, containers) { const tab = termStore.openLogsTab(ns, pod, containers); startLogStream(tab, false) }
 function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers); startExecStream(tab) }
-function restartStream(tab) { if (tab.type === 'exec') startExecStream(tab); else startLogStream(tab) }
+function restartStream(tab, previous = false) { if (tab.type === 'exec') startExecStream(tab); else startLogStream(tab, previous) }
 
 function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name }); modals.yaml = true }
 function openDelete(type, ns, name)  { modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }

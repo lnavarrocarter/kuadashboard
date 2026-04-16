@@ -25,7 +25,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
-    return tab
+    // Return the reactive proxy (tabs.value wraps pushed objects in Proxy)
+    return tabs.value.find(t => t.id === tab.id)
   }
 
   function openExecTab(ns, pod, containers) {
@@ -39,7 +40,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
-    return tab
+    // Return the reactive proxy (tabs.value wraps pushed objects in Proxy)
+    return tabs.value.find(t => t.id === tab.id)
   }
 
   function activateTab(id) {

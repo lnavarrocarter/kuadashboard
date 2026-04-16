@@ -1,7 +1,9 @@
 <template>
+  <Transition name="term-slide">
   <div
+    v-show="store.visible"
     class="term-panel"
-    :style="{ height: store.height + 'px', display: store.visible ? 'flex' : 'none' }"
+    :style="{ height: store.height + 'px' }"
     ref="panelRef"
   >
     <!-- Resize handle -->
@@ -26,14 +28,16 @@
         <select class="ctrl-select sm" v-model="activeContainer" @change="changeContainer">
           <option v-for="c in activeTabContainers" :key="c" :value="c">{{ c }}</option>
         </select>
-        <label class="chk-label"><input type="checkbox" v-model="showPrevious" /> Previous</label>
-        <button class="btn sm" title="Clear"    @click="clearLogs"><i data-lucide="eraser"></i> Clear</button>
-        <button class="btn sm" title="Wrap"     @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i> Wrap</button>
-        <button class="btn sm" title="End"      @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i> End</button>
-        <button class="btn sm danger"           @click="stopActive"><i data-lucide="square"></i> Stop</button>
-        <button class="btn sm"                  @click="popOut"><i data-lucide="external-link"></i></button>
-        <button class="btn sm" title="Minimise" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
-        <button class="btn sm"                  @click="closeAll"><i data-lucide="x"></i></button>
+        <label class="chk-label"><input type="checkbox" v-model="showPrevious" /> Prev</label>
+        <div class="term-btn-sep"></div>
+        <button class="btn btn-icon" title="Clear logs" @click="clearLogs"><i data-lucide="eraser"></i></button>
+        <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
+        <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
+        <div class="term-btn-sep"></div>
+        <button class="btn btn-icon stop" title="Stop stream" @click="stopActive"><i data-lucide="square"></i></button>
+        <button class="btn btn-icon" title="Pop out" @click="popOut"><i data-lucide="external-link"></i></button>
+        <button class="btn btn-icon" title="Minimise" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
+        <button class="btn btn-icon" title="Close all tabs" @click="closeAll"><i data-lucide="x"></i></button>
       </div>
     </div>
 
@@ -67,6 +71,7 @@
       <span id="termLineCount" style="margin-left:auto">{{ lineCount }} lines</span>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup>
@@ -103,9 +108,21 @@ watch(activeTab, tab => {
 
 watch(bodyHtml, () => nextTick(() => {
   if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
-}))
+}), { flush: 'post' })
 
 watch(isExecTab, v => { if (v) nextTick(() => inputRef.value?.focus()) })
+
+// Reset showPrevious when switching to a different tab
+watch(activeTab, () => { showPrevious.value = false })
+
+// Restart log stream when Previous checkbox is toggled
+watch(showPrevious, val => {
+  const tab = activeTab.value
+  if (!tab || tab.type === 'exec') return
+  store.stopStream(tab)
+  clearLogs()
+  emit('restartStream', tab, val)
+})
 
 // ── Tab actions ────────────────────────────────────────────────────────────
 function closeTab(id) { store.closeTab(id) }
@@ -130,7 +147,7 @@ function changeContainer() {
   activeTab.value.container = activeContainer.value
   store.stopStream(activeTab.value)
   clearLogs()
-  emit('restartStream', activeTab.value)
+  emit('restartStream', activeTab.value, showPrevious.value)
 }
 
 function popOut() {

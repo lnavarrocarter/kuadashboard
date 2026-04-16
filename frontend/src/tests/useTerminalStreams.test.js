@@ -16,11 +16,6 @@ describe('useTerminalStreams', () => {
     global.WebSocket.reset()
     store   = useTerminalStore()
     streams = useTerminalStreams()
-    // Provide location.host and protocol
-    Object.defineProperty(global, 'location', {
-      value: { protocol: 'http:', host: 'localhost:5173' },
-      writable: true,
-    })
   })
 
   afterEach(() => {
@@ -32,7 +27,7 @@ describe('useTerminalStreams', () => {
       const tab = store.openLogsTab('default', 'my-pod', ['nginx'])
       streams.startLogStream(tab)
       const ws = getMockWs()
-      expect(ws.url).toBe('ws://localhost:5173/ws/logs')
+      expect(ws.url).toBe('ws://localhost:3000/ws/logs')
     })
 
     it('sends start action with correct payload on open', () => {
@@ -118,7 +113,7 @@ describe('useTerminalStreams', () => {
       const tab = store.openExecTab('default', 'my-pod', ['sh'])
       streams.startExecStream(tab)
       const ws = getMockWs()
-      expect(ws.url).toBe('ws://localhost:5173/ws/exec')
+      expect(ws.url).toBe('ws://localhost:3000/ws/exec')
     })
 
     it('sends start action with correct payload on open', () => {
