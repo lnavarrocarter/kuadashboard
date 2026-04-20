@@ -34,7 +34,7 @@ kuadashboard/
     │   ├── stores/        # Pinia stores
     │   ├── composables/   # useApi, useToast, useTerminalStreams
     │   └── config/        # Resource definitions
-    └── vite.config.js     # Proxy → localhost:3000
+    └── vite.config.js     # Proxy → localhost:7190
 ```
 
 ## Getting Started
@@ -42,14 +42,14 @@ kuadashboard/
 ### Backend
 ```bash
 npm install
-node server.js        # → http://localhost:3000
+node server.js        # → http://localhost:7190
 ```
 
 ### Frontend (Vue dev server)
 ```bash
 cd frontend
 npm install
-npm run dev           # → http://localhost:5173
+npm run dev           # → http://localhost:7191
 ```
 
 ### Production build
@@ -101,7 +101,7 @@ npm start
 npm run dev
 ```
 
-Abre http://localhost:3000
+Abre http://localhost:7190
 
 Cambia el puerto con la variable de entorno `PORT`:
 ```bash

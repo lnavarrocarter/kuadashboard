@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "dev:full": "concurrently -n backend,frontend -c cyan,yellow \"nodemon server.js\" \"npm run dev --prefix frontend\"",
     "build:frontend": "cross-env ELECTRON_BUILD=1 npm run build --prefix frontend",
-    "electron:dev": "concurrently -n backend,frontend,electron -c cyan,yellow,green \"nodemon server.js\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:dev": "concurrently -n backend,frontend,electron -c cyan,yellow,green \"nodemon server.js\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:7190 && electron .\"",
     "electron:pack": "npm run build:frontend && electron-builder --dir",
     "electron:build": "npm run build:frontend && electron-builder",
     "electron:build:win": "npm run build:frontend && electron-builder --win",

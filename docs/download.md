@@ -35,7 +35,7 @@ npm run build:frontend
 npm start
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Then open [http://localhost:7190](http://localhost:7190).
 
 ## Verify Downloads
 

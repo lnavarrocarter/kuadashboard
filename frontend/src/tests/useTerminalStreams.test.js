@@ -27,7 +27,7 @@ describe('useTerminalStreams', () => {
       const tab = store.openLogsTab('default', 'my-pod', ['nginx'])
       streams.startLogStream(tab)
       const ws = getMockWs()
-      expect(ws.url).toBe('ws://localhost:3000/ws/logs')
+      expect(ws.url).toBe('ws://localhost:7190/ws/logs')
     })
 
     it('sends start action with correct payload on open', () => {
@@ -113,7 +113,7 @@ describe('useTerminalStreams', () => {
       const tab = store.openExecTab('default', 'my-pod', ['sh'])
       streams.startExecStream(tab)
       const ws = getMockWs()
-      expect(ws.url).toBe('ws://localhost:3000/ws/exec')
+      expect(ws.url).toBe('ws://localhost:7190/ws/exec')
     })
 
     it('sends start action with correct payload on open', () => {

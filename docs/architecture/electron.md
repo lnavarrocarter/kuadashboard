@@ -11,12 +11,12 @@ KuaDashboard's Electron integration wraps the full stack (Express + Vue) into a 
 │  ┌──────────────────────────────┐   │
 │  │  child_process.fork()         │   │
 │  │  → server.js (Express)        │   │
-│  │  → Listens on :3000           │   │
+│  │  → Listens on :7190           │   │
 │  └──────────────────────────────┘   │
 │                                      │
 │  ┌──────────────────────────────┐   │
 │  │  BrowserWindow                │   │
-│  │  → Loads http://localhost:3000│   │
+│  │  → Loads http://localhost:7190│   │
 │  │  → preload.js (contextBridge)│   │
 │  └──────────────────────────────┘   │
 │                                      │

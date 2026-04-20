@@ -1,13 +1,13 @@
 /**
  * Capture KuaDashboard screenshots for documentation.
  * Usage: node scripts/capture-screenshots.js
- * Requires the app running on http://localhost:3000
+ * Requires the app running on http://localhost:7190
  */
 const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://localhost:7190';
 const OUT_DIR = path.join(__dirname, '..', 'docs', 'public', 'screenshots');
 const VP = { width: 1440, height: 900 };
 

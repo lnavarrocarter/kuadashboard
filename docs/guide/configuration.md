@@ -38,8 +38,8 @@ During development, the Vite dev server proxies API requests to the backend:
 // frontend/vite.config.js
 server: {
   proxy: {
-    '/api': { target: 'http://localhost:3000', changeOrigin: true },
-    '/ws':  { target: 'ws://localhost:3000', ws: true, changeOrigin: true },
+    '/api': { target: 'http://localhost:7190', changeOrigin: true },
+    '/ws':  { target: 'ws://localhost:7190', ws: true, changeOrigin: true },
   }
 }
 ```

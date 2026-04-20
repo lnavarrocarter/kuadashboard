@@ -1317,7 +1317,7 @@ app.get('*', (req, res) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7190;
 server.listen(PORT, () => {
   console.log(`\n  KuaDashboard running → http://localhost:${PORT}`);
   console.log(`  Context: ${currentContext}\n`);

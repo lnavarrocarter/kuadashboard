@@ -27,7 +27,7 @@ cd frontend && npm install && cd ..
 npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:7190](http://localhost:7190) in your browser.
 
 ## Development Mode
 
@@ -39,8 +39,8 @@ npm run dev:full
 ```
 
 This starts:
-- **Backend** on `http://localhost:3000` (with nodemon auto-reload)
-- **Frontend** Vite dev server on `http://localhost:5173` (with HMR)
+- **Backend** on `http://localhost:7190` (with nodemon auto-reload)
+- **Frontend** Vite dev server on `http://localhost:7191` (with HMR)
 
 ## Desktop App (Electron)
 

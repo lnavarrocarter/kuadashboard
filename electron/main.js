@@ -6,7 +6,7 @@
  * Lifecycle:
  *   1. Start the Express backend (server.js) as a child process via fork().
  *   2. Wait for the backend to signal it is ready (stdout "KuaDashboard running").
- *   3. Create the BrowserWindow and load http://localhost:3000.
+ *   3. Create the BrowserWindow and load http://localhost:7190.
  *   4. On app quit, kill the backend child process cleanly.
  *
  * Architecture decisions:
@@ -28,7 +28,7 @@ const { autoUpdater } = require('electron-updater');
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const BACKEND_PORT = process.env.PORT || 3000;
+const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
 
