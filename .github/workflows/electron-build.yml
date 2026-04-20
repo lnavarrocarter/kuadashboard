@@ -26,6 +26,9 @@ jobs:
           - os: macos-latest
             platform: mac
             artifact-glob: '*.dmg'
+          - os: ubuntu-latest
+            platform: linux
+            artifact-glob: '*.{AppImage,deb}'
 
     runs-on: ${{ matrix.os }}
 
@@ -84,6 +87,12 @@ jobs:
           name: KuaDashboard-mac
           path: artifacts/mac
 
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: KuaDashboard-linux
+          path: artifacts/linux
+
       - name: List artifacts
         run: find artifacts -type f | head -30
 
@@ -106,5 +115,7 @@ jobs:
           files: |
             artifacts/win/*.exe
             artifacts/mac/*.dmg
+            artifacts/linux/*.AppImage
+            artifacts/linux/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

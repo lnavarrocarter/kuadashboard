@@ -1,0 +1,18 @@
+IMPORTANT — macOS Gatekeeper Notice
+=====================================
+
+KuaDashboard is not signed with an Apple Developer certificate.
+macOS will block the first launch. To allow it:
+
+1. Open the DMG and drag KuaDashboard to Applications as usual.
+2. Try to open KuaDashboard — macOS will show a warning.
+3. Go to System Settings > Privacy & Security.
+4. Scroll down — you will see a message about KuaDashboard being blocked.
+5. Click "Open Anyway" and confirm.
+
+Alternatively, run this command in Terminal:
+  xattr -cr /Applications/KuaDashboard.app
+
+The app only needs this step once. After that it will open normally.
+
+By clicking "Agree" you acknowledge this notice and accept the terms of use.

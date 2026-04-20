@@ -17,6 +17,8 @@ jobs:
             cmd: electron:build:win
           - os: macos-latest
             cmd: electron:build:mac
+          - os: ubuntu-latest
+            cmd: electron:build:linux
 
     runs-on: ${{ matrix.os }}
 
@@ -50,6 +52,8 @@ jobs:
             dist-electron/*.dmg.blockmap
             dist-electron/*.zip
             dist-electron/*.zip.blockmap
+            dist-electron/*.AppImage
+            dist-electron/*.deb
             dist-electron/latest*.yml
 
   release:
