@@ -28,9 +28,13 @@ const sponsorUrl = 'https://github.com/sponsors/lnavarrocarter'
 | Area | Impact |
 |------|--------|
 | **New Features** | AWS, GCP, and Azure integrations, RBAC views, Helm chart management |
-| **Platform Support** | Linux builds, auto-update, ARM native builds |
+| **Platform Support** | macOS, Linux builds, auto-update, ARM native builds |
 | **Quality** | Better testing, CI/CD, accessibility improvements |
 | **Community** | Documentation, issue triage, contributor support |
+
+## Active Projects
+
+- **[KuaDashboard](https://github.com/lnavarrocarter/kuadashboard)** — A Lens-like desktop app for managing Kubernetes clusters, with built-in support for AWS, GCP, port forwarding, and terminal access.
 
 ## Other Ways to Help
 
