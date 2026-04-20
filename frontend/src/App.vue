@@ -30,36 +30,50 @@
           <div class="sidebar-section">
             <div class="sidebar-section-title">Workloads</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets']" :key="r"
-               :class="['sidebar-item', { active: store.resource === r }]"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">Network</div>
             <a v-for="r in ['services','ingresses']" :key="r"
-               :class="['sidebar-item', { active: store.resource === r }]"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">Config</div>
             <a v-for="r in ['configmaps','secrets']" :key="r"
-               :class="['sidebar-item', { active: store.resource === r }]"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">Storage</div>
-            <a :class="['sidebar-item', { active: store.resource === 'pvcs' }]"
+            <a :class="['sidebar-item', { active: cloudView === null && store.resource === 'pvcs' }]"
                @click.prevent="setResource('pvcs')">PVC</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">Cluster</div>
             <a v-for="r in ['nodes','events']" :key="r"
-               :class="['sidebar-item', { active: store.resource === r }]"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Cloud</div>
+            <a :class="['sidebar-item', { active: cloudView === 'envs' }]"
+               @click.prevent="setCloudView('envs')">Env Manager</a>
+            <a :class="['sidebar-item', { active: cloudView === 'gcp' }]"
+               @click.prevent="setCloudView('gcp')">Google Cloud</a>
+            <a :class="['sidebar-item', { active: cloudView === 'aws' }]"
+               @click.prevent="setCloudView('aws')">AWS</a>
           </div>
         </nav>
 
         <main class="main">
-          <ResourceTable @action="handleAction" />
+          <template v-if="cloudView === null">
+            <ResourceTable @action="handleAction" />
+          </template>
+          <EnvManagerView v-else-if="cloudView === 'envs'" />
+          <GcpView        v-else-if="cloudView === 'gcp'" />
+          <AwsView        v-else-if="cloudView === 'aws'" />
         </main>
       </div>
 
@@ -103,6 +117,9 @@ import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
 
 import ResourceTable    from './components/ResourceTable.vue'
+import EnvManagerView  from './components/cloud/EnvManagerView.vue'
+import GcpView         from './components/cloud/GcpView.vue'
+import AwsView         from './components/cloud/AwsView.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
 import DeleteModal      from './components/modals/DeleteModal.vue'
@@ -126,6 +143,7 @@ const LABELS = {
 }
 
 const pfPanelVisible  = ref(false)
+const cloudView       = ref(null)   // null = Kubernetes view, 'envs' | 'gcp' | 'aws' = cloud view
 const selectedContext = ref('')
 const clock           = ref('')
 let clockTimer
@@ -140,7 +158,8 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
 })
 
-function setResource(r) { store.resource = r; store.loadResources() }
+function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
+function setCloudView(view)   { cloudView.value = view }
 
 async function switchContext() {
   try { await store.switchContext(selectedContext.value); toast('Context switched to ' + selectedContext.value, 'success') }
