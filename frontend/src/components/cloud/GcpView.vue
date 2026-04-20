@@ -30,19 +30,6 @@
 
     <template v-else>
 
-      <!-- Tab bar -->
-      <div class="aws-tab-bar">
-        <button
-          v-for="tab in TABS" :key="tab.id"
-          :class="['aws-tab-btn', { active: activeTab === tab.id }]"
-          @click="switchTab(tab.id)"
-        >
-          {{ tab.label }}
-          <span v-if="tabCount(tab.id) > 0" class="tab-badge">{{ tabCount(tab.id) }}</span>
-          <span v-else-if="tabHasError(tab.id)" class="tab-badge tab-badge-err">!</span>
-        </button>
-      </div>
-
       <!-- Toolbar -->
       <div class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" placeholder="Filter..." />
@@ -213,11 +200,15 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
+
+const props = defineProps({
+  activeService: { type: String, default: 'cloudrun' },
+})
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
@@ -285,6 +276,10 @@ function switchTab(id) {
   search.value = ''
   loadTab(id)
 }
+
+watch(() => props.activeService, (newTab) => {
+  if (newTab && newTab !== activeTab.value) switchTab(newTab)
+}, { immediate: true })
 
 const currentTab = computed(() => gcpStore.tabs[activeTab.value])
 function tabCount(id)    { return gcpStore.tabs[id]?.data?.length ?? 0 }

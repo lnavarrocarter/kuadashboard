@@ -4,21 +4,36 @@
     <header class="header">
       <div class="header-left">
         <span class="app-logo"><i data-lucide="layers"></i> KuaDashboard</span>
-        <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
-          <option v-for="c in store.contexts" :key="c.name" :value="c.name">{{ c.name }}</option>
-        </select>
-        <select class="ctrl-select" v-model="store.namespace" @change="store.loadResources()">
-          <option value="all">All namespaces</option>
-          <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
-        </select>
+        <div class="provider-tabs">
+          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" @click="setProvider('kubernetes')">
+            <i data-lucide="box"></i> Kubernetes
+          </button>
+          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" @click="setProvider('aws')">
+            <i data-lucide="cloud"></i> AWS
+          </button>
+          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" @click="setProvider('gcp')">
+            <i data-lucide="cloud-cog"></i> GCP
+          </button>
+        </div>
+        <template v-if="activeProvider === 'kubernetes'">
+          <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
+            <option v-for="c in store.contexts" :key="c.name" :value="c.name">{{ c.name }}</option>
+          </select>
+          <select class="ctrl-select" v-model="store.namespace" @change="store.loadResources()">
+            <option value="all">All namespaces</option>
+            <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
+          </select>
+        </template>
       </div>
       <div class="header-right">
-        <button class="btn sm" :class="{ primary: pfPanelVisible }" @click="pfPanelVisible = !pfPanelVisible" title="Port Forwards">
-          <i data-lucide="cable"></i> Ports
-          <span v-if="pfStore.list.length" class="badge-count">{{ pfStore.list.length }}</span>
-        </button>
-        <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
-        <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
+        <template v-if="activeProvider === 'kubernetes'">
+          <button class="btn sm" :class="{ primary: pfPanelVisible }" @click="pfPanelVisible = !pfPanelVisible" title="Port Forwards">
+            <i data-lucide="cable"></i> Ports
+            <span v-if="pfStore.list.length" class="badge-count">{{ pfStore.list.length }}</span>
+          </button>
+          <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
+        </template>
         <button class="btn btn-icon" @click="modals.help = true" title="Help"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" title="Apoyar el proyecto">
           <i data-lucide="heart"></i>
@@ -32,7 +47,8 @@
     <!-- ── Body ──────────────────────────────────────────────────────────── -->
     <div class="page-body">
       <div class="layout">
-        <nav class="sidebar">
+        <!-- Kubernetes sidebar -->
+        <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">Workloads</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets']" :key="r"
@@ -63,28 +79,91 @@
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Cloud</div>
+            <div class="sidebar-section-title">Tools</div>
             <a :class="['sidebar-item', { active: cloudView === 'envs' }]"
                @click.prevent="setCloudView('envs')">Env Manager</a>
-            <a :class="['sidebar-item', { active: cloudView === 'gcp' }]"
-               @click.prevent="setCloudView('gcp')">Google Cloud</a>
-            <a :class="['sidebar-item', { active: cloudView === 'aws' }]"
-               @click.prevent="setCloudView('aws')">AWS</a>
-          </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Tools</div>
             <a class="sidebar-item"
                @click.prevent="openLocalShell()">Local Shell</a>
           </div>
         </nav>
 
+        <!-- AWS sidebar -->
+        <nav class="sidebar" v-if="activeProvider === 'aws'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Compute</div>
+            <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Containers</div>
+            <a v-for="r in AWS_SIDEBAR.containers" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Networking</div>
+            <a v-for="r in AWS_SIDEBAR.networking" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Storage</div>
+            <a v-for="r in AWS_SIDEBAR.storage" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Integration</div>
+            <a v-for="r in AWS_SIDEBAR.integration" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+        </nav>
+
+        <!-- GCP sidebar -->
+        <nav class="sidebar" v-if="activeProvider === 'gcp'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Compute</div>
+            <a v-for="r in GCP_SIDEBAR.compute" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Database</div>
+            <a v-for="r in GCP_SIDEBAR.database" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Storage</div>
+            <a v-for="r in GCP_SIDEBAR.storage" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Serverless</div>
+            <a v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Messaging</div>
+            <a v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+        </nav>
+
         <main class="main">
-          <template v-if="cloudView === null">
-            <ResourceTable @action="handleAction" />
+          <template v-if="activeProvider === 'kubernetes'">
+            <template v-if="cloudView === null">
+              <ResourceTable @action="handleAction" />
+            </template>
+            <EnvManagerView v-else-if="cloudView === 'envs'" />
           </template>
-          <EnvManagerView   v-else-if="cloudView === 'envs'" />
-          <GcpView          v-else-if="cloudView === 'gcp'" />
-          <AwsView          v-else-if="cloudView === 'aws'" />
+          <AwsView  v-else-if="activeProvider === 'aws'"  :active-service="awsTab" />
+          <GcpView  v-else-if="activeProvider === 'gcp'"  :active-service="gcpTab" />
         </main>
       </div>
 
@@ -94,11 +173,17 @@
     <PortForwardPanel :visible="pfPanelVisible" @close="pfPanelVisible = false" @add="openPfManual" />
 
     <div class="statusbar">
-      <span class="sb-item">{{ store.currentContext }}</span>
-      <span class="sb-sep">|</span>
-      <span class="sb-item">{{ store.namespace }}</span>
-      <span class="sb-spacer"></span>
-      <span class="sb-item">{{ store.rows.length }} items</span>
+      <template v-if="activeProvider === 'kubernetes'">
+        <span class="sb-item">{{ store.currentContext }}</span>
+        <span class="sb-sep">|</span>
+        <span class="sb-item">{{ store.namespace }}</span>
+        <span class="sb-spacer"></span>
+        <span class="sb-item">{{ store.rows.length }} items</span>
+      </template>
+      <template v-else>
+        <span class="sb-item">{{ activeProvider === 'aws' ? 'Amazon Web Services' : 'Google Cloud Platform' }}</span>
+        <span class="sb-spacer"></span>
+      </template>
       <span class="sb-sep">|</span>
       <span class="sb-item">{{ clock }}</span>
     </div>
@@ -113,6 +198,7 @@
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
 
     <DonationModal />
+    <WelcomeModal />
     <UpdateNotice />
     <ToastContainer />
   </div>
@@ -142,6 +228,7 @@ import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
 import DonationModal    from './components/modals/DonationModal.vue'
+import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 
@@ -158,9 +245,28 @@ const LABELS = {
   nodes: 'Nodes', events: 'Events',
 }
 
+const AWS_SIDEBAR = {
+  compute:     [{ id: 'ec2', label: 'EC2' }, { id: 'lambda', label: 'Lambda' }],
+  containers:  [{ id: 'ecs', label: 'ECS' }, { id: 'eks', label: 'EKS' }, { id: 'ecr', label: 'ECR' }],
+  networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }],
+  storage:     [{ id: 's3', label: 'S3' }],
+  integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }],
+}
+
+const GCP_SIDEBAR = {
+  compute:    [{ id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
+  database:   [{ id: 'sql', label: 'Cloud SQL' }],
+  storage:    [{ id: 'storage', label: 'Storage' }],
+  serverless: [{ id: 'functions', label: 'Functions' }],
+  messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }],
+}
+
 const pfPanelVisible  = ref(false)
-const cloudView       = ref(null)   // null = Kubernetes view, 'envs' | 'gcp' | 'aws' = cloud view
+const activeProvider  = ref('kubernetes')  // 'kubernetes' | 'aws' | 'gcp'
+const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
+const awsTab          = ref('ec2')
+const gcpTab          = ref('cloudrun')
 const clock           = ref('')
 let clockTimer
 
@@ -174,6 +280,11 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
 })
 
+function setProvider(p) {
+  activeProvider.value = p
+  if (p === 'kubernetes') cloudView.value = null
+  nextTick(() => createIcons({ icons }))
+}
 function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
 function setCloudView(view)   { cloudView.value = view }
 

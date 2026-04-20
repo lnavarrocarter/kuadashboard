@@ -27,17 +27,6 @@
     <template v-else>
       <div v-if="awsStore.error" class="alert-error">{{ awsStore.error }}</div>
 
-      <div class="aws-tab-bar">
-        <button
-          v-for="tab in TABS" :key="tab.id"
-          :class="['aws-tab-btn', { active: activeTab === tab.id }]"
-          @click="switchTab(tab.id)"
-        >
-          {{ tab.label }}
-          <span v-if="tabCount(tab.id) > 0" class="tab-badge">{{ tabCount(tab.id) }}</span>
-        </button>
-      </div>
-
       <div class="aws-toolbar">
         <input
           v-model="search[activeTab]"
@@ -703,7 +692,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import jsYaml from 'js-yaml'
 import { useEnvStore }  from '../../stores/useEnvStore'
 import { useAwsStore }  from '../../stores/useAwsStore'
@@ -716,6 +705,10 @@ import EventBridgeLogs     from '../EventBridgeLogs.vue'
 import Ec2Shell            from './Ec2Shell.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
+
+const props = defineProps({
+  activeService: { type: String, default: 'ec2' },
+})
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
@@ -819,6 +812,10 @@ function switchTab(id) {
   resetSort()
   loadTab(id)
 }
+
+watch(() => props.activeService, (newTab) => {
+  if (newTab && newTab !== activeTab.value) switchTab(newTab)
+}, { immediate: true })
 
 onMounted(async () => {
   envStore.fetchProfiles()
