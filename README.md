@@ -1,6 +1,8 @@
 # KuaDashboard
 
-A Lens-like Kubernetes web dashboard built with **Node.js + Express** (backend) and **Vue 3 + Vite + Pinia** (frontend).
+A Lens-like Kubernetes web dashboard built with **Node.js + Express** (backend) and **Vue 3 + Vite + Pinia** (frontend). Available as a web app or native desktop app (Electron) for **Windows**, **macOS**, and **Linux**.
+
+![KuaDashboard — Kubernetes Nodes](screenshots/dashboard-nodes.png)
 
 ## Features
 
