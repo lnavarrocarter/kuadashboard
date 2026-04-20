@@ -1308,6 +1308,13 @@ wssEc2Shell.on('connection', (ws, req) => {
   ws.on('close', () => { cleanup(); });
 });
 
+// ─── SPA fallback ─────────────────────────────────────────────────────────────
+// For any GET that doesn't match an API route or static file, serve index.html
+// so the Vue SPA can handle client-side routing.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;

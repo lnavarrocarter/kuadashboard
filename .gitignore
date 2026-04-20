@@ -1,9 +1,13 @@
 # Dependencies
 node_modules/
 frontend/node_modules/
+docs/node_modules/
 
 # Build output
 frontend/dist/
+dist-electron/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
 
 # Env files
 .env
@@ -20,6 +24,7 @@ Thumbs.db
 
 # Python helpers (temp)
 *.py
+!scripts/*.js
 __pycache__/
 
 # Logs

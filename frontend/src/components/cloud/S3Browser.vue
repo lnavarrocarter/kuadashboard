@@ -79,29 +79,79 @@
                   <button class="s3b-btn accent" @click="downloadFile(selectedFile)" :disabled="downloading">
                     {{ downloading ? 'Downloading...' : '&#x2913; Download' }}
                   </button>
-                  <button v-if="!previewData?.binary" class="s3b-btn" @click="loadPreview(selectedFile)" :disabled="previewLoading">
-                    {{ previewLoading ? 'Loading...' : 'Read' }}
-                  </button>
                 </div>
               </div>
 
+              <!-- Metadata table -->
+              <div v-if="previewData && !previewLoading" class="s3b-meta">
+                <table class="s3b-meta-table">
+                  <tbody>
+                    <tr><td class="s3b-meta-label">Key</td><td class="s3b-meta-val mono-xs">{{ previewData.key }}</td></tr>
+                    <tr><td class="s3b-meta-label">Content-Type</td><td class="s3b-meta-val">{{ previewData.contentType || '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">Size</td><td class="s3b-meta-val">{{ formatSize(previewData.size) }}</td></tr>
+                    <tr><td class="s3b-meta-label">Last Modified</td><td class="s3b-meta-val">{{ previewData.lastModified ? new Date(previewData.lastModified).toLocaleString() : '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">ETag</td><td class="s3b-meta-val mono-xs">{{ previewData.etag || '-' }}</td></tr>
+                    <tr v-if="previewData.versionId"><td class="s3b-meta-label">Version ID</td><td class="s3b-meta-val mono-xs">{{ previewData.versionId }}</td></tr>
+                    <tr><td class="s3b-meta-label">Storage Class</td><td class="s3b-meta-val">{{ previewData.storageClass || '-' }}</td></tr>
+                    <tr v-if="previewData.serverSideEncryption"><td class="s3b-meta-label">Encryption</td><td class="s3b-meta-val">{{ previewData.serverSideEncryption }}</td></tr>
+                    <tr v-if="previewData.cacheControl"><td class="s3b-meta-label">Cache-Control</td><td class="s3b-meta-val">{{ previewData.cacheControl }}</td></tr>
+                    <tr v-if="previewData.contentEncoding"><td class="s3b-meta-label">Content-Encoding</td><td class="s3b-meta-val">{{ previewData.contentEncoding }}</td></tr>
+                    <tr v-if="previewData.contentDisposition"><td class="s3b-meta-label">Content-Disposition</td><td class="s3b-meta-val">{{ previewData.contentDisposition }}</td></tr>
+                    <tr v-if="previewData.contentLanguage"><td class="s3b-meta-label">Content-Language</td><td class="s3b-meta-val">{{ previewData.contentLanguage }}</td></tr>
+                    <template v-if="previewData.metadata && Object.keys(previewData.metadata).length">
+                      <tr v-for="(val, mkey) in previewData.metadata" :key="mkey">
+                        <td class="s3b-meta-label">x-amz-meta-{{ mkey }}</td>
+                        <td class="s3b-meta-val mono-xs">{{ val }}</td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Content preview -->
               <div v-if="previewLoading" class="s3b-preview-content">
-                <div class="s3b-empty">Loading content...</div>
+                <div class="s3b-empty">Loading...</div>
               </div>
               <div v-else-if="previewError" class="s3b-preview-content">
                 <div class="s3b-error">{{ previewError }}</div>
               </div>
+
+              <!-- Image preview -->
+              <div v-else-if="previewData?.image" class="s3b-preview-content s3b-img-wrap">
+                <img :src="`data:${previewData.contentType};base64,${previewData.base64}`" class="s3b-img-preview" />
+              </div>
+
+              <!-- PDF preview -->
+              <div v-else-if="previewData?.pdf" class="s3b-preview-content s3b-pdf-wrap">
+                <iframe :src="`data:application/pdf;base64,${previewData.base64}`" class="s3b-pdf-frame"></iframe>
+              </div>
+
+              <!-- CSV preview -->
+              <div v-else-if="previewData?.csv && previewData?.body" class="s3b-preview-content s3b-csv-wrap">
+                <table class="s3b-csv-table">
+                  <thead>
+                    <tr>
+                      <th v-for="(col, ci) in csvParsed.headers" :key="ci">{{ col }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, ri) in csvParsed.rows" :key="ri">
+                      <td v-for="(cell, ci) in row" :key="ci">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Binary fallback -->
               <div v-else-if="previewData?.binary" class="s3b-preview-content">
-                <div class="s3b-empty" style="padding-top:20px">
-                  <div style="font-size:2rem">&#x1F4CE;</div>
-                  <div style="margin-top:8px;color:#8b949e">Binary file ({{ previewData.contentType }})</div>
-                  <div style="margin-top:4px;font-size:0.8rem;color:#484f58">Use Download to save the file</div>
+                <div class="s3b-empty" style="padding-top:12px">
+                  <div style="font-size:1.5rem">📎</div>
+                  <div style="margin-top:6px;color:#8b949e;font-size:12px">Binary file &mdash; use Download</div>
                 </div>
               </div>
-              <pre v-else-if="previewData?.content" class="s3b-preview-code">{{ previewData.content }}</pre>
-              <div v-else class="s3b-empty" style="padding-top:20px;color:#8b949e">
-                Click "Read" to load file content
-              </div>
+
+              <!-- Text preview -->
+              <pre v-else-if="previewData?.body" class="s3b-preview-code">{{ previewData.body }}</pre>
             </template>
           </div>
         </div>
@@ -203,7 +253,10 @@ async function loadFolder(prefix, contToken = null) {
     currentPrefix.value = prefix
 
     if (!contToken) {
-      folders.value  = data.folders || []
+      folders.value  = (data.folders || []).map(f => {
+        const parts = f.replace(/\/$/, '').split('/')
+        return { key: f, name: parts[parts.length - 1] || f }
+      })
       allFiles.value = data.files   || []
     } else {
       allFiles.value.push(...(data.files || []))
@@ -239,11 +292,24 @@ async function loadMore() {
   await loadFolder(currentPrefix.value, nextContinuationToken.value)
 }
 
-function selectFile(file) {
+async function selectFile(file) {
   if (selectedFile.value?.key === file.key) return
   selectedFile.value = file
   previewData.value  = null
   previewError.value = null
+  // Auto-load metadata
+  previewLoading.value = true
+  try {
+    const url  = `${baseUrl()}/api/cloud/aws/s3/${encodeURIComponent(props.bucket)}/object?key=${encodeURIComponent(file.key)}`
+    const resp = await fetch(url, { headers: apiHeaders() })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data.error || resp.statusText)
+    previewData.value = data
+  } catch (e) {
+    previewError.value = e.message
+  } finally {
+    previewLoading.value = false
+  }
 }
 
 async function loadPreview(file) {
@@ -290,6 +356,51 @@ async function downloadFile(file) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Simple CSV parser (handles quoted fields with commas/newlines)
+const csvParsed = computed(() => {
+  const body = previewData.value?.body
+  if (!body) return { headers: [], rows: [] }
+  const lines = []
+  let cur = '', inQuote = false
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (inQuote) {
+      if (ch === '"' && body[i + 1] === '"') { cur += '"'; i++ }
+      else if (ch === '"') inQuote = false
+      else cur += ch
+    } else {
+      if (ch === '"') inQuote = true
+      else if (ch === '\n' || (ch === '\r' && body[i + 1] === '\n')) {
+        lines.push(cur); cur = ''
+        if (ch === '\r') i++
+      } else cur += ch
+    }
+  }
+  if (cur) lines.push(cur)
+
+  const split = line => {
+    const cols = []; let c = '', q = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (q) {
+        if (ch === '"' && line[i + 1] === '"') { c += '"'; i++ }
+        else if (ch === '"') q = false
+        else c += ch
+      } else {
+        if (ch === '"') q = true
+        else if (ch === ',') { cols.push(c); c = '' }
+        else c += ch
+      }
+    }
+    cols.push(c)
+    return cols
+  }
+
+  const headers = split(lines[0] || '')
+  const rows = lines.slice(1).filter(l => l.trim()).map(split)
+  return { headers, rows }
+})
 function formatSize(bytes) {
   if (bytes == null) return ''
   if (bytes === 0) return '0 B'
@@ -305,17 +416,18 @@ function shortDate(d) {
 }
 
 const EXT_ICONS = {
-  json: '{ }', yaml: '&#x1F4CB;', yml: '&#x1F4CB;', xml: '&#x1F4CB;',
-  txt: '&#x1F4C4;', md: '&#x1F4DD;', log: '&#x1F4DC;',
-  sh: '&#x1F41A;', py: '&#x1F40D;', js: '&#x1F4C3;', ts: '&#x1F4C3;',
-  html: '&#x1F30D;', css: '&#x1F3A8;',
-  png: '&#x1F5BC;', jpg: '&#x1F5BC;', jpeg: '&#x1F5BC;', gif: '&#x1F5BC;', svg: '&#x1F5BC;',
-  zip: '&#x1F4E6;', gz: '&#x1F4E6;', tar: '&#x1F4E6;',
-  csv: '&#x1F4CA;', xlsx: '&#x1F4CA;', xls: '&#x1F4CA;',
+  json: '{ }', yaml: '\uD83D\uDCCB', yml: '\uD83D\uDCCB', xml: '\uD83D\uDCCB',
+  txt: '\uD83D\uDCC4', md: '\uD83D\uDCDD', log: '\uD83D\uDCDC',
+  sh: '\uD83D\uDC1A', py: '\uD83D\uDC0D', js: '\uD83D\uDCC3', ts: '\uD83D\uDCC3',
+  html: '\uD83C\uDF0D', css: '\uD83C\uDFA8',
+  png: '\uD83D\uDDBC', jpg: '\uD83D\uDDBC', jpeg: '\uD83D\uDDBC', gif: '\uD83D\uDDBC', svg: '\uD83D\uDDBC',
+  zip: '\uD83D\uDCE6', gz: '\uD83D\uDCE6', tar: '\uD83D\uDCE6',
+  csv: '\uD83D\uDCCA', xlsx: '\uD83D\uDCCA', xls: '\uD83D\uDCCA',
+  pdf: '\uD83D\uDCC4',
 }
 function fileIcon(name) {
   const ext = (name.split('.').pop() || '').toLowerCase()
-  return EXT_ICONS[ext] || '&#x1F4C4;'
+  return EXT_ICONS[ext] || '\uD83D\uDCC4'
 }
 </script>
 
@@ -446,4 +558,56 @@ function fileIcon(name) {
 
 .s3b-empty { color: #8b949e; text-align: center; padding: 24px; font-size: .87rem; }
 .s3b-error { color: #f85149; padding: 12px; font-size: .85rem; }
+
+/* Metadata table */
+.s3b-meta {
+  padding: 8px 12px; border-bottom: 1px solid #21262d;
+  overflow-y: auto; max-height: 220px; flex-shrink: 0;
+}
+.s3b-meta-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.s3b-meta-table tr { border-bottom: 1px solid rgba(48,54,61,.5); }
+.s3b-meta-table tr:last-child { border-bottom: none; }
+.s3b-meta-label {
+  color: #8b949e; white-space: nowrap; padding: 3px 10px 3px 0;
+  vertical-align: top; width: 140px; font-size: .75rem;
+}
+.s3b-meta-val {
+  color: #e6edf3; padding: 3px 0; word-break: break-all;
+}
+.mono-xs { font-family: 'Consolas', 'Menlo', monospace; font-size: .73rem; }
+
+/* Image preview */
+.s3b-img-wrap {
+  display: flex; align-items: center; justify-content: center;
+  background: repeating-conic-gradient(#1c2128 0% 25%, #161b22 0% 50%) 0 0 / 16px 16px;
+}
+.s3b-img-preview {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  border-radius: 4px;
+}
+
+/* PDF preview */
+.s3b-pdf-wrap { padding: 0; }
+.s3b-pdf-frame {
+  width: 100%; height: 100%; border: none;
+  background: #fff; border-radius: 0 0 4px 0;
+}
+
+/* CSV preview */
+.s3b-csv-wrap { padding: 0; overflow: auto; }
+.s3b-csv-table {
+  width: 100%; border-collapse: collapse; font-size: .78rem;
+}
+.s3b-csv-table th {
+  position: sticky; top: 0;
+  background: #161b22; color: #8b949e; text-align: left;
+  padding: 6px 10px; border-bottom: 1px solid #30363d;
+  font-weight: 600; white-space: nowrap;
+}
+.s3b-csv-table td {
+  padding: 4px 10px; border-bottom: 1px solid rgba(48,54,61,.4);
+  color: #e6edf3; white-space: nowrap; max-width: 300px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.s3b-csv-table tr:hover td { background: rgba(255,255,255,.03); }
 </style>

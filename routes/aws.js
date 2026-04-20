@@ -1281,5 +1281,264 @@ router.post('/ecs/:cluster/:service/logging', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /apigateway/:id/integrations ──────────────────────────────────────────
+
+router.get('/apigateway/:id/integrations', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg  = await resolveAwsConfig(profileId);
+    const type = (req.query.type || 'REST').toUpperCase();
+    const id   = req.params.id;
+
+    if (type === 'REST') {
+      const {
+        APIGatewayClient, GetResourcesCommand, GetIntegrationCommand,
+      } = require('@aws-sdk/client-api-gateway');
+      const client = new APIGatewayClient(cfg);
+      const resources = [];
+      let position;
+      do {
+        const resp = await client.send(new GetResourcesCommand({ restApiId: id, limit: 500, position }));
+        resources.push(...(resp.items || []));
+        position = resp.position;
+      } while (position);
+
+      const integrations = [];
+      for (const r of resources) {
+        for (const method of Object.keys(r.resourceMethods || {})) {
+          if (method === 'OPTIONS') continue;
+          try {
+            const integ = await client.send(new GetIntegrationCommand({
+              restApiId: id, resourceId: r.id, httpMethod: method,
+            }));
+            let lambdaName = null;
+            if (integ.uri) {
+              const m = integ.uri.match(/functions\/arn:aws:lambda:[^:]+:\d+:function:([^/]+)/);
+              if (m) lambdaName = m[1];
+            }
+            integrations.push({
+              path: r.path, method, type: integ.type,
+              uri: integ.uri, lambdaName,
+              passthroughBehavior: integ.passthroughBehavior,
+              timeoutMs: integ.timeoutInMillis,
+            });
+          } catch { /* method without integration */ }
+        }
+      }
+      return res.json({ type: 'REST', integrations });
+    }
+
+    // HTTP / WebSocket APIs (ApiGatewayV2)
+    const {
+      ApiGatewayV2Client, GetRoutesCommand, GetIntegrationsCommand,
+    } = require('@aws-sdk/client-apigatewayv2');
+    const v2 = new ApiGatewayV2Client(cfg);
+    const [routesResp, integsResp] = await Promise.all([
+      v2.send(new GetRoutesCommand({ ApiId: id })),
+      v2.send(new GetIntegrationsCommand({ ApiId: id })),
+    ]);
+    const integMap = {};
+    for (const ig of (integsResp.Items || [])) {
+      integMap[ig.IntegrationId] = ig;
+    }
+    const integrations = (routesResp.Items || []).map(route => {
+      const ig = integMap[route.Target?.replace('integrations/', '')] || {};
+      let lambdaName = null;
+      if (ig.IntegrationUri) {
+        const m = ig.IntegrationUri.match(/functions\/arn:aws:lambda:[^:]+:\d+:function:([^/]+)/);
+        if (m) lambdaName = m[1];
+      }
+      return {
+        routeKey: route.RouteKey, type: ig.IntegrationType,
+        uri: ig.IntegrationUri, lambdaName,
+        payloadFormatVersion: ig.PayloadFormatVersion,
+        timeoutMs: ig.TimeoutInMillis,
+      };
+    });
+    res.json({ type, integrations });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /eks/:name/add-kubeconfig ────────────────────────────────────────────
+
+router.post('/eks/:name/add-kubeconfig', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EKSClient, DescribeClusterCommand } = require('@aws-sdk/client-eks');
+    const client = new EKSClient(cfg);
+    const resp = await client.send(new DescribeClusterCommand({ name: req.params.name }));
+    const cluster = resp.cluster;
+
+    const fs   = require('fs');
+    const path = require('path');
+    const yaml = require('js-yaml');
+    const kubeDir  = path.join(require('os').homedir(), '.kube');
+    const kubePath = path.join(kubeDir, 'config');
+    if (!fs.existsSync(kubeDir)) fs.mkdirSync(kubeDir, { recursive: true });
+
+    let kubeconfig = { apiVersion: 'v1', kind: 'Config', clusters: [], contexts: [], users: [], 'current-context': '' };
+    if (fs.existsSync(kubePath)) {
+      try { kubeconfig = yaml.load(fs.readFileSync(kubePath, 'utf8')) || kubeconfig; } catch { /* bad file */ }
+    }
+
+    const contextName = `aws-${cluster.name}`;
+    const clusterEntry = {
+      name: contextName,
+      cluster: { server: cluster.endpoint, 'certificate-authority-data': cluster.certificateAuthority?.data },
+    };
+    const userEntry = {
+      name: contextName,
+      user: { exec: {
+        apiVersion: 'client.authentication.k8s.io/v1beta1',
+        command: 'aws',
+        args: ['eks', 'get-token', '--cluster-name', cluster.name, '--region', cfg.region || 'us-east-1'],
+      }},
+    };
+    const contextEntry = { name: contextName, context: { cluster: contextName, user: contextName } };
+
+    // Upsert
+    kubeconfig.clusters  = (kubeconfig.clusters  || []).filter(c => c.name !== contextName);
+    kubeconfig.users     = (kubeconfig.users     || []).filter(u => u.name !== contextName);
+    kubeconfig.contexts  = (kubeconfig.contexts  || []).filter(c => c.name !== contextName);
+    kubeconfig.clusters.push(clusterEntry);
+    kubeconfig.users.push(userEntry);
+    kubeconfig.contexts.push(contextEntry);
+
+    fs.writeFileSync(kubePath, yaml.dump(kubeconfig, { lineWidth: -1 }), 'utf8');
+    res.json({ success: true, context: contextName, message: `Context "${contextName}" added to ~/.kube/config` });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/browse ────────────────────────────────────────────────────
+
+router.get('/s3/:bucket/browse', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+    const client = new S3Client(cfg);
+    const prefix = req.query.prefix || '';
+    const params = {
+      Bucket: req.params.bucket, Prefix: prefix, Delimiter: '/',
+      MaxKeys: 300,
+    };
+    if (req.query.continuationToken) params.ContinuationToken = req.query.continuationToken;
+    const resp = await client.send(new ListObjectsV2Command(params));
+
+    const folders = (resp.CommonPrefixes || []).map(p => p.Prefix);
+    const files = (resp.Contents || [])
+      .filter(o => o.Key !== prefix)
+      .map(o => ({
+        key: o.Key,
+        name: o.Key.split('/').filter(Boolean).pop(),
+        size: o.Size,
+        lastModified: o.LastModified,
+        storageClass: o.StorageClass,
+      }));
+
+    res.json({
+      prefix, folders, files, region: cfg.region,
+      nextContinuationToken: resp.NextContinuationToken || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/object ────────────────────────────────────────────────────
+
+router.get('/s3/:bucket/object', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+    const client = new S3Client(cfg);
+    const key = req.query.key;
+    if (!key) return res.status(400).json({ error: 'key is required' });
+
+    const head = await client.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key }));
+    const meta = {
+      key,
+      contentType: head.ContentType || '',
+      size: head.ContentLength || 0,
+      lastModified: head.LastModified,
+      etag: head.ETag,
+      versionId: head.VersionId || null,
+      storageClass: head.StorageClass || 'STANDARD',
+      serverSideEncryption: head.ServerSideEncryption || null,
+      cacheControl: head.CacheControl || null,
+      contentEncoding: head.ContentEncoding || null,
+      contentDisposition: head.ContentDisposition || null,
+      contentLanguage: head.ContentLanguage || null,
+      metadata: head.Metadata || {},
+      partsCount: head.PartsCount || null,
+      acceptRanges: head.AcceptRanges || null,
+    };
+
+    const contentType = meta.contentType;
+    const size = meta.size;
+
+    // Image preview (base64) – up to 10 MB
+    const isImage = contentType.startsWith('image/');
+    if (isImage && size <= 10 * 1024 * 1024) {
+      const resp = await client.send(new GetObjectCommand({ Bucket: req.params.bucket, Key: key }));
+      const chunks = [];
+      for await (const chunk of resp.Body) chunks.push(chunk);
+      const base64 = Buffer.concat(chunks).toString('base64');
+      return res.json({ binary: false, image: true, base64, ...meta });
+    }
+
+    // PDF preview (base64) – up to 10 MB
+    const isPdf = contentType === 'application/pdf';
+    if (isPdf && size <= 10 * 1024 * 1024) {
+      const resp = await client.send(new GetObjectCommand({ Bucket: req.params.bucket, Key: key }));
+      const chunks = [];
+      for await (const chunk of resp.Body) chunks.push(chunk);
+      const base64 = Buffer.concat(chunks).toString('base64');
+      return res.json({ binary: false, pdf: true, base64, ...meta });
+    }
+
+    // Text / CSV preview – up to 2 MB
+    const textTypes = ['text/', 'application/json', 'application/xml', 'application/javascript',
+      'application/x-yaml', 'application/yaml', 'application/x-sh'];
+    const isCsv = contentType === 'text/csv' || key.toLowerCase().endsWith('.csv');
+    const isText = textTypes.some(t => contentType.includes(t)) || isCsv || size === 0;
+
+    if (!isText || size > 2 * 1024 * 1024) {
+      return res.json({ binary: true, ...meta });
+    }
+
+    const resp = await client.send(new GetObjectCommand({ Bucket: req.params.bucket, Key: key }));
+    const chunks = [];
+    for await (const chunk of resp.Body) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString('utf-8');
+    res.json({ binary: false, csv: isCsv, body, ...meta });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/download ──────────────────────────────────────────────────
+
+router.get('/s3/:bucket/download', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+    const client = new S3Client(cfg);
+    const key = req.query.key;
+    if (!key) return res.status(400).json({ error: 'key is required' });
+
+    const resp = await client.send(new GetObjectCommand({ Bucket: req.params.bucket, Key: key }));
+    const filename = key.split('/').filter(Boolean).pop() || 'download';
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    if (resp.ContentType) res.setHeader('Content-Type', resp.ContentType);
+    if (resp.ContentLength) res.setHeader('Content-Length', resp.ContentLength);
+    resp.Body.pipe(res);
+  } catch (err) { handleErr(res, err); }
+});
+
 module.exports = router;
 
