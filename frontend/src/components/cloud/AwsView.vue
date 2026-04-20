@@ -1,27 +1,9 @@
 <template>
   <div class="cloud-view">
 
-    <div class="cloud-view-header">
-      <h2 class="cloud-view-title">Amazon Web Services</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select v-model="selectedProfileId" class="ctrl-select" @change="onProfileChange">
-          <optgroup v-if="envStore.awsProfiles.length" label="Stored profiles">
-            <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </optgroup>
-          <optgroup v-if="localProfiles.length" label="~/.aws/credentials">
-            <option v-for="p in localProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">
-              {{ p.name }} ({{ p.region }})
-            </option>
-          </optgroup>
-        </select>
-        <button v-if="selectedProfileId" class="btn" @click="reloadActiveTab" :disabled="tabLoading">
-        </button>
-      </div>
-    </div>
-
     <div v-if="!selectedProfileId" class="empty-state">
-      Select an AWS credential profile above to load resources.<br />
-      <span class="text-dim">No profile? Go to <strong>Env Manager</strong> to create one.</span>
+      Select an AWS credential profile in the top header to load resources.<br />
+      <span class="text-dim">No profile? Use the <strong>Env Manager</strong> button (key icon) to create one.</span>
     </div>
 
     <template v-else>
@@ -36,6 +18,7 @@
           <template v-if="awsStore.loading">Loading...</template>
           <template v-else>{{ activeRowCount }} result{{ activeRowCount !== 1 ? 's' : '' }}</template>
         </span>
+        <button class="btn sm" @click="reloadActiveTab" :disabled="tabLoading" title="Refresh"><i data-lucide="refresh-cw"></i></button>
       </div>
 
            TAB PANELS
@@ -692,7 +675,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { createIcons, icons } from 'lucide'
 import jsYaml from 'js-yaml'
 import { useEnvStore }  from '../../stores/useEnvStore'
 import { useAwsStore }  from '../../stores/useAwsStore'
@@ -821,6 +805,17 @@ onMounted(async () => {
   envStore.fetchProfiles()
   try { localProfiles.value = await apiFetch('/api/cloud/aws/local-profiles') } catch { /* ignore */ }
   if (selectedProfileId.value) loadTab(activeTab.value)
+  nextTick(() => createIcons({ icons }))
+})
+
+watch(() => awsStore.activeProfileId, (newId) => {
+  if ((newId || '') !== selectedProfileId.value) {
+    selectedProfileId.value = newId || ''
+    if (newId) {
+      Object.keys(loaded).forEach(k => { loaded[k] = false })
+      loadTab(activeTab.value)
+    }
+  }
 })
 
 function onProfileChange() {

@@ -1,31 +1,10 @@
 <template>
   <div class="cloud-view">
 
-    <!-- Header -->
-    <div class="cloud-view-header">
-      <h2 class="cloud-view-title">Google Cloud Platform</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select v-model="selectedProfileId" class="ctrl-select" @change="onProfileChange">
-          <option value="">--- Select GCP profile ---</option>
-          <optgroup v-if="envStore.gcpProfiles.length" label="Stored profiles">
-            <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </optgroup>
-          <optgroup v-if="localConfigs.length" label="gcloud configs">
-            <option v-for="c in localConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">
-              {{ c.name }}{{ c.project ? ` (${c.project})` : '' }}
-            </option>
-          </optgroup>
-        </select>
-        <button v-if="selectedProfileId" class="btn" @click="reloadActiveTab" :disabled="currentTab.loading">
-          Refresh
-        </button>
-      </div>
-    </div>
-
     <!-- No profile -->
     <div v-if="!selectedProfileId" class="empty-state">
-      Select a GCP credential profile above to load resources.<br />
-      <span class="text-dim">No profile? Go to <strong>Env Manager</strong> to create one.</span>
+      Select a GCP credential profile in the top header to load resources.<br />
+      <span class="text-dim">No profile? Use the <strong>Env Manager</strong> button (key icon) to create one.</span>
     </div>
 
     <template v-else>
@@ -37,6 +16,7 @@
           <template v-if="currentTab.loading">Loading...</template>
           <template v-else>{{ filteredRows.length }} result{{ filteredRows.length !== 1 ? 's' : '' }}</template>
         </span>
+        <button class="btn sm" @click="reloadActiveTab" :disabled="currentTab.loading" title="Refresh"><i data-lucide="refresh-cw"></i></button>
       </div>
 
       <!-- Permission denied banner -->
@@ -200,7 +180,8 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
+import { createIcons, icons } from 'lucide'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
 import { useToast }    from '../../composables/useToast'
@@ -222,6 +203,14 @@ onMounted(async () => {
   envStore.fetchProfiles()
   try { localConfigs.value = await apiFetch('/api/cloud/gcp/gcloud-configs') } catch { /* gcloud not installed */ }
   if (selectedProfileId.value) loadAllTabs()
+  nextTick(() => createIcons({ icons }))
+})
+
+watch(() => gcpStore.activeProfileId, (newId) => {
+  if ((newId || '') !== selectedProfileId.value) {
+    selectedProfileId.value = newId || ''
+    if (newId) loadAllTabs()
+  }
 })
 
 function onProfileChange() {

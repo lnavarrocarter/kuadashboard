@@ -28,6 +28,9 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Global SVG size ────────────────────────────────────────────────────────── */
+svg { width: 12px; height: 12px; }
 #app {
   display: flex;
   flex-direction: column;
@@ -69,7 +72,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   font-size: 15px; font-weight: 600; color: #fff;
   letter-spacing: .5px; white-space: nowrap; user-select: none;
 }
-.app-logo i, .app-logo svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+.app-logo i, .app-logo svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
 
 .header-controls { display: flex; align-items: center; gap: 12px; margin-left: 24px; }
 .control-group { display: flex; align-items: center; gap: 6px; }
@@ -117,7 +120,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   transition: all .15s;
   white-space: nowrap;
 }
-.provider-tab i, .provider-tab svg { width: 14px; height: 14px; flex-shrink: 0; }
+.provider-tab i, .provider-tab svg { width: 12px; height: 12px; flex-shrink: 0; }
 .provider-tab:hover {
   color: var(--text);
   background: rgba(255,255,255,.06);
@@ -414,7 +417,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   color: #f87171;
   font-size: 13px;
 }
-.error-state svg { width: 18px; height: 18px; flex-shrink: 0; }
+.error-state svg { width: 12px; height: 12px; flex-shrink: 0; }
 .error-state span { flex: 1; }
 
 /* ── Overlay / Modals ────────────────────────────────────────────────────────── */
@@ -1028,7 +1031,7 @@ body { flex-direction: column; }
 .pf-row { display: flex; align-items: flex-end; gap: 10px; }
 .pf-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .pf-arrow { display: flex; align-items: center; padding-bottom: 6px; color: var(--text-dim); }
-.pf-arrow svg { width: 16px; height: 16px; }
+.pf-arrow svg { width: 12px; height: 12px; }
 .pf-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin: 0; }
 .pf-hint code { background: rgba(255,255,255,.07); padding: 1px 4px; border-radius: 3px; }
 
@@ -1079,7 +1082,7 @@ body { flex-direction: column; }
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.help-section-title svg { width: 14px; height: 14px; }
+.help-section-title svg { width: 12px; height: 12px; }
 
 /* Action button cards grid */
 .help-grid {
@@ -1130,7 +1133,7 @@ body { flex-direction: column; }
   padding: 10px 8px;
   text-align: center;
 }
-.help-res-card svg { width: 20px; height: 20px; color: var(--accent); }
+.help-res-card svg { width: 12px; height: 12px; color: var(--accent); }
 .help-res-card span { font-size: 12px; font-weight: 600; color: var(--text); }
 .help-res-card small { font-size: 10px; color: var(--text-dim); }
 

@@ -25,11 +25,23 @@ import { ref, onMounted } from 'vue'
 import BaseModal from '../BaseModal.vue'
 
 const STORAGE_KEY = 'kuadashboard_last_seen_version'
-const version = '1.1.0'
+const version = '1.1.1'
 
 const visible = ref(false)
 
 const changelog = [
+  {
+    version: '1.1.1',
+    items: [
+      { type: 'new',     text: 'Credenciales AWS y GCP configurables desde el header global (como Kubernetes)' },
+      { type: 'new',     text: 'Botón de Local Shell siempre visible en el header (icono de terminal)' },
+      { type: 'new',     text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
+      { type: 'new',     text: 'Modal de Ayuda con Acerca de, Releases y Feedback/Issues' },
+      { type: 'better',  text: 'Iconos SVG uniformes en toda la interfaz (12px)' },
+      { type: 'better',  text: 'Botón Refresh en las vistas AWS y GCP con icono' },
+      { type: 'better',  text: 'Env Manager ahora funciona desde cualquier proveedor, no sólo Kubernetes' },
+    ],
+  },
   {
     version: '1.1.0',
     items: [

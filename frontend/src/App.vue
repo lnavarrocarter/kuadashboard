@@ -24,16 +24,44 @@
             <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
           </select>
         </template>
+        <template v-else-if="activeProvider === 'aws'">
+          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
+            <option value="">— AWS profile —</option>
+            <optgroup v-if="envStore.awsProfiles.length" label="Stored profiles">
+              <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </optgroup>
+            <optgroup v-if="awsLocalProfiles.length" label="~/.aws/credentials">
+              <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">
+                {{ p.name }}{{ p.region ? ` (${p.region})` : '' }}
+              </option>
+            </optgroup>
+          </select>
+        </template>
+        <template v-else-if="activeProvider === 'gcp'">
+          <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
+            <option value="">— GCP profile —</option>
+            <optgroup v-if="envStore.gcpProfiles.length" label="Stored profiles">
+              <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </optgroup>
+            <optgroup v-if="gcpLocalConfigs.length" label="gcloud configs">
+              <option v-for="c in gcpLocalConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">
+                {{ c.name }}{{ c.project ? ` (${c.project})` : '' }}
+              </option>
+            </optgroup>
+          </select>
+        </template>
       </div>
       <div class="header-right">
         <template v-if="activeProvider === 'kubernetes'">
           <button class="btn sm" :class="{ primary: pfPanelVisible }" @click="pfPanelVisible = !pfPanelVisible" title="Port Forwards">
-            <i data-lucide="cable"></i> Ports
+            <i data-lucide="cable"></i>
             <span v-if="pfStore.list.length" class="badge-count">{{ pfStore.list.length }}</span>
           </button>
           <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
           <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
         </template>
+        <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" title="Env Manager" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
+        <button class="btn btn-icon" title="Local Shell" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" title="Help"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" title="Apoyar el proyecto">
           <i data-lucide="heart"></i>
@@ -156,11 +184,9 @@
         </nav>
 
         <main class="main">
-          <template v-if="activeProvider === 'kubernetes'">
-            <template v-if="cloudView === null">
-              <ResourceTable @action="handleAction" />
-            </template>
-            <EnvManagerView v-else-if="cloudView === 'envs'" />
+          <EnvManagerView v-if="cloudView === 'envs'" />
+          <template v-else-if="activeProvider === 'kubernetes'">
+            <ResourceTable @action="handleAction" />
           </template>
           <AwsView  v-else-if="activeProvider === 'aws'"  :active-service="awsTab" />
           <GcpView  v-else-if="activeProvider === 'gcp'"  :active-service="gcpTab" />
@@ -196,6 +222,7 @@
     <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
+    <HelpModal        :show="modals.help"                                                    @close="modals.help = false" />
 
     <DonationModal />
     <WelcomeModal />
@@ -211,6 +238,9 @@ import { createIcons, icons } from 'lucide'
 import { useKubeStore }        from './stores/useKubeStore'
 import { usePortForwardStore } from './stores/usePortForwardStore'
 import { useTerminalStore }    from './stores/useTerminalStore'
+import { useAwsStore }         from './stores/useAwsStore'
+import { useGcpStore }         from './stores/useGcpStore'
+import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
@@ -227,6 +257,7 @@ import ScaleModal       from './components/modals/ScaleModal.vue'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
+import HelpModal        from './components/modals/HelpModal.vue'
 import DonationModal    from './components/modals/DonationModal.vue'
 import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
@@ -235,6 +266,9 @@ import ToastContainer   from './components/ToastContainer.vue'
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
 const termStore = useTerminalStore()
+const awsStore  = useAwsStore()
+const gcpStore  = useGcpStore()
+const envStore  = useEnvStore()
 const { startLogStream, startExecStream, startLocalStream } = useTerminalStreams()
 const { toast } = useToast()
 
@@ -270,6 +304,11 @@ const gcpTab          = ref('cloudrun')
 const clock           = ref('')
 let clockTimer
 
+const awsLocalProfiles = ref([])
+const gcpLocalConfigs  = ref([])
+const awsProfileId     = ref(awsStore.activeProfileId || '')
+const gcpProfileId     = ref(gcpStore.activeProfileId || '')
+
 const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false })
 const modalData = reactive({
   deleteMsg: '', deletePending: null,
@@ -280,9 +319,28 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
 })
 
-function setProvider(p) {
+async function setProvider(p) {
   activeProvider.value = p
-  if (p === 'kubernetes') cloudView.value = null
+  if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
+  if (p === 'aws') { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
+  if (p === 'gcp') { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
+  nextTick(() => createIcons({ icons }))
+}
+
+async function loadAwsLocalProfiles() {
+  try { awsLocalProfiles.value = await api('GET', '/api/cloud/aws/local-profiles') } catch { /* ignore */ }
+}
+async function loadGcpLocalConfigs() {
+  try { gcpLocalConfigs.value = await api('GET', '/api/cloud/gcp/gcloud-configs') } catch { /* ignore */ }
+}
+function onAwsProfileChange() {
+  awsStore.setActiveProfile(awsProfileId.value || null)
+}
+function onGcpProfileChange() {
+  gcpStore.setActiveProfile(gcpProfileId.value || null)
+}
+function toggleEnvManager() {
+  cloudView.value = cloudView.value === 'envs' ? null : 'envs'
   nextTick(() => createIcons({ icons }))
 }
 function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
@@ -379,6 +437,9 @@ onMounted(async () => {
   await store.loadNamespaces()
   await store.loadResources()
   await pfStore.autoRestore()
+  envStore.fetchProfiles()
+  loadAwsLocalProfiles()
+  loadGcpLocalConfigs()
   document.addEventListener('keydown', onKey)
   nextTick(() => createIcons({ icons }))
 })
