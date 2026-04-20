@@ -12,7 +12,7 @@ KuaDashboard is a lightweight Kubernetes & Cloud dashboard built with **Node.js 
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USER/kuadashboard.git
+git clone https://github.com/lnavarrocarter/kuadashboard.git
 cd kuadashboard
 
 # Install backend dependencies

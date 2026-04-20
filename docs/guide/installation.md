@@ -14,7 +14,7 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USER/kuadashboard.git
+git clone https://github.com/lnavarrocarter/kuadashboard.git
 cd kuadashboard
 ```
 
@@ -46,7 +46,7 @@ PORT=8080 npm start
 
 ## Install as Desktop App
 
-Download the latest installer for your platform from the [Releases](https://github.com/YOUR_USER/kuadashboard/releases) page:
+Download the latest installer for your platform from the [Downloads](/download) page, or from [GitHub Releases](https://github.com/lnavarrocarter/kuadashboard/releases):
 
 | Platform | Format | File |
 |----------|--------|------|

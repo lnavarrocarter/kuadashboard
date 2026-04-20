@@ -11,10 +11,10 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: Download Desktop App
-      link: /guide/electron
+      link: /download
     - theme: alt
       text: View on GitHub
-      link: https://github.com/YOUR_USER/kuadashboard
+      link: https://github.com/lnavarrocarter/kuadashboard
 
 features:
   - icon: ☸️

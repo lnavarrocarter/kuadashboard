@@ -18,6 +18,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Features', link: '/features/' },
+      { text: 'Download', link: '/download' },
       { text: 'Architecture', link: '/architecture/' },
       { text: 'GitHub', link: 'https://github.com/lnavarrocarter/kuadashboard' },
     ],
