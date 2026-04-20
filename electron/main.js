@@ -1,0 +1,236 @@
+'use strict';
+/**
+ * electron/main.js
+ * Electron main process — entry point for the KuaDashboard desktop app.
+ *
+ * Lifecycle:
+ *   1. Start the Express backend (server.js) as a child process via fork().
+ *   2. Wait for the backend to signal it is ready (stdout "KuaDashboard running").
+ *   3. Create the BrowserWindow and load http://localhost:3000.
+ *   4. On app quit, kill the backend child process cleanly.
+ *
+ * Architecture decisions:
+ *   - The backend runs as a separate Node.js process (fork) so it keeps its own
+ *     event loop and native modules (keytar, k8s, etc.) don't need to be
+ *     rebuilt for Electron's Node version.
+ *   - The frontend is served by the Express static middleware (production build).
+ *     In dev mode (`npm run electron:dev`) Vite serves the frontend and Express
+ *     proxies API calls.
+ *   - contextIsolation: true + nodeIntegration: false — renderer is sandboxed.
+ *     All Node/Electron access goes through preload.js contextBridge.
+ */
+
+const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
+const path   = require('path');
+const { fork } = require('child_process');
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const BACKEND_PORT = process.env.PORT || 3000;
+const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
+const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let mainWindow    = null;
+let backendProcess = null;
+let backendReady  = false;
+
+// ─── Backend (Express) ────────────────────────────────────────────────────────
+
+function startBackend() {
+  return new Promise((resolve, reject) => {
+    const env = {
+      ...process.env,
+      PORT:                    String(BACKEND_PORT),
+      // Activate KeytarStore automatically (we are in Electron)
+      KUADASHBOARD_STORE:      'keytar',
+      // Disable color codes in child process stdout
+      FORCE_COLOR:             '0',
+    };
+
+    backendProcess = fork(SERVER_PATH, [], {
+      env,
+      silent: true,   // capture stdout/stderr so we can detect readiness
+    });
+
+    backendProcess.stdout.on('data', chunk => {
+      const text = chunk.toString();
+      process.stdout.write(`[server] ${text}`);
+
+      // Detect readiness signal from server.js
+      if (!backendReady && text.includes('KuaDashboard running')) {
+        backendReady = true;
+        resolve();
+      }
+    });
+
+    backendProcess.stderr.on('data', chunk => {
+      process.stderr.write(`[server:err] ${chunk.toString()}`);
+    });
+
+    backendProcess.on('error', err => {
+      console.error('[electron] Backend process error:', err.message);
+      reject(err);
+    });
+
+    backendProcess.on('exit', (code, signal) => {
+      console.log(`[electron] Backend exited — code: ${code}, signal: ${signal}`);
+      backendReady = false;
+      if (!backendReady && mainWindow) {
+        mainWindow.webContents.send('server:error', 'Backend process exited unexpectedly.');
+      }
+    });
+
+    // Timeout: if server hasn't signalled readiness after 15s, reject
+    setTimeout(() => {
+      if (!backendReady) reject(new Error('Backend startup timed out after 15s'));
+    }, 15_000);
+  });
+}
+
+function stopBackend() {
+  if (backendProcess) {
+    backendProcess.kill('SIGTERM');
+    backendProcess = null;
+  }
+}
+
+// ─── Browser Window ───────────────────────────────────────────────────────────
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width:           1280,
+    height:          800,
+    minWidth:        900,
+    minHeight:       600,
+    title:           'KuaDashboard',
+    backgroundColor: '#1e1e1e',
+    show:            false,   // show after 'ready-to-show' to avoid white flash
+    webPreferences: {
+      preload:            path.join(__dirname, 'preload.js'),
+      contextIsolation:   true,    // required for security
+      nodeIntegration:    false,   // renderer has no Node access
+      sandbox:            false,   // needed for preload to use require()
+      webSecurity:        true,
+    },
+  });
+
+  // Load app — in dev, you can optionally load the Vite dev server instead
+  const loadUrl = IS_DEV
+    ? process.env.VITE_DEV_URL || BACKEND_URL
+    : BACKEND_URL;
+
+  mainWindow.loadURL(loadUrl);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    if (IS_DEV) mainWindow.webContents.openDevTools({ mode: 'detach' });
+  });
+
+  mainWindow.on('closed', () => { mainWindow = null; });
+
+  // Open external links in OS browser, not in Electron window
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+}
+
+// ─── Application menu ─────────────────────────────────────────────────────────
+
+function buildMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
+    {
+      label: 'File',
+      submenu: [
+        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        ...(IS_DEV ? [{ role: 'toggleDevTools' }] : []),
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(process.platform === 'darwin'
+          ? [{ type: 'separator' }, { role: 'front' }]
+          : [{ role: 'close' }]),
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ─── IPC handlers ─────────────────────────────────────────────────────────────
+
+ipcMain.on('app:version', event => {
+  event.returnValue = app.getVersion();
+});
+
+// ─── App lifecycle ────────────────────────────────────────────────────────────
+
+app.whenReady().then(async () => {
+  buildMenu();
+
+  console.log('[electron] Starting backend…');
+  try {
+    await startBackend();
+    console.log('[electron] Backend ready. Creating window…');
+  } catch (err) {
+    console.error('[electron] Failed to start backend:', err.message);
+    // Still create the window so the user sees an error instead of a blank screen
+  }
+
+  createWindow();
+
+  app.on('activate', () => {
+    // macOS: re-create window when dock icon is clicked and no windows are open
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  stopBackend();
+  // On macOS, keep the app running in the dock (standard behavior)
+  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', stopBackend);
+
+// Prevent navigation to arbitrary URLs (security hardening)
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(BACKEND_URL)) {
+      event.preventDefault();
+    }
+  });
+});

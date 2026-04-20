@@ -1006,3 +1006,31 @@ kbd {
 .ctrl-input:focus { border-color: var(--accent); }
 .code-input { font-family: 'Consolas', monospace; font-size: 11px; resize: vertical; }
 .text-dim { color: var(--text-dim); }
+
+/* ── CLI Tools Notice banner ─────────────────────────────────────────────────── */
+.cli-notice {
+  background: rgba(255,152,0,.08);
+  border-bottom: 1px solid rgba(255,152,0,.35);
+  padding: 10px 16px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.cli-notice-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cli-notice-icon { font-size: 15px; color: var(--yellow); }
+.cli-notice-sub  { font-size: 11px; flex: 1; }
+.cli-dismiss     { margin-left: auto; background: transparent; border: none; color: var(--text-dim); font-size: 13px; padding: 0 4px; cursor: pointer; }
+.cli-dismiss:hover { color: var(--text); }
+
+.cli-tools-list { display: flex; flex-direction: column; gap: 6px; padding-left: 24px; }
+.cli-tool-row   { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.cli-tool-info  { display: flex; flex-direction: column; gap: 1px; }
+.cli-tool-name  { font-weight: 600; color: var(--yellow); font-family: monospace; font-size: 12px; }
+.cli-tool-desc  { font-size: 11px; }
+.cli-tool-actions { display: flex; gap: 6px; flex-shrink: 0; }

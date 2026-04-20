@@ -23,6 +23,9 @@
       </div>
     </header>
 
+    <!-- ── CLI tools notice ──────────────────────────────────────────────── -->
+    <CliToolsNotice />
+
     <!-- ── Body ──────────────────────────────────────────────────────────── -->
     <div class="page-body">
       <div class="layout">
@@ -120,6 +123,7 @@ import ResourceTable    from './components/ResourceTable.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
+import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
 import DeleteModal      from './components/modals/DeleteModal.vue'
