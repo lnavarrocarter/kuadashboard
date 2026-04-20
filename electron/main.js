@@ -100,12 +100,16 @@ function stopBackend() {
 // ─── Browser Window ───────────────────────────────────────────────────────────
 
 function createWindow() {
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  const iconPath = path.join(__dirname, '..', 'assets', iconFile);
+
   mainWindow = new BrowserWindow({
     width:           1280,
     height:          800,
     minWidth:        900,
     minHeight:       600,
     title:           'KuaDashboard',
+    icon:            iconPath,
     backgroundColor: '#1e1e1e',
     show:            false,   // show after 'ready-to-show' to avoid white flash
     webPreferences: {

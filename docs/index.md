@@ -15,6 +15,9 @@ hero:
     - theme: alt
       text: View on GitHub
       link: https://github.com/lnavarrocarter/kuadashboard
+    - theme: alt
+      text: 💖 Sponsor
+      link: /sponsor
 
 features:
   - icon: ☸️

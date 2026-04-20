@@ -17,6 +17,7 @@ const zlib = require('zlib');
 
 const SIZE = 512;
 const OUT  = path.join(__dirname, '..', 'assets', 'icon.png');
+const OUT_ICO = path.join(__dirname, '..', 'assets', 'icon.ico');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -159,3 +160,71 @@ const png = Buffer.concat([
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, png);
 console.log(`Icon generated: ${OUT} (${png.length} bytes, ${SIZE}×${SIZE})`);
+
+// ── Generate ICO (Windows) ────────────────────────────────────────────────────
+
+function resizePng(srcPixels, srcSize, dstSize) {
+  const dst = Buffer.alloc(dstSize * dstSize * 4);
+  const ratio = srcSize / dstSize;
+  for (let y = 0; y < dstSize; y++) {
+    for (let x = 0; x < dstSize; x++) {
+      const sx = Math.min(Math.floor(x * ratio), srcSize - 1);
+      const sy = Math.min(Math.floor(y * ratio), srcSize - 1);
+      const si = (sy * srcSize + sx) * 4;
+      const di = (y * dstSize + x) * 4;
+      dst[di] = srcPixels[si]; dst[di+1] = srcPixels[si+1];
+      dst[di+2] = srcPixels[si+2]; dst[di+3] = srcPixels[si+3];
+    }
+  }
+  return dst;
+}
+
+function buildPngForSize(pxBuf, sz) {
+  const ihdrS = Buffer.alloc(13);
+  ihdrS.writeUInt32BE(sz, 0); ihdrS.writeUInt32BE(sz, 4);
+  ihdrS[8] = 8; ihdrS[9] = 6;
+  const rows = [];
+  for (let y = 0; y < sz; y++) {
+    rows.push(Buffer.from([0]));
+    rows.push(pxBuf.subarray(y * sz * 4, (y + 1) * sz * 4));
+  }
+  const comp = zlib.deflateSync(Buffer.concat(rows), { level: 9 });
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', ihdrS),
+    pngChunk('IDAT', comp),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const icoSizes = [16, 32, 48, 256];
+const pngImages = icoSizes.map(sz => {
+  const resized = sz === SIZE ? pixels : resizePng(pixels, SIZE, sz);
+  return { size: sz, data: buildPngForSize(resized, sz) };
+});
+
+// ICO header: 6 bytes + 16 bytes per entry + image data
+const icoHeaderSize = 6 + icoSizes.length * 16;
+const icoHeader = Buffer.alloc(6);
+icoHeader.writeUInt16LE(0, 0);              // reserved
+icoHeader.writeUInt16LE(1, 2);              // type: icon
+icoHeader.writeUInt16LE(icoSizes.length, 4);// count
+
+const entries = Buffer.alloc(icoSizes.length * 16);
+let dataOffset = icoHeaderSize;
+pngImages.forEach((img, i) => {
+  const off = i * 16;
+  entries[off]     = img.size < 256 ? img.size : 0; // width
+  entries[off + 1] = img.size < 256 ? img.size : 0; // height
+  entries[off + 2] = 0; // palette
+  entries[off + 3] = 0; // reserved
+  entries.writeUInt16LE(1, off + 4);  // color planes
+  entries.writeUInt16LE(32, off + 6); // bits per pixel
+  entries.writeUInt32LE(img.data.length, off + 8);  // data size
+  entries.writeUInt32LE(dataOffset, off + 12);       // data offset
+  dataOffset += img.data.length;
+});
+
+const ico = Buffer.concat([icoHeader, entries, ...pngImages.map(i => i.data)]);
+fs.writeFileSync(OUT_ICO, ico);
+console.log(`ICO generated: ${OUT_ICO} (${ico.length} bytes, sizes: ${icoSizes.join(', ')})`);
