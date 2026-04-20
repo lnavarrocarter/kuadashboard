@@ -117,6 +117,7 @@
 
         <!-- Input bar -->
         <div class="lsh-term-input-bar">
+          <span class="lsh-cwd-label" v-if="shortCwd" :title="shellCwd">{{ shortCwd }}</span>
           <span class="lsh-prompt" :class="sessionStatus">❯</span>
           <input
             ref="inputRef"
@@ -163,6 +164,15 @@ const entriesRef  = ref(null)
 const sessionStatus = ref('disconnected')  // 'disconnected' | 'connecting' | 'connected' | 'ended'
 const shellName     = ref('')
 const ws            = ref(null)
+const shellCwd      = ref('')
+
+// Abbreviated CWD for display (replace homedir with ~)
+const shortCwd = computed(() => {
+  if (!shellCwd.value) return ''
+  const home = shellCwd.value.match(/^\/Users\/[^\/]+|^\/home\/[^\/]+|^C:\\Users\\[^\\]+/)?.[0]
+  if (home && shellCwd.value.startsWith(home)) return '~' + shellCwd.value.slice(home.length)
+  return shellCwd.value
+})
 
 // terminal output
 const outputLines = ref([])  // raw HTML strings
@@ -252,10 +262,15 @@ function wsConnect() {
     if (msg.type === 'connected') {
       sessionStatus.value = 'connected'
       shellName.value     = msg.shell
+      shellCwd.value      = msg.cwd
       pushSys(`▶ Shell: ${msg.shell}   CWD: ${msg.cwd}`)
       // Seed file browser with initial CWD
       if (!currentPath.value) fetchBrowser(msg.cwd)
       nextTick(() => inputRef.value?.focus())
+    } else if (msg.type === 'cwd') {
+      shellCwd.value = msg.path
+      // Keep file browser in sync
+      if (showBrowser.value) fetchBrowser(msg.path)
     } else if (msg.type === 'out') {
       appendOutput(msg.data, '')
     } else if (msg.type === 'err') {
@@ -348,7 +363,7 @@ function sendCmd() {
   // Show what user typed
   const ts = new Date().toTimeString().slice(0, 8)
   outputLines.value.push(
-    `<div class="lsh-line cmd"><span class="ts">${ts}</span><span class="lsh-prompt-echo">❯</span> ${escape(cmd)}</div>`
+    `<div class="lsh-line cmd"><span class="ts">${ts}</span><span class="lsh-cwd-echo">${escape(shortCwd.value)}</span> <span class="lsh-prompt-echo">❯</span> ${escape(cmd)}</div>`
   )
   if (cmd.trim()) {
     cmdHistory.value.unshift(cmd)

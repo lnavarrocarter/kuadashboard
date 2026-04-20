@@ -50,7 +50,7 @@ const TOOLS = [
     id:          'kubectl',
     name:        'kubectl',
     binary:      'kubectl',
-    versionArgs: ['version', '--client', '--short'],
+    versionArgs: ['version', '--client'],
     // version output: "Client Version: v1.29.0"
     versionRegex: /v(\d+\.\d+\.\d+)/,
     description: 'Required for Kubernetes cluster management, exec shells and log streaming.',

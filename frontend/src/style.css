@@ -1556,6 +1556,24 @@ kbd {
 .lsh-line.sys  { color: #666; font-style: italic; }
 .lsh-line.cmd  { color: var(--accent); }
 .lsh-prompt-echo { color: var(--accent); margin-right: 4px; }
+.lsh-cwd-echo {
+  color: #5eaeff;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.lsh-cwd-label {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  color: #5eaeff;
+  font-weight: 600;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+  direction: rtl;
+  text-align: left;
+}
 
 /* Input bar */
 .lsh-term-input-bar {
