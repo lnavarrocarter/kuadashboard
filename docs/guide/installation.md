@@ -53,6 +53,36 @@ Download the latest installer for your platform from the [Downloads](/download) 
 | Windows  | Installer | `KuaDashboard-Setup-x.x.x.exe` |
 | macOS    | DMG | `KuaDashboard-x.x.x.dmg` |
 | Linux    | AppImage | `KuaDashboard-x.x.x.AppImage` |
+| Linux    | Debian/Ubuntu | `kuadashboard_x.x.x_amd64.deb` |
+
+### macOS — Gatekeeper Notice
+
+KuaDashboard is not signed with an Apple Developer certificate. On first launch, macOS will block the app:
+
+1. Go to **System Settings** → **Privacy & Security**
+2. Scroll down — you'll see a message about KuaDashboard being blocked
+3. Click **Open Anyway** and confirm
+
+Alternatively, run in Terminal:
+```bash
+xattr -cr /Applications/KuaDashboard.app
+```
+
+The app only needs this step once.
+
+### Linux — AppImage
+
+```bash
+chmod +x KuaDashboard-x.x.x.AppImage
+./KuaDashboard-x.x.x.AppImage
+```
+
+### Linux — Debian / Ubuntu
+
+```bash
+sudo dpkg -i kuadashboard_x.x.x_amd64.deb
+sudo apt-get install -f   # fix dependencies if needed
+```
 
 ## Kubeconfig Setup
 

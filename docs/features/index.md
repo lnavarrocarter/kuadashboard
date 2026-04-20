@@ -2,6 +2,8 @@
 
 KuaDashboard provides a unified interface for managing Kubernetes clusters and cloud resources.
 
+![KuaDashboard — Nodes overview](/screenshots/dashboard-nodes.png)
+
 ## Kubernetes
 
 | Feature | Resources |

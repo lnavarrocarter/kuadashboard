@@ -1,5 +1,7 @@
 # Kubernetes Features
 
+![KuaDashboard — Kubernetes dashboard](/screenshots/dashboard-main.png)
+
 ## Resource Browser
 
 Browse all major Kubernetes resources with sortable, filterable tables:

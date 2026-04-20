@@ -1,6 +1,8 @@
 # Getting Started
 
-KuaDashboard is a lightweight Kubernetes & Cloud dashboard built with **Node.js + Express** (backend) and **Vue 3 + Vite + Pinia** (frontend). It can run as a web app or a native desktop app via Electron.
+KuaDashboard is a lightweight Kubernetes & Cloud dashboard built with **Node.js + Express** (backend) and **Vue 3 + Vite + Pinia** (frontend). It can run as a web app or a native desktop app via Electron on **Windows**, **macOS**, and **Linux**.
+
+![KuaDashboard](/screenshots/dashboard-nodes.png)
 
 ## Prerequisites
 

@@ -1,6 +1,8 @@
 # Electron Desktop App
 
-KuaDashboard ships as a native desktop application for **Windows** and **macOS** powered by Electron.
+KuaDashboard ships as a native desktop application for **Windows**, **macOS**, and **Linux** powered by Electron.
+
+![KuaDashboard — Main dashboard](/screenshots/dashboard-main.png)
 
 ## How It Works
 
@@ -61,14 +63,18 @@ npm run electron:build:win
 # macOS only (DMG)
 npm run electron:build:mac
 
-# Both platforms
+# Linux only (AppImage + deb)
+npm run electron:build:linux
+
+# All platforms
 npm run electron:build:all
 ```
 
 ::: warning Cross-Platform Builds
-- Building for **macOS** requires running on macOS (code signing)
+- Building for **macOS** requires running on macOS
 - Building for **Windows** can be done from Windows or macOS
-- Use CI/CD (GitHub Actions) for automated cross-platform builds
+- Building for **Linux** requires running on Linux (or Docker with `electronuserland/builder`)
+- Use CI/CD (GitHub Actions) for automated cross-platform builds — the project includes workflows that build for all three platforms
 :::
 
 ### Build Output
@@ -80,7 +86,10 @@ dist-electron/
 ├── win-unpacked/              # Unpacked Windows app
 ├── KuaDashboard-Setup-1.0.0.exe  # Windows installer
 ├── mac/                       # Unpacked macOS app
-└── KuaDashboard-1.0.0.dmg    # macOS disk image
+├── KuaDashboard-1.0.0.dmg    # macOS disk image
+├── linux-unpacked/            # Unpacked Linux app
+├── KuaDashboard-1.0.0.AppImage # Linux AppImage
+└── kuadashboard_1.0.0_amd64.deb # Debian/Ubuntu package
 ```
 
 ## Custom Icons

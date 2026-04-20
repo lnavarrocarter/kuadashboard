@@ -34,7 +34,7 @@ features:
     details: One-click port forwards to Services and Pods. Persistent sessions with auto-reconnect. Visual manager panel.
   - icon: 🖥️
     title: Desktop App (Electron)
-    details: Native desktop experience for Windows and macOS. Auto-starts the backend server. Secure sandboxed renderer.
+    details: Native desktop experience for Windows, macOS, and Linux. Auto-starts the backend server. Secure sandboxed renderer.
   - icon: 🌙
     title: Dark Mode Native
     details: Built-in dark theme designed for developer comfort. No configuration needed — just works.
