@@ -1034,3 +1034,224 @@ kbd {
 .cli-tool-name  { font-weight: 600; color: var(--yellow); font-family: monospace; font-size: 12px; }
 .cli-tool-desc  { font-size: 11px; }
 .cli-tool-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ── Local Shell View ────────────────────────────────────────────────────────── */
+.lsh-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-size: 12px;
+}
+
+/* Header */
+.lsh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.lsh-header-left  { display: flex; align-items: center; gap: 8px; }
+.lsh-header-actions { display: flex; gap: 6px; }
+.lsh-title { font-weight: 700; font-size: 14px; }
+
+/* Status dot */
+.lsh-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text-dim);
+}
+.lsh-status-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.lsh-status-dot.connecting   { background: var(--yellow); animation: pulse 1s infinite; }
+.lsh-status-dot.ended        { background: var(--red); }
+.lsh-status-dot.disconnected { background: var(--text-dim); }
+.lsh-status-text { font-size: 11px; }
+
+/* Breadcrumb */
+.lsh-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+.lsh-bc-seg {
+  color: var(--accent);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: monospace;
+}
+.lsh-bc-seg:hover { background: var(--bg-hover); }
+.lsh-bc-sep { color: var(--text-dim); font-size: 11px; user-select: none; }
+.lsh-bc-refresh { margin-left: 6px; cursor: pointer; color: var(--text-dim); font-size: 13px; }
+.lsh-bc-refresh:hover { color: var(--text); }
+
+/* Help panel */
+.lsh-help {
+  background: rgba(100,181,246,.06);
+  border-bottom: 1px solid rgba(100,181,246,.25);
+  padding: 10px 16px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.lsh-help-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.lsh-help-table { border-collapse: collapse; }
+.lsh-help-table td { padding: 2px 12px 2px 0; vertical-align: top; }
+.lsh-help-table td:first-child { white-space: nowrap; font-family: monospace; }
+.lsh-help-table kbd {
+  background: var(--bg-row); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 4px; font-size: 10px;
+}
+
+/* Body: explorer + terminal side by side */
+.lsh-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* File browser */
+.lsh-filebrowser {
+  width: 220px;
+  min-width: 160px;
+  max-width: 320px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.lsh-drives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.lsh-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+.lsh-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 12px;
+}
+.lsh-entry:hover   { background: var(--bg-hover); }
+.lsh-entry.selected { background: rgba(100,181,246,.12); }
+.lsh-entry-dir  { color: var(--accent); }
+.lsh-entry-file { color: var(--text); }
+.lsh-entry-icon { font-size: 13px; flex-shrink: 0; }
+.lsh-entry-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.lsh-entry-meta { font-size: 10px; color: var(--text-dim); margin-left: auto; flex-shrink: 0; }
+.lsh-fb-msg { padding: 10px 12px; color: var(--text-dim); font-style: italic; font-size: 11px; }
+
+/* Terminal pane */
+.lsh-terminal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.lsh-term-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #111;
+  color: var(--text);
+  scrollbar-width: thin;
+}
+.lsh-line { display: flex; align-items: flex-start; gap: 8px; }
+.lsh-line .ts { color: #444; font-size: 10px; flex-shrink: 0; padding-top: 1px; }
+.lsh-line.err  { color: var(--red); }
+.lsh-line.warn { color: var(--yellow); }
+.lsh-line.ok   { color: var(--green); }
+.lsh-line.sys  { color: #666; font-style: italic; }
+.lsh-line.cmd  { color: var(--accent); }
+.lsh-prompt-echo { color: var(--accent); margin-right: 4px; }
+
+/* Input bar */
+.lsh-term-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-header);
+  flex-shrink: 0;
+}
+.lsh-prompt {
+  font-family: monospace;
+  font-size: 14px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.lsh-prompt.connected { color: var(--green); }
+.lsh-prompt.ended     { color: var(--red); }
+.lsh-term-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  caret-color: var(--accent);
+}
+
+/* File preview */
+.lsh-preview {
+  border-top: 1px solid var(--border);
+  max-height: 220px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--bg-row);
+}
+.lsh-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.lsh-preview-path { font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lsh-preview-body {
+  overflow: auto;
+  padding: 8px 12px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+  scrollbar-width: thin;
+  color: var(--text);
+  white-space: pre;
+}
+.btn-close { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; padding: 0 4px; }
+.btn-close:hover { color: var(--text); }

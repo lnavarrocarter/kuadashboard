@@ -15,14 +15,16 @@ const app    = express();
 const server = http.createServer(app);
 
 // ─── Cloud integration routes ─────────────────────────────────────────────────
-const envManagerRoutes = require('./routes/envManager');
-const gcpRoutes        = require('./routes/gcp');
-const awsRoutes        = require('./routes/aws');
+const envManagerRoutes  = require('./routes/envManager');
+const gcpRoutes         = require('./routes/gcp');
+const awsRoutes         = require('./routes/aws');
 const systemToolsRoutes = require('./routes/systemTools');
+const localShellRoutes  = require('./routes/localShell');
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
-const wss     = new WebSocket.Server({ noServer: true });
-const wssExec = new WebSocket.Server({ noServer: true });
+const wss      = new WebSocket.Server({ noServer: true });
+const wssExec  = new WebSocket.Server({ noServer: true });
+const wssShell = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url, 'http://localhost');
@@ -30,6 +32,8 @@ server.on('upgrade', (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
   } else if (pathname === '/ws/exec') {
     wssExec.handleUpgrade(request, socket, head, ws => wssExec.emit('connection', ws, request));
+  } else if (pathname === '/ws/shell') {
+    wssShell.handleUpgrade(request, socket, head, ws => wssShell.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
@@ -42,6 +46,7 @@ app.use('/api/cloud/envs', envManagerRoutes);
 app.use('/api/cloud/gcp',  gcpRoutes);
 app.use('/api/cloud/aws',  awsRoutes);
 app.use('/api/system',     systemToolsRoutes);
+app.use('/api/local',      localShellRoutes);
 
 app.use(express.static(path.join(__dirname, 'public'), {
   etag:         false,
@@ -1037,6 +1042,107 @@ wssExec.on('connection', ws => {
   });
 
   ws.on('close', stopExec);
+});
+
+// ─── WebSocket – Local Shell ──────────────────────────────────────────────────
+// Spawns a local shell process (PowerShell on Windows, $SHELL on Unix).
+// Security: only accepts connections from localhost.
+// Protocol (same JSON envelope as exec WS):
+//   client → server:  { action: 'stdin', data: string }
+//                     { action: 'stop' }
+//                     { action: 'resize', cols: n, rows: n }  (future node-pty)
+//   server → client:  { type: 'connected', shell, cwd }
+//                     { type: 'out',  data: string }
+//                     { type: 'err',  data: string }
+//                     { type: 'done', code: number }
+//                     { type: 'error', data: string }
+
+const { spawn } = require('child_process');
+
+/** Strip ANSI/VT escape codes from shell output before sending to client */
+function stripAnsi(text) {
+  return text
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')   // CSI sequences (colors, cursor)
+    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '') // OSC sequences (title, etc.)
+    .replace(/\x1b[()][A-B0-9]/g, '')          // charset sequences
+    .replace(/\x1b[@-_]/g, '')                 // 2-byte ESC sequences
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // other ctrl chars except \n \r \t
+}
+
+wssShell.on('connection', (ws, req) => {
+  // Only allow localhost connections
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) {
+    ws.close(1008, 'Local connections only');
+    return;
+  }
+
+  const isWin   = process.platform === 'win32';
+  const shell   = isWin ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
+  const args    = isWin ? ['-NoLogo', '-NoProfile'] : [];
+  const initCwd = os.homedir();
+
+  let proc = null;
+
+  function start() {
+    proc = spawn(shell, args, {
+      cwd:         initCwd,
+      env:         { ...process.env, TERM: 'dumb' },
+      shell:       false,
+      windowsHide: true,
+    });
+
+    if (ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({ type: 'connected', shell, cwd: initCwd }));
+
+    proc.stdout.on('data', chunk => {
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'out', data: stripAnsi(chunk.toString('utf8')) }));
+    });
+
+    proc.stderr.on('data', chunk => {
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'err', data: stripAnsi(chunk.toString('utf8')) }));
+    });
+
+    proc.on('error', err => {
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'error', data: err.message }));
+    });
+
+    proc.on('close', code => {
+      proc = null;
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'done', code: code ?? 0 }));
+    });
+  }
+
+  start();
+
+  ws.on('message', raw => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch (_) { return; }
+
+    if (msg.action === 'stop') {
+      if (proc && !proc.killed) proc.kill();
+      return;
+    }
+    if (msg.action === 'restart') {
+      if (proc && !proc.killed) proc.kill();
+      setTimeout(start, 200);
+      return;
+    }
+    if (msg.action === 'stdin') {
+      if (proc && !proc.killed) {
+        try { proc.stdin.write(msg.data); } catch (_) {}
+      }
+    }
+  });
+
+  ws.on('close', () => {
+    if (proc && !proc.killed) proc.kill();
+  });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────

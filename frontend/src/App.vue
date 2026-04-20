@@ -68,15 +68,21 @@
             <a :class="['sidebar-item', { active: cloudView === 'aws' }]"
                @click.prevent="setCloudView('aws')">AWS</a>
           </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Tools</div>
+            <a :class="['sidebar-item', { active: cloudView === 'shell' }]"
+               @click.prevent="setCloudView('shell')">Local Shell</a>
+          </div>
         </nav>
 
         <main class="main">
           <template v-if="cloudView === null">
             <ResourceTable @action="handleAction" />
           </template>
-          <EnvManagerView v-else-if="cloudView === 'envs'" />
-          <GcpView        v-else-if="cloudView === 'gcp'" />
-          <AwsView        v-else-if="cloudView === 'aws'" />
+          <EnvManagerView   v-else-if="cloudView === 'envs'" />
+          <GcpView          v-else-if="cloudView === 'gcp'" />
+          <AwsView          v-else-if="cloudView === 'aws'" />
+          <LocalShellView   v-else-if="cloudView === 'shell'" />
         </main>
       </div>
 
@@ -123,6 +129,7 @@ import ResourceTable    from './components/ResourceTable.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
+import LocalShellView  from './components/LocalShellView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
