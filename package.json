@@ -12,7 +12,18 @@
     "@kubernetes/client-node": "^0.20.0",
     "express": "^4.18.2",
     "js-yaml": "^4.1.0",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "google-auth-library": "^9.0.0",
+    "@google-cloud/resource-manager": "^5.0.0",
+    "@google-cloud/container": "^5.0.0",
+    "@google-cloud/run": "^1.0.0",
+    "@google-cloud/compute": "^4.0.0",
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-eks": "^3.0.0",
+    "@aws-sdk/client-ecs": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "keytar": "^7.9.0"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

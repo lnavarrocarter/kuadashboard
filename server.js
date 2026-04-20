@@ -13,6 +13,11 @@ const yaml       = require('js-yaml');
 
 const app    = express();
 const server = http.createServer(app);
+
+// ─── Cloud integration routes ─────────────────────────────────────────────────
+const envManagerRoutes = require('./routes/envManager');
+const gcpRoutes        = require('./routes/gcp');
+const awsRoutes        = require('./routes/aws');
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
 const wss     = new WebSocket.Server({ noServer: true });
@@ -30,6 +35,12 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
+
+// ─── Mount cloud routes ───────────────────────────────────────────────────────
+app.use('/api/cloud/envs', envManagerRoutes);
+app.use('/api/cloud/gcp',  gcpRoutes);
+app.use('/api/cloud/aws',  awsRoutes);
+
 app.use(express.static(path.join(__dirname, 'public'), {
   etag:         false,
   lastModified: false,
