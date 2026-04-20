@@ -54,6 +54,7 @@ jobs:
         run: npm run electron:build:${{ matrix.platform }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_BUILDER_PUBLISH: never
 
       - name: List build output
         run: ls dist-electron/
