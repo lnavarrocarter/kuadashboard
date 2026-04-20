@@ -269,34 +269,6 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
-  async function fetchApigwIntegrations(id, type = 'REST') {
-    try {
-      return await apiFetch(`/api/cloud/aws/apigateway/${encodeURIComponent(id)}/integrations?type=${encodeURIComponent(type)}`, { headers: headers() })
-    } catch (e) { setError(e); return null }
-  }
-
-  async function addEksKubeconfig(name) {
-    try {
-      return await apiFetch(`/api/cloud/aws/eks/${encodeURIComponent(name)}/add-kubeconfig`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { setError(e); return null }
-  }
-
-  async function fetchS3Objects(bucket, prefix = '', continuationToken = null) {
-    try {
-      let url = `/api/cloud/aws/s3/${encodeURIComponent(bucket)}/browse?prefix=${encodeURIComponent(prefix)}`
-      if (continuationToken) url += `&continuationToken=${encodeURIComponent(continuationToken)}`
-      return await apiFetch(url, { headers: headers() })
-    } catch (e) { setError(e); return null }
-  }
-
-  async function fetchS3ObjectContent(bucket, key) {
-    try {
-      return await apiFetch(`/api/cloud/aws/s3/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, { headers: headers() })
-    } catch (e) { setError(e); return null }
-  }
-
   return {
     activeProfileId, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
@@ -312,7 +284,5 @@ export const useAwsStore = defineStore('aws', () => {
     fetchResourceConfig,
     fetchTags, saveTags,
     enableLambdaLogging, enableEcsLogging,
-    fetchApigwIntegrations, addEksKubeconfig,
-    fetchS3Objects, fetchS3ObjectContent,
   }
 })

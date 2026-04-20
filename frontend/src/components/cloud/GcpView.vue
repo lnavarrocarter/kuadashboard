@@ -61,15 +61,11 @@
         </a>
       </div>
 
-      <!-- ── Cloud Run ─────────────────────────────────────────────────────── -->
+      <!-- Cloud Run -->
       <div v-show="activeTab === 'cloudrun'" class="tab-panel">
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredCloudRun.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No Cloud Run services found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Run services found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Region</th><th>Status</th><th>Min</th><th>Max</th><th>Actions</th></tr></thead>
           <tbody>
@@ -79,26 +75,20 @@
               <td><span :class="statusClass(svc.status)">{{ svc.status }}</span></td>
               <td>{{ svc.minInstances }}</td>
               <td>{{ svc.maxInstances ?? '--' }}</td>
-              <td>
-                <div class="row-actions">
-                  <button class="btn sm" @click="startCloudRun(svc)">Start</button>
-                  <button class="btn sm danger" @click="stopCloudRun(svc)">Stop</button>
-                </div>
-              </td>
+              <td><div class="row-actions">
+                <button class="btn sm" @click="startCloudRun(svc)">Start</button>
+                <button class="btn sm danger" @click="stopCloudRun(svc)">Stop</button>
+              </div></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- ── GKE ─────────────────────────────────────────────────────────── -->
+      <!-- GKE -->
       <div v-show="activeTab === 'gke'" class="tab-panel">
         <div v-if="gcpStore.tabs.gke.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.gke.error && !filteredGke.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredGke.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No GKE clusters found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.gke.error && !filteredGke.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredGke.length" class="empty-row">{{ search ? 'No matches.' : 'No GKE clusters found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Location</th><th>Version</th><th>Nodes</th><th>Status</th></tr></thead>
           <tbody>
@@ -113,15 +103,11 @@
         </table>
       </div>
 
-      <!-- ── Compute VMs ──────────────────────────────────────────────────── -->
+      <!-- Compute VMs -->
       <div v-show="activeTab === 'vms'" class="tab-panel">
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredVms.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No Compute Engine VMs found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? 'No matches.' : 'No Compute Engine VMs found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Zone</th><th>Machine</th><th>Status</th><th>External IP</th><th>Actions</th></tr></thead>
           <tbody>
@@ -131,26 +117,20 @@
               <td class="text-dim">{{ vm.machineType }}</td>
               <td><span :class="vmStatusClass(vm.status)">{{ vm.status }}</span></td>
               <td class="text-dim">{{ vm.externalIp || '--' }}</td>
-              <td>
-                <div class="row-actions">
-                  <button class="btn sm" @click="startVM(vm)" :disabled="vm.status === 'RUNNING'">Start</button>
-                  <button class="btn sm danger" @click="stopVM(vm)" :disabled="vm.status === 'TERMINATED'">Stop</button>
-                </div>
-              </td>
+              <td><div class="row-actions">
+                <button class="btn sm" @click="startVM(vm)" :disabled="vm.status === 'RUNNING'">Start</button>
+                <button class="btn sm danger" @click="stopVM(vm)" :disabled="vm.status === 'TERMINATED'">Stop</button>
+              </div></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- ── Cloud SQL ────────────────────────────────────────────────────── -->
+      <!-- Cloud SQL -->
       <div v-show="activeTab === 'sql'" class="tab-panel">
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredSql.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No Cloud SQL instances found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud SQL instances found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Database</th><th>Region</th><th>Tier</th><th>IP</th><th>State</th><th>Actions</th></tr></thead>
           <tbody>
@@ -161,26 +141,20 @@
               <td class="text-dim">{{ inst.tier }}</td>
               <td class="text-dim">{{ inst.ipAddress || '--' }}</td>
               <td><span :class="sqlStatusClass(inst.state)">{{ inst.state }}</span></td>
-              <td>
-                <div class="row-actions">
-                  <button class="btn sm" @click="startSql(inst)" :disabled="inst.state === 'RUNNABLE'">Start</button>
-                  <button class="btn sm danger" @click="stopSql(inst)" :disabled="inst.state !== 'RUNNABLE'">Stop</button>
-                </div>
-              </td>
+              <td><div class="row-actions">
+                <button class="btn sm" @click="startSql(inst)" :disabled="inst.state === 'RUNNABLE'">Start</button>
+                <button class="btn sm danger" @click="stopSql(inst)" :disabled="inst.state !== 'RUNNABLE'">Stop</button>
+              </div></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- ── Cloud Storage ────────────────────────────────────────────────── -->
+      <!-- Cloud Storage -->
       <div v-show="activeTab === 'storage'" class="tab-panel">
         <div v-if="gcpStore.tabs.storage.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.storage.error && !filteredStorage.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredStorage.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No GCS buckets found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.storage.error && !filteredStorage.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredStorage.length" class="empty-row">{{ search ? 'No matches.' : 'No GCS buckets found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Location</th><th>Storage Class</th><th>Public</th><th>Created</th></tr></thead>
           <tbody>
@@ -195,15 +169,11 @@
         </table>
       </div>
 
-      <!-- ── Cloud Functions ──────────────────────────────────────────────── -->
+      <!-- Cloud Functions -->
       <div v-show="activeTab === 'functions'" class="tab-panel">
         <div v-if="gcpStore.tabs.functions.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.functions.error && !filteredFunctions.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredFunctions.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No Cloud Functions found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.functions.error && !filteredFunctions.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredFunctions.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Functions found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Name</th><th>Location</th><th>Runtime</th><th>Trigger</th><th>State</th><th>URL</th></tr></thead>
           <tbody>
@@ -222,15 +192,11 @@
         </table>
       </div>
 
-      <!-- ── Pub/Sub ──────────────────────────────────────────────────────── -->
+      <!-- Pub/Sub -->
       <div v-show="activeTab === 'pubsub'" class="tab-panel">
         <div v-if="gcpStore.tabs.pubsub.loading" class="empty-row">Loading...</div>
-        <div v-else-if="gcpStore.tabs.pubsub.error && !filteredPubSub.length" class="empty-row text-dim">
-          API not available — see banner above.
-        </div>
-        <div v-else-if="!filteredPubSub.length" class="empty-row">
-          {{ search ? 'No matches.' : 'No Pub/Sub topics found.' }}
-        </div>
+        <div v-else-if="gcpStore.tabs.pubsub.error && !filteredPubSub.length" class="empty-row text-dim">API not available — see banner above.</div>
+        <div v-else-if="!filteredPubSub.length" class="empty-row">{{ search ? 'No matches.' : 'No Pub/Sub topics found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Topic Name</th><th>Labels</th></tr></thead>
           <tbody>
@@ -321,25 +287,22 @@ function switchTab(id) {
 }
 
 const currentTab = computed(() => gcpStore.tabs[activeTab.value])
-
 function tabCount(id)    { return gcpStore.tabs[id]?.data?.length ?? 0 }
 function tabHasError(id) { return !!gcpStore.tabs[id]?.error }
 
 function filterRows(rows) {
   if (!search.value) return rows
   const q = search.value.toLowerCase()
-  return rows.filter(row =>
-    Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q))
-  )
+  return rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
 }
 
-const filteredCloudRun = computed(() => filterRows(gcpStore.tabs.cloudrun.data))
-const filteredGke      = computed(() => filterRows(gcpStore.tabs.gke.data))
-const filteredVms      = computed(() => filterRows(gcpStore.tabs.vms.data))
-const filteredSql      = computed(() => filterRows(gcpStore.tabs.sql.data))
-const filteredStorage  = computed(() => filterRows(gcpStore.tabs.storage.data))
+const filteredCloudRun  = computed(() => filterRows(gcpStore.tabs.cloudrun.data))
+const filteredGke       = computed(() => filterRows(gcpStore.tabs.gke.data))
+const filteredVms       = computed(() => filterRows(gcpStore.tabs.vms.data))
+const filteredSql       = computed(() => filterRows(gcpStore.tabs.sql.data))
+const filteredStorage   = computed(() => filterRows(gcpStore.tabs.storage.data))
 const filteredFunctions = computed(() => filterRows(gcpStore.tabs.functions.data))
-const filteredPubSub   = computed(() => filterRows(gcpStore.tabs.pubsub.data))
+const filteredPubSub    = computed(() => filterRows(gcpStore.tabs.pubsub.data))
 
 const filteredRows = computed(() => {
   if (activeTab.value === 'cloudrun')  return filteredCloudRun.value
@@ -351,8 +314,6 @@ const filteredRows = computed(() => {
   if (activeTab.value === 'pubsub')    return filteredPubSub.value
   return []
 })
-
-// ── Actions ──────────────────────────────────────────────────────────────────
 
 async function startCloudRun(svc) {
   const res = await gcpStore.startCloudRunService(svc.region, svc.name)
@@ -384,8 +345,6 @@ async function stopSql(inst) {
   if (res) { toast(`Stopping ${inst.name}`, 'success'); loaded.sql = false; loadTab('sql') }
   else      toast(gcpStore.tabs.sql.error || 'Error', 'error')
 }
-
-// ── Style helpers ─────────────────────────────────────────────────────────────
 
 function statusClass(s) {
   if (!s) return ''

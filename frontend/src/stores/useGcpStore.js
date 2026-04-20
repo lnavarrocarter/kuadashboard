@@ -11,8 +11,37 @@ import { useApi } from '../composables/useApi'
 
 // Extract the "enable API" URL from a PERMISSION_DENIED gRPC error message.
 function extractEnableUrl(msg) {
-  const m = msg?.match(/https:\/\/console\.developers\.google\.com\/apis\/api\/[^\s]+/)
-  return m ? m[0] : null
+  if (!msg) return null
+
+  const m = msg.match(/https:\/\/console\.developers\.google\.com\/apis\/api\/[^\s]+/)
+  if (m) return m[0]
+
+  try {
+    const parsed = JSON.parse(msg)
+    const fromMeta = parsed?.error?.details
+      ?.find(d => d?.metadata?.activationUrl)
+      ?.metadata?.activationUrl
+    if (fromMeta) return fromMeta
+
+    const fromHelp = parsed?.error?.details
+      ?.find(d => Array.isArray(d?.links) && d.links.length)
+      ?.links?.[0]?.url
+    return fromHelp || null
+  } catch {
+    return null
+  }
+}
+
+function normalizeErrorMessage(msg) {
+  if (!msg) return 'Unknown GCP error'
+  try {
+    const parsed = JSON.parse(msg)
+    const apiMsg = parsed?.error?.message
+    if (apiMsg) return apiMsg
+  } catch {
+    // Non-JSON message, return as-is.
+  }
+  return msg
 }
 
 function makeTab() {
@@ -56,8 +85,9 @@ export const useGcpStore = defineStore('gcp', () => {
     try {
       tab.data = await apiFetch(url, { headers: headers() })
     } catch (e) {
-      tab.error    = e.message
-      tab.enableUrl = extractEnableUrl(e.message)
+      const raw = e?.message || String(e)
+      tab.error = normalizeErrorMessage(raw)
+      tab.enableUrl = extractEnableUrl(raw) || extractEnableUrl(tab.error)
     } finally {
       tab.loading = false
     }
