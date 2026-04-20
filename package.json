@@ -99,9 +99,6 @@
       "category": "public.app-category.developer-tools",
       "identity": null
     },
-    "dmg": {
-      "license": "assets/dmg-license.txt"
-    },
     "linux": {
       "target": [
         "AppImage",
