@@ -192,4 +192,29 @@ router.get('/stat', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/local/write
+ * Writes content to a file. Body: { path: string, content: string }
+ * Creates the file if it does not exist; overwrites if it does.
+ * Max 512 KB.
+ */
+router.post('/write', async (req, res) => {
+  const MAX = 512 * 1024;
+  try {
+    const { path: rawPath, content } = req.body || {};
+    if (!rawPath)   return res.status(400).json({ error: 'path is required' });
+    if (content == null) return res.status(400).json({ error: 'content is required' });
+    if (Buffer.byteLength(content, 'utf8') > MAX)
+      return res.status(413).json({ error: 'Content too large (max 512 KB)' });
+
+    const filePath = safePath(rawPath);
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    const stat = await fs.promises.stat(filePath);
+    res.json({ ok: true, path: filePath, size: stat.size, sizeHuman: fmtSize(stat.size) });
+  } catch (err) {
+    const code = err.code === 'ENOENT' ? 404 : 400;
+    res.status(code).json({ error: err.message });
+  }
+});
+
 module.exports = router;

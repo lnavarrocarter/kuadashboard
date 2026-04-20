@@ -11,7 +11,11 @@
  *   key containing the full Service Account JSON string.
  *   Alternatively, `GCP_PROJECT_ID` can be stored in the profile or passed via header.
  *
+ *   Local gcloud configs: prefix "local:" + config name (e.g. "local:default").
+ *   Uses Application Default Credentials (ADC) — requires `gcloud auth application-default login`.
+ *
  * Endpoints:
+ *   GET  /gcloud-configs                    → list local gcloud configurations
  *   GET  /projects                          → list accessible projects
  *   GET  /gke                               → list GKE clusters (requires GCP_PROJECT_ID)
  *   GET  /cloudrun                          → list Cloud Run services
@@ -26,9 +30,59 @@
  */
 
 const express  = require('express');
+const { exec }       = require('child_process');
+const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
 
-const router = express.Router();
+const router    = express.Router();
+const execAsync = promisify(exec);
+const isWin     = process.platform === 'win32';
+
+// ─── gcloud CLI helpers ───────────────────────────────────────────────────────
+
+/**
+ * Run a gcloud command via the system shell so it inherits the user's PATH.
+ * Returns stdout as a string, or throws on non-zero exit.
+ */
+async function gcloudExec(args, timeout = 10000) {
+  const cmd  = `gcloud ${args}`;
+  const opts = { timeout, windowsHide: true };
+  const { stdout } = await execAsync(
+    isWin ? `powershell -NoProfile -NonInteractive -Command "${cmd}"` : `sh -c "${cmd}"`,
+    opts
+  );
+  return stdout.trim();
+}
+
+/**
+ * List local gcloud configurations using the CLI.
+ * Returns: [{ name, project, account, isActive }]
+ */
+async function readGcloudConfigs() {
+  try {
+    const raw  = await gcloudExec('config configurations list --format=json');
+    const list = JSON.parse(raw);
+    return list.map(c => ({
+      name:     c.name,
+      project:  c.properties?.core?.project  || null,
+      account:  c.properties?.core?.account  || null,
+      region:   c.properties?.compute?.region || null,
+      isActive: c.is_active === true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get an OAuth2 access token for the given gcloud configuration name.
+ * Uses: gcloud auth print-access-token --configuration=<name>
+ */
+async function getGcloudAccessToken(configName) {
+  const token = await gcloudExec(`auth print-access-token --configuration=${configName}`);
+  if (!token) throw new Error(`No access token returned for gcloud config: ${configName}`);
+  return token;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,10 +93,36 @@ function handleErr(res, err) {
 }
 
 /**
- * Build a Google Auth client from a stored profile.
+ * Build a Google Auth client from a stored profile or local gcloud config.
  * Returns { auth, projectId } or throws.
+ *
+ * - profileId starting with "local:" → use `gcloud auth print-access-token` for the named config
+ * - otherwise → load from credentialStore using GCP_SERVICE_ACCOUNT_JSON
  */
 async function resolveGcpAuth(profileId) {
+  // ── Local gcloud config ───────────────────────────────────────────────────
+  if (profileId.startsWith('local:')) {
+    const configName = profileId.slice(6);
+    const configs    = await readGcloudConfigs();
+    const cfg        = configs.find(c => c.name === configName);
+    if (!cfg) throw Object.assign(new Error(`gcloud config not found: ${configName}`), { code: 404 });
+
+    // Obtain a fresh OAuth2 access token via the gcloud CLI.
+    // This honours whichever account is active in that config.
+    const accessToken = await getGcloudAccessToken(configName);
+
+    // google-gax (v4+) requires a GoogleAuth instance (needs getUniverseDomain +
+    // getClient). We pre-populate cachedCredential so GoogleAuth.getClient()
+    // returns our token-backed OAuth2Client without attempting ADC discovery.
+    const { GoogleAuth, OAuth2Client } = require('google-auth-library');
+    const tokenClient = new OAuth2Client();
+    tokenClient.setCredentials({ access_token: accessToken });
+    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    auth.cachedCredential = tokenClient;
+    return { auth, projectId: cfg.project || null, credentials: {}, accessToken };
+  }
+
+  // ── Stored profile ────────────────────────────────────────────────────────
   const store = getStore();
   const keys  = await store.getRawKeys(profileId);
   if (!keys) throw Object.assign(new Error('Credential profile not found'), { code: 404 });
@@ -71,6 +151,14 @@ function requireProfileId(req, res) {
   if (!id) { res.status(400).json({ error: 'X-Profile-Id header is required' }); return null; }
   return id;
 }
+
+// ─── GET /gcloud-configs ──────────────────────────────────────────────────────
+
+router.get('/gcloud-configs', async (_req, res) => {
+  try {
+    res.json(await readGcloudConfigs());
+  } catch (err) { handleErr(res, err); }
+});
 
 // ─── GET /projects ────────────────────────────────────────────────────────────
 
@@ -249,6 +337,156 @@ router.post('/compute/vms/:zone/:name/stop', async (req, res) => {
     const [operation] = await client.stop({ project: projectId, zone, instance: name });
     await operation.promise();
     res.json({ success: true, instance: name, zone, action: 'stop' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── REST helper (Node 18+ native fetch) ─────────────────────────────────────
+
+/**
+ * Make an authenticated GCP REST call.
+ * authCtx = { auth, accessToken? } as returned by resolveGcpAuth().
+ */
+async function gcpFetch(url, authCtx, method = 'GET', body = undefined) {
+  let token = authCtx.accessToken;
+  if (!token) {
+    const client = await authCtx.auth.getClient();
+    const t      = await client.getAccessToken();
+    token = t.token;
+  }
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res  = await fetch(url, opts);
+  const text = await res.text();
+  if (!res.ok) throw Object.assign(new Error(text), { code: res.status });
+  return text ? JSON.parse(text) : {};
+}
+
+// ─── GET /sql ────────────────────────────────────────────────────────────────
+
+router.get('/sql', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances`,
+      authCtx
+    );
+    res.json((data.items || []).map(i => ({
+      name:        i.name,
+      database:    i.databaseVersion,
+      region:      i.region,
+      state:       i.state,
+      tier:        i.settings?.tier,
+      ipAddress:   i.ipAddresses?.[0]?.ipAddress || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /sql/:instance/start ────────────────────────────────────────────────
+
+router.post('/sql/:instance/start', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    await gcpFetch(
+      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
+      authCtx, 'PATCH', { settings: { activationPolicy: 'ALWAYS' } }
+    );
+    res.json({ success: true, instance: req.params.instance, action: 'start' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /sql/:instance/stop ─────────────────────────────────────────────────
+
+router.post('/sql/:instance/stop', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    await gcpFetch(
+      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
+      authCtx, 'PATCH', { settings: { activationPolicy: 'NEVER' } }
+    );
+    res.json({ success: true, instance: req.params.instance, action: 'stop' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /storage/buckets ─────────────────────────────────────────────────────
+
+router.get('/storage/buckets', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=200`,
+      authCtx
+    );
+    res.json((data.items || []).map(b => ({
+      name:         b.name,
+      location:     b.location,
+      storageClass: b.storageClass,
+      created:      b.timeCreated,
+      publicAccess: b.iamConfiguration?.publicAccessPrevention !== 'enforced',
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /functions ───────────────────────────────────────────────────────────
+
+router.get('/functions', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`,
+      authCtx
+    );
+    res.json((data.functions || []).map(f => ({
+      name:     f.name?.split('/').pop(),
+      location: f.name?.split('/')[5],
+      runtime:  f.buildConfig?.runtime,
+      state:    f.state,
+      trigger:  f.eventTrigger?.eventType ? 'EVENT' : 'HTTPS',
+      url:      f.serviceConfig?.uri,
+      updated:  f.updateTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /pubsub/topics ───────────────────────────────────────────────────────
+
+router.get('/pubsub/topics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://pubsub.googleapis.com/v1/projects/${projectId}/topics`,
+      authCtx
+    );
+    res.json((data.topics || []).map(t => ({
+      name:   t.name?.split('/').pop(),
+      labels: Object.entries(t.labels || {}).map(([k, v]) => `${k}=${v}`).join(', '),
+    })));
   } catch (err) { handleErr(res, err); }
 });
 

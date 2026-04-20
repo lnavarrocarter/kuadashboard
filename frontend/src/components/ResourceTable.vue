@@ -21,7 +21,14 @@
       <table v-else class="rtable">
         <thead>
           <tr>
-            <th v-for="col in cfg.cols" :key="col">{{ col }}</th>
+            <th
+              v-for="(col, i) in cfg.cols" :key="col"
+              :class="sortColIdx === i ? 'sortable-th th-sorted' : 'sortable-th'"
+              @click="sortByCol(i)"
+            >
+              {{ col }}
+              <span class="sort-icon">{{ colSortIcon(i) }}</span>
+            </th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -58,10 +65,49 @@ const filter = ref('')
 
 const cfg = computed(() => RESOURCES[store.resource] || RESOURCES.pods)
 
+// ── Sorting ────────────────────────────────────────────────────────────────
+const sortColIdx = ref(null)
+const sortDir    = ref('asc')
+
+function sortByCol(i) {
+  if (sortColIdx.value === i) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortColIdx.value = i
+    sortDir.value = 'asc'
+  }
+}
+
+function colSortIcon(i) {
+  if (sortColIdx.value !== i) return '⇅'
+  return sortDir.value === 'asc' ? '↑' : '↓'
+}
+
+function cellSortVal(cell) {
+  if (cell === null || cell === undefined) return ''
+  if (typeof cell === 'object') {
+    if (cell.badge    !== undefined) return String(cell.badge ?? '')
+    if (cell.truncate !== undefined) return String(cell.truncate ?? '')
+  }
+  return String(cell)
+}
+
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
-  if (!q) return store.rows
-  return store.rows.filter(r => JSON.stringify(r).toLowerCase().includes(q))
+  let rows = store.rows
+  if (q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q))
+
+  if (sortColIdx.value === null) return rows
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const cells_a = cfg.value.row(a)
+    const cells_b = cfg.value.row(b)
+    const va = cellSortVal(cells_a[sortColIdx.value]).toLowerCase()
+    const vb = cellSortVal(cells_b[sortColIdx.value]).toLowerCase()
+    const na = parseFloat(va), nb = parseFloat(vb)
+    if (!isNaN(na) && !isNaN(nb)) return (na - nb) * dir
+    return va < vb ? -dir : va > vb ? dir : 0
+  })
 })
 
 function rowKey(row) { return row.name + (row.namespace || '') }
@@ -96,5 +142,6 @@ onMounted(() => {
 })
 onUnmounted(() => document.removeEventListener('keydown', onKey))
 
+watch(() => store.resource, () => { sortColIdx.value = null; sortDir.value = 'asc' })
 watch(() => store.rows, () => nextTick(() => createIcons({ icons })))
 </script>

@@ -22,12 +22,26 @@
  */
 
 const express        = require('express');
-const { execFile }   = require('child_process');
+const { exec }       = require('child_process');
 const { promisify }  = require('util');
-const which          = process.platform === 'win32' ? 'where' : 'which';
+const isWin          = process.platform === 'win32';
 
-const router       = express.Router();
-const execFileAsync = promisify(execFile);
+const router    = express.Router();
+const execAsync = promisify(exec);
+
+/**
+ * Run a command through the native shell so it inherits the user's PATH
+ * (including tools installed via winget, scoop, chocolatey, brew, etc.).
+ * On Windows: cmd /c <command>
+ * On Unix:    sh -c <command>
+ */
+async function shellExec(cmd, timeout = 6000) {
+  const opts = { timeout, windowsHide: true };
+  return execAsync(
+    isWin ? `powershell -NoProfile -NonInteractive -Command "${cmd}"` : `sh -c "${cmd}"`,
+    opts
+  );
+}
 
 // ─── Tool registry ────────────────────────────────────────────────────────────
 
@@ -69,9 +83,9 @@ const TOOLS = [
     id:          'helm',
     name:        'Helm',
     binary:      'helm',
-    versionArgs: ['version', '--short'],
-    // version output: "v3.14.0+g3fc9f4b"
-    versionRegex: /v(\d+\.\d+\.\d+)/,
+    versionArgs: ['version'],
+    // "version.BuildInfo{Version:"v3.14.4", ...}" or "v3.14.0+g3fc9f4b" (--short, older)
+    versionRegex: /[Vv]ersion[.:{" ]*v?(\d+\.\d+\.\d+)/,
     description: 'Optional: enables Helm chart management from the dashboard.',
     downloadUrl: 'https://helm.sh/docs/intro/install/',
     docsUrl:     'https://helm.sh/docs/intro/install/',
@@ -81,35 +95,21 @@ const TOOLS = [
 // ─── Detection helpers ────────────────────────────────────────────────────────
 
 /**
- * Check if a binary exists in PATH.
- * Returns true/false — does NOT throw.
- */
-async function isBinaryInPath(binary) {
-  try {
-    await execFileAsync(which, [binary], { timeout: 3000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Run `binary ...versionArgs` and parse out the version string.
- * Returns null on any failure.
+ * Run `binary versionArgs` through the native shell and parse the version.
+ * Returns null on any failure (binary not found, error, timeout).
  */
 async function detectVersion(binary, versionArgs, regex) {
+  const cmd = [binary, ...versionArgs].join(' ');
   try {
-    const { stdout, stderr } = await execFileAsync(binary, versionArgs, {
-      timeout: 5000,
-      windowsHide: true,
-    });
+    const { stdout, stderr } = await shellExec(cmd);
     const combined = (stdout + stderr).trim();
     const match    = combined.match(regex);
-    return match ? match[1] : combined.split('\n')[0].trim() || null;
+    return match ? match[1] : combined.split('\n')[0].trim() || 'installed';
   } catch (e) {
-    // Some tools write version to stderr (e.g. aws --version)
+    // Some CLIs write version to stderr; check there too
     const errOut = (e.stderr || e.stdout || '').trim();
-    const match  = errOut.match(regex);
+    if (!errOut) return null;
+    const match = errOut.match(regex);
     return match ? match[1] : null;
   }
 }
@@ -120,10 +120,11 @@ router.get('/tools', async (_req, res) => {
   try {
     const results = await Promise.all(
       TOOLS.map(async tool => {
-        const installed = await isBinaryInPath(tool.binary);
-        const version   = installed
-          ? await detectVersion(tool.binary, tool.versionArgs, tool.versionRegex)
-          : null;
+        // Try version detection directly — if it works, the tool is installed.
+        // This is more reliable than `which`/`where` when PATH differs between
+        // the shell and the Node.js subprocess environment (common on Windows).
+        const version = await detectVersion(tool.binary, tool.versionArgs, tool.versionRegex);
+        const installed = version !== null;
 
         return {
           id:          tool.id,

@@ -156,6 +156,11 @@ export function useTerminalStreams() {
         store.pushLine(tab, `▶ ${msg.shell}  |  cwd: ${msg.cwd}`, 'sys')
         tab.label = 'Local Shell'
         tab.streaming = true
+        // Signal initial CWD to file browser
+        tab.cwd = msg.cwd
+      } else if (msg.type === 'cwd') {
+        // Shell changed directory — update reactive CWD on the tab
+        tab.cwd = msg.path
       } else if (msg.type === 'out') {
         _appendRaw(tab, msg.data, '')
       } else if (msg.type === 'err') {

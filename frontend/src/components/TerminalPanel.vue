@@ -1,4 +1,5 @@
 <template>
+  <div>
   <Transition name="term-slide">
   <div
     v-show="store.visible"
@@ -43,9 +44,9 @@
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
         <div class="term-btn-sep"></div>
-        <!-- File browser toggle (shell tabs only) -->
+        <!-- File browser toggle (local shell only) -->
         <button
-          v-if="isShellTab"
+          v-if="activeTab?.context === 'local'"
           :class="['btn btn-icon', { primary: showBrowser }]"
           title="File browser"
           @click="toggleBrowser"
@@ -70,34 +71,34 @@
       <div class="term-help-cols">
         <div>
           <div class="term-help-section">Shell input</div>
-          <table class="term-help-table">
+          <table class="term-help-table"><tbody>
             <tr><td><kbd>↑</kbd><kbd>↓</kbd></td><td>Command history</td></tr>
             <tr><td><kbd>Tab</kbd></td><td>Path autocomplete</td></tr>
             <tr><td><kbd>Enter</kbd></td><td>Send command</td></tr>
             <tr><td><kbd>Ctrl+C</kbd></td><td>Interrupt (SIGINT)</td></tr>
             <tr><td><kbd>Ctrl+D</kbd></td><td>EOF / close session</td></tr>
             <tr><td><kbd>Ctrl+L</kbd></td><td>Clear output</td></tr>
-          </table>
+          </tbody></table>
         </div>
         <div>
           <div class="term-help-section">File browser</div>
-          <table class="term-help-table">
+          <table class="term-help-table"><tbody>
             <tr><td>Click 📁</td><td>Navigate + <code>cd</code></td></tr>
             <tr><td>Click 📄</td><td>Preview file</td></tr>
             <tr><td>Double click</td><td>Insert path into input</td></tr>
             <tr><td>↑ (top)</td><td>Go to parent directory</td></tr>
-          </table>
+          </tbody></table>
           <div class="term-help-section" style="margin-top:8px">Line colours</div>
-          <table class="term-help-table">
+          <table class="term-help-table"><tbody>
             <tr><td><span class="th-dot err"></span></td><td>Error / exception</td></tr>
             <tr><td><span class="th-dot warn"></span></td><td>Warning</td></tr>
             <tr><td><span class="th-dot ok"></span></td><td>Success / OK</td></tr>
             <tr><td><span class="th-dot sys"></span></td><td>System / meta</td></tr>
-          </table>
+          </tbody></table>
         </div>
         <div>
           <div class="term-help-section">Common commands</div>
-          <table class="term-help-table">
+          <table class="term-help-table"><tbody>
             <tr><td><code>ls -la</code></td><td>List files</td></tr>
             <tr><td><code>pwd</code></td><td>Current directory</td></tr>
             <tr><td><code>env</code></td><td>Environment vars</td></tr>
@@ -106,7 +107,7 @@
             <tr><td><code>df -h</code></td><td>Disk usage</td></tr>
             <tr><td><code>top</code> / <code>htop</code></td><td>CPU / memory</td></tr>
             <tr><td><code>curl -I &lt;url&gt;</code></td><td>HTTP check</td></tr>
-          </table>
+          </tbody></table>
         </div>
       </div>
     </div>
@@ -115,14 +116,18 @@
     <!-- ── Body: optional file browser + output ─────────────────────────── -->
     <div v-show="!minimised" class="term-main-body">
 
-      <!-- File browser (shell tabs, when toggled open) -->
-      <div v-show="isShellTab && showBrowser" class="term-filebrowser">
+      <!-- File browser (local shell only) -->
+      <div v-show="activeTab?.context === 'local' && showBrowser" class="term-filebrowser">
         <!-- Breadcrumb -->
         <div class="term-fb-crumb">
-        <template v-for="(seg, i) in browserCrumbs">
-            <span v-if="i > 0" :key="'sep-'+i" class="fb-sep">{{ browserSep }}</span>
-            <span :key="seg.path" class="fb-seg" @click="browseNavigate(seg.path)" :title="seg.path">{{ seg.label }}</span>
-          </template>
+        <span
+            v-for="(seg, i) in browserCrumbs"
+            :key="seg.path"
+            class="fb-crumb-item"
+          >
+            <span v-if="i > 0" class="fb-sep">{{ browserSep }}</span>
+            <span class="fb-seg" @click="browseNavigate(seg.path)" :title="seg.path">{{ seg.label }}</span>
+          </span>
           <span class="fb-refresh" @click="refreshBrowser" title="Refresh">↻</span>
         </div>
         <!-- Entries -->
@@ -191,12 +196,23 @@
     </div>
   </div>
   </Transition>
+
+  <!-- File viewer / editor modal -->
+  <FileViewerModal
+    v-if="fileViewerPath"
+    :filePath="fileViewerPath"
+    :initialMode="fileViewerMode"
+    @close="onViewerClose"
+    @saved="onViewerSaved"
+  />
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { createIcons, icons } from 'lucide'
+import FileViewerModal from './FileViewerModal.vue'
 
 const store = useTerminalStore()
 const bodyRef      = ref(null)
@@ -209,6 +225,10 @@ const showHelp     = ref(false)
 const showBrowser  = ref(true)
 const cmdInput     = ref('')
 let resizing = false, startY = 0, startH = 0
+
+// File viewer modal
+const fileViewerPath = ref(null)
+const fileViewerMode = ref('auto')
 
 // ── Context labels ─────────────────────────────────────────────────────────
 const CTX_LABELS = { pod: 'k8s', local: 'local', aws: 'AWS', gcp: 'GCP' }
@@ -245,10 +265,19 @@ watch(activeTab, tab => {
   }
 })
 
+// React to CWD changes pushed by the shell (via {type:'cwd'} WS message)
+watch(
+  () => activeTab.value?.cwd,
+  (newCwd) => {
+    if (!newCwd || activeTab.value?.context !== 'local') return
+    if (newCwd !== browserCwd.value) {
+      fetchBrowser(newCwd)
+    }
+  }
+)
+
 watch(bodyHtml, () => nextTick(() => {
   if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
-  // Track CWD from shell output (heuristic: detect pwd-like lines)
-  parseOutputForCwd()
 }), { flush: 'post' })
 
 watch(isShellTab, v => { if (v) nextTick(() => inputRef.value?.focus()) })
@@ -300,9 +329,7 @@ function sendInput() {
   if (cmd.trim()) {
     cmdHistory.value.unshift(cmd)
     if (cmdHistory.value.length > 200) cmdHistory.value.pop()
-    // Track cd commands to update browser
-    const cdMatch = cmd.trim().match(/^cd\s+['"]?(.+?)['"]?\s*$/)
-    if (cdMatch) scheduleBrowserRefresh()
+
   }
   historyIdx.value = -1
   suggestion.value = ''
@@ -338,13 +365,24 @@ function sendCtrlD() {
 
 // ── Autocomplete (Tab key) ─────────────────────────────────────────────────
 async function tabComplete() {
-  const input = cmdInput.value
+  const tab = activeTab.value
+  if (!tab) return
+
+  // For pod exec: always send Tab directly to the remote shell — no local interference
+  if (tab.context === 'pod' || tab.type === 'exec') {
+    if (tab.ws?.readyState === 1) {
+      tab.ws.send(JSON.stringify({ action: 'stdin', data: '\t' }))
+    }
+    return
+  }
+
+  // Local shell: use local filesystem for completion
+  const input     = cmdInput.value
   const lastSpace = Math.max(input.lastIndexOf(' '), input.lastIndexOf('\t'))
   const token     = lastSpace >= 0 ? input.slice(lastSpace + 1) : input
   const prefix    = lastSpace >= 0 ? input.slice(0, lastSpace + 1) : ''
 
   if (!token) {
-    // No token: show suggestions from history
     showHistorySuggestions(input)
     return
   }
@@ -353,7 +391,6 @@ async function tabComplete() {
   if (browserEntries.value.length) {
     const sep     = browserSep.value
     const hasPath = token.includes('/') || token.includes('\\')
-
     if (!hasPath) {
       const matches = browserEntries.value
         .filter(e => e.name.toLowerCase().startsWith(token.toLowerCase()))
@@ -364,24 +401,15 @@ async function tabComplete() {
         return
       }
       if (matches.length > 1) {
-        store.pushLine(activeTab.value, '  ' + matches.join('   '), 'sys')
+        store.pushLine(tab, '  ' + matches.join('   '), 'sys')
         scrollEnd()
         return
       }
     }
   }
 
-  // 2. For local context: query API for path completion
-  if (activeTab.value?.context === 'local') {
-    await apiPathComplete(prefix, token)
-    return
-  }
-
-  // 3. Fallback: send actual Tab to the shell (pod exec, remote)
-  const tab = activeTab.value
-  if (tab?.ws?.readyState === 1) {
-    tab.ws.send(JSON.stringify({ action: 'stdin', data: '\t' }))
-  }
+  // 2. Query API for deeper path completion
+  await apiPathComplete(prefix, token)
 }
 
 function showHistorySuggestions(input) {
@@ -419,9 +447,12 @@ async function apiPathComplete(prefix, token) {
   } catch (_) {}
 }
 
-// Inline suggestion: show suffix of best history match as ghost text
+// Inline suggestion: show suffix of best history match as ghost text (local only)
 watch(cmdInput, val => {
-  if (!val || historyIdx.value >= 0) { suggestion.value = ''; return }
+  if (!val || historyIdx.value >= 0 || activeTab.value?.context !== 'local') {
+    suggestion.value = ''
+    return
+  }
   const match = cmdHistory.value.find(c => c.startsWith(val) && c !== val)
   suggestion.value = match ? match.slice(val.length) : ''
 })
@@ -440,7 +471,7 @@ const browserSep     = ref('/')
 const browserEntries = ref([])
 const browserLoading = ref(false)
 const browserErr     = ref('')
-let browserRefreshTimer = null
+let browserRefreshTimer = null  // kept for potential future use
 
 const browserCrumbs = computed(() => {
   if (!browserCwd.value) return []
@@ -497,19 +528,14 @@ async function fetchBrowser(dirPath) {
 function refreshBrowser()   { fetchBrowser(browserCwd.value) }
 function toggleBrowser()    { showBrowser.value = !showBrowser.value }
 
-function scheduleBrowserRefresh() {
-  clearTimeout(browserRefreshTimer)
-  browserRefreshTimer = setTimeout(() => fetchBrowser(null), 800)
-}
-
 async function browseNavigate(dirPath) {
+  // Update the browser immediately for snappy UX
   await fetchBrowser(dirPath)
-  // Also cd in the shell (only local)
+  // Also cd in the shell (only local); the server's CWD probe will confirm and re-sync
   if (activeTab.value?.context === 'local' && activeTab.value?.ws?.readyState === 1) {
     const cmd = browserSep.value === '\\' ? `cd "${dirPath}"` : `cd '${dirPath}'`
     activeTab.value.ws.send(JSON.stringify({ action: 'stdin', data: cmd + '\n' }))
     store.pushLine(activeTab.value, cmd, 'cmd')
-    browserCwd.value = dirPath
   }
   nextTick(() => inputRef.value?.focus())
 }
@@ -534,18 +560,16 @@ function fbDblClick(entry) {
 }
 
 async function fbPreview(filePath) {
-  try {
-    const res  = await fetch(`/api/local/read?path=${encodeURIComponent(filePath)}`)
-    const data = await res.json()
-    if (!res.ok) { store.pushLine(activeTab.value, '✖ ' + data.error, 'err'); return }
-    const lines = data.content.split('\n').slice(0, 60)
-    store.pushLine(activeTab.value, `── Preview: ${filePath} (${data.lines} lines, ${data.sizeHuman}) ──`, 'sys')
-    lines.forEach(l => store.pushLine(activeTab.value, l, ''))
-    if (data.lines > 60) store.pushLine(activeTab.value, `  … (${data.lines - 60} more lines)`, 'sys')
-    scrollEnd()
-  } catch (err) {
-    store.pushLine(activeTab.value, '✖ ' + err.message, 'err')
-  }
+  fileViewerPath.value = filePath
+  fileViewerMode.value = 'auto'
+}
+
+function onViewerClose() {
+  fileViewerPath.value = null
+}
+
+function onViewerSaved(path) {
+  if (activeTab.value) store.pushLine(activeTab.value, `✔ Saved: ${path}`, 'ok')
 }
 
 // File icon helper
@@ -596,7 +620,6 @@ onMounted(() => nextTick(() => createIcons({ icons })))
 onUnmounted(() => {
   document.removeEventListener('mousemove', onResize)
   document.removeEventListener('mouseup', stopResize)
-  clearTimeout(browserRefreshTimer)
 })
 </script>
 

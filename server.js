@@ -22,9 +22,10 @@ const systemToolsRoutes = require('./routes/systemTools');
 const localShellRoutes  = require('./routes/localShell');
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
-const wss      = new WebSocket.Server({ noServer: true });
-const wssExec  = new WebSocket.Server({ noServer: true });
-const wssShell = new WebSocket.Server({ noServer: true });
+const wss        = new WebSocket.Server({ noServer: true });
+const wssExec    = new WebSocket.Server({ noServer: true });
+const wssShell   = new WebSocket.Server({ noServer: true });
+const wssEc2Shell = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url, 'http://localhost');
@@ -34,6 +35,8 @@ server.on('upgrade', (request, socket, head) => {
     wssExec.handleUpgrade(request, socket, head, ws => wssExec.emit('connection', ws, request));
   } else if (pathname === '/ws/shell') {
     wssShell.handleUpgrade(request, socket, head, ws => wssShell.emit('connection', ws, request));
+  } else if (pathname === '/ws/ec2-shell') {
+    wssEc2Shell.handleUpgrade(request, socket, head, ws => wssEc2Shell.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
@@ -1083,7 +1086,42 @@ wssShell.on('connection', (ws, req) => {
   const args    = isWin ? ['-NoLogo', '-NoProfile'] : [];
   const initCwd = os.homedir();
 
+  // Marker used to extract CWD from shell output without polluting visible output
+  const CWD_MARKER = '##KUA_CWD##';
+  // Probe injected after every stdin line to detect the new working directory
+  const cwdProbe = isWin
+    ? `\nWrite-Host "${CWD_MARKER}$($PWD.Path)${CWD_MARKER}"\n`
+    : `\necho "${CWD_MARKER}$(pwd)${CWD_MARKER}"\n`;
+  // Regex to match the marker line in raw output — uses lazy .*? not a broken char class
+  const CWD_RE = new RegExp(`${CWD_MARKER}(.*?)${CWD_MARKER}`);
+
   let proc = null;
+  // Buffer for assembling multi-chunk lines so we can reliably detect the marker
+  let outBuf = '';
+
+  function flushBuf(ws) {
+    const lines = outBuf.split('\n');
+    outBuf = lines.pop(); // keep incomplete last line in buffer
+    for (const line of lines) {
+      // Suppress any line that contains our marker (the Write-Host echo AND the output line)
+      if (line.includes(CWD_MARKER)) {
+        const m = line.match(CWD_RE);
+        if (m) {
+          const cwd = m[1].trim();
+          // Only accept real paths — ignore the echoed command line where
+          // the match would contain shell syntax like $($PWD.Path)
+          const isRealPath = /^([A-Za-z]:[\\\/]|\/)/.test(cwd) && !cwd.includes('$');
+          if (isRealPath && ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: 'cwd', path: cwd }));
+        }
+        // Either way: do NOT forward this line to the client
+        continue;
+      }
+      const clean = stripAnsi(line);
+      if (clean && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'out', data: clean }));
+    }
+  }
 
   function start() {
     proc = spawn(shell, args, {
@@ -1097,8 +1135,8 @@ wssShell.on('connection', (ws, req) => {
       ws.send(JSON.stringify({ type: 'connected', shell, cwd: initCwd }));
 
     proc.stdout.on('data', chunk => {
-      if (ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'out', data: stripAnsi(chunk.toString('utf8')) }));
+      outBuf += chunk.toString('utf8');
+      flushBuf(ws);
     });
 
     proc.stderr.on('data', chunk => {
@@ -1135,7 +1173,13 @@ wssShell.on('connection', (ws, req) => {
     }
     if (msg.action === 'stdin') {
       if (proc && !proc.killed) {
-        try { proc.stdin.write(msg.data); } catch (_) {}
+        try {
+          // Write the user's command, then inject the CWD probe so the
+          // frontend's file browser stays in sync with the shell's directory.
+          // The probe output is intercepted server-side and never shown to the user.
+          const data = msg.data.endsWith('\n') ? msg.data : msg.data + '\n';
+          proc.stdin.write(data + cwdProbe);
+        } catch (_) {}
       }
     }
   });
@@ -1143,6 +1187,125 @@ wssShell.on('connection', (ws, req) => {
   ws.on('close', () => {
     if (proc && !proc.killed) proc.kill();
   });
+});
+
+// ─── WebSocket – EC2 SSH Shell ────────────────────────────────────────────────
+// Protocol (client → server):
+//   First message:  { action: 'connect', host, user, keyPath, port? }
+//   Then:           { action: 'stdin', data: string }
+//                   { action: 'resize', cols, rows }
+//                   { action: 'stop' }
+// Protocol (server → client):
+//   { type: 'connected', host, user }
+//   { type: 'out',  data: string }
+//   { type: 'err',  data: string }
+//   { type: 'done', code: number }
+//   { type: 'error', data: string }
+
+wssEc2Shell.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) {
+    ws.close(1008, 'Local connections only');
+    return;
+  }
+
+  let sshConn   = null;
+  let sshStream = null;
+
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify(obj));
+  }
+
+  function cleanup() {
+    if (sshStream) { try { sshStream.end(); } catch (_) {} sshStream = null; }
+    if (sshConn)   { try { sshConn.end();    } catch (_) {} sshConn   = null; }
+  }
+
+  ws.on('message', rawMsg => {
+    let msg;
+    try { msg = JSON.parse(rawMsg); } catch (_) { return; }
+
+    if (msg.action === 'connect') {
+      const { Client } = require('ssh2');
+      const { host, user = 'ec2-user', keyPath, port = 22, passphrase } = msg;
+
+      if (!host)    { send({ type: 'error', data: 'host is required' }); return; }
+      if (!keyPath) { send({ type: 'error', data: 'keyPath is required' }); return; }
+
+      let privateKey;
+      try {
+        privateKey = fs.readFileSync(keyPath);
+      } catch (e) {
+        send({ type: 'error', data: `Cannot read key file: ${e.message}` });
+        return;
+      }
+
+      cleanup();
+      sshConn = new Client();
+
+      sshConn.on('ready', () => {
+        sshConn.shell({ term: 'xterm-256color', cols: 220, rows: 50 }, (err, stream) => {
+          if (err) {
+            send({ type: 'error', data: `Shell error: ${err.message}` });
+            cleanup();
+            return;
+          }
+          sshStream = stream;
+          send({ type: 'connected', host, user });
+
+          stream.on('data', chunk => {
+            send({ type: 'out', data: chunk.toString('utf8') });
+          });
+
+          stream.stderr.on('data', chunk => {
+            send({ type: 'err', data: chunk.toString('utf8') });
+          });
+
+          stream.on('close', (code) => {
+            send({ type: 'done', code: code ?? 0 });
+            cleanup();
+          });
+        });
+      });
+
+      sshConn.on('error', err => {
+        send({ type: 'error', data: `SSH error: ${err.message}` });
+        cleanup();
+      });
+
+      sshConn.on('end', () => {
+        if (sshStream) {
+          send({ type: 'done', code: 0 });
+          cleanup();
+        }
+      });
+
+      const connectOpts = { host, port, username: user, privateKey };
+      if (passphrase) connectOpts.passphrase = passphrase;
+
+      sshConn.connect(connectOpts);
+      return;
+    }
+
+    if (msg.action === 'stdin' && sshStream) {
+      try { sshStream.write(msg.data); } catch (_) {}
+      return;
+    }
+
+    if (msg.action === 'resize' && sshStream) {
+      try { sshStream.setWindow(msg.rows || 50, msg.cols || 220, 0, 0); } catch (_) {}
+      return;
+    }
+
+    if (msg.action === 'stop') {
+      cleanup();
+      send({ type: 'done', code: 0 });
+    }
+  });
+
+  ws.on('close', () => { cleanup(); });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────

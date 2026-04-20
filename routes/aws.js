@@ -21,9 +21,17 @@
  *   GET  /ec2                               → list EC2 instances
  *   POST /ec2/:id/start                     → start EC2 instance
  *   POST /ec2/:id/stop                      → stop EC2 instance
+ *   GET  /lambda                            → list Lambda functions
+ *   POST /lambda/:name/invoke               → invoke a Lambda function (sync)
+ *   GET  /apigateway                        → list REST + HTTP API Gateway APIs
+ *   GET  /logs/lambda/:name                 → CloudWatch logs for a Lambda function
+ *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
  * NOTE: AWS SDK v3 packages are lazy-required. Install them with:
- *   npm install @aws-sdk/client-ec2 @aws-sdk/client-eks @aws-sdk/client-ecs @aws-sdk/credential-providers
+ *   npm install @aws-sdk/client-ec2 @aws-sdk/client-eks @aws-sdk/client-ecs \
+ *               @aws-sdk/client-lambda @aws-sdk/client-api-gateway \
+ *               @aws-sdk/client-apigatewayv2 @aws-sdk/client-cloudwatch-logs \
+ *               @aws-sdk/credential-providers
  */
 
 const express      = require('express');
@@ -210,6 +218,7 @@ router.get('/ecs', async (req, res) => {
       const desc = await client.send(new DescribeServicesCommand({
         cluster: clusterArn,
         services: svcList.serviceArns,
+        include: ['TAGS'],
       }));
 
       for (const svc of (desc.services || [])) {
@@ -221,6 +230,10 @@ router.get('/ecs', async (req, res) => {
           running:      svc.runningCount,
           pending:      svc.pendingCount,
           taskDef:      svc.taskDefinition?.split('/').pop(),
+          createdAt:    svc.createdAt,
+          tags:         svc.tags || [],
+          logGroupName: svc.deploymentConfiguration?.maximumPercent != null
+            ? null : null, // fetched via config
         });
       }
     }
@@ -287,6 +300,7 @@ router.get('/ec2', async (req, res) => {
           privateIp:    i.PrivateIpAddress || null,
           az:           i.Placement?.AvailabilityZone,
           launchTime:   i.LaunchTime,
+          tags:         i.Tags || [],
         });
       }
     }
@@ -322,4 +336,1245 @@ router.post('/ec2/:id/stop', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /lambda ──────────────────────────────────────────────────────────────
+
+router.get('/lambda', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LambdaClient, ListFunctionsCommand } = require('@aws-sdk/client-lambda');
+    const client = new LambdaClient(cfg);
+    const all = [];
+    let marker;
+    do {
+      const resp = await client.send(new ListFunctionsCommand({ MaxItems: 50, Marker: marker }));
+      all.push(...(resp.Functions || []));
+      marker = resp.NextMarker;
+    } while (marker);
+    res.json(all.map(f => ({
+      name:         f.FunctionName,
+      runtime:      f.Runtime,
+      handler:      f.Handler,
+      memory:       f.MemorySize,
+      timeout:      f.Timeout,
+      lastModified: f.LastModified,
+      description:  f.Description,
+      state:        f.State,
+      arn:          f.FunctionArn,
+      logGroup:     `/aws/lambda/${f.FunctionName}`,
+      tags:         [],
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lambda/:name/invoke ────────────────────────────────────────────────
+
+router.post('/lambda/:name/invoke', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+    const client  = new LambdaClient(cfg);
+    const payload = req.body != null ? req.body : {};
+    const resp    = await client.send(new InvokeCommand({
+      FunctionName:   req.params.name,
+      InvocationType: 'RequestResponse',
+      Payload:        Buffer.from(JSON.stringify(payload)),
+    }));
+    const result = resp.Payload ? JSON.parse(Buffer.from(resp.Payload).toString()) : null;
+    res.json({
+      statusCode:    resp.StatusCode,
+      functionError: resp.FunctionError || null,
+      payload:       result,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /apigateway ──────────────────────────────────────────────────────────
+// Lists REST APIs (API Gateway v1) and HTTP/WebSocket APIs (API Gateway v2).
+
+router.get('/apigateway', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { APIGatewayClient, GetRestApisCommand }      = require('@aws-sdk/client-api-gateway');
+    const { ApiGatewayV2Client, GetApisCommand }        = require('@aws-sdk/client-apigatewayv2');
+
+    const [restResult, httpResult] = await Promise.allSettled([
+      new APIGatewayClient(cfg).send(new GetRestApisCommand({ limit: 50 })),
+      new ApiGatewayV2Client(cfg).send(new GetApisCommand({})),
+    ]);
+
+    const result = [];
+    if (restResult.status === 'fulfilled') {
+      for (const api of (restResult.value.items || [])) {
+        result.push({
+          id:          api.id,
+          name:        api.name,
+          type:        'REST',
+          endpoint:    `https://${api.id}.execute-api.${cfg.region}.amazonaws.com`,
+          createdDate: api.createdDate,
+          description: api.description || '',
+        });
+      }
+    }
+    if (httpResult.status === 'fulfilled') {
+      for (const api of (httpResult.value.Items || [])) {
+        result.push({
+          id:          api.ApiId,
+          name:        api.Name,
+          type:        api.ProtocolType || 'HTTP',
+          endpoint:    api.ApiEndpoint,
+          createdDate: api.CreatedDate,
+          description: api.Description || '',
+        });
+      }
+    }
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /logs/lambda/:name ───────────────────────────────────────────────────
+
+router.get('/logs/lambda/:name', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const client       = new CloudWatchLogsClient(cfg);
+    const logGroupName = `/aws/lambda/${req.params.name}`;
+    const limit        = Math.min(parseInt(req.query.limit) || 200, 500);
+    const minutes      = Math.min(parseInt(req.query.minutes) || 60, 1440);
+    const startTime    = Date.now() - minutes * 60 * 1000;
+
+    const resp = await client.send(new FilterLogEventsCommand({ logGroupName, limit, startTime }));
+    res.json({
+      logGroupName,
+      events: (resp.events || []).map(e => ({
+        timestamp:     e.timestamp,
+        message:       e.message,
+        logStreamName: e.logStreamName,
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /logs/ecs/:cluster/:service ─────────────────────────────────────────
+
+router.get('/logs/ecs/:cluster/:service', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      CloudWatchLogsClient,
+      DescribeLogGroupsCommand,
+      FilterLogEventsCommand,
+    } = require('@aws-sdk/client-cloudwatch-logs');
+    const client  = new CloudWatchLogsClient(cfg);
+    const cluster = req.params.cluster;
+    const service = req.params.service;
+    const limit   = Math.min(parseInt(req.query.limit) || 200, 500);
+    const minutes = Math.min(parseInt(req.query.minutes) || 60, 1440);
+    const startTime = Date.now() - minutes * 60 * 1000;
+
+    // Try common ECS log group naming conventions
+    const candidates = [
+      `/ecs/${service}`,
+      `/ecs/${cluster}/${service}`,
+      `/aws/ecs/${service}`,
+      `/aws/ecs/containerinsights/${cluster}/performance`,
+    ];
+
+    let logGroupName = null;
+    for (const prefix of candidates) {
+      try {
+        const desc = await client.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: prefix, limit: 1 }));
+        if (desc.logGroups?.length) { logGroupName = desc.logGroups[0].logGroupName; break; }
+      } catch { /* try next */ }
+    }
+
+    if (!logGroupName) {
+      return res.json({ logGroupName: null, events: [], message: 'No matching CloudWatch log group found.' });
+    }
+
+    const resp = await client.send(new FilterLogEventsCommand({ logGroupName, limit, startTime }));
+    res.json({
+      logGroupName,
+      events: (resp.events || []).map(e => ({
+        timestamp:     e.timestamp,
+        message:       e.message,
+        logStreamName: e.logStreamName,
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3 ──────────────────────────────────────────────────────────────────
+
+router.get('/s3', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, ListBucketsCommand, GetBucketLocationCommand } = require('@aws-sdk/client-s3');
+    const client = new S3Client({ ...cfg, region: 'us-east-1' });
+    const resp   = await client.send(new ListBucketsCommand({}));
+    const buckets = await Promise.all((resp.Buckets || []).map(async b => {
+      let region = 'us-east-1';
+      try {
+        const loc = await client.send(new GetBucketLocationCommand({ Bucket: b.Name }));
+        region = loc.LocationConstraint || 'us-east-1';
+      } catch { /* ignore per-bucket errors */ }
+      return { name: b.Name, creationDate: b.CreationDate, region };
+    }));
+    res.json(buckets);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/config ───────────────────────────────────────────────────
+
+router.get('/s3/:bucket/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      S3Client, GetBucketVersioningCommand, GetBucketTaggingCommand,
+      GetBucketEncryptionCommand, GetBucketAclCommand, GetBucketPolicyStatusCommand,
+      GetBucketLocationCommand,
+    } = require('@aws-sdk/client-s3');
+    const client = new S3Client(cfg);
+    const bucket = req.params.bucket;
+    const [versioning, tags, encryption, acl, policyStatus, location] = await Promise.allSettled([
+      client.send(new GetBucketVersioningCommand({ Bucket: bucket })),
+      client.send(new GetBucketTaggingCommand({ Bucket: bucket })),
+      client.send(new GetBucketEncryptionCommand({ Bucket: bucket })),
+      client.send(new GetBucketAclCommand({ Bucket: bucket })),
+      client.send(new GetBucketPolicyStatusCommand({ Bucket: bucket })),
+      client.send(new GetBucketLocationCommand({ Bucket: bucket })),
+    ]);
+    res.json({
+      bucket,
+      region:      location.status   === 'fulfilled' ? (location.value.LocationConstraint || 'us-east-1') : null,
+      versioning:  versioning.status === 'fulfilled' ? (versioning.value.Status || 'Disabled') : null,
+      tags:        tags.status       === 'fulfilled' ? (tags.value.TagSet || []) : [],
+      encryption:  encryption.status === 'fulfilled' ? encryption.value.ServerSideEncryptionConfiguration : null,
+      acl:         acl.status        === 'fulfilled' ? (acl.value.Grants || []) : [],
+      isPublic:    policyStatus.status === 'fulfilled' ? (policyStatus.value.PolicyStatus?.IsPublic ?? null) : null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ecr ─────────────────────────────────────────────────────────────────
+
+router.get('/ecr', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { ECRClient, DescribeRepositoriesCommand } = require('@aws-sdk/client-ecr');
+    const client = new ECRClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new DescribeRepositoriesCommand({ nextToken }));
+      all.push(...(resp.repositories || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+    res.json(all.map(r => ({
+      name:               r.repositoryName,
+      uri:                r.repositoryUri,
+      arn:                r.repositoryArn,
+      createdAt:          r.createdAt,
+      imageTagMutability: r.imageTagMutability,
+      scanOnPush:         r.imageScanningConfiguration?.scanOnPush ?? false,
+      tags:               [],
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ecr/config ──────────────────────────────────────────────────────────
+
+router.get('/ecr/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { repo } = req.query;
+  if (!repo) return res.status(400).json({ error: 'repo query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { ECRClient, DescribeRepositoriesCommand, ListImagesCommand, GetLifecyclePolicyCommand } = require('@aws-sdk/client-ecr');
+    const client = new ECRClient(cfg);
+    const [detail, images, lifecycle] = await Promise.allSettled([
+      client.send(new DescribeRepositoriesCommand({ repositoryNames: [repo] })),
+      client.send(new ListImagesCommand({ repositoryName: repo, maxResults: 20 })),
+      client.send(new GetLifecyclePolicyCommand({ repositoryName: repo })),
+    ]);
+    res.json({
+      repository: detail.status    === 'fulfilled' ? (detail.value.repositories?.[0] ?? null) : null,
+      images:     images.status    === 'fulfilled' ? (images.value.imageIds ?? []) : [],
+      lifecycle:  lifecycle.status === 'fulfilled' ? lifecycle.value.lifecyclePolicyText : null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /vpc ─────────────────────────────────────────────────────────────────
+
+router.get('/vpc', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } = require('@aws-sdk/client-ec2');
+    const client = new EC2Client(cfg);
+    const [vpcsResp, subnetsResp] = await Promise.all([
+      client.send(new DescribeVpcsCommand({})),
+      client.send(new DescribeSubnetsCommand({})),
+    ]);
+    const subnetsByVpc = {};
+    for (const s of (subnetsResp.Subnets || [])) {
+      (subnetsByVpc[s.VpcId] = subnetsByVpc[s.VpcId] || []).push({
+        id: s.SubnetId, cidr: s.CidrBlock, az: s.AvailabilityZone,
+        state: s.State, public: s.MapPublicIpOnLaunch,
+      });
+    }
+    res.json((vpcsResp.Vpcs || []).map(v => ({
+      id:      v.VpcId,
+      name:    v.Tags?.find(t => t.Key === 'Name')?.Value || v.VpcId,
+      cidr:    v.CidrBlock,
+      state:   v.State,
+      default: v.IsDefault,
+      tenancy: v.InstanceTenancy,
+      subnets: subnetsByVpc[v.VpcId] || [],
+      tags:    v.Tags || [],
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /vpc/:id/config ──────────────────────────────────────────────────────
+
+router.get('/vpc/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand,
+      DescribeInternetGatewaysCommand, DescribeRouteTablesCommand,
+      DescribeSecurityGroupsCommand, DescribeNatGatewaysCommand,
+    } = require('@aws-sdk/client-ec2');
+    const client  = new EC2Client(cfg);
+    const vpcId   = req.params.id;
+    const filters = [{ Name: 'vpc-id', Values: [vpcId] }];
+    const [vpc, subnets, igws, rts, sgs, nats] = await Promise.allSettled([
+      client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] })),
+      client.send(new DescribeSubnetsCommand({ Filters: filters })),
+      client.send(new DescribeInternetGatewaysCommand({ Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }] })),
+      client.send(new DescribeRouteTablesCommand({ Filters: filters })),
+      client.send(new DescribeSecurityGroupsCommand({ Filters: filters })),
+      client.send(new DescribeNatGatewaysCommand({ Filter: filters })),
+    ]);
+    res.json({
+      vpc:              vpc.status     === 'fulfilled' ? (vpc.value.Vpcs?.[0] ?? null) : null,
+      subnets:          subnets.status === 'fulfilled' ? (subnets.value.Subnets ?? []) : [],
+      internetGateways: igws.status    === 'fulfilled' ? (igws.value.InternetGateways ?? []) : [],
+      routeTables:      rts.status     === 'fulfilled' ? (rts.value.RouteTables ?? []) : [],
+      securityGroups:   sgs.status     === 'fulfilled' ? (sgs.value.SecurityGroups ?? []) : [],
+      natGateways:      nats.status    === 'fulfilled' ? (nats.value.NatGateways ?? []) : [],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /eventbridge ─────────────────────────────────────────────────────────
+
+router.get('/eventbridge', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EventBridgeClient, ListEventBusesCommand, ListRulesCommand } = require('@aws-sdk/client-eventbridge');
+    const client = new EventBridgeClient(cfg);
+    const busesResp = await client.send(new ListEventBusesCommand({ Limit: 50 }));
+    const result = [];
+    for (const bus of (busesResp.EventBuses || [])) {
+      try {
+        const rulesResp = await client.send(new ListRulesCommand({ EventBusName: bus.Name, Limit: 50 }));
+        for (const rule of (rulesResp.Rules || [])) {
+          result.push({
+            busName:      bus.Name,
+            name:         rule.Name,
+            state:        rule.State,
+            description:  rule.Description || '',
+            scheduleExpr: rule.ScheduleExpression || null,
+            eventPattern: rule.EventPattern ? (() => { try { return JSON.parse(rule.EventPattern); } catch { return rule.EventPattern; } })() : null,
+            arn:          rule.Arn,
+          });
+        }
+      } catch { /* ignore per-bus errors */ }
+    }
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /eventbridge/config ──────────────────────────────────────────────────
+
+router.get('/eventbridge/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { bus, rule } = req.query;
+  if (!bus || !rule) return res.status(400).json({ error: 'bus and rule query params required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EventBridgeClient, DescribeRuleCommand, ListTargetsByRuleCommand } = require('@aws-sdk/client-eventbridge');
+    const client = new EventBridgeClient(cfg);
+    const [desc, targets] = await Promise.all([
+      client.send(new DescribeRuleCommand({ EventBusName: bus, Name: rule })),
+      client.send(new ListTargetsByRuleCommand({ EventBusName: bus, Rule: rule })),
+    ]);
+    res.json({ rule: desc, targets: targets.Targets || [] });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /logs/eventbridge ────────────────────────────────────────────────────
+// Returns CloudWatch metrics (MatchedEvents, TriggeredRules, FailedInvocations,
+// ThrottledRules) + log events if a CloudWatch Logs target is configured.
+
+router.get('/logs/eventbridge', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { bus, rule } = req.query;
+  if (!bus || !rule) return res.status(400).json({ error: 'bus and rule query params required' });
+  try {
+    const cfg     = await resolveAwsConfig(profileId);
+    const minutes = Math.min(parseInt(req.query.minutes) || 60, 1440 * 7);
+    const now     = new Date();
+    const startTime = new Date(Date.now() - minutes * 60 * 1000);
+
+    const {
+      CloudWatchClient,
+      GetMetricStatisticsCommand,
+    } = require('@aws-sdk/client-cloudwatch');
+    const {
+      CloudWatchLogsClient,
+      FilterLogEventsCommand,
+      DescribeLogGroupsCommand,
+    } = require('@aws-sdk/client-cloudwatch-logs');
+    const {
+      EventBridgeClient,
+      ListTargetsByRuleCommand,
+    } = require('@aws-sdk/client-eventbridge');
+
+    const cwClient  = new CloudWatchClient(cfg);
+    const cwlClient = new CloudWatchLogsClient(cfg);
+    const ebClient  = new EventBridgeClient(cfg);
+
+    // 1. Fetch CW metrics for this rule
+    const metricNames = ['MatchedEvents', 'TriggeredRules', 'FailedInvocations', 'ThrottledRules'];
+    const period = minutes <= 60 ? 60 : minutes <= 360 ? 300 : minutes <= 1440 ? 900 : 3600;
+    const dimensions = [
+      { Name: 'RuleName', Value: rule },
+      { Name: 'EventBusName', Value: bus },
+    ];
+
+    const metricResults = await Promise.allSettled(
+      metricNames.map(MetricName =>
+        cwClient.send(new GetMetricStatisticsCommand({
+          Namespace:  'AWS/Events',
+          MetricName,
+          Dimensions: dimensions,
+          StartTime:  startTime,
+          EndTime:    now,
+          Period:     period,
+          Statistics: ['Sum'],
+        }))
+      )
+    );
+
+    const metrics = {};
+    metricNames.forEach((name, i) => {
+      const r = metricResults[i];
+      if (r.status === 'fulfilled') {
+        const pts = (r.value.Datapoints || []).sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+        metrics[name] = pts.map(p => ({ t: p.Timestamp, v: p.Sum ?? 0 }));
+      } else {
+        metrics[name] = [];
+      }
+    });
+
+    // Compute totals
+    const totals = {};
+    for (const [k, pts] of Object.entries(metrics)) {
+      totals[k] = pts.reduce((s, p) => s + p.v, 0);
+    }
+
+    // 2. Find CW Logs targets for this rule
+    let logGroupName = null;
+    let logEvents    = [];
+    try {
+      const targetsResp = await ebClient.send(new ListTargetsByRuleCommand({ EventBusName: bus, Rule: rule }));
+      const targets     = targetsResp.Targets || [];
+      // A CloudWatch Logs target ARN looks like: arn:aws:logs:<region>:<acct>:log-group:<name>
+      const cwLogsTarget = targets.find(t => t.Arn && t.Arn.includes(':logs:'));
+      if (cwLogsTarget) {
+        // Extract log group name from ARN: arn:aws:logs:r:a:log-group:/group/name
+        const arnParts = cwLogsTarget.Arn.split(':log-group:');
+        logGroupName   = arnParts[1] || null;
+      }
+    } catch { /* ignore */ }
+
+    // 3. If no direct CW Logs target, try to discover a bus-level log group
+    if (!logGroupName) {
+      const busSlug = bus === 'default' ? 'default' : bus.replace(/[^a-zA-Z0-9_/-]/g, '-');
+      const candidates = [
+        `/aws/events/${busSlug}`,
+        `/aws/events/`,
+        `/eventbridge/${busSlug}`,
+      ];
+      for (const prefix of candidates) {
+        try {
+          const desc = await cwlClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: prefix, limit: 1 }));
+          if (desc.logGroups?.length) { logGroupName = desc.logGroups[0].logGroupName; break; }
+        } catch { /* try next */ }
+      }
+    }
+
+    // 4. Fetch log events if we found a log group
+    if (logGroupName) {
+      try {
+        const filterPattern = rule.length <= 200 ? `"${rule}"` : '';
+        const logsResp = await cwlClient.send(new FilterLogEventsCommand({
+          logGroupName,
+          startTime: startTime.getTime(),
+          limit:     200,
+          filterPattern: filterPattern || undefined,
+        }));
+        logEvents = (logsResp.events || []).map(e => ({
+          timestamp:     e.timestamp,
+          message:       e.message,
+          logStreamName: e.logStreamName,
+        }));
+      } catch { logEvents = []; }
+    }
+
+    res.json({ metrics, totals, logGroupName, logEvents, period });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /stepfunctions ───────────────────────────────────────────────────────
+
+router.get('/stepfunctions', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, ListStateMachinesCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListStateMachinesCommand({ maxResults: 100, nextToken }));
+      all.push(...(resp.stateMachines || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+    res.json(all.map(sm => ({
+      name:         sm.name,
+      arn:          sm.stateMachineArn,
+      type:         sm.type,
+      creationDate: sm.creationDate,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /stepfunctions/config ────────────────────────────────────────────────
+
+router.get('/stepfunctions/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn } = req.query;
+  if (!arn) return res.status(400).json({ error: 'arn query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, DescribeStateMachineCommand, ListExecutionsCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const [detail, executions] = await Promise.allSettled([
+      client.send(new DescribeStateMachineCommand({ stateMachineArn: arn })),
+      client.send(new ListExecutionsCommand({ stateMachineArn: arn, maxResults: 10 })),
+    ]);
+    res.json({
+      stateMachine:     detail.status     === 'fulfilled' ? detail.value : null,
+      recentExecutions: executions.status === 'fulfilled' ? (executions.value.executions ?? []) : [],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ec2/:id/config ──────────────────────────────────────────────────────
+
+router.get('/ec2/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
+    const client = new EC2Client(cfg);
+    const resp   = await client.send(new DescribeInstancesCommand({ InstanceIds: [req.params.id] }));
+    res.json(resp.Reservations?.[0]?.Instances?.[0] ?? null);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ecs/:cluster/:service/config ────────────────────────────────────────
+
+router.get('/ecs/:cluster/:service/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { ECSClient, DescribeServicesCommand, DescribeTaskDefinitionCommand } = require('@aws-sdk/client-ecs');
+    const client  = new ECSClient(cfg);
+    const svcResp = await client.send(new DescribeServicesCommand({
+      cluster: req.params.cluster, services: [req.params.service],
+    }));
+    const svc = svcResp.services?.[0] ?? null;
+    let taskDef = null;
+    if (svc?.taskDefinition) {
+      try {
+        const td = await client.send(new DescribeTaskDefinitionCommand({ taskDefinition: svc.taskDefinition }));
+        taskDef = td.taskDefinition ?? null;
+      } catch { /* ignore */ }
+    }
+    res.json({ service: svc, taskDefinition: taskDef });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /eks/:name/config ────────────────────────────────────────────────────
+
+router.get('/eks/:name/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EKSClient, DescribeClusterCommand, ListNodegroupsCommand } = require('@aws-sdk/client-eks');
+    const client = new EKSClient(cfg);
+    const [cluster, nodegroups] = await Promise.allSettled([
+      client.send(new DescribeClusterCommand({ name: req.params.name })),
+      client.send(new ListNodegroupsCommand({ clusterName: req.params.name })),
+    ]);
+    res.json({
+      cluster:    cluster.status    === 'fulfilled' ? (cluster.value.cluster ?? null) : null,
+      nodegroups: nodegroups.status === 'fulfilled' ? (nodegroups.value.nodegroups ?? []) : [],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lambda/:name/config ─────────────────────────────────────────────────
+
+router.get('/lambda/:name/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LambdaClient, GetFunctionConfigurationCommand, ListAliasesCommand } = require('@aws-sdk/client-lambda');
+    const client = new LambdaClient(cfg);
+    const [fn, aliases] = await Promise.allSettled([
+      client.send(new GetFunctionConfigurationCommand({ FunctionName: req.params.name })),
+      client.send(new ListAliasesCommand({ FunctionName: req.params.name })),
+    ]);
+    res.json({
+      configuration: fn.status      === 'fulfilled' ? fn.value : null,
+      aliases:       aliases.status === 'fulfilled' ? (aliases.value.Aliases ?? []) : [],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /apigateway/:id/config ───────────────────────────────────────────────
+
+router.get('/apigateway/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const apiType = req.query.type || 'REST';
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    if (apiType === 'REST') {
+      const { APIGatewayClient, GetRestApiCommand, GetStagesCommand, GetResourcesCommand } = require('@aws-sdk/client-api-gateway');
+      const client = new APIGatewayClient(cfg);
+      const [api, stages, resources] = await Promise.allSettled([
+        client.send(new GetRestApiCommand({ restApiId: req.params.id })),
+        client.send(new GetStagesCommand({ restApiId: req.params.id })),
+        client.send(new GetResourcesCommand({ restApiId: req.params.id })),
+      ]);
+      res.json({
+        api:       api.status       === 'fulfilled' ? api.value : null,
+        stages:    stages.status    === 'fulfilled' ? (stages.value.item ?? []) : [],
+        resources: resources.status === 'fulfilled' ? (resources.value.items ?? []) : [],
+      });
+    } else {
+      const { ApiGatewayV2Client, GetApiCommand, GetStagesCommand } = require('@aws-sdk/client-apigatewayv2');
+      const client = new ApiGatewayV2Client(cfg);
+      const [api, stages] = await Promise.allSettled([
+        client.send(new GetApiCommand({ ApiId: req.params.id })),
+        client.send(new GetStagesCommand({ ApiId: req.params.id })),
+      ]);
+      res.json({
+        api:    api.status    === 'fulfilled' ? api.value : null,
+        stages: stages.status === 'fulfilled' ? (stages.value.Items ?? []) : [],
+      });
+    }
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /apigateway/:id/integrations ─────────────────────────────────────────
+// Returns routes → integration details (Lambda URI, type, etc.) for REST or HTTP/WS APIs.
+
+router.get('/apigateway/:id/integrations', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const apiType = req.query.type || 'REST';
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+
+    if (apiType === 'REST') {
+      const { APIGatewayClient, GetResourcesCommand, GetIntegrationCommand } = require('@aws-sdk/client-api-gateway');
+      const client    = new APIGatewayClient(cfg);
+      const restApiId = req.params.id;
+      const resources = await client.send(new GetResourcesCommand({ restApiId, limit: 100 }));
+      const rows      = [];
+
+      for (const resource of (resources.items || [])) {
+        if (!resource.resourceMethods) continue;
+        for (const httpMethod of Object.keys(resource.resourceMethods)) {
+          if (httpMethod === 'OPTIONS') continue;
+          let integration = null;
+          try {
+            const resp = await client.send(new GetIntegrationCommand({ restApiId, resourceId: resource.id, httpMethod }));
+            integration = resp;
+          } catch (_) {}
+
+          const uri          = integration?.uri || '';
+          const lambdaMatch  = uri.match(/function:([^/]+)/);
+          rows.push({
+            path:               resource.path || '/',
+            method:             httpMethod,
+            type:               integration?.type             || null,
+            uri,
+            lambdaName:         lambdaMatch ? lambdaMatch[1].split(':')[0] : null,
+            integrationMethod:  integration?.httpMethod       || null,
+            passthroughBehavior:integration?.passthroughBehavior || null,
+            timeoutMs:          integration?.timeoutInMillis  || null,
+          });
+        }
+      }
+      res.json({ type: 'REST', integrations: rows });
+
+    } else {
+      // HTTP / WebSocket APIs (v2)
+      const { ApiGatewayV2Client, GetRoutesCommand, GetIntegrationsCommand } = require('@aws-sdk/client-apigatewayv2');
+      const client = new ApiGatewayV2Client(cfg);
+      const [routesResp, intResp] = await Promise.allSettled([
+        client.send(new GetRoutesCommand({ ApiId: req.params.id })),
+        client.send(new GetIntegrationsCommand({ ApiId: req.params.id })),
+      ]);
+
+      const integrationMap = {};
+      for (const i of (intResp.status === 'fulfilled' ? (intResp.value.Items || []) : [])) {
+        integrationMap[i.IntegrationId] = i;
+      }
+
+      const rows = (routesResp.status === 'fulfilled' ? (routesResp.value.Items || []) : []).map(route => {
+        const intId   = (route.Target || '').replace('integrations/', '');
+        const intData = integrationMap[intId] || {};
+        const uri     = intData.IntegrationUri || '';
+        const lambdaMatch = uri.match(/function:([^/]+)/);
+        return {
+          routeKey:           route.RouteKey,
+          type:               intData.IntegrationType || null,
+          uri,
+          lambdaName:         lambdaMatch ? lambdaMatch[1].split(':')[0] : null,
+          payloadFormatVersion: intData.PayloadFormatVersion || null,
+          timeoutMs:          intData.TimeoutInMillis || null,
+          connectionType:     intData.ConnectionType || null,
+        };
+      });
+      res.json({ type: apiType, integrations: rows });
+    }
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /eks/:name/add-kubeconfig ───────────────────────────────────────────
+// Merges EKS cluster credentials into ~/.kube/config so kuadashboard can connect.
+
+router.post('/eks/:name/add-kubeconfig', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EKSClient, DescribeClusterCommand } = require('@aws-sdk/client-eks');
+    const yaml = require('js-yaml');
+
+    const client   = new EKSClient(cfg);
+    const clResult = await client.send(new DescribeClusterCommand({ name: req.params.name }));
+    const cluster  = clResult.cluster;
+
+    const clusterArn = cluster.arn;
+    const endpoint   = cluster.endpoint;
+    const caData     = cluster.certificateAuthority?.data;
+    const region     = cfg.region;
+
+    if (!endpoint || !caData) {
+      return res.status(400).json({ error: 'Cluster is not yet ready (missing endpoint or CA)' });
+    }
+
+    const kubeconfigPath = path.join(os.homedir(), '.kube', 'config');
+    const kubeDir        = path.dirname(kubeconfigPath);
+    if (!fs.existsSync(kubeDir)) fs.mkdirSync(kubeDir, { recursive: true });
+
+    let kube = { apiVersion: 'v1', kind: 'Config', clusters: [], contexts: [], users: [], preferences: {}, 'current-context': '' };
+    if (fs.existsSync(kubeconfigPath)) {
+      try { kube = yaml.load(fs.readFileSync(kubeconfigPath, 'utf8')) || kube; } catch (_) {}
+    }
+    if (!Array.isArray(kube.clusters))  kube.clusters = [];
+    if (!Array.isArray(kube.contexts))  kube.contexts = [];
+    if (!Array.isArray(kube.users))     kube.users = [];
+
+    // Build exec user entry (same as aws eks update-kubeconfig)
+    const execConfig = {
+      apiVersion: 'client.authentication.k8s.io/v1beta1',
+      command:    'aws',
+      args:       ['eks', 'get-token', '--cluster-name', cluster.name, '--region', region],
+      env:        null,
+      interactiveMode: 'IfAvailable',
+      provideClusterInfo: false,
+    };
+
+    // If profile-based, add --profile arg
+    if (profileId.startsWith('local:')) {
+      execConfig.args.push('--profile', profileId.slice(6));
+    }
+
+    // Upsert cluster
+    const existingCluster = kube.clusters.findIndex(c => c.name === clusterArn);
+    const clEntry = { name: clusterArn, cluster: { 'certificate-authority-data': caData, server: endpoint } };
+    if (existingCluster >= 0) kube.clusters[existingCluster] = clEntry;
+    else kube.clusters.push(clEntry);
+
+    // Upsert context
+    const existingCtx = kube.contexts.findIndex(c => c.name === clusterArn);
+    const ctxEntry = { name: clusterArn, context: { cluster: clusterArn, user: clusterArn } };
+    if (existingCtx >= 0) kube.contexts[existingCtx] = ctxEntry;
+    else kube.contexts.push(ctxEntry);
+
+    // Upsert user
+    const existingUser = kube.users.findIndex(u => u.name === clusterArn);
+    const userEntry = { name: clusterArn, user: { exec: execConfig } };
+    if (existingUser >= 0) kube.users[existingUser] = userEntry;
+    else kube.users.push(userEntry);
+
+    kube['current-context'] = clusterArn;
+    fs.writeFileSync(kubeconfigPath, yaml.dump(kube, { lineWidth: -1 }), 'utf8');
+    res.json({ message: `Added "${cluster.name}" to ~/.kube/config`, contextName: clusterArn });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/browse ───────────────────────────────────────────────────
+// Lists objects in a bucket under a given prefix (folder navigation).
+// Query: ?prefix=   (default '') &continuationToken=
+
+router.get('/s3/:bucket/browse', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg    = await resolveAwsConfig(profileId);
+    const { S3Client, ListObjectsV2Command, GetBucketLocationCommand } = require('@aws-sdk/client-s3');
+    const bucket = req.params.bucket;
+
+    // Resolve bucket region
+    const s3Global = new S3Client({ ...cfg, region: 'us-east-1' });
+    let bucketRegion = cfg.region;
+    try {
+      const loc = await s3Global.send(new GetBucketLocationCommand({ Bucket: bucket }));
+      bucketRegion = loc.LocationConstraint || 'us-east-1';
+    } catch (_) {}
+
+    const client = new S3Client({ ...cfg, region: bucketRegion });
+    const prefix = req.query.prefix || '';
+    const contTok = req.query.continuationToken || undefined;
+
+    const resp = await client.send(new ListObjectsV2Command({
+      Bucket:            bucket,
+      Prefix:            prefix,
+      Delimiter:         '/',
+      MaxKeys:           200,
+      ContinuationToken: contTok,
+    }));
+
+    const folders = (resp.CommonPrefixes || []).map(cp => ({
+      key:  cp.Prefix,
+      name: cp.Prefix.slice(prefix.length).replace(/\/$/, ''),
+      type: 'folder',
+    }));
+
+    const files = (resp.Contents || [])
+      .filter(obj => obj.Key !== prefix)  // skip the "folder itself" placeholder
+      .map(obj => ({
+        key:          obj.Key,
+        name:         obj.Key.slice(prefix.length),
+        type:         'file',
+        size:         obj.Size,
+        lastModified: obj.LastModified,
+        etag:         (obj.ETag || '').replace(/"/g, ''),
+        storageClass: obj.StorageClass,
+      }));
+
+    res.json({
+      bucket,
+      prefix,
+      folders,
+      files,
+      isTruncated:          resp.IsTruncated,
+      nextContinuationToken: resp.NextContinuationToken || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/object ───────────────────────────────────────────────────
+// Read object content (text only, up to 2 MB).
+// Query: ?key=path/to/file.txt
+
+router.get('/s3/:bucket/object', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ error: 'key query param required' });
+  try {
+    const cfg    = await resolveAwsConfig(profileId);
+    const { S3Client, GetObjectCommand, GetBucketLocationCommand } = require('@aws-sdk/client-s3');
+    const bucket = req.params.bucket;
+
+    const s3Global = new S3Client({ ...cfg, region: 'us-east-1' });
+    let bucketRegion = cfg.region;
+    try {
+      const loc = await s3Global.send(new GetBucketLocationCommand({ Bucket: bucket }));
+      bucketRegion = loc.LocationConstraint || 'us-east-1';
+    } catch (_) {}
+
+    const client = new S3Client({ ...cfg, region: bucketRegion });
+    const resp   = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const contentType = resp.ContentType || 'application/octet-stream';
+    const size        = resp.ContentLength || 0;
+    const MAX_READ    = 2 * 1024 * 1024; // 2 MB
+
+    const isText = /^text\/|\/json|\/xml|\/yaml|\/x-yaml|\/javascript|\/csv/.test(contentType)
+      || /\.(txt|json|yaml|yml|xml|csv|log|sh|py|js|ts|html|css|md|tf|hcl|conf|ini|env)$/i.test(key);
+
+    if (!isText && size > 65536) {
+      return res.json({ binary: true, contentType, size, key });
+    }
+
+    // Collect body
+    const chunks = [];
+    let total    = 0;
+    for await (const chunk of resp.Body) {
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total > MAX_READ) break;
+    }
+    const buf     = Buffer.concat(chunks);
+    const content = isText ? buf.toString('utf8') : buf.toString('base64');
+
+    res.json({ binary: !isText, contentType, size, key, content, truncated: total >= MAX_READ });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/download ─────────────────────────────────────────────────
+// Stream an object as a download attachment.
+// Query: ?key=path/to/file.txt
+
+router.get('/s3/:bucket/download', async (req, res) => {
+  const profileId = req.query.profileId || req.headers['x-profile-id'];
+  if (!profileId) return res.status(400).json({ error: 'profileId query param or X-Profile-Id header required' });
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ error: 'key query param required' });
+  try {
+    const cfg    = await resolveAwsConfig(profileId);
+    const { S3Client, GetObjectCommand, GetBucketLocationCommand } = require('@aws-sdk/client-s3');
+    const bucket = req.params.bucket;
+
+    const s3Global = new S3Client({ ...cfg, region: 'us-east-1' });
+    let bucketRegion = cfg.region;
+    try {
+      const loc = await s3Global.send(new GetBucketLocationCommand({ Bucket: bucket }));
+      bucketRegion = loc.LocationConstraint || 'us-east-1';
+    } catch (_) {}
+
+    const client = new S3Client({ ...cfg, region: bucketRegion });
+    const resp   = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+
+    const filename = key.split('/').pop();
+    res.setHeader('Content-Type', resp.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    if (resp.ContentLength) res.setHeader('Content-Length', resp.ContentLength);
+
+    resp.Body.pipe(res);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── PUT /tags ────────────────────────────────────────────────────────────────
+// Generic tag editor. Body: { arn, service, tags: [{Key,Value}], removedKeys: [] }
+
+router.put('/tags', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn, service, tags = [], removedKeys = [] } = req.body || {};
+  if (!arn) return res.status(400).json({ error: 'arn is required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+
+    if (service === 'ec2') {
+      const { EC2Client, CreateTagsCommand, DeleteTagsCommand } = require('@aws-sdk/client-ec2');
+      const client = new EC2Client(cfg);
+      const resourceId = arn; // EC2 uses instance IDs not ARNs for tagging
+      if (tags.length)
+        await client.send(new CreateTagsCommand({ Resources: [resourceId], Tags: tags }));
+      if (removedKeys.length)
+        await client.send(new DeleteTagsCommand({ Resources: [resourceId], Tags: removedKeys.map(k => ({ Key: k })) }));
+    } else if (service === 'lambda') {
+      const { LambdaClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-lambda');
+      const client = new LambdaClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ Resource: arn, Tags: Object.fromEntries(tags.map(t => [t.Key, t.Value])) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ Resource: arn, TagKeys: removedKeys }));
+    } else if (service === 'ecs') {
+      const { ECSClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-ecs');
+      const client = new ECSClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ resourceArn: arn, tags: tags.map(t => ({ key: t.Key, value: t.Value })) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ resourceArn: arn, tagKeys: removedKeys }));
+    } else if (service === 'eks') {
+      const { EKSClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-eks');
+      const client = new EKSClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ resourceArn: arn, tags: Object.fromEntries(tags.map(t => [t.Key, t.Value])) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ resourceArn: arn, tagKeys: removedKeys }));
+    } else if (service === 'ecr') {
+      const { ECRClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-ecr');
+      const client = new ECRClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ resourceArn: arn, tags: tags.map(t => ({ Key: t.Key, Value: t.Value })) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ resourceArn: arn, tagKeys: removedKeys }));
+    } else if (service === 's3') {
+      const { S3Client, PutBucketTaggingCommand, GetBucketTaggingCommand, DeleteBucketTaggingCommand } = require('@aws-sdk/client-s3');
+      const client = new S3Client(cfg);
+      const bucket = arn; // S3 uses bucket name
+      let existingTags = [];
+      try {
+        const resp = await client.send(new GetBucketTaggingCommand({ Bucket: bucket }));
+        existingTags = resp.TagSet || [];
+      } catch { /* no tags yet */ }
+      const filtered = existingTags.filter(t => !removedKeys.includes(t.Key));
+      const merged   = [...filtered.filter(t => !tags.find(n => n.Key === t.Key)), ...tags];
+      if (merged.length)
+        await client.send(new PutBucketTaggingCommand({ Bucket: bucket, Tagging: { TagSet: merged } }));
+      else
+        await client.send(new DeleteBucketTaggingCommand({ Bucket: bucket }));
+    } else if (service === 'vpc') {
+      const { EC2Client, CreateTagsCommand, DeleteTagsCommand } = require('@aws-sdk/client-ec2');
+      const client = new EC2Client(cfg);
+      if (tags.length)
+        await client.send(new CreateTagsCommand({ Resources: [arn], Tags: tags }));
+      if (removedKeys.length)
+        await client.send(new DeleteTagsCommand({ Resources: [arn], Tags: removedKeys.map(k => ({ Key: k })) }));
+    } else if (service === 'eventbridge') {
+      const { EventBridgeClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-eventbridge');
+      const client = new EventBridgeClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ ResourceARN: arn, Tags: tags.map(t => ({ Key: t.Key, Value: t.Value })) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ ResourceARN: arn, TagKeys: removedKeys }));
+    } else if (service === 'stepfn') {
+      const { SFNClient, TagResourceCommand, UntagResourceCommand } = require('@aws-sdk/client-sfn');
+      const client = new SFNClient(cfg);
+      if (tags.length)
+        await client.send(new TagResourceCommand({ resourceArn: arn, tags: tags.map(t => ({ key: t.Key, value: t.Value })) }));
+      if (removedKeys.length)
+        await client.send(new UntagResourceCommand({ resourceArn: arn, tagKeys: removedKeys }));
+    } else {
+      return res.status(400).json({ error: `Tagging not supported for service: ${service}` });
+    }
+
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /tags ────────────────────────────────────────────────────────────────
+// Fetch current tags for a resource. Query: service, arn
+
+router.get('/tags', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn, service } = req.query;
+  if (!arn || !service) return res.status(400).json({ error: 'arn and service query params required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    let tags = [];
+
+    if (service === 'ec2' || service === 'vpc') {
+      const { EC2Client, DescribeTagsCommand } = require('@aws-sdk/client-ec2');
+      const client = new EC2Client(cfg);
+      const resp = await client.send(new DescribeTagsCommand({ Filters: [{ Name: 'resource-id', Values: [arn] }] }));
+      tags = (resp.Tags || []).map(t => ({ Key: t.Key, Value: t.Value }));
+    } else if (service === 'lambda') {
+      const { LambdaClient, ListTagsCommand } = require('@aws-sdk/client-lambda');
+      const client = new LambdaClient(cfg);
+      const resp = await client.send(new ListTagsCommand({ Resource: arn }));
+      tags = Object.entries(resp.Tags || {}).map(([Key, Value]) => ({ Key, Value }));
+    } else if (service === 'ecs') {
+      const { ECSClient, ListTagsForResourceCommand } = require('@aws-sdk/client-ecs');
+      const client = new ECSClient(cfg);
+      const resp = await client.send(new ListTagsForResourceCommand({ resourceArn: arn }));
+      tags = (resp.tags || []).map(t => ({ Key: t.key, Value: t.value }));
+    } else if (service === 'eks') {
+      const { EKSClient, ListTagsForResourceCommand } = require('@aws-sdk/client-eks');
+      const client = new EKSClient(cfg);
+      const resp = await client.send(new ListTagsForResourceCommand({ resourceArn: arn }));
+      tags = Object.entries(resp.tags || {}).map(([Key, Value]) => ({ Key, Value }));
+    } else if (service === 'ecr') {
+      const { ECRClient, ListTagsForResourceCommand } = require('@aws-sdk/client-ecr');
+      const client = new ECRClient(cfg);
+      const resp = await client.send(new ListTagsForResourceCommand({ resourceArn: arn }));
+      tags = (resp.tags || []).map(t => ({ Key: t.Key, Value: t.Value }));
+    } else if (service === 's3') {
+      const { S3Client, GetBucketTaggingCommand } = require('@aws-sdk/client-s3');
+      const client = new S3Client(cfg);
+      try {
+        const resp = await client.send(new GetBucketTaggingCommand({ Bucket: arn }));
+        tags = resp.TagSet || [];
+      } catch { tags = []; }
+    } else if (service === 'eventbridge') {
+      const { EventBridgeClient, ListTagsForResourceCommand } = require('@aws-sdk/client-eventbridge');
+      const client = new EventBridgeClient(cfg);
+      const resp = await client.send(new ListTagsForResourceCommand({ ResourceARN: arn }));
+      tags = (resp.Tags || []).map(t => ({ Key: t.Key, Value: t.Value }));
+    } else if (service === 'stepfn') {
+      const { SFNClient, ListTagsForResourceCommand } = require('@aws-sdk/client-sfn');
+      const client = new SFNClient(cfg);
+      const resp = await client.send(new ListTagsForResourceCommand({ resourceArn: arn }));
+      tags = (resp.tags || []).map(t => ({ Key: t.key, Value: t.value }));
+    }
+
+    res.json({ tags });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lambda/:name/logging ───────────────────────────────────────────────
+// Enable or update CloudWatch logging for a Lambda function.
+// Body: { logFormat?: 'Text'|'JSON', retentionDays?: number }
+
+router.post('/lambda/:name/logging', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LambdaClient, UpdateFunctionConfigurationCommand, GetFunctionConfigurationCommand } = require('@aws-sdk/client-lambda');
+    const { CloudWatchLogsClient, CreateLogGroupCommand, PutRetentionPolicyCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const name       = req.params.name;
+    const logFormat  = req.body?.logFormat || 'Text';
+    const retention  = parseInt(req.body?.retentionDays) || 30;
+    const logGroup   = `/aws/lambda/${name}`;
+
+    const lambdaClient = new LambdaClient(cfg);
+    const logsClient   = new CloudWatchLogsClient(cfg);
+
+    // Get current function config to preserve role
+    const fnConfig = await lambdaClient.send(new GetFunctionConfigurationCommand({ FunctionName: name }));
+
+    // Ensure log group exists
+    try { await logsClient.send(new CreateLogGroupCommand({ logGroupName: logGroup })); } catch { /* already exists */ }
+    // Set retention
+    await logsClient.send(new PutRetentionPolicyCommand({ logGroupName: logGroup, retentionInDays: retention }));
+
+    // Update function logging config
+    await lambdaClient.send(new UpdateFunctionConfigurationCommand({
+      FunctionName:  name,
+      LoggingConfig: { LogFormat: logFormat, LogGroup: logGroup },
+    }));
+
+    res.json({ success: true, logGroup, logFormat, retentionDays: retention });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /ecs/:cluster/:service/logging ──────────────────────────────────────
+// Enable CloudWatch logging on the ECS task definition (creates/updates log group).
+// This registers a new task definition revision with awslogs driver.
+// Body: { retentionDays?: number, logPrefix?: string }
+
+router.post('/ecs/:cluster/:service/logging', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      ECSClient, DescribeServicesCommand, DescribeTaskDefinitionCommand,
+      RegisterTaskDefinitionCommand, UpdateServiceCommand,
+    } = require('@aws-sdk/client-ecs');
+    const { CloudWatchLogsClient, CreateLogGroupCommand, PutRetentionPolicyCommand } = require('@aws-sdk/client-cloudwatch-logs');
+
+    const cluster   = req.params.cluster;
+    const service   = req.params.service;
+    const retention = parseInt(req.body?.retentionDays) || 30;
+    const logPrefix = req.body?.logPrefix || service;
+
+    const ecsClient  = new ECSClient(cfg);
+    const logsClient = new CloudWatchLogsClient(cfg);
+
+    const svcResp = await ecsClient.send(new DescribeServicesCommand({ cluster, services: [service] }));
+    const svc = svcResp.services?.[0];
+    if (!svc) return res.status(404).json({ error: 'ECS service not found' });
+
+    const tdResp = await ecsClient.send(new DescribeTaskDefinitionCommand({ taskDefinition: svc.taskDefinition }));
+    const td = tdResp.taskDefinition;
+
+    const logGroup = `/ecs/${cluster}/${logPrefix}`;
+    try { await logsClient.send(new CreateLogGroupCommand({ logGroupName: logGroup })); } catch { /* already exists */ }
+    await logsClient.send(new PutRetentionPolicyCommand({ logGroupName: logGroup, retentionInDays: retention }));
+
+    // Update each container definition to use awslogs
+    const containers = (td.containerDefinitions || []).map(c => ({
+      ...c,
+      logConfiguration: {
+        logDriver: 'awslogs',
+        options: {
+          'awslogs-group':  logGroup,
+          'awslogs-region': cfg.region,
+          'awslogs-stream-prefix': c.name,
+        },
+      },
+    }));
+
+    // Register new task definition revision
+    const { family, taskRoleArn, executionRoleArn, networkMode, volumes,
+            placementConstraints, requiresCompatibilities, cpu, memory,
+            inferenceAccelerators, ipcMode, pidMode, ephemeralStorage } = td;
+    const newTd = await ecsClient.send(new RegisterTaskDefinitionCommand({
+      family, taskRoleArn, executionRoleArn, networkMode, volumes,
+      placementConstraints, requiresCompatibilities, cpu, memory,
+      inferenceAccelerators, ipcMode, pidMode, ephemeralStorage,
+      containerDefinitions: containers,
+    }));
+
+    const newTdArn = newTd.taskDefinition?.taskDefinitionArn;
+
+    // Update service to use new task definition
+    await ecsClient.send(new UpdateServiceCommand({ cluster, service, taskDefinition: newTdArn }));
+
+    res.json({ success: true, logGroup, retentionDays: retention, newTaskDefinition: newTdArn });
+  } catch (err) { handleErr(res, err); }
+});
+
 module.exports = router;
+

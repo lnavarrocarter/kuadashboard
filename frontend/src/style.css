@@ -233,6 +233,22 @@ input, select, textarea { font: inherit; color: var(--text); }
 .rtable tbody tr:hover td { background: var(--bg-hover); }
 .rtable .col-actions { width: 1px; white-space: nowrap; }
 
+/* ── Sortable columns ────────────────────────────────────────────────────────── */
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable-th:hover { color: var(--text); }
+.sortable-th .sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: .45;
+}
+.sortable-th:hover .sort-icon { opacity: .8; }
+.sortable-th.th-sorted { color: var(--accent); }
+.sortable-th.th-sorted .sort-icon { opacity: 1; }
+
 /* ── Status Badges ───────────────────────────────────────────────────────────── */
 .badge {
   display: inline-block;
@@ -373,6 +389,189 @@ input, select, textarea { font: inherit; color: var(--text); }
   justify-content: center;
 }
 .overlay.open { display: flex; }
+
+/* modal-overlay: v-if-based overlay (always "open" when rendered) */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-box {
+  background: #252526;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  overflow: hidden;
+  max-height: 90vh;
+  max-width: 95vw;
+}
+
+/* ── CloudWatch Logs viewer ─────────────────────────────────────────────────── */
+.logs-viewer {
+  font-family: monospace;
+  font-size: 11px;
+  background: #1a1a1a;
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+  padding: 8px;
+}
+.log-line {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  line-height: 1.5;
+}
+.log-ts {
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.log-msg {
+  color: #d4d4d4;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* ── AWS Tab bar ──────────────────────────────────────────────────────────────── */
+.aws-tab-bar {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.aws-tab-bar::-webkit-scrollbar { height: 4px; }
+.aws-tab-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.aws-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 4px 4px 0 0;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.aws-tab-btn:hover { color: var(--text); background: var(--bg-hover, rgba(255,255,255,.05)); }
+.aws-tab-btn.active { color: var(--accent, #7c9ef8); border-bottom-color: var(--accent, #7c9ef8); background: transparent; }
+
+.tab-badge {
+  background: var(--accent, #7c9ef8);
+  color: #000;
+  border-radius: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.aws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  flex-shrink: 0;
+}
+
+.aws-search {
+  width: 280px;
+  font-size: 12px;
+}
+
+.tab-panel {
+  overflow: auto;
+  flex: 1;
+}
+
+/* ── Config pre viewer ────────────────────────────────────────────────────────── */
+.config-pre {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  background: #1a1a1a;
+  color: #d4d4d4;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  flex: 1;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── Button toggle group (JSON/YAML) ─────────────────────────────────────────── */
+.btn-toggle-group {
+  display: flex;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.btn-toggle-group .btn {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid var(--border, #444);
+}
+.btn-toggle-group .btn:last-child { border-right: none; }
+.btn-toggle-group .btn.active {
+  background: var(--accent, #7c9ef8);
+  color: #000;
+}
+
+/* ── Row actions ─────────────────────────────────────────────────────────────── */
+.row-actions {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+/* ── Mono helpers ────────────────────────────────────────────────────────────── */
+.mono-xs { font-family: monospace; font-size: 10px; }
+.mono-sm { font-family: monospace; font-size: 12px; }
+
+/* Tag chips */
+.tag-chips { display: flex; flex-wrap: wrap; gap: 3px; max-width: 200px; }
+.tag-chip {
+  display: inline-block;
+  background: rgba(255,255,255,0.07);
+  color: var(--text-dim, #aaa);
+  font-size: 10px;
+  font-family: monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Alert success */
+.alert-success {
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: #4ade80;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
 
 .modal {
   background: #252526;
@@ -621,6 +820,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   overflow-x: auto; white-space: nowrap; flex-shrink: 0;
   font-size: 10px;
 }
+.fb-crumb-item { display: contents; }
 .fb-seg  { color: var(--accent); cursor: pointer; padding: 0 2px; border-radius: 2px; }
 .fb-seg:hover { background: var(--bg-hover); }
 .fb-sep  { color: #444; user-select: none; }
