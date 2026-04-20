@@ -55,9 +55,17 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredEc2.length" class="empty-row">{{ search.ec2 ? 'No matches.' : 'No EC2 instances found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name / ID</th><th>Type</th><th>State</th><th>Public IP</th><th>AZ</th><th>Launched</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"       @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"       @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th :class="thClass('state')"      @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('publicIp')"   @click="sortBy('publicIp')">Public IP <span class="sort-icon">{{ sortIcon('publicIp') }}</span></th>
+            <th :class="thClass('az')"         @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
+            <th :class="thClass('launchTime')" @click="sortBy('launchTime')">Launched <span class="sort-icon">{{ sortIcon('launchTime') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="i in filteredEc2" :key="i.id">
+            <tr v-for="i in sortRows(filteredEc2)" :key="i.id">
               <td>
                 <div>{{ i.name }}</div>
                 <div class="text-dim mono-xs">{{ i.id }}</div>
@@ -92,9 +100,17 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredEcs.length" class="empty-row">{{ search.ecs ? 'No matches.' : 'No ECS services found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Service</th><th>Cluster</th><th>Status</th><th>Desired</th><th>Running</th><th>Created</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"      @click="sortBy('name')">Service <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('cluster')"   @click="sortBy('cluster')">Cluster <span class="sort-icon">{{ sortIcon('cluster') }}</span></th>
+            <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('desired')"   @click="sortBy('desired')">Desired <span class="sort-icon">{{ sortIcon('desired') }}</span></th>
+            <th :class="thClass('running')"   @click="sortBy('running')">Running <span class="sort-icon">{{ sortIcon('running') }}</span></th>
+            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="svc in filteredEcs" :key="`${svc.cluster}/${svc.name}`">
+            <tr v-for="svc in sortRows(filteredEcs)" :key="`${svc.cluster}/${svc.name}`">
               <td>
                 <div>{{ svc.name }}</div>
                 <div v-if="svc.taskDef" class="text-dim mono-xs">{{ svc.taskDef }}</div>
@@ -127,9 +143,16 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredEks.length" class="empty-row">{{ search.eks ? 'No matches.' : 'No EKS clusters found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Region</th><th>Version</th><th>Status</th><th>Created</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"      @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('region')"    @click="sortBy('region')">Region <span class="sort-icon">{{ sortIcon('region') }}</span></th>
+            <th :class="thClass('version')"   @click="sortBy('version')">Version <span class="sort-icon">{{ sortIcon('version') }}</span></th>
+            <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="c in filteredEks" :key="c.name">
+            <tr v-for="c in sortRows(filteredEks)" :key="c.name">
               <td>{{ c.name }}</td>
               <td class="text-dim">{{ c.region }}</td>
               <td class="text-dim">{{ c.version }}</td>
@@ -156,9 +179,17 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? 'No matches.' : 'No Lambda functions found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Runtime</th><th>Memory</th><th>Timeout</th><th>State</th><th>Modified</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('runtime')"      @click="sortBy('runtime')">Runtime <span class="sort-icon">{{ sortIcon('runtime') }}</span></th>
+            <th :class="thClass('memory')"       @click="sortBy('memory')">Memory <span class="sort-icon">{{ sortIcon('memory') }}</span></th>
+            <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
+            <th :class="thClass('state')"        @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">Modified <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="fn in filteredLambda" :key="fn.name">
+            <tr v-for="fn in sortRows(filteredLambda)" :key="fn.name">
               <td>
                 <div>{{ fn.name }}</div>
                 <div v-if="fn.description" class="text-dim mono-xs">{{ fn.description }}</div>
@@ -191,9 +222,15 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredApigw.length" class="empty-row">{{ search.apigw ? 'No matches.' : 'No APIs found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name / ID</th><th>Type</th><th>Endpoint</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"        @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"        @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th>Endpoint</th>
+            <th :class="thClass('createdDate')" @click="sortBy('createdDate')">Created <span class="sort-icon">{{ sortIcon('createdDate') }}</span></th>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="api in filteredApigw" :key="api.id">
+            <tr v-for="api in sortRows(filteredApigw)" :key="api.id">
               <td>
                 <div>{{ api.name }}</div>
                 <div class="text-dim mono-xs">{{ api.id }}</div>
@@ -218,9 +255,14 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? 'No matches.' : 'No S3 buckets found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Bucket</th><th>Region</th><th>Created</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">Bucket <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('region')"       @click="sortBy('region')">Region <span class="sort-icon">{{ sortIcon('region') }}</span></th>
+            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="b in filteredS3" :key="b.name">
+            <tr v-for="b in sortRows(filteredS3)" :key="b.name">
               <td class="mono-sm">{{ b.name }}</td>
               <td class="text-dim">{{ b.region }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(b.creationDate) }}</td>
@@ -246,9 +288,16 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredEcr.length" class="empty-row">{{ search.ecr ? 'No matches.' : 'No ECR repositories found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Repository</th><th>URI</th><th>Mutability</th><th>Scan</th><th>Created</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"               @click="sortBy('name')">Repository <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th>URI</th>
+            <th :class="thClass('imageTagMutability')" @click="sortBy('imageTagMutability')">Mutability <span class="sort-icon">{{ sortIcon('imageTagMutability') }}</span></th>
+            <th :class="thClass('scanOnPush')"         @click="sortBy('scanOnPush')">Scan <span class="sort-icon">{{ sortIcon('scanOnPush') }}</span></th>
+            <th :class="thClass('createdAt')"          @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="r in filteredEcr" :key="r.name">
+            <tr v-for="r in sortRows(filteredEcr)" :key="r.name">
               <td>
                 <div>{{ r.name }}</div>
                 <div class="text-dim mono-xs">{{ r.arn }}</div>
@@ -281,9 +330,15 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredVpc.length" class="empty-row">{{ search.vpc ? 'No matches.' : 'No VPCs found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name / ID</th><th>CIDR</th><th>State</th><th>Default</th><th>Subnets</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"    @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('cidr')"    @click="sortBy('cidr')">CIDR <span class="sort-icon">{{ sortIcon('cidr') }}</span></th>
+            <th :class="thClass('state')"   @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('default')" @click="sortBy('default')">Default <span class="sort-icon">{{ sortIcon('default') }}</span></th>
+            <th>Subnets</th><th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="v in filteredVpc" :key="v.id">
+            <tr v-for="v in sortRows(filteredVpc)" :key="v.id">
               <td>
                 <div>{{ v.name }}</div>
                 <div class="text-dim mono-xs">{{ v.id }}</div>
@@ -313,9 +368,15 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredEventBridge.length" class="empty-row">{{ search.eventbridge ? 'No matches.' : 'No EventBridge rules found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Rule Name</th><th>Bus</th><th>State</th><th>Schedule / Pattern</th><th>Tags</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">Rule Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('busName')"       @click="sortBy('busName')">Bus <span class="sort-icon">{{ sortIcon('busName') }}</span></th>
+            <th :class="thClass('state')"         @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('scheduleExpr')"  @click="sortBy('scheduleExpr')">Schedule / Pattern <span class="sort-icon">{{ sortIcon('scheduleExpr') }}</span></th>
+            <th>Tags</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="r in filteredEventBridge" :key="`${r.busName}/${r.name}`">
+            <tr v-for="r in sortRows(filteredEventBridge)" :key="`${r.busName}/${r.name}`">
               <td>
                 <div>{{ r.name }}</div>
                 <div v-if="r.description" class="text-dim mono-xs">{{ r.description }}</div>
@@ -345,9 +406,14 @@
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? 'No matches.' : 'No Step Functions found.' }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Created</th><th>Tags</th><th>ARN</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"         @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th>Tags</th><th>ARN</th><th>Actions</th>
+          </tr></thead>
           <tbody>
-            <tr v-for="sm in filteredStepFn" :key="sm.arn">
+            <tr v-for="sm in sortRows(filteredStepFn)" :key="sm.arn">
               <td>{{ sm.name }}</td>
               <td><span :class="sm.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ sm.type }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(sm.creationDate) }}</td>
