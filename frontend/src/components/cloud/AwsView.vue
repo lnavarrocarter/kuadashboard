@@ -5,7 +5,16 @@
       <div style="display:flex;gap:8px;align-items:center">
         <select v-model="selectedProfileId" class="ctrl-select" @change="onProfileChange">
           <option value="">— Select AWS profile —</option>
-          <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <!-- Stored credential profiles -->
+          <optgroup v-if="envStore.awsProfiles.length" label="Stored profiles">
+            <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </optgroup>
+          <!-- Local ~/.aws/credentials profiles -->
+          <optgroup v-if="localProfiles.length" label="~/.aws/credentials">
+            <option v-for="p in localProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">
+              {{ p.name }} ({{ p.region }})
+            </option>
+          </optgroup>
         </select>
         <button v-if="selectedProfileId" class="btn" @click="refreshAll" :disabled="awsStore.loading">
           Refresh
@@ -109,15 +118,19 @@ import { ref, onMounted } from 'vue'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useToast }    from '../../composables/useToast'
+import { useApi }      from '../../composables/useApi'
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
-const { toast } = useToast()
+const { toast }    = useToast()
+const { apiFetch } = useApi()
 
 const selectedProfileId = ref(awsStore.activeProfileId || '')
+const localProfiles     = ref([])   // [{ name, region }] from ~/.aws/credentials
 
-onMounted(() => {
+onMounted(async () => {
   envStore.fetchProfiles()
+  try { localProfiles.value = await apiFetch('/api/cloud/aws/local-profiles') } catch { /* ignore */ }
   if (selectedProfileId.value) refreshAll()
 })
 

@@ -17,7 +17,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     if (existing) { activateTab(existing.id); return existing }
     const tab = {
       id: `tab-${Date.now()}`,
-      type: 'log', ns, pod,
+      type: 'log', context: 'pod', ns, pod,
+      label: `${pod} (logs)`,
       containers: containers || [],
       container: containers?.[0] || null,
       ws: null, lines: [], lineCount: 0, streaming: false
@@ -25,14 +26,14 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
-    // Return the reactive proxy (tabs.value wraps pushed objects in Proxy)
     return tabs.value.find(t => t.id === tab.id)
   }
 
   function openExecTab(ns, pod, containers) {
     const tab = {
       id: `tab-${Date.now()}`,
-      type: 'exec', ns, pod,
+      type: 'exec', context: 'pod', ns, pod,
+      label: pod,
       containers: containers || [],
       container: containers?.[0] || null,
       ws: null, lines: [], lineCount: 0, streaming: false
@@ -40,7 +41,42 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
-    // Return the reactive proxy (tabs.value wraps pushed objects in Proxy)
+    return tabs.value.find(t => t.id === tab.id)
+  }
+
+  /** Open a local shell tab (connects to /ws/shell) */
+  function openLocalTab() {
+    // Reuse existing idle local tab if available
+    const existing = tabs.value.find(t => t.type === 'local' && !t.streaming)
+    if (existing) { activateTab(existing.id); visible.value = true; return existing }
+    const tab = {
+      id: `tab-${Date.now()}`,
+      type: 'local', context: 'local',
+      label: 'Local Shell',
+      pod: 'local',
+      containers: [], container: null,
+      ws: null, lines: [], lineCount: 0, streaming: false
+    }
+    tabs.value.push(tab)
+    visible.value = true
+    activateTab(tab.id)
+    return tabs.value.find(t => t.id === tab.id)
+  }
+
+  /** Open a cloud shell tab (future: AWS SSM, GCP Cloud Shell, etc.) */
+  function openCloudTab(contextType, label, meta = {}) {
+    const tab = {
+      id: `tab-${Date.now()}`,
+      type: contextType, context: contextType,
+      label,
+      pod: label,
+      containers: [], container: null,
+      meta,  // extra info like instanceId, region, projectId
+      ws: null, lines: [], lineCount: 0, streaming: false
+    }
+    tabs.value.push(tab)
+    visible.value = true
+    activateTab(tab.id)
     return tabs.value.find(t => t.id === tab.id)
   }
 
@@ -83,7 +119,7 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   return {
     tabs, activeId, visible, wrap, height,
-    activeTab, openLogsTab, openExecTab,
+    activeTab, openLogsTab, openExecTab, openLocalTab, openCloudTab,
     activateTab, closeTab, stopStream, pushLine,
   }
 })

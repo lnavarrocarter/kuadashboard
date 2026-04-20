@@ -70,8 +70,8 @@
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">Tools</div>
-            <a :class="['sidebar-item', { active: cloudView === 'shell' }]"
-               @click.prevent="setCloudView('shell')">Local Shell</a>
+            <a class="sidebar-item"
+               @click.prevent="openLocalShell()">Local Shell</a>
           </div>
         </nav>
 
@@ -82,7 +82,6 @@
           <EnvManagerView   v-else-if="cloudView === 'envs'" />
           <GcpView          v-else-if="cloudView === 'gcp'" />
           <AwsView          v-else-if="cloudView === 'aws'" />
-          <LocalShellView   v-else-if="cloudView === 'shell'" />
         </main>
       </div>
 
@@ -129,7 +128,6 @@ import ResourceTable    from './components/ResourceTable.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
-import LocalShellView  from './components/LocalShellView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -143,7 +141,7 @@ import ToastContainer   from './components/ToastContainer.vue'
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
 const termStore = useTerminalStore()
-const { startLogStream, startExecStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream } = useTerminalStreams()
 const { toast } = useToast()
 
 const LABELS = {
@@ -171,6 +169,11 @@ const modalData = reactive({
 
 function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
 function setCloudView(view)   { cloudView.value = view }
+
+function openLocalShell() {
+  const tab = termStore.openLocalTab()
+  startLocalStream(tab)
+}
 
 async function switchContext() {
   try { await store.switchContext(selectedContext.value); toast('Context switched to ' + selectedContext.value, 'success') }

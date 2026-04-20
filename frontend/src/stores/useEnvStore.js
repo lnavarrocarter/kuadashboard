@@ -53,14 +53,14 @@ export const useEnvStore = defineStore('envManager', () => {
     }
   }
 
-  async function createProfile({ name, provider, keys = {} }) {
+  async function createProfile({ name, provider, category = '', keys = {}, meta = {} }) {
     loading.value = true
     error.value   = null
     try {
       const created = await apiFetch('/api/cloud/envs/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, provider, keys }),
+        body: JSON.stringify({ name, provider, category, keys, meta }),
       })
       profiles.value.push(created)
       return created
@@ -72,14 +72,14 @@ export const useEnvStore = defineStore('envManager', () => {
     }
   }
 
-  async function updateProfile(id, { name, keys = {} }) {
+  async function updateProfile(id, { name, category, keys = {}, meta = {} }) {
     loading.value = true
     error.value   = null
     try {
       const updated = await apiFetch(`/api/cloud/envs/profiles/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, keys }),
+        body: JSON.stringify({ name, category, keys, meta }),
       })
       const idx = profiles.value.findIndex(p => p.id === id)
       if (idx !== -1) profiles.value[idx] = updated
@@ -124,11 +124,31 @@ export const useEnvStore = defineStore('envManager', () => {
     }
   }
 
+  /** Import a .env file text and create a new generic profile */
+  async function importEnv({ content, name, category = '', meta = {} }) {
+    loading.value = true
+    error.value   = null
+    try {
+      const created = await apiFetch('/api/cloud/envs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, name, category, meta }),
+      })
+      profiles.value.push(created)
+      return created
+    } catch (e) {
+      error.value = e.message
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     profiles, loading, error,
     gcpProfiles, awsProfiles, genericProfiles,
     findById,
     fetchProfiles, fetchProfile,
-    createProfile, updateProfile, deleteProfile, exportProfile,
+    createProfile, updateProfile, deleteProfile, exportProfile, importEnv,
   }
 })

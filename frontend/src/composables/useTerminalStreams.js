@@ -122,9 +122,64 @@ export function useTerminalStreams() {
     const clean = raw.replace(/\x1b\[[0-9;]*[mGKHFABCDSTJu]/g, '')
     clean.split('\n').forEach(line => {
       if (!line) return
-      store.pushLine(tab, line, cls)
+      // Auto-classify if no class was forced
+      const lineCls = cls || autoClassify(line)
+      store.pushLine(tab, line, lineCls)
     })
   }
 
-  return { startLogStream, startExecStream }
+  /** Classify a shell output line by content patterns */
+  function autoClassify(line) {
+    const l = line.toLowerCase()
+    if (/error|exception|fail(ed)?|fatal|panic|denied|not found|no such/i.test(l)) return 'err'
+    if (/warn(ing)?/i.test(l)) return 'warn'
+    if (/\b(ok|done|success(ful)?|complete|passed|running|ready)\b/i.test(l)) return 'ok'
+    return ''
+  }
+
+  /** Connect to the local shell WebSocket (/ws/shell) */
+  function startLocalStream(tab) {
+    store.stopStream(tab)
+    tab.streaming = true
+
+    const ws = markRaw(new WebSocket(wsUrl('/ws/shell')))
+    tab.ws = ws
+
+    ws.addEventListener('open', () => {
+      store.pushLine(tab, '▶ Connecting to local shell…', 'sys')
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'connected') {
+        store.pushLine(tab, `▶ ${msg.shell}  |  cwd: ${msg.cwd}`, 'sys')
+        tab.label = 'Local Shell'
+        tab.streaming = true
+      } else if (msg.type === 'out') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'err') {
+        _appendRaw(tab, msg.data, 'err')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
+      } else if (msg.type === 'done') {
+        tab.streaming = false
+        store.pushLine(tab, `■ Session ended (exit ${msg.code})`, 'sys')
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  return { startLogStream, startExecStream, startLocalStream }
 }

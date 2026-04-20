@@ -4,40 +4,41 @@
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
   "main": "electron/main.js",
   "scripts": {
-    "start":          "node server.js",
-    "dev":            "nodemon server.js",
-    "dev:full":       "concurrently -n backend,frontend -c cyan,yellow \"nodemon server.js\" \"npm run dev --prefix frontend\"",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "dev:full": "concurrently -n backend,frontend -c cyan,yellow \"nodemon server.js\" \"npm run dev --prefix frontend\"",
     "build:frontend": "npm run build --prefix frontend",
-    "electron:dev":   "concurrently -n backend,frontend,electron -c cyan,yellow,green \"nodemon server.js\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:pack":  "npm run build:frontend && electron-builder --dir",
+    "electron:dev": "concurrently -n backend,frontend,electron -c cyan,yellow,green \"nodemon server.js\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:pack": "npm run build:frontend && electron-builder --dir",
     "electron:build": "npm run build:frontend && electron-builder"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-ecs": "^3.0.0",
+    "@aws-sdk/client-eks": "^3.0.0",
+    "@aws-sdk/credential-providers": "^3.1032.0",
+    "@google-cloud/compute": "^4.0.0",
+    "@google-cloud/container": "^5.0.0",
+    "@google-cloud/resource-manager": "^5.0.0",
+    "@google-cloud/run": "^1.0.0",
     "@kubernetes/client-node": "^0.20.0",
     "express": "^4.18.2",
-    "js-yaml": "^4.1.0",
-    "ws": "^8.14.2",
     "google-auth-library": "^9.0.0",
-    "@google-cloud/resource-manager": "^5.0.0",
-    "@google-cloud/container": "^5.0.0",
-    "@google-cloud/run": "^1.0.0",
-    "@google-cloud/compute": "^4.0.0",
-    "@aws-sdk/client-ec2": "^3.0.0",
-    "@aws-sdk/client-eks": "^3.0.0",
-    "@aws-sdk/client-ecs": "^3.0.0"
+    "js-yaml": "^4.1.0",
+    "ws": "^8.14.2"
   },
   "optionalDependencies": {
     "keytar": "^7.9.0"
   },
   "devDependencies": {
-    "concurrently":    "^9.2.1",
-    "nodemon":         "^3.0.1",
-    "electron":        "^31.0.0",
-    "electron-builder":"^25.0.0",
-    "wait-on":         "^8.0.0"
+    "concurrently": "^9.2.1",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0",
+    "nodemon": "^3.0.1",
+    "wait-on": "^8.0.0"
   },
   "build": {
-    "appId":       "dev.kua.kuadashboard",
+    "appId": "dev.kua.kuadashboard",
     "productName": "KuaDashboard",
     "files": [
       "electron/**",
@@ -53,21 +54,27 @@
     },
     "win": {
       "target": "nsis",
-      "icon":   "assets/icon.ico"
+      "icon": "assets/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon":   "assets/icon.icns",
+      "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
-      "icon":   "assets/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
       "category": "Development"
     },
     "nsis": {
-      "oneClick":          true,
-      "installerLanguages": ["en_US", "es_ES"],
+      "oneClick": true,
+      "installerLanguages": [
+        "en_US",
+        "es_ES"
+      ],
       "createDesktopShortcut": true
     }
   },

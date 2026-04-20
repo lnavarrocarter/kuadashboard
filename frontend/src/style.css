@@ -581,8 +581,134 @@ input, select, textarea { font: inherit; color: var(--text); }
 .term-line .ts { color: #555; font-size: 10px; margin-right: 8px; user-select: none; }
 .term-line.err  { color: #ef5350; }
 .term-line.warn { color: #ffa726; }
+.term-line.ok   { color: var(--green); }
 .term-line.info { color: var(--teal); }
 .term-line.sys  { color: #555; font-style: italic; }
+.term-line.cmd  { color: #64b5f6; }
+
+/* ── Terminal: tab context chips ─────────────────────────────────────────────── */
+.tab-ctx-chip {
+  font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0;
+}
+.ctx-pod   { background: rgba(14,157,232,.2);  color: #64b5f6; }
+.ctx-local { background: rgba(76,175,80,.2);   color: var(--green); }
+.ctx-aws   { background: rgba(255,153,0,.2);   color: #ffb347; }
+.ctx-gcp   { background: rgba(66,133,244,.2);  color: #7baaf7; }
+
+/* ── Terminal: main body (flex row: browser + output) ────────────────────────── */
+.term-main-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Terminal: inline file browser ───────────────────────────────────────────── */
+.term-filebrowser {
+  width: 200px;
+  min-width: 140px;
+  border-right: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #0d0d0d;
+}
+.term-fb-crumb {
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px 8px; border-bottom: 1px solid #222;
+  overflow-x: auto; white-space: nowrap; flex-shrink: 0;
+  font-size: 10px;
+}
+.fb-seg  { color: var(--accent); cursor: pointer; padding: 0 2px; border-radius: 2px; }
+.fb-seg:hover { background: var(--bg-hover); }
+.fb-sep  { color: #444; user-select: none; }
+.fb-refresh { margin-left: auto; color: #444; cursor: pointer; font-size: 12px; }
+.fb-refresh:hover { color: var(--text); }
+
+.term-fb-entries { flex: 1; overflow-y: auto; scrollbar-width: thin; }
+.fb-entry {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 8px; cursor: pointer; user-select: none;
+  font-size: 11px; white-space: nowrap; overflow: hidden;
+}
+.fb-entry:hover { background: var(--bg-hover); }
+.fb-dir  { color: var(--accent); }
+.fb-file { color: #c8c8c8; }
+.fb-icon { font-size: 12px; flex-shrink: 0; }
+.fb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.fb-size { font-size: 9px; color: #444; margin-left: auto; flex-shrink: 0; }
+.fb-msg  { padding: 8px; font-size: 11px; color: #555; font-style: italic; }
+.fb-msg.err { color: #ef5350; }
+
+/* ── Terminal: help overlay ───────────────────────────────────────────────────── */
+.term-help {
+  background: #0d0d0d;
+  border-bottom: 1px solid #222;
+  padding: 10px 14px;
+  flex-shrink: 0;
+  font-size: 11px;
+  overflow: hidden;
+}
+.term-help-cols {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.term-help-section {
+  font-size: 10px; font-weight: 700; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.term-help-table { border-collapse: collapse; font-size: 11px; }
+.term-help-table td { padding: 1px 8px 1px 0; vertical-align: top; color: #aaa; }
+.term-help-table td:first-child { white-space: nowrap; color: #ddd; }
+.term-help-table code { background: #1a1a1a; padding: 0 3px; border-radius: 2px; font-size: 10px; }
+.term-help-table kbd {
+  background: #1d1d1d; border: 1px solid #333; border-radius: 3px;
+  padding: 0 4px; font-size: 9px; font-family: monospace;
+}
+.th-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px;
+}
+.th-dot.err  { background: #ef5350; }
+.th-dot.warn { background: #ffa726; }
+.th-dot.ok   { background: var(--green); }
+.th-dot.sys  { background: #555; }
+
+/* ── Terminal: input bar enhancements ────────────────────────────────────────── */
+.term-input-bar {
+  display: flex; align-items: center; gap: 4px;
+  background: #1a1a1a; border-top: 1px solid #222;
+  padding: 5px 8px; flex-shrink: 0;
+}
+.term-prompt        { font-size: 14px; color: #555; flex-shrink: 0; }
+.term-prompt.active { color: var(--green); }
+.term-prompt.inactive { color: #ef5350; }
+
+.term-input-field {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e8e8e8; font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+  font-size: 12px; caret-color: var(--accent);
+}
+
+.term-suggestion {
+  color: #444; font-family: 'Cascadia Code','Consolas',monospace;
+  font-size: 12px; cursor: pointer; padding: 0 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+}
+.term-suggestion:hover { color: #777; }
+
+.term-footer-cwd {
+  font-family: monospace; font-size: 10px;
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Help slide transition */
+.help-slide-enter-active, .help-slide-leave-active { transition: max-height .2s ease, opacity .15s; }
+.help-slide-enter-from, .help-slide-leave-to { max-height: 0; opacity: 0; overflow: hidden; }
+.help-slide-enter-to, .help-slide-leave-from { max-height: 300px; opacity: 1; }
 
 .term-footer {
   height: 22px;

@@ -6,13 +6,13 @@
  * Base path: /api/cloud/aws
  *
  * Authentication model:
- *   All AWS requests require a `X-Profile-Id` header referencing a credential profile
- *   stored in the credentialStore. The profile should contain:
- *     AWS_ACCESS_KEY_ID      — IAM access key ID
- *     AWS_SECRET_ACCESS_KEY  — IAM secret access key
- *     AWS_DEFAULT_REGION     — default region (optional, defaults to us-east-1)
+ *   All AWS requests require a `X-Profile-Id` header referencing a credential profile.
+ *   Two types of profiles are supported:
+ *     - Stored profile: ID referencing a profile in the credentialStore (e.g. "uuid-v4")
+ *     - Local profile:  Prefix "local:" + profile name from ~/.aws/credentials (e.g. "local:default")
  *
  * Endpoints:
+ *   GET  /local-profiles                    → list profile names from ~/.aws/credentials
  *   GET  /regions                           → list all available AWS regions
  *   GET  /eks                               → list EKS clusters
  *   GET  /ecs                               → list ECS clusters + services
@@ -23,10 +23,13 @@
  *   POST /ec2/:id/stop                      → stop EC2 instance
  *
  * NOTE: AWS SDK v3 packages are lazy-required. Install them with:
- *   npm install @aws-sdk/client-ec2 @aws-sdk/client-eks @aws-sdk/client-ecs
+ *   npm install @aws-sdk/client-ec2 @aws-sdk/client-eks @aws-sdk/client-ecs @aws-sdk/credential-providers
  */
 
 const express      = require('express');
+const fs           = require('fs');
+const path         = require('path');
+const os           = require('os');
 const { getStore } = require('../lib/credentialStore');
 
 const router = express.Router();
@@ -39,8 +42,70 @@ function handleErr(res, err) {
   res.status(status).json({ error: err.message });
 }
 
-/** Build AWS credentials config from a stored profile. */
+/**
+ * Parse ~/.aws/credentials and return an array of profile objects.
+ * Each entry: { name, region }  (keys are NOT exposed)
+ */
+function readLocalAwsProfiles() {
+  const credFile = path.join(os.homedir(), '.aws', 'credentials');
+  const cfgFile  = path.join(os.homedir(), '.aws', 'config');
+  const profiles = {};
+
+  // Parse credentials file
+  if (fs.existsSync(credFile)) {
+    const lines = fs.readFileSync(credFile, 'utf8').split('\n');
+    let current = null;
+    for (const raw of lines) {
+      const line = raw.trim();
+      const m = line.match(/^\[([^\]]+)\]$/);
+      if (m) { current = m[1]; profiles[current] = profiles[current] || {}; continue; }
+      if (!current) continue;
+      const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
+      if (kv) profiles[current][kv[1].toLowerCase()] = kv[2].trim();
+    }
+  }
+
+  // Parse config file for region overrides (profile names prefixed with "profile ")
+  if (fs.existsSync(cfgFile)) {
+    const lines = fs.readFileSync(cfgFile, 'utf8').split('\n');
+    let current = null;
+    for (const raw of lines) {
+      const line = raw.trim();
+      const m = line.match(/^\[(?:profile\s+)?([^\]]+)\]$/);
+      if (m) { current = m[1]; profiles[current] = profiles[current] || {}; continue; }
+      if (!current) continue;
+      const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
+      if (kv && kv[1].toLowerCase() === 'region') {
+        if (!profiles[current].region) profiles[current].region = kv[2].trim();
+      }
+    }
+  }
+
+  return Object.entries(profiles)
+    .filter(([, data]) => data.aws_access_key_id || data.aws_secret_access_key)
+    .map(([name, data]) => ({ name, region: data.region || 'us-east-1' }));
+}
+
+/**
+ * Build AWS credentials config from a profile identifier.
+ * - "local:<name>"  → use named profile from ~/.aws/credentials via fromIni
+ * - "<uuid>"        → look up stored profile in credentialStore
+ */
 async function resolveAwsConfig(profileId) {
+  if (profileId.startsWith('local:')) {
+    const profileName = profileId.slice(6);
+    const { fromIni } = require('@aws-sdk/credential-providers');
+    const credFile    = path.join(os.homedir(), '.aws', 'credentials');
+    const profiles    = readLocalAwsProfiles();
+    const prof        = profiles.find(p => p.name === profileName);
+    if (!prof) throw Object.assign(new Error(`Local AWS profile not found: ${profileName}`), { $metadata: { httpStatusCode: 404 } });
+    return {
+      credentials: fromIni({ profile: profileName, filepath: credFile }),
+      region: prof.region,
+    };
+  }
+
+  // Stored profile
   const store = getStore();
   const keys  = await store.getRawKeys(profileId);
   if (!keys) throw Object.assign(new Error('Credential profile not found'), { $metadata: { httpStatusCode: 404 } });
@@ -58,6 +123,15 @@ async function resolveAwsConfig(profileId) {
     region: keys['AWS_DEFAULT_REGION'] || 'us-east-1',
   };
 }
+
+// ─── GET /local-profiles ──────────────────────────────────────────────────────
+
+router.get('/local-profiles', (_req, res) => {
+  try {
+    const profiles = readLocalAwsProfiles();
+    res.json(profiles);
+  } catch (err) { handleErr(res, err); }
+});
 
 /** Read X-Profile-Id header or return 400 */
 function requireProfileId(req, res) {
