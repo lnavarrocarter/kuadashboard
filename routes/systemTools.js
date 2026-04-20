@@ -37,10 +37,18 @@ const execAsync = promisify(exec);
  */
 async function shellExec(cmd, timeout = 6000) {
   const opts = { timeout, windowsHide: true };
-  return execAsync(
-    isWin ? `powershell -NoProfile -NonInteractive -Command "${cmd}"` : `sh -c "${cmd}"`,
-    opts
-  );
+  if (isWin) {
+    // Refresh PATH from the Windows registry so tools installed after the app
+    // started (or added via the user's PowerShell profile) are still found.
+    // Use -EncodedCommand to avoid quoting issues with cmd.exe shell escaping.
+    const psScript = "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User'); " + cmd;
+    const encoded  = Buffer.from(psScript, 'utf16le').toString('base64');
+    return execAsync(
+      `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`,
+      opts
+    );
+  }
+  return execAsync(`sh -c "${cmd}"`, opts);
 }
 
 // ─── Tool registry ────────────────────────────────────────────────────────────
@@ -50,8 +58,8 @@ const TOOLS = [
     id:          'kubectl',
     name:        'kubectl',
     binary:      'kubectl',
-    versionArgs: ['version', '--client'],
-    // version output: "Client Version: v1.29.0"
+    versionArgs: ['version', '--client', '-o', 'json'],
+    // version output (JSON): {"clientVersion":{"gitVersion":"v1.31.0",...}}
     versionRegex: /v(\d+\.\d+\.\d+)/,
     description: 'Required for Kubernetes cluster management, exec shells and log streaming.',
     downloadUrl: 'https://kubernetes.io/docs/tasks/tools/#kubectl',
