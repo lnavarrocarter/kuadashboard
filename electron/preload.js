@@ -20,6 +20,7 @@ const { contextBridge, ipcRenderer, shell } = require('electron');
 // Allowlist of valid IPC channels the renderer may listen to
 const ALLOWED_RECEIVE = new Set([
   'update:available',
+  'update:downloaded',
   'system-tools:changed',
   'server:ready',
   'server:error',
@@ -72,5 +73,15 @@ contextBridge.exposeInMainWorld('kuaElectron', {
   /** Convenience: listen to system tool change notifications */
   onSystemToolsChanged(cb) {
     return this.on('system-tools:changed', cb);
+  },
+
+  /** Convenience: listen to update downloaded notification */
+  onUpdateDownloaded(cb) {
+    return this.on('update:downloaded', cb);
+  },
+
+  /** Trigger install of downloaded update and restart */
+  installUpdate() {
+    ipcRenderer.send('app:install-update');
   },
 });

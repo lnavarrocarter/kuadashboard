@@ -20,6 +20,9 @@
         <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
         <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" title="Help"><i data-lucide="help-circle"></i></button>
+        <button class="btn btn-icon btn-donate" @click="openSponsor" title="Apoyar el proyecto">
+          <i data-lucide="heart"></i>
+        </button>
       </div>
     </header>
 
@@ -109,6 +112,8 @@
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
 
+    <DonationModal />
+    <UpdateNotice />
     <ToastContainer />
   </div>
 </template>
@@ -136,6 +141,8 @@ import ScaleModal       from './components/modals/ScaleModal.vue'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
+import DonationModal    from './components/modals/DonationModal.vue'
+import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 
 const store     = useKubeStore()
@@ -243,6 +250,12 @@ async function confirmDrain() {
   const name = modalData.drainPending; modals.drain = false
   try { const r = await api('POST', `/api/nodes/${name}/drain`); toast(`Node ${name} drained. Evicted: ${r.evicted}`, r.failed ? 'warn' : 'success'); setTimeout(() => store.loadResources(), 800) }
   catch (e) { toast(e.message, 'error') }
+}
+
+function openSponsor() {
+  const url = 'https://github.com/sponsors/lnavarrocarter/'
+  if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
+  else window.open(url, '_blank')
 }
 
 function onKey(e) { if (e.key === 'Escape') Object.keys(modals).forEach(k => modals[k] = false) }

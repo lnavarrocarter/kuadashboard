@@ -1,6 +1,6 @@
 {
   "name": "kuadashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
   "main": "electron/main.js",
   "scripts": {
@@ -37,6 +37,7 @@
     "@google-cloud/resource-manager": "^5.0.0",
     "@google-cloud/run": "^1.0.0",
     "@kubernetes/client-node": "^0.20.0",
+    "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "google-auth-library": "^9.0.0",
     "js-yaml": "^4.1.0",
@@ -110,7 +111,14 @@
         "es_ES"
       ],
       "createDesktopShortcut": true
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lnavarrocarter",
+        "repo": "kuadashboard"
+      }
+    ]
   },
   "engines": {
     "node": ">=16"

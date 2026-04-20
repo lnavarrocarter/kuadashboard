@@ -194,6 +194,8 @@ input, select, textarea { font: inherit; color: var(--text); }
 .btn.btn-icon:hover { color: var(--accent); }
 .btn.btn-icon.stop { color: rgba(244,67,54,.6); }
 .btn.btn-icon.stop:hover { color: var(--red); background: rgba(244,67,54,.13); }
+.btn.btn-donate { color: rgba(255,100,100,.7); }
+.btn.btn-donate:hover { color: #ff4081; background: rgba(255,64,129,.13); }
 
 /* ── Table ───────────────────────────────────────────────────────────────────── */
 .table-wrap {

@@ -23,6 +23,7 @@
 const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const path   = require('path');
 const { fork } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -200,6 +201,45 @@ ipcMain.on('app:version', event => {
   event.returnValue = app.getVersion();
 });
 
+// ─── Auto-updater ─────────────────────────────────────────────────────────────
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', info => {
+    console.log('[updater] Update available:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('update:available', {
+        version: info.version,
+        releaseDate: info.releaseDate,
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', info => {
+    console.log('[updater] Update downloaded:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('update:downloaded', {
+        version: info.version,
+      });
+    }
+  });
+
+  autoUpdater.on('error', err => {
+    console.error('[updater] Error:', err.message);
+  });
+
+  // Check for updates (silently — no dialogs)
+  autoUpdater.checkForUpdatesAndNotify().catch(err => {
+    console.warn('[updater] Check failed:', err.message);
+  });
+}
+
+ipcMain.on('app:install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -215,6 +255,9 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+
+  // Check for updates after window is ready (production only)
+  if (!IS_DEV) setupAutoUpdater();
 
   app.on('activate', () => {
     // macOS: re-create window when dock icon is clicked and no windows are open
