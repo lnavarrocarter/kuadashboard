@@ -2,14 +2,14 @@
   <div class="cloud-view">
     <div class="cloud-view-header">
       <div>
-        <h2 class="cloud-view-title">Credential Profiles</h2>
+        <h2 class="cloud-view-title">{{ t('env.title') }}</h2>
         <p class="text-dim" style="font-size:12px;margin-top:2px">
-          Keys are stored encrypted (AES-256-GCM). Raw values are never sent to the browser.
+          {{ t('env.subtitle') }}
         </p>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn" @click="showImport = true">↑ Import .env</button>
-        <button class="btn primary" @click="openCreate">+ New Profile</button>
+        <button class="btn" @click="showImport = true">{{ t('env.importEnv') }}</button>
+        <button class="btn primary" @click="openCreate">{{ t('env.newProfile') }}</button>
       </div>
     </div>
 
@@ -17,11 +17,11 @@
     <div v-if="envStore.error" class="alert-error">{{ envStore.error }}</div>
 
     <!-- Loading -->
-    <div v-if="envStore.loading" class="loading-row">Loading profiles…</div>
+    <div v-if="envStore.loading" class="loading-row">{{ t('env.loadingProfiles') }}</div>
 
     <!-- Empty state -->
     <div v-else-if="!envStore.profiles.length" class="empty-state">
-      No credential profiles yet.<br />Create one or import a .env file.
+      {{ t('env.empty') }}<br />{{ t('env.emptyHint') }}
     </div>
 
     <!-- Category groups -->
@@ -33,15 +33,15 @@
             <div class="profile-card-header">
               <span class="provider-badge" :class="`provider-${profile.provider}`">{{ providerLabel(profile.provider) }}</span>
               <div class="profile-card-actions">
-                <button class="btn sm" title="Edit" @click="openEdit(profile)">Edit</button>
-                <button class="btn sm" title="Export .env" @click="envStore.exportProfile(profile.id)">Export</button>
-                <button class="btn sm danger" title="Delete" @click="confirmDelete(profile)">Delete</button>
+                <button class="btn sm" title="Edit" @click="openEdit(profile)">{{ t('env.editBtn') }}</button>
+                <button class="btn sm" title="Export .env" @click="envStore.exportProfile(profile.id)">{{ t('env.exportBtn') }}</button>
+                <button class="btn sm danger" title="Delete" @click="confirmDelete(profile)">{{ t('env.deleteBtn') }}</button>
               </div>
             </div>
             <div class="profile-name">{{ profile.name }}</div>
             <div class="profile-meta text-dim">
-              <span>{{ profile.keyNames?.length || 0 }} key(s)</span>
-              <span>Updated {{ relativeTime(profile.updatedAt) }}</span>
+              <span>{{ t('env.keys', { n: profile.keyNames?.length || 0 }) }}</span>
+              <span>{{ t('env.updated', { time: relativeTime(profile.updatedAt) }) }}</span>
             </div>
             <!-- Key chips with tags -->
             <div class="profile-keys">
@@ -83,16 +83,15 @@
       <div v-if="deleteTarget" class="modal-overlay" @mousedown.self="deleteTarget = null">
         <div class="modal-box" style="width:380px">
           <div class="modal-header">
-            <span>Delete Profile</span>
+            <span>{{ t('env.deleteTitle') }}</span>
             <button class="btn-close" @click="deleteTarget = null">✕</button>
           </div>
           <div class="modal-body">
-            Delete profile <strong>{{ deleteTarget.name }}</strong>?
-            All stored keys will be permanently removed.
+            {{ t('env.deleteConfirm', { name: deleteTarget.name }) }}
           </div>
           <div class="modal-footer">
-            <button class="btn" @click="deleteTarget = null">Cancel</button>
-            <button class="btn danger" @click="doDelete">Delete</button>
+            <button class="btn" @click="deleteTarget = null">{{ t('env.cancelBtn') }}</button>
+            <button class="btn danger" @click="doDelete">{{ t('action.delete') }}</button>
           </div>
         </div>
       </div>
@@ -105,6 +104,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useEnvStore }    from '../../stores/useEnvStore'
 import ProfileModal       from '../modals/ProfileModal.vue'
 import ImportEnvModal     from '../modals/ImportEnvModal.vue'
+import { useI18n }        from '../../composables/useI18n.js'
+
+const { t } = useI18n()
 
 const envStore = useEnvStore()
 

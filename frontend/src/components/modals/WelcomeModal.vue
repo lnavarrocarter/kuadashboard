@@ -1,6 +1,6 @@
 <template>
   <BaseModal :show="visible" @close="dismiss">
-    <template #title>🚀 Novedades en KuaDashboard v{{ version }}</template>
+    <template #title>{{ t('welcome.title', { v: version }) }}</template>
 
     <div class="welcome-changelog">
       <div v-for="(release, idx) in changelog" :key="release.version" class="release-block">
@@ -15,7 +15,7 @@
     </div>
 
     <template #footer>
-      <button class="btn primary" @click="dismiss">¡Entendido!</button>
+      <button class="btn primary" @click="dismiss">{{ t('welcome.dismiss') }}</button>
     </template>
   </BaseModal>
 </template>
@@ -23,6 +23,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import BaseModal from '../BaseModal.vue'
+import { useI18n } from '../../composables/useI18n.js'
+
+const { t } = useI18n()
 
 const STORAGE_KEY = 'kuadashboard_last_seen_version'
 const version = '1.1.1'
@@ -72,8 +75,8 @@ const changelog = [
 ]
 
 function tagLabel(type) {
-  if (type === 'new')    return 'Nuevo'
-  if (type === 'better') return 'Mejora'
+  if (type === 'new')    return t('welcome.tagNew')
+  if (type === 'better') return t('welcome.tagBetter')
   if (type === 'fix')    return 'Fix'
   return type
 }

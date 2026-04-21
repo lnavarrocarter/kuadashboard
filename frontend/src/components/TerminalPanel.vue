@@ -4,7 +4,8 @@
   <div
     v-show="store.visible"
     class="term-panel"
-    :style="{ height: store.height + 'px' }"
+    :class="{ minimised }"
+    :style="minimised ? {} : { height: store.height + 'px' }"
     ref="panelRef"
   >
     <!-- Resize handle -->
@@ -23,7 +24,7 @@
           <!-- Context chip -->
           <span :class="['tab-ctx-chip', `ctx-${tab.context || 'pod'}`]">{{ CTX_LABELS[tab.context || 'pod'] }}</span>
           <span class="tab-label" :title="tab.label || tab.pod" @click="store.activateTab(tab.id)">{{ tab.label || tab.pod }}</span>
-          <button class="tab-close" title="Close" @click.stop="closeTab(tab.id)">✕</button>
+          <button class="tab-close" :title="t('term.closeTab')" @click.stop="closeTab(tab.id)">✕</button>
         </div>
       </div>
 
@@ -40,7 +41,7 @@
         <!-- Previous logs toggle (log tabs only) -->
         <label v-if="activeTab && !isShellTab" class="chk-label"><input type="checkbox" v-model="showPrevious" /> Prev</label>
         <div class="term-btn-sep"></div>
-        <button class="btn btn-icon" title="Clear (Ctrl+L)" @click="clearLogs"><i data-lucide="eraser"></i></button>
+        <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
         <div class="term-btn-sep"></div>
@@ -48,7 +49,7 @@
         <button
           v-if="activeTab?.context === 'local'"
           :class="['btn btn-icon', { primary: showBrowser }]"
-          title="File browser"
+          :title="t('term.fileBrowser')"
           @click="toggleBrowser"
         ><i data-lucide="folder-open"></i></button>
         <!-- Help toggle -->
@@ -58,7 +59,7 @@
           @click="showHelp = !showHelp"
         ><i data-lucide="circle-help"></i></button>
         <div class="term-btn-sep"></div>
-        <button class="btn btn-icon stop" title="Stop stream" @click="stopActive"><i data-lucide="square"></i></button>
+        <button class="btn btn-icon stop" :title="t('term.stop')" @click="stopActive"><i data-lucide="square"></i></button>
         <button class="btn btn-icon" title="Pop out" @click="popOut"><i data-lucide="external-link"></i></button>
         <button class="btn btn-icon" title="Minimise" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
         <button class="btn btn-icon" title="Close all tabs" @click="closeAll"><i data-lucide="x"></i></button>
@@ -210,6 +211,9 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useI18n } from '../composables/useI18n.js'
+
+const { t } = useI18n()
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { createIcons, icons } from 'lucide'
 import FileViewerModal from './FileViewerModal.vue'

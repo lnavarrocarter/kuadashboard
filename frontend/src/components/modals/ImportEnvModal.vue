@@ -3,7 +3,7 @@
     <div v-if="show" class="modal-overlay" @mousedown.self="$emit('close')">
       <div class="modal-box import-env-modal">
         <div class="modal-header">
-          <span>Import .env File</span>
+          <span>{{ t('importEnv.title') }}</span>
           <button class="btn-close" @click="$emit('close')">✕</button>
         </div>
 
@@ -11,12 +11,12 @@
           <!-- Step 1: paste or load file -->
           <div v-if="step === 1" style="display:flex;flex-direction:column;gap:14px">
             <label class="field-label">
-              Profile Name
+              {{ t('importEnv.nameLabel') }}
               <input v-model="form.name" class="ctrl-input" placeholder="e.g. my-app-prod" />
             </label>
 
             <label class="field-label">
-              Category <span class="text-dim" style="font-weight:normal">(optional label to group profiles)</span>
+              {{ t('importEnv.categoryLabel') }} <span class="text-dim" style="font-weight:normal">{{ t('importEnv.categoryHint') }}</span>
               <input v-model="form.category" class="ctrl-input" placeholder="e.g. backend, infra, staging…" />
             </label>
 
@@ -84,7 +84,7 @@
 
         <div class="modal-footer">
           <button class="btn" @click="step === 2 ? (step = 1) : $emit('close')">
-            {{ step === 2 ? '← Back' : 'Cancel' }}
+            {{ step === 2 ? t('importEnv.back') : t('action.cancel') }}
           </button>
           <button
             v-if="step === 1"
@@ -100,7 +100,7 @@
             :disabled="envStore.loading"
             @click="submit"
           >
-            {{ envStore.loading ? 'Importing…' : 'Import Profile' }}
+            {{ envStore.loading ? t('profile.saving') : t('importEnv.import') }}
           </button>
         </div>
       </div>
@@ -111,6 +111,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useEnvStore } from '../../stores/useEnvStore'
+import { useI18n } from '../../composables/useI18n.js'
+
+const { t } = useI18n()
 
 const props = defineProps({ show: { type: Boolean, default: false } })
 const emit  = defineEmits(['close', 'imported'])

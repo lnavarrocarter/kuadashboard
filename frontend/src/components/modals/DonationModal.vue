@@ -1,14 +1,13 @@
 <template>
   <BaseModal :show="visible" @close="dismiss">
-    <template #title>💛 Apoya KuaDashboard</template>
+    <template #title>💛 Apoya KUA</template>
 
     <p style="margin-bottom: .8rem; line-height: 1.5;">
-      KuaDashboard es un proyecto open-source construido con dedicación.
-      Si te resulta útil, considera apoyar su desarrollo con un pequeño aporte.
+      KUA (Know Unified Administration) es un proyecto open source construido con dedicación.
+      Si te resulta útil para gestionar tu infraestructura, considera apoyar su desarrollo.
     </p>
     <p style="margin-bottom: .4rem; color: var(--text-secondary); font-size: .85rem;">
-      Tu contribución ayuda a mantener el proyecto activo, agregar nuevas funcionalidades
-      y ofrecer soporte a la comunidad.
+      Tu contribución impulsa nuevas integraciones, la visión AI-driven y el soporte a la comunidad.
     </p>
 
     <template #footer>
