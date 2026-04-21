@@ -92,7 +92,6 @@ defineEmits(['close'])
 
 // ── WS URL builder ────────────────────────────────────────────────────────────
 function wsUrl(path) {
-  if (import.meta.env.DEV) return `ws://localhost:7190${path}`
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${location.host}${path}`
 }

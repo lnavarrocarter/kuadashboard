@@ -2,12 +2,12 @@ import { markRaw } from 'vue'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { useToast } from './useToast'
 
-// In dev, Vite proxies HTTP fine but path-specific WS servers break the upgrade
-// handshake ("Invalid frame header"). Connect directly to the backend port instead.
+// Resolve the correct WebSocket URL for any environment:
+//   - Dev (Vite proxy)   → ws://localhost:<vite-port>/ws/... (proxy forwards to backend)
+//   - Production Electron → ws://localhost:7190/ws/... (served directly by Express)
+// NOTE: The server uses noServer:true + manual upgrade routing, so the Vite
+// proxy correctly forwards WS upgrades without "Invalid frame header" issues.
 function wsUrl(path) {
-  if (import.meta.env.DEV) {
-    return `ws://localhost:7190${path}`
-  }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${location.host}${path}`
 }

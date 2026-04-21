@@ -1,6 +1,13 @@
 // Global test setup for jsdom environment
 import { vi } from 'vitest'
 
+// Set a consistent location that matches the production Electron port
+// so WebSocket URL assertions in tests are predictable.
+Object.defineProperty(window, 'location', {
+  value: { protocol: 'http:', host: 'localhost:7190', hostname: 'localhost', port: '7190', href: 'http://localhost:7190/' },
+  writable: true,
+})
+
 // Mock WebSocket globally
 class MockWebSocket {
   constructor(url) {
