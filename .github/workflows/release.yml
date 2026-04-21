@@ -36,9 +36,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
-      - name: Fix distutils for node-gyp
+      - name: Fix distutils for node-gyp (macOS)
+        if: runner.os == 'macOS'
+        run: pip3 install setuptools --break-system-packages
+
+      - name: Fix distutils for node-gyp (Windows)
+        if: runner.os == 'Windows'
         run: pip install setuptools
-        continue-on-error: true
+
+      - name: Fix distutils for node-gyp (Linux)
+        if: runner.os == 'Linux'
+        run: pip3 install setuptools
 
       - name: Build
         run: npm run ${{ matrix.cmd }}
