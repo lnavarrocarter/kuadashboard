@@ -21,6 +21,7 @@ const { contextBridge, ipcRenderer, shell } = require('electron');
 const ALLOWED_RECEIVE = new Set([
   'update:available',
   'update:downloaded',
+  'update:error',
   'system-tools:changed',
   'server:ready',
   'server:error',
@@ -83,5 +84,10 @@ contextBridge.exposeInMainWorld('kuaElectron', {
   /** Trigger install of downloaded update and restart */
   installUpdate() {
     ipcRenderer.send('app:install-update');
+  },
+
+  /** Manually trigger an update check */
+  checkForUpdates() {
+    ipcRenderer.send('app:check-updates');
   },
 });

@@ -312,8 +312,10 @@ import DonationModal    from './components/modals/DonationModal.vue'
 import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
+import { useUpdateStore } from './stores/useUpdateStore'
 
 const { t } = useI18n()
+const updateStore = useUpdateStore()
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
 const termStore = useTerminalStore()
@@ -595,6 +597,7 @@ onMounted(async () => {
   if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
   document.addEventListener('keydown', onKey)
+  updateStore.initListeners()
   nextTick(() => createIcons({ icons }))
 })
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(autoRefreshTimer); document.removeEventListener('keydown', onKey) })

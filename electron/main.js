@@ -209,7 +209,6 @@ function buildMenu() {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
-        ...(IS_DEV ? [{ role: 'toggleDevTools' }] : []),
       ],
     },
     {
@@ -222,6 +221,51 @@ function buildMenu() {
           : [{ role: 'close' }]),
       ],
     },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About KuaDashboard',
+          click: () => {
+            const { dialog } = require('electron');
+            dialog.showMessageBox(mainWindow, {
+              type:    'info',
+              title:   'KuaDashboard',
+              message: `KuaDashboard v${app.getVersion()}`,
+              detail:  `Know Unified Administration\n\nElectron ${process.versions.electron}\nNode ${process.versions.node}\nChrome ${process.versions.chrome}`,
+              buttons: ['OK'],
+            });
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Developer Tools',
+          accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+          click: () => {
+            if (mainWindow) mainWindow.webContents.toggleDevTools();
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates…',
+          click: () => {
+            if (!IS_DEV) {
+              autoUpdater.checkForUpdates().catch(err => {
+                console.warn('[updater] Manual check failed:', err.message);
+              });
+            } else {
+              const { dialog } = require('electron');
+              dialog.showMessageBox(mainWindow, {
+                type:    'info',
+                title:   'Updates',
+                message: 'Auto-updates are disabled in development mode.',
+                buttons: ['OK'],
+              });
+            }
+          },
+        },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -230,6 +274,14 @@ function buildMenu() {
 
 ipcMain.on('app:version', event => {
   event.returnValue = app.getVersion();
+});
+
+ipcMain.on('app:check-updates', () => {
+  if (!IS_DEV) {
+    autoUpdater.checkForUpdates().catch(err => {
+      console.warn('[updater] IPC check failed:', err.message);
+    });
+  }
 });
 
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
@@ -259,6 +311,9 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', err => {
     console.error('[updater] Error:', err.message);
+    if (mainWindow) {
+      mainWindow.webContents.send('update:error', err.message);
+    }
   });
 
   // Check for updates (silently — no dialogs)

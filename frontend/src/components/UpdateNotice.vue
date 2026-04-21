@@ -10,33 +10,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
+import { useUpdateStore } from '../stores/useUpdateStore'
 
-const updateReady = ref(false)
-const version     = ref('')
-let handler       = null
+const updateStore = useUpdateStore()
+const updateReady = computed(() => updateStore.updateDownloaded)
+const version     = computed(() => updateStore.newVersion)
 
 function install() {
-  if (window.kuaElectron?.installUpdate) {
-    window.kuaElectron.installUpdate()
-  }
+  updateStore.installUpdate()
 }
 
-onMounted(() => {
-  if (window.kuaElectron?.onUpdateDownloaded) {
-    handler = window.kuaElectron.onUpdateDownloaded(info => {
-      version.value = info.version
-      updateReady.value = true
-      nextTick(() => createIcons({ icons }))
-    })
-  }
-})
-
-onUnmounted(() => {
-  if (handler && window.kuaElectron?.removeListener) {
-    window.kuaElectron.removeListener('update:downloaded', handler)
-  }
+watch(updateReady, val => {
+  if (val) nextTick(() => createIcons({ icons }))
 })
 </script>
 

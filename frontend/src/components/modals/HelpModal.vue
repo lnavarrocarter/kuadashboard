@@ -41,6 +41,13 @@
               <i data-lucide="refresh-cw"></i> {{ t('help.restartUpdate') }}
             </button>
           </div>
+          <div v-else-if="updateStore.updateError" class="update-card update-error">
+            <i data-lucide="alert-triangle"></i>
+            <div class="update-card-body">
+              <div class="update-card-title">Error al descargar actualización</div>
+              <div class="update-card-sub">{{ updateStore.updateError }}</div>
+            </div>
+          </div>
           <div v-else-if="updateAvailable" class="update-card update-pending">
             <i data-lucide="cloud-download"></i>
             <div class="update-card-body">
@@ -296,12 +303,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import BaseModal from '../BaseModal.vue'
 import { settings, applySettings } from '../../composables/useSettings.js'
 import { useI18n } from '../../composables/useI18n.js'
+import { useUpdateStore } from '../../stores/useUpdateStore.js'
 
 const { t } = useI18n()
+const updateStore     = useUpdateStore()
+const updateAvailable  = computed(() => updateStore.updateAvailable)
+const updateDownloaded = computed(() => updateStore.updateDownloaded)
+const newVersion       = computed(() => updateStore.newVersion)
 
 const ACCENT_OPTIONS = [
   { id: 'blue',   label: 'Azul',    color: '#0e9de8' },
@@ -317,43 +329,16 @@ function resetSettings() {
   })
 }
 
-const VERSION = '1.1.2'
+function installUpdate() {
+  updateStore.installUpdate()
+}
+
+const VERSION = window.kuaElectron?.getVersion?.() || '1.3.0'
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
 
 const activeTab = ref('about')
-
-// ── Actualización ────────────────────────────────────────────────────────────
-const updateAvailable  = ref(false)
-const updateDownloaded = ref(false)
-const newVersion       = ref('')
-let handlerAvailable   = null
-let handlerDownloaded  = null
-
-function installUpdate() {
-  window.kuaElectron?.installUpdate?.()
-}
-
-onMounted(() => {
-  if (!window.kuaElectron) return
-  handlerAvailable = window.kuaElectron.on?.('update:available', info => {
-    newVersion.value      = info.version
-    updateAvailable.value = true
-    nextTick(() => import('lucide').then(({ createIcons, icons }) => createIcons({ icons })))
-  })
-  handlerDownloaded = window.kuaElectron.on?.('update:downloaded', info => {
-    newVersion.value       = info.version
-    updateDownloaded.value = true
-    nextTick(() => import('lucide').then(({ createIcons, icons }) => createIcons({ icons })))
-  })
-})
-
-onUnmounted(() => {
-  if (!window.kuaElectron) return
-  if (handlerAvailable)  window.kuaElectron.removeListener?.('update:available',  handlerAvailable)
-  if (handlerDownloaded) window.kuaElectron.removeListener?.('update:downloaded', handlerDownloaded)
-})
 
 const TABS = computed(() => [
   { id: 'about',    label: t('help.tabAbout'),    icon: 'info' },
@@ -364,55 +349,74 @@ const TABS = computed(() => [
 
 const CHANGELOG = [
   {
+    version: '1.3.0',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'Interfaz bilingüe (EN/ES) — sistema i18n completo con más de 150 claves traducidas y cambio reactivo de idioma sin recargar' },
+      { type: 'new',    text: 'Botones de acceso rápido en el header: cambio de idioma (🇪🇸/🇺🇸) y tema (☀/🌙) sin abrir Ajustes' },
+      { type: 'new',    text: 'Vista Helm — explorador de releases Helm bajo Herramientas' },
+      { type: 'new',    text: 'Menú de aplicación con About, DevTools y Check for Updates' },
+      { type: 'fix',    text: 'WebSocket: eliminada URL hardcoded ws://localhost:7190 que rompía streams de terminal en setups con puerto no predeterminado' },
+      { type: 'fix',    text: 'Terminal minimize: el panel ahora colapsa correctamente a 34px (solo cabecera)' },
+      { type: 'fix',    text: 'Auto-updater: estado de actualización movido a store global — el botón "Reiniciar y actualizar" ya no desaparece al cerrar el modal' },
+      { type: 'better', text: 'Documentación bilingüe VitePress completa — 17 páginas EN + ES cubriendo guía, features y arquitectura' },
+    ],
+  },
+  {
+    version: '1.2.0',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'Port forwarding persistente entre sesiones' },
+      { type: 'new',    text: 'Soporte AWS completo: 19 servicios incluyendo API Gateway, CloudFront, Route 53, DynamoDB, DocumentDB, Glue, Athena, Data Pipeline, Cognito, Secrets Manager, EventBridge y Step Functions' },
+      { type: 'better', text: 'Panel de terminal con múltiples pestañas, highlight de líneas y resize' },
+    ],
+  },
+  {
     version: '1.1.2',
     date: 'Abril 2026',
     items: [
-      { type: 'fix',     text: 'macOS: Electron ahora hereda el PATH del login shell al arrancar desde el Dock, resolviendo la falta de kubectl, aws, gcloud y helm instalados con Homebrew' },
-      { type: 'new',     text: 'Aviso de actualización disponible/lista dentro del modal de Ayuda (pestaña Acerca de)' },
+      { type: 'fix',  text: 'macOS: Electron hereda el PATH del login shell al arrancar desde el Dock, resolviendo la falta de kubectl, aws, gcloud y helm instalados con Homebrew' },
+      { type: 'new',  text: 'Aviso de actualización disponible/lista dentro del modal de Ayuda' },
     ],
   },
   {
     version: '1.1.1',
     date: 'Abril 2026',
     items: [
-      { type: 'new',     text: 'Credenciales AWS y GCP configurables desde el header global (como Kubernetes)' },
-      { type: 'new',     text: 'Botón de Local Shell siempre visible en el header (icono de terminal)' },
-      { type: 'new',     text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
-      { type: 'new',     text: 'Modal de Ayuda con Acerca de, Releases y Feedback/Issues' },
-      { type: 'better',  text: 'Iconos SVG uniformes en toda la interfaz (12px)' },
-      { type: 'better',  text: 'Botón Refresh en las vistas AWS y GCP con icono' },
-      { type: 'better',  text: 'Env Manager accesible desde cualquier proveedor, no sólo Kubernetes' },
+      { type: 'new',    text: 'Credenciales AWS y GCP configurables desde el header global' },
+      { type: 'new',    text: 'Botón de Local Shell siempre visible en el header' },
+      { type: 'new',    text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
+      { type: 'new',    text: 'Modal de Ayuda con Acerca de, Releases y Feedback/Issues' },
+      { type: 'better', text: 'Iconos SVG uniformes en toda la interfaz (12px)' },
+      { type: 'better', text: 'Botón Refresh en las vistas AWS y GCP con icono' },
     ],
   },
   {
     version: '1.1.0',
     date: 'Abril 2026',
     items: [
-      { type: 'new',     text: 'Selectores de credencial AWS y GCP en el header global' },
-      { type: 'new',     text: 'Botón de Local Shell siempre visible en el header' },
-      { type: 'new',     text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
-      { type: 'new',     text: 'Navegación lateral (sidebar) para AWS y GCP' },
-      { type: 'new',     text: 'Soporte para AWS Step Functions con visualización de diagramas' },
-      { type: 'new',     text: 'Soporte para AWS EventBridge — reglas, logs y métricas' },
-      { type: 'new',     text: 'Soporte para AWS API Gateway — rutas e integraciones' },
-      { type: 'new',     text: 'GCP Pub/Sub — gestiona tópicos' },
-      { type: 'new',     text: 'GCP Cloud Functions — invoca y monitorea funciones' },
-      { type: 'better',  text: 'SSH directo a instancias EC2 desde el dashboard' },
-      { type: 'better',  text: 'Terminal local integrada con múltiples pestañas' },
-      { type: 'better',  text: 'Port-forward ahora persiste entre sesiones' },
+      { type: 'new',    text: 'Selectores de credencial AWS y GCP en el header global' },
+      { type: 'new',    text: 'Navegación lateral (sidebar) para AWS y GCP' },
+      { type: 'new',    text: 'Soporte para AWS Step Functions con visualización de diagramas' },
+      { type: 'new',    text: 'Soporte para AWS EventBridge — reglas, logs y métricas' },
+      { type: 'new',    text: 'Soporte para AWS API Gateway — rutas e integraciones' },
+      { type: 'new',    text: 'GCP Pub/Sub — gestiona tópicos' },
+      { type: 'new',    text: 'GCP Cloud Functions — invoca y monitorea funciones' },
+      { type: 'better', text: 'SSH directo a instancias EC2 desde el dashboard' },
+      { type: 'better', text: 'Terminal local integrada con múltiples pestañas' },
     ],
   },
   {
     version: '1.0.0',
     date: 'Enero 2026',
     items: [
-      { type: 'new',     text: 'Dashboard Kubernetes con gestión de Pods, Deployments, Services y más' },
-      { type: 'new',     text: 'Soporte multi-contexto y multi-namespace' },
-      { type: 'new',     text: 'Vista AWS — EC2, ECS, EKS, Lambda, S3, ECR, VPC' },
-      { type: 'new',     text: 'Vista GCP — Cloud Run, GKE, Compute VMs, Cloud SQL, Storage' },
-      { type: 'new',     text: 'Env Manager para gestionar perfiles de credenciales cifradas' },
-      { type: 'new',     text: 'Port forwarding visual' },
-      { type: 'new',     text: 'Logs en streaming y terminal exec para pods' },
+      { type: 'new', text: 'Dashboard Kubernetes con gestión de Pods, Deployments, Services y más' },
+      { type: 'new', text: 'Soporte multi-contexto y multi-namespace' },
+      { type: 'new', text: 'Vista AWS — EC2, ECS, EKS, Lambda, S3, ECR, VPC' },
+      { type: 'new', text: 'Vista GCP — Cloud Run, GKE, Compute VMs, Cloud SQL, Storage' },
+      { type: 'new', text: 'Env Manager para gestionar perfiles de credenciales cifradas' },
+      { type: 'new', text: 'Port forwarding visual' },
+      { type: 'new', text: 'Logs en streaming y terminal exec para pods' },
     ],
   },
 ]
@@ -533,6 +537,8 @@ function open(url) {
 .update-ready > i, .update-ready > svg { color: var(--accent); }
 .update-pending { background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.3); }
 .update-pending > i, .update-pending > svg { color: #eab308; }
+.update-error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); }
+.update-error > i, .update-error > svg { color: #ef4444; }
 .update-card-body { flex: 1; }
 .update-card-title { font-weight: 600; color: var(--text); }
 .update-card-sub   { color: var(--text-dim); margin-top: 2px; }
