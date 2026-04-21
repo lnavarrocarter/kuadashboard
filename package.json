@@ -71,6 +71,8 @@
       "routes/**",
       "lib/**",
       "public/**",
+      "assets/icon.ico",
+      "assets/icon.png",
       "!node_modules/.cache"
     ],
     "directories": {
@@ -86,7 +88,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.ico",
       "signAndEditExecutable": false
     },
     "mac": {
