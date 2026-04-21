@@ -1,6 +1,6 @@
 {
   "name": "kuadashboard",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
   "author": {
     "name": "lnavarrocarter",
