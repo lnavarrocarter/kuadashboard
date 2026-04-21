@@ -43,6 +43,11 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Rebuild native modules for Electron
+        run: npx @electron/rebuild --force --types prod,optional
+        env:
+          npm_config_build_from_source: true
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
