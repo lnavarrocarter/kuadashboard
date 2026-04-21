@@ -15,7 +15,78 @@
   --teal:       #4ec9b0;
   --header-h:   46px;
   --sidebar-w:  190px;
+  --font-size-base: 13px;
+  --bg-modal:   #252526;   /* fondo de modales, se sobreescribe en light */
+  --bg-header:  #111111;   /* fondo del header, se sobreescribe en light */
 }
+
+/* ── Light theme ────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:         #ddeaf6;   /* fondo principal: azul claro suave */
+  --bg-panel:   #e8f2fb;   /* paneles/sidebar: azul muy claro */
+  --bg-row:     #f0f7ff;   /* filas de tabla: casi blanco azulado */
+  --bg-hover:   #cce0f5;   /* hover: azul claro más saturado */
+  --bg-sel:     #1a7cc0;   /* selección activa: azul medio */
+  --bg-modal:   #f4f7fa;   /* modales: gris claro neutro */
+  --border:     #b8cfe8;   /* bordes: azul grisáceo */
+  --text:       #0f1e2d;   /* texto principal: casi negro azulado */
+  --text-dim:   #5b7a99;   /* texto secundario: azul grisáceo */
+  --green:      #1a7a3a;
+  --yellow:     #c05000;
+  --red:        #b51c1c;
+  --teal:       #007a6e;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #a0bcd8; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #7aaac8; }
+
+/* Modales en tema claro usan --bg-modal en lugar de --bg-panel */
+[data-theme="light"] .modal,
+[data-theme="light"] .modal-box { background: var(--bg-modal, #f4f7fa); }
+
+/* Header en tema claro: azul oscuro para contraste */
+[data-theme="light"] .header { background: #0e3a5e; border-bottom-color: #0a2d4a; }
+
+/* Config pre / log body: fondo oscuro siempre (código) */
+[data-theme="light"] .config-pre { background: #1a2332; color: #d4d4d4; }
+[data-theme="light"] .logs-viewer { background: #1a2332; }
+[data-theme="light"] .logs-viewer .log-msg { color: #d4d4d4; }
+
+/* Tag chips en tema claro */
+[data-theme="light"] .tag-chip { background: rgba(14,58,94,.1); color: #1a5a8a; }
+
+/* Alert clases con mejor contraste */
+[data-theme="light"] .alert-error { background: rgba(181,28,28,.08); border-color: rgba(181,28,28,.3); color: #8b0000; }
+[data-theme="light"] .alert-success { background: rgba(26,122,58,.1); border-color: rgba(26,122,58,.3); color: #1a5a2a; }
+
+/* Inputs y selects */
+[data-theme="light"] input, [data-theme="light"] select, [data-theme="light"] textarea {
+  background: #ffffff;
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="light"] .ctrl-input,
+[data-theme="light"] .ctrl-select {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+/* Botón primario sin cambios; resto con fondo blanco */
+[data-theme="light"] .btn:not(.primary):not(.danger) {
+  background: #ffffff;
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="light"] .btn:not(.primary):not(.danger):hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+/* ── Compact mode ───────────────────────────────────────────────────────────── */
+.compact .cloud-table td,
+.compact .cloud-table th { padding: 3px 8px !important; }
+.compact .sidebar-item { padding: 4px 10px !important; }
+.compact .header { min-height: 38px !important; }
 
 /* ── Reset ──────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,7 +122,7 @@ input, select, textarea { font: inherit; color: var(--text); }
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 .header {
   height: var(--header-h);
-  background: #111;
+  background: var(--bg-header);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -68,11 +139,16 @@ input, select, textarea { font: inherit; color: var(--text); }
 .header-left  { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; overflow: hidden; }
 .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px; }
 .app-logo {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 15px; font-weight: 600; color: #fff;
+  display: flex; align-items: center; gap: 9px;
+  font-size: 17px; font-weight: 700; color: #fff;
   letter-spacing: .5px; white-space: nowrap; user-select: none;
 }
-.app-logo i, .app-logo svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.app-logo i, .app-logo svg { flex-shrink: 0; }
+.app-logo-sub {
+  font-size: 10px; font-weight: 400; color: var(--text-dim);
+  letter-spacing: .3px; white-space: nowrap;
+  border-left: 1px solid var(--border); padding-left: 8px; margin-left: 2px;
+}
 
 .header-controls { display: flex; align-items: center; gap: 12px; margin-left: 24px; }
 .control-group { display: flex; align-items: center; gap: 6px; }
@@ -171,6 +247,37 @@ input, select, textarea { font: inherit; color: var(--text); }
 .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
 .sidebar-item.active { background: var(--bg-sel); color: #fff; font-weight: 500; }
 
+/* Connections section header with inline + button */
+.sidebar-title-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 10px;
+}
+.sidebar-add-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.sidebar-add-btn:hover { background: var(--bg-hover); color: var(--text); }
+.sidebar-empty {
+  display: block;
+  padding: 5px 20px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 /* ── Main ────────────────────────────────────────────────────────────────────── */
 /* .main defined in Layout section below */
 
@@ -235,6 +342,8 @@ input, select, textarea { font: inherit; color: var(--text); }
 .btn.btn-icon.stop:hover { color: var(--red); background: rgba(244,67,54,.13); }
 .btn.btn-donate { color: rgba(255,100,100,.7); }
 .btn.btn-donate:hover { color: #ff4081; background: rgba(255,64,129,.13); }
+.btn.btn-lang { font-size: 16px; padding: 0 6px; }
+.btn.btn-lang .lang-flag { line-height: 1; }
 
 /* ── Table ───────────────────────────────────────────────────────────────────── */
 .table-wrap {
@@ -441,7 +550,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   justify-content: center;
 }
 .modal-box {
-  background: #252526;
+  background: var(--bg-modal);
   border: 1px solid var(--border);
   border-radius: 6px;
   display: flex;
@@ -615,7 +724,7 @@ input, select, textarea { font: inherit; color: var(--text); }
 }
 
 .modal {
-  background: #252526;
+  background: var(--bg-modal);
   border: 1px solid var(--border);
   border-radius: 6px;
   display: flex;
@@ -721,6 +830,11 @@ input, select, textarea { font: inherit; color: var(--text); }
 }
 .term-panel.minimised .term-body,
 .term-panel.minimised .term-footer { display: none !important; }
+.term-panel.minimised {
+  min-height: unset;
+  height: 34px !important;
+  overflow: hidden;
+}
 
 .term-resize-handle {
   position: absolute;
@@ -1372,7 +1486,15 @@ kbd {
 .ctrl-input { background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; padding: 6px 9px; color: var(--text); font-size: 12px; width: 100%; outline: none; }
 .ctrl-input:focus { border-color: var(--accent); }
 .code-input { font-family: 'Consolas', monospace; font-size: 11px; resize: vertical; }
-.text-dim { color: var(--text-dim); }
+.code-block { background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; font-family: 'Consolas', monospace; font-size: 11px; color: var(--text); white-space: pre-wrap; word-break: break-all; margin: 0; }
+.dynamo-cell-expand-btn {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 3px;
+  cursor: pointer; font-size: 10px; line-height: 1; padding: 1px 3px;
+  opacity: 0; transition: opacity .15s; color: var(--text-dim);
+}
+.cloud-table tbody tr:hover .dynamo-cell-expand-btn { opacity: 1; }
+.text-dim { color: var(--text-dim); margin-left: 3px; }
 
 /* ── CLI Tools Notice banner ─────────────────────────────────────────────────── */
 .cli-notice {
