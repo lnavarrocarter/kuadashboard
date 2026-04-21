@@ -333,7 +333,7 @@ function installUpdate() {
   updateStore.installUpdate()
 }
 
-const VERSION = window.kuaElectron?.getVersion?.() || '1.1.3'
+const VERSION = window.kuaElectron?.getVersion?.() || '1.3.2'
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
@@ -348,6 +348,13 @@ const TABS = computed(() => [
 ])
 
 const CHANGELOG = [
+  {
+    version: '1.3.2',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix', text: 'macOS: el auto-updater ahora genera un archivo .zip además del .dmg, resolviendo el error "zip file not provided" al intentar actualizar la app' },
+    ],
+  },
   {
     version: '1.1.3',
     date: 'Abril 2026',
