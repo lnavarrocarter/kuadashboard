@@ -302,6 +302,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', info => {
     console.log('[updater] Update downloaded:', info.version);
+    updateDownloaded = true;
     if (mainWindow) {
       mainWindow.webContents.send('update:downloaded', {
         version: info.version,
@@ -322,8 +323,30 @@ function setupAutoUpdater() {
   });
 }
 
+let updateDownloaded = false;
+
 ipcMain.on('app:install-update', () => {
-  autoUpdater.quitAndInstall(false, true);
+  console.log('[updater] install-update requested, downloaded:', updateDownloaded);
+  if (!updateDownloaded) {
+    console.warn('[updater] update not yet downloaded, cannot install');
+    if (mainWindow) mainWindow.webContents.send('update:error', 'La actualización no se ha descargado aún');
+    return;
+  }
+  try {
+    // Primary: quit + install + relaunch
+    autoUpdater.quitAndInstall(false, true);
+  } catch (err) {
+    console.error('[updater] quitAndInstall failed:', err.message);
+    // Fallback: just quit — autoInstallOnAppQuit will install on exit
+    try {
+      console.log('[updater] Falling back to app.quit() — update will install on exit');
+      if (mainWindow) mainWindow.webContents.send('update:error', 'quitAndInstall falló. La app se cerrará e instalará la actualización.');
+      setTimeout(() => app.quit(), 1500);
+    } catch (e2) {
+      console.error('[updater] app.quit() also failed:', e2.message);
+      if (mainWindow) mainWindow.webContents.send('update:error', err.message);
+    }
+  }
 });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────

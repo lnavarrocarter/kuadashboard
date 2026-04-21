@@ -25,10 +25,15 @@ export const useUpdateStore = defineStore('update', () => {
 
     window.kuaElectron.on('update:error', msg => {
       updateError.value = msg
+      installing.value = false
     })
   }
 
+  const installing = ref(false)
+
   function installUpdate() {
+    installing.value = true
+    updateError.value = null
     window.kuaElectron?.installUpdate?.()
   }
 
@@ -36,5 +41,5 @@ export const useUpdateStore = defineStore('update', () => {
     window.kuaElectron?.checkForUpdates?.()
   }
 
-  return { updateAvailable, updateDownloaded, updateError, newVersion, initListeners, installUpdate, checkForUpdates }
+  return { updateAvailable, updateDownloaded, updateError, newVersion, installing, initListeners, installUpdate, checkForUpdates }
 })
