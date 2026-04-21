@@ -24,55 +24,17 @@
 import { ref, onMounted } from 'vue'
 import BaseModal from '../BaseModal.vue'
 import { useI18n } from '../../composables/useI18n.js'
+import { CHANGELOG, CHANGELOG_VERSION } from '../../composables/useChangelog.js'
 
 const { t } = useI18n()
 
 const STORAGE_KEY = 'kuadashboard_last_seen_version'
-const version = '1.1.1'
+const version = CHANGELOG_VERSION
 
 const visible = ref(false)
 
-const changelog = [
-  {
-    version: '1.1.1',
-    items: [
-      { type: 'new',     text: 'Credenciales AWS y GCP configurables desde el header global (como Kubernetes)' },
-      { type: 'new',     text: 'Botón de Local Shell siempre visible en el header (icono de terminal)' },
-      { type: 'new',     text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
-      { type: 'new',     text: 'Modal de Ayuda con Acerca de, Releases y Feedback/Issues' },
-      { type: 'better',  text: 'Iconos SVG uniformes en toda la interfaz (12px)' },
-      { type: 'better',  text: 'Botón Refresh en las vistas AWS y GCP con icono' },
-      { type: 'better',  text: 'Env Manager ahora funciona desde cualquier proveedor, no sólo Kubernetes' },
-    ],
-  },
-  {
-    version: '1.1.0',
-    items: [
-      { type: 'new',     text: 'Navegación lateral (sidebar) para AWS y GCP — misma experiencia que Kubernetes' },
-      { type: 'new',     text: 'Soporte para AWS Step Functions — visualiza máquinas de estado y diagramas' },
-      { type: 'new',     text: 'Soporte para AWS EventBridge — reglas, logs y métricas' },
-      { type: 'new',     text: 'Soporte para AWS API Gateway — rutas e integraciones' },
-      { type: 'new',     text: 'GCP Pub/Sub — gestiona tópicos directamente' },
-      { type: 'new',     text: 'GCP Cloud Functions — invoca y monitorea funciones' },
-      { type: 'better',  text: 'SSH directo a instancias EC2 desde el dashboard' },
-      { type: 'better',  text: 'Terminal local integrada con múltiples pestañas' },
-      { type: 'better',  text: 'Port-forward ahora persiste entre sesiones' },
-      { type: 'better',  text: 'Panel de novedades al actualizar (lo estás viendo ahora 😉)' },
-    ],
-  },
-  {
-    version: '1.0.0',
-    items: [
-      { type: 'new',     text: 'Dashboard Kubernetes con gestión de Pods, Deployments, Services y más' },
-      { type: 'new',     text: 'Soporte multi-contexto y multi-namespace' },
-      { type: 'new',     text: 'Vista AWS — EC2, ECS, EKS, Lambda, S3, ECR, VPC' },
-      { type: 'new',     text: 'Vista GCP — Cloud Run, GKE, Compute VMs, Cloud SQL, Storage' },
-      { type: 'new',     text: 'Env Manager para gestionar perfiles de credenciales' },
-      { type: 'new',     text: 'Port forwarding visual con soporte drag & drop' },
-      { type: 'new',     text: 'Logs en streaming y terminal exec para pods' },
-    ],
-  },
-]
+// Show only entries from the current version and the two previous ones
+const changelog = CHANGELOG.slice(0, 3)
 
 function tagLabel(type) {
   if (type === 'new')    return t('welcome.tagNew')

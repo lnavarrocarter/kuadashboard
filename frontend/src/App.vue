@@ -219,6 +219,60 @@
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
+            <a v-for="r in GCP_SIDEBAR.security" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
+            <a v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.workflows') }}</div>
+            <a v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
+            <a v-for="r in GCP_SIDEBAR.networking" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.cache') }}</div>
+            <a v-for="r in GCP_SIDEBAR.cache" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.async') }}</div>
+            <a v-for="r in GCP_SIDEBAR.async" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.devops') }}</div>
+            <a v-for="r in GCP_SIDEBAR.devops" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.observability') }}</div>
+            <a v-for="r in GCP_SIDEBAR.observability" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.iam') }}</div>
+            <a v-for="r in GCP_SIDEBAR.iam" :key="r.id"
+               :class="['sidebar-item', { active: gcpTab === r.id }]"
+               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
         </nav>
 
         <main class="main">
@@ -228,7 +282,7 @@
             <ResourceTable @action="handleAction" />
           </template>
           <AwsView  v-else-if="activeProvider === 'aws'"  :active-service="awsTab" />
-          <GcpView  v-else-if="activeProvider === 'gcp'"  :active-service="gcpTab" />
+          <GcpView  v-else-if="activeProvider === 'gcp'"  :active-service="gcpTab" @connect-gke="handleGkeConnect" />
         </main>
       </div>
 
@@ -345,10 +399,19 @@ const AWS_SIDEBAR = {
 
 const GCP_SIDEBAR = {
   compute:    [{ id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
-  database:   [{ id: 'sql', label: 'Cloud SQL' }],
-  storage:    [{ id: 'storage', label: 'Storage' }],
-  serverless: [{ id: 'functions', label: 'Functions' }],
-  messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }],
+  database:   [{ id: 'sql', label: 'Cloud SQL' }, { id: 'firestore', label: 'Firestore' }, { id: 'spanner', label: 'Cloud Spanner' }],
+  storage:    [{ id: 'storage', label: 'Storage' }, { id: 'artifact', label: 'Artifact Registry' }],
+  serverless: [{ id: 'functions', label: 'Functions' }, { id: 'cloudrunJobs', label: 'Run Jobs' }],
+  messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }, { id: 'pubsubSubs', label: 'Subscriptions' }],
+  security:   [{ id: 'secrets', label: 'Secret Manager' }, { id: 'kms', label: 'Cloud KMS' }],
+  analytics:  [{ id: 'bigquery', label: 'BigQuery' }],
+  workflows:  [{ id: 'workflows', label: 'Cloud Workflows' }],
+  networking: [{ id: 'dns', label: 'Cloud DNS' }, { id: 'vpc', label: 'VPC Networks' }],
+  cache:      [{ id: 'memorystore', label: 'Memorystore' }],
+  async:      [{ id: 'tasks', label: 'Cloud Tasks' }, { id: 'scheduler', label: 'Cloud Scheduler' }],
+  devops:     [{ id: 'build', label: 'Cloud Build' }],
+  observability: [{ id: 'monitoring', label: 'Cloud Monitoring' }, { id: 'logging', label: 'Cloud Logging' }],
+  iam:        [{ id: 'iam', label: 'Service Accounts' }],
 }
 
 // ─── localStorage helpers ────────────────────────────────────────────────────
@@ -464,6 +527,23 @@ function toggleEnvManager() {
 }
 function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
 function setCloudView(view)   { cloudView.value = view }
+
+async function handleGkeConnect(contextName) {
+  // Switch to the Kubernetes view
+  activeProvider.value = 'kubernetes'
+  cloudView.value      = null
+  // Reload contexts so the imported one is available
+  await store.loadContexts()
+  // Switch to it
+  try {
+    selectedContext.value = contextName
+    await store.switchContext(contextName)
+    toast(t('msg.contextSwitched', { name: contextName }), 'success')
+  } catch (e) {
+    toast(e.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
 
 function openLocalShell() {
   const tab = termStore.openLocalTab()

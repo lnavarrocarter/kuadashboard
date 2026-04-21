@@ -308,6 +308,7 @@ import BaseModal from '../BaseModal.vue'
 import { settings, applySettings } from '../../composables/useSettings.js'
 import { useI18n } from '../../composables/useI18n.js'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
+import { CHANGELOG, CHANGELOG_VERSION } from '../../composables/useChangelog.js'
 
 const { t } = useI18n()
 const updateStore     = useUpdateStore()
@@ -333,7 +334,7 @@ function installUpdate() {
   updateStore.installUpdate()
 }
 
-const VERSION = window.kuaElectron?.getVersion?.() || '1.3.3'
+const VERSION = window.kuaElectron?.getVersion?.() || CHANGELOG_VERSION
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
@@ -347,101 +348,7 @@ const TABS = computed(() => [
   { id: 'feedback', label: t('help.tabFeedback'), icon: 'message-square' },
 ])
 
-const CHANGELOG = [
-  {
-    version: '1.3.3',
-    date: 'Abril 2026',
-    items: [
-      { type: 'fix',  text: 'macOS: credenciales almacenadas en el Keychain nativo usando @napi-rs/keyring — elimina el error "KeytarStore requires keytar" sin necesidad de recompilar módulos nativos' },
-      { type: 'fix',  text: 'macOS: el auto-updater genera archivo .zip además del .dmg, resolviendo el error "zip file not provided" al actualizar' },
-    ],
-  },
-  {
-    version: '1.3.2',
-    date: 'Abril 2026',
-    items: [
-      { type: 'fix', text: 'macOS: el auto-updater ahora genera un archivo .zip además del .dmg, resolviendo el error "zip file not provided" al intentar actualizar la app' },
-    ],
-  },
-  {
-    version: '1.1.3',
-    date: 'Abril 2026',
-    items: [
-      { type: 'fix', text: 'macOS: el auto-updater ahora genera un archivo .zip además del .dmg, resolviendo el error "zip file not provided" al intentar actualizar la app' },
-    ],
-  },
-  {
-    version: '1.3.0',
-    date: 'Abril 2026',
-    items: [
-      { type: 'new',    text: 'Interfaz bilingüe (EN/ES) — sistema i18n completo con más de 150 claves traducidas y cambio reactivo de idioma sin recargar' },
-      { type: 'new',    text: 'Botones de acceso rápido en el header: cambio de idioma (🇪🇸/🇺🇸) y tema (☀/🌙) sin abrir Ajustes' },
-      { type: 'new',    text: 'Vista Helm — explorador de releases Helm bajo Herramientas' },
-      { type: 'new',    text: 'Menú de aplicación con About, DevTools y Check for Updates' },
-      { type: 'fix',    text: 'WebSocket: eliminada URL hardcoded ws://localhost:7190 que rompía streams de terminal en setups con puerto no predeterminado' },
-      { type: 'fix',    text: 'Terminal minimize: el panel ahora colapsa correctamente a 34px (solo cabecera)' },
-      { type: 'fix',    text: 'Auto-updater: estado de actualización movido a store global — el botón "Reiniciar y actualizar" ya no desaparece al cerrar el modal' },
-      { type: 'better', text: 'Documentación bilingüe VitePress completa — 17 páginas EN + ES cubriendo guía, features y arquitectura' },
-    ],
-  },
-  {
-    version: '1.2.0',
-    date: 'Abril 2026',
-    items: [
-      { type: 'new',    text: 'Port forwarding persistente entre sesiones' },
-      { type: 'new',    text: 'Soporte AWS completo: 19 servicios incluyendo API Gateway, CloudFront, Route 53, DynamoDB, DocumentDB, Glue, Athena, Data Pipeline, Cognito, Secrets Manager, EventBridge y Step Functions' },
-      { type: 'better', text: 'Panel de terminal con múltiples pestañas, highlight de líneas y resize' },
-    ],
-  },
-  {
-    version: '1.1.2',
-    date: 'Abril 2026',
-    items: [
-      { type: 'fix',  text: 'macOS: Electron hereda el PATH del login shell al arrancar desde el Dock, resolviendo la falta de kubectl, aws, gcloud y helm instalados con Homebrew' },
-      { type: 'new',  text: 'Aviso de actualización disponible/lista dentro del modal de Ayuda' },
-    ],
-  },
-  {
-    version: '1.1.1',
-    date: 'Abril 2026',
-    items: [
-      { type: 'new',    text: 'Credenciales AWS y GCP configurables desde el header global' },
-      { type: 'new',    text: 'Botón de Local Shell siempre visible en el header' },
-      { type: 'new',    text: 'Botón de Env Manager en el header, accesible desde cualquier proveedor' },
-      { type: 'new',    text: 'Modal de Ayuda con Acerca de, Releases y Feedback/Issues' },
-      { type: 'better', text: 'Iconos SVG uniformes en toda la interfaz (12px)' },
-      { type: 'better', text: 'Botón Refresh en las vistas AWS y GCP con icono' },
-    ],
-  },
-  {
-    version: '1.1.0',
-    date: 'Abril 2026',
-    items: [
-      { type: 'new',    text: 'Selectores de credencial AWS y GCP en el header global' },
-      { type: 'new',    text: 'Navegación lateral (sidebar) para AWS y GCP' },
-      { type: 'new',    text: 'Soporte para AWS Step Functions con visualización de diagramas' },
-      { type: 'new',    text: 'Soporte para AWS EventBridge — reglas, logs y métricas' },
-      { type: 'new',    text: 'Soporte para AWS API Gateway — rutas e integraciones' },
-      { type: 'new',    text: 'GCP Pub/Sub — gestiona tópicos' },
-      { type: 'new',    text: 'GCP Cloud Functions — invoca y monitorea funciones' },
-      { type: 'better', text: 'SSH directo a instancias EC2 desde el dashboard' },
-      { type: 'better', text: 'Terminal local integrada con múltiples pestañas' },
-    ],
-  },
-  {
-    version: '1.0.0',
-    date: 'Enero 2026',
-    items: [
-      { type: 'new', text: 'Dashboard Kubernetes con gestión de Pods, Deployments, Services y más' },
-      { type: 'new', text: 'Soporte multi-contexto y multi-namespace' },
-      { type: 'new', text: 'Vista AWS — EC2, ECS, EKS, Lambda, S3, ECR, VPC' },
-      { type: 'new', text: 'Vista GCP — Cloud Run, GKE, Compute VMs, Cloud SQL, Storage' },
-      { type: 'new', text: 'Env Manager para gestionar perfiles de credenciales cifradas' },
-      { type: 'new', text: 'Port forwarding visual' },
-      { type: 'new', text: 'Logs en streaming y terminal exec para pods' },
-    ],
-  },
-]
+// CHANGELOG imported from useChangelog.js
 
 function tagLabel(t_) {
   return { new: t('welcome.tagNew'), better: t('welcome.tagBetter'), fix: 'Fix' }[t_] ?? t_

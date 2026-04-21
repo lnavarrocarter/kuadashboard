@@ -41,6 +41,12 @@ export default {
   'sidebar.messaging':       'Messaging',
   'sidebar.releases':        'Releases',
   'sidebar.repositories':    'Repositories',
+  'sidebar.workflows':       'Workflows',
+  'sidebar.cache':           'Cache',
+  'sidebar.async':           'Async',
+  'sidebar.devops':          'DevOps',
+  'sidebar.iam':             'IAM',
+  'sidebar.observability':   'Observability',
 
   // ── Status bar ────────────────────────────────────────────────────────────
   'status.items':            '{n} items',

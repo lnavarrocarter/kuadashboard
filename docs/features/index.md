@@ -33,9 +33,19 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - **Step Functions** — State machines, visual diagram
 
 ### GCP
-- **Cloud Run** — Services, start/stop, scaling
-- **GKE** — Cluster listing, status
-- **Compute Engine** — VM instances, start/stop
+- **Compute** — Cloud Run (start/stop), Cloud Run Jobs (run + executions), GKE, Compute Engine VMs (start/stop)
+- **Database** — Cloud SQL (start/stop), Cloud Spanner (SQL query editor), Firestore (document browser), Memorystore Redis
+- **Storage** — Cloud Storage (file browser + preview + download), Artifact Registry (packages)
+- **Serverless** — Cloud Functions (invoke + logs)
+- **Messaging** — Pub/Sub Topics, Pub/Sub Subscriptions
+- **Security** — Secret Manager (preview + import to Env Manager), Cloud KMS (key rings + crypto keys)
+- **Analytics** — BigQuery (SQL query editor + job polling)
+- **Workflows** — Cloud Workflows (executions + source viewer)
+- **Networking** — Cloud DNS (zones + records), VPC Networks (networks + subnets)
+- **Async** — Cloud Tasks (queues + tasks), Cloud Scheduler (run/pause/resume)
+- **DevOps** — Cloud Build (builds + log viewer)
+- **Observability** — Cloud Monitoring (alert policies + uptime checks), Cloud Logging (interactive query panel)
+- **IAM** — Service Accounts (list + keys)
 
 ## Tools
 
