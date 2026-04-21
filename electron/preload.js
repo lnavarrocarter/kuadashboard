@@ -90,4 +90,13 @@ contextBridge.exposeInMainWorld('kuaElectron', {
   checkForUpdates() {
     ipcRenderer.send('app:check-updates');
   },
+
+  /**
+   * Open a native OS file-picker dialog and return the selected path.
+   * Returns null if the user cancels.
+   * opts: { title?, filters?: [{ name, extensions }][], properties? }
+   */
+  openFileDialog(opts = {}) {
+    return ipcRenderer.invoke('dialog:openFile', opts);
+  },
 });

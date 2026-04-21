@@ -300,11 +300,221 @@ router.get('/ec2', async (req, res) => {
           privateIp:    i.PrivateIpAddress || null,
           az:           i.Placement?.AvailabilityZone,
           launchTime:   i.LaunchTime,
+          // 'windows' cuando Platform === 'windows', undefined/null = Linux
+          platform:     i.Platform?.toLowerCase() || 'linux',
           tags:         i.Tags || [],
         });
       }
     }
     res.json(instances);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ec2/:id/details ─────────────────────────────────────────────────────
+// Returns full instance details: detalles, networking, storage, security + CW metrics
+
+router.get('/ec2/:id/details', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const instanceId = req.params.id;
+
+    const {
+      EC2Client,
+      DescribeInstancesCommand,
+      DescribeVolumesCommand,
+      DescribeSecurityGroupsCommand,
+      DescribeInstanceStatusCommand,
+    } = require('@aws-sdk/client-ec2');
+
+    const {
+      CloudWatchClient,
+      GetMetricStatisticsCommand,
+    } = require('@aws-sdk/client-cloudwatch');
+
+    const ec2 = new EC2Client(cfg);
+    const cw  = new CloudWatchClient(cfg);
+
+    // ── Fetch in parallel: instance data, volumes, instance status ────────────
+    const [instResp, volResp, statusResp] = await Promise.all([
+      ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] })),
+      ec2.send(new DescribeVolumesCommand({
+        Filters: [{ Name: 'attachment.instance-id', Values: [instanceId] }],
+      })),
+      ec2.send(new DescribeInstanceStatusCommand({
+        InstanceIds: [instanceId],
+        IncludeAllInstances: true,
+      })),
+    ]);
+
+    const raw = instResp.Reservations?.[0]?.Instances?.[0];
+    if (!raw) return res.status(404).json({ error: 'Instance not found' });
+
+    // Fetch security group rules for all SGs attached to this instance
+    const sgIds = (raw.SecurityGroups || []).map(g => g.GroupId);
+    let sgDetails = [];
+    if (sgIds.length) {
+      const sgResp = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: sgIds }));
+      sgDetails = (sgResp.SecurityGroups || []).map(g => ({
+        id:          g.GroupId,
+        name:        g.GroupName,
+        description: g.Description,
+        vpcId:       g.VpcId,
+        inbound:     (g.IpPermissions || []).map(r => ({
+          protocol: r.IpProtocol === '-1' ? 'All' : r.IpProtocol?.toUpperCase(),
+          fromPort: r.FromPort,
+          toPort:   r.ToPort,
+          sources:  [
+            ...(r.IpRanges || []).map(x => ({ cidr: x.CidrIp, desc: x.Description })),
+            ...(r.Ipv6Ranges || []).map(x => ({ cidr: x.CidrIpv6, desc: x.Description })),
+            ...(r.UserIdGroupPairs || []).map(x => ({ sg: x.GroupId, desc: x.Description })),
+          ],
+        })),
+        outbound:    (g.IpPermissionsEgress || []).map(r => ({
+          protocol: r.IpProtocol === '-1' ? 'All' : r.IpProtocol?.toUpperCase(),
+          fromPort: r.FromPort,
+          toPort:   r.ToPort,
+          sources:  [
+            ...(r.IpRanges || []).map(x => ({ cidr: x.CidrIp, desc: x.Description })),
+            ...(r.Ipv6Ranges || []).map(x => ({ cidr: x.CidrIpv6, desc: x.Description })),
+            ...(r.UserIdGroupPairs || []).map(x => ({ sg: x.GroupId, desc: x.Description })),
+          ],
+        })),
+      }));
+    }
+
+    // ── CloudWatch metrics (last 3 hours, 5-min periods) ──────────────────────
+    const now   = new Date();
+    const start = new Date(now - 3 * 60 * 60 * 1000);
+    const dims  = [{ Name: 'InstanceId', Value: instanceId }];
+
+    const metricDefs = [
+      { name: 'CPUUtilization',  unit: 'Percent',          stat: 'Average' },
+      { name: 'NetworkIn',       unit: 'Bytes',            stat: 'Sum'     },
+      { name: 'NetworkOut',      unit: 'Bytes',            stat: 'Sum'     },
+      { name: 'DiskReadBytes',   unit: 'Bytes',            stat: 'Sum'     },
+      { name: 'DiskWriteBytes',  unit: 'Bytes',            stat: 'Sum'     },
+      { name: 'StatusCheckFailed', unit: 'Count',          stat: 'Maximum' },
+    ];
+
+    let metrics = {};
+    try {
+      const metricResults = await Promise.all(
+        metricDefs.map(m => cw.send(new GetMetricStatisticsCommand({
+          Namespace:  'AWS/EC2',
+          MetricName: m.name,
+          Dimensions: dims,
+          StartTime:  start,
+          EndTime:    now,
+          Period:     300,
+          Statistics: [m.stat],
+          Unit:       m.unit,
+        })))
+      );
+      metricDefs.forEach((m, idx) => {
+        const points = (metricResults[idx].Datapoints || [])
+          .sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp))
+          .map(p => ({ t: p.Timestamp, v: p[m.stat] ?? 0 }));
+        metrics[m.name] = points;
+      });
+    } catch (_) { /* metrics optional — ignore if CW not available */ }
+
+    // ── Build response ─────────────────────────────────────────────────────────
+    const instStatus = statusResp.InstanceStatuses?.[0];
+    const niList = (raw.NetworkInterfaces || []).map(ni => ({
+      id:          ni.NetworkInterfaceId,
+      subnetId:    ni.SubnetId,
+      vpcId:       ni.VpcId,
+      privateIp:   ni.PrivateIpAddress,
+      publicIp:    ni.Association?.PublicIp || null,
+      publicDns:   ni.Association?.PublicDnsName || null,
+      privateDns:  ni.PrivateDnsName,
+      macAddress:  ni.MacAddress,
+      description: ni.Description,
+      status:      ni.Status,
+      sourceDest:  ni.SourceDestCheck,
+      groups:      (ni.Groups || []).map(g => ({ id: g.GroupId, name: g.GroupName })),
+    }));
+
+    res.json({
+      // ── Detalles generales ──────────────────────────────────────────────
+      details: {
+        id:               raw.InstanceId,
+        name:             raw.Tags?.find(t => t.Key === 'Name')?.Value || raw.InstanceId,
+        type:             raw.InstanceType,
+        state:            raw.State?.Name,
+        stateReason:      raw.StateTransitionReason || null,
+        platform:         raw.Platform?.toLowerCase() || 'linux',
+        architecture:     raw.Architecture,
+        hypervisor:       raw.Hypervisor,
+        virtualizationType: raw.VirtualizationType,
+        ami:              raw.ImageId,
+        keyPair:          raw.KeyName || null,
+        iamProfile:       raw.IamInstanceProfile?.Arn || null,
+        publicIp:         raw.PublicIpAddress || null,
+        privateIp:        raw.PrivateIpAddress || null,
+        publicDns:        raw.PublicDnsName || null,
+        privateDns:       raw.PrivateDnsName || null,
+        az:               raw.Placement?.AvailabilityZone,
+        region:           raw.Placement?.AvailabilityZone?.slice(0, -1),
+        tenancy:          raw.Placement?.Tenancy,
+        launchTime:       raw.LaunchTime,
+        ebsOptimized:     raw.EbsOptimized,
+        enaSupport:       raw.EnaSupport,
+        rootDeviceName:   raw.RootDeviceName,
+        rootDeviceType:   raw.RootDeviceType,
+        monitoring:       raw.Monitoring?.State,
+        capacityReserv:   raw.CapacityReservationSpecification?.CapacityReservationPreference || null,
+        tags:             raw.Tags || [],
+        // System status checks
+        systemStatus:     instStatus?.SystemStatus?.Status || 'unknown',
+        instanceStatus:   instStatus?.InstanceStatus?.Status || 'unknown',
+      },
+      // ── Networking ──────────────────────────────────────────────────────
+      networking: {
+        vpcId:        raw.VpcId || null,
+        subnetId:     raw.SubnetId || null,
+        sourceDestCheck: raw.SourceDestCheck,
+        interfaces:   niList,
+      },
+      // ── Storage ─────────────────────────────────────────────────────────
+      storage: {
+        rootDevice:   raw.RootDeviceName,
+        volumes: (volResp.Volumes || []).map(v => ({
+          id:         v.VolumeId,
+          size:       v.Size,
+          type:       v.VolumeType,
+          state:      v.State,
+          encrypted:  v.Encrypted,
+          iops:       v.Iops || null,
+          throughput: v.Throughput || null,
+          az:         v.AvailabilityZone,
+          device:     v.Attachments?.[0]?.Device,
+          deleteOnTermination: v.Attachments?.[0]?.DeleteOnTermination,
+          snapshotId: v.SnapshotId || null,
+          kmsKeyId:   v.KmsKeyId || null,
+          multiAttach: v.MultiAttachEnabled,
+          createTime: v.CreateTime,
+        })),
+      },
+      // ── Security ────────────────────────────────────────────────────────
+      security: {
+        securityGroups: sgDetails,
+        iamProfile:     raw.IamInstanceProfile?.Arn || null,
+        metadataOptions: {
+          httpTokens:        raw.MetadataOptions?.HttpTokens,
+          httpEndpoint:      raw.MetadataOptions?.HttpEndpoint,
+          httpPutHopLimit:   raw.MetadataOptions?.HttpPutResponseHopLimit,
+          instanceMetadataTags: raw.MetadataOptions?.InstanceMetadataTags,
+        },
+      },
+      // ── Monitoring ──────────────────────────────────────────────────────
+      monitoring: {
+        cwEnabled: raw.Monitoring?.State === 'enabled',
+        metrics,
+      },
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -966,6 +1176,214 @@ router.get('/eks/:name/config', async (req, res) => {
       cluster:    cluster.status    === 'fulfilled' ? (cluster.value.cluster ?? null) : null,
       nodegroups: nodegroups.status === 'fulfilled' ? (nodegroups.value.nodegroups ?? []) : [],
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lambda/:name/details ────────────────────────────────────────────────
+// Returns: config, aliases, versions (last 10), resource policy, CW metrics
+
+router.get('/lambda/:name/details', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const name = req.params.name;
+
+    const {
+      LambdaClient,
+      GetFunctionCommand,
+      ListAliasesCommand,
+      ListVersionsByFunctionCommand,
+      GetPolicyCommand,
+      GetFunctionConcurrencyCommand,
+    } = require('@aws-sdk/client-lambda');
+
+    const {
+      CloudWatchClient,
+      GetMetricStatisticsCommand,
+    } = require('@aws-sdk/client-cloudwatch');
+
+    const lambda = new LambdaClient(cfg);
+    const cw     = new CloudWatchClient(cfg);
+
+    // Parallel: fn details, aliases, versions, policy, concurrency
+    const [fnRes, aliasRes, verRes, policyRes, concRes] = await Promise.allSettled([
+      lambda.send(new GetFunctionCommand({ FunctionName: name })),
+      lambda.send(new ListAliasesCommand({ FunctionName: name })),
+      lambda.send(new ListVersionsByFunctionCommand({ FunctionName: name, MaxItems: 15 })),
+      lambda.send(new GetPolicyCommand({ FunctionName: name })),
+      lambda.send(new GetFunctionConcurrencyCommand({ FunctionName: name })),
+    ]);
+
+    const fn = fnRes.status === 'fulfilled' ? fnRes.value : null;
+    const cfg2 = fn?.Configuration;
+
+    // CW metrics — last 3 hours, 5-min periods
+    const now   = new Date();
+    const start = new Date(now - 3 * 60 * 60 * 1000);
+    const dims  = [{ Name: 'FunctionName', Value: name }];
+    const metricDefs = [
+      { name: 'Invocations',          stat: 'Sum'     },
+      { name: 'Errors',               stat: 'Sum'     },
+      { name: 'Duration',             stat: 'Average' },
+      { name: 'Throttles',            stat: 'Sum'     },
+      { name: 'ConcurrentExecutions', stat: 'Maximum' },
+    ];
+    let metrics = {};
+    try {
+      const mResults = await Promise.all(
+        metricDefs.map(m => cw.send(new GetMetricStatisticsCommand({
+          Namespace: 'AWS/Lambda', MetricName: m.name,
+          Dimensions: dims, StartTime: start, EndTime: now,
+          Period: 300, Statistics: [m.stat],
+        })))
+      );
+      metricDefs.forEach((m, i) => {
+        metrics[m.name] = (mResults[i].Datapoints || [])
+          .sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp))
+          .map(p => ({ t: p.Timestamp, v: p[m.stat] ?? 0 }));
+      });
+    } catch (_) {}
+
+    // Parse resource-based policy
+    let policy = null;
+    if (policyRes.status === 'fulfilled') {
+      try { policy = JSON.parse(policyRes.value.Policy); } catch (_) {}
+    }
+
+    res.json({
+      basic: {
+        name:              cfg2?.FunctionName,
+        arn:               cfg2?.FunctionArn,
+        description:       cfg2?.Description || null,
+        runtime:           cfg2?.Runtime,
+        handler:           cfg2?.Handler,
+        memory:            cfg2?.MemorySize,
+        timeout:           cfg2?.Timeout,
+        codeSize:          cfg2?.CodeSize,
+        packageType:       cfg2?.PackageType,   // Zip | Image
+        imageUri:          fn?.Code?.ImageUri || null,
+        architecture:      (cfg2?.Architectures || ['x86_64'])[0],
+        state:             cfg2?.State,
+        stateReason:       cfg2?.StateReason || null,
+        lastModified:      cfg2?.LastModified,
+        codeHash:          cfg2?.CodeSha256,
+        version:           cfg2?.Version,
+        logGroup:          cfg2?.LoggingConfig?.LogGroup || `/aws/lambda/${name}`,
+        logFormat:         cfg2?.LoggingConfig?.LogFormat || null,
+        ephemeralStorage:  cfg2?.EphemeralStorage?.Size || 512,
+        snapStart:         cfg2?.SnapStart?.ApplyOn || null,
+        tags:              fn?.Tags || {},
+      },
+      config: {
+        envVars:   Object.entries(cfg2?.Environment?.Variables || {}).map(([k, v]) => ({ k, v })),
+        layers:    (cfg2?.Layers || []).map(l => ({ arn: l.Arn, codeSize: l.CodeSize })),
+        vpc: cfg2?.VpcConfig?.VpcId ? {
+          vpcId:            cfg2.VpcConfig.VpcId,
+          subnetIds:        cfg2.VpcConfig.SubnetIds || [],
+          securityGroupIds: cfg2.VpcConfig.SecurityGroupIds || [],
+        } : null,
+        tracing:          cfg2?.TracingConfig?.Mode,
+        dlq:              cfg2?.DeadLetterConfig?.TargetArn || null,
+        reservedConcurrency: concRes.status === 'fulfilled'
+          ? concRes.value.ReservedConcurrentExecutions ?? null
+          : null,
+        fileSystem: (cfg2?.FileSystemConfigs || []).map(f => ({
+          arn: f.Arn, localMountPath: f.LocalMountPath,
+        })),
+        kmsKeyArn:        cfg2?.KMSKeyArn || null,
+      },
+      aliases: aliasRes.status === 'fulfilled'
+        ? (aliasRes.value.Aliases || []).map(a => ({
+            name:        a.Name,
+            arn:         a.AliasArn,
+            version:     a.FunctionVersion,
+            description: a.Description || null,
+            routing:     a.RoutingConfig?.AdditionalVersionWeights
+              ? Object.entries(a.RoutingConfig.AdditionalVersionWeights).map(([v, w]) => ({ version: v, weight: w }))
+              : [],
+          }))
+        : [],
+      versions: verRes.status === 'fulfilled'
+        ? (verRes.value.Versions || []).slice(-10).reverse().map(v => ({
+            version:     v.Version,
+            description: v.Description || null,
+            state:       v.State,
+            lastModified: v.LastModified,
+            codeSize:    v.CodeSize,
+          }))
+        : [],
+      policy:  policy,
+      metrics,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lambda/:name/code ───────────────────────────────────────────────────
+// Downloads the deployment ZIP, extracts it in-memory, returns file tree + content
+
+router.get('/lambda/:name/code', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const name = req.params.name;
+    const { LambdaClient, GetFunctionCommand } = require('@aws-sdk/client-lambda');
+    const lambda = new LambdaClient(cfg);
+    const fnData = await lambda.send(new GetFunctionCommand({ FunctionName: name }));
+
+    const pkgType = fnData.Configuration?.PackageType;
+
+    // Container images: no ZIP to extract
+    if (pkgType === 'Image') {
+      return res.json({
+        type:     'image',
+        imageUri: fnData.Code?.ImageUri || null,
+        files:    [],
+      });
+    }
+
+    const codeUrl = fnData.Code?.Location;
+    if (!codeUrl) return res.status(404).json({ error: 'Code location not available' });
+
+    // Download the ZIP buffer
+    const zipBuffer = await new Promise((resolve, reject) => {
+      const proto = codeUrl.startsWith('https') ? require('https') : require('http');
+      proto.get(codeUrl, response => {
+        const chunks = [];
+        response.on('data', c => chunks.push(c));
+        response.on('end',  () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+      }).on('error', reject);
+    });
+
+    const AdmZip = require('adm-zip');
+    const zip    = new AdmZip(zipBuffer);
+    const TEXT_EXT = new Set([
+      '.js','.mjs','.cjs','.ts','.py','.rb','.go','.java','.cs','.php','.sh',
+      '.yaml','.yml','.json','.toml','.env','.txt','.md','.html','.css','.xml',
+      '.sql','.graphql','.tf','.hcl','.cfg','.ini','.conf','.properties','.gradle',
+      '.rs','.cpp','.c','.h','.hpp','.kt','.swift','.scala','.r','.lua','.pl',
+    ]);
+    const MAX_FILE_SIZE = 256 * 1024; // 256 KB per file
+
+    const entries = zip.getEntries().filter(e => !e.isDirectory);
+    const files = entries.map(e => {
+      const ext = require('path').extname(e.entryName).toLowerCase();
+      const isText = TEXT_EXT.has(ext);
+      let content = null;
+      if (isText && e.header.size <= MAX_FILE_SIZE) {
+        try { content = e.getData().toString('utf-8'); } catch (_) {}
+      }
+      return {
+        path:    e.entryName,
+        size:    e.header.size,
+        isText,
+        content,
+      };
+    }).sort((a, b) => a.path.localeCompare(b.path));
+
+    res.json({ type: 'zip', files });
   } catch (err) { handleErr(res, err); }
 });
 

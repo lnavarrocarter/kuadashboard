@@ -1,6 +1,6 @@
 {
   "name": "kuadashboard",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
   "author": {
     "name": "lnavarrocarter",
@@ -54,10 +54,12 @@
     "@google-cloud/run": "^1.0.0",
     "@kubernetes/client-node": "^0.20.0",
     "@napi-rs/keyring": "^1.2.0",
+    "adm-zip": "^0.5.17",
     "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "google-auth-library": "^9.0.0",
     "js-yaml": "^4.1.0",
+    "node-rdpjs-2": "^0.3.5",
     "ssh2": "^1.17.0",
     "ws": "^8.14.2"
   },

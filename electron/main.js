@@ -276,6 +276,16 @@ ipcMain.on('app:version', event => {
   event.returnValue = app.getVersion();
 });
 
+ipcMain.handle('dialog:openFile', async (event, opts = {}) => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title:      opts.title      || 'Select file',
+    filters:    opts.filters    || [],
+    properties: opts.properties || ['openFile'],
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
 ipcMain.on('app:check-updates', () => {
   if (!IS_DEV) {
     autoUpdater.checkForUpdates().catch(err => {

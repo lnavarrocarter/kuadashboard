@@ -55,12 +55,24 @@
               </td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm" @click="openEc2Detail(i)">ℹ Info</button>
                   <button class="btn sm" @click="startEc2(i)" :disabled="i.state === 'running'">Start</button>
                   <button class="btn sm danger" @click="stopEc2(i)" :disabled="i.state === 'stopped'">Stop</button>
                   <button class="btn sm" @click="openTags('ec2', `EC2: ${i.name}`, i.id, i.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('ec2', `EC2: ${i.name}`, i, { id: i.id })">Config</button>
-                  <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e"
-                    @click="openEc2Shell(i)" :disabled="i.state !== 'running'">SSH</button>
+                  <!-- Linux → SSH, Windows → RDP -->
+                  <template v-if="i.platform !== 'windows'">
+                    <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e"
+                      @click="openEc2Shell(i)" :disabled="i.state !== 'running'">
+                      🖥 SSH
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button class="btn sm" style="background:rgba(88,166,255,.18);border-color:#58a6ff;color:#58a6ff"
+                      @click="openEc2Rdp(i)" :disabled="i.state !== 'running'">
+                      🪟 RDP
+                    </button>
+                  </template>
                 </div>
               </td>
             </tr>
@@ -183,6 +195,7 @@
                   <button class="btn sm" @click="openLogging('lambda', fn)">CW Logs</button>
                   <button class="btn sm" @click="openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name })">Config</button>
+                  <button class="btn sm" @click="openLambdaDetail(fn)">ℹ Info</button>
                 </div>
               </td>
             </tr>
@@ -1069,7 +1082,10 @@
     </div>
 
     <!-- EC2 SSH Shell Modal -->
-    <Ec2Shell :open="ec2ShellModal.open" :instance="ec2ShellModal.instance" @close="ec2ShellModal.open = false" />
+    <Ec2Shell    :open="ec2ShellModal.open" :instance="ec2ShellModal.instance" @close="ec2ShellModal.open = false" />
+    <Ec2Rdp    :open="ec2RdpModal.open"   :instance="ec2RdpModal.instance"   @close="ec2RdpModal.open = false" />
+    <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
+    <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
 
     <!-- API Gateway Routes & Integrations Modal -->
     <ApiGwIntegrations
@@ -2196,6 +2212,10 @@ import StepFnDiagram       from '../StepFnDiagram.vue'
 import EventBridgeDetail   from '../EventBridgeDetail.vue'
 import EventBridgeLogs     from '../EventBridgeLogs.vue'
 import Ec2Shell            from './Ec2Shell.vue'
+import Ec2Rdp              from './Ec2Rdp.vue'
+import Ec2RdpInfo          from './Ec2RdpInfo.vue'
+import Ec2Detail           from './Ec2Detail.vue'
+import LambdaDetail        from './LambdaDetail.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
 
@@ -2494,6 +2514,27 @@ function lambdaStateClass(s) {
 const ec2ShellModal = reactive({ open: false, instance: null })
 function openEc2Shell(instance) {
   Object.assign(ec2ShellModal, { open: true, instance })
+}
+
+// ─── EC2 RDP Info Modal ───────────────────────────────────────────────────────
+
+const ec2RdpModal = reactive({ open: false, instance: null })
+function openEc2Rdp(instance) {
+  Object.assign(ec2RdpModal, { open: true, instance })
+}
+
+// ─── EC2 Detail Modal ────────────────────────────────────────────────────────
+
+const ec2DetailModal = reactive({ open: false, instance: null })
+function openEc2Detail(instance) {
+  Object.assign(ec2DetailModal, { open: true, instance })
+}
+
+// ─── Lambda Detail Modal ─────────────────────────────────────────────────────
+
+const lambdaDetailModal = reactive({ open: false, fn: null })
+function openLambdaDetail(fn) {
+  Object.assign(lambdaDetailModal, { open: true, fn })
 }
 
 // ─── API Gateway Routes Modal ─────────────────────────────────────────────────

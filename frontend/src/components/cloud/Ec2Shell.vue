@@ -31,15 +31,40 @@
             <input v-model.number="form.port" type="number" min="1" max="65535" placeholder="22" class="ec2sh-input" style="width:80px" />
           </div>
           <div class="ec2sh-form-row">
-            <label>Key file (.pem)</label>
-            <input v-model="form.keyPath" placeholder="/path/to/key.pem" class="ec2sh-input ec2sh-input-wide" />
+            <label>Auth method</label>
+            <div class="ec2sh-radio-group">
+              <label class="ec2sh-radio-label">
+                <input type="radio" v-model="form.authMethod" value="key" /> PEM key
+              </label>
+              <label class="ec2sh-radio-label">
+                <input type="radio" v-model="form.authMethod" value="password" /> Password
+              </label>
+            </div>
           </div>
-          <div class="ec2sh-form-row">
-            <label>Passphrase</label>
-            <input v-model="form.passphrase" type="password" placeholder="(optional)" class="ec2sh-input" style="width:180px" />
-          </div>
+
+          <!-- Key-based auth -->
+          <template v-if="form.authMethod === 'key'">
+            <div class="ec2sh-form-row">
+              <label>Key file (.pem)</label>
+              <input v-model="form.keyPath" placeholder="/path/to/key.pem" class="ec2sh-input ec2sh-input-wide" />
+              <button class="btn btn-browse" @click="browseKeyFile" title="Browse file">&#x1F4C2;</button>
+            </div>
+            <div class="ec2sh-form-row">
+              <label>Passphrase</label>
+              <input v-model="form.passphrase" type="password" placeholder="(optional)" class="ec2sh-input" style="width:180px" />
+            </div>
+          </template>
+
+          <!-- Password auth -->
+          <template v-else>
+            <div class="ec2sh-form-row">
+              <label>Password</label>
+              <input v-model="form.password" type="password" placeholder="SSH password" class="ec2sh-input" style="width:240px" />
+            </div>
+          </template>
+
           <div class="ec2sh-form-actions">
-            <button class="btn" @click="connect" :disabled="!form.host || !form.keyPath">Connect</button>
+            <button class="btn" @click="connect" :disabled="!form.host || (form.authMethod === 'key' ? !form.keyPath : !form.password)">Connect</button>
             <button class="btn btn-ghost" @click="$emit('close')">Cancel</button>
           </div>
         </div>
@@ -112,8 +137,10 @@ const form = ref({
   host:       '',
   user:       'ec2-user',
   port:       22,
+  authMethod: 'key',
   keyPath:    '',
   passphrase: '',
+  password:   '',
 })
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
@@ -158,14 +185,20 @@ function connect() {
   ws.value   = sock
 
   sock.addEventListener('open', () => {
-    sock.send(JSON.stringify({
+    const payload = {
       action:     'connect',
       host:       form.value.host,
       user:       form.value.user || 'ec2-user',
       port:       form.value.port || 22,
-      keyPath:    form.value.keyPath,
-      passphrase: form.value.passphrase || undefined,
-    }))
+      authMethod: form.value.authMethod,
+    }
+    if (form.value.authMethod === 'key') {
+      payload.keyPath    = form.value.keyPath
+      payload.passphrase = form.value.passphrase || undefined
+    } else {
+      payload.password = form.value.password
+    }
+    sock.send(JSON.stringify(payload))
   })
 
   sock.addEventListener('message', e => {
@@ -288,6 +321,34 @@ function sendRaw(data) {
 function sendCtrlC() { sendRaw('\x03') }
 function sendCtrlD() { sendRaw('\x04') }
 
+async function browseKeyFile() {
+  // Electron environment: use native OS file dialog
+  if (window.kuaElectron?.openFileDialog) {
+    const filePath = await window.kuaElectron.openFileDialog({
+      title:   'Select PEM key file',
+      filters: [{ name: 'PEM key', extensions: ['pem', 'key'] }, { name: 'All files', extensions: ['*'] }],
+    })
+    if (filePath) form.value.keyPath = filePath
+    return
+  }
+  // Browser/dev fallback: use hidden <input type="file">
+  const input = document.createElement('input')
+  input.type   = 'file'
+  input.accept = '.pem,.key'
+  input.style.display = 'none'
+  input.addEventListener('change', () => {
+    const file = input.files?.[0]
+    if (file) {
+      // In browser we only get the filename, not the full path.
+      // Show the name so the user knows what was selected; they can edit the path manually.
+      form.value.keyPath = file.name
+    }
+    input.remove()
+  })
+  document.body.appendChild(input)
+  input.click()
+}
+
 function historyUp() {
   if (!cmdHistory.value.length) return
   historyIdx.value = Math.min(historyIdx.value + 1, cmdHistory.value.length - 1)
@@ -408,6 +469,28 @@ onUnmounted(() => { disconnectWs() })
   padding-top: 6px;
   margin-left: 122px;
 }
+.ec2sh-radio-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.ec2sh-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #e6edf3;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.btn-browse {
+  padding: 5px 9px;
+  font-size: 0.9rem;
+  margin-left: 4px;
+  background: rgba(139,148,158,.12);
+  border-color: #30363d;
+  color: #8b949e;
+}
+.btn-browse:hover { background: rgba(255,255,255,.08); color: #e6edf3; }
 
 /* Terminal */
 .ec2sh-term-wrap {

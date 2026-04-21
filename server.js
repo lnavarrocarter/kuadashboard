@@ -27,6 +27,7 @@ const wss        = new WebSocket.Server({ noServer: true });
 const wssExec    = new WebSocket.Server({ noServer: true });
 const wssShell   = new WebSocket.Server({ noServer: true });
 const wssEc2Shell = new WebSocket.Server({ noServer: true });
+const wssEc2Rdp   = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url, 'http://localhost');
@@ -38,6 +39,8 @@ server.on('upgrade', (request, socket, head) => {
     wssShell.handleUpgrade(request, socket, head, ws => wssShell.emit('connection', ws, request));
   } else if (pathname === '/ws/ec2-shell') {
     wssEc2Shell.handleUpgrade(request, socket, head, ws => wssEc2Shell.emit('connection', ws, request));
+  } else if (pathname === '/ws/ec2-rdp') {
+    wssEc2Rdp.handleUpgrade(request, socket, head, ws => wssEc2Rdp.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
@@ -1231,17 +1234,26 @@ wssEc2Shell.on('connection', (ws, req) => {
 
     if (msg.action === 'connect') {
       const { Client } = require('ssh2');
-      const { host, user = 'ec2-user', keyPath, port = 22, passphrase } = msg;
+      const { host, user = 'ec2-user', keyPath, port = 22, passphrase, authMethod = 'key', password } = msg;
 
-      if (!host)    { send({ type: 'error', data: 'host is required' }); return; }
-      if (!keyPath) { send({ type: 'error', data: 'keyPath is required' }); return; }
+      if (!host) { send({ type: 'error', data: 'host is required' }); return; }
+
+      if (authMethod === 'key') {
+        if (!keyPath) { send({ type: 'error', data: 'keyPath is required for key authentication' }); return; }
+      } else if (authMethod === 'password') {
+        if (!password) { send({ type: 'error', data: 'password is required for password authentication' }); return; }
+      } else {
+        send({ type: 'error', data: 'Invalid authMethod. Use "key" or "password"' }); return;
+      }
 
       let privateKey;
-      try {
-        privateKey = fs.readFileSync(keyPath);
-      } catch (e) {
-        send({ type: 'error', data: `Cannot read key file: ${e.message}` });
-        return;
+      if (authMethod === 'key') {
+        try {
+          privateKey = fs.readFileSync(keyPath);
+        } catch (e) {
+          send({ type: 'error', data: `Cannot read key file: ${e.message}` });
+          return;
+        }
       }
 
       cleanup();
@@ -1284,8 +1296,13 @@ wssEc2Shell.on('connection', (ws, req) => {
         }
       });
 
-      const connectOpts = { host, port, username: user, privateKey };
-      if (passphrase) connectOpts.passphrase = passphrase;
+      const connectOpts = { host, port, username: user };
+      if (authMethod === 'key') {
+        connectOpts.privateKey = privateKey;
+        if (passphrase) connectOpts.passphrase = passphrase;
+      } else {
+        connectOpts.password = password;
+      }
 
       sshConn.connect(connectOpts);
       return;
@@ -1310,7 +1327,126 @@ wssEc2Shell.on('connection', (ws, req) => {
   ws.on('close', () => { cleanup(); });
 });
 
-// ─── SPA fallback ─────────────────────────────────────────────────────────────
+// ─── WebSocket – EC2 RDP Canvas ───────────────────────────────────────────────
+// Protocol (client → server):
+//   { action: 'connect', host, user, password, domain?, port?, width?, height? }
+//   { action: 'mouse', x, y, button, isDown }
+//   { action: 'key',   code, isDown, extended? }
+//   { action: 'stop' }
+// Protocol (server → client):
+//   { type: 'connected', width, height }
+//   { type: 'bitmap', x, y, w, h, bpp, data: base64 }
+//   { type: 'error',  data: string }
+//   { type: 'done' }
+//
+// ⚠  node-rdpjs-2 does NOT support NLA (CredSSP). The Windows instance must
+//    allow Classic RDP Security:
+//    System Properties → Remote → "Allow connections from computers running
+//    any version of Remote Desktop (less secure)"
+
+wssEc2Rdp.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) { ws.close(1008, 'Local connections only'); return; }
+
+  let rdpClient = null;
+
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify(obj));
+  }
+
+  function cleanup() {
+    if (rdpClient) {
+      try { rdpClient.close(); } catch (_) {}
+      rdpClient = null;
+    }
+  }
+
+  ws.on('message', rawMsg => {
+    let msg;
+    try { msg = JSON.parse(rawMsg); } catch (_) { return; }
+
+    // ── Connect ──────────────────────────────────────────────────────────────
+    if (msg.action === 'connect') {
+      const rdp = require('node-rdpjs-2');
+      const {
+        host, port = 3389,
+        user = 'Administrator', password, domain = '',
+        width = 1280, height = 800,
+      } = msg;
+
+      if (!host)     { send({ type: 'error', data: 'host is required' }); return; }
+      if (!password) { send({ type: 'error', data: 'password is required' }); return; }
+
+      cleanup();
+
+      rdpClient = rdp.createClient({
+        logLevel:         'ERROR',
+        domain,
+        userName:         user,
+        password,
+        enablePerf:       true,
+        autoLogin:        true,
+        screen:           { width, height },
+        locale:           'en',
+        enableGlyphCache: true,
+      });
+
+      rdpClient.on('connect', () => {
+        send({ type: 'connected', width, height });
+      });
+
+      rdpClient.on('bitmap', bitmap => {
+        // bitmap: destLeft, destTop, destRight, destBottom, width, height,
+        //         bitsPerPixel, isCompress, data (Buffer, already decompressed)
+        send({
+          type: 'bitmap',
+          x:    bitmap.destLeft,
+          y:    bitmap.destTop,
+          w:    bitmap.width  || (bitmap.destRight  - bitmap.destLeft + 1),
+          h:    bitmap.height || (bitmap.destBottom - bitmap.destTop  + 1),
+          bpp:  bitmap.bitsPerPixel,
+          data: bitmap.data.toString('base64'),
+        });
+      });
+
+      rdpClient.on('close', () => {
+        send({ type: 'done' });
+        cleanup();
+      });
+
+      rdpClient.on('error', err => {
+        send({ type: 'error', data: err.message || String(err) });
+        cleanup();
+      });
+
+      rdpClient.connect(host, port);
+      return;
+    }
+
+    // ── Mouse ────────────────────────────────────────────────────────────────
+    if (msg.action === 'mouse' && rdpClient) {
+      try { rdpClient.sendPointerEvent(msg.x, msg.y, msg.button || 0, !!msg.isDown); } catch (_) {}
+      return;
+    }
+
+    // ── Keyboard (scan code) ─────────────────────────────────────────────────
+    if (msg.action === 'key' && rdpClient) {
+      try { rdpClient.sendKeyEventScancode(msg.code, !!msg.isDown); } catch (_) {}
+      return;
+    }
+
+    // ── Stop ─────────────────────────────────────────────────────────────────
+    if (msg.action === 'stop') {
+      cleanup();
+      send({ type: 'done' });
+    }
+  });
+
+  ws.on('close', () => { cleanup(); });
+});
+
 // For any GET that doesn't match an API route or static file, serve index.html
 // so the Vue SPA can handle client-side routing.
 app.get('*', (req, res) => {
