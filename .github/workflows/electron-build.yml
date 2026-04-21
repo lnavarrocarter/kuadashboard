@@ -47,6 +47,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Fix distutils for node-gyp
+        run: pip install setuptools
+        continue-on-error: true
+
       - name: Generate icons
         run: npm run icons:generate
 

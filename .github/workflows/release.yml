@@ -36,6 +36,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
+      - name: Fix distutils for node-gyp
+        run: pip install setuptools
+        continue-on-error: true
+
       - name: Build
         run: npm run ${{ matrix.cmd }}
         env:

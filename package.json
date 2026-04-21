@@ -145,8 +145,7 @@
         "owner": "lnavarrocarter",
         "repo": "kuadashboard"
       }
-    ],
-    "ignoredDependencies": ["dtrace-provider"]
+    ]
   },
   "engines": {
     "node": ">=16"
