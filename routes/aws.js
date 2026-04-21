@@ -1540,5 +1540,1254 @@ router.get('/s3/:bucket/download', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AWS GLUE ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /glue/jobs  → list Glue ETL jobs
+router.get('/glue/jobs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetJobsCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetJobsCommand({}));
+    res.json((resp.Jobs || []).map(j => ({
+      name:        j.Name,
+      description: j.Description || '',
+      role:        j.Role,
+      glueVersion: j.GlueVersion,
+      maxCapacity: j.MaxCapacity,
+      workerType:  j.WorkerType,
+      numWorkers:  j.NumberOfWorkers,
+      createdOn:   j.CreatedOn,
+      lastModified: j.LastModifiedOn,
+      command:     j.Command?.Name,
+      scriptLocation: j.Command?.ScriptLocation,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/databases  → list Glue Data Catalog databases
+router.get('/glue/databases', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetDatabasesCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetDatabasesCommand({}));
+    res.json((resp.DatabaseList || []).map(d => ({
+      name:        d.Name,
+      description: d.Description || '',
+      locationUri: d.LocationUri,
+      createTime:  d.CreateTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /glue/jobs/:name/run  → trigger a Glue job run
+router.post('/glue/jobs/:name/run', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, StartJobRunCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new StartJobRunCommand({
+      JobName: req.params.name,
+      Arguments: req.body?.arguments || {},
+    }));
+    res.json({ jobRunId: resp.JobRunId });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/jobs/:name/runs  → list recent job runs
+router.get('/glue/jobs/:name/runs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetJobRunsCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetJobRunsCommand({ JobName: req.params.name, MaxResults: 20 }));
+    res.json((resp.JobRuns || []).map(r => ({
+      id:           r.Id,
+      status:       r.JobRunState,
+      startedOn:    r.StartedOn,
+      completedOn:  r.CompletedOn,
+      errorMessage: r.ErrorMessage || null,
+      executionTime: r.ExecutionTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/jobs/:name/config  → full job config (connections, script, args, CW logs)
+router.get('/glue/jobs/:name/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetJobCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetJobCommand({ JobName: req.params.name }));
+    const j = resp.Job;
+    res.json({
+      name:              j.Name,
+      description:       j.Description || '',
+      role:              j.Role,
+      glueVersion:       j.GlueVersion,
+      maxCapacity:       j.MaxCapacity,
+      workerType:        j.WorkerType,
+      numberOfWorkers:   j.NumberOfWorkers,
+      maxRetries:        j.MaxRetries,
+      timeout:           j.Timeout,
+      createdOn:         j.CreatedOn,
+      lastModifiedOn:    j.LastModifiedOn,
+      command:           j.Command,
+      defaultArguments:  j.DefaultArguments || {},
+      nonOverridableArguments: j.NonOverridableArguments || {},
+      connections:       j.Connections?.Connections || [],
+      executionProperty: j.ExecutionProperty,
+      notificationProperty: j.NotificationProperty,
+      codeGenConfigurationNodes: j.CodeGenConfigurationNodes,
+      securityConfiguration: j.SecurityConfiguration || null,
+      logUri:            j.LogUri || null,
+      cloudWatchLogGroup: `/aws-glue/jobs/${j.Name}`,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/connections  → list Glue Data Catalog connections
+router.get('/glue/connections', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetConnectionsCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetConnectionsCommand({}));
+    res.json((resp.ConnectionList || []).map(c => ({
+      name:            c.Name,
+      description:     c.Description || '',
+      connectionType:  c.ConnectionType,
+      status:          c.ConnectionProperties?.['JDBC_ENFORCE_SSL'] ? 'SSL' : 'PLAIN',
+      lastUpdated:     c.LastUpdatedTime,
+      physicalConnectionRequirements: {
+        subnetId:          c.PhysicalConnectionRequirements?.SubnetId || null,
+        availabilityZone:  c.PhysicalConnectionRequirements?.AvailabilityZone || null,
+        securityGroups:    c.PhysicalConnectionRequirements?.SecurityGroupIdList || [],
+      },
+      // Expose host/port but NOT credentials
+      connectionUrl:  c.ConnectionProperties?.['JDBC_CONNECTION_URL'] || c.ConnectionProperties?.['CONNECTION_URL'] || null,
+      host:           c.ConnectionProperties?.['HOST'] || null,
+      port:           c.ConnectionProperties?.['PORT'] || null,
+      kafkaBrokers:   c.ConnectionProperties?.['KAFKA_BOOTSTRAP_SERVERS'] || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/logs/:name  → CloudWatch logs for a Glue job
+router.get('/glue/logs/:name', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const minutes = parseInt(req.query.minutes || '60', 10);
+    const runId   = req.query.runId || null;
+    const client  = new CloudWatchLogsClient(cfg);
+    const logGroupName = `/aws-glue/jobs/${req.params.name}`;
+    const params = {
+      logGroupName,
+      startTime: Date.now() - minutes * 60 * 1000,
+      limit: 500,
+      ...(runId ? { logStreamNames: [`${req.params.name}/${runId}`] } : {}),
+    };
+    const resp = await client.send(new FilterLogEventsCommand(params));
+    res.json({
+      logGroup: logGroupName,
+      events: (resp.events || []).map(e => ({ timestamp: e.timestamp, message: e.message })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON DOCUMENTDB ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /docdb  → list DocumentDB clusters
+router.get('/docdb', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DocDBClient, DescribeDBClustersCommand } = require('@aws-sdk/client-docdb');
+    const client = new DocDBClient(cfg);
+    const resp = await client.send(new DescribeDBClustersCommand({
+      Filters: [{ Name: 'engine', Values: ['docdb'] }],
+    }));
+    res.json((resp.DBClusters || []).map(c => ({
+      id:               c.DBClusterIdentifier,
+      status:           c.Status,
+      engine:           c.Engine,
+      engineVersion:    c.EngineVersion,
+      endpoint:         c.Endpoint,
+      readerEndpoint:   c.ReaderEndpoint,
+      port:             c.Port,
+      masterUsername:   c.MasterUsername,
+      multiAZ:          c.MultiAZ,
+      storageEncrypted: c.StorageEncrypted,
+      clusterCreateTime: c.ClusterCreateTime,
+      members:          (c.DBClusterMembers || []).map(m => ({
+        id:     m.DBInstanceIdentifier,
+        writer: m.IsClusterWriter,
+      })),
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /docdb/:id/config  → full cluster details + instances
+router.get('/docdb/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DocDBClient, DescribeDBClustersCommand, DescribeDBInstancesCommand } = require('@aws-sdk/client-docdb');
+    const client = new DocDBClient(cfg);
+    const [clusterResp, instResp] = await Promise.all([
+      client.send(new DescribeDBClustersCommand({ DBClusterIdentifier: req.params.id })),
+      client.send(new DescribeDBInstancesCommand({ Filters: [{ Name: 'db-cluster-id', Values: [req.params.id] }] })),
+    ]);
+    const c = clusterResp.DBClusters?.[0];
+    if (!c) return res.status(404).json({ error: 'Cluster not found' });
+    res.json({
+      id:                    c.DBClusterIdentifier,
+      status:                c.Status,
+      engine:                c.Engine,
+      engineVersion:         c.EngineVersion,
+      endpoint:              c.Endpoint,
+      readerEndpoint:        c.ReaderEndpoint,
+      port:                  c.Port,
+      masterUsername:        c.MasterUsername,
+      multiAZ:               c.MultiAZ,
+      storageEncrypted:      c.StorageEncrypted,
+      kmsKeyId:              c.KmsKeyId,
+      availabilityZones:     c.AvailabilityZones,
+      vpcSecurityGroups:     (c.VpcSecurityGroups || []).map(sg => ({ id: sg.VpcSecurityGroupId, status: sg.Status })),
+      subnetGroup:           c.DBSubnetGroup,
+      parameterGroup:        c.DBClusterParameterGroup,
+      backupRetentionPeriod: c.BackupRetentionPeriod,
+      preferredBackupWindow: c.PreferredBackupWindow,
+      preferredMaintenanceWindow: c.PreferredMaintenanceWindow,
+      deletionProtection:    c.DeletionProtection,
+      clusterCreateTime:     c.ClusterCreateTime,
+      earliestRestorableTime: c.EarliestRestorableTime,
+      latestRestorableTime:  c.LatestRestorableTime,
+      members:               (c.DBClusterMembers || []).map(m => ({ id: m.DBInstanceIdentifier, writer: m.IsClusterWriter })),
+      instances:             (instResp.DBInstances || []).map(i => ({
+        id:            i.DBInstanceIdentifier,
+        class:         i.DBInstanceClass,
+        status:        i.DBInstanceStatus,
+        az:            i.AvailabilityZone,
+        writer:        (c.DBClusterMembers || []).find(m => m.DBInstanceIdentifier === i.DBInstanceIdentifier)?.IsClusterWriter ?? false,
+        promotionTier: i.PromotionTier,
+        endpoint:      i.Endpoint?.Address,
+        port:          i.Endpoint?.Port,
+        engineVersion: i.EngineVersion,
+        publiclyAccessible: i.PubliclyAccessible,
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /docdb/:id/reset-password  → reset master user password
+router.post('/docdb/:id/reset-password', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { newPassword } = req.body || {};
+  if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DocDBClient, ModifyDBClusterCommand } = require('@aws-sdk/client-docdb');
+    const client = new DocDBClient(cfg);
+    await client.send(new ModifyDBClusterCommand({
+      DBClusterIdentifier: req.params.id,
+      MasterUserPassword:  newPassword,
+      ApplyImmediately:    true,
+    }));
+    res.json({ ok: true, message: `Password reset initiated for cluster ${req.params.id}. Changes apply immediately.` });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /docdb  → create a new DocumentDB cluster
+router.post('/docdb', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { clusterId, masterUsername, masterPassword, engineVersion, instanceClass, subnetGroupName, vpcSecurityGroupIds, storageEncrypted, deletionProtection, backupRetentionPeriod } = req.body || {};
+  if (!clusterId || !masterUsername || !masterPassword) return res.status(400).json({ error: 'clusterId, masterUsername and masterPassword are required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DocDBClient, CreateDBClusterCommand, CreateDBInstanceCommand } = require('@aws-sdk/client-docdb');
+    const client = new DocDBClient(cfg);
+    const params = {
+      DBClusterIdentifier:  clusterId,
+      Engine:               'docdb',
+      MasterUsername:       masterUsername,
+      MasterUserPassword:   masterPassword,
+      StorageEncrypted:     storageEncrypted ?? false,
+      DeletionProtection:   deletionProtection ?? false,
+      BackupRetentionPeriod: backupRetentionPeriod ?? 1,
+    };
+    if (engineVersion)        params.EngineVersion        = engineVersion;
+    if (subnetGroupName)      params.DBSubnetGroupName    = subnetGroupName;
+    if (vpcSecurityGroupIds?.length) params.VpcSecurityGroupIds = vpcSecurityGroupIds;
+    const clusterResp = await client.send(new CreateDBClusterCommand(params));
+    // Optionally create the first instance if instanceClass provided
+    let instance = null;
+    if (instanceClass) {
+      try {
+        const instResp = await client.send(new CreateDBInstanceCommand({
+          DBInstanceIdentifier: `${clusterId}-instance-1`,
+          DBClusterIdentifier:  clusterId,
+          Engine:               'docdb',
+          DBInstanceClass:      instanceClass,
+        }));
+        instance = instResp.DBInstance?.DBInstanceIdentifier;
+      } catch (_) { /* instance creation error is non-fatal */ }
+    }
+    res.json({
+      ok:        true,
+      clusterId: clusterResp.DBCluster?.DBClusterIdentifier,
+      status:    clusterResp.DBCluster?.Status,
+      instance,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /docdb/:id/connection-strings  → generate Compass/mongosh connection strings
+// Returns only metadata needed to build the URI client-side; user supplies the password.
+router.get('/docdb/:id/connection-strings', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DocDBClient, DescribeDBClustersCommand } = require('@aws-sdk/client-docdb');
+    const client = new DocDBClient(cfg);
+    const resp = await client.send(new DescribeDBClustersCommand({
+      DBClusterIdentifier: req.params.id,
+    }));
+    const c = resp.DBClusters?.[0];
+    if (!c) return res.status(404).json({ error: 'Cluster not found' });
+
+    const endpoint = c.Endpoint;
+    const port     = c.Port || 27017;
+    const user     = c.MasterUsername;
+    const region   = cfg.region;
+
+    // DocumentDB requires TLS + Amazon CA bundle
+    const tlsCAUrl = 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem';
+
+    res.json({
+      clusterId:     c.DBClusterIdentifier,
+      endpoint,
+      port,
+      masterUsername: user,
+      region,
+      tlsEnabled:    true,
+      tlsCAUrl,
+      // Templates — user fills in <PASSWORD>
+      mongoshTemplate:  `mongosh "mongodb://${user}:<PASSWORD>@${endpoint}:${port}/?tls=true&tlsCAFile=global-bundle.pem&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"`,
+      compassUri:       `mongodb://${user}:<PASSWORD>@${endpoint}:${port}/?tls=true&tlsCAFile=global-bundle.pem&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false`,
+      tlsDownloadNote:  `Download CA: curl -O ${tlsCAUrl}`,
+      notes: [
+        'Replace <PASSWORD> with the master user password.',
+        'Download and reference global-bundle.pem for TLS: ' + tlsCAUrl,
+        'MongoDB Compass: paste the URI in the connection string field, then set TLS/SSL > CA File to global-bundle.pem.',
+      ],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON DYNAMODB ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /dynamodb  → list DynamoDB tables
+router.get('/dynamodb', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, ListTablesCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    const list = await client.send(new ListTablesCommand({}));
+    const details = await Promise.all(
+      (list.TableNames || []).map(name =>
+        client.send(new DescribeTableCommand({ TableName: name })).then(r => r.Table)
+      )
+    );
+    res.json(details.map(t => ({
+      name:             t.TableName,
+      status:           t.TableStatus,
+      itemCount:        t.ItemCount,
+      sizeBytes:        t.TableSizeBytes,
+      billingMode:      t.BillingModeSummary?.BillingMode || 'PROVISIONED',
+      readCapacity:     t.ProvisionedThroughput?.ReadCapacityUnits,
+      writeCapacity:    t.ProvisionedThroughput?.WriteCapacityUnits,
+      creationDateTime: t.CreationDateTime,
+      keySchema:        (t.KeySchema || []).map(k => ({ name: k.AttributeName, type: k.KeyType })),
+      globalIndexes:    (t.GlobalSecondaryIndexes || []).length,
+      localIndexes:     (t.LocalSecondaryIndexes || []).length,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /dynamodb/:table/config  → describe a specific table
+router.get('/dynamodb/:table/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    const resp = await client.send(new DescribeTableCommand({ TableName: req.params.table }));
+    res.json(resp.Table);
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /dynamodb/:table/scan  → scan table data (paginated)
+router.post('/dynamodb/:table/scan', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { limit = 50, exclusiveStartKey } = req.body || {};
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
+    const { unmarshall } = require('@aws-sdk/util-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    const params = { TableName: req.params.table, Limit: Math.min(limit, 200) };
+    if (exclusiveStartKey) params.ExclusiveStartKey = exclusiveStartKey;
+    const resp = await client.send(new ScanCommand(params));
+    res.json({
+      items:                (resp.Items || []).map(i => unmarshall(i)),
+      count:                resp.Count,
+      scannedCount:         resp.ScannedCount,
+      lastEvaluatedKey:     resp.LastEvaluatedKey || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /dynamodb/:table/query  → query table by partition key
+router.post('/dynamodb/:table/query', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { keyName, keyValue, keyType = 'S', indexName, limit = 50, exclusiveStartKey } = req.body || {};
+    if (!keyName || keyValue === undefined)
+      return res.status(400).json({ error: 'keyName and keyValue are required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, QueryCommand } = require('@aws-sdk/client-dynamodb');
+    const { unmarshall, marshall } = require('@aws-sdk/util-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    const params = {
+      TableName:                 req.params.table,
+      KeyConditionExpression:    '#pk = :pkval',
+      ExpressionAttributeNames:  { '#pk': keyName },
+      ExpressionAttributeValues: marshall({ ':pkval': keyValue }),
+      Limit:                     Math.min(limit, 200),
+    };
+    if (indexName)         params.IndexName          = indexName;
+    if (exclusiveStartKey) params.ExclusiveStartKey  = exclusiveStartKey;
+    const resp = await client.send(new QueryCommand(params));
+    res.json({
+      items:            (resp.Items || []).map(i => unmarshall(i)),
+      count:            resp.Count,
+      scannedCount:     resp.ScannedCount,
+      lastEvaluatedKey: resp.LastEvaluatedKey || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON ATHENA ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /athena/workgroups  → list Athena workgroups
+router.get('/athena/workgroups', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, ListWorkGroupsCommand, GetWorkGroupCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const list = await client.send(new ListWorkGroupsCommand({}));
+    const details = await Promise.all(
+      (list.WorkGroups || []).map(wg =>
+        client.send(new GetWorkGroupCommand({ WorkGroup: wg.Name })).then(r => r.WorkGroup)
+      )
+    );
+    res.json(details.map(wg => ({
+      name:           wg.Name,
+      description:    wg.Description || '',
+      state:          wg.State,
+      creationTime:   wg.CreationTime,
+      outputLocation: wg.Configuration?.ResultConfiguration?.OutputLocation,
+      bytesScanned:   wg.Statistics?.TotalBytesScanned,
+      queriesRun:     wg.Statistics?.TotalQueryCount,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/databases  → list named query databases
+router.get('/athena/databases', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, ListDataCatalogsCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const resp = await client.send(new ListDataCatalogsCommand({}));
+    res.json((resp.DataCatalogsSummary || []).map(c => ({
+      name:        c.CatalogName,
+      type:        c.Type,
+      description: c.Description || '',
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /athena/query  → start a query execution
+router.post('/athena/query', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { query, workgroup, outputLocation } = req.body || {};
+    if (!query) return res.status(400).json({ error: 'query is required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, StartQueryExecutionCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const resp = await client.send(new StartQueryExecutionCommand({
+      QueryString: query,
+      WorkGroup: workgroup || 'primary',
+      ResultConfiguration: outputLocation ? { OutputLocation: outputLocation } : undefined,
+    }));
+    res.json({ queryExecutionId: resp.QueryExecutionId });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/query/:id  → get query execution status + results
+router.get('/athena/query/:id', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, GetQueryExecutionCommand, GetQueryResultsCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const exec = await client.send(new GetQueryExecutionCommand({ QueryExecutionId: req.params.id }));
+    const status = exec.QueryExecution?.Status?.State;
+    let results = null;
+    if (status === 'SUCCEEDED') {
+      const r = await client.send(new GetQueryResultsCommand({ QueryExecutionId: req.params.id, MaxResults: 100 }));
+      results = r.ResultSet;
+    }
+    res.json({ execution: exec.QueryExecution, results });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON CLOUDFRONT ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /cloudfront  → list CloudFront distributions
+router.get('/cloudfront', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFrontClient, ListDistributionsCommand } = require('@aws-sdk/client-cloudfront');
+    const client = new CloudFrontClient({ ...cfg, region: 'us-east-1' }); // CloudFront is global
+    const resp = await client.send(new ListDistributionsCommand({}));
+    const items = resp.DistributionList?.Items || [];
+    res.json(items.map(d => ({
+      id:             d.Id,
+      domainName:     d.DomainName,
+      status:         d.Status,
+      enabled:        d.Enabled,
+      priceClass:     d.PriceClass,
+      comment:        d.Comment || '',
+      aliases:        d.Aliases?.Items || [],
+      origins:        (d.Origins?.Items || []).map(o => ({ id: o.Id, domain: o.DomainName })),
+      httpVersion:    d.HttpVersion,
+      isIPV6Enabled:  d.IsIPV6Enabled,
+      lastModified:   d.LastModifiedTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cloudfront/:id/invalidate  → create a cache invalidation
+router.post('/cloudfront/:id/invalidate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { paths = ['/*'] } = req.body || {};
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFrontClient, CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
+    const client = new CloudFrontClient({ ...cfg, region: 'us-east-1' });
+    const resp = await client.send(new CreateInvalidationCommand({
+      DistributionId: req.params.id,
+      InvalidationBatch: {
+        Paths: { Quantity: paths.length, Items: paths },
+        CallerReference: `kuadashboard-${Date.now()}`,
+      },
+    }));
+    res.json({ invalidationId: resp.Invalidation?.Id, status: resp.Invalidation?.Status });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cloudfront/:id/config  → get full distribution config
+router.get('/cloudfront/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFrontClient, GetDistributionCommand } = require('@aws-sdk/client-cloudfront');
+    const client = new CloudFrontClient({ ...cfg, region: 'us-east-1' });
+    const resp = await client.send(new GetDistributionCommand({ Id: req.params.id }));
+    const dist = resp.Distribution;
+    res.json({
+      id:           dist.Id,
+      arn:          dist.ARN,
+      status:       dist.Status,
+      domainName:   dist.DomainName,
+      lastModified: dist.LastModifiedTime,
+      config:       dist.DistributionConfig,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cloudfront/:id/stats  → CloudWatch metrics for the distribution (last 7 days)
+router.get('/cloudfront/:id/stats', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricStatisticsCommand } = require('@aws-sdk/client-cloudwatch');
+    const cw = new CloudWatchClient({ ...cfg, region: 'us-east-1' });
+    const now = new Date();
+    const start = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const dims = [
+      { Name: 'DistributionId', Value: req.params.id },
+      { Name: 'Region', Value: 'Global' },
+    ];
+    const period = 86400;
+    const [reqData, bytesData, err4xx, err5xx] = await Promise.all([
+      cw.send(new GetMetricStatisticsCommand({ Namespace: 'AWS/CloudFront', MetricName: 'Requests',         Dimensions: dims, StartTime: start, EndTime: now, Period: period, Statistics: ['Sum'] })),
+      cw.send(new GetMetricStatisticsCommand({ Namespace: 'AWS/CloudFront', MetricName: 'BytesDownloaded',  Dimensions: dims, StartTime: start, EndTime: now, Period: period, Statistics: ['Sum'] })),
+      cw.send(new GetMetricStatisticsCommand({ Namespace: 'AWS/CloudFront', MetricName: '4xxErrorRate',     Dimensions: dims, StartTime: start, EndTime: now, Period: period, Statistics: ['Average'] })),
+      cw.send(new GetMetricStatisticsCommand({ Namespace: 'AWS/CloudFront', MetricName: '5xxErrorRate',     Dimensions: dims, StartTime: start, EndTime: now, Period: period, Statistics: ['Average'] })),
+    ]);
+    const sort = dp => [...dp].sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+    res.json({
+      requests:       sort(reqData.Datapoints).map(dp => ({ date: dp.Timestamp, value: dp.Sum })),
+      bytesDownloaded:sort(bytesData.Datapoints).map(dp => ({ date: dp.Timestamp, value: dp.Sum })),
+      errorRate4xx:   sort(err4xx.Datapoints).map(dp => ({ date: dp.Timestamp, value: dp.Average })),
+      errorRate5xx:   sort(err5xx.Datapoints).map(dp => ({ date: dp.Timestamp, value: dp.Average })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cloudfront  → create a distribution from an S3 bucket
+router.post('/cloudfront', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { bucketName, region, comment = '', priceClass = 'PriceClass_100', aliases = [] } = req.body || {};
+    if (!bucketName || !region) return res.status(400).json({ error: 'bucketName and region are required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFrontClient, CreateDistributionCommand } = require('@aws-sdk/client-cloudfront');
+    const client = new CloudFrontClient({ ...cfg, region: 'us-east-1' });
+    const originDomain = `${bucketName}.s3.${region}.amazonaws.com`;
+    const distributionConfig = {
+      CallerReference: `kuadashboard-${Date.now()}`,
+      Comment: comment,
+      Enabled: true,
+      PriceClass: priceClass,
+      DefaultCacheBehavior: {
+        TargetOriginId: bucketName,
+        ViewerProtocolPolicy: 'redirect-to-https',
+        AllowedMethods: { Quantity: 2, Items: ['GET', 'HEAD'] },
+        CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // CachingOptimized managed policy
+        Compress: true,
+      },
+      Origins: {
+        Quantity: 1,
+        Items: [{
+          Id: bucketName,
+          DomainName: originDomain,
+          S3OriginConfig: { OriginAccessIdentity: '' },
+        }],
+      },
+      ...(aliases.length > 0 && {
+        Aliases: { Quantity: aliases.length, Items: aliases },
+      }),
+    };
+    const resp = await client.send(new CreateDistributionCommand({ DistributionConfig: distributionConfig }));
+    const dist = resp.Distribution;
+    res.json({ id: dist.Id, domainName: dist.DomainName, status: dist.Status, arn: dist.ARN });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON ROUTE 53 ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /route53/zones  → list hosted zones
+router.get('/route53/zones', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { Route53Client, ListHostedZonesCommand } = require('@aws-sdk/client-route-53');
+    const client = new Route53Client({ ...cfg, region: 'us-east-1' });
+    const resp = await client.send(new ListHostedZonesCommand({}));
+    res.json((resp.HostedZones || []).map(z => ({
+      id:              z.Id.split('/').pop(),
+      name:            z.Name,
+      recordCount:     z.ResourceRecordSetCount,
+      private:         z.Config?.PrivateZone,
+      comment:         z.Config?.Comment || '',
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /route53/zones/:id/records  → list records in a hosted zone
+router.get('/route53/zones/:id/records', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { Route53Client, ListResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
+    const client = new Route53Client({ ...cfg, region: 'us-east-1' });
+    const resp = await client.send(new ListResourceRecordSetsCommand({ HostedZoneId: req.params.id }));
+    res.json((resp.ResourceRecordSets || []).map(r => ({
+      name:    r.Name,
+      type:    r.Type,
+      ttl:     r.TTL,
+      records: (r.ResourceRecords || []).map(rr => rr.Value),
+      alias:   r.AliasTarget ? { dnsName: r.AliasTarget.DNSName, zoneId: r.AliasTarget.HostedZoneId } : null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON COGNITO ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /cognito/userpools  → list Cognito user pools
+router.get('/cognito/userpools', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, ListUserPoolsCommand, DescribeUserPoolCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const list = await client.send(new ListUserPoolsCommand({ MaxResults: 60 }));
+    const details = await Promise.all(
+      (list.UserPools || []).map(p =>
+        client.send(new DescribeUserPoolCommand({ UserPoolId: p.Id })).then(r => r.UserPool)
+      )
+    );
+    res.json(details.map(p => ({
+      id:             p.Id,
+      name:           p.Name,
+      status:         p.Status,
+      userCount:      p.EstimatedNumberOfUsers,
+      creationDate:   p.CreationDate,
+      lastModified:   p.LastModifiedDate,
+      mfaConfig:      p.MfaConfiguration,
+      emailVerification: p.AutoVerifiedAttributes?.includes('email'),
+      phoneVerification: p.AutoVerifiedAttributes?.includes('phone_number'),
+      domain:         p.Domain || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/config  → full user pool configuration
+router.get('/cognito/userpools/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, DescribeUserPoolCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const resp = await client.send(new DescribeUserPoolCommand({ UserPoolId: req.params.id }));
+    res.json(resp.UserPool);
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/users  → list users with pagination + all attributes
+router.get('/cognito/userpools/:id/users', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, ListUsersCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const params = {
+      UserPoolId:       req.params.id,
+      Limit:            parseInt(req.query.limit || '60', 10),
+      Filter:           req.query.filter || undefined,
+      PaginationToken:  req.query.paginationToken || undefined,
+    };
+    const resp = await client.send(new ListUsersCommand(params));
+    const attrMap = (attrs) => {
+      const m = {};
+      for (const a of (attrs || [])) m[a.Name] = a.Value;
+      return m;
+    };
+    res.json({
+      users: (resp.Users || []).map(u => ({
+        username:      u.Username,
+        status:        u.UserStatus,
+        enabled:       u.Enabled,
+        created:       u.UserCreateDate,
+        modified:      u.UserLastModifiedDate,
+        attributes:    attrMap(u.Attributes),
+        email:         attrMap(u.Attributes)['email'] || null,
+        emailVerified: attrMap(u.Attributes)['email_verified'] === 'true',
+        phone:         attrMap(u.Attributes)['phone_number'] || null,
+        mfaEnabled:    (u.MFAOptions || []).length > 0,
+        mfaOptions:    u.MFAOptions || [],
+      })),
+      paginationToken: resp.PaginationToken || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/users/:username  → get single user detail + MFA
+router.get('/cognito/userpools/:id/users/:username', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const resp = await client.send(new AdminGetUserCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+    }));
+    const attrMap = {};
+    for (const a of (resp.UserAttributes || [])) attrMap[a.Name] = a.Value;
+    res.json({
+      username:       resp.Username,
+      status:         resp.UserStatus,
+      enabled:        resp.Enabled,
+      created:        resp.UserCreateDate,
+      modified:       resp.UserLastModifiedDate,
+      attributes:     attrMap,
+      mfaOptions:     resp.MFAOptions || [],
+      preferredMfa:   resp.PreferredMfaSetting || null,
+      mfaSettingList: resp.UserMFASettingList || [],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users  → create user (AdminCreateUser)
+router.post('/cognito/userpools/:id/users', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { username, email, phone, temporaryPassword, messageAction, suppressMessage } = req.body || {};
+    if (!username) return res.status(400).json({ error: 'username is required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminCreateUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const userAttributes = [];
+    if (email)  userAttributes.push({ Name: 'email',  Value: email });
+    if (phone)  userAttributes.push({ Name: 'phone_number', Value: phone });
+    const params = {
+      UserPoolId:       req.params.id,
+      Username:         username,
+      UserAttributes:   userAttributes,
+      DesiredDeliveryMediums: email ? ['EMAIL'] : [],
+    };
+    if (temporaryPassword) params.TemporaryPassword = temporaryPassword;
+    if (messageAction === 'SUPPRESS' || suppressMessage) params.MessageAction = 'SUPPRESS';
+    const resp = await client.send(new AdminCreateUserCommand(params));
+    res.status(201).json({ username: resp.User?.Username, status: resp.User?.UserStatus });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/reset-password  → AdminResetUserPassword
+router.post('/cognito/userpools/:id/users/:username/reset-password', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminResetUserPasswordCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminResetUserPasswordCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+    }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/set-password  → AdminSetUserPassword
+router.post('/cognito/userpools/:id/users/:username/set-password', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { password, permanent = true } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'password is required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminSetUserPasswordCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminSetUserPasswordCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+      Password:   password,
+      Permanent:  permanent,
+    }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/enable  → AdminEnableUser
+router.post('/cognito/userpools/:id/users/:username/enable', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminEnableUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminEnableUserCommand({ UserPoolId: req.params.id, Username: req.params.username }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/disable  → AdminDisableUser
+router.post('/cognito/userpools/:id/users/:username/disable', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminDisableUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminDisableUserCommand({ UserPoolId: req.params.id, Username: req.params.username }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /cognito/userpools/:id/users/:username  → AdminDeleteUser
+router.delete('/cognito/userpools/:id/users/:username', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminDeleteUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminDeleteUserCommand({ UserPoolId: req.params.id, Username: req.params.username }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/clients  → list app clients
+router.get('/cognito/userpools/:id/clients', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, ListUserPoolClientsCommand, DescribeUserPoolClientCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const list = await client.send(new ListUserPoolClientsCommand({ UserPoolId: req.params.id }));
+    // Fetch full details for each client
+    const details = await Promise.all(
+      (list.UserPoolClients || []).map(c =>
+        client.send(new DescribeUserPoolClientCommand({ UserPoolId: req.params.id, ClientId: c.ClientId }))
+          .then(r => r.UserPoolClient)
+          .catch(() => c) // fallback to basic info on error
+      )
+    );
+    res.json(details.map(c => ({
+      clientId:             c.ClientId,
+      clientName:           c.ClientName,
+      userPoolId:           c.UserPoolId,
+      lastModifiedDate:     c.LastModifiedDate,
+      creationDate:         c.CreationDate,
+      refreshTokenValidity: c.RefreshTokenValidity,
+      accessTokenValidity:  c.AccessTokenValidity,
+      idTokenValidity:      c.IdTokenValidity,
+      explicitAuthFlows:    c.ExplicitAuthFlows || [],
+      supportedIdentityProviders: c.SupportedIdentityProviders || [],
+      callbackURLs:         c.CallbackURLs || [],
+      logoutURLs:           c.LogoutURLs || [],
+      allowedOAuthFlows:    c.AllowedOAuthFlows || [],
+      allowedOAuthScopes:   c.AllowedOAuthScopes || [],
+      allowedOAuthFlowsUserPoolClient: c.AllowedOAuthFlowsUserPoolClient,
+      preventUserExistenceErrors: c.PreventUserExistenceErrors,
+      enableTokenRevocation: c.EnableTokenRevocation,
+      hasSecret:            !!c.ClientSecret, // never expose the actual secret
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/identity-providers  → list federated IdPs
+router.get('/cognito/userpools/:id/identity-providers', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, ListIdentityProvidersCommand, DescribeIdentityProviderCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const list = await client.send(new ListIdentityProvidersCommand({ UserPoolId: req.params.id }));
+    const details = await Promise.all(
+      (list.Providers || []).map(p =>
+        client.send(new DescribeIdentityProviderCommand({ UserPoolId: req.params.id, ProviderName: p.ProviderName }))
+          .then(r => r.IdentityProvider)
+          .catch(() => p)
+      )
+    );
+    res.json(details.map(p => ({
+      providerName:      p.ProviderName,
+      providerType:      p.ProviderType,
+      status:            p.ProviderDetails?.status || 'active',
+      creationDate:      p.CreationDate,
+      lastModifiedDate:  p.LastModifiedDate,
+      // Expose safe metadata only (not secrets)
+      metadataURL:       p.ProviderDetails?.MetadataURL || null,
+      issuer:            p.ProviderDetails?.oidc_issuer || p.ProviderDetails?.IDPSignout || null,
+      attributeMapping:  p.AttributeMapping || {},
+      idpIdentifiers:    p.IdpIdentifiers || [],
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AWS SECRETS MANAGER ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /secrets  → list secrets (names and metadata only — no values)
+router.get('/secrets', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SecretsManagerClient, ListSecretsCommand } = require('@aws-sdk/client-secrets-manager');
+    const client = new SecretsManagerClient(cfg);
+    const resp = await client.send(new ListSecretsCommand({ MaxResults: 100 }));
+    res.json((resp.SecretList || []).map(s => ({
+      name:            s.Name,
+      arn:             s.ARN,
+      description:     s.Description || '',
+      lastChanged:     s.LastChangedDate,
+      lastAccessed:    s.LastAccessedDate,
+      rotationEnabled: s.RotationEnabled || false,
+      tags:            s.Tags || [],
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /secrets/:name/config  → get secret metadata (no value)
+router.get('/secrets/:name/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SecretsManagerClient, DescribeSecretCommand } = require('@aws-sdk/client-secrets-manager');
+    const client = new SecretsManagerClient(cfg);
+    const resp = await client.send(new DescribeSecretCommand({ SecretId: req.params.name }));
+    res.json({
+      name:             resp.Name,
+      arn:              resp.ARN,
+      description:      resp.Description || '',
+      kmsKeyId:         resp.KmsKeyId || null,
+      rotationEnabled:  resp.RotationEnabled || false,
+      rotationLambdaArn: resp.RotationLambdaARN || null,
+      lastRotatedDate:  resp.LastRotatedDate,
+      lastChangedDate:  resp.LastChangedDate,
+      tags:             resp.Tags || [],
+      versionIds:       Object.keys(resp.VersionIdsToStages || {}),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /secrets/:name/preview-keys  → fetch secret and return key names + masked values (no full values exposed)
+router.get('/secrets/:name/preview-keys', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+    const client = new SecretsManagerClient(cfg);
+    const resp = await client.send(new GetSecretValueCommand({ SecretId: req.params.name }));
+    let keys = [];
+    if (resp.SecretString) {
+      try {
+        const parsed = JSON.parse(resp.SecretString);
+        if (typeof parsed === 'object' && parsed !== null) {
+          for (const [k, v] of Object.entries(parsed)) {
+            const sanitized = k.replace(/[^A-Z0-9_]/gi, '_').toUpperCase();
+            if (sanitized) keys.push({ original: k, sanitized, preview: typeof v === 'string' ? v.slice(0, 4) + '***' : '[non-string]' });
+          }
+        } else {
+          keys.push({ original: 'SECRET_VALUE', sanitized: 'SECRET_VALUE', preview: resp.SecretString.slice(0, 4) + '***' });
+        }
+      } catch {
+        keys.push({ original: 'SECRET_VALUE', sanitized: 'SECRET_VALUE', preview: resp.SecretString.slice(0, 4) + '***' });
+      }
+    }
+    res.json({ keys, secretName: req.params.name });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /secrets/:name/import-selected  → import only chosen keys into Env Manager profile
+router.post('/secrets/:name/import-selected', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { selectedKeys, targetProfileId, targetProfileName } = req.body || {};
+  if (!selectedKeys?.length) return res.status(400).json({ error: 'No keys selected' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+    const client = new SecretsManagerClient(cfg);
+    const resp = await client.send(new GetSecretValueCommand({ SecretId: req.params.name }));
+    let allParsed = {};
+    if (resp.SecretString) {
+      try { allParsed = JSON.parse(resp.SecretString); } catch { allParsed = { SECRET_VALUE: resp.SecretString }; }
+    }
+    const keys = {};
+    for (const sel of selectedKeys) {
+      const raw = allParsed[sel.original];
+      if (raw !== undefined && typeof raw === 'string') keys[sel.sanitized] = raw;
+    }
+    if (!Object.keys(keys).length) return res.status(400).json({ error: 'No importable string values in selection' });
+    const store = getStore();
+    const secretName = req.params.name.split('/').pop();
+    if (targetProfileId) {
+      const existing = await store.getProfile(targetProfileId);
+      if (!existing) return res.status(404).json({ error: 'Target profile not found' });
+      await store.updateProfile(targetProfileId, { keys });
+      res.json({ merged: true, profileId: targetProfileId, keysImported: Object.keys(keys).length });
+    } else {
+      const name = targetProfileName || `Secret: ${secretName}`;
+      const profile = await store.createProfile({ name, provider: 'generic', category: 'Secrets Manager', keys });
+      res.json({ created: true, profileId: profile.id, keysImported: Object.keys(keys).length });
+    }
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /secrets/:name/import-to-profile  → retrieve secret value and import into an Env Manager profile
+router.post('/secrets/:name/import-to-profile', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { targetProfileId, targetProfileName } = req.body || {};
+    const cfg = await resolveAwsConfig(profileId);
+    const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+    const client = new SecretsManagerClient(cfg);
+    const resp = await client.send(new GetSecretValueCommand({ SecretId: req.params.name }));
+
+    // Parse secret — supports JSON key/value or plain string
+    let keys = {};
+    if (resp.SecretString) {
+      try {
+        const parsed = JSON.parse(resp.SecretString);
+        if (typeof parsed === 'object' && parsed !== null) {
+          // Sanitize key names
+          for (const [k, v] of Object.entries(parsed)) {
+            const sanitized = k.replace(/[^A-Z0-9_]/gi, '_').toUpperCase();
+            if (sanitized && typeof v === 'string') keys[sanitized] = v;
+          }
+        } else {
+          keys['SECRET_VALUE'] = resp.SecretString;
+        }
+      } catch {
+        keys['SECRET_VALUE'] = resp.SecretString;
+      }
+    }
+
+    if (!Object.keys(keys).length)
+      return res.status(400).json({ error: 'Secret has no importable string values' });
+
+    const store = getStore();
+    const secretName = req.params.name.split('/').pop();
+
+    if (targetProfileId) {
+      // Merge into existing profile
+      const existing = await store.getProfile(targetProfileId);
+      if (!existing) return res.status(404).json({ error: 'Target profile not found' });
+      await store.updateProfile(targetProfileId, { keys });
+      res.json({ merged: true, profileId: targetProfileId, keysImported: Object.keys(keys).length });
+    } else {
+      // Create new generic profile from the secret
+      const name = targetProfileName || `Secret: ${secretName}`;
+      const profile = await store.createProfile({ name, provider: 'generic', category: 'Secrets Manager', keys });
+      res.json({ created: true, profileId: profile.id, keysImported: Object.keys(keys).length });
+    }
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON DATA PIPELINE ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /datapipeline  → list Data Pipeline pipelines
+router.get('/datapipeline', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DataPipelineClient, ListPipelinesCommand, DescribePipelinesCommand } = require('@aws-sdk/client-data-pipeline');
+    const client = new DataPipelineClient(cfg);
+    const list = await client.send(new ListPipelinesCommand({}));
+    const ids = (list.pipelineIdList || []).map(p => p.id);
+    if (!ids.length) return res.json([]);
+    const desc = await client.send(new DescribePipelinesCommand({ pipelineIds: ids }));
+    res.json((desc.pipelineDescriptionList || []).map(p => {
+      const fields = {};
+      for (const f of (p.fields || [])) fields[f.key] = f.stringValue || f.refValue;
+      return {
+        id:          p.pipelineId,
+        name:        p.name,
+        description: p.description || '',
+        state:       fields['@pipelineState'] || 'UNKNOWN',
+        createdBy:   fields['@createdBy'],
+        creationTime: fields['@creationTime'],
+        latestRunTime: fields['@latestRunTime'],
+        nextRunTime:  fields['@nextRunTime'],
+      };
+    }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /datapipeline/:id/activate  → activate a pipeline
+router.post('/datapipeline/:id/activate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DataPipelineClient, ActivatePipelineCommand } = require('@aws-sdk/client-data-pipeline');
+    const client = new DataPipelineClient(cfg);
+    await client.send(new ActivatePipelineCommand({ pipelineId: req.params.id }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /datapipeline/:id/deactivate  → deactivate a pipeline
+router.post('/datapipeline/:id/deactivate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { DataPipelineClient, DeactivatePipelineCommand } = require('@aws-sdk/client-data-pipeline');
+    const client = new DataPipelineClient(cfg);
+    await client.send(new DeactivatePipelineCommand({ pipelineId: req.params.id, cancelActive: req.body?.cancelActive ?? true }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
 module.exports = router;
 

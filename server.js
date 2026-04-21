@@ -18,6 +18,7 @@ const server = http.createServer(app);
 const envManagerRoutes  = require('./routes/envManager');
 const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
+const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
 const localShellRoutes  = require('./routes/localShell');
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
@@ -48,6 +49,7 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/api/cloud/envs', envManagerRoutes);
 app.use('/api/cloud/gcp',  gcpRoutes);
 app.use('/api/cloud/aws',  awsRoutes);
+app.use('/api/helm',       helmRoutes);
 app.use('/api/system',     systemToolsRoutes);
 app.use('/api/local',      localShellRoutes);
 

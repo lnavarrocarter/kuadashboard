@@ -160,6 +160,101 @@ router.get('/gcloud-configs', async (_req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /gcloud-accounts ─────────────────────────────────────────────────────
+// Lists already-authenticated Google accounts via `gcloud auth list`.
+
+router.get('/gcloud-accounts', async (_req, res) => {
+  try {
+    const raw  = await gcloudExec('auth list --format=json');
+    const list = JSON.parse(raw || '[]');
+    res.json(list.map(a => ({
+      account: a.account,
+      status:  a.status,   // 'ACTIVE' | 'CREDENTIALED'
+    })));
+  } catch (err) {
+    res.json([]); // not a fatal error — user may just have no accounts yet
+  }
+});
+
+// ─── POST /gcloud-login ───────────────────────────────────────────────────────
+// Launches `gcloud auth login` in a detached shell so the browser opens on the
+// host machine. The process is fire-and-forget — the frontend polls /gcloud-configs
+// to detect when a new account/config appears.
+// Body: { configName? } — if provided, creates (or reuses) that named config first.
+
+router.post('/gcloud-login', async (req, res) => {
+  const { configName } = req.body || {};
+
+  // Validate config name if provided
+  if (configName && !/^[a-zA-Z0-9_\-]+$/.test(configName)) {
+    return res.status(400).json({ error: 'Invalid config name (alphanumeric, - and _ only)' });
+  }
+
+  try {
+    const { spawn } = require('child_process');
+
+    // Build the gcloud command sequence:
+    // 1. Create the config if it doesn't exist yet
+    // 2. Activate it
+    // 3. Run auth login inside it
+    let cmd, args;
+
+    if (isWin) {
+      // On Windows open a new terminal window so the user can complete the browser flow
+      const loginCmd = configName
+        ? `gcloud config configurations create ${configName} --no-activate 2>nul; gcloud config configurations activate ${configName}; gcloud auth login --configuration=${configName}`
+        : 'gcloud auth login';
+      cmd  = 'cmd.exe';
+      args = ['/c', 'start', 'cmd.exe', '/k', loginCmd];
+    } else {
+      // On macOS/Linux use the default terminal emulator or run in background
+      const loginCmd = configName
+        ? `gcloud config configurations create ${configName} 2>/dev/null; gcloud config configurations activate ${configName}; gcloud auth login --configuration=${configName}`
+        : 'gcloud auth login';
+      cmd  = 'sh';
+      args = ['-c', loginCmd];
+    }
+
+    const child = spawn(cmd, args, {
+      detached:  true,
+      stdio:     'ignore',
+      windowsHide: false,  // show the terminal so user can complete OAuth
+    });
+    child.unref();
+
+    res.json({ success: true, message: 'gcloud auth login launched — complete the browser flow, then click Refresh.' });
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
+// ─── POST /gcloud-configs ─────────────────────────────────────────────────────
+// Creates a new named gcloud configuration and optionally sets project / account.
+// Body: { name, project?, account?, region? }
+
+router.post('/gcloud-configs', async (req, res) => {
+  const { name, project, account, region } = req.body || {};
+
+  if (!name || !/^[a-zA-Z0-9_\-]+$/.test(name)) {
+    return res.status(400).json({ error: 'name is required (alphanumeric, - and _ only)' });
+  }
+
+  try {
+    // Create config (ignore error if already exists)
+    await gcloudExec(`config configurations create ${name}`).catch(() => {});
+    // Activate it to set properties on it
+    if (project) await gcloudExec(`config set project ${project} --configuration=${name}`);
+    if (account) await gcloudExec(`config set account ${account} --configuration=${name}`);
+    if (region)  await gcloudExec(`config set compute/region ${region} --configuration=${name}`);
+
+    const configs = await readGcloudConfigs();
+    const created = configs.find(c => c.name === name) || null;
+    res.json({ success: true, config: created });
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
 // ─── GET /projects ────────────────────────────────────────────────────────────
 
 router.get('/projects', async (req, res) => {

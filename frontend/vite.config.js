@@ -11,10 +11,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 7191,
+    port: 7193,
     proxy: {
-      '/api': { target: 'http://localhost:7190', changeOrigin: true },
-      '/ws':  { target: 'ws://localhost:7190',   ws: true, changeOrigin: true },
+      '/api': { target: `http://localhost:${process.env.VITE_BACKEND_PORT || 7190}`, changeOrigin: true },
+      '/ws':  { target: `ws://localhost:${process.env.VITE_BACKEND_PORT || 7190}`,   ws: true, changeOrigin: true },
     }
   },
   test: {
