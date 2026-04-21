@@ -47,6 +47,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Fix distutils for node-gyp (macOS)
+        if: matrix.os == 'macos-latest'
+        run: python3 -m pip install setuptools --break-system-packages || python3 -m pip install setuptools
+
       - name: Generate icons
         run: npm run icons:generate
 
