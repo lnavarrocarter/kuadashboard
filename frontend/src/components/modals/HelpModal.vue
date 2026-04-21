@@ -333,7 +333,7 @@ function installUpdate() {
   updateStore.installUpdate()
 }
 
-const VERSION = window.kuaElectron?.getVersion?.() || '1.3.2'
+const VERSION = window.kuaElectron?.getVersion?.() || '1.3.3'
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
@@ -348,6 +348,14 @@ const TABS = computed(() => [
 ])
 
 const CHANGELOG = [
+  {
+    version: '1.3.3',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',  text: 'macOS: credenciales almacenadas en el Keychain nativo usando @napi-rs/keyring — elimina el error "KeytarStore requires keytar" sin necesidad de recompilar módulos nativos' },
+      { type: 'fix',  text: 'macOS: el auto-updater genera archivo .zip además del .dmg, resolviendo el error "zip file not provided" al actualizar' },
+    ],
+  },
   {
     version: '1.3.2',
     date: 'Abril 2026',
