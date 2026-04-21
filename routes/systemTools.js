@@ -48,7 +48,10 @@ async function shellExec(cmd, timeout = 6000) {
       opts
     );
   }
-  return execAsync(`sh -c "${cmd}"`, opts);
+  // Use single quotes to avoid word-splitting / variable expansion on the cmd.
+  // process.env.PATH was already expanded by expandMacPath() in electron/main.js
+  // before the backend was forked, so Homebrew-installed tools are on the PATH.
+  return execAsync(`sh -c '${cmd.replace(/'/g, "'\\''")}'`, opts);
 }
 
 // ─── Tool registry ────────────────────────────────────────────────────────────

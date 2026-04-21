@@ -26,6 +26,25 @@
               <div class="about-subtitle">v{{ VERSION }} · Dashboard multi-cloud open source</div>
             </div>
           </div>
+
+          <!-- Aviso de actualización -->
+          <div v-if="updateDownloaded" class="update-card update-ready">
+            <i data-lucide="download"></i>
+            <div class="update-card-body">
+              <div class="update-card-title">Actualización lista — v{{ newVersion }}</div>
+              <div class="update-card-sub">Descargada y lista para instalar. Se aplicará al reiniciar.</div>
+            </div>
+            <button class="btn primary sm" @click="installUpdate">
+              <i data-lucide="refresh-cw"></i> Reiniciar y actualizar
+            </button>
+          </div>
+          <div v-else-if="updateAvailable" class="update-card update-pending">
+            <i data-lucide="cloud-download"></i>
+            <div class="update-card-body">
+              <div class="update-card-title">Nueva versión disponible — v{{ newVersion }}</div>
+              <div class="update-card-sub">Descargando en segundo plano&hellip;</div>
+            </div>
+          </div>
           <p class="help-p">
             KuaDashboard es un dashboard de administración para Kubernetes, AWS y GCP.
             Gestiona pods, deployments, instancias, lambdas, servicios cloud y más desde una sola interfaz.
@@ -140,14 +159,46 @@
 </template>
 
 <script setup>
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import BaseModal from '../BaseModal.vue'
 
-const VERSION = '1.1.1'
+const VERSION = '1.1.2'
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
 
 const activeTab = ref('about')
+
+// ── Actualización ────────────────────────────────────────────────────────────
+const updateAvailable  = ref(false)
+const updateDownloaded = ref(false)
+const newVersion       = ref('')
+let handlerAvailable   = null
+let handlerDownloaded  = null
+
+function installUpdate() {
+  window.kuaElectron?.installUpdate?.()
+}
+
+onMounted(() => {
+  if (!window.kuaElectron) return
+  handlerAvailable = window.kuaElectron.on?.('update:available', info => {
+    newVersion.value      = info.version
+    updateAvailable.value = true
+    nextTick(() => import('lucide').then(({ createIcons, icons }) => createIcons({ icons })))
+  })
+  handlerDownloaded = window.kuaElectron.on?.('update:downloaded', info => {
+    newVersion.value       = info.version
+    updateDownloaded.value = true
+    nextTick(() => import('lucide').then(({ createIcons, icons }) => createIcons({ icons })))
+  })
+})
+
+onUnmounted(() => {
+  if (!window.kuaElectron) return
+  if (handlerAvailable)  window.kuaElectron.removeListener?.('update:available',  handlerAvailable)
+  if (handlerDownloaded) window.kuaElectron.removeListener?.('update:downloaded', handlerDownloaded)
+})
 
 const TABS = [
   { id: 'about',    label: 'Acerca de',  icon: 'info' },
@@ -156,6 +207,14 @@ const TABS = [
 ]
 
 const CHANGELOG = [
+  {
+    version: '1.1.2',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',     text: 'macOS: Electron ahora hereda el PATH del login shell al arrancar desde el Dock, resolviendo la falta de kubectl, aws, gcloud y helm instalados con Homebrew' },
+      { type: 'new',     text: 'Aviso de actualización disponible/lista dentro del modal de Ayuda (pestaña Acerca de)' },
+    ],
+  },
   {
     version: '1.1.1',
     date: 'Abril 2026',
@@ -210,8 +269,6 @@ function open(url) {
   if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
   else window.open(url, '_blank')
 }
-
-import { ref } from 'vue'
 </script>
 
 <style scoped>
@@ -293,6 +350,26 @@ import { ref } from 'vue'
 .donate-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
 .donate-card .btn { flex-shrink: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .donate-card .btn i, .donate-card .btn svg { width: 12px; height: 12px; }
+
+/* Update card */
+.update-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+.update-card > i, .update-card > svg { width: 18px; height: 18px; flex-shrink: 0; }
+.update-ready  { background: rgba(14,157,232,.1); border: 1px solid rgba(14,157,232,.3); }
+.update-ready > i, .update-ready > svg { color: var(--accent); }
+.update-pending { background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.3); }
+.update-pending > i, .update-pending > svg { color: #eab308; }
+.update-card-body { flex: 1; }
+.update-card-title { font-weight: 600; color: var(--text); }
+.update-card-sub   { color: var(--text-dim); margin-top: 2px; }
+.update-card .btn  { flex-shrink: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.update-card .btn i, .update-card .btn svg { width: 11px; height: 11px; }
 
 /* Releases */
 .release-list { display: flex; flex-direction: column; gap: 16px; max-height: 340px; overflow-y: auto; padding-right: 4px; }

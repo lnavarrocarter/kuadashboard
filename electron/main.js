@@ -21,8 +21,9 @@
  */
 
 const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
-const path   = require('path');
-const { fork } = require('child_process');
+const path        = require('path');
+const { fork }    = require('child_process');
+const { execSync } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -31,6 +32,36 @@ const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
+
+// ─── macOS PATH fix ──────────────────────────────────────────────────────────
+// When Electron launches from the Dock or Finder on macOS it does NOT inherit
+// the user's login-shell PATH, so CLI tools installed via Homebrew
+// (/opt/homebrew/bin on Apple Silicon, /usr/local/bin on Intel) are invisible.
+// This function queries the real PATH from the user's login shell and injects
+// it into process.env before the backend is forked, so every child process
+// (including the Express server and any spawn'd tool checks) can find them.
+function expandMacPath() {
+  if (process.platform !== 'darwin') return;
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash'].filter(Boolean);
+  for (const sh of shells) {
+    try {
+      const loginPath = execSync(`${sh} -lc 'echo $PATH'`, {
+        encoding: 'utf8',
+        timeout:  3000,
+      }).trim();
+      if (loginPath && loginPath.includes('/')) {
+        process.env.PATH = loginPath;
+        console.log('[electron] Resolved macOS PATH from login shell:', sh);
+        return;
+      }
+    } catch (_) { /* try next shell */ }
+  }
+  // Hard-coded fallback: prepend the most common Homebrew binary locations
+  const extra   = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin'];
+  const current = (process.env.PATH || '').split(':').filter(Boolean);
+  process.env.PATH = [...extra, ...current].filter((v, i, a) => a.indexOf(v) === i).join(':');
+  console.log('[electron] Using fallback macOS PATH (login shell unavailable)');
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -243,6 +274,10 @@ ipcMain.on('app:install-update', () => {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  // Expand PATH on macOS before anything else so the backend and all child
+  // processes can find Homebrew-installed CLI tools (kubectl, aws, gcloud…)
+  expandMacPath();
+
   buildMenu();
 
   console.log('[electron] Starting backend…');
