@@ -2,40 +2,40 @@
 layout: home
 
 hero:
-  name: KuaDashboard
-  text: Kubernetes & Cloud Dashboard
-  tagline: A lightweight, fast alternative to Lens — manage K8s, AWS, and GCP from a single dark-mode UI
+  name: KUA
+  text: Know Unified Administration
+  tagline: Centralize knowledge and operations of your entire infrastructure — AWS, GCP and Kubernetes — from a single open source platform.
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
-      text: Download Desktop App
+      text: Download App
       link: /download
     - theme: alt
-      text: View on GitHub
+      text: GitHub
       link: https://github.com/lnavarrocarter/kuadashboard
     - theme: alt
       text: 💖 Sponsor
       link: /sponsor
 
 features:
+  - icon: ☁️
+    title: Unified Multi-Cloud
+    details: AWS (EC2, ECS, EKS, Lambda, S3, DynamoDB, Secrets Manager and more) + GCP (Cloud Run, GKE, SQL, Storage) in one interface with persistent credentials.
   - icon: ☸️
     title: Kubernetes Management
-    details: Browse Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVCs, Nodes and Events. Scale, restart, drain, cordon/uncordon with one click.
+    details: Pods, Deployments, Services, Ingresses, ConfigMaps, PVCs, Nodes and more. Scale, restart, drain and cordon/uncordon with one click.
   - icon: 📺
     title: Live Logs & Shell
-    details: Stream pod logs in real time via WebSocket. Open interactive exec shells directly in pods. Multi-tab terminal panel with search.
-  - icon: ☁️
-    title: AWS & GCP Integration
-    details: Manage Lambda, ECS, EKS, EC2, S3, API Gateway, EventBridge, Step Functions. GCP Cloud Run, GKE, and Compute VMs.
+    details: Log streaming via WebSocket. Interactive shell (exec) in pods. Integrated multi-tab local terminal.
+  - icon: 🔐
+    title: Env Manager
+    details: Encrypted credential profiles (AES-256) for AWS, GCP and generics. Import/export .env files. Secrets Manager integration.
   - icon: 🔌
     title: Port Forwarding
-    details: One-click port forwards to Services and Pods. Persistent sessions with auto-reconnect. Visual manager panel.
+    details: Port-forward to Services and Pods with one click. Persistent sessions with auto-reconnect. Integrated visual panel.
   - icon: 🖥️
-    title: Desktop App (Electron)
-    details: Native desktop experience for Windows, macOS, and Linux. Auto-starts the backend server. Secure sandboxed renderer.
-  - icon: 🌙
-    title: Dark Mode Native
-    details: Built-in dark theme designed for developer comfort. No configuration needed — just works.
+    title: Desktop App
+    details: Native experience on Windows, macOS and Linux via Electron. Integrated backend, auto-update and instant startup.
 ---
