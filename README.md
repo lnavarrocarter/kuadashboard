@@ -33,28 +33,41 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - Soporte multi-contexto y multi-namespace
 - Import kubeconfigs
 
-### ☁️ AWS
-- EC2, ECS, EKS, Lambda, S3, ECR, VPC
-- API Gateway, EventBridge, Step Functions
-- CloudFront, Route 53, Cognito
-- DynamoDB, DocumentDB, Glue, Athena, Data Pipeline
-- Secrets Manager (import individual de variables al Env Manager)
-- SSH directo a instancias EC2
+### ☁️ AWS — 19 servicios
+- **Cómputo**: EC2 (start/stop, SSH), ECS (clusters, servicios, tareas), EKS, Lambda (invoke)
+- **Almacenamiento**: S3 (file browser + download), ECR
+- **Red**: VPC, API Gateway (REST & HTTP), CloudFront, Route 53
+- **Mensajería & eventos**: EventBridge (reglas + logs), Step Functions (state machines + diagrama visual)
+- **Base de datos**: DynamoDB, DocumentDB
+- **Analítica & ETL**: Glue, Athena, Data Pipeline
+- **Seguridad**: Secrets Manager (import al Env Manager), Cognito
 
-### 🌐 GCP
-- Cloud Run, GKE, Compute VMs
-- Cloud SQL, Cloud Storage
-- Cloud Functions, Pub/Sub
+### 🌐 GCP — 25 servicios
+- **Cómputo**: Cloud Run (start/stop), Cloud Run Jobs (run + historial de ejecuciones), GKE, Compute Engine VMs (start/stop)
+- **Base de datos**: Cloud SQL (start/stop), Cloud Spanner (SQL query editor), Firestore (document browser), Memorystore Redis
+- **Almacenamiento**: Cloud Storage (file browser + preview + download), Artifact Registry (paquetes)
+- **Serverless**: Cloud Functions (invoke + logs)
+- **Mensajería**: Pub/Sub Topics, Pub/Sub Subscriptions
+- **Seguridad**: Secret Manager (preview + import al Env Manager), Cloud KMS (key rings + crypto keys)
+- **Analítica**: BigQuery (SQL query editor + job polling)
+- **Flujos de trabajo**: Cloud Workflows (ejecuciones + source viewer)
+- **Red**: Cloud DNS (zonas + registros), VPC Networks (redes + subnets)
+- **Async**: Cloud Tasks (colas + tareas), Cloud Scheduler (run/pause/resume)
+- **DevOps**: Cloud Build (builds + log viewer)
+- **Observabilidad**: Cloud Monitoring (alert policies + uptime checks), Cloud Logging (panel de query interactivo)
+- **IAM**: Service Accounts (lista paginada + keys)
 
 ### 🔐 Env Manager
-- Perfiles de credenciales cifradas (AES-256) para AWS, GCP y genéricos
+- Perfiles de credenciales cifradas (AES-256-GCM) para AWS, GCP y genéricos
 - Import/Export de archivos `.env`
-- Credenciales seleccionadas persisten entre sesiones (localStorage)
+- Import de secretos directamente desde Secret Manager (AWS y GCP)
+- Credenciales seleccionadas persisten entre sesiones
 
 ### 🖥️ Desktop App (Electron)
 - Aplicación nativa para Windows, macOS y Linux
 - Auto-inicia el servidor backend
-- Auto-update integrado
+- Auto-update integrado con `electron-updater`
+- Interfaz bilingüe EN/ES con cambio reactivo
 
 ---
 
@@ -63,22 +76,26 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 ```
 kuadashboard/
 ├── server.js            # Express + WebSocket API server
-├── electron/            # Electron main + preload
+├── electron/            # Electron main + preload (contextBridge)
 ├── routes/
-│   ├── aws.js           # AWS SDK v3 endpoints
-│   ├── gcp.js           # GCP endpoints
-│   ├── helm.js          # Helm endpoints
+│   ├── aws.js           # AWS SDK v3 — 19 servicios
+│   ├── gcp.js           # GCP REST API — 25 servicios
+│   ├── helm.js          # Helm releases
 │   ├── envManager.js    # Credential profiles CRUD
-│   └── localShell.js    # Local terminal WebSocket
+│   ├── localShell.js    # Local terminal WebSocket
+│   └── systemTools.js   # CLI tool detection
 ├── lib/
 │   ├── credentialStore.js  # Encrypted credential vault
 │   └── crypto.js           # AES-256-GCM helpers
 └── frontend/            # Vue 3 + Vite + Pinia
     └── src/
         ├── App.vue
-        ├── components/  # ResourceTable, TerminalPanel, PortForwardPanel, modals…
-        ├── stores/      # useKubeStore, useAwsStore, useGcpStore, useEnvStore…
-        └── composables/ # useApi, useToast, useTerminalStreams
+        ├── components/
+        │   ├── cloud/       # AwsView, GcpView, GcsBrowser…
+        │   └── modals/      # HelpModal, WelcomeModal, FileViewerModal…
+        ├── stores/          # useKubeStore, useAwsStore, useGcpStore, useUpdateStore…
+        ├── composables/     # useApi, useToast, useChangelog, useTerminalStreams…
+        └── locales/         # en.js, es.js
 ```
 
 ---
@@ -87,9 +104,10 @@ kuadashboard/
 
 ### Prerrequisitos
 
-- Node.js ≥ 16 (recomendado: 20+)
+- Node.js ≥ 18 (recomendado: 20+)
 - `kubectl` configurado con kubeconfig válido (`~/.kube/config`)
-- Para cloud: AWS CLI o `gcloud` CLI configurados (opcional)
+- Para AWS: `aws` CLI o credenciales en `~/.aws/`
+- Para GCP: `gcloud` CLI autenticado (`gcloud auth application-default login`)
 
 ### Modo web
 
@@ -105,18 +123,36 @@ npm start
 ### Dev (hot-reload)
 
 ```bash
-# Terminal 1 — backend
-npm start
+npm run dev:full
+# backend en :7192, frontend Vite en :7191
+```
 
-# Terminal 2 — frontend
-cd frontend && npm run dev
-# → http://localhost:7191 (proxy → :7190)
+### App Electron (dev)
+
+```bash
+npm run electron:dev
 ```
 
 ### Build de producción
 
 ```bash
+# Solo frontend
 cd frontend && npm run build
+
+# App Electron (macOS)
+npm run electron:build:mac
+
+# App Electron (todas las plataformas)
+npm run electron:build:all
+```
+
+---
+
+## Tests
+
+```bash
+cd frontend && npm test
+# 111 tests — useGcpStore, useKubeStore, usePortForwardStore, useTerminalStore…
 ```
 
 ---
@@ -125,58 +161,15 @@ cd frontend && npm run build
 
 - Las credenciales se almacenan cifradas con AES-256-GCM; la clave se deriva de la máquina.
 - Los valores de Secrets K8s se muestran como `[REDACTED]` en el YAML viewer.
+- El preload de Electron usa `contextBridge` — el renderer nunca accede directamente a Node.js.
 - Usar en red local o detrás de autenticación — el servidor expone acceso total al kubeconfig.
-
----
-
-## Visión
-
-KUA evoluciona hacia una plataforma de **AI-driven Unified Cloud Operations**:
-
-1. Dashboard → 2. Control Platform → 3. Intelligent System → 4. AI Ops
 
 ---
 
 ## Licencia
 
-MIT — Construido con ❤️ y mantenido en tiempo libre.
+MIT — Construido con ❤️ y mantenido en tiempo libre.  
 [¿Te resulta útil? Considera apoyar el proyecto →](https://github.com/sponsors/lnavarrocarter/)
-
-
-![KuaDashboard — Kubernetes Nodes](screenshots/dashboard-nodes.png)
-
-## Features
-
-- Browse all K8s resources: Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVCs, Nodes, Events
-- **Live log streaming** with multi-tab terminal panel
-- **Interactive shell** (exec) into pods
-- **Port-forward** management with persistence (localStorage)
-- YAML viewer/editor with apply
-- Scale, restart, cordon/uncordon, drain nodes
-- Delete resources and contexts
-- Import kubeconfigs
-- Multiple cluster context support
-
-## Architecture
-
-```
-kuadashboard/
-├── server.js          # Express + WebSocket API server
-├── public/            # Legacy vanilla JS frontend (preserved)
-└── frontend/          # Vue 3 + Vite + Pinia frontend (new)
-    ├── src/
-    │   ├── App.vue
-    │   ├── components/
-    │   │   ├── ResourceTable.vue
-    │   │   ├── TerminalPanel.vue
-    │   │   ├── PortForwardPanel.vue
-    │   │   ├── ToastContainer.vue
-    │   │   └── modals/
-    │   ├── stores/        # Pinia stores
-    │   ├── composables/   # useApi, useToast, useTerminalStreams
-    │   └── config/        # Resource definitions
-    └── vite.config.js     # Proxy → localhost:7190
-```
 
 ## Getting Started
 
