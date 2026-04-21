@@ -3,7 +3,13 @@
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
     <header class="header">
       <div class="header-left">
-        <span class="app-logo"><i data-lucide="layers"></i> KuaDashboard</span>
+        <span class="app-logo" title="Know Unified Administration">
+          <svg width="28" height="28" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" style="border-radius:5px;flex-shrink:0">
+            <rect width="32" height="32" rx="6" fill="#252526"/>
+            <path fill="#0e9de8" d="M7,5 L12,5 L12,13.5 L25,5 L28.5,5 L15.5,16.5 L28.5,27 L25,27 L12,18.5 L12,27 L7,27 Z"/>
+          </svg>
+          <span>KUA</span><span class="app-logo-sub">Know Unified Administration</span>
+        </span>
         <div class="provider-tabs">
           <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" @click="setProvider('kubernetes')">
             <i data-lucide="box"></i> Kubernetes
@@ -20,14 +26,14 @@
             <option v-for="c in store.contexts" :key="c.name" :value="c.name">{{ c.name }}</option>
           </select>
           <select class="ctrl-select" v-model="store.namespace" @change="store.loadResources()">
-            <option value="all">All namespaces</option>
+            <option value="all">{{ t('nav.allNamespaces') }}</option>
             <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
           </select>
         </template>
         <template v-else-if="activeProvider === 'aws'">
           <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
-            <option value="">— AWS profile —</option>
-            <optgroup v-if="envStore.awsProfiles.length" label="Stored profiles">
+            <option value="">{{ t('aws.noProfile') }}</option>
+            <optgroup v-if="envStore.awsProfiles.length" :label="t('nav.storedProfiles')">
               <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
             </optgroup>
             <optgroup v-if="awsLocalProfiles.length" label="~/.aws/credentials">
@@ -39,11 +45,11 @@
         </template>
         <template v-else-if="activeProvider === 'gcp'">
           <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
-            <option value="">— GCP profile —</option>
-            <optgroup v-if="envStore.gcpProfiles.length" label="Stored profiles">
+            <option value="">{{ t('gcp.noProfile') }}</option>
+            <optgroup v-if="envStore.gcpProfiles.length" :label="t('nav.storedProfiles')">
               <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
             </optgroup>
-            <optgroup v-if="gcpLocalConfigs.length" label="gcloud configs">
+            <optgroup v-if="gcpLocalConfigs.length" :label="t('nav.gcpConfigs')">
               <option v-for="c in gcpLocalConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">
                 {{ c.name }}{{ c.project ? ` (${c.project})` : '' }}
               </option>
@@ -57,13 +63,27 @@
             <i data-lucide="cable"></i>
             <span v-if="pfStore.list.length" class="badge-count">{{ pfStore.list.length }}</span>
           </button>
-          <button class="btn btn-icon" title="Import kubeconfig" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
-          <button class="btn btn-icon" title="Delete context" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
+          <button class="btn btn-icon" :title="t('nav.importKubeconfig')" @click="modals.kubeconfig = true"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" :title="t('nav.deleteContext')" @click="deleteContextConfirm"><i data-lucide="trash-2"></i></button>
         </template>
-        <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" title="Env Manager" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
-        <button class="btn btn-icon" title="Local Shell" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
-        <button class="btn btn-icon" @click="modals.help = true" title="Help"><i data-lucide="help-circle"></i></button>
-        <button class="btn btn-icon btn-donate" @click="openSponsor" title="Apoyar el proyecto">
+        <template v-else-if="activeProvider === 'aws'">
+          <button class="btn btn-icon" :title="t('nav.addAws')" @click="openAddConnection('aws')"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" :title="t('nav.deleteAws')" :disabled="!awsProfileId || awsProfileId.startsWith('local:')" @click="deleteConnectionConfirm('aws')"><i data-lucide="trash-2"></i></button>
+        </template>
+        <template v-else-if="activeProvider === 'gcp'">
+          <button class="btn btn-icon" :title="t('nav.addGcp')" @click="openAddConnection('gcp')"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" :title="t('nav.deleteGcp')" :disabled="!gcpProfileId || gcpProfileId.startsWith('local:')" @click="deleteConnectionConfirm('gcp')"><i data-lucide="trash-2"></i></button>
+        </template>
+        <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
+        <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
+        <button class="btn btn-icon btn-lang" @click="toggleLang" :title="settings.lang === 'es' ? 'Switch to English' : 'Cambiar a Español'">
+          <span class="lang-flag">{{ settings.lang === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
+        </button>
+        <button class="btn btn-icon" @click="toggleTheme" :title="settings.theme === 'dark' ? t('nav.lightMode') : t('nav.darkMode')">
+          <i :data-lucide="settings.theme === 'dark' ? 'sun' : 'moon'"></i>
+        </button>
+        <button class="btn btn-icon" @click="modals.help = true" :title="t('nav.help')"><i data-lucide="help-circle"></i></button>
+        <button class="btn btn-icon btn-donate" @click="openSponsor" :title="t('nav.supportProject')">
           <i data-lucide="heart"></i>
         </button>
       </div>
@@ -78,72 +98,90 @@
         <!-- Kubernetes sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Workloads</div>
+            <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Network</div>
+            <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
             <a v-for="r in ['services','ingresses']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Config</div>
+            <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
             <a v-for="r in ['configmaps','secrets']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Storage</div>
+            <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <a :class="['sidebar-item', { active: cloudView === null && store.resource === 'pvcs' }]"
                @click.prevent="setResource('pvcs')">PVC</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Cluster</div>
+            <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
             <a v-for="r in ['nodes','events']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Tools</div>
-            <a :class="['sidebar-item', { active: cloudView === 'envs' }]"
-               @click.prevent="setCloudView('envs')">Env Manager</a>
-            <a class="sidebar-item"
-               @click.prevent="openLocalShell()">Local Shell</a>
+            <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
+            <a :class="['sidebar-item', { active: cloudView === 'helm' }]"
+               @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
+            <a :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
+               @click.prevent="setCloudView('helm-repos')">{{ t('sidebar.repositories') }}</a>
           </div>
         </nav>
 
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Compute</div>
+            <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Containers</div>
+            <div class="sidebar-section-title">{{ t('sidebar.containers') }}</div>
             <a v-for="r in AWS_SIDEBAR.containers" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Networking</div>
+            <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
             <a v-for="r in AWS_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Storage</div>
+            <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <a v-for="r in AWS_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Integration</div>
+            <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
+            <a v-for="r in AWS_SIDEBAR.database" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
+            <a v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.integration') }}</div>
             <a v-for="r in AWS_SIDEBAR.integration" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
+            <a v-for="r in AWS_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
@@ -152,31 +190,31 @@
         <!-- GCP sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'gcp'">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Compute</div>
+            <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <a v-for="r in GCP_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Database</div>
+            <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
             <a v-for="r in GCP_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Storage</div>
+            <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <a v-for="r in GCP_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Serverless</div>
+            <div class="sidebar-section-title">{{ t('sidebar.serverless') }}</div>
             <a v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Messaging</div>
+            <div class="sidebar-section-title">{{ t('sidebar.messaging') }}</div>
             <a v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
@@ -185,6 +223,7 @@
 
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
+          <HelmView v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <ResourceTable @action="handleAction" />
           </template>
@@ -204,14 +243,14 @@
         <span class="sb-sep">|</span>
         <span class="sb-item">{{ store.namespace }}</span>
         <span class="sb-spacer"></span>
-        <span class="sb-item">{{ store.rows.length }} items</span>
+        <span class="sb-item">{{ t('status.items', { n: store.rows.length }) }}</span>
       </template>
       <template v-else>
         <span class="sb-item">{{ activeProvider === 'aws' ? 'Amazon Web Services' : 'Google Cloud Platform' }}</span>
         <span class="sb-spacer"></span>
       </template>
       <span class="sb-sep">|</span>
-      <span class="sb-item">{{ clock }}</span>
+      <span v-if="settings.showClock" class="sb-item">{{ clock }}</span>
     </div>
 
     <!-- Modals -->
@@ -223,6 +262,13 @@
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help"                                                    @close="modals.help = false" />
+    <ProfileModal
+      :show="modals.addConnection"
+      :profile="null"
+      :default-provider="modalData.connectionProvider"
+      @close="modals.addConnection = false"
+      @save="handleConnectionSave"
+    />
 
     <DonationModal />
     <WelcomeModal />
@@ -232,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 
 import { useKubeStore }        from './stores/useKubeStore'
@@ -244,8 +290,11 @@ import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
+import { settings, applySettings } from './composables/useSettings'
+import { useI18n } from './composables/useI18n'
 
 import ResourceTable    from './components/ResourceTable.vue'
+import HelmView         from './components/HelmView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
@@ -258,11 +307,13 @@ import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
 import HelpModal        from './components/modals/HelpModal.vue'
+import ProfileModal     from './components/modals/ProfileModal.vue'
 import DonationModal    from './components/modals/DonationModal.vue'
 import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 
+const { t } = useI18n()
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
 const termStore = useTerminalStore()
@@ -282,9 +333,12 @@ const LABELS = {
 const AWS_SIDEBAR = {
   compute:     [{ id: 'ec2', label: 'EC2' }, { id: 'lambda', label: 'Lambda' }],
   containers:  [{ id: 'ecs', label: 'ECS' }, { id: 'eks', label: 'EKS' }, { id: 'ecr', label: 'ECR' }],
-  networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }],
+  networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }, { id: 'cloudfront', label: 'CloudFront' }, { id: 'route53', label: 'Route 53' }],
   storage:     [{ id: 's3', label: 'S3' }],
+  database:    [{ id: 'dynamodb', label: 'DynamoDB' }, { id: 'docdb', label: 'DocumentDB' }],
+  analytics:   [{ id: 'glue', label: 'Glue' }, { id: 'athena', label: 'Athena' }, { id: 'datapipeline', label: 'Data Pipeline' }],
   integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }],
+  security:    [{ id: 'cognito', label: 'Cognito' }, { id: 'secrets', label: 'Secrets Manager' }],
 }
 
 const GCP_SIDEBAR = {
@@ -295,21 +349,43 @@ const GCP_SIDEBAR = {
   messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }],
 }
 
+// ─── localStorage helpers ────────────────────────────────────────────────────
+const LS = {
+  get:    (k, def = '') => { try { return localStorage.getItem(`kua:${k}`) ?? def } catch { return def } },
+  set:    (k, v)        => { try { if (v) localStorage.setItem(`kua:${k}`, v); else localStorage.removeItem(`kua:${k}`) } catch {} },
+}
+
 const pfPanelVisible  = ref(false)
-const activeProvider  = ref('kubernetes')  // 'kubernetes' | 'aws' | 'gcp'
+const activeProvider  = ref(LS.get('provider', 'kubernetes'))  // 'kubernetes' | 'aws' | 'gcp'
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
 const clock           = ref('')
 let clockTimer
+let autoRefreshTimer
+
+watch(() => settings.autoRefresh, (secs) => {
+  clearInterval(autoRefreshTimer)
+  if (secs > 0) autoRefreshTimer = setInterval(() => reloadActiveProvider(), secs * 1000)
+})
+
+function reloadActiveProvider() {
+  if (activeProvider.value === 'kubernetes') store.loadResources()
+}
 
 const awsLocalProfiles = ref([])
 const gcpLocalConfigs  = ref([])
-const awsProfileId     = ref(awsStore.activeProfileId || '')
-const gcpProfileId     = ref(gcpStore.activeProfileId || '')
+const awsProfileId     = ref(LS.get('awsProfile', ''))
+const gcpProfileId     = ref(LS.get('gcpProfile', ''))
 
-const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false })
+// Persistir cambios en localStorage automáticamente
+watch(activeProvider, v  => LS.set('provider',    v))
+watch(awsProfileId,   v  => LS.set('awsProfile',  v))
+watch(gcpProfileId,   v  => LS.set('gcpProfile',  v))
+watch(() => store.namespace, v => LS.set('kubeNs', v))
+
+const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
 const modalData = reactive({
   deleteMsg: '', deletePending: null,
   deleteContextMsg: '', deleteContextName: '',
@@ -317,6 +393,7 @@ const modalData = reactive({
   yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '',
   pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false,
   drainMsg: '', drainPending: null,
+  connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
 
 async function setProvider(p) {
@@ -339,6 +416,46 @@ function onAwsProfileChange() {
 function onGcpProfileChange() {
   gcpStore.setActiveProfile(gcpProfileId.value || null)
 }
+function selectProfile(provider, id) {
+  if (provider === 'aws') { awsProfileId.value = id; awsStore.setActiveProfile(id) }
+  else                    { gcpProfileId.value = id; gcpStore.setActiveProfile(id) }
+}
+function openAddConnection(provider) {
+  modalData.connectionProvider = provider
+  modals.addConnection = true
+}
+async function handleConnectionSave(payload) {
+  // gcloud CLI auto-auth mode: no profile stored, just activate the local config
+  if (payload.gcpAuthMode === 'gcloud') {
+    modals.addConnection = false
+    gcpProfileId.value   = payload.profileId
+    gcpStore.setActiveProfile(payload.profileId)
+    toast(`GCP gcloud config "${payload.profileId.slice(6)}" activated`, 'success')
+    nextTick(() => createIcons({ icons }))
+    return
+  }
+
+  const { name, category, provider, keys, meta } = payload
+  const created = await envStore.createProfile({ name, category, provider, keys, meta })
+  modals.addConnection = false
+  if (created) {
+    if (provider === 'aws') { awsProfileId.value = created.id; awsStore.setActiveProfile(created.id) }
+    if (provider === 'gcp') { gcpProfileId.value = created.id; gcpStore.setActiveProfile(created.id) }
+    toast(`Connection "${name}" added`, 'success')
+    nextTick(() => createIcons({ icons }))
+  }
+}
+function deleteConnectionConfirm(provider) {
+  const id = provider === 'aws' ? awsProfileId.value : gcpProfileId.value
+  if (!id || id.startsWith('local:')) return
+  const profile = envStore.profiles.find(p => p.id === id)
+  if (!profile) return
+  modalData.deleteConnectionId   = id
+  modalData.deleteConnectionMode = true
+  modalData.deletePending        = null
+  modalData.deleteMsg            = `Delete profile "${profile.name}"? All stored keys will be permanently removed.`
+  modals.delete                  = true
+}
 function toggleEnvManager() {
   cloudView.value = cloudView.value === 'envs' ? null : 'envs'
   nextTick(() => createIcons({ icons }))
@@ -352,19 +469,19 @@ function openLocalShell() {
 }
 
 async function switchContext() {
-  try { await store.switchContext(selectedContext.value); toast('Context switched to ' + selectedContext.value, 'success') }
+  try { await store.switchContext(selectedContext.value); toast(t('msg.contextSwitched', { name: selectedContext.value }), 'success') }
   catch (e) { toast(e.message, 'error') }
 }
 
 function deleteContextConfirm() {
   const name = selectedContext.value; if (!name) return
   modalData.deleteContextName = name
-  modalData.deleteContextMsg  = `Eliminar contexto "${name}"? Esta accion no puede deshacerse.`
+  modalData.deleteContextMsg  = t('msg.deleteContext', { name })
   modals.deleteContext = true
 }
 async function confirmDeleteContext() {
   modals.deleteContext = false
-  try { await store.deleteContext(modalData.deleteContextName); toast(`Contexto eliminado`, 'success'); selectedContext.value = store.currentContext }
+  try { await store.deleteContext(modalData.deleteContextName); toast(t('msg.contextDeleted'), 'success'); selectedContext.value = store.currentContext }
   catch (e) { toast(e.message, 'error') }
 }
 
@@ -395,6 +512,18 @@ function openPfManual()              { Object.assign(modalData, { pfNamespace: s
 function openDrain(name)             { modalData.drainPending = name; modalData.drainMsg = `Drain node "${name}"? It will be cordoned and pods evicted.`; modals.drain = true }
 
 async function confirmDelete() {
+  if (modalData.deleteConnectionMode) {
+    modalData.deleteConnectionMode = false
+    const id = modalData.deleteConnectionId
+    modals.delete = false
+    const ok = await envStore.deleteProfile(id)
+    if (ok) {
+      if (awsProfileId.value === id) { awsProfileId.value = ''; awsStore.setActiveProfile(null) }
+      if (gcpProfileId.value === id) { gcpProfileId.value = ''; gcpStore.setActiveProfile(null) }
+      toast('Profile deleted', 'success')
+    }
+    return
+  }
   const { type, ns, name } = modalData.deletePending; modals.delete = false
   try {
     if (type === 'nodes') await api('DELETE', `/api/nodes/${name}`)
@@ -427,21 +556,46 @@ function openSponsor() {
   else window.open(url, '_blank')
 }
 
+function toggleLang() {
+  settings.lang = settings.lang === 'es' ? 'en' : 'es'
+  applySettings()
+}
+
+function toggleTheme() {
+  settings.theme = settings.theme === 'dark' ? 'light' : 'dark'
+  applySettings()
+}
+
 function onKey(e) { if (e.key === 'Escape') Object.keys(modals).forEach(k => modals[k] = false) }
 
 onMounted(async () => {
+  applySettings()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
   await store.loadContexts()
   selectedContext.value = store.currentContext
   await store.loadNamespaces()
+  // Restaurar namespace guardado
+  const savedNs = LS.get('kubeNs', '')
+  if (savedNs && store.namespaces.includes(savedNs)) store.namespace = savedNs
   await store.loadResources()
   await pfStore.autoRestore()
-  envStore.fetchProfiles()
-  loadAwsLocalProfiles()
-  loadGcpLocalConfigs()
+  await envStore.fetchProfiles()
+  // Restaurar perfil AWS guardado
+  if (awsProfileId.value) {
+    awsStore.setActiveProfile(awsProfileId.value)
+    if (activeProvider.value === 'aws') loadAwsLocalProfiles()
+  }
+  // Restaurar perfil GCP guardado
+  if (gcpProfileId.value) {
+    gcpStore.setActiveProfile(gcpProfileId.value)
+    if (activeProvider.value === 'gcp') loadGcpLocalConfigs()
+  }
+  // Cargar profiles locales si el proveedor activo lo necesita
+  if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
+  if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
   document.addEventListener('keydown', onKey)
   nextTick(() => createIcons({ icons }))
 })
-onUnmounted(() => { clearInterval(clockTimer); document.removeEventListener('keydown', onKey) })
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(autoRefreshTimer); document.removeEventListener('keydown', onKey) })
 </script>
