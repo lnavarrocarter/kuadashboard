@@ -4,9 +4,17 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.6.0'
+export const CHANGELOG_VERSION = '1.6.1'
 
 export const CHANGELOG = [
+  {
+    version: '1.6.1',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',    text: 'HelpModal — corregidos caracteres con encoding incorrecto (mojibake) en títulos y comentarios del componente' },
+      { type: 'fix',    text: 'Helm — contextos con nombre ARN (EKS) ya se resuelven correctamente; se inyecta KUBECONFIG completo al invocar el CLI de helm' },
+    ],
+  },
   {
     version: '1.6.0',
     date: 'Abril 2026',

@@ -169,6 +169,10 @@ cd frontend && npm test
 
 ## Changelog
 
+### v1.6.1 (2026-04-24)
+- **HelpModal** — fix encoding mojibake en títulos y comentarios del componente (caracteres UTF-8 corruptos por doble codificación CP850)
+- **Helm** — contextos con nombre ARN de EKS (`arn:aws:eks:...`) ya se resuelven correctamente; `KUBECONFIG` completo (incluyendo `kuadashboard_merged.yaml`) se inyecta al invocar el CLI de helm
+
 ### v1.6.0 (2026-04-24)
 - **AWS Lambda** — tab **Logs** dedicado: visualiza eventos de CloudWatch con selector de rango (15 min → 24 h) y refresh; si no existe el log group muestra opción de crearlo con selección de retención (7–365 días); tags movidos dentro de la grid de cards del tab Básico
 - **AWS ECR → Deploy to K8s** — fix en indentación YAML que causaba `error converting YAML to JSON: did not find expected '-' indicator`; nueva opción **Crear Service** (ClusterIP / NodePort / LoadBalancer) que agrega un recurso `Service` separado con `---` al manifiesto generado
