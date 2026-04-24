@@ -974,7 +974,7 @@ router.post('/k8s/apply', async (req, res) => {
   const tmpFile = path.join(os.tmpdir(), `kua-manifest-${Date.now()}.yaml`);
   try {
     await fs.promises.writeFile(tmpFile, manifest, 'utf8');
-    const args = ['apply', '-f', tmpFile];
+    const args = ['apply', '-f', tmpFile, '--validate=false'];
     if (context) args.push('--context', context);
     const result = await new Promise((resolve) => {
       execFile('kubectl', args, { timeout: 30000, windowsHide: true }, (err, stdout, stderr) => {
@@ -1243,7 +1243,7 @@ router.get('/stepfunctions', async (req, res) => {
     const all = [];
     let nextToken;
     do {
-      const resp = await client.send(new ListStateMachinesCommand({ maxResults: 100, nextToken }));
+      const resp = await client.send(new ListStateMachinesCommand({ maxResults: 1000, nextToken }));
       all.push(...(resp.stateMachines || []));
       nextToken = resp.nextToken;
     } while (nextToken);
@@ -2703,7 +2703,7 @@ router.get('/athena/catalogs/:catalog/databases/:db/tables', async (req, res) =>
     const resp = await client.send(new ListTableMetadataCommand({
       CatalogName: req.params.catalog,
       DatabaseName: req.params.db,
-      MaxResults: 100,
+      MaxResults: 50,
     }));
     res.json((resp.TableMetadataList || []).map(t => ({
       name:        t.Name,
@@ -3650,7 +3650,7 @@ router.get('/lex/:botId/intents', async (req, res) => {
       const intents = [];
       let nextToken;
       do {
-        const resp = await client.send(new ListIntentsCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 100, nextToken }));
+        const resp = await client.send(new ListIntentsCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 50, nextToken }));
         intents.push(...(resp.intentSummaries || []));
         nextToken = resp.nextToken;
       } while (nextToken);
@@ -3659,7 +3659,7 @@ router.get('/lex/:botId/intents', async (req, res) => {
         const slots = [];
         let sNext;
         do {
-          const sr = await client.send(new ListSlotsCommand({ botId, botVersion: 'DRAFT', localeId, intentId: intent.intentId, maxResults: 100, nextToken: sNext }));
+          const sr = await client.send(new ListSlotsCommand({ botId, botVersion: 'DRAFT', localeId, intentId: intent.intentId, maxResults: 50, nextToken: sNext }));
           slots.push(...(sr.slotSummaries || []));
           sNext = sr.nextToken;
         } while (sNext);
@@ -3874,7 +3874,7 @@ router.get('/lex/:botId/slot-types', async (req, res) => {
       const types = [];
       let nextToken;
       do {
-        const resp = await client.send(new ListSlotTypesCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 100, nextToken }));
+        const resp = await client.send(new ListSlotTypesCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 50, nextToken }));
         types.push(...(resp.slotTypeSummaries || []));
         nextToken = resp.nextToken;
       } while (nextToken);

@@ -587,7 +587,7 @@
               <th>Actions</th>
             </tr></thead>
             <tbody>
-              <tr v-for="wg in sortedRows(filteredAthena)" :key="wg.name">
+              <tr v-for="wg in sortRows(filteredAthena)" :key="wg.name">
                 <td class="mono-xs">{{ wg.name }}</td>
                 <td><span :class="wg.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ wg.state }}</span></td>
                 <td class="text-dim" style="font-size:11px">{{ wg.engineVersion || '—' }}</td>
@@ -1512,6 +1512,23 @@
               <input v-model="ecrDeployModal.pullSecret" type="text" placeholder="ecr-secret"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
+          </div>
+          <!-- Service creation option -->
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:6px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text,#ccc);user-select:none">
+              <input type="checkbox" v-model="ecrDeployModal.createService" style="cursor:pointer" />
+              También crear un <strong>Service</strong>
+            </label>
+            <template v-if="ecrDeployModal.createService">
+              <span style="font-size:12px;color:var(--text-dim)">Tipo:</span>
+              <select v-model="ecrDeployModal.serviceType"
+                style="background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:4px 8px;font-size:12px">
+                <option>ClusterIP</option>
+                <option>NodePort</option>
+                <option>LoadBalancer</option>
+              </select>
+              <span v-if="!ecrDeployModal.port" style="font-size:11px;color:#f85149">⚠ Requiere un Container Port</span>
+            </template>
           </div>
           <!-- YAML Preview -->
           <div>
@@ -4232,6 +4249,7 @@ const ecrDeployModal = reactive({
   images: [], selectedTag: '',
   appName: '', namespace: 'default', replicas: 1, port: 8080,
   context: '', pullSecret: '',
+  createService: false, serviceType: 'ClusterIP',
   applyResult: null,
 })
 
@@ -4243,10 +4261,11 @@ const ecrDeployYaml = computed(() => {
   const pullSecretBlock = ecrDeployModal.pullSecret
     ? `\n      imagePullSecrets:\n        - name: ${ecrDeployModal.pullSecret}`
     : ''
+  // Fixed: 10 spaces for ports (inside container), 12 for - containerPort
   const portBlock = ecrDeployModal.port
-    ? `\n        ports:\n          - containerPort: ${ecrDeployModal.port}`
+    ? `\n          ports:\n            - containerPort: ${ecrDeployModal.port}`
     : ''
-  return `apiVersion: apps/v1
+  const deployment = `apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ${name}
@@ -4267,6 +4286,24 @@ spec:
         - name: ${name}
           image: ${imageUri}${portBlock}
           imagePullPolicy: Always`
+  if (!ecrDeployModal.createService || !ecrDeployModal.port) return deployment
+  const serviceYaml = `\n---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  namespace: ${ns}
+  labels:
+    app: ${name}
+spec:
+  selector:
+    app: ${name}
+  ports:
+    - port: ${ecrDeployModal.port}
+      targetPort: ${ecrDeployModal.port}
+      protocol: TCP
+  type: ${ecrDeployModal.serviceType}`
+  return deployment + serviceYaml
 })
 
 async function openEcrDeploy(r) {
@@ -4276,7 +4313,9 @@ async function openEcrDeploy(r) {
     images: [], selectedTag: '',
     appName: r.name.split('/').pop().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
     namespace: 'default', replicas: 1, port: 8080,
-    context: '', pullSecret: '', applyResult: null,
+    context: '', pullSecret: '',
+    createService: false, serviceType: 'ClusterIP',
+    applyResult: null,
   })
   try {
     const imgs = await awsStore.fetchEcrImages(r.name)
