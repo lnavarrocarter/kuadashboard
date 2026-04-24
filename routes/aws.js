@@ -3555,6 +3555,244 @@ router.get('/lex/:botId/testsets', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /lex/:botId/aliases ──────────────────────────────────────────────────
+
+router.get('/lex/:botId/aliases', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, ListBotAliasesCommand, DescribeBotAliasCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListBotAliasesCommand({ botId, maxResults: 20, nextToken }));
+      all.push(...(resp.botAliasSummaries || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+
+    const detailed = await Promise.all(all.map(async (a) => {
+      try {
+        const d = await client.send(new DescribeBotAliasCommand({ botId, botAliasId: a.botAliasId }));
+        const localeSettings = d.botAliasLocaleSettings || {};
+        const lambdaArns = [];
+        for (const [localeId, settings] of Object.entries(localeSettings)) {
+          const arn = settings?.codeHookSpecification?.lambdaCodeHook?.lambdaARN;
+          if (arn) lambdaArns.push({ localeId, arn });
+        }
+        const logsGroup = d.conversationLogSettings?.textLogSettings?.[0]?.destination?.cloudWatch?.logGroupArn || null;
+        return {
+          id:          a.botAliasId,
+          name:        a.botAliasName,
+          status:      a.botAliasStatus,
+          botVersion:  a.botVersion || 'DRAFT',
+          description: a.description || '',
+          lambdaArns,
+          logsGroup,
+          createdDate: a.creationDateTime || null,
+          updatedDate: a.lastUpdatedDateTime || null,
+        };
+      } catch (_) {
+        return {
+          id: a.botAliasId, name: a.botAliasName,
+          status: a.botAliasStatus, botVersion: a.botVersion || 'DRAFT',
+          description: a.description || '', lambdaArns: [], logsGroup: null,
+          createdDate: a.creationDateTime || null, updatedDate: a.lastUpdatedDateTime || null,
+        };
+      }
+    }));
+    res.json(detailed);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex/:botId/slot-types ───────────────────────────────────────────────
+
+router.get('/lex/:botId/slot-types', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, ListBotLocalesCommand, ListSlotTypesCommand, DescribeSlotTypeCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+
+    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion: 'DRAFT' }));
+    const locales = localesResp.botLocaleSummaries || [];
+    const result = [];
+
+    for (const locale of locales) {
+      const localeId = locale.localeId;
+      const types = [];
+      let nextToken;
+      do {
+        const resp = await client.send(new ListSlotTypesCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 100, nextToken }));
+        types.push(...(resp.slotTypeSummaries || []));
+        nextToken = resp.nextToken;
+      } while (nextToken);
+
+      const detailed = await Promise.all(
+        types.filter(t => !t.slotTypeName?.startsWith('AMAZON.')).map(async (t) => {
+          try {
+            const d = await client.send(new DescribeSlotTypeCommand({ botId, botVersion: 'DRAFT', localeId, slotTypeId: t.slotTypeId }));
+            return {
+              id:       t.slotTypeId,
+              name:     t.slotTypeName,
+              strategy: d.valueSelectionSetting?.resolutionStrategy || 'ORIGINAL_VALUE',
+              values:   (d.slotTypeValues || []).map(v => ({
+                value:    v.sampleValue?.value || '',
+                synonyms: (v.synonyms || []).map(s => s.value),
+              })),
+            };
+          } catch (_) {
+            return { id: t.slotTypeId, name: t.slotTypeName, strategy: '', values: [] };
+          }
+        })
+      );
+      if (detailed.length) result.push({ localeId, localeName: locale.localeName || localeId, types: detailed });
+    }
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lex/:botId/chat ────────────────────────────────────────────────────
+
+router.post('/lex/:botId/chat', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const { text, aliasId = 'TSTALIASID', localeId = 'es_MX', sessionId } = req.body || {};
+  if (!text || typeof text !== 'string' || text.length > 1024) {
+    return res.status(400).json({ error: 'text is required and must be <= 1024 chars' });
+  }
+  const sid = (sessionId || `kua-${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexRuntimeV2Client, RecognizeTextCommand } = require('@aws-sdk/client-lex-runtime-v2');
+    const client = new LexRuntimeV2Client(cfg);
+    const resp = await client.send(new RecognizeTextCommand({
+      botId, botAliasId: aliasId, localeId, sessionId: sid, text,
+    }));
+    const slots = {};
+    for (const [k, v] of Object.entries(resp.sessionState?.intent?.slots || {})) {
+      slots[k] = v?.value?.interpretedValue ?? null;
+    }
+    res.json({
+      sessionId:     sid,
+      inputTranscript: text,
+      intent:        resp.sessionState?.intent?.name || null,
+      intentState:   resp.sessionState?.intent?.state || null,
+      confidence:    resp.interpretations?.[0]?.nluConfidence?.score ?? null,
+      slots,
+      messages:      (resp.messages || []).map(m => ({ type: m.contentType, content: m.content })),
+      interpretations: (resp.interpretations || []).slice(0, 5).map(i => ({
+        intent:     i.intent?.name,
+        confidence: i.nluConfidence?.score,
+      })),
+      dialogAction:  resp.sessionState?.dialogAction?.type || null,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex/:botId/missed-utterances ────────────────────────────────────────
+
+router.get('/lex/:botId/missed-utterances', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  const limit  = Math.min(parseInt(req.query.limit) || 200, 1000);
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const cw = new CloudWatchLogsClient(cfg);
+
+    const lgResp = await cw.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lex/' }));
+    const groups = (lgResp.logGroups || []).filter(g => g.logGroupName.includes(botId));
+    if (!groups.length) return res.json({ configured: false, utterances: [] });
+
+    const logGroupName = groups[0].logGroupName;
+    const startTime = Date.now() - hours * 3600000;
+    const evResp = await cw.send(new FilterLogEventsCommand({
+      logGroupName, startTime, limit,
+      filterPattern: '{ $.missedUtterance IS TRUE }',
+    }));
+
+    const utterances = (evResp.events || []).map(e => {
+      let p = null; try { p = JSON.parse(e.message); } catch (_) {}
+      return {
+        timestamp:       e.timestamp,
+        text:            p?.inputTranscript || p?.inputText || e.message.slice(0, 120),
+        sessionId:       p?.sessionId || null,
+        localeId:        p?.localeId || null,
+        missedUtterance: p?.missedUtterance ?? true,
+      };
+    });
+    res.json({ configured: true, logGroupName, utterances });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lex/:botId/build ───────────────────────────────────────────────────
+
+router.post('/lex/:botId/build', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const { localeId } = req.body || {};
+  if (!localeId) return res.status(400).json({ error: 'localeId is required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, BuildBotLocaleCommand, DescribeBotLocaleCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+    await client.send(new BuildBotLocaleCommand({ botId, botVersion: 'DRAFT', localeId }));
+
+    // Poll status up to 30 seconds
+    let status = 'Building';
+    let failureReasons = [];
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const d = await client.send(new DescribeBotLocaleCommand({ botId, botVersion: 'DRAFT', localeId }));
+      status = d.botLocaleStatus;
+      failureReasons = d.failureReasons || [];
+      if (status === 'Built' || status === 'Failed' || status === 'NotBuilt') break;
+    }
+    res.json({ localeId, status, failureReasons });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex/:botId/metrics ──────────────────────────────────────────────────
+
+router.get('/lex/:botId/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const cw = new CloudWatchClient(cfg);
+    const endTime = new Date();
+    const startTime = new Date(Date.now() - hours * 3600000);
+    const period = hours <= 6 ? 300 : hours <= 48 ? 3600 : 86400;
+
+    const dims = [{ Name: 'BotName', Value: botId }];
+    const metricNames = ['RuntimeRequestCount', 'RuntimeSuccessfulRequestLatency', 'MissedUtteranceCount', 'RuntimePollyErrors'];
+    const queries = metricNames.map((m, i) => ({
+      Id: `m${i}`, Label: m,
+      MetricStat: { Metric: { Namespace: 'AWS/Lex', MetricName: m, Dimensions: dims }, Period: period, Stat: m.includes('Latency') ? 'Average' : 'Sum' },
+    }));
+
+    const resp = await cw.send(new GetMetricDataCommand({ MetricDataQueries: queries, StartTime: startTime, EndTime: endTime }));
+    const out = {};
+    for (const r of (resp.MetricDataResults || [])) {
+      out[r.Label] = r.Timestamps.map((t, i) => ({ t: new Date(t).toISOString(), v: r.Values[i] }))
+        .sort((a, b) => a.t.localeCompare(b.t));
+    }
+    res.json({ period, hours, metrics: out });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /cloudformation/stacks ──────────────────────────────────────────────
 
 router.get('/cloudformation/stacks', async (req, res) => {

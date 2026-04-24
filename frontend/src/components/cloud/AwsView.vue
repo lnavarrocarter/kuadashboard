@@ -670,7 +670,12 @@
               <td style="white-space:nowrap">
                 <button class="btn xs" style="background:rgba(139,92,246,.18);border-color:#8b5cf6;color:#8b5cf6;margin-right:4px" @click="openLexIntents(b)" title="Intents & Slots">Intents</button>
                 <button class="btn xs" style="background:rgba(59,130,246,.18);border-color:#3b82f6;color:#3b82f6;margin-right:4px" @click="openLexLogs(b)" title="Invocation Logs">Logs</button>
-                <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openLexTestSet(b)" title="Test Sets">Test Set</button>
+                <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e;margin-right:4px" @click="openLexTestSet(b)" title="Test Sets">Test Set</button>
+                <button class="btn xs" style="background:rgba(245,158,11,.18);border-color:#f59e0b;color:#f59e0b;margin-right:4px" @click="openLexChat(b)" title="Chat Simulator">Chat</button>
+                <button class="btn xs" style="background:rgba(239,68,68,.18);border-color:#ef4444;color:#ef4444;margin-right:4px" @click="openLexMissed(b)" title="Missed Utterances">Missed</button>
+                <button class="btn xs" style="background:rgba(20,184,166,.18);border-color:#14b8a6;color:#14b8a6;margin-right:4px" @click="openLexAliases(b)" title="Bot Aliases">Aliases</button>
+                <button class="btn xs" style="background:rgba(168,85,247,.18);border-color:#a855f7;color:#a855f7;margin-right:4px" @click="openLexSlotTypes(b)" title="Slot Types">Slot Types</button>
+                <button class="btn xs" style="background:rgba(99,102,241,.18);border-color:#6366f1;color:#6366f1" @click="openLexMetrics(b)" title="Runtime Metrics">Metrics</button>
               </td>
             </tr>
           </tbody>
@@ -1563,6 +1568,295 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Chat Simulator Modal ────────────────────────────────────── -->
+    <div v-if="lexChatModal.open" class="modal-overlay" @click.self="lexChatModal.open = false">
+      <div class="modal" style="width:720px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-weight:600">Chat Simulator — {{ lexChatModal.botName }}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <select v-model="lexChatModal.aliasId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+              <option value="TSTALIASID">DRAFT (TestBotAlias)</option>
+              <option v-for="a in lexChatModal.aliases" :key="a.id" :value="a.id">{{ a.name }} ({{ a.botVersion }})</option>
+            </select>
+            <select v-model="lexChatModal.localeId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+              <option value="es_MX">es_MX</option>
+              <option value="es_ES">es_ES</option>
+              <option value="es_US">es_US</option>
+              <option value="en_US">en_US</option>
+              <option value="en_GB">en_GB</option>
+              <option value="pt_BR">pt_BR</option>
+              <option value="fr_FR">fr_FR</option>
+              <option value="de_DE">de_DE</option>
+            </select>
+            <button class="btn sm" @click="lexChatReset">↺ Reset</button>
+            <button class="btn sm" @click="lexChatModal.open = false">✕</button>
+          </div>
+        </div>
+        <!-- Conversation area -->
+        <div ref="lexChatScrollRef" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:300px">
+          <div v-if="!lexChatModal.messages.length" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:13px">
+            Escribe un mensaje para iniciar la conversación con el bot
+          </div>
+          <div v-for="(msg, i) in lexChatModal.messages" :key="i"
+            :style="`display:flex;flex-direction:column;align-items:${msg.role === 'user' ? 'flex-end' : 'flex-start'};gap:4px`">
+            <div :style="`max-width:80%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4;${msg.role === 'user' ? 'background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.3)' : 'background:var(--surface);border:1px solid var(--border)'}`">
+              {{ msg.role === 'user' ? msg.text : msg.content }}
+            </div>
+            <!-- Intent / confidence bubble -->
+            <div v-if="msg.role === 'bot' && msg.intent" style="display:flex;gap:4px;flex-wrap:wrap">
+              <span style="font-size:10px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:10px;padding:1px 6px;color:#a78bfa">🎯 {{ msg.intent }}</span>
+              <span v-if="msg.confidence != null" style="font-size:10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:1px 6px;color:#4ade80">{{ (msg.confidence * 100).toFixed(0) }}%</span>
+              <span v-for="(v, k) in msg.slots" :key="k" style="font-size:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 6px;color:#fbbf24">{{ k }}: {{ v }}</span>
+            </div>
+            <!-- interpretations dropdown -->
+            <details v-if="msg.role === 'bot' && msg.interpretations && msg.interpretations.length > 1" style="font-size:10px;color:var(--text-dim);margin-top:2px">
+              <summary style="cursor:pointer">All interpretations</summary>
+              <div v-for="int in msg.interpretations" :key="int.intent" style="padding:1px 4px">{{ int.intent }}: {{ int.confidence != null ? (int.confidence*100).toFixed(0)+'%' : '' }}</div>
+            </details>
+          </div>
+          <div v-if="lexChatModal.sending" style="display:flex;align-items:flex-start;gap:4px">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;font-size:13px;color:var(--text-dim)">...</div>
+          </div>
+        </div>
+        <!-- Input area -->
+        <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+          <input v-model="lexChatModal.input" type="text" placeholder="Escribe un mensaje..."
+            style="flex:1;font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text)"
+            @keydown.enter="lexChatSend" :disabled="lexChatModal.sending" />
+          <button class="btn sm" style="background:rgba(99,102,241,.2);border-color:#6366f1;color:#6366f1"
+            @click="lexChatSend" :disabled="!lexChatModal.input.trim() || lexChatModal.sending">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Missed Utterances Modal ─────────────────────────────────── -->
+    <div v-if="lexMissedModal.open" class="modal-overlay" @click.self="lexMissedModal.open = false">
+      <div class="modal" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-weight:600">Missed Utterances — {{ lexMissedModal.botName }}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <select v-model="lexMissedModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+              <option :value="6">Last 6h</option>
+              <option :value="24">Last 24h</option>
+              <option :value="72">Last 3d</option>
+              <option :value="168">Last 7d</option>
+            </select>
+            <button class="btn sm" @click="reloadLexMissed" :disabled="lexMissedModal.loading">{{ lexMissedModal.loading ? 'Loading...' : 'Refresh' }}</button>
+            <button class="btn sm" @click="lexMissedModal.open = false">✕</button>
+          </div>
+        </div>
+        <div v-if="lexMissedModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading...</div>
+        <div v-else-if="lexMissedModal.error" class="alert-error" style="margin:12px">{{ lexMissedModal.error }}</div>
+        <div v-else-if="!lexMissedModal.configured" style="padding:32px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">🔇</div>
+          <div style="font-weight:600;margin-bottom:4px">Conversation logs not configured</div>
+          <div class="text-dim" style="font-size:12px">Enable conversation logs in the bot's alias settings to track missed utterances.</div>
+        </div>
+        <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="padding:6px 12px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);flex-shrink:0">
+            <span class="mono-xs">{{ lexMissedModal.logGroupName }}</span> · {{ lexMissedModal.utterances.length }} missed utterance{{ lexMissedModal.utterances.length !== 1 ? 's' : '' }}
+          </div>
+          <div v-if="!lexMissedModal.utterances.length" class="empty-row">No missed utterances in this time range. 🎉</div>
+          <div v-else style="flex:1;overflow:auto">
+            <table class="cloud-table">
+              <thead><tr>
+                <th>Time</th><th>Utterance</th><th>Session</th><th>Locale</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="(u, i) in lexMissedModal.utterances" :key="i">
+                  <td class="text-dim mono-xs" style="white-space:nowrap">{{ new Date(u.timestamp).toLocaleString() }}</td>
+                  <td style="font-style:italic">"{{ u.text }}"</td>
+                  <td class="mono-xs text-dim" style="font-size:10px">{{ u.sessionId || '-' }}</td>
+                  <td class="text-dim">{{ u.localeId || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Aliases Modal ────────────────────────────────────────────── -->
+    <div v-if="lexAliasesModal.open" class="modal-overlay" @click.self="lexAliasesModal.open = false">
+      <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Bot Aliases — {{ lexAliasesModal.botName }}</span>
+          <button class="btn sm" @click="lexAliasesModal.open = false">✕</button>
+        </div>
+        <div v-if="lexAliasesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading aliases...</div>
+        <div v-else-if="lexAliasesModal.error" class="alert-error" style="margin:12px">{{ lexAliasesModal.error }}</div>
+        <div v-else style="flex:1;overflow:auto;padding:12px">
+          <div v-if="!lexAliasesModal.aliases.length" class="text-dim" style="text-align:center;padding:32px">No aliases found.</div>
+          <div v-for="alias in lexAliasesModal.aliases" :key="alias.id"
+            style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface)">
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:14px">{{ alias.name }}</div>
+                <div class="text-dim mono-xs">{{ alias.id }}</div>
+                <div v-if="alias.description" class="text-dim" style="font-size:11px">{{ alias.description }}</div>
+              </div>
+              <span :class="alias.status === 'Available' ? 'status-ok' : 'status-warn'">{{ alias.status }}</span>
+              <span style="font-size:12px;color:var(--text-dim)">v{{ alias.botVersion }}</span>
+            </div>
+            <div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Fulfillment Lambdas</div>
+                <div v-if="!alias.lambdaArns.length" class="text-dim" style="font-size:12px">None configured</div>
+                <div v-for="l in alias.lambdaArns" :key="l.localeId" style="font-size:11px">
+                  <span style="font-weight:600">{{ l.localeId }}</span>:
+                  <span class="mono-xs text-dim" :title="l.arn">{{ l.arn.split(':').pop() }}</span>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Conversation Logs</div>
+                <div v-if="alias.logsGroup" class="mono-xs" style="font-size:11px;color:#4ade80">✓ {{ alias.logsGroup.split(':').pop() }}</div>
+                <div v-else class="text-dim" style="font-size:12px">Not configured</div>
+              </div>
+            </div>
+            <div style="padding:0 14px 10px;display:flex;gap:6px">
+              <button class="btn xs" style="background:rgba(245,158,11,.15);border-color:#f59e0b;color:#f59e0b"
+                @click="openLexChatFromAlias(lexAliasesModal.bot, alias)">Chat with this alias</button>
+              <button class="btn xs" style="background:rgba(99,102,241,.15);border-color:#6366f1;color:#6366f1"
+                @click="openLexBuildFromAlias(lexAliasesModal.bot, alias)">Build</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Slot Types Modal ─────────────────────────────────────────── -->
+    <div v-if="lexSlotTypesModal.open" class="modal-overlay" @click.self="lexSlotTypesModal.open = false">
+      <div class="modal" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Custom Slot Types — {{ lexSlotTypesModal.botName }}</span>
+          <button class="btn sm" @click="lexSlotTypesModal.open = false">✕</button>
+        </div>
+        <div v-if="lexSlotTypesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading slot types...</div>
+        <div v-else-if="lexSlotTypesModal.error" class="alert-error" style="margin:12px">{{ lexSlotTypesModal.error }}</div>
+        <div v-else style="flex:1;overflow:auto;padding:12px">
+          <!-- Locale tabs -->
+          <div v-if="lexSlotTypesModal.locales.length > 1" style="display:flex;gap:4px;margin-bottom:10px">
+            <button v-for="loc in lexSlotTypesModal.locales" :key="loc.localeId"
+              :class="['btn','xs', lexSlotTypesModal.activeLocale === loc.localeId ? 'active' : '']"
+              @click="lexSlotTypesModal.activeLocale = loc.localeId">
+              {{ loc.localeName }}
+            </button>
+          </div>
+          <div v-for="locale in lexSlotTypesModal.locales.filter(l => l.localeId === lexSlotTypesModal.activeLocale)" :key="locale.localeId">
+            <div v-if="!locale.types.length" class="text-dim" style="text-align:center;padding:32px">No custom slot types defined for this locale.</div>
+            <div v-for="st in locale.types" :key="st.id"
+              style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface)">
+                <div style="flex:1">
+                  <span style="font-weight:600">{{ st.name }}</span>
+                  <span class="mono-xs text-dim" style="font-size:10px;margin-left:6px">{{ st.id }}</span>
+                </div>
+                <span style="font-size:11px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:10px;padding:1px 7px;color:#c084fc">{{ st.strategy }}</span>
+                <span class="text-dim" style="font-size:11px">{{ st.values.length }} value{{ st.values.length !== 1 ? 's' : '' }}</span>
+              </div>
+              <div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px">
+                <div v-for="val in st.values" :key="val.value"
+                  style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px">
+                  <span style="font-weight:600">{{ val.value }}</span>
+                  <span v-if="val.synonyms.length" class="text-dim" style="font-size:11px"> — {{ val.synonyms.join(', ') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-if="!lexSlotTypesModal.locales.length" class="text-dim" style="text-align:center;padding:32px">No custom slot types found.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Metrics Modal ────────────────────────────────────────────── -->
+    <div v-if="lexMetricsModal.open" class="modal-overlay" @click.self="lexMetricsModal.open = false">
+      <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-weight:600">Runtime Metrics — {{ lexMetricsModal.botName }}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <select v-model="lexMetricsModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+              <option :value="6">Last 6h</option>
+              <option :value="24">Last 24h</option>
+              <option :value="72">Last 3d</option>
+              <option :value="168">Last 7d</option>
+            </select>
+            <button class="btn sm" @click="reloadLexMetrics" :disabled="lexMetricsModal.loading">{{ lexMetricsModal.loading ? 'Loading...' : 'Refresh' }}</button>
+            <button class="btn sm" @click="lexMetricsModal.open = false">✕</button>
+          </div>
+        </div>
+        <div v-if="lexMetricsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading metrics...</div>
+        <div v-else-if="lexMetricsModal.error" class="alert-error" style="margin:12px">{{ lexMetricsModal.error }}</div>
+        <div v-else style="flex:1;overflow:auto;padding:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <!-- Requests card -->
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+              <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Runtime Requests</div>
+              <div v-if="!lexMetricsModal.metrics.RuntimeRequestCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+              <div v-else>
+                <div style="font-size:28px;font-weight:700;margin-bottom:4px">{{ lexMetricsTotal('RuntimeRequestCount') }}</div>
+                <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
+                  <div v-for="(p, i) in lexMetricsSparkline('RuntimeRequestCount')" :key="i"
+                    :style="`flex:1;background:#6366f1;border-radius:2px 2px 0 0;height:${p}%;opacity:.7;min-height:2px`" :title="p+'%'"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Missed utterances card -->
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+              <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Missed Utterances</div>
+              <div v-if="!lexMetricsModal.metrics.MissedUtteranceCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+              <div v-else>
+                <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#f87171">{{ lexMetricsTotal('MissedUtteranceCount') }}</div>
+                <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
+                  <div v-for="(p, i) in lexMetricsSparkline('MissedUtteranceCount')" :key="i"
+                    :style="`flex:1;background:#ef4444;border-radius:2px 2px 0 0;height:${p}%;opacity:.7;min-height:2px`"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Latency card -->
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+              <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Avg Latency (ms)</div>
+              <div v-if="!lexMetricsModal.metrics.RuntimeSuccessfulRequestLatency?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+              <div v-else>
+                <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#4ade80">{{ lexMetricsAvg('RuntimeSuccessfulRequestLatency') }}ms</div>
+                <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
+                  <div v-for="(p, i) in lexMetricsSparkline('RuntimeSuccessfulRequestLatency')" :key="i"
+                    :style="`flex:1;background:#22c55e;border-radius:2px 2px 0 0;height:${p}%;opacity:.7;min-height:2px`"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Polly errors card -->
+            <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+              <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Polly TTS Errors</div>
+              <div v-if="!lexMetricsModal.metrics.RuntimePollyErrors?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+              <div v-else>
+                <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#fb923c">{{ lexMetricsTotal('RuntimePollyErrors') }}</div>
+                <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
+                  <div v-for="(p, i) in lexMetricsSparkline('RuntimePollyErrors')" :key="i"
+                    :style="`flex:1;background:#f97316;border-radius:2px 2px 0 0;height:${p}%;opacity:.7;min-height:2px`"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Build section -->
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Build Bot</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <select v-model="lexMetricsModal.buildLocale" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text)">
+                <option v-for="loc in lexMetricsModal.locales" :key="loc.localeId" :value="loc.localeId">{{ loc.localeName || loc.localeId }}</option>
+              </select>
+              <button class="btn sm" style="background:rgba(99,102,241,.18);border-color:#6366f1;color:#6366f1"
+                :disabled="lexMetricsModal.building || !lexMetricsModal.buildLocale"
+                @click="doBuildLexBot">{{ lexMetricsModal.building ? 'Building...' : '⚒ Build' }}</button>
+              <span v-if="lexMetricsModal.buildResult" :class="lexMetricsModal.buildResult.status === 'Built' ? 'status-ok' : 'status-err'">
+                {{ lexMetricsModal.buildResult.status }}
+                <span v-if="lexMetricsModal.buildResult.failureReasons?.length" class="text-dim" style="font-size:11px"> — {{ lexMetricsModal.buildResult.failureReasons.join('; ') }}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -3541,6 +3835,235 @@ function downloadLexTestSetJson() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a'); a.href = url; a.download = `lex-testset-${lexTestSetModal.botId}.json`; a.click()
   URL.revokeObjectURL(url)
+}
+
+// ─── Lex Chat Simulator ───────────────────────────────────────────────────────
+
+const lexChatModal = reactive({
+  open: false, sending: false, error: null,
+  botId: '', botName: '',
+  aliasId: 'TSTALIASID', localeId: 'es_MX',
+  sessionId: null, input: '',
+  messages: [], aliases: [],
+})
+const lexChatScrollRef = ref(null)
+
+async function openLexChat(bot) {
+  Object.assign(lexChatModal, {
+    open: true, sending: false, error: null,
+    botId: bot.id, botName: bot.name,
+    aliasId: 'TSTALIASID', localeId: 'es_MX',
+    sessionId: `kua-${Date.now()}`,
+    input: '', messages: [], aliases: [],
+  })
+  // Load aliases in background for selector
+  try {
+    const aliases = await awsStore.fetchLexAliases(bot.id)
+    lexChatModal.aliases = aliases.filter(a => a.id !== 'TSTALIASID')
+  } catch (_) {}
+}
+
+function openLexChatFromAlias(bot, alias) {
+  lexAliasesModal.open = false
+  Object.assign(lexChatModal, {
+    open: true, sending: false, error: null,
+    botId: bot.id, botName: bot.name,
+    aliasId: alias.id, localeId: 'es_MX',
+    sessionId: `kua-${Date.now()}`,
+    input: '', messages: [], aliases: [],
+  })
+}
+
+function lexChatReset() {
+  lexChatModal.messages = []
+  lexChatModal.sessionId = `kua-${Date.now()}`
+  lexChatModal.input = ''
+}
+
+async function lexChatSend() {
+  const text = lexChatModal.input.trim()
+  if (!text || lexChatModal.sending) return
+  lexChatModal.messages.push({ role: 'user', text })
+  lexChatModal.input = ''
+  lexChatModal.sending = true
+  await nextTick()
+  if (lexChatScrollRef.value) lexChatScrollRef.value.scrollTop = lexChatScrollRef.value.scrollHeight
+  try {
+    const resp = await awsStore.lexChat(
+      lexChatModal.botId, text,
+      lexChatModal.aliasId, lexChatModal.localeId, lexChatModal.sessionId
+    )
+    lexChatModal.sessionId = resp.sessionId
+    const msgs = resp.messages?.length
+      ? resp.messages
+      : [{ content: '(No response message)' }]
+    for (const m of msgs) {
+      lexChatModal.messages.push({
+        role: 'bot', content: m.content,
+        intent: resp.intent, confidence: resp.confidence,
+        slots: resp.slots, interpretations: resp.interpretations,
+        dialogAction: resp.intentState,
+      })
+    }
+  } catch (e) {
+    lexChatModal.messages.push({ role: 'bot', content: `Error: ${e?.message || 'Unknown error'}` })
+  } finally {
+    lexChatModal.sending = false
+    await nextTick()
+    if (lexChatScrollRef.value) lexChatScrollRef.value.scrollTop = lexChatScrollRef.value.scrollHeight
+  }
+}
+
+// ─── Lex Missed Utterances Modal ──────────────────────────────────────────────
+
+const lexMissedModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  hours: 24, configured: false, logGroupName: '', utterances: [],
+})
+
+async function openLexMissed(bot) {
+  Object.assign(lexMissedModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    hours: 24, configured: false, logGroupName: '', utterances: [],
+  })
+  await reloadLexMissed()
+}
+
+async function reloadLexMissed() {
+  lexMissedModal.loading = true; lexMissedModal.error = null
+  try {
+    const data = await awsStore.fetchLexMissedUtterances(lexMissedModal.botId, lexMissedModal.hours)
+    lexMissedModal.configured   = data.configured
+    lexMissedModal.logGroupName = data.logGroupName || ''
+    lexMissedModal.utterances   = data.utterances || []
+  } catch (e) {
+    lexMissedModal.error = e?.message || 'Error loading missed utterances'
+  } finally {
+    lexMissedModal.loading = false
+  }
+}
+
+// ─── Lex Aliases Modal ────────────────────────────────────────────────────────
+
+const lexAliasesModal = reactive({
+  open: false, loading: false, error: null,
+  bot: null, botName: '', aliases: [],
+})
+
+async function openLexAliases(bot) {
+  Object.assign(lexAliasesModal, {
+    open: true, loading: true, error: null,
+    bot, botName: bot.name, aliases: [],
+  })
+  try {
+    lexAliasesModal.aliases = await awsStore.fetchLexAliases(bot.id)
+  } catch (e) {
+    lexAliasesModal.error = e?.message || 'Error loading aliases'
+  } finally {
+    lexAliasesModal.loading = false
+  }
+}
+
+function openLexBuildFromAlias(bot, alias) {
+  lexAliasesModal.open = false
+  openLexMetrics(bot)
+}
+
+// ─── Lex Slot Types Modal ─────────────────────────────────────────────────────
+
+const lexSlotTypesModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  locales: [], activeLocale: null,
+})
+
+async function openLexSlotTypes(bot) {
+  Object.assign(lexSlotTypesModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    locales: [], activeLocale: null,
+  })
+  try {
+    const data = await awsStore.fetchLexSlotTypes(bot.id)
+    lexSlotTypesModal.locales = data
+    if (data.length) lexSlotTypesModal.activeLocale = data[0].localeId
+  } catch (e) {
+    lexSlotTypesModal.error = e?.message || 'Error loading slot types'
+  } finally {
+    lexSlotTypesModal.loading = false
+  }
+}
+
+// ─── Lex Metrics Modal ────────────────────────────────────────────────────────
+
+const lexMetricsModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  hours: 24, metrics: {},
+  locales: [], buildLocale: null, building: false, buildResult: null,
+})
+
+async function openLexMetrics(bot) {
+  Object.assign(lexMetricsModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    hours: 24, metrics: {},
+    locales: [], buildLocale: null, building: false, buildResult: null,
+  })
+  // Load locales for the build selector
+  try {
+    const intents = await awsStore.fetchLexIntents(bot.id)
+    lexMetricsModal.locales = intents.map(l => ({ localeId: l.localeId, localeName: l.localeName }))
+    if (lexMetricsModal.locales.length) lexMetricsModal.buildLocale = lexMetricsModal.locales[0].localeId
+  } catch (_) {}
+  await reloadLexMetrics()
+}
+
+async function reloadLexMetrics() {
+  lexMetricsModal.loading = true; lexMetricsModal.error = null
+  try {
+    const data = await awsStore.fetchLexMetrics(lexMetricsModal.botId, lexMetricsModal.hours)
+    lexMetricsModal.metrics = data.metrics || {}
+  } catch (e) {
+    lexMetricsModal.error = e?.message || 'Error loading metrics'
+  } finally {
+    lexMetricsModal.loading = false
+  }
+}
+
+function lexMetricsTotal(key) {
+  const pts = lexMetricsModal.metrics[key] || []
+  return pts.reduce((s, p) => s + (p.v || 0), 0).toLocaleString()
+}
+
+function lexMetricsAvg(key) {
+  const pts = lexMetricsModal.metrics[key] || []
+  if (!pts.length) return 0
+  return Math.round(pts.reduce((s, p) => s + (p.v || 0), 0) / pts.length)
+}
+
+function lexMetricsSparkline(key) {
+  const pts = lexMetricsModal.metrics[key] || []
+  if (!pts.length) return []
+  const max = Math.max(...pts.map(p => p.v || 0), 1)
+  return pts.map(p => Math.round(((p.v || 0) / max) * 100))
+}
+
+async function doBuildLexBot() {
+  if (!lexMetricsModal.buildLocale) return
+  lexMetricsModal.building = true; lexMetricsModal.buildResult = null
+  try {
+    const result = await awsStore.buildLexBot(lexMetricsModal.botId, lexMetricsModal.buildLocale)
+    lexMetricsModal.buildResult = result
+    toast(`Build ${result.status}: ${lexMetricsModal.botName} (${result.localeId})`, result.status === 'Built' ? 'success' : 'error')
+  } catch (e) {
+    lexMetricsModal.buildResult = { status: 'Failed', failureReasons: [e?.message || 'Error'] }
+    toast(e?.message || 'Build failed', 'error')
+  } finally {
+    lexMetricsModal.building = false
+  }
 }
 
 // ─── EventBridge Logs Modal ───────────────────────────────────────────────────

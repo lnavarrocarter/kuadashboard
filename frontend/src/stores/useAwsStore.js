@@ -758,6 +758,38 @@ export const useAwsStore = defineStore('aws', () => {
     return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/testsets`, { headers: headers() })
   }
 
+  async function fetchLexAliases(botId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/aliases`, { headers: headers() })
+  }
+
+  async function fetchLexSlotTypes(botId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types`, { headers: headers() })
+  }
+
+  async function lexChat(botId, text, aliasId, localeId, sessionId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/chat`, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, aliasId, localeId, sessionId }),
+    })
+  }
+
+  async function fetchLexMissedUtterances(botId, hours = 24) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/missed-utterances?hours=${hours}`, { headers: headers() })
+  }
+
+  async function buildLexBot(botId, localeId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/build`, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localeId }),
+    })
+  }
+
+  async function fetchLexMetrics(botId, hours = 24) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/metrics?hours=${hours}`, { headers: headers() })
+  }
+
   // ─── CloudFormation (AgentCore) ────────────────────────────────────────────
 
   async function fetchCloudformationStacks(agentCoreOnly = false) {
@@ -804,7 +836,9 @@ export const useAwsStore = defineStore('aws', () => {
     fetchCognitoClients, fetchCognitoIdentityProviders, fetchCognitoGroups,
     fetchSecrets, fetchSecretConfig, importSecretToProfile, previewSecretKeys, importSelectedSecretKeys,
     fetchDataPipelines, activateDataPipeline, deactivateDataPipeline,
-    fetchBedrockModels, fetchLexBots, fetchLexIntents, fetchLexLogs, fetchLexTestSets, fetchCloudformationStacks,
+    fetchBedrockModels, fetchLexBots, fetchLexIntents, fetchLexLogs, fetchLexTestSets,
+    fetchLexAliases, fetchLexSlotTypes, lexChat, fetchLexMissedUtterances, buildLexBot, fetchLexMetrics,
+    fetchCloudformationStacks,
     createS3Bucket, testS3Bucket, fetchEcrImages, applyK8sManifest,
   }
 })
