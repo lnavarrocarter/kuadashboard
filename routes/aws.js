@@ -3563,8 +3563,17 @@ router.get('/lex/:botId/aliases', async (req, res) => {
   const { botId } = req.params;
   try {
     const cfg = await resolveAwsConfig(profileId);
-    const { LexModelsV2Client, ListBotAliasesCommand, DescribeBotAliasCommand } = require('@aws-sdk/client-lex-models-v2');
+    const { LexModelsV2Client, ListBotAliasesCommand, DescribeBotAliasCommand, DescribeBotCommand } = require('@aws-sdk/client-lex-models-v2');
     const client = new LexModelsV2Client(cfg);
+
+    // Get bot ARN and available versions
+    let botArn = null, botName = null;
+    try {
+      const botDesc = await client.send(new DescribeBotCommand({ botId }));
+      botArn  = botDesc.botArn  || null;
+      botName = botDesc.botName || null;
+    } catch (_) {}
+
     const all = [];
     let nextToken;
     do {
@@ -3583,27 +3592,67 @@ router.get('/lex/:botId/aliases', async (req, res) => {
           if (arn) lambdaArns.push({ localeId, arn });
         }
         const logsGroup = d.conversationLogSettings?.textLogSettings?.[0]?.destination?.cloudWatch?.logGroupArn || null;
+        const aliasArn = d.botAliasArn || null;
         return {
           id:          a.botAliasId,
           name:        a.botAliasName,
+          arn:         aliasArn,
           status:      a.botAliasStatus,
-          botVersion:  a.botVersion || 'DRAFT',
-          description: a.description || '',
+          botVersion:  d.botVersion || a.botVersion || 'DRAFT',
+          description: d.description || a.description || '',
           lambdaArns,
+          localeSettings: Object.entries(localeSettings).map(([localeId, s]) => ({
+            localeId,
+            enabled:   s?.enabled ?? true,
+            lambdaArn: s?.codeHookSpecification?.lambdaCodeHook?.lambdaARN || null,
+          })),
           logsGroup,
-          createdDate: a.creationDateTime || null,
-          updatedDate: a.lastUpdatedDateTime || null,
+          textLogs:  (d.conversationLogSettings?.textLogSettings || []).length > 0,
+          audioLogs: (d.conversationLogSettings?.audioLogSettings || []).length > 0,
+          createdDate: d.creationDateTime || a.creationDateTime || null,
+          updatedDate: d.lastUpdatedDateTime || a.lastUpdatedDateTime || null,
         };
       } catch (_) {
         return {
-          id: a.botAliasId, name: a.botAliasName,
+          id: a.botAliasId, name: a.botAliasName, arn: null,
           status: a.botAliasStatus, botVersion: a.botVersion || 'DRAFT',
-          description: a.description || '', lambdaArns: [], logsGroup: null,
+          description: a.description || '', lambdaArns: [], localeSettings: [],
+          logsGroup: null, textLogs: false, audioLogs: false,
           createdDate: a.creationDateTime || null, updatedDate: a.lastUpdatedDateTime || null,
         };
       }
     }));
-    res.json(detailed);
+    res.json({ botArn, botName, aliases: detailed });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lex/:botId/aliases ─────────────────────────────────────────────────
+
+router.post('/lex/:botId/aliases', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const { name, description, botVersion } = req.body || {};
+  if (!name || !botVersion) return res.status(400).json({ error: 'name and botVersion are required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, CreateBotAliasCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+    const result = await client.send(new CreateBotAliasCommand({
+      botId,
+      botAliasName: name,
+      description:  description || undefined,
+      botVersion,
+    }));
+    res.json({
+      id:          result.botAliasId,
+      name:        result.botAliasName,
+      arn:         result.botAliasArn || null,
+      status:      result.botAliasStatus,
+      botVersion:  result.botVersion,
+      description: result.description || '',
+      createdDate: result.creationDateTime || null,
+    });
   } catch (err) { handleErr(res, err); }
 });
 

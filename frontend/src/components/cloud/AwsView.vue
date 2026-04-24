@@ -1585,14 +1585,8 @@
               <option v-for="a in lexChatModal.aliases" :key="a.id" :value="a.id">{{ a.name }} ({{ a.botVersion }})</option>
             </select>
             <select v-model="lexChatModal.localeId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-              <option value="es_MX">es_MX</option>
-              <option value="es_ES">es_ES</option>
-              <option value="es_US">es_US</option>
-              <option value="en_US">en_US</option>
-              <option value="en_GB">en_GB</option>
-              <option value="pt_BR">pt_BR</option>
-              <option value="fr_FR">fr_FR</option>
-              <option value="de_DE">de_DE</option>
+              <option v-if="!lexChatModal.locales.length" value="">Cargando...</option>
+              <option v-for="loc in lexChatModal.locales" :key="loc.localeId" :value="loc.localeId">{{ loc.localeName || loc.localeId }}</option>
             </select>
             <button class="btn sm" @click="lexChatReset">↺ Reset</button>
             <button class="btn sm" @click="lexChatModal.open = false">✕</button>
@@ -1684,46 +1678,111 @@
 
     <!-- ── Lex Aliases Modal ────────────────────────────────────────────── -->
     <div v-if="lexAliasesModal.open" class="modal-overlay" @click.self="lexAliasesModal.open = false">
-      <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Bot Aliases — {{ lexAliasesModal.botName }}</span>
-          <button class="btn sm" @click="lexAliasesModal.open = false">✕</button>
+      <div class="modal" style="width:960px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div>
+            <span style="font-weight:600">Bot Aliases — {{ lexAliasesModal.botName }}</span>
+            <div v-if="lexAliasesModal.botArn" class="mono-xs text-dim" style="font-size:10px;margin-top:2px" :title="lexAliasesModal.botArn">
+              Bot ARN: {{ lexAliasesModal.botArn }}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" style="background:rgba(20,184,166,.15);border-color:#14b8a6;color:#14b8a6"
+              @click="lexAliasesModal.showCreate = !lexAliasesModal.showCreate">
+              {{ lexAliasesModal.showCreate ? '✕ Cancel' : '＋ New Alias' }}
+            </button>
+            <button class="btn sm" @click="lexAliasesModal.open = false">✕</button>
+          </div>
         </div>
+
+        <!-- Create alias form -->
+        <div v-if="lexAliasesModal.showCreate" style="padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(20,184,166,.05);flex-shrink:0">
+          <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:#2dd4bf">Create New Alias</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Name *</label>
+              <input v-model="lexAliasesModal.createForm.name" type="text" placeholder="my-alias"
+                style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Bot Version *</label>
+              <input v-model="lexAliasesModal.createForm.botVersion" type="text" placeholder="1, 2, DRAFT…"
+                style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Description</label>
+              <input v-model="lexAliasesModal.createForm.description" type="text" placeholder="Optional"
+                style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn sm" style="background:rgba(20,184,166,.2);border-color:#14b8a6;color:#2dd4bf"
+              :disabled="lexAliasesModal.creating || !lexAliasesModal.createForm.name || !lexAliasesModal.createForm.botVersion"
+              @click="doCreateLexAlias">
+              {{ lexAliasesModal.creating ? 'Creating...' : 'Create Alias' }}
+            </button>
+            <span v-if="lexAliasesModal.createError" style="font-size:12px;color:#f87171">{{ lexAliasesModal.createError }}</span>
+          </div>
+        </div>
+
         <div v-if="lexAliasesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading aliases...</div>
         <div v-else-if="lexAliasesModal.error" class="alert-error" style="margin:12px">{{ lexAliasesModal.error }}</div>
         <div v-else style="flex:1;overflow:auto;padding:12px">
           <div v-if="!lexAliasesModal.aliases.length" class="text-dim" style="text-align:center;padding:32px">No aliases found.</div>
           <div v-for="alias in lexAliasesModal.aliases" :key="alias.id"
             style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface)">
-              <div style="flex:1">
+            <!-- Header row -->
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--surface)">
+              <div style="flex:1;min-width:0">
                 <div style="font-weight:600;font-size:14px">{{ alias.name }}</div>
-                <div class="text-dim mono-xs">{{ alias.id }}</div>
-                <div v-if="alias.description" class="text-dim" style="font-size:11px">{{ alias.description }}</div>
+                <div class="mono-xs text-dim" style="font-size:10px">ID: {{ alias.id }}</div>
+                <div v-if="alias.arn" class="mono-xs text-dim" style="font-size:10px;word-break:break-all" :title="alias.arn">ARN: {{ alias.arn }}</div>
+                <div v-if="alias.description" class="text-dim" style="font-size:11px;margin-top:2px">{{ alias.description }}</div>
               </div>
-              <span :class="alias.status === 'Available' ? 'status-ok' : 'status-warn'">{{ alias.status }}</span>
-              <span style="font-size:12px;color:var(--text-dim)">v{{ alias.botVersion }}</span>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+                <span :class="alias.status === 'Available' ? 'status-ok' : 'status-warn'">{{ alias.status }}</span>
+                <span style="font-size:11px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:1px 7px;color:#818cf8">
+                  v{{ alias.botVersion }}
+                </span>
+              </div>
             </div>
-            <div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <!-- Details grid -->
+            <div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-top:1px solid var(--border)">
+              <!-- Lambda -->
               <div>
                 <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Fulfillment Lambdas</div>
                 <div v-if="!alias.lambdaArns.length" class="text-dim" style="font-size:12px">None configured</div>
-                <div v-for="l in alias.lambdaArns" :key="l.localeId" style="font-size:11px">
-                  <span style="font-weight:600">{{ l.localeId }}</span>:
-                  <span class="mono-xs text-dim" :title="l.arn">{{ l.arn.split(':').pop() }}</span>
+                <div v-for="l in alias.lambdaArns" :key="l.localeId" style="font-size:11px;margin-bottom:2px">
+                  <span class="mono-xs" style="background:rgba(245,158,11,.1);border-radius:3px;padding:0 3px;color:#fbbf24">{{ l.localeId }}</span>
+                  <span class="mono-xs text-dim" :title="l.arn" style="margin-left:4px">{{ l.arn.split(':').pop() }}</span>
                 </div>
               </div>
+              <!-- Conversation logs -->
               <div>
                 <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Conversation Logs</div>
-                <div v-if="alias.logsGroup" class="mono-xs" style="font-size:11px;color:#4ade80">✓ {{ alias.logsGroup.split(':').pop() }}</div>
-                <div v-else class="text-dim" style="font-size:12px">Not configured</div>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <span v-if="alias.textLogs" style="font-size:11px;color:#4ade80">✓ Text logs</span>
+                  <span v-else style="font-size:11px;color:var(--text-dim)">✗ Text logs</span>
+                  <span v-if="alias.audioLogs" style="font-size:11px;color:#4ade80">✓ Audio logs</span>
+                  <span v-else style="font-size:11px;color:var(--text-dim)">✗ Audio logs</span>
+                  <span v-if="alias.logsGroup" class="mono-xs text-dim" style="font-size:10px" :title="alias.logsGroup">{{ alias.logsGroup.split(':').pop() }}</span>
+                </div>
+              </div>
+              <!-- Dates -->
+              <div>
+                <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Dates</div>
+                <div v-if="alias.createdDate" style="font-size:11px;color:var(--text-dim)">Created: {{ new Date(alias.createdDate).toLocaleString() }}</div>
+                <div v-if="alias.updatedDate" style="font-size:11px;color:var(--text-dim)">Updated: {{ new Date(alias.updatedDate).toLocaleString() }}</div>
               </div>
             </div>
-            <div style="padding:0 14px 10px;display:flex;gap:6px">
+            <!-- Actions -->
+            <div style="padding:0 14px 10px;display:flex;gap:6px;border-top:1px solid var(--border);padding-top:8px">
               <button class="btn xs" style="background:rgba(245,158,11,.15);border-color:#f59e0b;color:#f59e0b"
-                @click="openLexChatFromAlias(lexAliasesModal.bot, alias)">Chat with this alias</button>
+                @click="openLexChatFromAlias(lexAliasesModal.bot, alias)">💬 Chat</button>
               <button class="btn xs" style="background:rgba(99,102,241,.15);border-color:#6366f1;color:#6366f1"
-                @click="openLexBuildFromAlias(lexAliasesModal.bot, alias)">Build</button>
+                @click="openLexBuildFromAlias(lexAliasesModal.bot, alias)">⚒ Build</button>
+              <button class="btn xs" style="background:rgba(15,23,42,.3);border-color:var(--border);color:var(--text-dim)"
+                :title="alias.arn || alias.id" @click="navigator.clipboard.writeText(alias.arn || alias.id)">📋 Copy ARN</button>
             </div>
           </div>
         </div>
@@ -3842,9 +3901,9 @@ function downloadLexTestSetJson() {
 const lexChatModal = reactive({
   open: false, sending: false, error: null,
   botId: '', botName: '',
-  aliasId: 'TSTALIASID', localeId: 'es_MX',
+  aliasId: 'TSTALIASID', localeId: '',
   sessionId: null, input: '',
-  messages: [], aliases: [],
+  messages: [], aliases: [], locales: [],
 })
 const lexChatScrollRef = ref(null)
 
@@ -3852,25 +3911,27 @@ async function openLexChat(bot) {
   Object.assign(lexChatModal, {
     open: true, sending: false, error: null,
     botId: bot.id, botName: bot.name,
-    aliasId: 'TSTALIASID', localeId: 'es_MX',
+    aliasId: 'TSTALIASID', localeId: '',
     sessionId: `kua-${Date.now()}`,
-    input: '', messages: [], aliases: [],
+    input: '', messages: [], aliases: [], locales: [],
   })
-  // Load aliases in background for selector
+  // Load locales y aliases en paralelo
   try {
-    const aliases = await awsStore.fetchLexAliases(bot.id)
-    lexChatModal.aliases = aliases.filter(a => a.id !== 'TSTALIASID')
+    const [intents, aliasData] = await Promise.all([
+      awsStore.fetchLexIntents(bot.id),
+      awsStore.fetchLexAliases(bot.id).catch(() => ({ aliases: [] })),
+    ])
+    lexChatModal.locales = intents.map(l => ({ localeId: l.localeId, localeName: l.localeName }))
+    lexChatModal.localeId = lexChatModal.locales[0]?.localeId || ''
+    const rawAliases = aliasData.aliases || aliasData
+    lexChatModal.aliases = rawAliases.filter(a => a.id !== 'TSTALIASID')
   } catch (_) {}
 }
 
 function openLexChatFromAlias(bot, alias) {
   lexAliasesModal.open = false
-  Object.assign(lexChatModal, {
-    open: true, sending: false, error: null,
-    botId: bot.id, botName: bot.name,
-    aliasId: alias.id, localeId: 'es_MX',
-    sessionId: `kua-${Date.now()}`,
-    input: '', messages: [], aliases: [],
+  openLexChat(bot).then(() => {
+    lexChatModal.aliasId = alias.id
   })
 }
 
@@ -3949,20 +4010,41 @@ async function reloadLexMissed() {
 
 const lexAliasesModal = reactive({
   open: false, loading: false, error: null,
-  bot: null, botName: '', aliases: [],
+  bot: null, botName: '', botArn: null, aliases: [],
+  showCreate: false, creating: false, createError: null,
+  createForm: { name: '', botVersion: 'DRAFT', description: '' },
 })
 
 async function openLexAliases(bot) {
   Object.assign(lexAliasesModal, {
     open: true, loading: true, error: null,
-    bot, botName: bot.name, aliases: [],
+    bot, botName: bot.name, botArn: null, aliases: [],
+    showCreate: false, creating: false, createError: null,
+    createForm: { name: '', botVersion: 'DRAFT', description: '' },
   })
   try {
-    lexAliasesModal.aliases = await awsStore.fetchLexAliases(bot.id)
+    const data = await awsStore.fetchLexAliases(bot.id)
+    lexAliasesModal.botArn   = data.botArn || null
+    lexAliasesModal.aliases  = data.aliases || data
   } catch (e) {
     lexAliasesModal.error = e?.message || 'Error loading aliases'
   } finally {
     lexAliasesModal.loading = false
+  }
+}
+
+async function doCreateLexAlias() {
+  lexAliasesModal.creating = true; lexAliasesModal.createError = null
+  try {
+    const alias = await awsStore.createLexAlias(lexAliasesModal.bot.id, lexAliasesModal.createForm)
+    lexAliasesModal.aliases.unshift(alias)
+    lexAliasesModal.showCreate = false
+    Object.assign(lexAliasesModal.createForm, { name: '', botVersion: 'DRAFT', description: '' })
+    toast(`Alias "${alias.name}" created`, 'success')
+  } catch (e) {
+    lexAliasesModal.createError = e?.message || 'Error creating alias'
+  } finally {
+    lexAliasesModal.creating = false
   }
 }
 

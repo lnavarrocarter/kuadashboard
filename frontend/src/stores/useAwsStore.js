@@ -762,6 +762,14 @@ export const useAwsStore = defineStore('aws', () => {
     return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/aliases`, { headers: headers() })
   }
 
+  async function createLexAlias(botId, { name, description, botVersion }) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/aliases`, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description, botVersion }),
+    })
+  }
+
   async function fetchLexSlotTypes(botId) {
     return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types`, { headers: headers() })
   }
@@ -837,7 +845,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchSecrets, fetchSecretConfig, importSecretToProfile, previewSecretKeys, importSelectedSecretKeys,
     fetchDataPipelines, activateDataPipeline, deactivateDataPipeline,
     fetchBedrockModels, fetchLexBots, fetchLexIntents, fetchLexLogs, fetchLexTestSets,
-    fetchLexAliases, fetchLexSlotTypes, lexChat, fetchLexMissedUtterances, buildLexBot, fetchLexMetrics,
+    fetchLexAliases, createLexAlias, fetchLexSlotTypes, lexChat, fetchLexMissedUtterances, buildLexBot, fetchLexMetrics,
     fetchCloudformationStacks,
     createS3Bucket, testS3Bucket, fetchEcrImages, applyK8sManifest,
   }
