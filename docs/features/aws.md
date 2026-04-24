@@ -2,7 +2,7 @@
 
 KuaDashboard provides a comprehensive AWS management panel accessible from the sidebar under **Cloud > AWS**. It gives you a single unified view over **19 AWS services** without ever leaving the dashboard.
 
-> **v1.5.0 highlights:** S3 bucket creation & endpoint testing, ECR image browser with deploy-to-Kubernetes, VPC deep-dive details panel, Cognito Groups tab.
+> **v1.6.0 highlights:** Lambda Logs tab with CloudWatch viewer & log group creation; ECR Deploy to K8s YAML bug fixes + Service creation option; API maxResults constraint fixes (Lex, Athena).
 
 ![KuaDashboard — dashboard overview](/screenshots/dashboard-main.png)
 
@@ -61,14 +61,17 @@ Browse all EKS clusters:
 
 ### Lambda Functions
 
-Manage Lambda functions with runtime diagnostics:
+Manage Lambda functions with a rich detail modal — click any function name to open it.
 
 - Function name, description, runtime (Node.js / Python / Go / Java / etc.), memory (MB), timeout (s), state, last modified
 - **Invoke** — send a custom JSON payload synchronously and inspect the full response
-- **Logs** — stream recent CloudWatch log events from `/aws/lambda/<name>`
-- **CW Logs** — open the CloudWatch Logs browser with configurable time range
-- **Tags** — view all function tags
-- **Config** — view handler, environment variables, layers, VPC config, etc.
+- **Detail modal** (6 tabs):
+  - **Básico** — name, ARN, description, state, version, architecture, package type, memory, timeout, ephemeral storage, code size/hash and **Tags** (all in one grid)
+  - **Configuración** — environment variables (toggle reveal), layers, VPC config, tracing/DLQ/concurrency, EFS mounts
+  - **Logs** — live CloudWatch log viewer with time-range selector (15 min → 24 h) and refresh; if the log group does not exist yet, shows a **Create Log Group** button with configurable retention (7–365 days)
+  - **Monitoreo** — CloudWatch metric sparklines: Invocations, Errors, Duration, Throttles, ConcurrentExecutions
+  - **Aliases** — aliases and published versions table
+  - **Código** — file tree + syntax-highlighted code viewer for ZIP-packaged functions
 
 ### API Gateway
 
@@ -95,11 +98,12 @@ Browse bucket contents without leaving the dashboard:
 
 ### DynamoDB
 
-Inspect DynamoDB tables at a glance:
+Inspect and manage DynamoDB tables:
 
 - Table name, partition + sort key schema, status, billing mode (PAY_PER_REQUEST / PROVISIONED), item count, size on disk, creation date
 - **Browse** — scan / query records visually in the inline item browser
-- **Config** — view indexes, streams, TTL settings and more
+- **Info** — detailed panel: billing mode, provisioned throughput, key schema, GSIs, LSIs, stream status, ARN
+- **+ Create Table** — create a new table with partition key, optional sort key, billing mode and RCU/WCU
 
 ### ECR (Elastic Container Registry)
 
@@ -109,7 +113,10 @@ Manage Docker image repositories:
 - **Tags** — view resource tags
 - **Config** — view lifecycle policies and scanning configuration
 - **Images** — browse all images in the repository with digest, tags, push date, size and scan findings
-- **Deploy to K8s** — generate a Kubernetes `Deployment` manifest from any image tag and apply it directly to the connected cluster; configure app name, namespace, replica count, container port, image pull secret and `kubectl` context; copy YAML or apply with one click
+- **Deploy to K8s** — generate Kubernetes manifests from any image tag and apply them directly to the connected cluster:
+  - Configure app name, namespace, replica count, container port, image pull secret and `kubectl` context
+  - **Create Service** option — optionally append a `Service` resource (`ClusterIP`, `NodePort` or `LoadBalancer`) separated by `---`
+  - Copy YAML to clipboard or apply with one click (`kubectl apply --validate=false`)
 
 ---
 
@@ -169,14 +176,28 @@ Monitor and trigger ETL jobs:
 - Job name, type (glueetl / pythonshell / ray), Glue version, worker type, worker count, last modified
 - **Run** — trigger an on-demand job execution
 - **Runs** — view recent execution history with status and duration
-- **Config** — view script location, connections and triggers
+- **Info** — detailed job info: type, worker config, script location, IAM role, connections, default arguments, tags
 
 ### Athena
 
-Browse and query Athena workgroups:
+Full data pipeline browser and query IDE organised in three sub-tabs:
 
-- Workgroup name, state (ENABLED / DISABLED), total queries run, data scanned, S3 output location
-- **Query** — open the inline SQL query editor for the selected workgroup
+**Workgroups**
+- Workgroup name, state (ENABLED / DISABLED), engine version, S3 output location, bytes scanned, queries run, description
+- **Config** — full workgroup configuration (engine, encryption, output, stats, IAM role, policies)
+- **Query** — jump directly to the inline query editor pre-loaded with the workgroup
+
+**Data Sources**
+- Expandable catalog → database tree with type, description, parameters and database count
+- **Info** — catalog detail panel
+- **Editor** — open the query editor scoped to that catalog
+- **Tables** — inline table list for any database
+
+**Query Editor**
+- Split-pane layout: sidebar data tree (catalogs → databases → tables) + SQL editor
+- Run queries and view results in a paginated grid
+- Export results to CSV
+- Query history panel with the 20 most recent executions
 
 ### Data Pipeline
 

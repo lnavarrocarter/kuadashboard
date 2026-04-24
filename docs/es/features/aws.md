@@ -2,7 +2,7 @@
 
 KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **19 servicios de AWS** sin salir del dashboard.
 
-> **Novedades en v1.5.0:** creación y test de endpoints S3, explorador de imágenes ECR con deploy a Kubernetes, panel de detalles VPC con 6 pestañas, tab de Grupos en Cognito.
+> **Novedades en v1.6.0:** tab Logs en Lambda con visor de CloudWatch y opción de crear log group; corrección del YAML en ECR Deploy to K8s + opción de crear Service; corrección de límites maxResults en Lex y Athena.
 
 ![KuaDashboard — vista general](/screenshots/dashboard-main.png)
 
@@ -61,14 +61,17 @@ Navega todos los clusters EKS:
 
 ### Lambda Functions
 
-Gestiona funciones Lambda con diagnóstico de runtime:
+Gestiona funciones Lambda con un modal de detalle completo — haz clic en el nombre de cualquier función para abrirlo.
 
 - Nombre, descripción, runtime (Node.js / Python / Go / Java / etc.), memoria (MB), timeout (s), estado, última modificación
 - **Invoke** — envía un payload JSON personalizado de forma síncrona e inspecciona la respuesta completa
-- **Logs** — transmite eventos de log recientes desde `/aws/lambda/<nombre>`
-- **CW Logs** — abre el explorador de CloudWatch Logs con rango de tiempo configurable
-- **Tags** — ver todos los tags de la función
-- **Config** — ver handler, variables de entorno, layers, configuración VPC, etc.
+- **Modal de detalle** (6 pestañas):
+  - **Básico** — nombre, ARN, descripción, estado, versión, arquitectura, tipo de paquete, memoria, timeout, almacenamiento efímero, tamaño/hash del código y **Tags** (todo en una grid)
+  - **Configuración** — variables de entorno (toggle reveal), layers, configuración VPC, tracing/DLQ/concurrencia, montajes EFS
+  - **Logs** — visor de logs de CloudWatch en vivo con selector de rango de tiempo (15 min → 24 h) y refresco; si el log group no existe, muestra un botón **Crear Log Group** con retención configurable (7–365 días)
+  - **Monitoreo** — sparklines de métricas CloudWatch: Invocaciones, Errores, Duración, Throttles, ConcurrentExecutions
+  - **Aliases** — tabla de aliases y versiones publicadas
+  - **Código** — árbol de archivos + visor de código con resaltado de sintaxis para funciones empaquetadas en ZIP
 
 ### API Gateway
 
@@ -95,11 +98,12 @@ Navega el contenido de los buckets sin salir del dashboard:
 
 ### DynamoDB
 
-Inspecciona tablas DynamoDB de un vistazo:
+Inspecciona y gestiona tablas DynamoDB:
 
 - Nombre de la tabla, esquema de clave (partición + sort), estado, modo de facturación (PAY_PER_REQUEST / PROVISIONED), conteo de ítems, tamaño en disco, fecha de creación
 - **Browse** — escanea/consulta registros visualmente en el explorador de ítems
-- **Config** — ver índices, streams, TTL y más
+- **Info** — panel detallado: modo de facturación, throughput provisionado, esquema de clave, GSIs, LSIs, estado del stream, ARN
+- **+ Create Table** — crea una nueva tabla con clave de partición, sort key opcional, modo de facturación y RCU/WCU
 
 ### ECR (Elastic Container Registry)
 
@@ -109,7 +113,10 @@ Gestiona repositorios de imágenes Docker:
 - **Tags** — ver tags del recurso
 - **Config** — ver lifecycle policies y configuración de escaneo
 - **Images** — lista todas las imágenes del repositorio con digest, tags, fecha de push, tamaño y resultados de escaneo
-- **Deploy to K8s** — genera un manifiesto `Deployment` de Kubernetes desde cualquier tag de imagen y lo aplica directamente al cluster conectado; configura nombre de la app, namespace, réplicas, puerto, image pull secret y contexto `kubectl`; copia el YAML o aplica con un clic
+- **Deploy to K8s** — genera manifiestos de Kubernetes desde cualquier tag de imagen y los aplica al cluster conectado:
+  - Configura nombre de la app, namespace, réplicas, puerto, image pull secret y contexto `kubectl`
+  - Opción **Crear Service** — añade opcionalmente un recurso `Service` (`ClusterIP`, `NodePort` o `LoadBalancer`) separado con `---`
+  - Copiar YAML al portapapeles o aplicar con un clic (`kubectl apply --validate=false`)
 
 ---
 
@@ -169,14 +176,28 @@ Monitorea y ejecuta jobs ETL:
 - Nombre del job, tipo (glueetl / pythonshell / ray), versión de Glue, tipo y cantidad de workers, última modificación
 - **Run** — dispara una ejecución on-demand del job
 - **Runs** — ver historial de ejecuciones recientes con estado y duración
-- **Config** — ver ubicación del script, conexiones y triggers
+- **Info** — detalle del job: tipo, configuración de workers, ubicación del script, rol IAM, conexiones, argumentos por defecto, tags
 
 ### Athena
 
-Navega y consulta workgroups de Athena:
+Explorador completo de pipelines de datos y editor SQL organizado en tres sub-pestañas:
 
-- Nombre del workgroup, estado (ENABLED / DISABLED), total de queries ejecutadas, datos escaneados, ubicación S3 de salida
-- **Query** — abre el editor SQL inline para el workgroup seleccionado
+**Workgroups**
+- Nombre del workgroup, estado (ENABLED / DISABLED), versión del motor, ubicación S3 de salida, bytes escaneados, queries ejecutadas, descripción
+- **Config** — configuración completa (motor, cifrado, salida, estadísticas, rol IAM, políticas)
+- **Query** — salta directamente al editor SQL inline pre-cargado con el workgroup
+
+**Data Sources**
+- Árbol expandible catálogo → base de datos con tipo, descripción, parámetros y conteo de bases de datos
+- **Info** — panel de detalle del catálogo
+- **Editor** — abre el editor de consultas con el catálogo seleccionado
+- **Tables** — lista de tablas inline para cualquier base de datos
+
+**Query Editor**
+- Diseño de panel dividido: árbol de datos en la barra lateral (catálogos → bases de datos → tablas) + editor SQL
+- Ejecuta consultas y ve los resultados en una cuadrícula paginada
+- Exporta resultados a CSV
+- Panel de historial de consultas con las 20 ejecuciones más recientes
 
 ### Data Pipeline
 

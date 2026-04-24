@@ -169,6 +169,14 @@ cd frontend && npm test
 
 ## Changelog
 
+### v1.6.0 (2026-04-24)
+- **AWS Lambda** — tab **Logs** dedicado: visualiza eventos de CloudWatch con selector de rango (15 min → 24 h) y refresh; si no existe el log group muestra opción de crearlo con selección de retención (7–365 días); tags movidos dentro de la grid de cards del tab Básico
+- **AWS ECR → Deploy to K8s** — fix en indentación YAML que causaba `error converting YAML to JSON: did not find expected '-' indicator`; nueva opción **Crear Service** (ClusterIP / NodePort / LoadBalancer) que agrega un recurso `Service` separado con `---` al manifiesto generado
+- **AWS ECR → kubectl apply** — agregado `--validate=false` para evitar error de conexión al API server durante validación de schema OpenAPI
+- **AWS Athena** — fix `sortedRows is not a function` (renombrado a `sortRows` para consistencia con el resto de tablas); límite `MaxResults` corregido de 100 → 50 en `ListTableMetadata`
+- **AWS Lex V2** — corregido `maxResults` de 100 → 50 en `ListIntents`, `ListSlots`, `ListSlotTypes` (límite máximo del API)
+- **Backend** — nuevos endpoints: `POST /lambda/:name/logging` (crear log group CW + configurar retención + actualizar loggingConfig), `GET /logs/lambda/:name` (eventos CloudWatch con filtro de tiempo)
+
 ### v1.5.0 (2026-04-23)
 - **AWS S3** — modal para crear bucket (nombre, región, block public access); botón "Test" por fila con latencia y diagnóstico de acceso
 - **AWS ECR** — lista detallada de imágenes con tags/digest/fecha push; modal "Deploy to K8s" que genera manifiesto Deployment YAML (replicas, namespace, port, pull secret, context) y aplica con `kubectl apply`
