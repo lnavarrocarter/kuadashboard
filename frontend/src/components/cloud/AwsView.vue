@@ -433,6 +433,9 @@
 
       <!-- ══ DynamoDB ══════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'dynamodb'" class="tab-panel">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+          <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openDynamoCreate">+ Create Table</button>
+        </div>
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredDynamo.length" class="empty-row">{{ search.dynamodb ? 'No matches.' : 'No DynamoDB tables found.' }}</div>
         <table v-else class="cloud-table">
@@ -458,6 +461,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ t.creationDateTime ? formatDate(t.creationDateTime) : '-' }}</td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm" @click="openDynamoInfo(t)">ℹ Info</button>
                   <button class="btn sm" @click="openDynamoBrowse(t)">Browse</button>
                   <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${t.name}`, t, { table: t.name })">Config</button>
                 </div>
@@ -534,6 +538,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ j.lastModified ? formatDate(j.lastModified) : '-' }}</td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm" @click="openGlueInfo(j)">ℹ Info</button>
                   <button class="btn sm" @click="runGlueJob(j)">Run</button>
                   <button class="btn sm" @click="openGlueRuns(j)">Runs</button>
                   <button class="btn sm" @click="openGlueJobConfig(j)">Config</button>
@@ -545,39 +550,240 @@
       </div>
 
       <!-- ══ Athena ═════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'athena'" class="tab-panel">
-        <div style="display:flex;gap:8px;align-items:flex-start;height:100%;overflow:hidden">
-          <!-- Workgroups list -->
-          <div style="flex:1;overflow:auto">
-            <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-            <div v-else-if="!filteredAthena.length" class="empty-row">{{ search.athena ? 'No matches.' : 'No Athena workgroups found.' }}</div>
-            <table v-else class="cloud-table">
-              <thead><tr>
-                <th :class="thClass('name')"        @click="sortBy('name')">Workgroup <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-                <th :class="thClass('state')"       @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-                <th :class="thClass('queriesRun')"  @click="sortBy('queriesRun')">Queries <span class="sort-icon">{{ sortIcon('queriesRun') }}</span></th>
-                <th :class="thClass('bytesScanned')" @click="sortBy('bytesScanned')">Scanned</th>
-                <th>Output Location</th>
-                <th>Actions</th>
-              </tr></thead>
-              <tbody>
-                <tr v-for="wg in sortRows(filteredAthena)" :key="wg.name">
-                  <td>
-                    <div>{{ wg.name }}</div>
-                    <div v-if="wg.description" class="text-dim" style="font-size:11px">{{ wg.description }}</div>
+      <div v-show="activeTab === 'athena'" class="tab-panel" style="flex-direction:column;gap:0;overflow:hidden">
+
+        <!-- ── Sub-nav ──────────────────────────────────────────────────── -->
+        <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);padding:0 10px;flex-shrink:0;background:var(--bg-panel,inherit)">
+          <button v-for="t in athenaSubTabs" :key="t.id"
+            :class="['aws-tab-btn', { active: athenaSubTab === t.id }]"
+            style="margin-right:4px"
+            @click="athenaSubTab = t.id">{{ t.label }}</button>
+          <div style="flex:1"/>
+          <input v-if="athenaSubTab !== 'editor'"
+            v-model="search.athena" type="text"
+            placeholder="Search…" class="search-input"
+            style="width:180px;font-size:12px;margin:4px 0" />
+          <button class="btn sm" style="margin:4px 0 4px 6px" @click="reloadActiveTab" title="Reload">↺</button>
+          <button v-if="athenaSubTab !== 'editor'" class="btn sm"
+            style="margin:4px 0 4px 6px;background:rgba(88,166,255,.15);border-color:#58a6ff;color:#58a6ff"
+            @click="athenaSubTab = 'editor'">⚡ Query Editor</button>
+        </div>
+
+        <!-- ── Workgroups sub-tab ──────────────────────────────────────── -->
+        <div v-show="athenaSubTab === 'workgroups'" style="flex:1;overflow:auto">
+          <div v-if="awsStore.loading" class="empty-row">Loading...</div>
+          <div v-else-if="!filteredAthena.length" class="empty-row">
+            {{ search.athena ? 'No matches.' : 'No Athena workgroups found.' }}
+          </div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th :class="thClass('name')"          @click="sortBy('name')">Workgroup <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+              <th :class="thClass('state')"         @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+              <th>Engine Version</th>
+              <th>Output Location</th>
+              <th :class="thClass('bytesScanned')"  @click="sortBy('bytesScanned')">Bytes Scanned <span class="sort-icon">{{ sortIcon('bytesScanned') }}</span></th>
+              <th :class="thClass('queriesRun')"    @click="sortBy('queriesRun')">Queries Run <span class="sort-icon">{{ sortIcon('queriesRun') }}</span></th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="wg in sortedRows(filteredAthena)" :key="wg.name">
+                <td class="mono-xs">{{ wg.name }}</td>
+                <td><span :class="wg.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ wg.state }}</span></td>
+                <td class="text-dim" style="font-size:11px">{{ wg.engineVersion || '—' }}</td>
+                <td class="text-dim mono-xs" style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="wg.outputLocation">{{ wg.outputLocation || '—' }}</td>
+                <td class="text-dim">{{ wg.bytesScanned ? formatBytes(wg.bytesScanned) : '—' }}</td>
+                <td class="text-dim">{{ wg.queriesRun ?? '—' }}</td>
+                <td class="text-dim" style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wg.description || '—' }}</td>
+                <td>
+                  <div class="action-group">
+                    <button class="btn sm" @click="openAthenaWgInfo(wg)" title="Configuration details">ℹ Config</button>
+                    <button class="btn sm" @click="openAthenaWgQuery(wg)" title="Run a query with this workgroup">▶ Query</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── Data Sources sub-tab ───────────────────────────────────── -->
+        <div v-show="athenaSubTab === 'datasources'" style="flex:1;overflow:auto">
+          <div v-if="athenaEditor.catalogsLoading" class="empty-row">Loading...</div>
+          <div v-else-if="!athenaEditor.catalogs.length" class="empty-row">No data sources found.</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>Catalog / Data Source</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Databases</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody>
+              <template v-for="cat in athenaEditor.catalogs" :key="cat.name">
+                <!-- Catalog row -->
+                <tr class="athena-cat-row" @click="cat._open = !cat._open" style="cursor:pointer">
+                  <td style="font-weight:600;display:flex;align-items:center;gap:6px">
+                    <span style="font-size:9px;color:var(--text-dim)">{{ cat._open ? '▾' : '▸' }}</span>
+                    🗄 {{ cat.name }}
                   </td>
-                  <td><span :class="wg.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ wg.state }}</span></td>
-                  <td class="text-dim">{{ wg.queriesRun?.toLocaleString() ?? '-' }}</td>
-                  <td class="text-dim">{{ wg.bytesScanned ? formatBytes(wg.bytesScanned) : '-' }}</td>
-                  <td class="text-dim mono-xs" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="wg.outputLocation">{{ wg.outputLocation || '-' }}</td>
+                  <td><span class="tag-chip" style="font-size:10px">{{ cat.type }}</span></td>
+                  <td class="text-dim" style="font-size:11px">{{ cat.description || '—' }}</td>
+                  <td class="text-dim">{{ (cat.databases || []).length }}</td>
                   <td>
-                    <div class="row-actions">
-                      <button class="btn sm" @click="openAthenaQuery(wg)">Query</button>
+                    <div class="action-group">
+                      <button class="btn sm" @click.stop="openAthenaCatalogInfo(cat)" title="Catalog details">ℹ Info</button>
+                      <button class="btn sm" @click.stop="athenaSubTab = 'editor'; athenaEditor.selectedCatalog = cat.name" title="Open in Query Editor">⚡ Editor</button>
                     </div>
                   </td>
                 </tr>
-              </tbody>
-            </table>
+                <!-- Database rows (expanded) -->
+                <template v-if="cat._open">
+                  <tr v-for="db in (cat.databases || [])" :key="cat.name + '/' + db.name"
+                    style="background:rgba(255,255,255,.02)">
+                    <td style="padding-left:32px;display:flex;align-items:center;gap:6px">
+                      <span style="font-size:10px">📁</span> {{ db.name }}
+                    </td>
+                    <td class="text-dim" style="font-size:11px">Database</td>
+                    <td class="text-dim" style="font-size:11px">{{ db.description || '—' }}</td>
+                    <td class="text-dim" style="font-size:11px">{{ db.tables?.length ?? '—' }} tables loaded</td>
+                    <td>
+                      <div class="action-group">
+                        <button class="btn sm" @click="athenaSubTab = 'editor'; selectAthenaDb(cat, db)" title="Query this database">⚡ Editor</button>
+                        <button class="btn sm" @click="loadAthenaDatabaseTables(cat, db)" :disabled="db._loadingTables" title="Load tables">{{ db._loadingTables ? '...' : '⊞ Tables' }}</button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── Query Editor sub-tab ───────────────────────────────────── -->
+        <div v-show="athenaSubTab === 'editor'" style="flex:1;display:flex;flex-direction:row;overflow:hidden">
+          <!-- Left: Data sources tree -->
+          <div class="athena-sidebar">
+            <div class="athena-sidebar-header">
+              <span>Data Sources</span>
+              <button class="btn sm" @click="loadAthenaCatalogs" :disabled="athenaEditor.catalogsLoading" title="Refresh">↺</button>
+            </div>
+            <div v-if="athenaEditor.catalogsLoading" class="empty-row" style="font-size:11px">Loading...</div>
+            <div v-else-if="!athenaEditor.catalogs.length" class="empty-row" style="font-size:11px">No catalogs found.</div>
+            <div v-else class="athena-tree">
+              <div v-for="cat in athenaEditor.catalogs" :key="cat.name" class="athena-tree-catalog">
+                <div class="athena-tree-node catalog-node" @click="cat._open = !cat._open">
+                  <span class="tree-icon">{{ cat._open ? '▾' : '▸' }}</span>
+                  <span class="tree-icon-db">🗄</span>
+                  <span class="tree-label">{{ cat.name }}</span>
+                  <span class="tree-badge">{{ cat.type }}</span>
+                </div>
+                <div v-if="cat._open" class="athena-tree-databases">
+                  <div v-for="db in (cat.databases || [])" :key="db.name" class="athena-tree-db">
+                    <div class="athena-tree-node db-node" @click="toggleAthenaDb(cat, db)">
+                      <span class="tree-icon">{{ db._open ? '▾' : '▸' }}</span>
+                      <span class="tree-icon-db">📁</span>
+                      <span class="tree-label" :class="{ active: athenaEditor.selectedCatalog === cat.name && athenaEditor.selectedDb === db.name }" @click.stop="selectAthenaDb(cat, db)">{{ db.name }}</span>
+                    </div>
+                    <div v-if="db._open" class="athena-tree-tables">
+                      <div v-if="db._loadingTables" class="tree-loading">Loading tables...</div>
+                      <div v-else-if="!(db.tables || []).length" class="tree-loading">No tables</div>
+                      <div v-for="tbl in (db.tables || [])" :key="tbl.name"
+                        class="athena-tree-node table-node"
+                        :class="{ active: athenaEditor.selectedTable === tbl.name }"
+                        @click="selectAthenaTable(cat, db, tbl)">
+                        <span class="tree-icon-db">🗒</span>
+                        <span class="tree-label">{{ tbl.name }}</span>
+                        <span class="tree-badge dim">{{ tbl.tableType }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Query editor -->
+          <div class="athena-main">
+            <!-- Toolbar -->
+            <div class="athena-toolbar">
+              <select v-model="athenaEditor.selectedWorkgroup" class="ctrl-select" style="min-width:130px;font-size:12px">
+                <option value="">— Workgroup —</option>
+                <option v-for="wg in awsStore.athenaWorkgroups" :key="wg.name" :value="wg.name">{{ wg.name }}</option>
+              </select>
+              <span v-if="athenaEditor.selectedDb" class="text-dim" style="font-size:11px">{{ athenaEditor.selectedCatalog }}.{{ athenaEditor.selectedDb }}</span>
+              <div style="flex:1"></div>
+              <button class="btn sm" @click="loadAthenaHistory" title="Query history">📋 History</button>
+              <button class="btn" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e;font-size:12px"
+                @click="runAthenaEditorQuery" :disabled="athenaEditor.running || !athenaEditor.sql.trim()">
+                {{ athenaEditor.running ? '⏳ Running…' : '▶ Run' }}
+              </button>
+            </div>
+
+            <!-- SQL editor -->
+            <div class="athena-editor-wrap">
+              <textarea
+                v-model="athenaEditor.sql"
+                class="athena-editor"
+                placeholder="SELECT * FROM my_database.my_table LIMIT 10;"
+                spellcheck="false"
+                @keydown.ctrl.enter.prevent="runAthenaEditorQuery"
+              ></textarea>
+            </div>
+
+            <!-- Status bar -->
+            <div v-if="athenaEditor.queryId || athenaEditor.error" class="athena-status-bar">
+              <span v-if="athenaEditor.running" class="status-warn">Running…</span>
+              <span v-else-if="athenaEditor.status === 'SUCCEEDED'" class="status-ok">✓ Succeeded</span>
+              <span v-else-if="athenaEditor.status === 'FAILED'" class="status-err">✗ Failed</span>
+              <span v-else-if="athenaEditor.status === 'CANCELLED'" class="status-err">✗ Cancelled</span>
+              <span v-if="athenaEditor.queryId" class="text-dim mono-xs">ID: {{ athenaEditor.queryId }}</span>
+              <span v-if="athenaEditor.execTimeMs" class="text-dim" style="font-size:11px">{{ (athenaEditor.execTimeMs/1000).toFixed(1) }}s · {{ athenaEditor.bytesScanned ? formatBytes(athenaEditor.bytesScanned) + ' scanned' : '' }}</span>
+              <span v-if="athenaEditor.error" class="status-err" style="font-size:11px">{{ athenaEditor.error }}</span>
+            </div>
+
+            <!-- Results -->
+            <div class="athena-results" v-if="athenaEditor.results">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;flex-shrink:0;font-size:11px;color:var(--text-dim)">
+                <span>{{ (athenaEditor.results.Rows || []).length - 1 }} rows</span>
+                <button class="btn sm" @click="exportAthenaResults">⬇ Export CSV</button>
+              </div>
+              <div style="overflow:auto;flex:1">
+                <table class="cloud-table" style="font-size:11px">
+                  <thead>
+                    <tr>
+                      <th v-for="col in (athenaEditor.results.ResultSetMetadata?.ColumnInfo || [])" :key="col.Name">{{ col.Name }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, ri) in (athenaEditor.results.Rows || []).slice(1)" :key="ri">
+                      <td v-for="(cell, ci) in (row.Data || [])" :key="ci" class="text-dim">{{ cell.VarCharValue ?? '' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- History panel -->
+            <div v-if="athenaEditor.showHistory" class="athena-history-panel">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+                <span style="font-size:12px;font-weight:600">Recent Queries</span>
+                <button class="btn sm" @click="athenaEditor.showHistory = false">✕</button>
+              </div>
+              <div v-if="athenaEditor.historyLoading" class="empty-row">Loading...</div>
+              <div v-else-if="!athenaEditor.history.length" class="empty-row" style="font-size:12px">No history found.</div>
+              <div v-else style="overflow-y:auto;flex:1">
+                <div v-for="h in athenaEditor.history" :key="h.id"
+                  class="athena-history-item"
+                  @click="loadHistoryItem(h)">
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <span :class="h.state === 'SUCCEEDED' ? 'status-ok' : h.state === 'FAILED' ? 'status-err' : 'status-warn'" style="font-size:10px">{{ h.state }}</span>
+                    <span class="text-dim" style="font-size:10px">{{ h.submittedAt ? formatDate(h.submittedAt) : '' }}</span>
+                    <span v-if="h.database" class="text-dim mono-xs" style="font-size:10px">{{ h.database }}</span>
+                  </div>
+                  <div class="mono-xs" style="font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">{{ h.query }}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -749,7 +955,7 @@
                   <button class="btn sm" @click="openInvalidateModal(d)">Invalidate</button>
                   <button class="btn sm" @click="openConfig('cloudfront', `CF: ${d.domainName}`, d, { id: d.id })">Config</button>
                   <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openCfStats(d)">Stats</button>
-                  <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="window.open('https://' + (d.aliases?.[0] || d.domainName), '_blank')" title="Open site">Visit Site</button>
+                  <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openSiteUrl('https://' + (d.aliases?.[0] || d.domainName))" title="Open site">Visit Site</button>
                 </div>
               </td>
             </tr>
@@ -2210,45 +2416,6 @@
       </div>
     </div>
 
-    <!-- Athena Query Modal -->
-    <div v-if="athenaModal.open" class="modal-overlay" @click.self="athenaModal.open = false">
-      <div class="modal" style="width:800px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Athena Query — {{ athenaModal.workgroup?.name }}</span>
-          <button class="btn sm" @click="athenaModal.open = false">Close</button>
-        </div>
-        <div style="padding:12px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
-          <textarea v-model="athenaModal.query" rows="5" class="ctrl-input"
-            style="font-family:monospace;font-size:12px;resize:vertical"
-            placeholder="SELECT * FROM my_table LIMIT 10;" />
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn" @click="submitAthenaQuery" :disabled="athenaModal.loading || !athenaModal.query.trim()">
-              {{ athenaModal.loading ? 'Running...' : 'Run Query' }}
-            </button>
-            <span v-if="athenaModal.status" :class="athenaModal.status === 'SUCCEEDED' ? 'status-ok' : athenaModal.status === 'FAILED' ? 'status-err' : 'status-warn'">
-              {{ athenaModal.status }}
-            </span>
-            <span v-if="athenaModal.queryId" class="text-dim mono-xs">ID: {{ athenaModal.queryId }}</span>
-          </div>
-          <div v-if="athenaModal.error" class="alert-error">{{ athenaModal.error }}</div>
-          <div v-if="athenaModal.results" style="overflow:auto;flex:1">
-            <table class="cloud-table">
-              <thead v-if="athenaModal.results.ResultSetMetadata?.ColumnInfo">
-                <tr>
-                  <th v-for="col in athenaModal.results.ResultSetMetadata.ColumnInfo" :key="col.Name">{{ col.Name }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, ri) in (athenaModal.results.Rows || []).slice(1)" :key="ri">
-                  <td v-for="(cell, ci) in (row.Data || [])" :key="ci" class="text-dim" style="font-size:12px">{{ cell.VarCharValue ?? '' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- CloudFront Invalidation Modal -->
     <div v-if="invalidateModal.open" class="modal-overlay" @click.self="invalidateModal.open = false">
       <div class="modal" style="width:500px;max-width:96vw">
@@ -2584,6 +2751,390 @@
               @click="() => submitImportSecret()">
               {{ importSecretModal.loading ? 'Importando...' : `Importar ${importSecretModal.selectedKeys.length} variable(s)` }}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Athena Workgroup Config Modal ════════════════════════════════════ -->
+    <div v-if="athenaWgInfo.open" class="modal-overlay" @click.self="athenaWgInfo.open = false">
+      <div class="modal" style="width:660px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span style="font-weight:600">Athena Workgroup — {{ athenaWgInfo.wg?.name }}</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e" @click="athenaWgInfo.open=false; openAthenaWgQuery(athenaWgInfo.wg)">▶ Query</button>
+            <button class="btn sm" @click="athenaWgInfo.open = false">Close</button>
+          </div>
+        </div>
+        <div v-if="athenaWgInfo.loading" class="empty-row">Loading...</div>
+        <div v-else-if="athenaWgInfo.error" class="alert-error">{{ athenaWgInfo.error }}</div>
+        <div v-else-if="athenaWgInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+          <!-- Status & engine -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div class="config-section">
+              <div class="config-title">Estado</div>
+              <span :class="athenaWgInfo.data.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ athenaWgInfo.data.state }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Engine Version</div>
+              <span class="text-dim">{{ athenaWgInfo.data.effectiveEngineVersion || athenaWgInfo.data.selectedEngineVersion || '—' }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Creado</div>
+              <span class="text-dim" style="font-size:11px">{{ athenaWgInfo.data.creationTime ? formatDate(athenaWgInfo.data.creationTime) : '—' }}</span>
+            </div>
+          </div>
+          <!-- Stats -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="config-section">
+              <div class="config-title">Estadísticas de Uso</div>
+              <div class="config-row"><span>Total Queries</span><span class="mono-xs">{{ (athenaWgInfo.data.totalQueryCount || 0).toLocaleString() }}</span></div>
+              <div class="config-row"><span>Total Bytes Escaneados</span><span class="mono-xs">{{ athenaWgInfo.data.totalBytesScanned ? formatBytes(athenaWgInfo.data.totalBytesScanned) : '—' }}</span></div>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Límites</div>
+              <div class="config-row"><span>Bytes Scanned Cutoff</span><span class="mono-xs">{{ athenaWgInfo.data.bytesScannedCutoff ? formatBytes(athenaWgInfo.data.bytesScannedCutoff) : 'Sin límite' }}</span></div>
+              <div class="config-row"><span>Requester Pays</span><span :class="athenaWgInfo.data.requesterPays ? 'status-warn' : 'text-dim'">{{ athenaWgInfo.data.requesterPays ? 'Sí' : 'No' }}</span></div>
+            </div>
+          </div>
+          <!-- Output / Encryption -->
+          <div class="config-section">
+            <div class="config-title">Resultados & Cifrado</div>
+            <div class="config-row"><span>Output Location (S3)</span><span class="mono-xs" style="font-size:11px;word-break:break-all">{{ athenaWgInfo.data.outputLocation || '—' }}</span></div>
+            <div class="config-row"><span>Encryption</span><span class="mono-xs">{{ athenaWgInfo.data.encryptionOption || 'SSE_S3 (default)' }}</span></div>
+            <div v-if="athenaWgInfo.data.kmsKey" class="config-row"><span>KMS Key</span><span class="mono-xs" style="font-size:10px;word-break:break-all">{{ athenaWgInfo.data.kmsKey }}</span></div>
+          </div>
+          <!-- Policies -->
+          <div class="config-section">
+            <div class="config-title">Políticas</div>
+            <div class="config-row"><span>Enforce Workgroup Config</span><span :class="athenaWgInfo.data.enforceWorkGroupConfig ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.enforceWorkGroupConfig ? 'Sí' : 'No' }}</span></div>
+            <div class="config-row"><span>Publish CloudWatch Metrics</span><span :class="athenaWgInfo.data.publishCloudWatchMetrics ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.publishCloudWatchMetrics ? 'Sí' : 'No' }}</span></div>
+          </div>
+          <!-- Execution Role -->
+          <div v-if="athenaWgInfo.data.executionRole" class="config-section">
+            <div class="config-title">IAM Execution Role</div>
+            <span class="mono-xs" style="font-size:11px;word-break:break-all">{{ athenaWgInfo.data.executionRole }}</span>
+          </div>
+          <!-- Description -->
+          <div v-if="athenaWgInfo.data.description" class="config-section">
+            <div class="config-title">Descripción</div>
+            <span class="text-dim">{{ athenaWgInfo.data.description }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Athena Workgroup Query Modal ══════════════════════════════════════ -->
+    <div v-if="athenaModal.open" class="modal-overlay" @click.self="athenaModal.open = false">
+      <div class="modal" style="width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span style="font-weight:600">Query — Workgroup: {{ athenaModal.workgroup?.name }}</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" @click="athenaModal.open=false; athenaSubTab='editor'; if(athenaModal.workgroup) athenaEditor.selectedWorkgroup = athenaModal.workgroup.name">⚡ Open in Editor</button>
+            <button class="btn sm" @click="athenaModal.open = false">Close</button>
+          </div>
+        </div>
+        <div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px;flex:1;overflow:hidden">
+          <textarea v-model="athenaModal.query" rows="5" class="ctrl-input"
+            style="font-family:monospace;font-size:12px;resize:vertical"
+            placeholder="SELECT * FROM my_database.my_table LIMIT 10;"></textarea>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn" @click="submitAthenaQuery" :disabled="athenaModal.loading || !athenaModal.query.trim()">
+              {{ athenaModal.loading ? 'Running...' : '▶ Run Query' }}
+            </button>
+            <span v-if="athenaModal.status" :class="athenaModal.status === 'SUCCEEDED' ? 'status-ok' : athenaModal.status === 'FAILED' ? 'status-err' : 'status-warn'">
+              {{ athenaModal.status }}
+            </span>
+            <span v-if="athenaModal.queryId" class="text-dim mono-xs">ID: {{ athenaModal.queryId }}</span>
+          </div>
+          <div v-if="athenaModal.error" class="alert-error">{{ athenaModal.error }}</div>
+          <div v-if="athenaModal.results" style="overflow:auto;flex:1">
+            <table class="cloud-table" style="font-size:11px">
+              <thead v-if="athenaModal.results.ResultSetMetadata?.ColumnInfo">
+                <tr><th v-for="col in athenaModal.results.ResultSetMetadata.ColumnInfo" :key="col.Name">{{ col.Name }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, ri) in (athenaModal.results.Rows || []).slice(1)" :key="ri">
+                  <td v-for="(cell, ci) in (row.Data || [])" :key="ci" class="text-dim">{{ cell.VarCharValue ?? '' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Athena Catalog Info Modal ════════════════════════════════════════ -->
+    <div v-if="athenaCatInfo.open" class="modal-overlay" @click.self="athenaCatInfo.open = false">
+      <div class="modal" style="width:560px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span style="font-weight:600">Data Source — {{ athenaCatInfo.cat?.name }}</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" style="background:rgba(88,166,255,.15);border-color:#58a6ff;color:#58a6ff"
+              @click="athenaCatInfo.open=false; athenaSubTab='editor'; athenaEditor.selectedCatalog = athenaCatInfo.cat?.name || ''">⚡ Editor</button>
+            <button class="btn sm" @click="athenaCatInfo.open = false">Close</button>
+          </div>
+        </div>
+        <div v-if="athenaCatInfo.loading" class="empty-row">Loading...</div>
+        <div v-else-if="athenaCatInfo.error" class="alert-error">{{ athenaCatInfo.error }}</div>
+        <div v-else-if="athenaCatInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="config-section">
+              <div class="config-title">Tipo</div>
+              <span class="tag-chip">{{ athenaCatInfo.data.type }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Descripción</div>
+              <span class="text-dim">{{ athenaCatInfo.data.description || '—' }}</span>
+            </div>
+          </div>
+          <div v-if="Object.keys(athenaCatInfo.data.parameters || {}).length" class="config-section">
+            <div class="config-title">Parámetros de Conexión</div>
+            <div v-for="(v, k) in athenaCatInfo.data.parameters" :key="k" class="config-row">
+              <span class="mono-xs" style="color:var(--text-dim)">{{ k }}</span>
+              <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ v }}</span>
+            </div>
+          </div>
+          <div class="config-section">
+            <div class="config-title">Bases de Datos</div>
+            <div v-if="!athenaCatInfo.cat?.databases?.length" class="text-dim" style="font-size:11px">—</div>
+            <div v-for="db in (athenaCatInfo.cat?.databases || [])" :key="db.name" class="config-row">
+              <span class="mono-xs">📁 {{ db.name }}</span>
+              <span v-if="db.description" class="text-dim" style="font-size:11px">{{ db.description }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DynamoDB Info Modal ════════════════════════════════════════════════ -->
+    <div v-if="dynamoInfo.open" class="modal-overlay" @click.self="dynamoInfo.open = false">
+      <div class="modal" style="width:680px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span style="font-weight:600">DynamoDB — {{ dynamoInfo.table?.name }}</span>
+          <button class="btn sm" @click="dynamoInfo.open = false">Close</button>
+        </div>
+        <div v-if="dynamoInfo.loading" class="empty-row">Loading...</div>
+        <div v-else-if="dynamoInfo.error" class="alert-error">{{ dynamoInfo.error }}</div>
+        <div v-else-if="dynamoInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+          <!-- Status / billing -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div class="config-section">
+              <div class="config-title">Estado</div>
+              <span :class="dynamoInfo.data.TableStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ dynamoInfo.data.TableStatus }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Billing</div>
+              <span class="text-dim">{{ dynamoInfo.data.BillingModeSummary?.BillingMode || 'PROVISIONED' }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Tamaño</div>
+              <span class="text-dim">{{ dynamoInfo.data.TableSizeBytes ? formatBytes(dynamoInfo.data.TableSizeBytes) : '-' }}</span>
+              <span class="text-dim" style="font-size:11px"> ({{ (dynamoInfo.data.ItemCount || 0).toLocaleString() }} items)</span>
+            </div>
+          </div>
+          <!-- Provisioned (if applicable) -->
+          <div v-if="dynamoInfo.data.ProvisionedThroughput" class="config-section">
+            <div class="config-title">Throughput Provisionado</div>
+            <div class="config-row"><span>Read Capacity Units (RCU)</span><span class="mono-xs">{{ dynamoInfo.data.ProvisionedThroughput.ReadCapacityUnits }}</span></div>
+            <div class="config-row"><span>Write Capacity Units (WCU)</span><span class="mono-xs">{{ dynamoInfo.data.ProvisionedThroughput.WriteCapacityUnits }}</span></div>
+            <div class="config-row"><span>Last Decrease</span><span class="text-dim" style="font-size:11px">{{ dynamoInfo.data.ProvisionedThroughput.LastDecreaseDateTime ? formatDate(dynamoInfo.data.ProvisionedThroughput.LastDecreaseDateTime) : '-' }}</span></div>
+          </div>
+          <!-- Key Schema -->
+          <div class="config-section">
+            <div class="config-title">Key Schema</div>
+            <div v-for="k in (dynamoInfo.data.KeySchema || [])" :key="k.AttributeName" class="config-row">
+              <span>{{ k.KeyType === 'HASH' ? 'Partition Key' : 'Sort Key' }}</span>
+              <span class="mono-xs">{{ k.AttributeName }}
+                <span class="text-dim"> ({{ (dynamoInfo.data.AttributeDefinitions || []).find(a => a.AttributeName === k.AttributeName)?.AttributeType || '?' }})</span>
+              </span>
+            </div>
+          </div>
+          <!-- GSIs -->
+          <div v-if="dynamoInfo.data.GlobalSecondaryIndexes?.length" class="config-section">
+            <div class="config-title">Global Secondary Indexes ({{ dynamoInfo.data.GlobalSecondaryIndexes.length }})</div>
+            <div v-for="gsi in dynamoInfo.data.GlobalSecondaryIndexes" :key="gsi.IndexName" style="margin-bottom:8px;border:1px solid var(--border);border-radius:4px;padding:8px">
+              <div style="font-weight:600;font-size:12px">{{ gsi.IndexName }}</div>
+              <div class="config-row"><span>Keys</span><span class="mono-xs">{{ (gsi.KeySchema || []).map(k => `${k.AttributeName} (${k.KeyType})`).join(', ') }}</span></div>
+              <div class="config-row"><span>Status</span><span :class="gsi.IndexStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ gsi.IndexStatus }}</span></div>
+              <div class="config-row"><span>Items</span><span class="text-dim">{{ (gsi.ItemCount || 0).toLocaleString() }}</span></div>
+              <div class="config-row"><span>Projection</span><span class="text-dim">{{ gsi.Projection?.ProjectionType }}</span></div>
+            </div>
+          </div>
+          <!-- LSIs -->
+          <div v-if="dynamoInfo.data.LocalSecondaryIndexes?.length" class="config-section">
+            <div class="config-title">Local Secondary Indexes ({{ dynamoInfo.data.LocalSecondaryIndexes.length }})</div>
+            <div v-for="lsi in dynamoInfo.data.LocalSecondaryIndexes" :key="lsi.IndexName" style="margin-bottom:4px">
+              <span class="mono-xs">{{ lsi.IndexName }}</span>
+              <span class="text-dim" style="font-size:11px"> — {{ (lsi.KeySchema || []).map(k => k.AttributeName).join(', ') }}</span>
+            </div>
+          </div>
+          <!-- Stream / TTL -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="config-section">
+              <div class="config-title">DynamoDB Streams</div>
+              <span :class="dynamoInfo.data.StreamSpecification?.StreamEnabled ? 'status-ok' : 'text-dim'">
+                {{ dynamoInfo.data.StreamSpecification?.StreamEnabled ? `Enabled (${dynamoInfo.data.StreamSpecification.StreamViewType})` : 'Disabled' }}
+              </span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">ARN</div>
+              <span class="mono-xs" style="font-size:10px;word-break:break-all">{{ dynamoInfo.data.TableArn }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DynamoDB Create Table Modal ════════════════════════════════════════ -->
+    <div v-if="dynamoCreate.open" class="modal-overlay" @click.self="dynamoCreate.open = false">
+      <div class="modal" style="width:480px;max-width:96vw">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Create DynamoDB Table</span>
+          <button class="btn sm" @click="dynamoCreate.open = false">Close</button>
+        </div>
+        <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+          <div>
+            <label class="ctrl-label">Table Name *</label>
+            <input v-model="dynamoCreate.tableName" class="ctrl-input" placeholder="my-table" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+            <div>
+              <label class="ctrl-label">Partition Key (HASH) *</label>
+              <input v-model="dynamoCreate.partitionKey" class="ctrl-input" placeholder="id" />
+            </div>
+            <div>
+              <label class="ctrl-label">Type</label>
+              <select v-model="dynamoCreate.partitionKeyType" class="ctrl-select" style="width:70px">
+                <option value="S">S (String)</option>
+                <option value="N">N (Number)</option>
+                <option value="B">B (Binary)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+            <div>
+              <label class="ctrl-label">Sort Key (RANGE) — optional</label>
+              <input v-model="dynamoCreate.sortKey" class="ctrl-input" placeholder="timestamp (optional)" />
+            </div>
+            <div>
+              <label class="ctrl-label">Type</label>
+              <select v-model="dynamoCreate.sortKeyType" class="ctrl-select" style="width:70px">
+                <option value="S">S (String)</option>
+                <option value="N">N (Number)</option>
+                <option value="B">B (Binary)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="ctrl-label">Billing Mode</label>
+            <select v-model="dynamoCreate.billingMode" class="ctrl-select">
+              <option value="PAY_PER_REQUEST">PAY_PER_REQUEST (On-demand)</option>
+              <option value="PROVISIONED">PROVISIONED</option>
+            </select>
+          </div>
+          <div v-if="dynamoCreate.billingMode === 'PROVISIONED'" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label class="ctrl-label">Read Capacity Units</label>
+              <input v-model.number="dynamoCreate.readCapacity" class="ctrl-input" type="number" min="1" />
+            </div>
+            <div>
+              <label class="ctrl-label">Write Capacity Units</label>
+              <input v-model.number="dynamoCreate.writeCapacity" class="ctrl-input" type="number" min="1" />
+            </div>
+          </div>
+          <div v-if="dynamoCreate.error" class="alert-error">{{ dynamoCreate.error }}</div>
+          <div v-if="dynamoCreate.result" class="alert-success">{{ dynamoCreate.result }}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+            <button class="btn" @click="submitDynamoCreate" :disabled="dynamoCreate.loading">{{ dynamoCreate.loading ? 'Creating...' : 'Create Table' }}</button>
+            <button class="btn sm" @click="dynamoCreate.open = false">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Glue Job Info Modal ════════════════════════════════════════════════ -->
+    <div v-if="glueInfo.open" class="modal-overlay" @click.self="glueInfo.open = false">
+      <div class="modal" style="width:700px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span style="font-weight:600">Glue Job — {{ glueInfo.job?.name }}</span>
+          <button class="btn sm" @click="glueInfo.open = false">Close</button>
+        </div>
+        <div v-if="glueInfo.loading" class="empty-row">Loading...</div>
+        <div v-else-if="glueInfo.error" class="alert-error">{{ glueInfo.error }}</div>
+        <div v-else-if="glueInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+          <!-- Summary cards -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div class="config-section">
+              <div class="config-title">Tipo</div>
+              <span class="text-dim">{{ glueInfo.data.command || '-' }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Glue Version</div>
+              <span class="text-dim">{{ glueInfo.data.glueVersion || '-' }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Worker</div>
+              <span class="text-dim">{{ glueInfo.data.workerType || '-' }}</span>
+            </div>
+            <div class="config-section">
+              <div class="config-title">Workers</div>
+              <span class="text-dim">{{ glueInfo.data.numWorkers ?? '-' }}</span>
+            </div>
+          </div>
+          <!-- Execution settings -->
+          <div class="config-section">
+            <div class="config-title">Configuración de Ejecución</div>
+            <div class="config-row"><span>Timeout</span><span class="mono-xs">{{ glueInfo.data.timeout ? glueInfo.data.timeout + ' min' : '-' }}</span></div>
+            <div class="config-row"><span>Max Retries</span><span class="mono-xs">{{ glueInfo.data.maxRetries ?? '-' }}</span></div>
+            <div class="config-row"><span>Max Concurrent Runs</span><span class="mono-xs">{{ glueInfo.data.maxConcurrentRuns ?? '-' }}</span></div>
+            <div class="config-row"><span>Python Version</span><span class="mono-xs">{{ glueInfo.data.pythonVersion || '-' }}</span></div>
+            <div class="config-row"><span>Runtime</span><span class="mono-xs">{{ glueInfo.data.runtime || '-' }}</span></div>
+          </div>
+          <!-- IAM / Role -->
+          <div class="config-section">
+            <div class="config-title">IAM Role</div>
+            <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ glueInfo.data.role || '-' }}</span>
+          </div>
+          <!-- Script -->
+          <div v-if="glueInfo.data.scriptLocation" class="config-section">
+            <div class="config-title">Script</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="mono-xs" style="font-size:11px;word-break:break-all;flex:1">{{ glueInfo.data.scriptLocation }}</span>
+              <a :href="glueS3ConsoleUrl(glueInfo.data.scriptLocation)" target="_blank" class="btn sm">Open in S3</a>
+            </div>
+          </div>
+          <!-- CW Log Group -->
+          <div class="config-section">
+            <div class="config-title">CloudWatch Log Group</div>
+            <span class="mono-xs" style="font-size:11px">{{ glueInfo.data.cloudWatchLogGroup || `/aws-glue/jobs/${glueInfo.job?.name}` }}</span>
+          </div>
+          <!-- Connections -->
+          <div v-if="(glueInfo.data.connections || []).length" class="config-section">
+            <div class="config-title">Conexiones ({{ glueInfo.data.connections.length }})</div>
+            <div v-for="c in glueInfo.data.connections" :key="c" class="config-row">
+              <span>{{ c }}</span>
+            </div>
+          </div>
+          <!-- Catalog database -->
+          <div v-if="glueInfo.data.databaseName" class="config-section">
+            <div class="config-title">Data Catalog Database</div>
+            <span class="mono-xs">{{ glueInfo.data.databaseName }}</span>
+          </div>
+          <!-- Default Arguments -->
+          <div v-if="Object.keys(glueInfo.data.defaultArguments || {}).length" class="config-section">
+            <div class="config-title">Default Arguments ({{ Object.keys(glueInfo.data.defaultArguments).length }})</div>
+            <div v-for="(v, k) in glueInfo.data.defaultArguments" :key="k" class="config-row">
+              <span class="mono-xs" style="color:var(--text-dim)">{{ k }}</span>
+              <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ v }}</span>
+            </div>
+          </div>
+          <!-- Tags -->
+          <div v-if="Object.keys(glueInfo.data.tags || {}).length" class="config-section">
+            <div class="config-title">Tags</div>
+            <div class="tag-chips">
+              <span v-for="(v, k) in glueInfo.data.tags" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -3332,7 +3883,7 @@ const fetchMap = {
   dynamodb:     () => awsStore.fetchDynamoTables(),
   docdb:        () => awsStore.fetchDocdbClusters(),
   glue:         () => awsStore.fetchGlueJobs(),
-  athena:       () => awsStore.fetchAthenaWorkgroups(),
+  athena:       () => Promise.all([awsStore.fetchAthenaWorkgroups(), loadAthenaCatalogs()]),
   datapipeline: () => awsStore.fetchDataPipelines(),
   bedrock:      () => awsStore.fetchBedrockModels(),
   lex:          () => awsStore.fetchLexBots(),
@@ -4385,6 +4936,14 @@ async function deactivatePipeline(p) {
 
 // ─── CloudFront Invalidation Modal ────────────────────────────────────────────
 
+function openSiteUrl(url) {
+  if (window.kuaElectron?.openExternal) {
+    window.kuaElectron.openExternal(url)
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
+
 const invalidateModal = reactive({ open: false, loading: false, dist: null, paths: '/*', result: null, error: null })
 
 function openInvalidateModal(d) {
@@ -4641,6 +5200,220 @@ async function openUserDetail(user) {
   try {
     cognitoUserDetail.data = await awsStore.fetchCognitoUserDetail(cognitoState.selectedPool.id, user.username)
   } finally { cognitoUserDetail.loading = false }
+}
+
+// ─── DynamoDB Info Modal ─────────────────────────────────────────────────────
+const dynamoInfo = reactive({ open: false, loading: false, error: null, data: null, table: null })
+
+async function openDynamoInfo(t) {
+  Object.assign(dynamoInfo, { open: true, loading: true, error: null, data: null, table: t })
+  try {
+    dynamoInfo.data = await awsStore.fetchDynamoTableConfig(t.name)
+    if (!dynamoInfo.data) dynamoInfo.error = awsStore.error || 'Failed to load table info'
+  } finally { dynamoInfo.loading = false }
+}
+
+// ─── DynamoDB Create Modal ────────────────────────────────────────────────────
+const dynamoCreate = reactive({
+  open: false, loading: false, error: null, result: null,
+  tableName: '', partitionKey: '', partitionKeyType: 'S',
+  sortKey: '', sortKeyType: 'S', billingMode: 'PAY_PER_REQUEST',
+  readCapacity: 5, writeCapacity: 5,
+})
+
+function openDynamoCreate() {
+  Object.assign(dynamoCreate, { open: true, loading: false, error: null, result: null, tableName: '', partitionKey: '', partitionKeyType: 'S', sortKey: '', sortKeyType: 'S', billingMode: 'PAY_PER_REQUEST', readCapacity: 5, writeCapacity: 5 })
+}
+
+async function submitDynamoCreate() {
+  if (!dynamoCreate.tableName.trim() || !dynamoCreate.partitionKey.trim()) {
+    dynamoCreate.error = 'Table name and partition key are required'; return
+  }
+  dynamoCreate.loading = true; dynamoCreate.error = null; dynamoCreate.result = null
+  try {
+    const r = await awsStore.createDynamoTable({
+      tableName:        dynamoCreate.tableName.trim(),
+      partitionKey:     dynamoCreate.partitionKey.trim(),
+      partitionKeyType: dynamoCreate.partitionKeyType,
+      sortKey:          dynamoCreate.sortKey.trim() || undefined,
+      sortKeyType:      dynamoCreate.sortKeyType,
+      billingMode:      dynamoCreate.billingMode,
+      readCapacity:     dynamoCreate.readCapacity,
+      writeCapacity:    dynamoCreate.writeCapacity,
+    })
+    if (r?.tableName) {
+      dynamoCreate.result = `Table "${r.tableName}" created (${r.status})`
+      toast(`DynamoDB table created: ${r.tableName}`, 'success')
+      loaded.dynamodb = false; loadTab('dynamodb')
+    } else {
+      dynamoCreate.error = awsStore.error || 'Failed to create table'
+    }
+  } finally { dynamoCreate.loading = false }
+}
+
+// ─── Glue Info Modal ──────────────────────────────────────────────────────────
+const glueInfo = reactive({ open: false, loading: false, error: null, data: null, job: null })
+
+async function openGlueInfo(j) {
+  Object.assign(glueInfo, { open: true, loading: true, error: null, data: null, job: j })
+  try {
+    glueInfo.data = await awsStore.fetchGlueJobConfig(j.name)
+    if (!glueInfo.data) glueInfo.error = awsStore.error || 'Failed to load job info'
+  } finally { glueInfo.loading = false }
+}
+
+// ─── Athena Sub-tabs ─────────────────────────────────────────────────────────
+const athenaSubTabs = [
+  { id: 'workgroups',  label: 'Workgroups' },
+  { id: 'datasources', label: 'Data Sources' },
+  { id: 'editor',      label: '⚡ Query Editor' },
+]
+const athenaSubTab = ref('workgroups')
+
+// ─── Athena Workgroup Info Modal ──────────────────────────────────────────────
+const athenaWgInfo = reactive({ open: false, loading: false, error: null, wg: null, data: null })
+
+async function openAthenaWgInfo(wg) {
+  Object.assign(athenaWgInfo, { open: true, loading: true, error: null, wg, data: null })
+  try {
+    athenaWgInfo.data = await awsStore.fetchAthenaWorkgroupConfig(wg.name)
+    if (!athenaWgInfo.data) athenaWgInfo.error = awsStore.error || 'Failed to load workgroup config'
+  } finally { athenaWgInfo.loading = false }
+}
+
+function openAthenaWgQuery(wg) {
+  Object.assign(athenaModal, { open: true, workgroup: wg, query: '', queryId: null, status: null, results: null, error: null, loading: false })
+}
+
+// ─── Athena Catalog Info Modal ────────────────────────────────────────────────
+const athenaCatInfo = reactive({ open: false, loading: false, error: null, cat: null, data: null })
+
+async function openAthenaCatalogInfo(cat) {
+  Object.assign(athenaCatInfo, { open: true, loading: true, error: null, cat, data: null })
+  try {
+    athenaCatInfo.data = await awsStore.fetchAthenaCatalogInfo(cat.name)
+    if (!athenaCatInfo.data) athenaCatInfo.error = awsStore.error || 'Failed to load catalog info'
+  } finally { athenaCatInfo.loading = false }
+}
+
+async function loadAthenaDatabaseTables(cat, db) {
+  if (db._loadingTables) return
+  db._loadingTables = true
+  try {
+    db.tables = await awsStore.fetchAthenaTables(cat.name, db.name) || []
+  } finally { db._loadingTables = false }
+}
+
+// ─── Athena Advanced Editor ───────────────────────────────────────────────────
+const athenaEditor = reactive({
+  sql: '',
+  selectedWorkgroup: 'primary',
+  selectedCatalog: '',
+  selectedDb: '',
+  selectedTable: '',
+  catalogs: [],
+  catalogsLoading: false,
+  running: false,
+  queryId: null,
+  status: null,
+  results: null,
+  error: null,
+  execTimeMs: 0,
+  bytesScanned: 0,
+  showHistory: false,
+  history: [],
+  historyLoading: false,
+})
+
+async function loadAthenaCatalogs() {
+  athenaEditor.catalogsLoading = true
+  try {
+    const cats = await awsStore.fetchAthenaCatalogs() || []
+    // Mark all closed by default
+    athenaEditor.catalogs = cats.map(c => ({ ...c, _open: false, databases: (c.databases || []).map(d => ({ ...d, _open: false, tables: [], _loadingTables: false })) }))
+  } finally { athenaEditor.catalogsLoading = false }
+}
+
+async function toggleAthenaDb(cat, db) {
+  if (!db._open) {
+    // Load tables on first open
+    if (!db.tables?.length) {
+      db._loadingTables = true
+      db._open = true
+      try {
+        db.tables = await awsStore.fetchAthenaTables(cat.name, db.name) || []
+      } finally { db._loadingTables = false }
+    } else { db._open = true }
+  } else { db._open = false }
+}
+
+function selectAthenaDb(cat, db) {
+  athenaEditor.selectedCatalog = cat.name
+  athenaEditor.selectedDb = db.name
+  athenaEditor.selectedTable = ''
+}
+
+function selectAthenaTable(cat, db, tbl) {
+  athenaEditor.selectedCatalog = cat.name
+  athenaEditor.selectedDb = db.name
+  athenaEditor.selectedTable = tbl.name
+  // Insert a SELECT snippet into the editor
+  const snippet = `SELECT *\nFROM "${db.name}"."${tbl.name}"\nLIMIT 10;`
+  if (!athenaEditor.sql.trim()) athenaEditor.sql = snippet
+}
+
+async function runAthenaEditorQuery() {
+  if (!athenaEditor.sql.trim() || athenaEditor.running) return
+  athenaEditor.running = true; athenaEditor.error = null; athenaEditor.results = null; athenaEditor.status = null; athenaEditor.queryId = null
+  try {
+    const wg = athenaEditor.selectedWorkgroup || awsStore.athenaWorkgroups?.[0]?.name || 'primary'
+    const outputLocation = awsStore.athenaWorkgroups.find(w => w.name === wg)?.outputLocation
+    const r = await awsStore.startAthenaQuery(athenaEditor.sql, wg, outputLocation)
+    if (!r?.queryExecutionId) { athenaEditor.error = awsStore.error || 'Failed to start query'; return }
+    athenaEditor.queryId = r.queryExecutionId
+    for (let i = 0; i < 60; i++) {
+      await new Promise(res => setTimeout(res, 1000))
+      const result = await awsStore.getAthenaQueryResult(athenaEditor.queryId)
+      athenaEditor.status = result?.execution?.Status?.State
+      if (athenaEditor.status === 'SUCCEEDED') {
+        athenaEditor.results = result.results
+        athenaEditor.execTimeMs = result.execution?.Statistics?.TotalExecutionTimeInMillis || 0
+        athenaEditor.bytesScanned = result.execution?.Statistics?.DataScannedInBytes || 0
+        break
+      }
+      if (athenaEditor.status === 'FAILED' || athenaEditor.status === 'CANCELLED') {
+        athenaEditor.error = result?.execution?.Status?.StateChangeReason || 'Query failed'; break
+      }
+    }
+  } finally { athenaEditor.running = false }
+}
+
+async function loadAthenaHistory() {
+  athenaEditor.showHistory = !athenaEditor.showHistory
+  if (athenaEditor.showHistory && !athenaEditor.history.length) {
+    athenaEditor.historyLoading = true
+    try {
+      athenaEditor.history = await awsStore.fetchAthenaHistory(athenaEditor.selectedWorkgroup || 'primary') || []
+    } finally { athenaEditor.historyLoading = false }
+  }
+}
+
+function loadHistoryItem(h) {
+  athenaEditor.sql = h.query || ''
+  if (h.database) athenaEditor.selectedDb = h.database
+  if (h.catalog)  athenaEditor.selectedCatalog = h.catalog
+  athenaEditor.showHistory = false
+}
+
+function exportAthenaResults() {
+  if (!athenaEditor.results) return
+  const cols = (athenaEditor.results.ResultSetMetadata?.ColumnInfo || []).map(c => c.Name)
+  const rows = (athenaEditor.results.Rows || []).slice(1)
+  const csv = [cols.join(','), ...rows.map(r => (r.Data || []).map(c => `"${(c.VarCharValue ?? '').replace(/"/g, '""')}"`).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `athena-${Date.now()}.csv`; a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── DynamoDB Browse Modal ────────────────────────────────────────────────────

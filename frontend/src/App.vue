@@ -82,6 +82,7 @@
         <button class="btn btn-icon" @click="toggleTheme" :title="settings.theme === 'dark' ? t('nav.lightMode') : t('nav.darkMode')">
           <i :data-lucide="settings.theme === 'dark' ? 'sun' : 'moon'"></i>
         </button>
+        <button class="btn btn-icon" :class="{ primary: cloudView === 'audit' }" :title="t('nav.auditLog')" @click="toggleAuditLog"><i data-lucide="shield-check"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" :title="t('nav.help')"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" :title="t('nav.supportProject')">
           <i data-lucide="heart"></i>
@@ -283,6 +284,7 @@
 
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
+          <AuditLogView  v-else-if="cloudView === 'audit'" />
           <HelmView v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <ResourceTable @action="handleAction" />
@@ -355,6 +357,7 @@ import { useI18n } from './composables/useI18n'
 
 import ResourceTable    from './components/ResourceTable.vue'
 import HelmView         from './components/HelmView.vue'
+import AuditLogView    from './components/AuditLogView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
@@ -530,6 +533,10 @@ function deleteConnectionConfirm(provider) {
 }
 function toggleEnvManager() {
   cloudView.value = cloudView.value === 'envs' ? null : 'envs'
+  nextTick(() => createIcons({ icons }))
+}
+function toggleAuditLog() {
+  cloudView.value = cloudView.value === 'audit' ? null : 'audit'
   nextTick(() => createIcons({ icons }))
 }
 function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }

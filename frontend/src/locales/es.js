@@ -16,6 +16,7 @@ export default {
   'nav.deleteContext':       'Eliminar contexto',
   'nav.envManager':          'Env Manager',
   'nav.localShell':          'Terminal local',
+  'nav.auditLog':            'Log de Auditoría',
   'nav.lightMode':           'Cambiar a modo claro',
   'nav.darkMode':            'Cambiar a modo oscuro',
   'nav.help':                'Ayuda',
@@ -311,4 +312,27 @@ export default {
   'helm.chart':              'Chart',
   'helm.revision':           'Revisión',
   'helm.deployedAt':         'Desplegado',
-}
+  // ── Audit Log ────────────────────────────────────────────────────────
+  'audit.title':             'Log de Auditoría',
+  'audit.entries':           'entradas',
+  'audit.export':            'Exportar a CSV',
+  'audit.clear':             'Limpiar todo',
+  'audit.search':            'Buscar acción, recurso, contexto…',
+  'audit.allCategories':     'Todas las categorías',
+  'audit.allLevels':         'Todos los niveles',
+  'audit.catEnvManager':     'Credenciales',
+  'audit.catSystem':         'Sistema',
+  'audit.colTime':           'Timestamp',
+  'audit.colLevel':          'Nivel',
+  'audit.colCategory':       'Categoría',
+  'audit.colAction':         'Acción',
+  'audit.colResource':       'Recurso',
+  'audit.colContext':        'Contexto',
+  'audit.colDetails':        'Detalles',
+  'audit.empty':             'Aún no hay eventos de auditoría',
+  'audit.clearConfirm':      '¿Limpiar todas las entradas del log? Esta acción no se puede deshacer.',
+  'audit.cleared':           'Log de auditoría limpiado',
+
+  // ── Common ─────────────────────────────────────────────────────────────
+  'common.confirm':          'Confirmar',
+  'common.cancel':           'Cancelar',}

@@ -16,6 +16,7 @@ export default {
   'nav.deleteContext':       'Delete context',
   'nav.envManager':          'Env Manager',
   'nav.localShell':          'Local Shell',
+  'nav.auditLog':            'Audit Log',
   'nav.lightMode':           'Switch to light mode',
   'nav.darkMode':            'Switch to dark mode',
   'nav.help':                'Help',
@@ -311,4 +312,29 @@ export default {
   'helm.chart':              'Chart',
   'helm.revision':           'Revision',
   'helm.deployedAt':         'Deployed at',
+
+  // ── Audit Log ─────────────────────────────────────────────────────────
+  'audit.title':             'Audit Log',
+  'audit.entries':           'entries',
+  'audit.export':            'Export to CSV',
+  'audit.clear':             'Clear all entries',
+  'audit.search':            'Search action, resource, context…',
+  'audit.allCategories':     'All categories',
+  'audit.allLevels':         'All levels',
+  'audit.catEnvManager':     'Credentials',
+  'audit.catSystem':         'System',
+  'audit.colTime':           'Timestamp',
+  'audit.colLevel':          'Level',
+  'audit.colCategory':       'Category',
+  'audit.colAction':         'Action',
+  'audit.colResource':       'Resource',
+  'audit.colContext':        'Context',
+  'audit.colDetails':        'Details',
+  'audit.empty':             'No audit events recorded yet',
+  'audit.clearConfirm':      'Clear all audit log entries? This cannot be undone.',
+  'audit.cleared':           'Audit log cleared',
+
+  // ── Common ─────────────────────────────────────────────────────────────
+  'common.confirm':          'Confirm',
+  'common.cancel':           'Cancel',
 }

@@ -1767,3 +1767,26 @@ kbd {
 }
 .btn-close { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; padding: 0 4px; }
 .btn-close:hover { color: var(--text); }
+
+/* ── Athena Advanced Editor ─────────────────────────────────────────────── */
+.athena-sidebar { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.athena-sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.athena-tree { flex: 1; overflow-y: auto; padding: 4px 0; }
+.athena-tree-node { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; font-size: 12px; user-select: none; }
+.athena-tree-node:hover { background: rgba(255,255,255,.05); }
+.athena-tree-node.active .tree-label, .tree-label.active { color: var(--primary, #58a6ff); }
+.tree-icon { width: 10px; color: var(--text-dim); font-size: 9px; flex-shrink: 0; }
+.tree-icon-db { font-size: 11px; flex-shrink: 0; }
+.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-badge { font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,.07); padding: 1px 4px; border-radius: 3px; }
+.tree-loading { padding: 3px 24px; font-size: 11px; color: var(--text-dim); font-style: italic; }
+.athena-tree-databases, .athena-tree-tables { padding-left: 12px; }
+.athena-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.athena-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+.athena-editor-wrap { flex: 0 0 160px; padding: 6px; border-bottom: 1px solid var(--border); }
+.athena-editor { width: 100%; height: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px; resize: none; background: var(--bg-input, #1e1e2e); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); outline: none; }
+.athena-status-bar { display: flex; align-items: center; gap: 10px; padding: 4px 10px; font-size: 11px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: rgba(0,0,0,.1); }
+.athena-results { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.athena-history-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; background: var(--bg-modal, #252526); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+.athena-history-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); }
+.athena-history-item:hover { background: rgba(255,255,255,.05); }

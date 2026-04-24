@@ -82,26 +82,17 @@
                 </div>
 
                 <div class="lmd-card">
-                  <div class="lmd-card-title">Logs</div>
-                  <dl>
-                    <dt>Log group</dt>    <dd class="mono wrap">{{ data.basic.logGroup }}</dd>
-                    <dt>Formato</dt>      <dd>{{ data.basic.logFormat || 'Text' }}</dd>
-                  </dl>
+                  <div class="lmd-card-title">Tags ({{ Object.keys(data.basic.tags || {}).length }})</div>
+                  <table class="lmd-table" v-if="Object.keys(data.basic.tags || {}).length">
+                    <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(v, k) in data.basic.tags" :key="k">
+                        <td class="mono">{{ k }}</td><td class="mono">{{ v }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
                 </div>
-              </div>
-
-              <!-- Tags -->
-              <div class="lmd-card" style="margin-top:10px">
-                <div class="lmd-card-title">Tags ({{ Object.keys(data.basic.tags).length }})</div>
-                <table class="lmd-table" v-if="Object.keys(data.basic.tags).length">
-                  <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
-                  <tbody>
-                    <tr v-for="(v, k) in data.basic.tags" :key="k">
-                      <td class="mono">{{ k }}</td><td class="mono">{{ v }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
               </div>
             </div>
 
@@ -184,6 +175,70 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <!-- ══ LOGS ════════════════════════════════════════════════════ -->
+            <div v-show="activeTab === 'logs'" class="lmd-section">
+              <!-- Header con log group + controles -->
+              <div class="lmd-card" style="margin-bottom:10px">
+                <div class="lmd-card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+                  <span>CloudWatch Logs</span>
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                    <select v-model="logsState.minutes" class="lmd-select" @change="loadLogs" style="font-size:.78rem">
+                      <option :value="15">15 min</option>
+                      <option :value="60">1 hora</option>
+                      <option :value="180">3 horas</option>
+                      <option :value="720">12 horas</option>
+                      <option :value="1440">24 horas</option>
+                    </select>
+                    <button class="btn sm" @click="loadLogs" :disabled="logsState.loading">{{ logsState.loading ? '...' : '↺ Refresh' }}</button>
+                  </div>
+                </div>
+                <dl style="margin-top:4px">
+                  <dt>Log Group</dt>
+                  <dd class="mono wrap" style="font-size:.8rem">{{ data.basic.logGroup || `/aws/lambda/${data.basic.name}` }}</dd>
+                  <dt>Formato</dt>
+                  <dd>{{ data.basic.logFormat || 'Text' }}</dd>
+                </dl>
+              </div>
+
+              <!-- No log group → opción de crear -->
+              <div v-if="logsState.noGroup" class="lmd-logs-nogroup">
+                <div style="font-size:1.8rem">📭</div>
+                <div>No se encontró el log group <span class="mono-xs">{{ data.basic.logGroup || `/aws/lambda/${data.basic.name}` }}</span> en CloudWatch.</div>
+                <div style="font-size:.82rem;color:#8b949e">La función no ha generado logs todavía o el log group fue eliminado.</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
+                  <select v-model="logsState.createRetention" class="lmd-select">
+                    <option :value="7">Retención: 7 días</option>
+                    <option :value="14">Retención: 14 días</option>
+                    <option :value="30">Retención: 30 días</option>
+                    <option :value="60">Retención: 60 días</option>
+                    <option :value="90">Retención: 90 días</option>
+                    <option :value="365">Retención: 1 año</option>
+                  </select>
+                  <button class="btn" @click="createLogGroup" :disabled="logsState.creating">
+                    {{ logsState.creating ? 'Creando...' : '+ Crear Log Group en CloudWatch' }}
+                  </button>
+                </div>
+                <div v-if="logsState.createResult" class="lmd-logs-ok">{{ logsState.createResult }}</div>
+                <div v-if="logsState.createError" class="lmd-error">{{ logsState.createError }}</div>
+              </div>
+
+              <!-- Eventos -->
+              <template v-else-if="!logsState.loading">
+                <div v-if="logsState.error && !logsState.noGroup" class="lmd-error" style="margin-bottom:8px">{{ logsState.error }}</div>
+                <div v-if="!logsState.events.length && !logsState.error" class="text-dim" style="text-align:center;padding:24px;font-size:.85rem">
+                  Sin eventos en el período seleccionado.
+                </div>
+                <div v-else class="lmd-logs-wrap">
+                  <div v-for="(e, i) in logsState.events" :key="i" class="lmd-log-row">
+                    <span class="lmd-log-ts">{{ fmtTs(e.timestamp) }}</span>
+                    <span class="lmd-log-stream">{{ shortStream(e.logStreamName) }}</span>
+                    <span class="lmd-log-msg">{{ e.message }}</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="lmd-spinner-wrap" style="padding:24px"><div class="lmd-spinner"></div></div>
             </div>
 
             <!-- ══ MONITOREO ══════════════════════════════════════════════ -->
@@ -342,6 +397,7 @@ defineEmits(['close'])
 const TABS = [
   { id: 'basic',      label: '📋 Básico'         },
   { id: 'config',     label: '⚙️ Configuración'   },
+  { id: 'logs',       label: '📋 Logs'            },
   { id: 'monitoring', label: '📊 Monitoreo'       },
   { id: 'aliases',    label: '🏷 Aliases'          },
   { id: 'code',       label: '💻 Código'           },
@@ -360,6 +416,13 @@ const codeLoading  = ref(false)
 const codeError    = ref('')
 const selectedFile = ref(null)
 
+// Logs tab state
+const logsState = ref({
+  loading: false, error: '', events: [], noGroup: false,
+  minutes: 60,
+  creating: false, createRetention: 30, createResult: '', createError: '',
+})
+
 watch(() => props.open, val => {
   if (val) {
     activeTab.value  = 'basic'
@@ -370,12 +433,89 @@ watch(() => props.open, val => {
     codeError.value  = ''
     selectedFile.value = null
     showEnvValues.value = false
+    logsState.value = {
+      loading: false, error: '', events: [], noGroup: false,
+      minutes: 60, creating: false, createRetention: 30, createResult: '', createError: '',
+    }
     loadDetails()
   }
 })
 
 function switchTab(id) {
   activeTab.value = id
+  if (id === 'logs' && !logsState.value.events.length && !logsState.value.noGroup && !logsState.value.error) {
+    loadLogs()
+  }
+}
+
+async function loadLogs() {
+  if (!props.fn?.name) return
+  logsState.value.loading = true
+  logsState.value.error   = ''
+  logsState.value.noGroup = false
+  try {
+    const h = props.profileId ? { 'x-profile-id': props.profileId } : {}
+    const url = `/api/cloud/aws/logs/lambda/${encodeURIComponent(props.fn.name)}?minutes=${logsState.value.minutes}&limit=300`
+    const res = await fetch(url, { headers: h })
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}))
+      const msg = b.error || `HTTP ${res.status}`
+      if (msg.includes('ResourceNotFoundException') || msg.includes('does not exist')) {
+        logsState.value.noGroup = true
+      } else {
+        logsState.value.error = msg
+      }
+      return
+    }
+    const d = await res.json()
+    logsState.value.events = d.events || []
+  } catch (e) {
+    logsState.value.error = e.message
+  } finally {
+    logsState.value.loading = false
+  }
+}
+
+async function createLogGroup() {
+  if (!props.fn?.name) return
+  logsState.value.creating     = true
+  logsState.value.createError  = ''
+  logsState.value.createResult = ''
+  try {
+    const h = {
+      'Content-Type': 'application/json',
+      ...(props.profileId ? { 'x-profile-id': props.profileId } : {}),
+    }
+    const res = await fetch(`/api/cloud/aws/lambda/${encodeURIComponent(props.fn.name)}/logging`, {
+      method: 'POST',
+      headers: h,
+      body: JSON.stringify({ logFormat: data.value?.basic?.logFormat || 'Text', retentionDays: logsState.value.createRetention }),
+    })
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}))
+      throw new Error(b.error || `HTTP ${res.status}`)
+    }
+    const r = await res.json()
+    logsState.value.createResult = `Log group "${r.logGroup}" creado con retención de ${r.retentionDays} días.`
+    logsState.value.noGroup = false
+    // Reload logs after a moment
+    setTimeout(() => loadLogs(), 1500)
+  } catch (e) {
+    logsState.value.createError = e.message
+  } finally {
+    logsState.value.creating = false
+  }
+}
+
+function fmtTs(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function shortStream(s) {
+  if (!s) return ''
+  const parts = s.split('/')
+  return parts[parts.length - 1]?.slice(-12) || s
 }
 
 async function loadDetails() {
@@ -760,4 +900,35 @@ dd.wrap { word-break: break-all; }
 
 .text-dim  { color: #8b949e; }
 .mono-xs   { font-family: monospace; font-size: .75rem; }
+
+/* Logs tab */
+.lmd-select {
+  background: #161b22; border: 1px solid #30363d; color: #e6edf3;
+  border-radius: 5px; padding: 3px 8px; font-size: .82rem; cursor: pointer;
+}
+.lmd-logs-nogroup {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 36px 24px; text-align: center;
+  background: rgba(248,81,73,.06); border: 1px solid rgba(248,81,73,.2);
+  border-radius: 8px; color: #e6edf3; font-size: .87rem;
+}
+.lmd-logs-ok {
+  background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3);
+  border-radius: 6px; padding: 8px 14px; color: #3fb950; font-size: .82rem;
+}
+.lmd-logs-wrap {
+  background: #0d1117; border: 1px solid #21262d;
+  border-radius: 8px; overflow-y: auto; max-height: calc(90vh - 340px);
+  font-family: 'Fira Code', monospace;
+}
+.lmd-log-row {
+  display: grid; grid-template-columns: 80px 90px 1fr;
+  gap: 8px; padding: 3px 10px;
+  border-bottom: 1px solid rgba(33,38,45,.6);
+  font-size: .76rem; line-height: 1.45;
+}
+.lmd-log-row:last-child { border-bottom: none; }
+.lmd-log-ts     { color: #8b949e; white-space: nowrap; flex-shrink: 0; }
+.lmd-log-stream { color: #a371f7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lmd-log-msg    { color: #e6edf3; white-space: pre-wrap; word-break: break-word; }
 </style>

@@ -20,6 +20,7 @@
 
 const express = require('express');
 const { getStore } = require('../lib/credentialStore');
+const auditLog     = require('../lib/auditLog');
 
 const router = express.Router();
 
@@ -76,6 +77,10 @@ router.post('/profiles', async (req, res) => {
     const profile = await store.createProfile({
       name: name.trim(), provider, category: (category || '').trim(), keys: sanitizedKeys, meta: sanitizedMeta,
     });
+    auditLog.log({
+      category: 'envManager', action: 'Credential profile created',
+      resource: name.trim(), details: { provider, category: (category || '').trim() },
+    });
     res.status(201).json(profile);
   } catch (err) { handleErr(res, err); }
 });
@@ -120,6 +125,10 @@ router.put('/profiles/:id', async (req, res) => {
       meta: sanitizedMeta,
     });
     if (!updated) return res.status(404).json({ error: 'Profile not found' });
+    auditLog.log({
+      category: 'envManager', action: 'Credential profile updated',
+      resource: req.params.id, details: { name },
+    });
     res.json(updated);
   } catch (err) { handleErr(res, err); }
 });
@@ -131,6 +140,10 @@ router.delete('/profiles/:id', async (req, res) => {
     const store  = getStore();
     const result = await store.deleteProfile(req.params.id);
     if (!result) return res.status(404).json({ error: 'Profile not found' });
+    auditLog.log({
+      category: 'envManager', action: 'Credential profile deleted',
+      resource: req.params.id, level: 'warning',
+    });
     res.json({ success: true });
   } catch (err) { handleErr(res, err); }
 });
@@ -206,6 +219,10 @@ router.post('/import', async (req, res) => {
       category: (category || '').trim(),
       keys,
       meta: sanitizedMeta,
+    });
+    auditLog.log({
+      category: 'envManager', action: 'Credential profile imported from .env',
+      resource: name.trim(), details: { keys: Object.keys(keys).length },
     });
     res.status(201).json(profile);
   } catch (err) { handleErr(res, err); }

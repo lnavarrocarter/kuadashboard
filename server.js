@@ -21,6 +21,8 @@ const awsRoutes         = require('./routes/aws');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
 const localShellRoutes  = require('./routes/localShell');
+const auditLogRoutes    = require('./routes/auditLog');
+const auditLog          = require('./lib/auditLog');
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
 const wss        = new WebSocket.Server({ noServer: true });
@@ -55,6 +57,7 @@ app.use('/api/cloud/aws',  awsRoutes);
 app.use('/api/helm',       helmRoutes);
 app.use('/api/system',     systemToolsRoutes);
 app.use('/api/local',      localShellRoutes);
+app.use('/api/audit',      auditLogRoutes);
 
 app.use(express.static(path.join(__dirname, 'public'), {
   etag:         false,
@@ -227,6 +230,12 @@ app.post('/api/kubeconfig/import', (req, res) => {
     // Reload global kubeconfig so new contexts are available immediately
     loadKubeConfig(null);
 
+    auditLog.log({
+      category: 'kubernetes', action: 'KubeConfig imported',
+      resource: addedContexts.join(', ') || '(none)',
+      details:  { added: addedContexts.length, contexts: addedContexts },
+      level:    'info',
+    });
     res.json({ success: true, added: addedContexts.length, contexts: addedContexts });
   } catch (err) { handleError(res, err); }
 });
@@ -273,6 +282,10 @@ app.post('/api/contexts/switch', (req, res) => {
     const { context } = req.body;
     if (!context) return res.status(400).json({ error: 'context required' });
     loadKubeConfig(context);
+    auditLog.log({
+      category: 'kubernetes', action: 'Context switched',
+      resource: context, context,
+    });
     res.json({ success: true, current: currentContext });
   } catch (err) { handleError(res, err); }
 });
@@ -302,6 +315,10 @@ app.delete('/api/contexts/:name', (req, res) => {
     // Reload — if deleted context was active, fallback to first available
     const next = name === currentContext ? null : currentContext;
     loadKubeConfig(next);
+    auditLog.log({
+      category: 'kubernetes', action: 'Context deleted',
+      resource: name, level: 'warning',
+    });
     res.json({ success: true, removed: name, current: currentContext });
   } catch (err) { handleError(res, err); }
 });
@@ -355,6 +372,11 @@ app.delete('/api/:namespace/pods/:name', async (req, res) => {
     const { core } = clients();
     const { namespace, name } = req.params;
     await core.deleteNamespacedPod(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'Pod deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -389,6 +411,10 @@ app.post('/api/:namespace/deployments/:name/restart', async (req, res) => {
     }}}};
     await apps.patchNamespacedDeployment(name, namespace, patch,
       undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'Deployment restarted',
+      resource: `${namespace}/${name}`, context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -401,6 +427,11 @@ app.post('/api/:namespace/deployments/:name/scale', async (req, res) => {
     if (isNaN(replicas) || replicas < 0) return res.status(400).json({ error: 'Invalid replicas' });
     await apps.patchNamespacedDeployment(name, namespace, { spec: { replicas } },
       undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'Deployment scaled',
+      resource: `${namespace}/${name}`, details: { replicas },
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -410,6 +441,11 @@ app.delete('/api/:namespace/deployments/:name', async (req, res) => {
     const { apps } = clients();
     const { namespace, name } = req.params;
     await apps.deleteNamespacedDeployment(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'Deployment deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -452,6 +488,10 @@ app.post('/api/:namespace/statefulsets/:name/restart', async (req, res) => {
     }}}};
     await apps.patchNamespacedStatefulSet(name, namespace, patch,
       undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'StatefulSet restarted',
+      resource: `${namespace}/${name}`, context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -464,6 +504,11 @@ app.post('/api/:namespace/statefulsets/:name/scale', async (req, res) => {
     if (isNaN(replicas) || replicas < 0) return res.status(400).json({ error: 'Invalid replicas' });
     await apps.patchNamespacedStatefulSet(name, namespace, { spec: { replicas } },
       undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'StatefulSet scaled',
+      resource: `${namespace}/${name}`, details: { replicas },
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -473,6 +518,11 @@ app.delete('/api/:namespace/statefulsets/:name', async (req, res) => {
     const { apps } = clients();
     const { namespace, name } = req.params;
     await apps.deleteNamespacedStatefulSet(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'StatefulSet deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -512,6 +562,11 @@ app.delete('/api/:namespace/daemonsets/:name', async (req, res) => {
     const { apps } = clients();
     const { namespace, name } = req.params;
     await apps.deleteNamespacedDaemonSet(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'DaemonSet deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -555,6 +610,11 @@ app.delete('/api/:namespace/services/:name', async (req, res) => {
     const { core } = clients();
     const { namespace, name } = req.params;
     await core.deleteNamespacedService(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'Service deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -591,6 +651,11 @@ app.post('/api/:namespace/services/:name/portforward', async (req, res) => {
     tcpServer.listen(lp, '127.0.0.1', () => {
       const id = `${namespace}/${name}:${lp}->${rp}`;
       portForwards.set(lp, { server: tcpServer, id, namespace, name, localPort: lp, remotePort: rp });
+      auditLog.log({
+        category: 'kubernetes', action: 'Port forward started',
+        resource: `${namespace}/${name}`, details: { localPort: lp, remotePort: rp },
+        context: currentContext,
+      });
       res.json({ success: true, id, localPort: lp, remotePort: rp });
     });
     tcpServer.on('error', err => {
@@ -604,6 +669,11 @@ app.delete('/api/portforward/:localPort', (req, res) => {
   const lp = parseInt(req.params.localPort, 10);
   const pf = portForwards.get(lp);
   if (!pf) return res.status(404).json({ error: 'Port forward not found' });
+  auditLog.log({
+    category: 'kubernetes', action: 'Port forward stopped',
+    resource: pf.id, details: { localPort: lp },
+    context: currentContext,
+  });
   pf.server.close();
   portForwards.delete(lp);
   res.json({ success: true });
@@ -649,6 +719,11 @@ app.delete('/api/:namespace/ingresses/:name', async (req, res) => {
     const { networking } = clients();
     const { namespace, name } = req.params;
     await networking.deleteNamespacedIngress(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'Ingress deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -686,6 +761,11 @@ app.delete('/api/:namespace/configmaps/:name', async (req, res) => {
     const { core } = clients();
     const { namespace, name } = req.params;
     await core.deleteNamespacedConfigMap(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'ConfigMap deleted',
+      resource: `${namespace}/${name}`, level: 'warning',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -724,6 +804,11 @@ app.delete('/api/:namespace/secrets/:name', async (req, res) => {
     const { core } = clients();
     const { namespace, name } = req.params;
     await core.deleteNamespacedSecret(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'Secret deleted',
+      resource: `${namespace}/${name}`, level: 'critical',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -767,6 +852,11 @@ app.delete('/api/:namespace/pvcs/:name', async (req, res) => {
     const { core } = clients();
     const { namespace, name } = req.params;
     await core.deleteNamespacedPersistentVolumeClaim(name, namespace);
+    auditLog.log({
+      category: 'kubernetes', action: 'PVC deleted',
+      resource: `${namespace}/${name}`, level: 'critical',
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -826,6 +916,11 @@ app.post('/api/nodes/:name/cordon', async (req, res) => {
     const unschedulable = req.body.cordon !== false;
     await core.patchNode(name, { spec: { unschedulable } },
       undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes',
+      action: unschedulable ? 'Node cordoned' : 'Node uncordoned',
+      resource: name, level: 'warning', context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
@@ -864,6 +959,11 @@ app.post('/api/nodes/:name/drain', async (req, res) => {
 
     const evicted  = results.filter(r => r.status === 'fulfilled').length;
     const failed   = results.filter(r => r.status === 'rejected').length;
+    auditLog.log({
+      category: 'kubernetes', action: 'Node drained',
+      resource: name, details: { evicted, failed },
+      level: 'critical', context: currentContext,
+    });
     res.json({ success: true, evicted, failed });
   } catch (err) { handleError(res, err); }
 });
@@ -918,6 +1018,11 @@ app.put('/api/apply', async (req, res) => {
 
     if (!handlers[kind]) return res.status(400).json({ error: `Unsupported kind: ${kind}` });
     await handlers[kind]();
+    auditLog.log({
+      category: 'kubernetes', action: 'YAML applied',
+      resource: `${kind}/${ns}/${name}`, details: { kind, namespace: ns },
+      context: currentContext,
+    });
     res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });

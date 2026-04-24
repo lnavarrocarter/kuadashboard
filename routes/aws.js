@@ -42,6 +42,7 @@ const fs           = require('fs');
 const path         = require('path');
 const os           = require('os');
 const { getStore } = require('../lib/credentialStore');
+const auditLog     = require('../lib/auditLog');
 
 const router = express.Router();
 
@@ -258,6 +259,11 @@ router.post('/ecs/:cluster/:service/start', async (req, res) => {
       service:      req.params.service,
       desiredCount: 1,
     }));
+    auditLog.log({
+      category: 'aws', action: 'ECS service started',
+      resource: `${req.params.cluster}/${req.params.service}`,
+      context: profileId,
+    });
     res.json({ success: true, cluster: req.params.cluster, service: req.params.service, desiredCount: 1 });
   } catch (err) { handleErr(res, err); }
 });
@@ -276,6 +282,11 @@ router.post('/ecs/:cluster/:service/stop', async (req, res) => {
       service:      req.params.service,
       desiredCount: 0,
     }));
+    auditLog.log({
+      category: 'aws', action: 'ECS service stopped',
+      resource: `${req.params.cluster}/${req.params.service}`,
+      level: 'warning', context: profileId,
+    });
     res.json({ success: true, cluster: req.params.cluster, service: req.params.service, desiredCount: 0 });
   } catch (err) { handleErr(res, err); }
 });
@@ -597,6 +608,10 @@ router.post('/lambda/:name/invoke', async (req, res) => {
       Payload:        Buffer.from(JSON.stringify(payload)),
     }));
     const result = resp.Payload ? JSON.parse(Buffer.from(resp.Payload).toString()) : null;
+    auditLog.log({
+      category: 'aws', action: 'Lambda function invoked',
+      resource: req.params.name, context: profileId,
+    });
     res.json({
       statusCode:    resp.StatusCode,
       functionError: resp.FunctionError || null,
@@ -1968,6 +1983,11 @@ router.post('/eks/:name/add-kubeconfig', async (req, res) => {
     kubeconfig.contexts.push(contextEntry);
 
     fs.writeFileSync(kubePath, yaml.dump(kubeconfig, { lineWidth: -1 }), 'utf8');
+    auditLog.log({
+      category: 'aws', action: 'EKS cluster added to kubeconfig',
+      resource: req.params.name, details: { context: contextName },
+      context: profileId,
+    });
     res.json({ success: true, context: contextName, message: `Context "${contextName}" added to ~/.kube/config` });
   } catch (err) { handleErr(res, err); }
 });
@@ -2143,6 +2163,28 @@ router.get('/glue/databases', async (req, res) => {
       description: d.Description || '',
       locationUri: d.LocationUri,
       createTime:  d.CreateTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /glue/databases/:db/tables  → list tables in a Glue database
+router.get('/glue/databases/:db/tables', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { GlueClient, GetTablesCommand } = require('@aws-sdk/client-glue');
+    const client = new GlueClient(cfg);
+    const resp = await client.send(new GetTablesCommand({ DatabaseName: req.params.db, MaxResults: 100 }));
+    res.json((resp.TableList || []).map(t => ({
+      name:        t.Name,
+      tableType:   t.TableType,
+      location:    t.StorageDescriptor?.Location,
+      inputFormat: t.StorageDescriptor?.InputFormat,
+      columns:     (t.StorageDescriptor?.Columns || []).map(c => ({ name: c.Name, type: c.Type })),
+      partitions:  (t.PartitionKeys || []).map(c => ({ name: c.Name, type: c.Type })),
+      createTime:  t.CreateTime,
+      updateTime:  t.UpdateTime,
     })));
   } catch (err) { handleErr(res, err); }
 });
@@ -2377,6 +2419,11 @@ router.post('/docdb/:id/reset-password', async (req, res) => {
       MasterUserPassword:  newPassword,
       ApplyImmediately:    true,
     }));
+    auditLog.log({
+      category: 'aws', action: 'DocumentDB password reset',
+      resource: req.params.id, level: 'critical',
+      context: profileId,
+    });
     res.json({ ok: true, message: `Password reset initiated for cluster ${req.params.id}. Changes apply immediately.` });
   } catch (err) { handleErr(res, err); }
 });
@@ -2570,6 +2617,29 @@ router.post('/dynamodb/:table/query', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// POST /dynamodb  → create a new DynamoDB table
+router.post('/dynamodb', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { tableName, partitionKey, partitionKeyType = 'S', sortKey, sortKeyType = 'S', billingMode = 'PAY_PER_REQUEST', readCapacity = 5, writeCapacity = 5 } = req.body || {};
+    if (!tableName || !partitionKey) return res.status(400).json({ error: 'tableName and partitionKey are required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, CreateTableCommand } = require('@aws-sdk/client-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    const attrDefs = [{ AttributeName: partitionKey, AttributeType: partitionKeyType }];
+    const keySchema = [{ AttributeName: partitionKey, KeyType: 'HASH' }];
+    if (sortKey) {
+      attrDefs.push({ AttributeName: sortKey, AttributeType: sortKeyType });
+      keySchema.push({ AttributeName: sortKey, KeyType: 'RANGE' });
+    }
+    const params = { TableName: tableName, AttributeDefinitions: attrDefs, KeySchema: keySchema, BillingMode: billingMode };
+    if (billingMode === 'PROVISIONED') params.ProvisionedThroughput = { ReadCapacityUnits: Number(readCapacity), WriteCapacityUnits: Number(writeCapacity) };
+    const resp = await client.send(new CreateTableCommand(params));
+    res.json({ tableName: resp.TableDescription?.TableName, status: resp.TableDescription?.TableStatus });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── AMAZON ATHENA ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2600,20 +2670,138 @@ router.get('/athena/workgroups', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
-// GET /athena/databases  → list named query databases
+// GET /athena/databases  → list named query databases / data catalogs
 router.get('/athena/databases', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
     const cfg = await resolveAwsConfig(profileId);
-    const { AthenaClient, ListDataCatalogsCommand } = require('@aws-sdk/client-athena');
+    const { AthenaClient, ListDataCatalogsCommand, ListDatabasesCommand } = require('@aws-sdk/client-athena');
     const client = new AthenaClient(cfg);
     const resp = await client.send(new ListDataCatalogsCommand({}));
-    res.json((resp.DataCatalogsSummary || []).map(c => ({
-      name:        c.CatalogName,
-      type:        c.Type,
-      description: c.Description || '',
+    const catalogs = (resp.DataCatalogsSummary || []);
+    // For each catalog, also list its databases
+    const withDbs = await Promise.all(catalogs.map(async c => {
+      try {
+        const dbResp = await client.send(new ListDatabasesCommand({ CatalogName: c.CatalogName, MaxResults: 50 }));
+        const databases = (dbResp.DatabaseList || []).map(d => ({ name: d.Name, description: d.Description || '' }));
+        return { name: c.CatalogName, type: c.Type, description: c.Description || '', databases };
+      } catch { return { name: c.CatalogName, type: c.Type, description: c.Description || '', databases: [] }; }
+    }));
+    res.json(withDbs);
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/catalogs/:catalog/databases/:db/tables  → list tables in a database
+router.get('/athena/catalogs/:catalog/databases/:db/tables', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, ListTableMetadataCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const resp = await client.send(new ListTableMetadataCommand({
+      CatalogName: req.params.catalog,
+      DatabaseName: req.params.db,
+      MaxResults: 100,
+    }));
+    res.json((resp.TableMetadataList || []).map(t => ({
+      name:        t.Name,
+      tableType:   t.TableType,
+      columns:     (t.Columns || []).map(c => ({ name: c.Name, type: c.Type })),
+      partitions:  (t.PartitionKeys || []).map(c => ({ name: c.Name, type: c.Type })),
+      createTime:  t.CreateTime,
+      lastAccess:  t.LastAccessTime,
     })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/history  → list recent query executions (last 20)
+router.get('/athena/history', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { workgroup = 'primary' } = req.query;
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, ListQueryExecutionsCommand, GetQueryExecutionCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const list = await client.send(new ListQueryExecutionsCommand({ WorkGroup: workgroup, MaxResults: 20 }));
+    const ids = list.QueryExecutionIds || [];
+    if (!ids.length) return res.json([]);
+    const execs = await Promise.all(ids.map(id =>
+      client.send(new GetQueryExecutionCommand({ QueryExecutionId: id }))
+        .then(r => r.QueryExecution).catch(() => null)
+    ));
+    res.json(execs.filter(Boolean).map(e => ({
+      id:            e.QueryExecutionId,
+      query:         e.Query,
+      state:         e.Status?.State,
+      submittedAt:   e.Status?.SubmissionDateTime,
+      completedAt:   e.Status?.CompletionDateTime,
+      bytesScanned:  e.Statistics?.DataScannedInBytes,
+      execTimeMs:    e.Statistics?.TotalExecutionTimeInMillis,
+      workgroup:     e.WorkGroup,
+      database:      e.QueryExecutionContext?.Database,
+      catalog:       e.QueryExecutionContext?.Catalog,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/workgroups/:name  → get full workgroup configuration
+router.get('/athena/workgroups/:name', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, GetWorkGroupCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const r = await client.send(new GetWorkGroupCommand({ WorkGroup: req.params.name }));
+    const wg = r.WorkGroup;
+    const conf = wg.Configuration || {};
+    res.json({
+      name:                       wg.Name,
+      description:                wg.Description || '',
+      state:                      wg.State,
+      creationTime:               wg.CreationTime,
+      outputLocation:             conf.ResultConfiguration?.OutputLocation || '',
+      encryptionOption:           conf.ResultConfiguration?.EncryptionConfiguration?.EncryptionOption || '',
+      kmsKey:                     conf.ResultConfiguration?.EncryptionConfiguration?.KmsKey || '',
+      enforceWorkGroupConfig:     conf.EnforceWorkGroupConfiguration ?? false,
+      publishCloudWatchMetrics:   conf.PublishCloudWatchMetricsEnabled ?? false,
+      bytesScannedCutoff:         conf.BytesScannedCutoffPerQuery ?? null,
+      requesterPays:              conf.RequesterPaysEnabled ?? false,
+      selectedEngineVersion:      conf.EngineVersion?.SelectedEngineVersion || '',
+      effectiveEngineVersion:     conf.EngineVersion?.EffectiveEngineVersion || '',
+      executionRole:              conf.ExecutionRole || '',
+      totalBytesScanned:          wg.Statistics?.TotalBytesScanned ?? 0,
+      totalQueryCount:            wg.Statistics?.TotalQueryCount ?? 0,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /athena/catalogs/:catalog  → get full data catalog configuration
+router.get('/athena/catalogs/:catalog', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { AthenaClient, GetDataCatalogCommand, ListDatabasesCommand } = require('@aws-sdk/client-athena');
+    const client = new AthenaClient(cfg);
+    const r = await client.send(new GetDataCatalogCommand({ Name: req.params.catalog }));
+    const cat = r.DataCatalog;
+    // Also fetch database count
+    let dbCount = 0;
+    try {
+      const dbs = await client.send(new ListDatabasesCommand({ CatalogName: req.params.catalog, MaxResults: 1 }));
+      dbCount = dbs.DatabaseList?.length ?? 0;
+    } catch { /* ignore */ }
+    res.json({
+      name:        cat.Name,
+      type:        cat.Type,
+      description: cat.Description || '',
+      parameters:  cat.Parameters || {},
+      dbCount,
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2975,6 +3163,11 @@ router.post('/cognito/userpools/:id/users', async (req, res) => {
     if (temporaryPassword) params.TemporaryPassword = temporaryPassword;
     if (messageAction === 'SUPPRESS' || suppressMessage) params.MessageAction = 'SUPPRESS';
     const resp = await client.send(new AdminCreateUserCommand(params));
+    auditLog.log({
+      category: 'aws', action: 'Cognito user created',
+      resource: `${req.params.id}/${username}`, level: 'warning',
+      context: profileId,
+    });
     res.status(201).json({ username: resp.User?.Username, status: resp.User?.UserStatus });
   } catch (err) { handleErr(res, err); }
 });
@@ -2991,6 +3184,11 @@ router.post('/cognito/userpools/:id/users/:username/reset-password', async (req,
       UserPoolId: req.params.id,
       Username:   req.params.username,
     }));
+    auditLog.log({
+      category: 'aws', action: 'Cognito user password reset',
+      resource: `${req.params.id}/${req.params.username}`, level: 'critical',
+      context: profileId,
+    });
     res.json({ success: true });
   } catch (err) { handleErr(res, err); }
 });

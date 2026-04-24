@@ -488,6 +488,15 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  async function createDynamoTable(params) {
+    try {
+      return await apiFetch('/api/cloud/aws/dynamodb', {
+        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
   // ─── Athena ──────────────────────────────────────────────────────────────────
 
   async function fetchAthenaWorkgroups() {
@@ -496,10 +505,40 @@ export const useAwsStore = defineStore('aws', () => {
     catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  async function fetchAthenaWorkgroupConfig(name) {
+    try {
+      return await apiFetch(`/api/cloud/aws/athena/workgroups/${encodeURIComponent(name)}`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function fetchAthenaCatalogInfo(name) {
+    try {
+      return await apiFetch(`/api/cloud/aws/athena/catalogs/${encodeURIComponent(name)}`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
   async function fetchAthenaCatalogs() {
     try {
       return await apiFetch('/api/cloud/aws/athena/databases', { headers: headers() })
     } catch (e) { setError(e); return null }
+  }
+
+  async function fetchAthenaTables(catalog, db) {
+    try {
+      return await apiFetch(`/api/cloud/aws/athena/catalogs/${encodeURIComponent(catalog)}/databases/${encodeURIComponent(db)}/tables`, { headers: headers() })
+    } catch (e) { setError(e); return [] }
+  }
+
+  async function fetchAthenaHistory(workgroup = 'primary') {
+    try {
+      return await apiFetch(`/api/cloud/aws/athena/history?workgroup=${encodeURIComponent(workgroup)}`, { headers: headers() })
+    } catch (e) { setError(e); return [] }
+  }
+
+  async function fetchGlueTables(db) {
+    try {
+      return await apiFetch(`/api/cloud/aws/glue/databases/${encodeURIComponent(db)}/tables`, { headers: headers() })
+    } catch (e) { setError(e); return [] }
   }
 
   async function startAthenaQuery(query, workgroup, outputLocation) {
@@ -832,8 +871,9 @@ export const useAwsStore = defineStore('aws', () => {
     fetchGlueJobs, fetchGlueDatabases, runGlueJob, fetchGlueJobRuns,
     fetchGlueJobConfig, fetchGlueConnections, fetchGlueLogs,
     fetchDocdbClusters, fetchDocdbConnectionStrings, fetchDocdbConfig, resetDocdbPassword, createDocdbCluster,
-    fetchDynamoTables, fetchDynamoTableConfig, scanDynamoTable, queryDynamoTable,
-    fetchAthenaWorkgroups, fetchAthenaCatalogs, startAthenaQuery, getAthenaQueryResult,
+    fetchDynamoTables, fetchDynamoTableConfig, scanDynamoTable, queryDynamoTable, createDynamoTable,
+    fetchAthenaWorkgroups, fetchAthenaWorkgroupConfig, fetchAthenaCatalogs, fetchAthenaCatalogInfo, fetchAthenaTables, fetchAthenaHistory, startAthenaQuery, getAthenaQueryResult,
+    fetchGlueTables,
     fetchCloudfrontDists, invalidateCloudfront,
     fetchCloudfrontConfig, fetchCloudfrontStats, createCloudfrontFromS3,
     fetchRoute53Zones, fetchRoute53Records,

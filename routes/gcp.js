@@ -33,6 +33,7 @@ const express  = require('express');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
+const auditLog     = require('../lib/auditLog');
 
 const router    = express.Router();
 const execAsync = promisify(exec);
@@ -368,6 +369,11 @@ router.post('/gke/:location/:cluster/connect', async (req, res) => {
     };
 
     res.json({ success: true, contextName, kubeconfig: jsYaml.dump(kubeconfigObj) });
+    auditLog.log({
+      category: 'gcp', action: 'GKE cluster connected',
+      resource: `${location}/${cluster}`, details: { contextName },
+      context: profileId,
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -487,6 +493,10 @@ router.post('/compute/vms/:zone/:name/start', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.start({ project: projectId, zone, instance: name });
     await operation.promise();
+    auditLog.log({
+      category: 'gcp', action: 'Compute VM started',
+      resource: `${zone}/${name}`, context: profileId,
+    });
     res.json({ success: true, instance: name, zone, action: 'start' });
   } catch (err) { handleErr(res, err); }
 });
@@ -505,6 +515,11 @@ router.post('/compute/vms/:zone/:name/stop', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.stop({ project: projectId, zone, instance: name });
     await operation.promise();
+    auditLog.log({
+      category: 'gcp', action: 'Compute VM stopped',
+      resource: `${zone}/${name}`, level: 'warning',
+      context: profileId,
+    });
     res.json({ success: true, instance: name, zone, action: 'stop' });
   } catch (err) { handleErr(res, err); }
 });
@@ -570,6 +585,10 @@ router.post('/sql/:instance/start', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'ALWAYS' } }
     );
+    auditLog.log({
+      category: 'gcp', action: 'Cloud SQL instance started',
+      resource: req.params.instance, context: profileId,
+    });
     res.json({ success: true, instance: req.params.instance, action: 'start' });
   } catch (err) { handleErr(res, err); }
 });
@@ -587,6 +606,11 @@ router.post('/sql/:instance/stop', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'NEVER' } }
     );
+    auditLog.log({
+      category: 'gcp', action: 'Cloud SQL instance stopped',
+      resource: req.params.instance, level: 'warning',
+      context: profileId,
+    });
     res.json({ success: true, instance: req.params.instance, action: 'stop' });
   } catch (err) { handleErr(res, err); }
 });
