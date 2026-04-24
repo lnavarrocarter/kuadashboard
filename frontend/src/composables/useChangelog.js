@@ -4,9 +4,33 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.4.3'
+export const CHANGELOG_VERSION = '1.6.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.6.0',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'AWS Lambda — nuevo tab Logs con visor CloudWatch en vivo, selector de rango de tiempo (15 min–24 h) y opción de crear Log Group con retención configurable si no existe' },
+      { type: 'new',    text: 'AWS Lambda — Tags movido a la grid del tab Básico (6 tabs en total: Básico, Configuración, Logs, Monitoreo, Aliases, Código)' },
+      { type: 'new',    text: 'AWS ECR Deploy to K8s — opción de crear Service (ClusterIP / NodePort / LoadBalancer) junto al Deployment' },
+      { type: 'fix',    text: 'AWS ECR Deploy to K8s — corregida indentación del YAML generado que causaba error "did not find expected - indicator"' },
+      { type: 'fix',    text: 'AWS ECR Deploy to K8s — añadido --validate=false a kubectl apply para evitar fallos de conexión al API server durante la validación de esquema' },
+      { type: 'fix',    text: 'AWS Athena — corregido error "sortedRows is not a function" al cargar la vista de tablas' },
+      { type: 'fix',    text: 'AWS Lex y Athena — maxResults ajustado a 50 (límite del API) para evitar error de constraint' },
+    ],
+  },
+  {
+    version: '1.5.0',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'AWS DynamoDB — modal Info con billing mode, throughput, GSIs/LSIs, stream status y ARN; botón + Create Table con clave de partición, sort key, modo de facturación y RCU/WCU' },
+      { type: 'new',    text: 'AWS Glue — panel Info con tipo de job, configuración de workers, script location, rol IAM, conexiones y argumentos' },
+      { type: 'new',    text: 'AWS Athena — rediseño completo con 3 sub-pestañas: Workgroups, Data Sources (árbol catálogo→BD→tablas) y Query Editor con panel dividido, historial y exportación CSV' },
+      { type: 'new',    text: 'AWS Lex — visor de Intents, Slots y Slot Types en pestañas dentro del detalle del bot' },
+      { type: 'new',    text: 'AWS Step Functions — ejecución de state machines con payload personalizado; visor de ejecuciones con estado y salida' },
+    ],
+  },
   {
     version: '1.4.3',
     date: 'Abril 2026',
