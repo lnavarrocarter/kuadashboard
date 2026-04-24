@@ -1,4 +1,4 @@
-﻿# Integración AWS
+# Integración AWS
 
 KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **19 servicios de AWS** sin salir del dashboard.
 

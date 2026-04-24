@@ -1,4 +1,4 @@
-﻿# Terminal & Shell
+# Terminal & Shell
 
 KuaDashboard includes a powerful integrated terminal panel that gives you full interactive access to pod shells, log streams, EC2 SSH sessions and a local system shell — all from within the same window.
 

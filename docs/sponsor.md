@@ -1,4 +1,4 @@
-﻿# Sponsor KuaDashboard
+# Sponsor KuaDashboard
 
 **KUA — Know Unified Administration** is free and open source. It was built to eliminate the operational fragmentation of managing multiple clouds and Kubernetes clusters from separate consoles.
 

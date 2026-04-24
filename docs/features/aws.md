@@ -1,4 +1,4 @@
-﻿# AWS Integration
+# AWS Integration
 
 KuaDashboard provides a comprehensive AWS management panel accessible from the sidebar under **Cloud > AWS**. It gives you a single unified view over **19 AWS services** without ever leaving the dashboard.
 
