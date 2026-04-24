@@ -2,6 +2,8 @@
 
 KuaDashboard provides a comprehensive AWS management panel accessible from the sidebar under **Cloud > AWS**. It gives you a single unified view over **19 AWS services** without ever leaving the dashboard.
 
+> **v1.5.0 highlights:** S3 bucket creation & endpoint testing, ECR image browser with deploy-to-Kubernetes, VPC deep-dive details panel, Cognito Groups tab.
+
 ![KuaDashboard — dashboard overview](/screenshots/dashboard-main.png)
 
 ## Authentication
@@ -88,6 +90,8 @@ Browse bucket contents without leaving the dashboard:
 - **Browse** — navigate folders, view object sizes, download files, preview text content inline
 - **Tags** — view bucket tags
 - **Config** — view versioning, encryption, ACLs and CORS configuration
+- **Test** — check endpoint accessibility and measure latency (ms) for any bucket; result shown inline per row
+- **+ Create Bucket** — create a new S3 bucket with name, optional region and optional public access block
 
 ### DynamoDB
 
@@ -104,6 +108,8 @@ Manage Docker image repositories:
 - Repository name, full URI, image tag mutability (MUTABLE / IMMUTABLE), scan-on-push status, creation date
 - **Tags** — view resource tags
 - **Config** — view lifecycle policies and scanning configuration
+- **Images** — browse all images in the repository with digest, tags, push date, size and scan findings
+- **Deploy to K8s** — generate a Kubernetes `Deployment` manifest from any image tag and apply it directly to the connected cluster; configure app name, namespace, replica count, container port, image pull secret and `kubectl` context; copy YAML or apply with one click
 
 ---
 
@@ -116,6 +122,13 @@ Inspect Virtual Private Clouds:
 - VPC name, ID, CIDR block, state, subnet count, default VPC indicator
 - **Tags** — view all VPC tags
 - **Config** — view route tables, internet gateways and DHCP options
+- **Details** — deep-dive panel with 6 inner tabs:
+  - **Overview** — VPC info card, resource summary counts (subnets, SGs, route tables, IGWs, NAT GWs) and all tags
+  - **Subnets** — subnet ID, CIDR, availability zone, state, auto-assign public IP, available IP count
+  - **Security Groups** — per-group card showing name, description and inbound rules table (protocol, port range, source CIDR)
+  - **Route Tables** — per-table card listing all routes (destination CIDR, target, origin, state)
+  - **Internet Gateways** — gateway ID, state, attachment state
+  - **NAT Gateways** — gateway ID, subnet, public/private IP, state, creation date
 
 ### CloudFront
 
@@ -194,6 +207,9 @@ Full user pool management across four tabs:
 
 **Identity Providers**
 - Federated IdPs: name, type (SAML / OIDC / Google / Facebook), issuer/metadata URL, attribute mapping
+
+**Groups**
+- All groups in the pool: group name, description, precedence, IAM role ARN, last modified date
 
 **Pool Config**
 - Password policy (length, character requirements, temporary pwd validity)

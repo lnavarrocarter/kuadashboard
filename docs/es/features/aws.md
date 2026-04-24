@@ -2,6 +2,8 @@
 
 KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **19 servicios de AWS** sin salir del dashboard.
 
+> **Novedades en v1.5.0:** creación y test de endpoints S3, explorador de imágenes ECR con deploy a Kubernetes, panel de detalles VPC con 6 pestañas, tab de Grupos en Cognito.
+
 ![KuaDashboard — vista general](/screenshots/dashboard-main.png)
 
 ## Autenticación
@@ -88,6 +90,8 @@ Navega el contenido de los buckets sin salir del dashboard:
 - **Browse** — navega carpetas, ve tamaños de objetos, descarga archivos, previsualiza contenido de texto
 - **Tags** — ver tags del bucket
 - **Config** — ver versionado, cifrado, ACLs y configuración CORS
+- **Test** — verifica la accesibilidad del endpoint y mide la latencia (ms) de cualquier bucket; el resultado se muestra inline por fila
+- **+ Create Bucket** — crea un nuevo bucket S3 con nombre, región opcional y bloqueo de acceso público opcional
 
 ### DynamoDB
 
@@ -104,6 +108,8 @@ Gestiona repositorios de imágenes Docker:
 - Nombre del repositorio, URI completa, mutabilidad de tags (MUTABLE / IMMUTABLE), scan-on-push, fecha de creación
 - **Tags** — ver tags del recurso
 - **Config** — ver lifecycle policies y configuración de escaneo
+- **Images** — lista todas las imágenes del repositorio con digest, tags, fecha de push, tamaño y resultados de escaneo
+- **Deploy to K8s** — genera un manifiesto `Deployment` de Kubernetes desde cualquier tag de imagen y lo aplica directamente al cluster conectado; configura nombre de la app, namespace, réplicas, puerto, image pull secret y contexto `kubectl`; copia el YAML o aplica con un clic
 
 ---
 
@@ -116,6 +122,13 @@ Inspecciona Virtual Private Clouds:
 - Nombre del VPC, ID, bloque CIDR, estado, número de subnets, indicador de VPC por defecto
 - **Tags** — ver todos los tags del VPC
 - **Config** — ver tablas de rutas, internet gateways y opciones DHCP
+- **Details** — panel de análisis profundo con 6 pestañas internas:
+  - **Overview** — tarjeta de info del VPC, conteos resumen de recursos (subnets, SGs, tablas de rutas, IGWs, NAT GWs) y todos los tags
+  - **Subnets** — subnet ID, CIDR, availability zone, estado, auto-assign IP pública, IPs disponibles
+  - **Security Groups** — tarjeta por grupo con nombre, descripción y tabla de reglas inbound (protocolo, rango de puertos, CIDR fuente)
+  - **Route Tables** — tarjeta por tabla con todas las rutas (CIDR destino, target, origen, estado)
+  - **Internet Gateways** — ID del gateway, estado, estado de adjunto
+  - **NAT Gateways** — ID del gateway, subnet, IP pública/privada, estado, fecha de creación
 
 ### CloudFront
 
@@ -194,6 +207,9 @@ Gestión completa de user pools con cuatro pestañas internas:
 
 **Identity Providers**
 - IdPs federados: nombre, tipo (SAML / OIDC / Google / Facebook), issuer/metadata URL, mapeo de atributos
+
+**Grupos**
+- Todos los grupos del pool: nombre del grupo, descripción, precedencia, ARN del rol IAM, fecha de última modificación
 
 **Pool Config**
 - Política de contraseñas (longitud, requisitos de caracteres, validez de contraseña temporal)
