@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -67,6 +69,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_PUBLISH: never
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: true
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: List build output
         run: ls dist-electron/
@@ -78,6 +87,7 @@ jobs:
           name: KuaDashboard-${{ matrix.platform }}
           path: |
             dist-electron/${{ matrix.artifact-glob }}
+            dist-electron/*.zip
             dist-electron/latest*.yml
           if-no-files-found: warn
 
@@ -118,6 +128,23 @@ jobs:
             echo "tag=dev-$(date +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "latest*.yml" \) -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS.txt
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/win/*
+            artifacts/mac/*
+            artifacts/linux/*
+            artifacts/SHA256SUMS.txt
+          push-to-registry: false
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -128,7 +155,9 @@ jobs:
           files: |
             artifacts/win/*.exe
             artifacts/mac/*.dmg
+            artifacts/mac/*.zip
             artifacts/linux/*.AppImage
             artifacts/linux/*.deb
+            artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -24,6 +24,7 @@ const enSidebar = {
   '/guide/': [{ text: 'Guide', items: [
     { text: 'Getting Started', link: '/guide/getting-started' },
     { text: 'Installation', link: '/guide/installation' },
+    { text: 'Code Signing & Trust', link: '/guide/code-signing' },
     { text: 'Electron Desktop App', link: '/guide/electron' },
     { text: 'Configuration', link: '/guide/configuration' },
   ]}],
@@ -47,6 +48,7 @@ const esSidebar = {
   '/es/guide/': [{ text: 'Guía', items: [
     { text: 'Primeros Pasos', link: '/es/guide/getting-started' },
     { text: 'Instalación', link: '/es/guide/installation' },
+    { text: 'Firma y Confianza', link: '/es/guide/code-signing' },
     { text: 'App Electron', link: '/es/guide/electron' },
     { text: 'Configuración', link: '/es/guide/configuration' },
   ]}],

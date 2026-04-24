@@ -362,6 +362,12 @@ ipcMain.on('app:install-update', () => {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  // Set App User Model ID on Windows so the taskbar and notifications show
+  // the correct icon instead of the default Electron icon.
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('dev.kua.kuadashboard');
+  }
+
   // Expand PATH on macOS before anything else so the backend and all child
   // processes can find Homebrew-installed CLI tools (kubectl, aws, gcloud…)
   expandMacPath();

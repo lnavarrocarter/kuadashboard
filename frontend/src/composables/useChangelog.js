@@ -4,9 +4,35 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.4.0'
+export const CHANGELOG_VERSION = '1.4.3'
 
 export const CHANGELOG = [
+  {
+    version: '1.4.3',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',    text: 'Windows: el icono de la app ya no aparece como Electron genérico — se registra el App User Model ID (dev.kua.kuadashboard) para el taskbar, alt+tab y notificaciones' },
+      { type: 'better', text: 'Descripción del paquete actualizada para reflejar el soporte multi-cloud (Kubernetes, AWS y GCP)' },
+    ],
+  },
+  {
+    version: '1.4.2',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'AWS Lambda — panel de detalle con 5 pestañas: Overview, Code Viewer, Variables de entorno, Triggers y Logs en tiempo real' },
+      { type: 'new',    text: 'AWS EC2 — panel de detalle con 5 pestañas: Overview, Monitoring, Security Groups, Volumes y Console Output' },
+      { type: 'new',    text: 'AWS EC2 — autenticación SSH con contraseña además de PEM; selector de archivo PEM integrado' },
+      { type: 'new',    text: 'AWS EC2 — botones SSH/RDP conscientes del SO; canvas RDP integrado' },
+    ],
+  },
+  {
+    version: '1.4.1',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',    text: 'Auto-updater: try-catch en quitAndInstall con fallback a app.quit() para evitar cuelgues al instalar la actualización' },
+      { type: 'fix',    text: 'UpdateNotice: muestra estado de error con botón "Descargar manualmente" que abre la página de releases' },
+    ],
+  },
   {
     version: '1.4.0',
     date: 'Abril 2026',

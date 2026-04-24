@@ -41,38 +41,63 @@ Then open [http://localhost:7190](http://localhost:7190).
 
 All releases are built automatically via GitHub Actions from the [source repository](https://github.com/lnavarrocarter/kuadashboard). You can verify the build by checking the [Actions tab](https://github.com/lnavarrocarter/kuadashboard/actions/workflows/electron-build.yml).
 
+Each release includes a `SHA256SUMS.txt` file. Verify checksums before installation:
+
+### Checksum on Windows
+
+```powershell
+Get-FileHash .\KuaDashboard-Setup-x.x.x.exe -Algorithm SHA256
+```
+
+### Checksum on macOS
+
+```bash
+shasum -a 256 KuaDashboard-x.x.x.dmg
+```
+
+### Checksum on Linux
+
+```bash
+sha256sum KuaDashboard-x.x.x.AppImage
+```
+
+Compare the output hash against the entry in `SHA256SUMS.txt` from the same release.
+
 ## First Launch
 
 ### Windows
+
 - Run the installer (`KuaDashboard Setup x.x.x.exe`)
-- Windows SmartScreen may show a warning (app is unsigned) — click **More info** → **Run anyway**
+- Confirm the publisher shown in the installer matches **lnavarrocarter**
 - KuaDashboard will install and start automatically
 
 ### macOS
-- Open the `.dmg` file — a license dialog will appear with Gatekeeper bypass instructions
-- Drag **KuaDashboard** to the **Applications** folder
-- On first launch, macOS will block the app. To allow it:
-  1. Go to **System Settings** → **Privacy & Security**
-  2. Scroll down — you'll see a message about KuaDashboard being blocked
-  3. Click **Open Anyway** and confirm
-- Alternatively, run in Terminal:
-  ```bash
-  xattr -cr /Applications/KuaDashboard.app
-  ```
-- The app only needs this step once. After that it will open normally.
+
+- Open the `.dmg` file and drag **KuaDashboard** to the **Applications** folder
+- The app is distributed signed and notarized; Gatekeeper should allow launch normally
+
+Optional signature checks:
+
+```bash
+codesign --verify --deep --strict --verbose=2 /Applications/KuaDashboard.app
+spctl -a -vv /Applications/KuaDashboard.app
+```
 
 ### Linux
 
 #### AppImage
+
 ```bash
 chmod +x KuaDashboard-x.x.x.AppImage
 ./KuaDashboard-x.x.x.AppImage
 ```
 
 #### Debian / Ubuntu (.deb)
+
 ```bash
 sudo dpkg -i kuadashboard_x.x.x_amd64.deb
 # If there are missing dependencies:
 sudo apt-get install -f
 ```
+
 Then launch from the application menu or run `kuadashboard` from the terminal.

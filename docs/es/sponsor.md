@@ -10,6 +10,7 @@ Si KuaDashboard te ahorra tiempo, reduce tu complejidad operativa o ayuda a tu e
 
 <script setup>
 const sponsorUrl = 'https://github.com/sponsors/lnavarrocarter'
+const paypalUrl  = 'https://paypal.me/NavarroCarter'
 const shareText = encodeURIComponent('KuaDashboard — Un dashboard gratuito estilo Lens para Kubernetes + AWS + GCP. ¡Échale un vistazo!')
 const shareUrl = encodeURIComponent('https://github.com/lnavarrocarter/kuadashboard')
 const twitterUrl = `https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`
@@ -24,7 +25,42 @@ const redditUrl = `https://reddit.com/submit?url=${shareUrl}&title=${shareText}`
   <p>Tu patrocinio va directamente al mantenedor y financia el roadmap de KUA: desde Dashboard a Plataforma de Control a Sistema Inteligente — y eventualmente <strong>AI-driven Cloud Ops</strong>. GitHub <strong>iguala las contribuciones</strong> para desarrolladores elegibles.</p>
   <a :href="sponsorUrl" target="_blank" class="sponsor-btn">💖 Patrocinar en GitHub</a>
 </div>
+<div class="sponsor-card paypal-card">
+  <div class="sponsor-icon">🅿️</div>
+  <h3>Donación directa vía PayPal</h3>
+  <p>¿Prefieres contribuir con un pago único? Envía cualquier monto vía PayPal — no se requiere cuenta.</p>
+  <a :href="paypalUrl" target="_blank" class="sponsor-btn paypal-btn">🅿️ Donar vía PayPal</a>
 </div>
+</div>
+
+## Costo Real del Open Source
+
+KuaDashboard es gratuito para usar, pero no es gratuito de construir y distribuir. Aquí un desglose transparente de lo que realmente cuesta mantenerlo activo y confiable.
+
+### Tiempo de desarrollo
+
+| Área | Horas invertidas estimadas |
+|------|---------------------------|
+| Backend principal (rutas K8s, AWS, GCP) | ~300 h |
+| Frontend (Vue 3, Pinia, todas las vistas) | ~250 h |
+| Empaquetado Electron de escritorio | ~60 h |
+| Pipeline CI/CD y automatización de releases | ~40 h |
+| Documentación (EN + ES) | ~50 h |
+| Firma de código y hardening de seguridad | ~20 h |
+| **Total acumulado** | **~720 h** |
+
+A una tarifa de mercado conservadora de $50 USD/h, eso representa más de **$36,000 USD** de trabajo donado a la comunidad.
+
+### Costos operativos anuales
+
+| Concepto | Costo / año (USD) |
+|----------|------------------|
+| Certificado de firma de código Windows (OV/EV) | $30 – $600 |
+| Apple Developer Program (firma + notarización macOS) | $99 |
+| Dominio y hosting del sitio de documentación | ~$20 – $50 |
+| **Total recurrente** | **~$149 – $749 / año** |
+
+Cada dólar donado se destina a mantener el proyecto firmado, seguro y en evolución.
 
 ## Qué Permite Tu Apoyo
 
@@ -146,4 +182,7 @@ npm run dev:full
 .twitter-btn { background: #000; }
 .linkedin-btn { background: #0077b5; }
 .reddit-btn  { background: #ff4500; }
+.paypal-card { margin-top: 1.25rem; }
+.paypal-btn  { background: linear-gradient(135deg, #003087, #009cde); }
+.paypal-btn:hover { box-shadow: 0 4px 12px rgba(0, 156, 222, 0.4); }
 </style>

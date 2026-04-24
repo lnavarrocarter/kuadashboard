@@ -55,20 +55,11 @@ Descarga el instalador más reciente para tu plataforma desde la página de [Des
 | Linux      | AppImage | `KuaDashboard-x.x.x.AppImage` |
 | Linux      | Debian/Ubuntu | `kuadashboard_x.x.x_amd64.deb` |
 
-### macOS — Aviso de Gatekeeper
+### Modelo de confianza en Windows y macOS
 
-KuaDashboard no está firmado con un certificado de Apple Developer. En el primer inicio, macOS bloqueará la app:
+Los releases de escritorio se distribuyen con firma de codigo (Windows) y notarizacion (macOS).
 
-1. Ve a **Configuración del Sistema** → **Privacidad y Seguridad**
-2. Desplázate hacia abajo — verás un mensaje sobre KuaDashboard bloqueado
-3. Haz clic en **Abrir de todas formas** y confirma
-
-O ejecuta en Terminal:
-```bash
-xattr -cr /Applications/KuaDashboard.app
-```
-
-La app solo necesita este paso una vez.
+Para ver el proceso completo de generacion/exportacion de certificados y configuracion de secrets en CI, revisa [Firma de Codigo y Notarizacion](/es/guide/code-signing).
 
 ### Linux — AppImage
 

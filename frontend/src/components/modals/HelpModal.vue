@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <BaseModal :show="show" :wide="true" @close="$emit('close')">
-    <template #title><i data-lucide="info"></i> KUA — Know Unified Administration · v{{ VERSION }}</template>
+    <template #title><i data-lucide="info"></i> KUA ÔÇö Know Unified Administration ┬À v{{ VERSION }}</template>
 
     <div class="help-layout">
 
-      <!-- ── Columna izquierda: navegación ─────────────── -->
+      <!-- ÔöÇÔöÇ Columna izquierda: navegaci├│n ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ -->
       <nav class="help-nav">
         <button v-for="tab in TABS" :key="tab.id"
           :class="['help-nav-item', { active: activeTab === tab.id }]"
@@ -14,7 +14,7 @@
         </button>
       </nav>
 
-      <!-- ── Contenido ──────────────────────────────────── -->
+      <!-- ÔöÇÔöÇ Contenido ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ -->
       <div class="help-content">
 
         <!-- About -->
@@ -25,12 +25,12 @@
               <path fill="#0e9de8" d="M7,5 L12,5 L12,13.5 L25,5 L28.5,5 L15.5,16.5 L28.5,27 L25,27 L12,18.5 L12,27 L7,27 Z"/>
             </svg>
             <div>
-              <div class="about-title">KUA <span style="font-weight:400;font-size:13px;color:var(--text-dim)">— Know Unified Administration</span></div>
+              <div class="about-title">KUA <span style="font-weight:400;font-size:13px;color:var(--text-dim)">ÔÇö Know Unified Administration</span></div>
               <div class="about-subtitle">{{ t('help.subtitle', { v: VERSION }) }}</div>
             </div>
           </div>
 
-          <!-- Aviso de actualización -->
+          <!-- Aviso de actualizaci├│n -->
           <div v-if="updateDownloaded" class="update-card update-ready">
             <i data-lucide="download"></i>
             <div class="update-card-body">
@@ -44,7 +44,7 @@
           <div v-else-if="updateStore.updateError" class="update-card update-error">
             <i data-lucide="alert-triangle"></i>
             <div class="update-card-body">
-              <div class="update-card-title">Error al descargar actualización</div>
+              <div class="update-card-title">Error al descargar actualizaci├│n</div>
               <div class="update-card-sub">{{ updateStore.updateError }}</div>
             </div>
           </div>
@@ -234,8 +234,8 @@
                 <span class="opts-desc">{{ t('help.langDesc') }}</span>
               </div>
               <div class="btn-toggle-group">
-                <button :class="['btn','sm', settings.lang === 'es' ? 'active' : '']" @click="settings.lang = 'es'">🇪🇸 Español</button>
-                <button :class="['btn','sm', settings.lang === 'en' ? 'active' : '']" @click="settings.lang = 'en'">🇺🇸 English</button>
+                <button :class="['btn','sm', settings.lang === 'es' ? 'active' : '']" @click="settings.lang = 'es'">­ƒç¬­ƒç© Espa├▒ol</button>
+                <button :class="['btn','sm', settings.lang === 'en' ? 'active' : '']" @click="settings.lang = 'en'">­ƒç║­ƒç© English</button>
               </div>
             </div>
           </div>

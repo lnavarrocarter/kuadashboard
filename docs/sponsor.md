@@ -10,6 +10,7 @@ If KuaDashboard saves you time, reduces your operational complexity, or helps yo
 
 <script setup>
 const sponsorUrl = 'https://github.com/sponsors/lnavarrocarter'
+const paypalUrl  = 'https://paypal.me/NavarroCarter'
 const shareText = encodeURIComponent('KuaDashboard — A free Lens-like dashboard for Kubernetes + AWS + GCP. Check it out!')
 const shareUrl = encodeURIComponent('https://github.com/lnavarrocarter/kuadashboard')
 const twitterUrl = `https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`
@@ -24,7 +25,42 @@ const redditUrl = `https://reddit.com/submit?url=${shareUrl}&title=${shareText}`
   <p>Your sponsorship goes directly to the maintainer and funds the KUA roadmap: from Dashboard to Control Platform to Intelligent System — and eventually <strong>AI-driven Cloud Ops</strong>. GitHub <strong>matches contributions</strong> for eligible developers.</p>
   <a :href="sponsorUrl" target="_blank" class="sponsor-btn">💖 Sponsor on GitHub</a>
 </div>
+<div class="sponsor-card paypal-card">
+  <div class="sponsor-icon">🅿️</div>
+  <h3>One-time donation via PayPal</h3>
+  <p>Prefer a direct one-time contribution? Send any amount via PayPal — no account required.</p>
+  <a :href="paypalUrl" target="_blank" class="sponsor-btn paypal-btn">🅿️ Donate via PayPal</a>
 </div>
+</div>
+
+## Real Cost of Open Source
+
+KuaDashboard is free to use, but not free to build and distribute. Here is a transparent breakdown of what keeping it running and trusted actually costs.
+
+### Development time
+
+| Area | Estimated hours invested |
+|------|-------------------------|
+| Core backend (K8s, AWS, GCP routes) | ~300 h |
+| Frontend (Vue 3, Pinia, all views) | ~250 h |
+| Electron desktop packaging | ~60 h |
+| CI/CD pipeline and release automation | ~40 h |
+| Documentation (EN + ES) | ~50 h |
+| Code signing, security hardening | ~20 h |
+| **Total to date** | **~720 h** |
+
+At a conservative market rate of $50 USD/h, that represents over **$36,000 USD** of work donated to the community.
+
+### Annual operating costs
+
+| Item | Cost / year (USD) |
+|------|------------------|
+| Windows code-signing certificate (OV/EV) | $30 – $600 |
+| Apple Developer Program (macOS signing + notarization) | $99 |
+| Domain and hosting (docs site) | ~$20 – $50 |
+| **Total recurring** | **~$149 – $749 / year** |
+
+Every dollar donated goes toward keeping the project signed, secure, and maintained.
 
 ## What Your Support Enables
 
@@ -146,4 +182,7 @@ npm run dev:full
 .twitter-btn { background: #000; }
 .linkedin-btn { background: #0077b5; }
 .reddit-btn  { background: #ff4500; }
+.paypal-card { margin-top: 1.25rem; }
+.paypal-btn  { background: linear-gradient(135deg, #003087, #009cde); }
+.paypal-btn:hover { box-shadow: 0 4px 12px rgba(0, 156, 222, 0.4); }
 </style>
