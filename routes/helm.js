@@ -18,10 +18,36 @@
 const express       = require('express');
 const { exec }      = require('child_process');
 const { promisify } = require('util');
+const path          = require('path');
+const os            = require('os');
+const fs            = require('fs');
 
 const router    = express.Router();
 const execAsync = promisify(exec);
 const isWin     = process.platform === 'win32';
+
+const MERGED_KUBECONFIG  = path.join(os.homedir(), '.kube', 'kuadashboard_merged.yaml');
+const DEFAULT_KUBECONFIG = path.join(os.homedir(), '.kube', 'config');
+
+/**
+ * Build the KUBECONFIG env-var string using the same sources as server.js:
+ * KUBECONFIG env paths + ~/.kube/config + kuadashboard_merged.yaml
+ */
+function resolveKubeconfigEnv() {
+  const sep    = isWin ? ';' : ':';
+  const envVar = process.env.KUBECONFIG || '';
+  const fromEnv = envVar
+    ? envVar.split(sep).map(p => p.trim()).filter(p => p && fs.existsSync(p))
+    : [];
+  const files = [...fromEnv];
+  if (!files.includes(DEFAULT_KUBECONFIG) && fs.existsSync(DEFAULT_KUBECONFIG)) {
+    files.push(DEFAULT_KUBECONFIG);
+  }
+  if (fs.existsSync(MERGED_KUBECONFIG) && !files.includes(MERGED_KUBECONFIG)) {
+    files.push(MERGED_KUBECONFIG);
+  }
+  return files.join(sep);
+}
 
 // ─── Shell helper ─────────────────────────────────────────────────────────────
 
@@ -31,24 +57,29 @@ const isWin     = process.platform === 'win32';
  */
 async function shellExec(cmd, timeout = 15000) {
   const opts = { timeout, windowsHide: true, maxBuffer: 10 * 1024 * 1024 };
+  const kubeconfig = resolveKubeconfigEnv();
   if (isWin) {
     const psScript =
       "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + " +
-      "[Environment]::GetEnvironmentVariable('Path','User'); " + cmd;
+      "[Environment]::GetEnvironmentVariable('Path','User'); " +
+      (kubeconfig ? `$env:KUBECONFIG = ${JSON.stringify(kubeconfig)}; ` : '') +
+      cmd;
     const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
     return execAsync(
       `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`,
       opts
     );
   }
-  return execAsync(`sh -c '${cmd.replace(/'/g, "'\\''")}'`, opts);
+  const kubePfx = kubeconfig ? `KUBECONFIG=${kubeconfig.replace(/'/g, "'\\''")} ` : '';
+  return execAsync(`sh -c '${kubePfx}${cmd.replace(/'/g, "'\\''")}' `, opts);
 }
 
 /**
  * Build the base helm command with optional --kube-context flag.
  */
 function helmBase(context) {
-  return context ? `helm --kube-context ${context}` : 'helm';
+  // Quote the context name to handle ARN-style names with colons and slashes
+  return context ? `helm --kube-context "${context}"` : 'helm';
 }
 
 /**
