@@ -654,6 +654,7 @@
             <th :class="thClass('latestVersion')" @click="sortBy('latestVersion')">Latest Version</th>
             <th :class="thClass('updatedDate')"  @click="sortBy('updatedDate')">Updated <span class="sort-icon">{{ sortIcon('updatedDate') }}</span></th>
             <th>Role ARN</th>
+            <th>Actions</th>
           </tr></thead>
           <tbody>
             <tr v-for="b in sortRows(filteredLex)" :key="b.id">
@@ -665,7 +666,12 @@
               <td><span :class="b.status === 'Available' ? 'status-ok' : 'status-warn'">{{ b.status || '-' }}</span></td>
               <td class="text-dim">{{ b.latestVersion || '-' }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ b.updatedDate ? formatDate(b.updatedDate) : '-' }}</td>
-              <td class="text-dim mono-xs" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="b.roleArn">{{ b.roleArn || '-' }}</td>
+              <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="b.roleArn">{{ b.roleArn || '-' }}</td>
+              <td style="white-space:nowrap">
+                <button class="btn xs" style="background:rgba(139,92,246,.18);border-color:#8b5cf6;color:#8b5cf6;margin-right:4px" @click="openLexIntents(b)" title="Intents & Slots">Intents</button>
+                <button class="btn xs" style="background:rgba(59,130,246,.18);border-color:#3b82f6;color:#3b82f6;margin-right:4px" @click="openLexLogs(b)" title="Invocation Logs">Logs</button>
+                <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openLexTestSet(b)" title="Test Sets">Test Set</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1311,6 +1317,253 @@
             <button class="btn sm" :disabled="!ecrDeployModal.appName || !ecrDeployModal.selectedTag || ecrDeployModal.applying"
               style="background:rgba(124,158,248,.2);border-color:#7c9ef8;color:#7c9ef8"
               @click="doApplyEcrToK8s">{{ ecrDeployModal.applying ? 'Applying...' : 'Apply to K8s' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Intents & Slots Modal ──────────────────────────────────────── -->
+    <div v-if="lexIntentsModal.open" class="modal-overlay" @click.self="lexIntentsModal.open = false">
+      <div class="modal" style="width:920px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Intents & Slots — {{ lexIntentsModal.botName }}</span>
+          <button class="btn sm" @click="lexIntentsModal.open = false">✕</button>
+        </div>
+        <div v-if="lexIntentsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading intents...</div>
+        <div v-else-if="lexIntentsModal.error" class="alert-error" style="margin:12px">{{ lexIntentsModal.error }}</div>
+        <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <!-- Locale tabs -->
+          <div v-if="lexIntentsModal.locales.length > 1" style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--border);flex-shrink:0">
+            <button v-for="loc in lexIntentsModal.locales" :key="loc.localeId"
+              :class="['btn','xs', lexIntentsModal.activeLocale === loc.localeId ? 'active' : '']"
+              @click="lexIntentsModal.activeLocale = loc.localeId; lexIntentsModal.activeIntent = null; lexIntentsModal.activeView = 'list'">
+              {{ loc.localeName }} <span class="text-dim">({{ loc.intents.length }})</span>
+            </button>
+          </div>
+          <!-- Inner tabs: List / Flow -->
+          <div style="display:flex;gap:4px;padding:8px 12px 0;flex-shrink:0">
+            <button :class="['btn','xs', lexIntentsModal.activeView === 'list' ? 'active' : '']"
+              @click="lexIntentsModal.activeView = 'list'; lexIntentsModal.activeIntent = null">Intent List</button>
+            <button :class="['btn','xs', lexIntentsModal.activeView === 'flow' ? 'active' : '']"
+              @click="lexIntentsModal.activeView = 'flow'">Conversation Flow</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:12px">
+            <!-- ── Intent List view ── -->
+            <div v-if="lexIntentsModal.activeView === 'list'">
+              <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">No intents found for this locale.</div>
+              <div v-else>
+                <div v-for="intent in lexCurrentLocale.intents" :key="intent.id"
+                  style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--surface)"
+                    @click="lexIntentsModal.activeIntent = lexIntentsModal.activeIntent === intent.id ? null : intent.id">
+                    <span style="font-weight:600;flex:1">{{ intent.name }}</span>
+                    <span class="text-dim" style="font-size:11px">{{ intent.slots.length }} slot{{ intent.slots.length !== 1 ? 's' : '' }}</span>
+                    <span class="text-dim" style="font-size:11px">{{ intent.sampleUtterances.length }} utterance{{ intent.sampleUtterances.length !== 1 ? 's' : '' }}</span>
+                    <span style="font-size:11px;color:var(--text-dim)">{{ lexIntentsModal.activeIntent === intent.id ? '▲' : '▼' }}</span>
+                  </div>
+                  <div v-if="lexIntentsModal.activeIntent === intent.id" style="padding:12px;border-top:1px solid var(--border)">
+                    <div v-if="intent.description" class="text-dim" style="font-size:12px;margin-bottom:8px">{{ intent.description }}</div>
+                    <!-- Sample utterances -->
+                    <div style="margin-bottom:12px">
+                      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Sample Utterances</div>
+                      <div v-if="!intent.sampleUtterances.length" class="text-dim" style="font-size:12px">None defined.</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:4px">
+                        <span v-for="(u, i) in intent.sampleUtterances" :key="i"
+                          style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:2px 8px;font-size:11px">{{ u }}</span>
+                      </div>
+                    </div>
+                    <!-- Slots table -->
+                    <div>
+                      <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Slots</div>
+                      <div v-if="!intent.slots.length" class="text-dim" style="font-size:12px">No slots defined.</div>
+                      <table v-else class="cloud-table" style="font-size:12px">
+                        <thead><tr>
+                          <th>Slot Name</th><th>Type</th><th>Required</th><th>Description</th>
+                        </tr></thead>
+                        <tbody>
+                          <tr v-for="s in intent.slots" :key="s.id">
+                            <td style="font-weight:600">{{ s.name }}</td>
+                            <td class="mono-xs">{{ s.typeName || '-' }}</td>
+                            <td><span :class="s.required ? 'status-ok' : 'status-warn'">{{ s.required ? 'Required' : 'Optional' }}</span></td>
+                            <td class="text-dim">{{ s.description || '-' }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- ── Conversation Flow view ── -->
+            <div v-if="lexIntentsModal.activeView === 'flow'">
+              <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">No intents to render flow.</div>
+              <div v-else style="display:flex;flex-wrap:wrap;gap:16px">
+                <div v-for="intent in lexCurrentLocale.intents" :key="intent.id"
+                  style="border:1px solid rgba(139,92,246,.4);border-radius:8px;min-width:220px;max-width:300px;overflow:hidden;background:var(--surface)">
+                  <!-- Intent header -->
+                  <div style="background:rgba(139,92,246,.2);padding:8px 12px;border-bottom:1px solid rgba(139,92,246,.3)">
+                    <div style="font-weight:600;font-size:13px">🎯 {{ intent.name }}</div>
+                    <div v-if="intent.description" class="text-dim" style="font-size:11px">{{ intent.description }}</div>
+                  </div>
+                  <!-- Utterances (up to 3) -->
+                  <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Triggers</div>
+                    <div style="display:flex;flex-direction:column;gap:2px">
+                      <div v-for="(u, i) in intent.sampleUtterances.slice(0,3)" :key="i"
+                        style="font-size:11px;color:var(--text-dim);font-style:italic">"{{ u }}"</div>
+                      <div v-if="intent.sampleUtterances.length > 3" class="text-dim" style="font-size:10px">+{{ intent.sampleUtterances.length - 3 }} more</div>
+                    </div>
+                  </div>
+                  <!-- Slots flow -->
+                  <div v-if="intent.slots.length" style="padding:8px 12px">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Slot Collection</div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <div v-for="(s, si) in intent.slots" :key="s.id" style="display:flex;align-items:center;gap:6px">
+                        <div style="width:16px;text-align:center;font-size:10px;color:var(--text-dim)">{{ si + 1 }}</div>
+                        <div :style="`flex:1;border:1px solid ${s.required ? 'rgba(34,197,94,.4)' : 'rgba(250,204,21,.4)'};border-radius:4px;padding:3px 7px;font-size:11px;background:${s.required ? 'rgba(34,197,94,.08)' : 'rgba(250,204,21,.08)'}`">
+                          <span style="font-weight:600">{{ s.name }}</span>
+                          <span class="text-dim" style="font-size:10px;margin-left:4px">{{ s.typeName }}</span>
+                        </div>
+                        <span :class="s.required ? 'status-ok' : 'status-warn'" style="font-size:9px;padding:1px 4px">{{ s.required ? 'REQ' : 'OPT' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else style="padding:8px 12px;color:var(--text-dim);font-size:11px">No slots — immediate fulfillment</div>
+                  <!-- Fulfillment -->
+                  <div style="background:rgba(34,197,94,.1);padding:6px 12px;border-top:1px solid var(--border);font-size:11px;color:#22c55e;text-align:center">
+                    ✓ Fulfillment
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Invocation Logs Modal ────────────────────────────────────── -->
+    <div v-if="lexLogsModal.open" class="modal-overlay" @click.self="lexLogsModal.open = false">
+      <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-weight:600">Invocation Logs — {{ lexLogsModal.botName }}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <select v-model="lexLogsModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+              <option :value="1">Last 1h</option>
+              <option :value="6">Last 6h</option>
+              <option :value="24">Last 24h</option>
+              <option :value="72">Last 3d</option>
+              <option :value="168">Last 7d</option>
+            </select>
+            <button class="btn sm" @click="reloadLexLogs" :disabled="lexLogsModal.loading">{{ lexLogsModal.loading ? 'Loading...' : 'Refresh' }}</button>
+            <button class="btn sm" @click="lexLogsModal.open = false">✕</button>
+          </div>
+        </div>
+        <div v-if="lexLogsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+        <div v-else-if="lexLogsModal.error" class="alert-error" style="margin:12px">{{ lexLogsModal.error }}</div>
+        <div v-else-if="!lexLogsModal.configured" style="padding:24px;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">📋</div>
+          <div style="font-weight:600;margin-bottom:4px">Conversation logs not configured</div>
+          <div class="text-dim" style="font-size:12px">No CloudWatch log group found for this bot. Enable conversation logs in the bot's alias settings.</div>
+        </div>
+        <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="padding:6px 12px;font-size:11px;color:var(--text-dim);flex-shrink:0;border-bottom:1px solid var(--border)">
+            Log group: <span class="mono-xs">{{ (lexLogsModal.groups || []).join(', ') }}</span>
+            &nbsp;·&nbsp; {{ lexLogsModal.events.length }} events
+          </div>
+          <div v-if="!lexLogsModal.events.length" class="empty-row">No log events in this time range.</div>
+          <div v-else style="flex:1;overflow:auto;padding:8px">
+            <div v-for="(ev, idx) in lexLogsModal.events" :key="idx"
+              style="border:1px solid var(--border);border-radius:4px;margin-bottom:6px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface);cursor:pointer"
+                @click="ev._expanded = !ev._expanded; lexLogsModal.events = [...lexLogsModal.events]">
+                <span class="text-dim mono-xs" style="flex-shrink:0">{{ new Date(ev.timestamp).toLocaleString() }}</span>
+                <span class="mono-xs text-dim" style="font-size:10px;flex-shrink:0">{{ ev.stream }}</span>
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">
+                  {{ ev.parsed ? (ev.parsed.inputTranscript || ev.parsed.sessionId || JSON.stringify(ev.parsed).slice(0,80)) : ev.message.slice(0,100) }}
+                </span>
+                <span style="font-size:10px;color:var(--text-dim)">{{ ev._expanded ? '▲' : '▼' }}</span>
+              </div>
+              <div v-if="ev._expanded" style="padding:10px;border-top:1px solid var(--border);font-size:11px;font-family:monospace;white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.15)">{{ ev.parsed ? JSON.stringify(ev.parsed, null, 2) : ev.message }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Lex Test Set Modal ───────────────────────────────────────────── -->
+    <div v-if="lexTestSetModal.open" class="modal-overlay" @click.self="lexTestSetModal.open = false">
+      <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Test Sets — {{ lexTestSetModal.botName }}</span>
+          <button class="btn sm" @click="lexTestSetModal.open = false">✕</button>
+        </div>
+        <!-- Inner tabs -->
+        <div style="display:flex;gap:4px;padding:8px 12px 0;flex-shrink:0;border-bottom:1px solid var(--border)">
+          <button :class="['btn','xs', lexTestSetModal.activeView === 'existing' ? 'active' : '']" @click="lexTestSetModal.activeView = 'existing'">Existing Test Sets</button>
+          <button :class="['btn','xs', lexTestSetModal.activeView === 'generate' ? 'active' : '']" @click="lexTestSetModal.activeView = 'generate'">Generate from Intents</button>
+        </div>
+        <div v-if="lexTestSetModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading...</div>
+        <div v-else-if="lexTestSetModal.error" class="alert-error" style="margin:12px">{{ lexTestSetModal.error }}</div>
+        <div v-else style="flex:1;overflow:auto;padding:12px">
+          <!-- Existing test sets -->
+          <div v-if="lexTestSetModal.activeView === 'existing'">
+            <div v-if="!lexTestSetModal.testSets.length" style="text-align:center;padding:32px;color:var(--text-dim)">
+              <div style="font-size:28px;margin-bottom:8px">📂</div>
+              <div>No test sets found for this account.</div>
+              <div style="font-size:12px;margin-top:4px">Use the "Generate from Intents" tab to create one.</div>
+            </div>
+            <table v-else class="cloud-table">
+              <thead><tr>
+                <th>Name</th><th>Status</th><th>Turns</th><th>Modality</th><th>Last Updated</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="ts in lexTestSetModal.testSets" :key="ts.id">
+                  <td>
+                    <div style="font-weight:600">{{ ts.name }}</div>
+                    <div v-if="ts.description" class="text-dim" style="font-size:11px">{{ ts.description }}</div>
+                    <div class="mono-xs text-dim">{{ ts.id }}</div>
+                  </td>
+                  <td><span :class="/READY|COMPLETED/.test(ts.status) ? 'status-ok' : /FAILED/.test(ts.status) ? 'status-err' : 'status-warn'">{{ ts.status }}</span></td>
+                  <td class="text-dim">{{ ts.numTurns || '-' }}</td>
+                  <td class="text-dim">{{ ts.modality || '-' }}</td>
+                  <td class="text-dim" style="white-space:nowrap">{{ ts.lastUpdated ? formatDate(ts.lastUpdated) : '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Generate from intents -->
+          <div v-if="lexTestSetModal.activeView === 'generate'">
+            <div v-if="!lexTestSetModal.intentsLoaded" style="text-align:center;padding:24px">
+              <button class="btn sm" style="background:rgba(139,92,246,.18);border-color:#8b5cf6;color:#8b5cf6"
+                @click="lexLoadIntentsForTestSet" :disabled="lexTestSetModal.loadingIntents">
+                {{ lexTestSetModal.loadingIntents ? 'Loading intents...' : 'Load Intents to Generate Tests' }}
+              </button>
+            </div>
+            <div v-else>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+                <span style="font-size:12px;color:var(--text-dim)">{{ lexTestSetModal.generatedCases.length }} test cases generated</span>
+                <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="downloadLexTestSetCsv">⬇ Download CSV</button>
+                <button class="btn xs" style="background:rgba(59,130,246,.18);border-color:#3b82f6;color:#3b82f6" @click="downloadLexTestSetJson">⬇ Download JSON</button>
+              </div>
+              <table class="cloud-table" style="font-size:12px">
+                <thead><tr>
+                  <th>#</th><th>Intent</th><th>Utterance</th><th>Expected Slots</th>
+                </tr></thead>
+                <tbody>
+                  <tr v-for="(tc, i) in lexTestSetModal.generatedCases" :key="i">
+                    <td class="text-dim">{{ i + 1 }}</td>
+                    <td style="font-weight:600">{{ tc.intent }}</td>
+                    <td style="font-style:italic;color:var(--text-dim)">"{{ tc.utterance }}"</td>
+                    <td>
+                      <div class="tag-chips">
+                        <span v-for="s in tc.expectedSlots" :key="s" class="tag-chip">{{ s }}</span>
+                        <span v-if="!tc.expectedSlots.length" class="text-dim">—</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -3156,6 +3409,138 @@ async function doApplyEcrToK8s() {
   } finally {
     ecrDeployModal.applying = false
   }
+}
+
+// ─── Lex Intents Modal ────────────────────────────────────────────────────────
+
+const lexIntentsModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  locales: [], activeLocale: null, activeIntent: null, activeView: 'list',
+})
+
+const lexCurrentLocale = computed(() =>
+  lexIntentsModal.locales.find(l => l.localeId === lexIntentsModal.activeLocale) || null
+)
+
+async function openLexIntents(bot) {
+  Object.assign(lexIntentsModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    locales: [], activeLocale: null, activeIntent: null, activeView: 'list',
+  })
+  try {
+    const data = await awsStore.fetchLexIntents(bot.id)
+    lexIntentsModal.locales = data
+    if (data.length) lexIntentsModal.activeLocale = data[0].localeId
+  } catch (e) {
+    lexIntentsModal.error = e?.message || 'Error loading intents'
+  } finally {
+    lexIntentsModal.loading = false
+  }
+}
+
+// ─── Lex Invocation Logs Modal ────────────────────────────────────────────────
+
+const lexLogsModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  hours: 24, configured: false, groups: [], events: [],
+})
+
+async function openLexLogs(bot) {
+  Object.assign(lexLogsModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    hours: 24, configured: false, groups: [], events: [],
+  })
+  await reloadLexLogs()
+}
+
+async function reloadLexLogs() {
+  lexLogsModal.loading = true; lexLogsModal.error = null
+  try {
+    const data = await awsStore.fetchLexLogs(lexLogsModal.botId, lexLogsModal.hours)
+    lexLogsModal.configured = data.configured
+    lexLogsModal.groups     = data.groups || []
+    lexLogsModal.events     = (data.events || []).map(e => ({ ...e, _expanded: false }))
+  } catch (e) {
+    lexLogsModal.error = e?.message || 'Error loading logs'
+  } finally {
+    lexLogsModal.loading = false
+  }
+}
+
+// ─── Lex Test Set Modal ───────────────────────────────────────────────────────
+
+const lexTestSetModal = reactive({
+  open: false, loading: false, error: null,
+  botId: '', botName: '',
+  activeView: 'existing',
+  testSets: [],
+  intentsLoaded: false, loadingIntents: false,
+  generatedCases: [],
+})
+
+async function openLexTestSet(bot) {
+  Object.assign(lexTestSetModal, {
+    open: true, loading: true, error: null,
+    botId: bot.id, botName: bot.name,
+    activeView: 'existing',
+    testSets: [],
+    intentsLoaded: false, loadingIntents: false,
+    generatedCases: [],
+  })
+  try {
+    lexTestSetModal.testSets = await awsStore.fetchLexTestSets(bot.id)
+  } catch (e) {
+    lexTestSetModal.error = e?.message || 'Error loading test sets'
+  } finally {
+    lexTestSetModal.loading = false
+  }
+}
+
+async function lexLoadIntentsForTestSet() {
+  lexTestSetModal.loadingIntents = true
+  try {
+    const locales = await awsStore.fetchLexIntents(lexTestSetModal.botId)
+    const cases = []
+    for (const locale of locales) {
+      for (const intent of locale.intents) {
+        const utterances = intent.sampleUtterances.length
+          ? intent.sampleUtterances
+          : [`[${intent.name}]`]
+        const expectedSlots = intent.slots.filter(s => s.required).map(s => s.name)
+        for (const utterance of utterances) {
+          cases.push({ intent: intent.name, utterance, expectedSlots, localeId: locale.localeId })
+        }
+      }
+    }
+    lexTestSetModal.generatedCases = cases
+    lexTestSetModal.intentsLoaded = true
+  } catch (e) {
+    toast(e?.message || 'Error loading intents', 'error')
+  } finally {
+    lexTestSetModal.loadingIntents = false
+  }
+}
+
+function downloadLexTestSetCsv() {
+  const header = 'intent,utterance,expected_slots,locale'
+  const rows = lexTestSetModal.generatedCases.map(c =>
+    `"${c.intent}","${c.utterance.replace(/"/g, '""')}","${c.expectedSlots.join('|')}","${c.localeId}"`
+  )
+  const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `lex-testset-${lexTestSetModal.botId}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadLexTestSetJson() {
+  const blob = new Blob([JSON.stringify(lexTestSetModal.generatedCases, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `lex-testset-${lexTestSetModal.botId}.json`; a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── EventBridge Logs Modal ───────────────────────────────────────────────────

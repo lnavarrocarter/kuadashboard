@@ -746,6 +746,18 @@ export const useAwsStore = defineStore('aws', () => {
     catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  async function fetchLexIntents(botId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/intents`, { headers: headers() })
+  }
+
+  async function fetchLexLogs(botId, hours = 24, limit = 100) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/logs?hours=${hours}&limit=${limit}`, { headers: headers() })
+  }
+
+  async function fetchLexTestSets(botId) {
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/testsets`, { headers: headers() })
+  }
+
   // ─── CloudFormation (AgentCore) ────────────────────────────────────────────
 
   async function fetchCloudformationStacks(agentCoreOnly = false) {
@@ -792,7 +804,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchCognitoClients, fetchCognitoIdentityProviders, fetchCognitoGroups,
     fetchSecrets, fetchSecretConfig, importSecretToProfile, previewSecretKeys, importSelectedSecretKeys,
     fetchDataPipelines, activateDataPipeline, deactivateDataPipeline,
-    fetchBedrockModels, fetchLexBots, fetchCloudformationStacks,
+    fetchBedrockModels, fetchLexBots, fetchLexIntents, fetchLexLogs, fetchLexTestSets, fetchCloudformationStacks,
     createS3Bucket, testS3Bucket, fetchEcrImages, applyK8sManifest,
   }
 })

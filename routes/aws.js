@@ -3430,6 +3430,131 @@ router.get('/lex', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /lex/:botId/intents ─────────────────────────────────────────────────
+
+router.get('/lex/:botId/intents', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      LexModelsV2Client, ListBotLocalesCommand, ListIntentsCommand, ListSlotsCommand
+    } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+
+    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion: 'DRAFT' }));
+    const locales = localesResp.botLocaleSummaries || [];
+
+    const result = [];
+    for (const locale of locales) {
+      const localeId = locale.localeId;
+      const intents = [];
+      let nextToken;
+      do {
+        const resp = await client.send(new ListIntentsCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 100, nextToken }));
+        intents.push(...(resp.intentSummaries || []));
+        nextToken = resp.nextToken;
+      } while (nextToken);
+
+      const intentsWithSlots = await Promise.all(intents.map(async (intent) => {
+        const slots = [];
+        let sNext;
+        do {
+          const sr = await client.send(new ListSlotsCommand({ botId, botVersion: 'DRAFT', localeId, intentId: intent.intentId, maxResults: 100, nextToken: sNext }));
+          slots.push(...(sr.slotSummaries || []));
+          sNext = sr.nextToken;
+        } while (sNext);
+        return {
+          id:               intent.intentId,
+          name:             intent.intentName,
+          description:      intent.description || '',
+          sampleUtterances: (intent.sampleUtterances || []).map(u => u.utterance || u),
+          slots: slots.map(s => ({
+            id:          s.slotId,
+            name:        s.slotName,
+            typeName:    s.slotTypeName || '',
+            required:    s.slotConstraint === 'Required',
+            description: s.description || '',
+          }))
+        };
+      }));
+
+      result.push({
+        localeId,
+        localeName: locale.localeName || localeId,
+        status:     locale.botLocaleStatus,
+        intents:    intentsWithSlots
+      });
+    }
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex/:botId/logs ─────────────────────────────────────────────────────
+
+router.get('/lex/:botId/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { botId } = req.params;
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const cw = new CloudWatchLogsClient(cfg);
+
+    const lgResp = await cw.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lex/' }));
+    const allGroups = lgResp.logGroups || [];
+    const groups = allGroups.filter(g => g.logGroupName.includes(botId));
+
+    if (!groups.length) {
+      return res.json({ configured: false, groups: [], events: [] });
+    }
+
+    const logGroupName = groups[0].logGroupName;
+    const startTime = Date.now() - hours * 60 * 60 * 1000;
+    const evResp = await cw.send(new FilterLogEventsCommand({ logGroupName, startTime, limit }));
+
+    res.json({
+      configured: true,
+      groups: groups.map(g => g.logGroupName),
+      events: (evResp.events || []).map(e => {
+        let parsed = null;
+        try { parsed = JSON.parse(e.message); } catch (_) {}
+        return {
+          timestamp:  e.timestamp,
+          stream:     e.logStreamName,
+          message:    e.message,
+          parsed,
+        };
+      })
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex/:botId/testsets ─────────────────────────────────────────────────
+
+router.get('/lex/:botId/testsets', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, ListTestSetsCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+    const resp = await client.send(new ListTestSetsCommand({ maxResults: 20 }));
+    res.json((resp.testSets || []).map(t => ({
+      id:          t.testSetId,
+      name:        t.testSetName,
+      description: t.description || '',
+      numTurns:    t.numTurns || 0,
+      modality:    t.modality || '',
+      status:      t.status,
+      lastUpdated: t.lastUpdatedDateTime || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /cloudformation/stacks ──────────────────────────────────────────────
 
 router.get('/cloudformation/stacks', async (req, res) => {
