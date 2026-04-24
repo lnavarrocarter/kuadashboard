@@ -33,14 +33,15 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - Soporte multi-contexto y multi-namespace
 - Import kubeconfigs
 
-### ☁️ AWS — 19 servicios
+### ☁️ AWS — 22 servicios
 - **Cómputo**: EC2 (start/stop, SSH), ECS (clusters, servicios, tareas), EKS, Lambda (invoke)
-- **Almacenamiento**: S3 (file browser + download), ECR
-- **Red**: VPC, API Gateway (REST & HTTP), CloudFront, Route 53
-- **Mensajería & eventos**: EventBridge (reglas + logs), Step Functions (state machines + diagrama visual)
+- **Almacenamiento**: S3 (file browser + download + **crear bucket** + test endpoint), ECR (**deploy directo a Kubernetes**)
+- **Red**: VPC (**details panel** — subnets, SGs, route tables, IGWs, NAT GWs), API Gateway (REST & HTTP), CloudFront, Route 53
+- **Mensajería & eventos**: EventBridge (reglas + logs), Step Functions (state machines + diagrama visual), Amazon Lex V2 (bots)
+- **AI**: Bedrock (foundation models), CloudFormation para stacks de AgentCore
 - **Base de datos**: DynamoDB, DocumentDB
 - **Analítica & ETL**: Glue, Athena, Data Pipeline
-- **Seguridad**: Secrets Manager (import al Env Manager), Cognito
+- **Seguridad**: Secrets Manager (import al Env Manager), Cognito (**grupos por user pool**)
 
 ### 🌐 GCP — 25 servicios
 - **Cómputo**: Cloud Run (start/stop), Cloud Run Jobs (run + historial de ejecuciones), GKE, Compute Engine VMs (start/stop)
@@ -78,7 +79,7 @@ kuadashboard/
 ├── server.js            # Express + WebSocket API server
 ├── electron/            # Electron main + preload (contextBridge)
 ├── routes/
-│   ├── aws.js           # AWS SDK v3 — 19 servicios
+│   ├── aws.js           # AWS SDK v3 — 22 servicios (+ S3 create, ECR→K8s deploy, VPC details)
 │   ├── gcp.js           # GCP REST API — 25 servicios
 │   ├── helm.js          # Helm releases
 │   ├── envManager.js    # Credential profiles CRUD
@@ -163,6 +164,31 @@ cd frontend && npm test
 - Los valores de Secrets K8s se muestran como `[REDACTED]` en el YAML viewer.
 - El preload de Electron usa `contextBridge` — el renderer nunca accede directamente a Node.js.
 - Usar en red local o detrás de autenticación — el servidor expone acceso total al kubeconfig.
+
+---
+
+## Changelog
+
+### v1.5.0 (2026-04-23)
+- **AWS S3** — modal para crear bucket (nombre, región, block public access); botón "Test" por fila con latencia y diagnóstico de acceso
+- **AWS ECR** — lista detallada de imágenes con tags/digest/fecha push; modal "Deploy to K8s" que genera manifiesto Deployment YAML (replicas, namespace, port, pull secret, context) y aplica con `kubectl apply`
+- **AWS VPC** — panel "Details" con 6 inner tabs: Overview, Subnets, Security Groups (reglas inbound), Route Tables, Internet Gateways, NAT Gateways
+- **AWS Cognito** — tab "Groups" en el panel de detalle de cada user pool (nombre, descripción, precedencia, Role ARN)
+- **Backend** — nuevos endpoints: `POST /s3`, `GET /s3/:bucket/test`, `GET /ecr/:repo/images`, `POST /k8s/apply`, `GET /cognito/userpools/:id/groups`
+
+### v1.4.3 (2026-04-10)
+- Fix icono Windows en el build de Electron
+- Corrección BOM en package.json que rompía electron-builder
+- Mejoras CI/CD: pass tag_name en workflow_dispatch
+
+### v1.4.2 (2026-04-09)
+- Panel de detalle Lambda (5 tabs: Overview, Code Viewer, Logs, Env Vars, Permissions)
+- Panel de detalle EC2 (5 tabs: Overview, Networking, Security, Storage, Tags)
+- SSH con autenticación por contraseña + PEM file picker + botones SSH/RDP según OS
+
+### v1.4.1
+- Bedrock foundation models, Amazon Lex V2 bots, AgentCore CloudFormation stacks
+- Dependencias AWS SDK: `client-bedrock`, `client-lex-models-v2`, `client-cloudformation`
 
 ---
 

@@ -24,6 +24,9 @@
  *   GET  /lambda                            → list Lambda functions
  *   POST /lambda/:name/invoke               → invoke a Lambda function (sync)
  *   GET  /apigateway                        → list REST + HTTP API Gateway APIs
+ *   GET  /bedrock                           → list Bedrock foundation models
+ *   GET  /lex                               → list Amazon Lex V2 bots
+ *   GET  /cloudformation/stacks             → list CloudFormation stacks
  *   GET  /logs/lambda/:name                 → CloudWatch logs for a Lambda function
  *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
@@ -746,6 +749,79 @@ router.get('/s3', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── POST /s3 ─────────────────────────────────────────────────────────────────
+// Body: { name: string, region?: string, blockPublicAccess?: boolean }
+
+router.post('/s3', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { name, region = 'us-east-1', blockPublicAccess = true } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  if (!/^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$/.test(name)) {
+    return res.status(400).json({ error: 'Bucket name must be 3-63 lowercase alphanumeric chars, dots or hyphens' });
+  }
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      S3Client, CreateBucketCommand,
+      PutPublicAccessBlockCommand, GetBucketLocationCommand,
+    } = require('@aws-sdk/client-s3');
+    const client = new S3Client({ ...cfg, region: region === 'us-east-1' ? 'us-east-1' : region });
+    const createParams = { Bucket: name };
+    if (region !== 'us-east-1') {
+      createParams.CreateBucketConfiguration = { LocationConstraint: region };
+    }
+    await client.send(new CreateBucketCommand(createParams));
+    if (blockPublicAccess) {
+      await client.send(new PutPublicAccessBlockCommand({
+        Bucket: name,
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true, IgnorePublicAcls: true,
+          BlockPublicPolicy: true, RestrictPublicBuckets: true,
+        },
+      }));
+    }
+    const loc = await client.send(new GetBucketLocationCommand({ Bucket: name })).catch(() => null);
+    res.json({
+      name,
+      region: loc?.LocationConstraint || 'us-east-1',
+      created: true,
+      blockPublicAccess,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /s3/:bucket/test ─────────────────────────────────────────────────────
+
+router.get('/s3/:bucket/test', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, HeadBucketCommand, GetBucketLocationCommand } = require('@aws-sdk/client-s3');
+    const client = new S3Client({ ...cfg, region: 'us-east-1' });
+    const bucket = req.params.bucket;
+    const start  = Date.now();
+    await client.send(new HeadBucketCommand({ Bucket: bucket }));
+    const latencyMs = Date.now() - start;
+    let region = 'us-east-1';
+    try {
+      const loc = await client.send(new GetBucketLocationCommand({ Bucket: bucket }));
+      region = loc.LocationConstraint || 'us-east-1';
+    } catch { /* ignore */ }
+    res.json({ accessible: true, bucket, region, latencyMs });
+  } catch (err) {
+    const status = err.$metadata?.httpStatusCode;
+    if (status === 403) {
+      res.json({ accessible: false, bucket, reason: 'Access denied (403)', status });
+    } else if (status === 404) {
+      res.json({ accessible: false, bucket, reason: 'Bucket not found (404)', status });
+    } else {
+      res.json({ accessible: false, bucket, reason: err.message, status: status || 0 });
+    }
+  }
+});
+
 // ─── GET /s3/:bucket/config ───────────────────────────────────────────────────
 
 router.get('/s3/:bucket/config', async (req, res) => {
@@ -830,6 +906,72 @@ router.get('/ecr/config', async (req, res) => {
       lifecycle:  lifecycle.status === 'fulfilled' ? lifecycle.value.lifecyclePolicyText : null,
     });
   } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ecr/:repo/images ────────────────────────────────────────────────────
+// Returns full image details (tags, digest, pushed date, size) for a repo
+
+router.get('/ecr/:repo/images', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { ECRClient, DescribeImagesCommand } = require('@aws-sdk/client-ecr');
+    const client = new ECRClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new DescribeImagesCommand({
+        repositoryName: req.params.repo,
+        nextToken,
+        filter: { tagStatus: 'ANY' },
+      }));
+      all.push(...(resp.imageDetails || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+    // Sort newest first
+    all.sort((a, b) => (b.imagePushedAt || 0) - (a.imagePushedAt || 0));
+    res.json(all.map(img => ({
+      digest:      img.imageDigest,
+      tags:        img.imageTags || [],
+      pushedAt:    img.imagePushedAt || null,
+      sizeBytes:   img.imageSizeInBytes || null,
+      scanStatus:  img.imageScanStatus?.status || null,
+      scanFindings: img.imageScanFindingsSummary?.findingSeverityCounts || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /k8s/apply ──────────────────────────────────────────────────────────
+// Applies a Kubernetes manifest string via `kubectl apply -f -`
+// Body: { manifest: string, context?: string }
+
+router.post('/k8s/apply', async (req, res) => {
+  const { manifest, context } = req.body || {};
+  if (!manifest || typeof manifest !== 'string' || manifest.trim().length < 10) {
+    return res.status(400).json({ error: 'manifest string is required' });
+  }
+  const { execFile } = require('child_process');
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+  // Write manifest to temp file (avoids stdin escaping issues on Windows)
+  const tmpFile = path.join(os.tmpdir(), `kua-manifest-${Date.now()}.yaml`);
+  try {
+    await fs.promises.writeFile(tmpFile, manifest, 'utf8');
+    const args = ['apply', '-f', tmpFile];
+    if (context) args.push('--context', context);
+    const result = await new Promise((resolve) => {
+      execFile('kubectl', args, { timeout: 30000, windowsHide: true }, (err, stdout, stderr) => {
+        resolve({ success: !err || err.code === 0, stdout: stdout || '', stderr: stderr || '', code: err?.code ?? 0 });
+      });
+    });
+    res.json(result);
+  } catch (err) {
+    res.json({ success: false, stdout: '', stderr: err.message, code: -1 });
+  } finally {
+    fs.promises.unlink(tmpFile).catch(() => {});
+  }
 });
 
 // ─── GET /vpc ─────────────────────────────────────────────────────────────────
@@ -2983,6 +3125,32 @@ router.get('/cognito/userpools/:id/identity-providers', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// GET /cognito/userpools/:id/groups  → list all groups in a user pool
+router.get('/cognito/userpools/:id/groups', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, ListGroupsCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListGroupsCommand({ UserPoolId: req.params.id, Limit: 60, NextToken: nextToken }));
+      all.push(...(resp.Groups || []));
+      nextToken = resp.NextToken;
+    } while (nextToken);
+    res.json(all.map(g => ({
+      name:         g.GroupName,
+      description:  g.Description || '',
+      precedence:   g.Precedence ?? null,
+      roleArn:      g.RoleArn || null,
+      lastModified: g.LastModifiedDate || null,
+      createdDate:  g.CreationDate || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── AWS SECRETS MANAGER ──────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3204,6 +3372,109 @@ router.post('/datapipeline/:id/deactivate', async (req, res) => {
     const client = new DataPipelineClient(cfg);
     await client.send(new DeactivatePipelineCommand({ pipelineId: req.params.id, cancelActive: req.body?.cancelActive ?? true }));
     res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /bedrock ────────────────────────────────────────────────────────────
+
+router.get('/bedrock', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { BedrockClient, ListFoundationModelsCommand } = require('@aws-sdk/client-bedrock');
+    const client = new BedrockClient(cfg);
+    const resp = await client.send(new ListFoundationModelsCommand({}));
+    res.json((resp.modelSummaries || []).map(m => ({
+      modelId:         m.modelId,
+      modelName:       m.modelName,
+      providerName:    m.providerName,
+      inputModalities: m.inputModalities || [],
+      outputModalities:m.outputModalities || [],
+      responseStreamingSupported: !!m.responseStreamingSupported,
+      customizationsSupported: m.customizationsSupported || [],
+      inferenceTypesSupported: m.inferenceTypesSupported || [],
+      lifecycleStatus: m.modelLifecycle?.status || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /lex ────────────────────────────────────────────────────────────────
+
+router.get('/lex', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { LexModelsV2Client, ListBotsCommand } = require('@aws-sdk/client-lex-models-v2');
+    const client = new LexModelsV2Client(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListBotsCommand({ maxResults: 50, nextToken }));
+      all.push(...(resp.botSummaries || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+
+    res.json(all.map(b => ({
+      id:           b.botId,
+      name:         b.botName,
+      status:       b.botStatus,
+      description:  b.description || '',
+      latestVersion:b.latestBotVersion || null,
+      createdDate:  b.creationDateTime || null,
+      updatedDate:  b.lastUpdatedDateTime || null,
+      idleSessionTtlInSeconds: b.idleSessionTTLInSeconds ?? null,
+      roleArn:      b.botRoleArn || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /cloudformation/stacks ──────────────────────────────────────────────
+
+router.get('/cloudformation/stacks', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, ListStacksCommand } = require('@aws-sdk/client-cloudformation');
+    const client = new CloudFormationClient(cfg);
+    const statuses = [
+      'CREATE_IN_PROGRESS', 'CREATE_COMPLETE', 'CREATE_FAILED',
+      'ROLLBACK_IN_PROGRESS', 'ROLLBACK_COMPLETE', 'ROLLBACK_FAILED',
+      'DELETE_IN_PROGRESS', 'DELETE_FAILED',
+      'UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE_CLEANUP_IN_PROGRESS', 'UPDATE_COMPLETE',
+      'UPDATE_FAILED', 'UPDATE_ROLLBACK_IN_PROGRESS', 'UPDATE_ROLLBACK_FAILED',
+      'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS', 'UPDATE_ROLLBACK_COMPLETE',
+      'REVIEW_IN_PROGRESS',
+      'IMPORT_IN_PROGRESS', 'IMPORT_COMPLETE', 'IMPORT_ROLLBACK_IN_PROGRESS', 'IMPORT_ROLLBACK_FAILED', 'IMPORT_ROLLBACK_COMPLETE',
+    ];
+
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListStacksCommand({ StackStatusFilter: statuses, NextToken: nextToken }));
+      all.push(...(resp.StackSummaries || []));
+      nextToken = resp.NextToken;
+    } while (nextToken);
+
+    const agentCoreOnly = String(req.query.agentCoreOnly || 'false').toLowerCase() === 'true';
+    const mapped = all.map(s => {
+      const name = s.StackName || '';
+      const isAgentCore = /agent\s*core|agentcore/i.test(name);
+      return {
+        id:           s.StackId,
+        name,
+        status:       s.StackStatus,
+        statusReason: s.StackStatusReason || null,
+        createdTime:  s.CreationTime || null,
+        updatedTime:  s.LastUpdatedTime || null,
+        templateDescription: s.TemplateDescription || null,
+        isAgentCore,
+      };
+    });
+
+    res.json(agentCoreOnly ? mapped.filter(s => s.isAgentCore) : mapped);
   } catch (err) { handleErr(res, err); }
 });
 

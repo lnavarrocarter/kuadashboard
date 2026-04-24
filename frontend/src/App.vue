@@ -180,6 +180,12 @@
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
+            <div class="sidebar-section-title">AI</div>
+            <a v-for="r in AWS_SIDEBAR.ai" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
             <a v-for="r in AWS_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
@@ -393,7 +399,8 @@ const AWS_SIDEBAR = {
   storage:     [{ id: 's3', label: 'S3' }],
   database:    [{ id: 'dynamodb', label: 'DynamoDB' }, { id: 'docdb', label: 'DocumentDB' }],
   analytics:   [{ id: 'glue', label: 'Glue' }, { id: 'athena', label: 'Athena' }, { id: 'datapipeline', label: 'Data Pipeline' }],
-  integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }],
+  integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }, { id: 'lex', label: 'Amazon Lex' }],
+  ai:          [{ id: 'bedrock', label: 'Bedrock' }, { id: 'agentcorecfn', label: 'AgentCore CFN' }],
   security:    [{ id: 'cognito', label: 'Cognito' }, { id: 'secrets', label: 'Secrets Manager' }],
 }
 

@@ -237,6 +237,9 @@
       </div>
 
       <div v-show="activeTab === 's3'" class="tab-panel">
+        <div style="display:flex;justify-content:flex-end;padding:6px 8px 4px;flex-shrink:0">
+          <button class="btn sm" style="background:rgba(80,200,120,.18);border-color:#50c878;color:#50c878" @click="openCreateS3Modal">+ Create Bucket</button>
+        </div>
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? 'No matches.' : 'No S3 buckets found.' }}</div>
         <table v-else class="cloud-table">
@@ -262,6 +265,10 @@
                   <button class="btn sm" @click="openConfig('s3', `S3: ${b.name}`, b, { bucket: b.name })">Config</button>
                   <button class="btn sm" style="background:rgba(88,166,255,.18);border-color:#58a6ff;color:#58a6ff"
                     @click="openS3Browser(b)">Browse</button>
+                  <button class="btn sm" :disabled="s3TestState[b.name]?.loading"
+                    @click="testS3Bucket(b.name)"
+                    :style="s3TestState[b.name]?.ok === true ? 'border-color:#50c878;color:#50c878' : s3TestState[b.name]?.ok === false ? 'border-color:#f85149;color:#f85149' : ''"
+                    :title="s3TestState[b.name]?.msg || 'Test bucket connectivity'">{{ s3TestState[b.name]?.loading ? '...' : 'Test' }}</button>
                 </div>
               </td>
             </tr>
@@ -304,6 +311,8 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openTags('ecr', `ECR: ${r.name}`, r.arn, r.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('ecr', `ECR: ${r.name}`, r, { repo: r.name })">Config</button>
+                  <button class="btn sm" style="background:rgba(124,158,248,.18);border-color:#7c9ef8;color:#7c9ef8"
+                    @click="openEcrDeploy(r)">Deploy to K8s</button>
                 </div>
               </td>
             </tr>
@@ -342,6 +351,8 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openTags('vpc', `VPC: ${v.name}`, v.id, v.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('vpc', `VPC: ${v.name}`, v, { id: v.id })">Config</button>
+                  <button class="btn sm" style="background:rgba(88,166,255,.18);border-color:#58a6ff;color:#58a6ff"
+                    @click="openVpcDetails(v)">Details</button>
                 </div>
               </td>
             </tr>
@@ -603,6 +614,90 @@
         </table>
       </div>
 
+      <!-- ══ Bedrock ═══════════════════════════════════════════════════════ -->
+      <div v-show="activeTab === 'bedrock'" class="tab-panel">
+        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
+        <div v-else-if="!filteredBedrock.length" class="empty-row">{{ search.bedrock ? 'No matches.' : 'No Bedrock foundation models found.' }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th :class="thClass('modelName')"        @click="sortBy('modelName')">Model <span class="sort-icon">{{ sortIcon('modelName') }}</span></th>
+            <th :class="thClass('providerName')"     @click="sortBy('providerName')">Provider <span class="sort-icon">{{ sortIcon('providerName') }}</span></th>
+            <th :class="thClass('inputModalities')"  @click="sortBy('inputModalities')">Input</th>
+            <th :class="thClass('outputModalities')" @click="sortBy('outputModalities')">Output</th>
+            <th :class="thClass('responseStreamingSupported')" @click="sortBy('responseStreamingSupported')">Streaming</th>
+            <th :class="thClass('lifecycleStatus')"  @click="sortBy('lifecycleStatus')">Lifecycle <span class="sort-icon">{{ sortIcon('lifecycleStatus') }}</span></th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="m in sortRows(filteredBedrock)" :key="m.modelId">
+              <td>
+                <div>{{ m.modelName || m.modelId }}</div>
+                <div class="text-dim mono-xs">{{ m.modelId }}</div>
+              </td>
+              <td class="text-dim">{{ m.providerName || '-' }}</td>
+              <td class="text-dim">{{ (m.inputModalities || []).join(', ') || '-' }}</td>
+              <td class="text-dim">{{ (m.outputModalities || []).join(', ') || '-' }}</td>
+              <td><span :class="m.responseStreamingSupported ? 'status-ok' : 'text-dim'">{{ m.responseStreamingSupported ? 'Yes' : 'No' }}</span></td>
+              <td><span :class="m.lifecycleStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ m.lifecycleStatus || '-' }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ══ Amazon Lex ════════════════════════════════════════════════════ -->
+      <div v-show="activeTab === 'lex'" class="tab-panel">
+        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
+        <div v-else-if="!filteredLex.length" class="empty-row">{{ search.lex ? 'No matches.' : 'No Lex bots found.' }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">Bot <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('status')"       @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('latestVersion')" @click="sortBy('latestVersion')">Latest Version</th>
+            <th :class="thClass('updatedDate')"  @click="sortBy('updatedDate')">Updated <span class="sort-icon">{{ sortIcon('updatedDate') }}</span></th>
+            <th>Role ARN</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="b in sortRows(filteredLex)" :key="b.id">
+              <td>
+                <div>{{ b.name }}</div>
+                <div class="text-dim mono-xs">{{ b.id }}</div>
+                <div v-if="b.description" class="text-dim" style="font-size:11px">{{ b.description }}</div>
+              </td>
+              <td><span :class="b.status === 'Available' ? 'status-ok' : 'status-warn'">{{ b.status || '-' }}</span></td>
+              <td class="text-dim">{{ b.latestVersion || '-' }}</td>
+              <td class="text-dim" style="white-space:nowrap">{{ b.updatedDate ? formatDate(b.updatedDate) : '-' }}</td>
+              <td class="text-dim mono-xs" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="b.roleArn">{{ b.roleArn || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ══ AgentCore CloudFormation ══════════════════════════════════════ -->
+      <div v-show="activeTab === 'agentcorecfn'" class="tab-panel">
+        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
+        <div v-else-if="!filteredAgentCoreCfn.length" class="empty-row">{{ search.agentcorecfn ? 'No matches.' : 'No AgentCore CloudFormation stacks found.' }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th :class="thClass('name')"        @click="sortBy('name')">Stack <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('status')"      @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('createdTime')" @click="sortBy('createdTime')">Created <span class="sort-icon">{{ sortIcon('createdTime') }}</span></th>
+            <th :class="thClass('updatedTime')" @click="sortBy('updatedTime')">Updated <span class="sort-icon">{{ sortIcon('updatedTime') }}</span></th>
+            <th>Stack ID</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="s in sortRows(filteredAgentCoreCfn)" :key="s.id">
+              <td>
+                <div>{{ s.name }}</div>
+                <div v-if="s.templateDescription" class="text-dim" style="font-size:11px">{{ s.templateDescription }}</div>
+              </td>
+              <td><span :class="/COMPLETE$/.test(s.status) ? 'status-ok' : /FAILED|ROLLBACK/.test(s.status) ? 'status-err' : 'status-warn'">{{ s.status }}</span></td>
+              <td class="text-dim" style="white-space:nowrap">{{ s.createdTime ? formatDate(s.createdTime) : '-' }}</td>
+              <td class="text-dim" style="white-space:nowrap">{{ s.updatedTime ? formatDate(s.updatedTime) : '-' }}</td>
+              <td class="text-dim mono-xs" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="s.id">{{ s.id }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- ══ CloudFront ═════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'cloudfront'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
@@ -813,6 +908,25 @@
                   </tbody>
                 </table>
               </div>
+              <!-- ── Groups tab ──────────────────────────────── -->
+              <div v-show="cognitoState.innerTab === 'groups'" style="flex:1;overflow:auto;padding:8px">
+                <div v-if="cognitoState.loadingGroups" class="empty-row">Loading groups...</div>
+                <div v-else-if="!cognitoState.groups.length" class="empty-row">No groups in this user pool.</div>
+                <table v-else class="cloud-table">
+                  <thead><tr>
+                    <th>Group Name</th><th>Description</th><th>Precedence</th><th>Role ARN</th><th>Last Modified</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="g in cognitoState.groups" :key="g.name">
+                      <td style="font-weight:500">{{ g.name }}</td>
+                      <td class="text-dim">{{ g.description || '-' }}</td>
+                      <td class="text-dim">{{ g.precedence ?? '-' }}</td>
+                      <td class="text-dim mono-xs" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="g.roleArn">{{ g.roleArn || '-' }}</td>
+                      <td class="text-dim" style="white-space:nowrap">{{ g.lastModified ? formatDate(g.lastModified) : '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <!-- ── Pool Config tab ─────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'config'" style="flex:1;overflow:auto;padding:12px">
                 <div v-if="cognitoState.loadingConfig" class="empty-row">Loading configuration...</div>
@@ -930,6 +1044,277 @@
     </template>
 
          MODALS
+
+    <!-- ── Create S3 Bucket Modal ─────────────────────────────────────────── -->
+    <div v-if="createS3Modal.open" class="modal-overlay" @click.self="createS3Modal.open = false">
+      <div class="modal" style="width:480px;max-width:95vw">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Create S3 Bucket</span>
+          <button class="btn sm" @click="createS3Modal.open = false">✕</button>
+        </div>
+        <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Bucket Name <span style="color:#f85149">*</span></label>
+            <input v-model="createS3Modal.name" type="text" placeholder="my-bucket-name"
+              style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box" />
+            <div style="font-size:11px;color:var(--text-dim);margin-top:3px">3-63 chars · lowercase · letters, numbers, hyphens, dots</div>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Region</label>
+            <select v-model="createS3Modal.region"
+              style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px">
+              <option value="us-east-1">us-east-1 (N. Virginia)</option>
+              <option value="us-east-2">us-east-2 (Ohio)</option>
+              <option value="us-west-1">us-west-1 (N. California)</option>
+              <option value="us-west-2">us-west-2 (Oregon)</option>
+              <option value="eu-west-1">eu-west-1 (Ireland)</option>
+              <option value="eu-west-2">eu-west-2 (London)</option>
+              <option value="eu-west-3">eu-west-3 (Paris)</option>
+              <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+              <option value="eu-north-1">eu-north-1 (Stockholm)</option>
+              <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+              <option value="ap-southeast-2">ap-southeast-2 (Sydney)</option>
+              <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+              <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+              <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+              <option value="sa-east-1">sa-east-1 (São Paulo)</option>
+              <option value="ca-central-1">ca-central-1 (Canada)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="s3BlockPublic" v-model="createS3Modal.blockPublicAccess" />
+            <label for="s3BlockPublic" style="font-size:12px;cursor:pointer">Block all public access <span style="color:var(--text-dim)">(recommended)</span></label>
+          </div>
+          <div v-if="createS3Modal.error" class="alert-error" style="margin:0">{{ createS3Modal.error }}</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
+            <button class="btn sm" @click="createS3Modal.open = false">Cancel</button>
+            <button class="btn sm" :disabled="createS3Modal.loading || !createS3Modal.name.trim()"
+              style="background:rgba(80,200,120,.2);border-color:#50c878;color:#50c878"
+              @click="doCreateS3Bucket">{{ createS3Modal.loading ? 'Creating...' : 'Create Bucket' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VPC Details Modal ──────────────────────────────────────────────── -->
+    <div v-if="vpcDetailModal.open" class="modal-overlay" @click.self="vpcDetailModal.open = false">
+      <div class="modal" style="width:1020px;max-width:97vw;max-height:90vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">VPC Details — {{ vpcDetailModal.name }}</span>
+          <button class="btn sm" @click="vpcDetailModal.open = false">✕</button>
+        </div>
+        <div v-if="vpcDetailModal.loading" class="empty-row" style="padding:20px">Loading details...</div>
+        <div v-else-if="vpcDetailModal.error" class="alert-error" style="margin:8px">{{ vpcDetailModal.error }}</div>
+        <template v-else-if="vpcDetailModal.data">
+          <!-- inner tab bar -->
+          <div style="display:flex;gap:2px;padding:4px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <button v-for="t in vpcDetailTabs" :key="t.id"
+              :class="['btn','sm', vpcDetailModal.tab === t.id ? 'active' : '']"
+              @click="vpcDetailModal.tab = t.id">{{ t.label }}</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:8px">
+            <!-- Overview -->
+            <div v-if="vpcDetailModal.tab === 'overview'">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="config-section">
+                  <div class="config-title">VPC Info</div>
+                  <div class="config-row"><span>VPC ID</span><span class="mono-xs">{{ vpcDetailModal.data.vpc?.VpcId }}</span></div>
+                  <div class="config-row"><span>CIDR</span><span class="mono-xs">{{ vpcDetailModal.data.vpc?.CidrBlock }}</span></div>
+                  <div class="config-row"><span>State</span><span :class="vpcDetailModal.data.vpc?.State === 'available' ? 'status-ok' : 'status-warn'">{{ vpcDetailModal.data.vpc?.State }}</span></div>
+                  <div class="config-row"><span>Default</span><span :class="vpcDetailModal.data.vpc?.IsDefault ? 'status-warn' : 'text-dim'">{{ vpcDetailModal.data.vpc?.IsDefault ? 'Yes' : 'No' }}</span></div>
+                  <div class="config-row"><span>Tenancy</span><span class="text-dim">{{ vpcDetailModal.data.vpc?.InstanceTenancy }}</span></div>
+                  <div class="config-row"><span>DHCPOptionsId</span><span class="mono-xs text-dim">{{ vpcDetailModal.data.vpc?.DhcpOptionsId }}</span></div>
+                </div>
+                <div class="config-section">
+                  <div class="config-title">Summary</div>
+                  <div class="config-row"><span>Subnets</span><span style="font-weight:600">{{ vpcDetailModal.data.subnets?.length ?? 0 }}</span></div>
+                  <div class="config-row"><span>Security Groups</span><span style="font-weight:600">{{ vpcDetailModal.data.securityGroups?.length ?? 0 }}</span></div>
+                  <div class="config-row"><span>Route Tables</span><span style="font-weight:600">{{ vpcDetailModal.data.routeTables?.length ?? 0 }}</span></div>
+                  <div class="config-row"><span>Internet Gateways</span><span style="font-weight:600">{{ vpcDetailModal.data.internetGateways?.length ?? 0 }}</span></div>
+                  <div class="config-row"><span>NAT Gateways</span><span style="font-weight:600">{{ vpcDetailModal.data.natGateways?.length ?? 0 }}</span></div>
+                </div>
+              </div>
+              <div class="config-section" style="margin-top:12px" v-if="vpcDetailModal.data.vpc?.Tags?.length">
+                <div class="config-title">Tags</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+                  <span v-for="t in vpcDetailModal.data.vpc.Tags" :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- Subnets -->
+            <div v-else-if="vpcDetailModal.tab === 'subnets'">
+              <div v-if="!vpcDetailModal.data.subnets?.length" class="empty-row">No subnets.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Subnet ID</th><th>CIDR</th><th>AZ</th><th>State</th><th>Public IP</th><th>Available IPs</th></tr></thead>
+                <tbody>
+                  <tr v-for="s in vpcDetailModal.data.subnets" :key="s.SubnetId">
+                    <td class="mono-xs">{{ s.SubnetId }}</td>
+                    <td class="text-dim">{{ s.CidrBlock }}</td>
+                    <td class="text-dim">{{ s.AvailabilityZone }}</td>
+                    <td><span :class="s.State === 'available' ? 'status-ok' : 'status-warn'">{{ s.State }}</span></td>
+                    <td><span :class="s.MapPublicIpOnLaunch ? 'status-warn' : 'text-dim'">{{ s.MapPublicIpOnLaunch ? 'Yes' : 'No' }}</span></td>
+                    <td class="text-dim">{{ s.AvailableIpAddressCount }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Security Groups -->
+            <div v-else-if="vpcDetailModal.tab === 'sgs'">
+              <div v-if="!vpcDetailModal.data.securityGroups?.length" class="empty-row">No security groups.</div>
+              <div v-else style="display:flex;flex-direction:column;gap:10px">
+                <div v-for="sg in vpcDetailModal.data.securityGroups" :key="sg.GroupId"
+                  class="config-section">
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                    <span style="font-weight:600">{{ sg.GroupName }}</span>
+                    <span class="mono-xs text-dim">{{ sg.GroupId }}</span>
+                    <span class="text-dim" style="font-size:11px">{{ sg.Description }}</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Inbound Rules ({{ sg.IpPermissions?.length ?? 0 }})</div>
+                  <table class="cloud-table" style="font-size:11px">
+                    <thead><tr><th>Protocol</th><th>Port</th><th>Source</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(rule, i) in (sg.IpPermissions || [])" :key="i">
+                        <td>{{ rule.IpProtocol === '-1' ? 'All' : rule.IpProtocol }}</td>
+                        <td>{{ rule.FromPort != null ? (rule.FromPort === rule.ToPort ? rule.FromPort : `${rule.FromPort}-${rule.ToPort}`) : '*' }}</td>
+                        <td>{{ (rule.IpRanges||[]).map(r=>r.CidrIp).concat((rule.Ipv6Ranges||[]).map(r=>r.CidrIpv6)).join(', ') || (rule.UserIdGroupPairs||[]).map(p=>p.GroupId).join(', ') || '*' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- Route Tables -->
+            <div v-else-if="vpcDetailModal.tab === 'routes'">
+              <div v-if="!vpcDetailModal.data.routeTables?.length" class="empty-row">No route tables.</div>
+              <div v-else style="display:flex;flex-direction:column;gap:10px">
+                <div v-for="rt in vpcDetailModal.data.routeTables" :key="rt.RouteTableId" class="config-section">
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                    <span class="mono-xs" style="font-weight:600">{{ rt.RouteTableId }}</span>
+                    <span v-if="rt.Associations?.some(a => a.Main)" style="font-size:11px;padding:1px 6px;border-radius:3px;background:rgba(124,158,248,.15);color:var(--accent)">Main</span>
+                    <span class="text-dim" style="font-size:11px">{{ (rt.Tags||[]).find(t=>t.Key==='Name')?.Value || '' }}</span>
+                  </div>
+                  <table class="cloud-table" style="font-size:11px">
+                    <thead><tr><th>Destination</th><th>Target</th><th>State</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(r, i) in (rt.Routes || [])" :key="i">
+                        <td class="mono-xs">{{ r.DestinationCidrBlock || r.DestinationIpv6CidrBlock || r.DestinationPrefixListId }}</td>
+                        <td class="mono-xs text-dim">{{ r.GatewayId || r.NatGatewayId || r.TransitGatewayId || r.InstanceId || 'local' }}</td>
+                        <td><span :class="r.State === 'active' ? 'status-ok' : 'status-warn'">{{ r.State }}</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- IGWs -->
+            <div v-else-if="vpcDetailModal.tab === 'igws'">
+              <div v-if="!vpcDetailModal.data.internetGateways?.length" class="empty-row">No internet gateways attached.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Gateway ID</th><th>State</th><th>Name</th></tr></thead>
+                <tbody>
+                  <tr v-for="igw in vpcDetailModal.data.internetGateways" :key="igw.InternetGatewayId">
+                    <td class="mono-xs">{{ igw.InternetGatewayId }}</td>
+                    <td><span :class="igw.Attachments?.[0]?.State === 'available' ? 'status-ok' : 'status-warn'">{{ igw.Attachments?.[0]?.State || '-' }}</span></td>
+                    <td class="text-dim">{{ (igw.Tags||[]).find(t=>t.Key==='Name')?.Value || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- NAT Gateways -->
+            <div v-else-if="vpcDetailModal.tab === 'nats'">
+              <div v-if="!vpcDetailModal.data.natGateways?.length" class="empty-row">No NAT gateways.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>NAT ID</th><th>Subnet</th><th>Public IP</th><th>Private IP</th><th>State</th></tr></thead>
+                <tbody>
+                  <tr v-for="nat in vpcDetailModal.data.natGateways" :key="nat.NatGatewayId">
+                    <td class="mono-xs">{{ nat.NatGatewayId }}</td>
+                    <td class="mono-xs text-dim">{{ nat.SubnetId }}</td>
+                    <td class="text-dim">{{ nat.NatGatewayAddresses?.[0]?.PublicIp || '-' }}</td>
+                    <td class="text-dim">{{ nat.NatGatewayAddresses?.[0]?.PrivateIp || '-' }}</td>
+                    <td><span :class="nat.State === 'available' ? 'status-ok' : 'status-warn'">{{ nat.State }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── ECR Deploy to K8s Modal ────────────────────────────────────────── -->
+    <div v-if="ecrDeployModal.open" class="modal-overlay" @click.self="ecrDeployModal.open = false">
+      <div class="modal" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">Deploy to Kubernetes — {{ ecrDeployModal.repoName }}</span>
+          <button class="btn sm" @click="ecrDeployModal.open = false">✕</button>
+        </div>
+        <div style="padding:12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px">
+          <!-- Image tag selector -->
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Image Tag</label>
+            <div v-if="ecrDeployModal.loadingImages" style="font-size:12px;color:var(--text-dim)">Loading images...</div>
+            <select v-else v-model="ecrDeployModal.selectedTag"
+              style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px">
+              <option value="">-- select a tag --</option>
+              <optgroup v-for="img in ecrDeployModal.images" :key="img.digest" :label="img.digest.slice(7,19)">
+                <option v-for="tag in (img.tags.length ? img.tags : ['<untagged>'])" :key="tag" :value="tag === '<untagged>' ? img.digest : tag">
+                  {{ tag }} {{ img.pushedAt ? `· ${formatDate(img.pushedAt)}` : '' }}
+                </option>
+              </optgroup>
+            </select>
+          </div>
+          <!-- Deployment params -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">App Name <span style="color:#f85149">*</span></label>
+              <input v-model="ecrDeployModal.appName" type="text" placeholder="my-app"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Namespace</label>
+              <input v-model="ecrDeployModal.namespace" type="text" placeholder="default"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Replicas</label>
+              <input v-model.number="ecrDeployModal.replicas" type="number" min="1" max="20"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Container Port</label>
+              <input v-model.number="ecrDeployModal.port" type="number" min="1" max="65535" placeholder="8080"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">K8s Context <span style="color:var(--text-dim)">(optional)</span></label>
+              <input v-model="ecrDeployModal.context" type="text" placeholder="use current context"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Image Pull Secret <span style="color:var(--text-dim)">(optional)</span></label>
+              <input v-model="ecrDeployModal.pullSecret" type="text" placeholder="ecr-secret"
+                style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
+            </div>
+          </div>
+          <!-- YAML Preview -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:12px;color:var(--text-dim)">Generated Manifest</label>
+              <button class="btn sm" @click="copyEcrManifest">Copy YAML</button>
+            </div>
+            <pre style="background:var(--bg-input,#161b22);border:1px solid var(--border,#444);border-radius:4px;padding:10px;font-size:11px;overflow:auto;max-height:220px;margin:0;white-space:pre;color:var(--text,#ccc)">{{ ecrDeployYaml }}</pre>
+          </div>
+          <!-- Apply result -->
+          <div v-if="ecrDeployModal.applyResult" :class="ecrDeployModal.applyResult.success ? 'alert-success' : 'alert-error'" style="margin:0;white-space:pre-wrap;font-size:11px;font-family:monospace">{{ ecrDeployModal.applyResult.stdout || ecrDeployModal.applyResult.stderr }}</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
+            <button class="btn sm" @click="ecrDeployModal.open = false">Close</button>
+            <button class="btn sm" :disabled="!ecrDeployModal.appName || !ecrDeployModal.selectedTag || ecrDeployModal.applying"
+              style="background:rgba(124,158,248,.2);border-color:#7c9ef8;color:#7c9ef8"
+              @click="doApplyEcrToK8s">{{ ecrDeployModal.applying ? 'Applying...' : 'Apply to K8s' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div v-if="configModal.open" class="modal-overlay" @click.self="configModal.open = false">
       <div class="modal" style="width:900px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
@@ -2248,6 +2633,9 @@ const TABS = [
   { id: 'glue',         label: 'Glue'           },
   { id: 'athena',       label: 'Athena'         },
   { id: 'datapipeline', label: 'Data Pipeline'  },
+  { id: 'bedrock',      label: 'Bedrock'        },
+  { id: 'lex',          label: 'Amazon Lex'     },
+  { id: 'agentcorecfn', label: 'AgentCore CFN'  },
   { id: 'cloudfront',   label: 'CloudFront'     },
   { id: 'route53',      label: 'Route 53'       },
   { id: 'cognito',      label: 'Cognito'        },
@@ -2286,6 +2674,9 @@ const filteredDocdb       = computed(() => filterRows(awsStore.docdbClusters,   
 const filteredGlue        = computed(() => filterRows(awsStore.glueJobs,         search.glue))
 const filteredAthena      = computed(() => filterRows(awsStore.athenaWorkgroups, search.athena))
 const filteredPipelines   = computed(() => filterRows(awsStore.dataPipelines,    search.datapipeline))
+const filteredBedrock     = computed(() => filterRows(awsStore.bedrockModels,    search.bedrock))
+const filteredLex         = computed(() => filterRows(awsStore.lexBots,          search.lex))
+const filteredAgentCoreCfn= computed(() => filterRows(awsStore.cfnStacks,        search.agentcorecfn))
 const filteredCloudfront  = computed(() => filterRows(awsStore.cloudfrontDists,  search.cloudfront))
 const filteredRoute53     = computed(() => filterRows(awsStore.route53Zones,     search.route53))
 const filteredCognito     = computed(() => filterRows(awsStore.cognitoUserPools, search.cognito))
@@ -2297,6 +2688,7 @@ const tabFilteredMap = {
   ecr: filteredEcr, vpc: filteredVpc, eventbridge: filteredEventBridge, stepfn: filteredStepFn,
   dynamodb: filteredDynamo, docdb: filteredDocdb, glue: filteredGlue,
   athena: filteredAthena, datapipeline: filteredPipelines,
+  bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,
   cloudfront: filteredCloudfront, route53: filteredRoute53,
   cognito: filteredCognito, secrets: filteredSecrets,
 }
@@ -2311,7 +2703,9 @@ function tabCount(id) {
     stepfn: awsStore.stepFunctions,
     dynamodb: awsStore.dynamoTables, docdb: awsStore.docdbClusters,
     glue: awsStore.glueJobs, athena: awsStore.athenaWorkgroups,
-    datapipeline: awsStore.dataPipelines, cloudfront: awsStore.cloudfrontDists,
+    datapipeline: awsStore.dataPipelines,
+    bedrock: awsStore.bedrockModels, lex: awsStore.lexBots, agentcorecfn: awsStore.cfnStacks,
+    cloudfront: awsStore.cloudfrontDists,
     route53: awsStore.route53Zones, cognito: awsStore.cognitoUserPools,
     secrets: awsStore.secrets,
   }
@@ -2334,6 +2728,9 @@ const fetchMap = {
   glue:         () => awsStore.fetchGlueJobs(),
   athena:       () => awsStore.fetchAthenaWorkgroups(),
   datapipeline: () => awsStore.fetchDataPipelines(),
+  bedrock:      () => awsStore.fetchBedrockModels(),
+  lex:          () => awsStore.fetchLexBots(),
+  agentcorecfn: () => awsStore.fetchCloudformationStacks(true),
   cloudfront:   () => awsStore.fetchCloudfrontDists(),
   route53:      () => awsStore.fetchRoute53Zones(),
   cognito:      () => awsStore.fetchCognitoUserPools(),
@@ -2579,6 +2976,186 @@ async function addEksToKubeconfig(cluster) {
 const s3BrowserModal = reactive({ open: false, bucket: '', region: '' })
 function openS3Browser(b) {
   Object.assign(s3BrowserModal, { open: true, bucket: b.name, region: b.region || '' })
+}
+
+// ─── S3 Create Bucket ─────────────────────────────────────────────────────────
+
+const createS3Modal = reactive({
+  open: false, loading: false, error: null,
+  name: '', region: 'us-east-1', blockPublicAccess: true,
+})
+
+function openCreateS3Modal() {
+  Object.assign(createS3Modal, { open: true, loading: false, error: null, name: '', region: 'us-east-1', blockPublicAccess: true })
+}
+
+async function doCreateS3Bucket() {
+  if (!createS3Modal.name.trim()) return
+  createS3Modal.loading = true; createS3Modal.error = null
+  try {
+    const result = await awsStore.createS3Bucket(createS3Modal.name.trim(), createS3Modal.region, createS3Modal.blockPublicAccess)
+    if (result?.created) {
+      toast(`Bucket "${result.name}" created in ${result.region}`, 'success')
+      createS3Modal.open = false
+      await awsStore.fetchS3Buckets()
+    } else {
+      createS3Modal.error = awsStore.error || result?.error || 'Failed to create bucket'
+    }
+  } catch (e) {
+    createS3Modal.error = e?.message || 'Error'
+  } finally {
+    createS3Modal.loading = false
+  }
+}
+
+// ─── S3 Endpoint Test ─────────────────────────────────────────────────────────
+
+const s3TestState = reactive({}) // keyed by bucket name: { loading, ok, msg }
+
+async function testS3Bucket(bucketName) {
+  if (!s3TestState[bucketName]) s3TestState[bucketName] = {}
+  s3TestState[bucketName].loading = true
+  s3TestState[bucketName].ok = null
+  try {
+    const r = await awsStore.testS3Bucket(bucketName)
+    if (r?.accessible) {
+      s3TestState[bucketName].ok  = true
+      s3TestState[bucketName].msg = `OK · ${r.latencyMs}ms · ${r.region}`
+      toast(`S3 "${bucketName}" accessible — ${r.latencyMs}ms (${r.region})`, 'success')
+    } else {
+      s3TestState[bucketName].ok  = false
+      s3TestState[bucketName].msg = r?.reason || 'Not accessible'
+      toast(`S3 "${bucketName}" — ${r?.reason || 'Not accessible'}`, 'error')
+    }
+  } catch (e) {
+    s3TestState[bucketName].ok  = false
+    s3TestState[bucketName].msg = e?.message || 'Error'
+  } finally {
+    s3TestState[bucketName].loading = false
+  }
+}
+
+// ─── VPC Details Modal ────────────────────────────────────────────────────────
+
+const vpcDetailTabs = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'subnets',  label: 'Subnets' },
+  { id: 'sgs',      label: 'Security Groups' },
+  { id: 'routes',   label: 'Route Tables' },
+  { id: 'igws',     label: 'Internet GWs' },
+  { id: 'nats',     label: 'NAT GWs' },
+]
+
+const vpcDetailModal = reactive({
+  open: false, loading: false, error: null,
+  name: '', vpcId: '', tab: 'overview', data: null,
+})
+
+async function openVpcDetails(v) {
+  Object.assign(vpcDetailModal, { open: true, loading: true, error: null, name: v.name, vpcId: v.id, tab: 'overview', data: null })
+  try {
+    const data = await awsStore.fetchResourceConfig('vpc', { id: v.id })
+    if (data) {
+      vpcDetailModal.data = data
+    } else {
+      vpcDetailModal.error = awsStore.error || 'Failed to load VPC details'
+    }
+  } catch (e) {
+    vpcDetailModal.error = e?.message || 'Error'
+  } finally {
+    vpcDetailModal.loading = false
+  }
+}
+
+// ─── ECR Deploy to K8s Modal ─────────────────────────────────────────────────
+
+const ecrDeployModal = reactive({
+  open: false, loadingImages: false, applying: false,
+  repoName: '', repoUri: '',
+  images: [], selectedTag: '',
+  appName: '', namespace: 'default', replicas: 1, port: 8080,
+  context: '', pullSecret: '',
+  applyResult: null,
+})
+
+const ecrDeployYaml = computed(() => {
+  if (!ecrDeployModal.appName || !ecrDeployModal.selectedTag) return '# Fill in App Name and select an image tag above'
+  const imageUri = `${ecrDeployModal.repoUri}:${ecrDeployModal.selectedTag}`
+  const name = ecrDeployModal.appName.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+  const ns   = ecrDeployModal.namespace || 'default'
+  const pullSecretBlock = ecrDeployModal.pullSecret
+    ? `\n      imagePullSecrets:\n        - name: ${ecrDeployModal.pullSecret}`
+    : ''
+  const portBlock = ecrDeployModal.port
+    ? `\n        ports:\n          - containerPort: ${ecrDeployModal.port}`
+    : ''
+  return `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${name}
+  namespace: ${ns}
+  labels:
+    app: ${name}
+spec:
+  replicas: ${ecrDeployModal.replicas || 1}
+  selector:
+    matchLabels:
+      app: ${name}
+  template:
+    metadata:
+      labels:
+        app: ${name}
+    spec:${pullSecretBlock}
+      containers:
+        - name: ${name}
+          image: ${imageUri}${portBlock}
+          imagePullPolicy: Always`
+})
+
+async function openEcrDeploy(r) {
+  Object.assign(ecrDeployModal, {
+    open: true, loadingImages: true, applying: false,
+    repoName: r.name, repoUri: r.uri,
+    images: [], selectedTag: '',
+    appName: r.name.split('/').pop().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+    namespace: 'default', replicas: 1, port: 8080,
+    context: '', pullSecret: '', applyResult: null,
+  })
+  try {
+    const imgs = await awsStore.fetchEcrImages(r.name)
+    ecrDeployModal.images = imgs || []
+    if (ecrDeployModal.images.length && ecrDeployModal.images[0].tags.length) {
+      ecrDeployModal.selectedTag = ecrDeployModal.images[0].tags[0]
+    }
+  } catch (e) {
+    toast(e?.message || 'Failed to load images', 'error')
+  } finally {
+    ecrDeployModal.loadingImages = false
+  }
+}
+
+function copyEcrManifest() {
+  navigator.clipboard?.writeText(ecrDeployYaml.value)
+  toast('Manifest copied to clipboard', 'success')
+}
+
+async function doApplyEcrToK8s() {
+  if (!ecrDeployModal.appName || !ecrDeployModal.selectedTag) return
+  ecrDeployModal.applying = true; ecrDeployModal.applyResult = null
+  try {
+    const result = await awsStore.applyK8sManifest(ecrDeployYaml.value, ecrDeployModal.context || undefined)
+    ecrDeployModal.applyResult = result
+    if (result?.success) {
+      toast(`Deployment applied successfully`, 'success')
+    } else {
+      toast(result?.stderr || 'kubectl apply failed', 'error')
+    }
+  } catch (e) {
+    ecrDeployModal.applyResult = { success: false, stderr: e?.message || 'Error', stdout: '' }
+    toast(e?.message || 'Error', 'error')
+  } finally {
+    ecrDeployModal.applying = false
+  }
 }
 
 // ─── EventBridge Logs Modal ───────────────────────────────────────────────────
@@ -2906,6 +3483,7 @@ const cognitoInnerTabs = [
   { id: 'users',   label: 'Users' },
   { id: 'clients', label: 'App Clients' },
   { id: 'idps',    label: 'Identity Providers' },
+  { id: 'groups',  label: 'Groups' },
   { id: 'config',  label: 'Pool Config' },
 ]
 
@@ -2925,6 +3503,9 @@ const cognitoState = reactive({
   // IdPs
   idps:            [],
   loadingIdps:     false,
+  // Groups
+  groups:          [],
+  loadingGroups:   false,
   // Pool Config
   poolConfig:      null,
   loadingConfig:   false,
@@ -2935,6 +3516,7 @@ async function loadCognitoPool(pool) {
   cognitoState.users           = []
   cognitoState.clients         = []
   cognitoState.idps            = []
+  cognitoState.groups          = []
   cognitoState.poolConfig      = null
   cognitoState.paginationToken = null
   cognitoState.prevTokens      = []
@@ -2945,6 +3527,7 @@ async function loadCognitoPool(pool) {
   // Load remaining tabs in background
   loadCognitoClients()
   loadCognitoIdps()
+  loadCognitoGroups()
   loadCognitoPoolConfig()
 }
 
@@ -3002,6 +3585,14 @@ async function loadCognitoIdps() {
     const data = await awsStore.fetchCognitoIdentityProviders(cognitoState.selectedPool.id)
     cognitoState.idps = data || []
   } finally { cognitoState.loadingIdps = false }
+}
+
+async function loadCognitoGroups() {
+  cognitoState.loadingGroups = true
+  try {
+    const data = await awsStore.fetchCognitoGroups(cognitoState.selectedPool.id)
+    cognitoState.groups = data || []
+  } finally { cognitoState.loadingGroups = false }
 }
 
 async function loadCognitoPoolConfig() {

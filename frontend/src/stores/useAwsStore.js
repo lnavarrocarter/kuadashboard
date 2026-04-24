@@ -36,6 +36,9 @@ export const useAwsStore = defineStore('aws', () => {
   const cognitoUserPools = ref([])
   const secrets          = ref([])
   const dataPipelines    = ref([])
+  const bedrockModels    = ref([])
+  const lexBots          = ref([])
+  const cfnStacks        = ref([])
   const loading          = ref(false)
   const error            = ref(null)
 
@@ -73,6 +76,9 @@ export const useAwsStore = defineStore('aws', () => {
     cognitoUserPools.value = []
     secrets.value          = []
     dataPipelines.value    = []
+    bedrockModels.value    = []
+    lexBots.value          = []
+    cfnStacks.value        = []
   }
 
   async function fetchRegions() {
@@ -327,6 +333,38 @@ export const useAwsStore = defineStore('aws', () => {
     try {
       return await apiFetch(`/api/cloud/aws/s3/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, {
         headers: headers(),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function createS3Bucket(name, region = 'us-east-1', blockPublicAccess = true) {
+    try {
+      return await apiFetch('/api/cloud/aws/s3', {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, region, blockPublicAccess }),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function testS3Bucket(bucket) {
+    try {
+      return await apiFetch(`/api/cloud/aws/s3/${encodeURIComponent(bucket)}/test`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function fetchEcrImages(repo) {
+    try {
+      return await apiFetch(`/api/cloud/aws/ecr/${encodeURIComponent(repo)}/images`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function applyK8sManifest(manifest, context) {
+    try {
+      return await apiFetch('/api/cloud/aws/k8s/apply', {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest, context }),
       })
     } catch (e) { setError(e); return null }
   }
@@ -623,6 +661,12 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  async function fetchCognitoGroups(poolId) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/groups`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
   // ─── Secrets Manager ─────────────────────────────────────────────────────────
 
   async function fetchSecrets() {
@@ -686,11 +730,39 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  // ─── Bedrock ────────────────────────────────────────────────────────────────
+
+  async function fetchBedrockModels() {
+    loading.value = true; error.value = null
+    try { bedrockModels.value = await apiFetch('/api/cloud/aws/bedrock', { headers: headers() }) }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  // ─── Amazon Lex ─────────────────────────────────────────────────────────────
+
+  async function fetchLexBots() {
+    loading.value = true; error.value = null
+    try { lexBots.value = await apiFetch('/api/cloud/aws/lex', { headers: headers() }) }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  // ─── CloudFormation (AgentCore) ────────────────────────────────────────────
+
+  async function fetchCloudformationStacks(agentCoreOnly = false) {
+    loading.value = true; error.value = null
+    try {
+      const q = agentCoreOnly ? '?agentCoreOnly=true' : ''
+      cfnStacks.value = await apiFetch(`/api/cloud/aws/cloudformation/stacks${q}`, { headers: headers() })
+    }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
   return {
     activeProfileId, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
+    bedrockModels, lexBots, cfnStacks,
     loading, error,
     setActiveProfile,
     fetchRegions, fetchEksClusters,
@@ -717,8 +789,10 @@ export const useAwsStore = defineStore('aws', () => {
     fetchCognitoUsers, fetchCognitoUserDetail, createCognitoUser,
     resetCognitoUserPassword, setCognitoUserPassword,
     enableCognitoUser, disableCognitoUser, deleteCognitoUser,
-    fetchCognitoClients, fetchCognitoIdentityProviders,
+    fetchCognitoClients, fetchCognitoIdentityProviders, fetchCognitoGroups,
     fetchSecrets, fetchSecretConfig, importSecretToProfile, previewSecretKeys, importSelectedSecretKeys,
     fetchDataPipelines, activateDataPipeline, deactivateDataPipeline,
+    fetchBedrockModels, fetchLexBots, fetchCloudformationStacks,
+    createS3Bucket, testS3Bucket, fetchEcrImages, applyK8sManifest,
   }
 })
