@@ -263,7 +263,14 @@ function escape(text) {
 }
 
 function appendOutput(text, forceCls = '') {
-  const lines = text.split(/\r?\n/)
+  // Strip any remaining ANSI/VT escape codes (CSI, OSC, 2-byte ESC, DEC private)
+  const stripped = text
+    .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, '')
+    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
+    .replace(/\x1b[()][A-B0-9]/g, '')
+    .replace(/\x1b[@-_]/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+  const lines = stripped.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     if (!raw && i === lines.length - 1) break
