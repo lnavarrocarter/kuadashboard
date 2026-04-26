@@ -1175,11 +1175,11 @@ const { spawn } = require('child_process');
 /** Strip ANSI/VT escape codes from shell output before sending to client */
 function stripAnsi(text) {
   return text
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')   // CSI sequences (colors, cursor)
-    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '') // OSC sequences (title, etc.)
-    .replace(/\x1b[()][A-B0-9]/g, '')          // charset sequences
-    .replace(/\x1b[@-_]/g, '')                 // 2-byte ESC sequences
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // other ctrl chars except \n \r \t
+    .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, '') // CSI sequences (colors, cursor, DEC private e.g. ?2004h)
+    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')            // OSC sequences (title, etc.)
+    .replace(/\x1b[()][A-B0-9]/g, '')                            // charset sequences
+    .replace(/\x1b[@-_]/g, '')                                   // 2-byte ESC sequences
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');              // other ctrl chars except \n \r \t
 }
 
 wssShell.on('connection', (ws, req) => {
@@ -1365,7 +1365,7 @@ wssEc2Shell.on('connection', (ws, req) => {
       sshConn = new Client();
 
       sshConn.on('ready', () => {
-        sshConn.shell({ term: 'xterm-256color', cols: 220, rows: 50 }, (err, stream) => {
+        sshConn.shell({ term: 'dumb', cols: 220, rows: 50 }, (err, stream) => {
           if (err) {
             send({ type: 'error', data: `Shell error: ${err.message}` });
             cleanup();
@@ -1375,11 +1375,11 @@ wssEc2Shell.on('connection', (ws, req) => {
           send({ type: 'connected', host, user });
 
           stream.on('data', chunk => {
-            send({ type: 'out', data: chunk.toString('utf8') });
+            send({ type: 'out', data: stripAnsi(chunk.toString('utf8')) });
           });
 
           stream.stderr.on('data', chunk => {
-            send({ type: 'err', data: chunk.toString('utf8') });
+            send({ type: 'err', data: stripAnsi(chunk.toString('utf8')) });
           });
 
           stream.on('close', (code) => {
