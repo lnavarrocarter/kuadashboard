@@ -11,6 +11,11 @@ export const CHANGELOG = [
     version: '1.6.1',
     date: 'Abril 2026',
     items: [
+      { type: 'new',    text: 'AWS RDS — nuevo panel por instancia con acciones Info, Configuración, Conexión y Restablecer contraseña' },
+      { type: 'new',    text: 'AWS RDS — modal de detalle rediseñado con pestañas estilo consola AWS: Conectividad y seguridad, Supervisión y registros, Configuración, Mantenimiento y copias de seguridad, Migración y réplicas, y Etiquetas' },
+      { type: 'better', text: 'AWS RDS — traducción completa al español de textos, botones y mensajes de los modales de Info, Conexión y Restablecimiento de contraseña' },
+      { type: 'better', text: 'AWS Database — unificación de navegación y vista para trabajar bajo RDS, eliminando la sección residual de DocumentDB en la interfaz' },
+      { type: 'better', text: 'Documentación — guía de permisos mínimos IAM en español ampliada con acciones requeridas para RDS' },
       { type: 'fix',    text: 'HelpModal — corregidos caracteres con encoding incorrecto (mojibake) en títulos y comentarios del componente' },
       { type: 'fix',    text: 'Helm — contextos con nombre ARN (EKS) ya se resuelven correctamente; se inyecta KUBECONFIG completo al invocar el CLI de helm' },
     ],
