@@ -28,6 +28,7 @@ export const useAwsStore = defineStore('aws', () => {
   // New services
   const glueJobs         = ref([])
   const glueDatabases    = ref([])
+  const rdsClusters      = ref([])
   const docdbClusters    = ref([])
   const dynamoTables     = ref([])
   const athenaWorkgroups = ref([])
@@ -68,6 +69,7 @@ export const useAwsStore = defineStore('aws', () => {
     stepFunctions.value    = []
     glueJobs.value         = []
     glueDatabases.value    = []
+    rdsClusters.value      = []
     docdbClusters.value    = []
     dynamoTables.value     = []
     athenaWorkgroups.value = []
@@ -256,6 +258,8 @@ export const useAwsStore = defineStore('aws', () => {
           return await apiFetch(`/api/cloud/aws/apigateway/${params.id}/config?type=${encodeURIComponent(params.type || 'REST')}`, { headers: h })
         case 'dynamodb':
           return await apiFetch(`/api/cloud/aws/dynamodb/${encodeURIComponent(params.table)}/config`, { headers: h })
+        case 'rds':
+          return await apiFetch(`/api/cloud/aws/rds/${encodeURIComponent(params.id)}/config`, { headers: h })
         case 'glue':
           return await apiFetch(`/api/cloud/aws/glue/jobs/${encodeURIComponent(params.name)}/config`, { headers: h })
         case 'secrets':
@@ -415,6 +419,36 @@ export const useAwsStore = defineStore('aws', () => {
       const q = new URLSearchParams({ minutes })
       if (runId) q.set('runId', runId)
       return await apiFetch(`/api/cloud/aws/glue/logs/${encodeURIComponent(name)}?${q}`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  // ─── RDS ────────────────────────────────────────────────────────────────────
+
+  async function fetchRdsClusters() {
+    loading.value = true; error.value = null
+    try { rdsClusters.value = await apiFetch('/api/cloud/aws/rds', { headers: headers() }) }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchRdsConfig(id) {
+    try {
+      return await apiFetch(`/api/cloud/aws/rds/${encodeURIComponent(id)}/config`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function fetchRdsConnectionStrings(id) {
+    try {
+      return await apiFetch(`/api/cloud/aws/rds/${encodeURIComponent(id)}/connection-strings`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function resetRdsPassword(id, newPassword) {
+    try {
+      return await apiFetch(`/api/cloud/aws/rds/${encodeURIComponent(id)}/reset-password`, {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      })
     } catch (e) { setError(e); return null }
   }
 
@@ -851,7 +885,7 @@ export const useAwsStore = defineStore('aws', () => {
   return {
     activeProfileId, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
-    glueJobs, glueDatabases, docdbClusters, dynamoTables, athenaWorkgroups,
+    glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
     bedrockModels, lexBots, cfnStacks,
     loading, error,
@@ -870,6 +904,7 @@ export const useAwsStore = defineStore('aws', () => {
     // New services
     fetchGlueJobs, fetchGlueDatabases, runGlueJob, fetchGlueJobRuns,
     fetchGlueJobConfig, fetchGlueConnections, fetchGlueLogs,
+    fetchRdsClusters, fetchRdsConfig, fetchRdsConnectionStrings, resetRdsPassword,
     fetchDocdbClusters, fetchDocdbConnectionStrings, fetchDocdbConfig, resetDocdbPassword, createDocdbCluster,
     fetchDynamoTables, fetchDynamoTableConfig, scanDynamoTable, queryDynamoTable, createDynamoTable,
     fetchAthenaWorkgroups, fetchAthenaWorkgroupConfig, fetchAthenaCatalogs, fetchAthenaCatalogInfo, fetchAthenaTables, fetchAthenaHistory, startAthenaQuery, getAthenaQueryResult,

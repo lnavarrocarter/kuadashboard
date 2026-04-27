@@ -471,39 +471,43 @@
         </table>
       </div>
 
-      <!-- ══ DocumentDB ════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'docdb'" class="tab-panel">
-        <div style="display:flex;justify-content:flex-end;padding:8px 0 6px">
-          <button class="btn sm" @click="openDocdbCreate()">+ Nuevo Cluster</button>
-        </div>
+      <!-- ══ RDS ═══════════════════════════════════════════════════════════ -->
+      <div v-show="activeTab === 'rds'" class="tab-panel">
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredDocdb.length" class="empty-row">{{ search.docdb ? 'No matches.' : 'No DocumentDB clusters found.' }}</div>
+        <div v-else-if="!filteredRds.length" class="empty-row">{{ search.rds ? 'No matches.' : 'No RDS instances found.' }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('id')"            @click="sortBy('id')">Cluster ID <span class="sort-icon">{{ sortIcon('id') }}</span></th>
+            <th :class="thClass('id')"            @click="sortBy('id')">Instance <span class="sort-icon">{{ sortIcon('id') }}</span></th>
+            <th :class="thClass('engine')"        @click="sortBy('engine')">Engine <span class="sort-icon">{{ sortIcon('engine') }}</span></th>
+            <th :class="thClass('class')"         @click="sortBy('class')">Class <span class="sort-icon">{{ sortIcon('class') }}</span></th>
             <th :class="thClass('status')"        @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('engineVersion')" @click="sortBy('engineVersion')">Engine <span class="sort-icon">{{ sortIcon('engineVersion') }}</span></th>
             <th :class="thClass('endpoint')"      @click="sortBy('endpoint')">Endpoint <span class="sort-icon">{{ sortIcon('endpoint') }}</span></th>
-            <th :class="thClass('port')"          @click="sortBy('port')">Port</th>
-            <th>Multi-AZ</th><th>Encrypted</th><th>Actions</th>
+            <th :class="thClass('az')"            @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
+            <th :class="thClass('storageGb')"     @click="sortBy('storageGb')">Storage <span class="sort-icon">{{ sortIcon('storageGb') }}</span></th>
+            <th :class="thClass('createdAt')"     @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody>
-            <tr v-for="c in sortRows(filteredDocdb)" :key="c.id">
+            <tr v-for="db in sortRows(filteredRds)" :key="db.id">
               <td>
-                <div>{{ c.id }}</div>
-                <div class="text-dim mono-xs">Master: {{ c.masterUsername }}</div>
+                <div>{{ db.id }}</div>
+                <div class="text-dim mono-xs">{{ db.arn }}</div>
               </td>
-              <td><span :class="c.status === 'available' ? 'status-ok' : 'status-warn'">{{ c.status }}</span></td>
-              <td class="text-dim">{{ c.engine }} {{ c.engineVersion }}</td>
-              <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="c.endpoint">{{ c.endpoint || '-' }}</td>
-              <td class="text-dim">{{ c.port }}</td>
-              <td><span :class="c.multiAZ ? 'status-ok' : 'text-dim'">{{ c.multiAZ ? 'Yes' : 'No' }}</span></td>
-              <td><span :class="c.storageEncrypted ? 'status-ok' : 'text-dim'">{{ c.storageEncrypted ? 'Yes' : 'No' }}</span></td>
+              <td class="text-dim">{{ db.engine }} {{ db.engineVersion || '' }}</td>
+              <td class="text-dim mono-xs">{{ db.class }}</td>
+              <td><span :class="db.status === 'available' ? 'status-ok' : 'status-warn'">{{ db.status }}</span></td>
+              <td class="text-dim mono-xs" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="db.endpoint">
+                {{ db.endpoint ? `${db.endpoint}:${db.port}` : '-' }}
+              </td>
+              <td class="text-dim">{{ db.az || '-' }}</td>
+              <td class="text-dim">{{ db.storageGb ? `${db.storageGb} GiB` : '-' }}</td>
+              <td class="text-dim" style="white-space:nowrap">{{ db.createdAt ? formatDate(db.createdAt) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openDocdbConnect(c)">Connect</button>
-                  <button class="btn sm" @click="openDocdbConfig(c)">Config</button>
-                  <button class="btn sm" @click="openDocdbResetPwd(c)">Reset Pwd</button>
+                  <button class="btn sm" @click="openRdsInfo(db)">ℹ Info</button>
+                  <button class="btn sm" @click="openConfig('rds', `RDS: ${db.id}`, db, { id: db.id })">Config</button>
+                  <button class="btn sm" @click="openRdsConnect(db)">Connect</button>
+                  <button class="btn sm" @click="openRdsResetPwd(db)">Reset Pwd</button>
                 </div>
               </td>
             </tr>
@@ -2924,115 +2928,36 @@
       </div>
     </div>
 
-    <!-- ══ DynamoDB Info Modal ════════════════════════════════════════════════ -->
-    <div v-if="dynamoInfo.open" class="modal-overlay" @click.self="dynamoInfo.open = false">
-      <div class="modal" style="width:680px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-          <span style="font-weight:600">DynamoDB — {{ dynamoInfo.table?.name }}</span>
-          <button class="btn sm" @click="dynamoInfo.open = false">Close</button>
-        </div>
-        <div v-if="dynamoInfo.loading" class="empty-row">Loading...</div>
-        <div v-else-if="dynamoInfo.error" class="alert-error">{{ dynamoInfo.error }}</div>
-        <div v-else-if="dynamoInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
-          <!-- Status / billing -->
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-            <div class="config-section">
-              <div class="config-title">Estado</div>
-              <span :class="dynamoInfo.data.TableStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ dynamoInfo.data.TableStatus }}</span>
-            </div>
-            <div class="config-section">
-              <div class="config-title">Billing</div>
-              <span class="text-dim">{{ dynamoInfo.data.BillingModeSummary?.BillingMode || 'PROVISIONED' }}</span>
-            </div>
-            <div class="config-section">
-              <div class="config-title">Tamaño</div>
-              <span class="text-dim">{{ dynamoInfo.data.TableSizeBytes ? formatBytes(dynamoInfo.data.TableSizeBytes) : '-' }}</span>
-              <span class="text-dim" style="font-size:11px"> ({{ (dynamoInfo.data.ItemCount || 0).toLocaleString() }} items)</span>
-            </div>
-          </div>
-          <!-- Provisioned (if applicable) -->
-          <div v-if="dynamoInfo.data.ProvisionedThroughput" class="config-section">
-            <div class="config-title">Throughput Provisionado</div>
-            <div class="config-row"><span>Read Capacity Units (RCU)</span><span class="mono-xs">{{ dynamoInfo.data.ProvisionedThroughput.ReadCapacityUnits }}</span></div>
-            <div class="config-row"><span>Write Capacity Units (WCU)</span><span class="mono-xs">{{ dynamoInfo.data.ProvisionedThroughput.WriteCapacityUnits }}</span></div>
-            <div class="config-row"><span>Last Decrease</span><span class="text-dim" style="font-size:11px">{{ dynamoInfo.data.ProvisionedThroughput.LastDecreaseDateTime ? formatDate(dynamoInfo.data.ProvisionedThroughput.LastDecreaseDateTime) : '-' }}</span></div>
-          </div>
-          <!-- Key Schema -->
-          <div class="config-section">
-            <div class="config-title">Key Schema</div>
-            <div v-for="k in (dynamoInfo.data.KeySchema || [])" :key="k.AttributeName" class="config-row">
-              <span>{{ k.KeyType === 'HASH' ? 'Partition Key' : 'Sort Key' }}</span>
-              <span class="mono-xs">{{ k.AttributeName }}
-                <span class="text-dim"> ({{ (dynamoInfo.data.AttributeDefinitions || []).find(a => a.AttributeName === k.AttributeName)?.AttributeType || '?' }})</span>
-              </span>
-            </div>
-          </div>
-          <!-- GSIs -->
-          <div v-if="dynamoInfo.data.GlobalSecondaryIndexes?.length" class="config-section">
-            <div class="config-title">Global Secondary Indexes ({{ dynamoInfo.data.GlobalSecondaryIndexes.length }})</div>
-            <div v-for="gsi in dynamoInfo.data.GlobalSecondaryIndexes" :key="gsi.IndexName" style="margin-bottom:8px;border:1px solid var(--border);border-radius:4px;padding:8px">
-              <div style="font-weight:600;font-size:12px">{{ gsi.IndexName }}</div>
-              <div class="config-row"><span>Keys</span><span class="mono-xs">{{ (gsi.KeySchema || []).map(k => `${k.AttributeName} (${k.KeyType})`).join(', ') }}</span></div>
-              <div class="config-row"><span>Status</span><span :class="gsi.IndexStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ gsi.IndexStatus }}</span></div>
-              <div class="config-row"><span>Items</span><span class="text-dim">{{ (gsi.ItemCount || 0).toLocaleString() }}</span></div>
-              <div class="config-row"><span>Projection</span><span class="text-dim">{{ gsi.Projection?.ProjectionType }}</span></div>
-            </div>
-          </div>
-          <!-- LSIs -->
-          <div v-if="dynamoInfo.data.LocalSecondaryIndexes?.length" class="config-section">
-            <div class="config-title">Local Secondary Indexes ({{ dynamoInfo.data.LocalSecondaryIndexes.length }})</div>
-            <div v-for="lsi in dynamoInfo.data.LocalSecondaryIndexes" :key="lsi.IndexName" style="margin-bottom:4px">
-              <span class="mono-xs">{{ lsi.IndexName }}</span>
-              <span class="text-dim" style="font-size:11px"> — {{ (lsi.KeySchema || []).map(k => k.AttributeName).join(', ') }}</span>
-            </div>
-          </div>
-          <!-- Stream / TTL -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="config-section">
-              <div class="config-title">DynamoDB Streams</div>
-              <span :class="dynamoInfo.data.StreamSpecification?.StreamEnabled ? 'status-ok' : 'text-dim'">
-                {{ dynamoInfo.data.StreamSpecification?.StreamEnabled ? `Enabled (${dynamoInfo.data.StreamSpecification.StreamViewType})` : 'Disabled' }}
-              </span>
-            </div>
-            <div class="config-section">
-              <div class="config-title">ARN</div>
-              <span class="mono-xs" style="font-size:10px;word-break:break-all">{{ dynamoInfo.data.TableArn }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ DynamoDB Create Table Modal ════════════════════════════════════════ -->
+    <!-- ══ DynamoDB Create Table Modal ═══════════════════════════════════════ -->
     <div v-if="dynamoCreate.open" class="modal-overlay" @click.self="dynamoCreate.open = false">
-      <div class="modal" style="width:480px;max-width:96vw">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div class="modal-box" style="width:560px;max-width:98vw">
+        <div class="modal-header">
           <span style="font-weight:600">Create DynamoDB Table</span>
           <button class="btn sm" @click="dynamoCreate.open = false">Close</button>
         </div>
         <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
           <div>
-            <label class="ctrl-label">Table Name *</label>
+            <label class="ctrl-label">Table Name</label>
             <input v-model="dynamoCreate.tableName" class="ctrl-input" placeholder="my-table" />
           </div>
-          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+          <div style="display:grid;grid-template-columns:1fr 100px;gap:8px">
             <div>
-              <label class="ctrl-label">Partition Key (HASH) *</label>
-              <input v-model="dynamoCreate.partitionKey" class="ctrl-input" placeholder="id" />
+              <label class="ctrl-label">Partition Key</label>
+              <input v-model="dynamoCreate.partitionKey" class="ctrl-input" placeholder="pk" />
             </div>
             <div>
               <label class="ctrl-label">Type</label>
-              <select v-model="dynamoCreate.partitionKeyType" class="ctrl-select" style="width:70px">
-                <option value="S">S (String)</option>
-                <option value="N">N (Number)</option>
-                <option value="B">B (Binary)</option>
+              <select v-model="dynamoCreate.partitionKeyType" class="ctrl-select">
+                <option value="S">S</option>
+                <option value="N">N</option>
+                <option value="B">B</option>
               </select>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+          <div style="display:grid;grid-template-columns:1fr 100px;gap:8px">
             <div>
-              <label class="ctrl-label">Sort Key (RANGE) — optional</label>
-              <input v-model="dynamoCreate.sortKey" class="ctrl-input" placeholder="timestamp (optional)" />
+              <label class="ctrl-label">Sort Key (optional)</label>
+              <input v-model="dynamoCreate.sortKey" class="ctrl-input" placeholder="sk" />
             </div>
             <div>
               <label class="ctrl-label">Type</label>
@@ -3258,260 +3183,203 @@
       </div>
     </div>
 
-    <!-- ══ DocumentDB Config Modal ════════════════════════════════════════════ -->
-    <div v-if="docdbConfigModal.open" class="modal-overlay" @click.self="docdbConfigModal.open = false">
-      <div class="modal-box" style="width:820px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+    <!-- ══ RDS Info Modal ══════════════════════════════════════════════════════ -->
+    <div v-if="rdsInfoModal.open" class="modal-overlay" @click.self="rdsInfoModal.open = false">
+      <div class="modal-box" style="width:900px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
-          <div>
-            <div style="font-weight:600;font-size:14px">{{ docdbConfigModal.clusterId }}</div>
-            <div class="text-dim" style="font-size:11px">DocumentDB Cluster Configuration</div>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+            <span style="font-weight:600">Info de RDS — {{ rdsInfoModal.id }}</span>
+            <span v-if="rdsInfoModal.data" class="text-dim" style="font-size:11px">{{ rdsInfoModal.data.engine }} {{ rdsInfoModal.data.engineVersion || '' }} · {{ rdsInfoModal.data.status }}</span>
           </div>
-          <button class="btn sm" @click="docdbConfigModal.open = false">Cerrar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm" @click="openRdsConnect({ id: rdsInfoModal.id })">Conectar</button>
+            <button class="btn sm" @click="openRdsResetPwd({ id: rdsInfoModal.id })">Restablecer contraseña</button>
+            <button class="btn sm" @click="rdsInfoModal.open = false">Cerrar</button>
+          </div>
         </div>
-        <div v-if="docdbConfigModal.loading" class="empty-row">Loading...</div>
-        <div v-else-if="docdbConfigModal.error" class="alert-error">{{ docdbConfigModal.error }}</div>
-        <div v-else-if="docdbConfigModal.data" style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
-
-          <!-- Header badges -->
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <span :class="docdbConfigModal.data.status === 'available' ? 'status-ok' : 'status-warn'" style="font-size:13px;font-weight:600">{{ docdbConfigModal.data.status }}</span>
-            <span class="text-dim" style="font-size:11px">{{ docdbConfigModal.data.engine }} {{ docdbConfigModal.data.engineVersion }}</span>
-            <span v-if="docdbConfigModal.data.storageEncrypted" style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(166,227,161,.12);color:#a6e3a1">Encrypted</span>
-            <span v-if="docdbConfigModal.data.deletionProtection" style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(250,179,135,.12);color:#fab387">Deletion Protection</span>
-            <span v-if="docdbConfigModal.data.multiAZ" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border)">Multi-AZ</span>
+        <div v-if="rdsInfoModal.loading" class="empty-row">Cargando...</div>
+        <div v-else-if="rdsInfoModal.error" class="alert-error">{{ rdsInfoModal.error }}</div>
+        <div v-else-if="rdsInfoModal.data" style="padding:12px;display:flex;flex-direction:column;gap:12px;overflow:hidden;flex:1">
+          <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex-wrap:wrap">
+            <button
+              v-for="t in rdsInfoTabs"
+              :key="t.id"
+              class="btn sm"
+              :style="rdsInfoTab === t.id ? 'background:var(--accent);border-color:var(--accent);color:#fff' : ''"
+              @click="rdsInfoTab = t.id"
+            >{{ t.label }}</button>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-            <!-- General -->
-            <div class="config-section">
-              <div class="config-title">General</div>
-              <div class="config-row"><span>Master User</span><span class="mono-xs text-dim">{{ docdbConfigModal.data.masterUsername }}</span></div>
-              <div class="config-row"><span>Port</span><span class="text-dim">{{ docdbConfigModal.data.port }}</span></div>
-              <div class="config-row"><span>Subnet Group</span><span class="mono-xs text-dim">{{ docdbConfigModal.data.subnetGroup || '-' }}</span></div>
-              <div class="config-row"><span>Param Group</span><span class="mono-xs text-dim">{{ docdbConfigModal.data.parameterGroup || '-' }}</span></div>
-              <div class="config-row"><span>Creado</span><span class="text-dim">{{ docdbConfigModal.data.clusterCreateTime ? formatDate(docdbConfigModal.data.clusterCreateTime) : '-' }}</span></div>
+          <div style="overflow:auto;display:flex;flex-direction:column;gap:12px;flex:1;padding-right:2px">
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+              <div v-for="card in rdsInfoHighlights" :key="card.label" class="config-section" style="margin:0;padding:10px 12px">
+                <div class="config-title" style="margin-bottom:4px">{{ card.label }}</div>
+                <div class="mono-xs" :class="card.tone" style="font-size:12px;word-break:break-word">{{ card.value }}</div>
+              </div>
             </div>
 
-            <!-- Endpoints -->
-            <div class="config-section">
-              <div class="config-title">Endpoints</div>
+            <div v-if="rdsInfoTab === 'connectivity'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="config-section">
+                <div class="config-title">Conectividad y seguridad</div>
+                <div class="config-row"><span>Endpoint</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.endpoint ? `${rdsInfoModal.data.endpoint}:${rdsInfoModal.data.port}` : '-' }}</span></div>
+                <div class="config-row"><span>Acceso público</span><span :class="rdsInfoModal.data.public ? 'status-warn' : 'status-ok'">{{ rdsInfoModal.data.public ? 'Sí' : 'No' }}</span></div>
+                <div class="config-row"><span>Grupo de subredes</span><span class="text-dim">{{ rdsInfoModal.data.subnetGroup || '-' }}</span></div>
+                <div class="config-row"><span>Tipo de red</span><span class="text-dim">{{ rdsInfoModal.data.networkType || '-' }}</span></div>
+                <div class="config-row"><span>Autenticación IAM DB</span><span :class="rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? 'Habilitada' : 'Deshabilitada' }}</span></div>
+                <div class="config-row"><span>Certificado CA</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.caCertificateIdentifier || '-' }}</span></div>
+              </div>
+              <div class="config-section">
+                <div class="config-title">Grupos de seguridad ({{ (rdsInfoModal.data.vpcSecurityGroups || []).length }})</div>
+                <div v-if="!rdsInfoModal.data.vpcSecurityGroups?.length" class="text-dim" style="font-size:12px">Sin grupos de seguridad.</div>
+                <div v-for="sg in rdsInfoModal.data.vpcSecurityGroups" :key="sg.id" class="config-row">
+                  <span class="mono-xs">{{ sg.id }}</span>
+                  <span :class="sg.status === 'active' ? 'status-ok' : 'text-dim'">{{ sg.status }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="rdsInfoTab === 'monitoring'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="config-section">
+                <div class="config-title">Supervisión</div>
+                <div class="config-row"><span>Monitoreo mejorado</span><span :class="rdsInfoModal.data.monitoringInterval ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.monitoringInterval ? `Cada ${rdsInfoModal.data.monitoringInterval}s` : 'Deshabilitado' }}</span></div>
+                <div class="config-row"><span>Rol de monitoreo</span><span class="mono-xs text-dim" style="font-size:10px">{{ rdsInfoModal.data.monitoringRoleArn || '-' }}</span></div>
+                <div class="config-row"><span>Performance Insights</span><span :class="rdsInfoModal.data.performanceInsightsEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.performanceInsightsEnabled ? 'Habilitado' : 'Deshabilitado' }}</span></div>
+                <div class="config-row"><span>Retención PI</span><span class="text-dim">{{ rdsInfoModal.data.performanceInsightsRetentionPeriod || '-' }}</span></div>
+              </div>
+              <div class="config-section">
+                <div class="config-title">Logs exportados</div>
+                <div v-if="!(rdsInfoModal.data.enabledCloudwatchLogsExports || []).length" class="text-dim" style="font-size:12px">Sin exportaciones a CloudWatch Logs.</div>
+                <div v-for="logName in (rdsInfoModal.data.enabledCloudwatchLogsExports || [])" :key="logName" class="config-row">
+                  <span class="mono-xs">{{ logName }}</span>
+                  <span class="status-ok">Habilitado</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="rdsInfoTab === 'configuration'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="config-section">
+                <div class="config-title">Configuración</div>
+                <div class="config-row"><span>Motor</span><span class="text-dim">{{ rdsInfoModal.data.engine }} {{ rdsInfoModal.data.engineVersion || '' }}</span></div>
+                <div class="config-row"><span>Clase de instancia</span><span class="text-dim">{{ rdsInfoModal.data.class || '-' }}</span></div>
+                <div class="config-row"><span>Usuario maestro</span><span class="text-dim">{{ rdsInfoModal.data.masterUsername || '-' }}</span></div>
+                <div class="config-row"><span>Nombre de base</span><span class="text-dim">{{ rdsInfoModal.data.dbName || '-' }}</span></div>
+                <div class="config-row"><span>Almacenamiento</span><span class="text-dim">{{ rdsInfoModal.data.storageGb || '-' }} GiB ({{ rdsInfoModal.data.storageType || '-' }})</span></div>
+                <div class="config-row"><span>Cifrado de almacenamiento</span><span :class="rdsInfoModal.data.storageEncrypted ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.storageEncrypted ? 'Sí' : 'No' }}</span></div>
+                <div class="config-row"><span>Máx. almacenamiento automático</span><span class="text-dim">{{ rdsInfoModal.data.maxAllocatedStorage || '-' }}</span></div>
+              </div>
+              <div class="config-section">
+                <div class="config-title">Parámetros y opciones</div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Grupos de parámetros</div>
+                <div v-if="!(rdsInfoModal.data.parameterGroups || []).length" class="text-dim" style="font-size:12px">No asignados.</div>
+                <div v-for="pg in (rdsInfoModal.data.parameterGroups || [])" :key="pg.name" class="config-row">
+                  <span class="mono-xs">{{ pg.name }}</span>
+                  <span class="text-dim">{{ pg.status }}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-dim);margin:10px 0 6px">Grupos de opciones</div>
+                <div v-if="!(rdsInfoModal.data.optionGroups || []).length" class="text-dim" style="font-size:12px">No asignados.</div>
+                <div v-for="og in (rdsInfoModal.data.optionGroups || [])" :key="og.name" class="config-row">
+                  <span class="mono-xs">{{ og.name }}</span>
+                  <span class="text-dim">{{ og.status }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="rdsInfoTab === 'maintenance'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="config-section">
+                <div class="config-title">Mantenimiento</div>
+                <div class="config-row"><span>Actualización menor automática</span><span :class="rdsInfoModal.data.autoMinorVersionUpgrade ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.autoMinorVersionUpgrade ? 'Habilitada' : 'Deshabilitada' }}</span></div>
+                <div class="config-row"><span>Ventana de mantenimiento</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredMaintenanceWindow || '-' }}</span></div>
+                <div class="config-row"><span>Protección contra eliminación</span><span :class="rdsInfoModal.data.deletionProtection ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.deletionProtection ? 'Habilitada' : 'Deshabilitada' }}</span></div>
+              </div>
+              <div class="config-section">
+                <div class="config-title">Copias de seguridad</div>
+                <div class="config-row"><span>Retención (días)</span><span class="text-dim">{{ rdsInfoModal.data.backupRetention ?? '-' }}</span></div>
+                <div class="config-row"><span>Ventana de copia</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredBackupWindow || '-' }}</span></div>
+                <div class="config-row"><span>Último punto restaurable</span><span class="text-dim">{{ rdsInfoModal.data.latestRestorableTime ? formatDate(rdsInfoModal.data.latestRestorableTime) : '-' }}</span></div>
+                <div class="config-row"><span>Copiar etiquetas en snapshot</span><span :class="rdsInfoModal.data.copyTagsToSnapshot ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.copyTagsToSnapshot ? 'Sí' : 'No' }}</span></div>
+                <div class="config-row"><span>Destino de backup</span><span class="text-dim">{{ rdsInfoModal.data.backupTarget || '-' }}</span></div>
+              </div>
+            </div>
+
+            <div v-else-if="rdsInfoTab === 'migration'" class="config-section">
+              <div class="config-title">Migración y replicación</div>
+              <div class="config-row"><span>Instancia origen</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.readReplicaSourceDBInstanceIdentifier || '-' }}</span></div>
+              <div class="config-row"><span>Modo de réplica</span><span class="text-dim">{{ rdsInfoModal.data.replicaMode || '-' }}</span></div>
               <div class="config-row" style="align-items:flex-start">
-                <span style="flex-shrink:0">Writer</span>
-                <span class="mono-xs text-dim" style="word-break:break-all;font-size:10px">{{ docdbConfigModal.data.endpoint || '-' }}</span>
+                <span>Réplicas de lectura (instancias)</span>
+                <span class="text-dim mono-xs" style="font-size:10px;word-break:break-all">{{ (rdsInfoModal.data.readReplicaDBInstanceIdentifiers || []).join(', ') || '-' }}</span>
               </div>
               <div class="config-row" style="align-items:flex-start">
-                <span style="flex-shrink:0">Reader</span>
-                <span class="mono-xs text-dim" style="word-break:break-all;font-size:10px">{{ docdbConfigModal.data.readerEndpoint || '-' }}</span>
+                <span>Réplicas de lectura (clusters)</span>
+                <span class="text-dim mono-xs" style="font-size:10px;word-break:break-all">{{ (rdsInfoModal.data.readReplicaDBClusterIdentifiers || []).join(', ') || '-' }}</span>
               </div>
             </div>
 
-            <!-- Backup & Maintenance -->
-            <div class="config-section">
-              <div class="config-title">Backup &amp; Mantenimiento</div>
-              <div class="config-row"><span>Retención (días)</span><span class="text-dim">{{ docdbConfigModal.data.backupRetentionPeriod ?? '-' }}</span></div>
-              <div class="config-row"><span>Ventana backup</span><span class="mono-xs text-dim">{{ docdbConfigModal.data.preferredBackupWindow || '-' }}</span></div>
-              <div class="config-row"><span>Ventana mant.</span><span class="mono-xs text-dim">{{ docdbConfigModal.data.preferredMaintenanceWindow || '-' }}</span></div>
-              <div class="config-row"><span>Restore más antiguo</span><span class="text-dim" style="font-size:10px">{{ docdbConfigModal.data.earliestRestorableTime ? formatDate(docdbConfigModal.data.earliestRestorableTime) : '-' }}</span></div>
-            </div>
-
-            <!-- Security Groups -->
-            <div class="config-section">
-              <div class="config-title">Security Groups ({{ (docdbConfigModal.data.vpcSecurityGroups || []).length }})</div>
-              <div v-for="sg in docdbConfigModal.data.vpcSecurityGroups" :key="sg.id"
-                style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border);font-size:11px">
-                <span class="mono-xs">{{ sg.id }}</span>
-                <span :class="sg.status === 'active' ? 'status-ok' : 'text-dim'" style="font-size:10px">{{ sg.status }}</span>
+            <div v-else-if="rdsInfoTab === 'tags'" class="config-section">
+              <div class="config-title">Etiquetas</div>
+              <div v-if="!(rdsInfoModal.data.tags || []).length" class="text-dim" style="font-size:12px">Sin etiquetas.</div>
+              <div v-for="tag in (rdsInfoModal.data.tags || [])" :key="tag.key" class="config-row">
+                <span class="mono-xs">{{ tag.key }}</span>
+                <span class="mono-xs text-dim" style="word-break:break-all">{{ tag.value }}</span>
               </div>
-              <div v-if="!docdbConfigModal.data.vpcSecurityGroups?.length" class="text-dim" style="font-size:11px">Ninguno</div>
             </div>
-          </div>
-
-          <!-- AZs -->
-          <div class="config-section">
-            <div class="config-title">Availability Zones</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-              <span v-for="az in (docdbConfigModal.data.availabilityZones || [])" :key="az"
-                style="font-size:11px;padding:2px 10px;border-radius:4px;border:1px solid var(--border);color:var(--text-dim)">{{ az }}</span>
-            </div>
-          </div>
-
-          <!-- Instances -->
-          <div class="config-section">
-            <div class="config-title">Instancias ({{ (docdbConfigModal.data.instances || []).length }})</div>
-            <table class="cloud-table" style="margin-top:6px">
-              <thead><tr>
-                <th>ID</th><th>Clase</th><th>Status</th><th>AZ</th><th>Rol</th><th>Tier</th><th>Pública</th>
-              </tr></thead>
-              <tbody>
-                <tr v-for="inst in docdbConfigModal.data.instances" :key="inst.id">
-                  <td class="mono-xs" style="font-size:10px">{{ inst.id }}</td>
-                  <td class="text-dim" style="font-size:11px">{{ inst.class }}</td>
-                  <td><span :class="inst.status === 'available' ? 'status-ok' : 'status-warn'" style="font-size:11px">{{ inst.status }}</span></td>
-                  <td class="text-dim" style="font-size:11px">{{ inst.az }}</td>
-                  <td><span :class="inst.writer ? 'status-ok' : 'text-dim'" style="font-size:11px;font-weight:600">{{ inst.writer ? 'Writer' : 'Reader' }}</span></td>
-                  <td class="text-dim" style="font-size:11px">{{ inst.promotionTier ?? '-' }}</td>
-                  <td><span :class="inst.publiclyAccessible ? 'status-warn' : 'text-dim'" style="font-size:11px">{{ inst.publiclyAccessible ? 'Sí' : 'No' }}</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- KMS -->
-          <div v-if="docdbConfigModal.data.kmsKeyId" class="config-section">
-            <div class="config-title">Cifrado KMS</div>
-            <div class="config-row"><span>KMS Key ID</span><span class="mono-xs text-dim" style="font-size:10px;word-break:break-all">{{ docdbConfigModal.data.kmsKeyId }}</span></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ══ DocumentDB Reset Password Modal ═════════════════════════════════════ -->
-    <div v-if="docdbResetPwdModal.open" class="modal-overlay" @click.self="docdbResetPwdModal.open = false">
+    <!-- ══ RDS Connect Modal ═══════════════════════════════════════════════════ -->
+    <div v-if="rdsConnectModal.open" class="modal-overlay" @click.self="rdsConnectModal.open = false">
+      <div class="modal-box" style="width:760px;max-width:98vw">
+        <div class="modal-header">
+          <span style="font-weight:600">Conexión RDS — {{ rdsConnectModal.id }}</span>
+          <button class="btn sm" @click="rdsConnectModal.open = false">Cerrar</button>
+        </div>
+        <div v-if="rdsConnectModal.loading" class="empty-row">Cargando...</div>
+        <div v-else-if="rdsConnectModal.error" class="alert-error">{{ rdsConnectModal.error }}</div>
+        <div v-else-if="rdsConnectModal.data" style="padding:12px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap">Contraseña (para URI)</label>
+            <input v-model="rdsConnectModal.password" type="password" class="ctrl-input" placeholder="contraseña del usuario maestro" style="flex:1" />
+          </div>
+          <div v-for="entry in rdsConnectionEntries" :key="entry.key">
+            <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text-muted)">{{ entry.label }}</div>
+            <div style="position:relative">
+              <pre class="code-block" style="user-select:all;overflow-x:auto">{{ entry.value }}</pre>
+              <button class="btn sm" style="position:absolute;top:4px;right:4px" @click="copyText(entry.value)">Copiar</button>
+            </div>
+          </div>
+          <div v-if="rdsConnectModal.data.templates?.notes?.length" style="background:var(--bg-alt,#1e1e2e);border-radius:6px;padding:10px 12px">
+            <div style="font-size:11px;font-weight:600;margin-bottom:6px">Notas</div>
+            <div v-for="n in rdsConnectModal.data.templates.notes" :key="n" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">• {{ n }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RDS Reset Password Modal ═══════════════════════════════════════════ -->
+    <div v-if="rdsResetPwdModal.open" class="modal-overlay" @click.self="rdsResetPwdModal.open = false">
       <div class="modal-box" style="width:460px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Cambiar Password Master — {{ docdbResetPwdModal.clusterId }}</span>
-          <button class="btn sm" @click="docdbResetPwdModal.open = false">Cerrar</button>
+          <span style="font-weight:600">Restablecer contraseña maestra — {{ rdsResetPwdModal.id }}</span>
+          <button class="btn sm" @click="rdsResetPwdModal.open = false">Cerrar</button>
         </div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
-          <div style="font-size:12px;color:var(--text-dim);border-left:3px solid var(--accent);padding-left:10px;line-height:1.6">
-            Esta acción cambia la contraseña del usuario master del cluster. El cambio se aplica de inmediato (<code>ApplyImmediately=true</code>). La contraseña anterior dejará de funcionar.
-          </div>
           <label class="field-label">
             Nueva contraseña
-            <input v-model="docdbResetPwdModal.newPassword" type="password" class="ctrl-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+            <input v-model="rdsResetPwdModal.newPassword" type="password" class="ctrl-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
           </label>
           <label class="field-label">
             Confirmar contraseña
-            <input v-model="docdbResetPwdModal.confirmPassword" type="password" class="ctrl-input" placeholder="Repetir contraseña" autocomplete="new-password" />
+            <input v-model="rdsResetPwdModal.confirmPassword" type="password" class="ctrl-input" placeholder="Repetir contraseña" autocomplete="new-password" />
           </label>
-          <div v-if="docdbResetPwdModal.error" class="alert-error">{{ docdbResetPwdModal.error }}</div>
-          <div v-if="docdbResetPwdModal.success" style="color:#a6e3a1;font-size:12px;padding:8px;border-radius:4px;background:rgba(166,227,161,.1)">{{ docdbResetPwdModal.success }}</div>
+          <div v-if="rdsResetPwdModal.error" class="alert-error">{{ rdsResetPwdModal.error }}</div>
+          <div v-if="rdsResetPwdModal.success" style="color:#a6e3a1;font-size:12px;padding:8px;border-radius:4px;background:rgba(166,227,161,.1)">{{ rdsResetPwdModal.success }}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn sm" @click="docdbResetPwdModal.open = false">Cancelar</button>
-            <button class="btn sm" :disabled="docdbResetPwdModal.loading" @click="() => doDocdbResetPassword()">
-              {{ docdbResetPwdModal.loading ? 'Cambiando...' : 'Cambiar Password' }}
+            <button class="btn sm" @click="rdsResetPwdModal.open = false">Cancelar</button>
+            <button class="btn sm" :disabled="rdsResetPwdModal.loading" @click="doRdsResetPassword">
+              {{ rdsResetPwdModal.loading ? 'Aplicando...' : 'Restablecer contraseña' }}
             </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ DocumentDB Create Cluster Modal ════════════════════════════════════ -->
-    <div v-if="docdbCreateModal.open" class="modal-overlay" @click.self="docdbCreateModal.open = false">
-      <div class="modal-box" style="width:560px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
-        <div class="modal-header">
-          <span style="font-weight:600">Crear Nuevo Cluster DocumentDB</span>
-          <button class="btn sm" @click="docdbCreateModal.open = false">Cerrar</button>
-        </div>
-        <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <label class="field-label" style="grid-column:1/-1">
-              Cluster ID *
-              <input v-model="docdbCreateModal.form.clusterId" class="ctrl-input" placeholder="my-docdb-cluster" />
-            </label>
-            <label class="field-label">
-              Master Username *
-              <input v-model="docdbCreateModal.form.masterUsername" class="ctrl-input" placeholder="admin" />
-            </label>
-            <label class="field-label">
-              Master Password *
-              <input v-model="docdbCreateModal.form.masterPassword" type="password" class="ctrl-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
-            </label>
-            <label class="field-label">
-              Engine Version
-              <select v-model="docdbCreateModal.form.engineVersion" class="ctrl-input ctrl-select">
-                <option value="">Última (default)</option>
-                <option value="5.0.0">5.0.0</option>
-                <option value="4.0.0">4.0.0</option>
-                <option value="3.6.0">3.6.0</option>
-              </select>
-            </label>
-            <label class="field-label">
-              Instance Class (opcional)
-              <select v-model="docdbCreateModal.form.instanceClass" class="ctrl-input ctrl-select">
-                <option value="">Sin instancia inicial</option>
-                <option value="db.t3.medium">db.t3.medium</option>
-                <option value="db.r5.large">db.r5.large</option>
-                <option value="db.r5.xlarge">db.r5.xlarge</option>
-                <option value="db.r5.2xlarge">db.r5.2xlarge</option>
-                <option value="db.r6g.large">db.r6g.large</option>
-              </select>
-            </label>
-            <label class="field-label">
-              Subnet Group (opcional)
-              <input v-model="docdbCreateModal.form.subnetGroupName" class="ctrl-input" placeholder="default" />
-            </label>
-            <label class="field-label">
-              Backup Retention (días)
-              <input v-model.number="docdbCreateModal.form.backupRetentionPeriod" type="number" min="1" max="35" class="ctrl-input" placeholder="1" />
-            </label>
-          </div>
-          <div style="display:flex;gap:16px;align-items:center;padding:6px 0">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox" v-model="docdbCreateModal.form.storageEncrypted" />
-              Storage Encrypted
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox" v-model="docdbCreateModal.form.deletionProtection" />
-              Deletion Protection
-            </label>
-          </div>
-          <div v-if="docdbCreateModal.error" class="alert-error">{{ docdbCreateModal.error }}</div>
-          <div v-if="docdbCreateModal.result" style="color:#a6e3a1;font-size:12px;padding:10px;border-radius:4px;background:rgba(166,227,161,.1)">
-            <div style="font-weight:600;margin-bottom:4px">✓ Cluster creado</div>
-            <div>ID: <span class="mono-xs">{{ docdbCreateModal.result.clusterId }}</span></div>
-            <div>Status: <span class="mono-xs">{{ docdbCreateModal.result.status }}</span></div>
-            <div v-if="docdbCreateModal.result.instance">Instancia: <span class="mono-xs">{{ docdbCreateModal.result.instance }}</span></div>
-            <div class="text-dim" style="font-size:11px;margin-top:6px">El cluster puede tardar varios minutos en estar disponible.</div>
-          </div>
-          <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px">
-            <button class="btn sm" @click="docdbCreateModal.open = false">Cancelar</button>
-            <button class="btn sm" :disabled="docdbCreateModal.loading" @click="() => doDocdbCreate()">
-              {{ docdbCreateModal.loading ? 'Creando...' : 'Crear Cluster' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ DocumentDB Connect Modal ═══════════════════════════════════════════ -->
-    <div v-if="docdbConnectModal.open" class="modal-overlay" @click.self="docdbConnectModal.open = false">
-      <div class="modal-box" style="width:700px;max-width:98vw">
-        <div class="modal-header">
-          <span style="font-weight:600">Connect — {{ docdbConnectModal.clusterId }}</span>
-          <button class="btn sm" @click="docdbConnectModal.open = false">Close</button>
-        </div>
-        <div v-if="docdbConnectModal.loading" class="empty-row">Loading...</div>
-        <div v-else-if="docdbConnectModal.error" class="alert-error">{{ docdbConnectModal.error }}</div>
-        <div v-else-if="docdbConnectModal.data" style="padding:12px;display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;gap:6px;align-items:center">
-            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap">Password (for URI)</label>
-            <input v-model="docdbConnectModal.password" type="password" class="ctrl-input" placeholder="master user password" style="flex:1" />
-          </div>
-          <!-- mongosh -->
-          <div>
-            <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text-muted)">mongosh</div>
-            <div style="position:relative">
-              <pre class="code-block" style="user-select:all;overflow-x:auto">{{ docdbConnectModal.password ? docdbConnectModal.data.mongoshTemplate.replace('<PASSWORD>', docdbConnectModal.password) : docdbConnectModal.data.mongoshTemplate }}</pre>
-              <button class="btn sm" style="position:absolute;top:4px;right:4px" @click="copyDocdbUri('mongosh')">Copy</button>
-            </div>
-          </div>
-          <!-- Compass URI -->
-          <div>
-            <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text-muted)">MongoDB Compass URI</div>
-            <div style="position:relative">
-              <pre class="code-block" style="user-select:all;overflow-x:auto">{{ docdbConnectModal.password ? docdbConnectModal.data.compassUri.replace('<PASSWORD>', docdbConnectModal.password) : docdbConnectModal.data.compassUri }}</pre>
-              <button class="btn sm" style="position:absolute;top:4px;right:4px" @click="copyDocdbUri('compass')">Copy</button>
-            </div>
-          </div>
-          <!-- TLS note -->
-          <div style="background:var(--bg-alt,#1e1e2e);border-radius:6px;padding:10px 12px">
-            <div style="font-size:11px;font-weight:600;margin-bottom:6px">TLS Setup Required</div>
-            <div v-for="n in docdbConnectModal.data.notes" :key="n" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">• {{ n }}</div>
-            <div style="display:flex;gap:6px;margin-top:8px">
-              <code style="font-size:11px;flex:1;word-break:break-all">{{ docdbConnectModal.data.tlsDownloadNote }}</code>
-              <button class="btn sm" @click="copyText(docdbConnectModal.data.tlsDownloadNote)">Copy</button>
-            </div>
           </div>
         </div>
       </div>
@@ -3803,7 +3671,7 @@ const TABS = [
   { id: 'eventbridge',  label: 'EventBridge'    },
   { id: 'stepfn',       label: 'Step Functions' },
   { id: 'dynamodb',     label: 'DynamoDB'       },
-  { id: 'docdb',        label: 'DocumentDB'     },
+  { id: 'rds',          label: 'RDS'            },
   { id: 'glue',         label: 'Glue'           },
   { id: 'athena',       label: 'Athena'         },
   { id: 'datapipeline', label: 'Data Pipeline'  },
@@ -3844,7 +3712,7 @@ const filteredVpc         = computed(() => filterRows(awsStore.vpcs,            
 const filteredEventBridge = computed(() => filterRows(awsStore.eventBridgeRules, search.eventbridge))
 const filteredStepFn      = computed(() => filterRows(awsStore.stepFunctions,    search.stepfn))
 const filteredDynamo      = computed(() => filterRows(awsStore.dynamoTables,     search.dynamodb))
-const filteredDocdb       = computed(() => filterRows(awsStore.docdbClusters,    search.docdb))
+const filteredRds         = computed(() => filterRows(awsStore.rdsClusters,      search.rds))
 const filteredGlue        = computed(() => filterRows(awsStore.glueJobs,         search.glue))
 const filteredAthena      = computed(() => filterRows(awsStore.athenaWorkgroups, search.athena))
 const filteredPipelines   = computed(() => filterRows(awsStore.dataPipelines,    search.datapipeline))
@@ -3860,7 +3728,7 @@ const tabFilteredMap = {
   ec2: filteredEc2, ecs: filteredEcs, eks: filteredEks,
   lambda: filteredLambda, apigw: filteredApigw, s3: filteredS3,
   ecr: filteredEcr, vpc: filteredVpc, eventbridge: filteredEventBridge, stepfn: filteredStepFn,
-  dynamodb: filteredDynamo, docdb: filteredDocdb, glue: filteredGlue,
+  dynamodb: filteredDynamo, rds: filteredRds, glue: filteredGlue,
   athena: filteredAthena, datapipeline: filteredPipelines,
   bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,
   cloudfront: filteredCloudfront, route53: filteredRoute53,
@@ -3875,7 +3743,8 @@ function tabCount(id) {
     lambda: awsStore.lambdas, apigw: awsStore.apiGateways, s3: awsStore.s3Buckets,
     ecr: awsStore.ecrRepos, vpc: awsStore.vpcs, eventbridge: awsStore.eventBridgeRules,
     stepfn: awsStore.stepFunctions,
-    dynamodb: awsStore.dynamoTables, docdb: awsStore.docdbClusters,
+    dynamodb: awsStore.dynamoTables,
+    rds: awsStore.rdsClusters,
     glue: awsStore.glueJobs, athena: awsStore.athenaWorkgroups,
     datapipeline: awsStore.dataPipelines,
     bedrock: awsStore.bedrockModels, lex: awsStore.lexBots, agentcorecfn: awsStore.cfnStacks,
@@ -3898,7 +3767,7 @@ const fetchMap = {
   eventbridge:  () => awsStore.fetchEventBridgeRules(),
   stepfn:       () => awsStore.fetchStepFunctions(),
   dynamodb:     () => awsStore.fetchDynamoTables(),
-  docdb:        () => awsStore.fetchDocdbClusters(),
+  rds:          () => awsStore.fetchRdsClusters(),
   glue:         () => awsStore.fetchGlueJobs(),
   athena:       () => Promise.all([awsStore.fetchAthenaWorkgroups(), loadAthenaCatalogs()]),
   datapipeline: () => awsStore.fetchDataPipelines(),
@@ -5530,116 +5399,135 @@ function openDynamoCellModal(column, val) {
   Object.assign(dynamoCellModal, { open: true, column, raw, formatted })
 }
 
-// ─── DocumentDB Connect Modal ─────────────────────────────────────────────────
-
-const docdbConnectModal = reactive({ open: false, loading: false, error: null, clusterId: '', password: '', data: null })
-
-async function openDocdbConnect(cluster) {
-  Object.assign(docdbConnectModal, { open: true, loading: true, error: null, clusterId: cluster.id, password: '', data: null })
-  try {
-    docdbConnectModal.data = await awsStore.fetchDocdbConnectionStrings(cluster.id)
-    if (!docdbConnectModal.data) docdbConnectModal.error = awsStore.error || 'Failed to load connection strings'
-  } catch (e) { docdbConnectModal.error = e.message }
-  finally      { docdbConnectModal.loading = false }
-}
-
-function copyDocdbUri(type) {
-  const d = docdbConnectModal.data
-  if (!d) return
-  const pw   = docdbConnectModal.password || '<PASSWORD>'
-  const text = type === 'mongosh'
-    ? d.mongoshTemplate.replace('<PASSWORD>', pw)
-    : d.compassUri.replace('<PASSWORD>', pw)
-  copyText(text)
-}
-
-// ─── DocumentDB Config Modal ──────────────────────────────────────────────────
-
-const docdbConfigModal = reactive({ open: false, loading: false, error: null, clusterId: '', data: null })
-
-async function openDocdbConfig(cluster) {
-  Object.assign(docdbConfigModal, { open: true, loading: true, error: null, clusterId: cluster.id, data: null })
-  try {
-    docdbConfigModal.data = await awsStore.fetchDocdbConfig(cluster.id)
-    if (!docdbConfigModal.data) docdbConfigModal.error = awsStore.error || 'Failed to load config'
-  } catch (e) { docdbConfigModal.error = e.message }
-  finally { docdbConfigModal.loading = false }
-}
-
-// ─── DocumentDB Reset Password Modal ─────────────────────────────────────────
-
-const docdbResetPwdModal = reactive({ open: false, loading: false, error: null, success: null, clusterId: '', newPassword: '', confirmPassword: '' })
-
-function openDocdbResetPwd(cluster) {
-  Object.assign(docdbResetPwdModal, { open: true, loading: false, error: null, success: null, clusterId: cluster.id, newPassword: '', confirmPassword: '' })
-}
-
-async function doDocdbResetPassword() {
-  docdbResetPwdModal.error = null; docdbResetPwdModal.success = null
-  if (!docdbResetPwdModal.newPassword || docdbResetPwdModal.newPassword.length < 8) {
-    docdbResetPwdModal.error = 'La contraseña debe tener al menos 8 caracteres'; return
-  }
-  if (docdbResetPwdModal.newPassword !== docdbResetPwdModal.confirmPassword) {
-    docdbResetPwdModal.error = 'Las contraseñas no coinciden'; return
-  }
-  docdbResetPwdModal.loading = true
-  try {
-    const resp = await awsStore.resetDocdbPassword(docdbResetPwdModal.clusterId, docdbResetPwdModal.newPassword)
-    if (resp?.ok) {
-      docdbResetPwdModal.success = resp.message || 'Password cambiado exitosamente'
-      docdbResetPwdModal.newPassword = ''; docdbResetPwdModal.confirmPassword = ''
-    } else {
-      docdbResetPwdModal.error = awsStore.error || 'Error al cambiar la contraseña'
-    }
-  } catch (e) { docdbResetPwdModal.error = e.message }
-  finally { docdbResetPwdModal.loading = false }
-}
-
-// ─── DocumentDB Create Cluster Modal ─────────────────────────────────────────
-
-const docdbCreateForm = () => ({ clusterId: '', masterUsername: '', masterPassword: '', engineVersion: '', instanceClass: 'db.t3.medium', subnetGroupName: '', backupRetentionPeriod: 1, storageEncrypted: false, deletionProtection: false })
-const docdbCreateModal = reactive({ open: false, loading: false, error: null, result: null, form: docdbCreateForm() })
-
-function openDocdbCreate() {
-  Object.assign(docdbCreateModal, { open: true, loading: false, error: null, result: null, form: docdbCreateForm() })
-}
-
-async function doDocdbCreate() {
-  docdbCreateModal.error = null
-  const f = docdbCreateModal.form
-  if (!f.clusterId || !f.masterUsername || !f.masterPassword) {
-    docdbCreateModal.error = 'Cluster ID, Master Username y Password son obligatorios'; return
-  }
-  if (f.masterPassword.length < 8) {
-    docdbCreateModal.error = 'La contraseña debe tener al menos 8 caracteres'; return
-  }
-  docdbCreateModal.loading = true
-  try {
-    const resp = await awsStore.createDocdbCluster({
-      clusterId:              f.clusterId,
-      masterUsername:         f.masterUsername,
-      masterPassword:         f.masterPassword,
-      engineVersion:          f.engineVersion || undefined,
-      instanceClass:          f.instanceClass || undefined,
-      subnetGroupName:        f.subnetGroupName || undefined,
-      backupRetentionPeriod:  f.backupRetentionPeriod,
-      storageEncrypted:       f.storageEncrypted,
-      deletionProtection:     f.deletionProtection,
-    })
-    if (resp?.ok) {
-      docdbCreateModal.result = resp
-      await awsStore.fetchDocdbClusters()
-    } else {
-      docdbCreateModal.error = awsStore.error || 'Error al crear el cluster'
-    }
-  } catch (e) { docdbCreateModal.error = e.message }
-  finally { docdbCreateModal.loading = false }
-}
-
 function copyText(text) {
   navigator.clipboard?.writeText(text)
     .then(() => toast('Copied!', 'success'))
     .catch(() => toast('Copy failed', 'error'))
+}
+
+// ─── RDS actions/modals ──────────────────────────────────────────────────────
+
+const rdsInfoModal = reactive({ open: false, loading: false, error: null, id: '', data: null })
+const rdsConnectModal = reactive({ open: false, loading: false, error: null, id: '', password: '', data: null })
+const rdsResetPwdModal = reactive({ open: false, loading: false, error: null, success: null, id: '', newPassword: '', confirmPassword: '' })
+const rdsInfoTabs = [
+  { id: 'connectivity', label: 'Conectividad y seguridad' },
+  { id: 'monitoring', label: 'Supervisión y registros' },
+  { id: 'configuration', label: 'Configuración' },
+  { id: 'maintenance', label: 'Mantenimiento y copias de seguridad' },
+  { id: 'migration', label: 'Migración y réplicas' },
+  { id: 'tags', label: 'Etiquetas' },
+]
+const rdsInfoTab = ref('connectivity')
+
+const rdsInfoHighlights = computed(() => {
+  const d = rdsInfoModal.data || {}
+  const sgCount = (d.vpcSecurityGroups || []).length
+  const logCount = (d.enabledCloudwatchLogsExports || []).length
+  const replicasCount = (d.readReplicaDBInstanceIdentifiers || []).length + (d.readReplicaDBClusterIdentifiers || []).length
+  const tagCount = (d.tags || []).length
+
+  switch (rdsInfoTab.value) {
+    case 'connectivity':
+      return [
+        { label: 'Endpoint', value: d.endpoint ? `${d.endpoint}:${d.port || ''}` : '-', tone: 'text-dim' },
+        { label: 'Acceso público', value: d.public ? 'Habilitado' : 'Privado', tone: d.public ? 'status-warn' : 'status-ok' },
+        { label: 'Grupos de seguridad', value: String(sgCount), tone: sgCount ? 'status-ok' : 'text-dim' },
+      ]
+    case 'monitoring':
+      return [
+        { label: 'Monitoreo mejorado', value: d.monitoringInterval ? `Cada ${d.monitoringInterval}s` : 'Deshabilitado', tone: d.monitoringInterval ? 'status-ok' : 'text-dim' },
+        { label: 'Performance Insights', value: d.performanceInsightsEnabled ? 'Habilitado' : 'Deshabilitado', tone: d.performanceInsightsEnabled ? 'status-ok' : 'text-dim' },
+        { label: 'Logs exportados', value: String(logCount), tone: logCount ? 'status-ok' : 'text-dim' },
+      ]
+    case 'configuration':
+      return [
+        { label: 'Motor', value: `${d.engine || '-'} ${d.engineVersion || ''}`.trim(), tone: 'text-dim' },
+        { label: 'Clase', value: d.class || '-', tone: 'text-dim' },
+        { label: 'Almacenamiento', value: `${d.storageGb ?? '-'} GiB`, tone: 'text-dim' },
+      ]
+    case 'maintenance':
+      return [
+        { label: 'Retención de backup', value: d.backupRetention != null ? `${d.backupRetention} días` : '-', tone: 'text-dim' },
+        { label: 'Protección de borrado', value: d.deletionProtection ? 'Habilitada' : 'Deshabilitada', tone: d.deletionProtection ? 'status-ok' : 'text-dim' },
+        { label: 'Estado', value: d.status || '-', tone: d.status === 'available' ? 'status-ok' : 'status-warn' },
+      ]
+    case 'migration':
+      return [
+        { label: 'Instancia origen', value: d.readReplicaSourceDBInstanceIdentifier || '-', tone: 'text-dim' },
+        { label: 'Modo réplica', value: d.replicaMode || '-', tone: 'text-dim' },
+        { label: 'Total de réplicas', value: String(replicasCount), tone: replicasCount ? 'status-ok' : 'text-dim' },
+      ]
+    case 'tags':
+      return [
+        { label: 'Etiquetas', value: String(tagCount), tone: tagCount ? 'status-ok' : 'text-dim' },
+        { label: 'Copiar etiquetas a snapshot', value: d.copyTagsToSnapshot ? 'Sí' : 'No', tone: d.copyTagsToSnapshot ? 'status-ok' : 'text-dim' },
+        { label: 'ARN', value: d.arn || '-', tone: 'text-dim' },
+      ]
+    default:
+      return []
+  }
+})
+
+const rdsConnectionEntries = computed(() => {
+  const t = rdsConnectModal.data?.templates || {}
+  const entries = []
+  if (t.psql) entries.push({ key: 'psql', label: 'psql', value: String(t.psql).replace('<PASSWORD>', rdsConnectModal.password || '<PASSWORD>') })
+  if (t.mysql) entries.push({ key: 'mysql', label: 'mysql', value: String(t.mysql).replace('<PASSWORD>', rdsConnectModal.password || '<PASSWORD>') })
+  if (t.sqlcmd) entries.push({ key: 'sqlcmd', label: 'sqlcmd', value: String(t.sqlcmd).replace('<PASSWORD>', rdsConnectModal.password || '<PASSWORD>') })
+  if (t.jdbc) entries.push({ key: 'jdbc', label: 'JDBC', value: t.jdbc })
+  return entries
+})
+
+async function openRdsInfo(db) {
+  rdsInfoTab.value = 'connectivity'
+  Object.assign(rdsInfoModal, { open: true, loading: true, error: null, id: db.id, data: null })
+  try {
+    rdsInfoModal.data = await awsStore.fetchRdsConfig(db.id)
+    if (!rdsInfoModal.data) rdsInfoModal.error = awsStore.error || 'No se pudo cargar la información de RDS'
+  } catch (e) { rdsInfoModal.error = e.message }
+  finally { rdsInfoModal.loading = false }
+}
+
+async function openRdsConnect(db) {
+  Object.assign(rdsConnectModal, { open: true, loading: true, error: null, id: db.id, password: '', data: null })
+  try {
+    rdsConnectModal.data = await awsStore.fetchRdsConnectionStrings(db.id)
+    if (!rdsConnectModal.data) rdsConnectModal.error = awsStore.error || 'No se pudieron cargar las cadenas de conexión'
+  } catch (e) { rdsConnectModal.error = e.message }
+  finally { rdsConnectModal.loading = false }
+}
+
+function openRdsResetPwd(db) {
+  Object.assign(rdsResetPwdModal, {
+    open: true, loading: false, error: null, success: null,
+    id: db.id, newPassword: '', confirmPassword: '',
+  })
+}
+
+async function doRdsResetPassword() {
+  rdsResetPwdModal.error = null
+  rdsResetPwdModal.success = null
+  if (!rdsResetPwdModal.newPassword || rdsResetPwdModal.newPassword.length < 8) {
+    rdsResetPwdModal.error = 'La contraseña debe tener al menos 8 caracteres'
+    return
+  }
+  if (rdsResetPwdModal.newPassword !== rdsResetPwdModal.confirmPassword) {
+    rdsResetPwdModal.error = 'Las contraseñas no coinciden'
+    return
+  }
+  rdsResetPwdModal.loading = true
+  try {
+    const resp = await awsStore.resetRdsPassword(rdsResetPwdModal.id, rdsResetPwdModal.newPassword)
+    if (resp?.ok) {
+      rdsResetPwdModal.success = resp.message || 'Restablecimiento de contraseña iniciado'
+      rdsResetPwdModal.newPassword = ''
+      rdsResetPwdModal.confirmPassword = ''
+    } else {
+      rdsResetPwdModal.error = awsStore.error || 'No se pudo restablecer la contraseña'
+    }
+  } catch (e) { rdsResetPwdModal.error = e.message }
+  finally { rdsResetPwdModal.loading = false }
 }
 
 // ─── Glue Job Config Modal ─────────────────────────────────────────────────────

@@ -400,7 +400,7 @@ const AWS_SIDEBAR = {
   containers:  [{ id: 'ecs', label: 'ECS' }, { id: 'eks', label: 'EKS' }, { id: 'ecr', label: 'ECR' }],
   networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }, { id: 'cloudfront', label: 'CloudFront' }, { id: 'route53', label: 'Route 53' }],
   storage:     [{ id: 's3', label: 'S3' }],
-  database:    [{ id: 'dynamodb', label: 'DynamoDB' }, { id: 'docdb', label: 'DocumentDB' }],
+  database:    [{ id: 'dynamodb', label: 'DynamoDB' }, { id: 'rds', label: 'RDS' }],
   analytics:   [{ id: 'glue', label: 'Glue' }, { id: 'athena', label: 'Athena' }, { id: 'datapipeline', label: 'Data Pipeline' }],
   integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }, { id: 'lex', label: 'Amazon Lex' }],
   ai:          [{ id: 'bedrock', label: 'Bedrock' }, { id: 'agentcorecfn', label: 'AgentCore CFN' }],

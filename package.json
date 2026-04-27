@@ -46,6 +46,7 @@
     "@aws-sdk/client-lambda": "^3.1032.0",
     "@aws-sdk/client-lex-models-v2": "^3.1036.0",
     "@aws-sdk/client-lex-runtime-v2": "^3.1036.0",
+    "@aws-sdk/client-rds": "^3.1037.0",
     "@aws-sdk/client-route-53": "^3.1033.0",
     "@aws-sdk/client-s3": "^3.1032.0",
     "@aws-sdk/client-secrets-manager": "^3.1033.0",

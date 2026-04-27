@@ -27,6 +27,7 @@
  *   GET  /bedrock                           → list Bedrock foundation models
  *   GET  /lex                               → list Amazon Lex V2 bots
  *   GET  /cloudformation/stacks             → list CloudFormation stacks
+ *   GET  /rds                               → list RDS instances
  *   GET  /logs/lambda/:name                 → CloudWatch logs for a Lambda function
  *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
@@ -2312,6 +2313,203 @@ router.get('/glue/logs/:name', async (req, res) => {
       logGroup: logGroupName,
       events: (resp.events || []).map(e => ({ timestamp: e.timestamp, message: e.message })),
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AMAZON RDS ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /rds  → list RDS instances
+router.get('/rds', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { RDSClient, DescribeDBInstancesCommand } = require('@aws-sdk/client-rds');
+    const client = new RDSClient(cfg);
+
+    const instances = [];
+    let marker;
+    do {
+      const resp = await client.send(new DescribeDBInstancesCommand({ Marker: marker }));
+      instances.push(...(resp.DBInstances || []));
+      marker = resp.Marker;
+    } while (marker);
+
+    res.json(instances.map(db => ({
+      id:            db.DBInstanceIdentifier,
+      arn:           db.DBInstanceArn,
+      masterUsername: db.MasterUsername,
+      dbName:        db.DBName || null,
+      engine:        db.Engine,
+      engineVersion: db.EngineVersion,
+      class:         db.DBInstanceClass,
+      status:        db.DBInstanceStatus,
+      endpoint:      db.Endpoint?.Address || null,
+      port:          db.Endpoint?.Port || null,
+      az:            db.AvailabilityZone,
+      multiAZ:       db.MultiAZ,
+      public:        db.PubliclyAccessible,
+      storageGb:     db.AllocatedStorage,
+      createdAt:     db.InstanceCreateTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /rds/:id/config  → full instance details
+router.get('/rds/:id/config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { RDSClient, DescribeDBInstancesCommand, ListTagsForResourceCommand } = require('@aws-sdk/client-rds');
+    const client = new RDSClient(cfg);
+    const resp = await client.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: req.params.id }));
+    const db = resp.DBInstances?.[0];
+    if (!db) return res.status(404).json({ error: 'RDS instance not found' });
+
+    let tags = [];
+    if (db.DBInstanceArn) {
+      try {
+        const tagsResp = await client.send(new ListTagsForResourceCommand({ ResourceName: db.DBInstanceArn }));
+        tags = (tagsResp.TagList || []).map(t => ({ key: t.Key, value: t.Value }));
+      } catch {
+        tags = [];
+      }
+    }
+
+    res.json({
+      id:                 db.DBInstanceIdentifier,
+      arn:                db.DBInstanceArn,
+      engine:             db.Engine,
+      engineVersion:      db.EngineVersion,
+      status:             db.DBInstanceStatus,
+      class:              db.DBInstanceClass,
+      endpoint:           db.Endpoint?.Address || null,
+      port:               db.Endpoint?.Port || null,
+      dbName:             db.DBName || null,
+      masterUsername:     db.MasterUsername || null,
+      storageGb:          db.AllocatedStorage,
+      storageType:        db.StorageType,
+      multiAZ:            db.MultiAZ,
+      public:             db.PubliclyAccessible,
+      az:                 db.AvailabilityZone,
+      backupRetention:    db.BackupRetentionPeriod,
+      preferredBackupWindow: db.PreferredBackupWindow,
+      preferredMaintenanceWindow: db.PreferredMaintenanceWindow,
+      deletionProtection: db.DeletionProtection,
+      kmsKeyId:           db.KmsKeyId || null,
+      createdAt:          db.InstanceCreateTime,
+      vpcSecurityGroups:  (db.VpcSecurityGroups || []).map(sg => ({ id: sg.VpcSecurityGroupId, status: sg.Status })),
+      subnetGroup:        db.DBSubnetGroup?.DBSubnetGroupName || null,
+      parameterGroups:    (db.DBParameterGroups || []).map(pg => ({ name: pg.DBParameterGroupName, status: pg.ParameterApplyStatus })),
+      optionGroups:       (db.OptionGroupMemberships || []).map(og => ({ name: og.OptionGroupName, status: og.Status })),
+      storageEncrypted:   !!db.StorageEncrypted,
+      autoMinorVersionUpgrade: !!db.AutoMinorVersionUpgrade,
+      iamDatabaseAuthenticationEnabled: !!db.IAMDatabaseAuthenticationEnabled,
+      networkType:        db.NetworkType || null,
+      caCertificateIdentifier: db.CACertificateIdentifier || null,
+      maxAllocatedStorage: db.MaxAllocatedStorage ?? null,
+      monitoringInterval: db.MonitoringInterval ?? null,
+      monitoringRoleArn:  db.MonitoringRoleArn || null,
+      performanceInsightsEnabled: !!db.PerformanceInsightsEnabled,
+      performanceInsightsRetentionPeriod: db.PerformanceInsightsRetentionPeriod ?? null,
+      enabledCloudwatchLogsExports: db.EnabledCloudwatchLogsExports || [],
+      copyTagsToSnapshot: !!db.CopyTagsToSnapshot,
+      latestRestorableTime: db.LatestRestorableTime || null,
+      backupTarget:       db.BackupTarget || null,
+      readReplicaSourceDBInstanceIdentifier: db.ReadReplicaSourceDBInstanceIdentifier || null,
+      readReplicaDBInstanceIdentifiers: db.ReadReplicaDBInstanceIdentifiers || [],
+      readReplicaDBClusterIdentifiers: db.ReadReplicaDBClusterIdentifiers || [],
+      replicaMode:        db.ReplicaMode || null,
+      tags,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /rds/:id/connection-strings  → build connection templates by engine
+router.get('/rds/:id/connection-strings', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { RDSClient, DescribeDBInstancesCommand } = require('@aws-sdk/client-rds');
+    const client = new RDSClient(cfg);
+    const resp = await client.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: req.params.id }));
+    const db = resp.DBInstances?.[0];
+    if (!db) return res.status(404).json({ error: 'RDS instance not found' });
+
+    const engine = (db.Engine || '').toLowerCase();
+    const host = db.Endpoint?.Address;
+    const port = db.Endpoint?.Port;
+    const user = db.MasterUsername || '<USER>';
+    const dbName = db.DBName || '<DB_NAME>';
+    if (!host || !port) return res.status(400).json({ error: 'RDS endpoint is not available yet' });
+
+    const templates = {
+      psql: null,
+      mysql: null,
+      sqlcmd: null,
+      jdbc: null,
+      notes: [
+        'Reemplaza <PASSWORD> por la contraseña del usuario master.',
+        'Asegura acceso de red (Security Group, NACL, ruta/VPN) antes de conectar.',
+      ],
+    };
+
+    if (engine.startsWith('postgres')) {
+      templates.psql = `psql "host=${host} port=${port} dbname=${dbName} user=${user} password=<PASSWORD> sslmode=require"`;
+      templates.jdbc = `jdbc:postgresql://${host}:${port}/${dbName}?sslmode=require`;
+    } else if (engine.includes('mysql') || engine.includes('mariadb')) {
+      templates.mysql = `mysql -h ${host} -P ${port} -u ${user} -p${'<PASSWORD>'} ${dbName}`;
+      templates.jdbc = `jdbc:mysql://${host}:${port}/${dbName}?sslMode=REQUIRED`;
+    } else if (engine.startsWith('sqlserver')) {
+      templates.sqlcmd = `sqlcmd -S ${host},${port} -U ${user} -P "<PASSWORD>" -d ${dbName} -N`;
+      templates.jdbc = `jdbc:sqlserver://${host}:${port};databaseName=${dbName};encrypt=true;trustServerCertificate=false;`;
+    } else {
+      templates.jdbc = `jdbc:${engine}://${host}:${port}/${dbName}`;
+      templates.notes.push(`Motor detectado: ${db.Engine}. Usa el cliente nativo correspondiente.`);
+    }
+
+    res.json({
+      id: db.DBInstanceIdentifier,
+      engine: db.Engine,
+      host,
+      port,
+      masterUsername: user,
+      dbName,
+      templates,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /rds/:id/reset-password  → reset master user password
+router.post('/rds/:id/reset-password', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { newPassword } = req.body || {};
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { RDSClient, ModifyDBInstanceCommand } = require('@aws-sdk/client-rds');
+    const client = new RDSClient(cfg);
+    await client.send(new ModifyDBInstanceCommand({
+      DBInstanceIdentifier: req.params.id,
+      MasterUserPassword: newPassword,
+      ApplyImmediately: true,
+    }));
+
+    auditLog.log({
+      category: 'aws',
+      action: 'RDS password reset',
+      resource: req.params.id,
+      level: 'critical',
+      context: profileId,
+    });
+    res.json({ ok: true, message: `Password reset initiated for RDS instance ${req.params.id}.` });
   } catch (err) { handleErr(res, err); }
 });
 
