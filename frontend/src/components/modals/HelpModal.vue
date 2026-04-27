@@ -36,6 +36,9 @@
             <div class="update-card-body">
               <div class="update-card-title">{{ t('help.updateReady', { v: newVersion }) }}</div>
               <div class="update-card-sub">{{ t('help.updateReadySub') }}</div>
+              <ul v-if="latestReleaseHighlights.length" class="update-card-list">
+                <li v-for="(line, idx) in latestReleaseHighlights" :key="`ready-${idx}`">{{ line }}</li>
+              </ul>
             </div>
             <button class="btn primary sm" @click="installUpdate">
               <i data-lucide="refresh-cw"></i> {{ t('help.restartUpdate') }}
@@ -53,6 +56,9 @@
             <div class="update-card-body">
               <div class="update-card-title">{{ t('help.updatePending', { v: newVersion }) }}</div>
               <div class="update-card-sub">{{ t('help.updatePendingSub') }}</div>
+              <ul v-if="latestReleaseHighlights.length" class="update-card-list">
+                <li v-for="(line, idx) in latestReleaseHighlights" :key="`pending-${idx}`">{{ line }}</li>
+              </ul>
             </div>
           </div>
 
@@ -335,6 +341,7 @@ function installUpdate() {
 }
 
 const VERSION = window.kuaElectron?.getVersion?.() || CHANGELOG_VERSION
+const latestReleaseHighlights = computed(() => (CHANGELOG[0]?.items || []).slice(0, 4).map(i => i.text))
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
@@ -471,6 +478,16 @@ function open(url) {
 .update-card-body { flex: 1; }
 .update-card-title { font-weight: 600; color: var(--text); }
 .update-card-sub   { color: var(--text-dim); margin-top: 2px; }
+.update-card-list {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .update-card .btn  { flex-shrink: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .update-card .btn i, .update-card .btn svg { width: 11px; height: 11px; }
 
