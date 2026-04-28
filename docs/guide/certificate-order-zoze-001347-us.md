@@ -55,16 +55,7 @@ The software is distributed for technical and operational use in development, te
 
 This document describes technical product characteristics for documentary support purposes and does not replace certificates issued by regulatory authorities or accredited certification bodies.
 
-## 7. Recommended evidence to attach to certification
 
-It is recommended to include the following with this document:
+## 7. Technical contact
 
-1. Official repository URL and license information.
-2. Exact evaluated version (tag or release).
-3. Installation artifact checksums.
-4. Binary signing/notarization evidence.
-5. Changelog for the evaluated version.
-
-## 8. Technical contact
-
-For additional technical validation, architecture review, or supporting evidence, use the project's official repository and its maintenance/support channels.
+For additional technical validation, architecture review, or supporting evidence, use the project's official repository and its maintenance/support channels or contact lnavarro.carter@gmail.com.

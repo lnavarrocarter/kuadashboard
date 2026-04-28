@@ -55,16 +55,7 @@ El software se distribuye para uso tecnico y operativo en entornos de desarrollo
 
 Este documento describe las caracteristicas tecnicas del producto para fines de soporte documental y no reemplaza certificados emitidos por autoridades regulatorias o entidades de certificacion acreditadas.
 
-## 7. Evidencia recomendada para anexar a la certificacion
 
-Se recomienda adjuntar, junto con este documento:
+## 7. Contacto tecnico
 
-1. URL del repositorio oficial y licencia.
-2. Version exacta evaluada (tag o release).
-3. Checksums de artefactos de instalacion.
-4. Evidencia de firma/notarizacion de binarios.
-5. Registro de cambios (changelog) de la version evaluada.
-
-## 8. Contacto tecnico
-
-Para validaciones tecnicas adicionales, revisiones de arquitectura o evidencia complementaria, utilizar el repositorio oficial del proyecto y sus canales de soporte/mantenimiento.
+Para validaciones tecnicas adicionales, revisiones de arquitectura o evidencia complementaria, utilizar el repositorio oficial del proyecto y sus canales de soporte/mantenimiento o contactar a lnavarro.carter@gmail.com
