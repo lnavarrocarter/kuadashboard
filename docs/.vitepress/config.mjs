@@ -27,6 +27,7 @@ const enSidebar = {
     { text: 'Code Signing & Trust', link: '/guide/code-signing' },
     { text: 'Electron Desktop App', link: '/guide/electron' },
     { text: 'Configuration', link: '/guide/configuration' },
+    { text: 'Certification ZoZE/001347/US', link: '/guide/certificate-order-zoze-001347-us' },
   ]}],
   '/features/': [{ text: 'Features', items: [
     { text: 'Overview', link: '/features/' },
@@ -51,6 +52,7 @@ const esSidebar = {
     { text: 'Firma y Confianza', link: '/es/guide/code-signing' },
     { text: 'App Electron', link: '/es/guide/electron' },
     { text: 'Configuración', link: '/es/guide/configuration' },
+    { text: 'Certificacion ZoZE/001347/US', link: '/es/guide/certificate-order-zoze-001347-us' },
   ]}],
   '/es/features/': [{ text: 'Funcionalidades', items: [
     { text: 'Resumen', link: '/es/features/' },
