@@ -1,6 +1,6 @@
 <template>
   <BaseModal :show="show" :wide="true" @close="$emit('close')">
-    <template #title><i data-lucide="info"></i> KUA — Know Unified Administration · v{{ VERSION }}</template>
+    <template #title><i data-lucide="info"></i> KUA - Know Unified Administration v{{ VERSION }}</template>
 
     <div class="help-layout">
 
@@ -25,7 +25,7 @@
               <path fill="#0e9de8" d="M7,5 L12,5 L12,13.5 L25,5 L28.5,5 L15.5,16.5 L28.5,27 L25,27 L12,18.5 L12,27 L7,27 Z"/>
             </svg>
             <div>
-              <div class="about-title">KUA <span style="font-weight:400;font-size:13px;color:var(--text-dim)">— Know Unified Administration</span></div>
+              <div class="about-title">KUA <span style="font-weight:400;font-size:13px;color:var(--text-dim)">- Know Unified Administration</span></div>
               <div class="about-subtitle">{{ t('help.subtitle', { v: VERSION }) }}</div>
             </div>
           </div>
