@@ -169,6 +169,11 @@ cd frontend && npm test
 
 ## Changelog
 
+### v1.6.2 (2026-04-29)
+- **AWS EC2 Info** — botones de copia ⧉ en campos clave: Instance ID, AMI, IP Pública/Privada, DNS Público/Privado, Key Pair y Perfil IAM
+- **AWS Lambda Info** — botones de copia ⧉ en campos clave: ARN, SHA256, VPC ID, DLQ ARN y KMS Key ARN
+- **UX** — el botón aparece al hacer hover y confirma visualmente con ✓ por 1.5 s; usa Clipboard API nativa sin dependencias externas
+
 ### v1.6.1 (2026-04-24)
 - **HelpModal** — fix encoding mojibake en títulos y comentarios del componente (caracteres UTF-8 corruptos por doble codificación CP850)
 - **Helm** — contextos con nombre ARN de EKS (`arn:aws:eks:...`) ya se resuelven correctamente; `KUBECONFIG` completo (incluyendo `kuadashboard_merged.yaml`) se inyecta al invocar el CLI de helm

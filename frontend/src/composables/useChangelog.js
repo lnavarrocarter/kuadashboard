@@ -4,9 +4,18 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.6.1'
+export const CHANGELOG_VERSION = '1.6.2'
 
 export const CHANGELOG = [
+  {
+    version: '1.6.2',
+    date: 'Abril 2026',
+    items: [
+      { type: 'new',    text: 'AWS EC2 Info — botones de copia ⧉ en campos clave: Instance ID, AMI, IP Pública/Privada, DNS Público/Privado, Key Pair y Perfil IAM' },
+      { type: 'new',    text: 'AWS Lambda Info — botones de copia ⧉ en campos clave: ARN, SHA256, VPC ID, DLQ ARN y KMS Key ARN' },
+      { type: 'better', text: 'UX — el botón de copia aparece al hacer hover y confirma visualmente con ✓ durante 1.5 s; sin dependencias externas (Clipboard API nativa)' },
+    ],
+  },
   {
     version: '1.6.1',
     date: 'Abril 2026',

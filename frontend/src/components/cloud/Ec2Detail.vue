@@ -45,7 +45,7 @@
                 <div class="ec2d-card">
                   <div class="ec2d-card-title">Instancia</div>
                   <dl>
-                    <dt>ID</dt>             <dd class="mono">{{ data.details.id }}</dd>
+                    <dt>ID</dt>             <dd class="mono copyable">{{ data.details.id }}<button class="copy-btn" @click.stop="copyField(data.details.id,'id')" :title="copiedKey==='id'?'¡Copiado!':'Copiar'">{{ copiedKey==='id' ? '✓' : '⧉' }}</button></dd>
                     <dt>Nombre</dt>         <dd>{{ data.details.name }}</dd>
                     <dt>Tipo</dt>           <dd class="mono">{{ data.details.type }}</dd>
                     <dt>Estado</dt>
@@ -61,7 +61,7 @@
                 <div class="ec2d-card">
                   <div class="ec2d-card-title">Imagen y Plataforma</div>
                   <dl>
-                    <dt>AMI</dt>            <dd class="mono">{{ data.details.ami }}</dd>
+                    <dt>AMI</dt>            <dd class="mono copyable">{{ data.details.ami }}<button class="copy-btn" @click.stop="copyField(data.details.ami,'ami')" :title="copiedKey==='ami'?'¡Copiado!':'Copiar'">{{ copiedKey==='ami' ? '✓' : '⧉' }}</button></dd>
                     <dt>Plataforma</dt>     <dd>{{ data.details.platform }}</dd>
                     <dt>Arquitectura</dt>   <dd class="mono">{{ data.details.architecture }}</dd>
                     <dt>Virtualización</dt> <dd>{{ data.details.virtualizationType }}</dd>
@@ -73,18 +73,18 @@
                 <div class="ec2d-card">
                   <div class="ec2d-card-title">Red y DNS</div>
                   <dl>
-                    <dt>IP Pública</dt>     <dd class="mono">{{ data.details.publicIp || '—' }}</dd>
-                    <dt>IP Privada</dt>     <dd class="mono">{{ data.details.privateIp || '—' }}</dd>
-                    <dt>DNS Público</dt>    <dd class="mono wrap">{{ data.details.publicDns || '—' }}</dd>
-                    <dt>DNS Privado</dt>    <dd class="mono wrap">{{ data.details.privateDns || '—' }}</dd>
+                    <dt>IP Pública</dt>     <dd class="mono copyable">{{ data.details.publicIp || '—' }}<button v-if="data.details.publicIp" class="copy-btn" @click.stop="copyField(data.details.publicIp,'pubip')" :title="copiedKey==='pubip'?'¡Copiado!':'Copiar'">{{ copiedKey==='pubip' ? '✓' : '⧉' }}</button></dd>
+                    <dt>IP Privada</dt>     <dd class="mono copyable">{{ data.details.privateIp || '—' }}<button v-if="data.details.privateIp" class="copy-btn" @click.stop="copyField(data.details.privateIp,'privip')" :title="copiedKey==='privip'?'¡Copiado!':'Copiar'">{{ copiedKey==='privip' ? '✓' : '⧉' }}</button></dd>
+                    <dt>DNS Público</dt>    <dd class="mono wrap copyable">{{ data.details.publicDns || '—' }}<button v-if="data.details.publicDns" class="copy-btn" @click.stop="copyField(data.details.publicDns,'pubdns')" :title="copiedKey==='pubdns'?'¡Copiado!':'Copiar'">{{ copiedKey==='pubdns' ? '✓' : '⧉' }}</button></dd>
+                    <dt>DNS Privado</dt>    <dd class="mono wrap copyable">{{ data.details.privateDns || '—' }}<button v-if="data.details.privateDns" class="copy-btn" @click.stop="copyField(data.details.privateDns,'privdns')" :title="copiedKey==='privdns'?'¡Copiado!':'Copiar'">{{ copiedKey==='privdns' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="ec2d-card">
                   <div class="ec2d-card-title">IAM y acceso</div>
                   <dl>
-                    <dt>Key Pair</dt>       <dd class="mono">{{ data.details.keyPair || '—' }}</dd>
-                    <dt>Perfil IAM</dt>     <dd class="mono wrap">{{ data.details.iamProfile || '—' }}</dd>
+                    <dt>Key Pair</dt>       <dd class="mono copyable">{{ data.details.keyPair || '—' }}<button v-if="data.details.keyPair" class="copy-btn" @click.stop="copyField(data.details.keyPair,'keypair')" :title="copiedKey==='keypair'?'¡Copiado!':'Copiar'">{{ copiedKey==='keypair' ? '✓' : '⧉' }}</button></dd>
+                    <dt>Perfil IAM</dt>     <dd class="mono wrap copyable">{{ data.details.iamProfile || '—' }}<button v-if="data.details.iamProfile" class="copy-btn" @click.stop="copyField(data.details.iamProfile,'iam')" :title="copiedKey==='iam'?'¡Copiado!':'Copiar'">{{ copiedKey==='iam' ? '✓' : '⧉' }}</button></dd>
                     <dt>EBS Optimizado</dt> <dd>{{ data.details.ebsOptimized ? 'Sí' : 'No' }}</dd>
                     <dt>ENA</dt>            <dd>{{ data.details.enaSupport ? 'Habilitado' : 'Deshabilitado' }}</dd>
                     <dt>Monitoreo CW</dt>   <dd>{{ data.details.monitoring || '—' }}</dd>
@@ -417,6 +417,15 @@ const hasAnyMetric = computed(() => {
   if (!m) return false
   return Object.values(m).some(pts => pts.length > 0)
 })
+
+// ── Copy helpers ─────────────────────────────────────────────────────────────
+const copiedKey = ref(null)
+function copyField(val, key) {
+  if (!val || val === '—') return
+  navigator.clipboard?.writeText(String(val)).catch(() => {})
+  copiedKey.value = key
+  setTimeout(() => { if (copiedKey.value === key) copiedKey.value = null }, 1500)
+}
 </script>
 
 <style scoped>
@@ -625,4 +634,18 @@ dd.wrap { word-break: break-all; }
 .btn { background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.4); color: #58a6ff; border-radius: 6px; padding: 4px 12px; font-size: .82rem; cursor: pointer; transition: all .15s; }
 .btn:hover { background: rgba(88,166,255,.25); }
 .btn.sm { padding: 3px 10px; font-size: .78rem; }
+
+/* Copy buttons */
+.copyable { display: inline-flex; align-items: flex-start; gap: 4px; width: 100%; min-width: 0; }
+.copyable span { flex: 1; min-width: 0; word-break: break-word; }
+.copy-btn {
+  background: none; border: none;
+  color: #8b949e; cursor: pointer;
+  font-size: .72rem; padding: 1px 3px;
+  border-radius: 3px; opacity: 0;
+  transition: opacity .15s, color .15s;
+  flex-shrink: 0; line-height: 1.5;
+}
+.copyable:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: #58a6ff; background: rgba(88,166,255,.12); }
 </style>

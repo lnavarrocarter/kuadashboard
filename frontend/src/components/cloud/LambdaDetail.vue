@@ -46,7 +46,7 @@
                   <dl>
                     <dt>Nombre</dt>       <dd>{{ data.basic.name }}</dd>
                     <dt>Descripción</dt>  <dd>{{ data.basic.description || '—' }}</dd>
-                    <dt>ARN</dt>          <dd class="mono wrap">{{ data.basic.arn }}</dd>
+                    <dt>ARN</dt>          <dd class="mono wrap copyable">{{ data.basic.arn }}<button class="copy-btn" @click.stop="copyField(data.basic.arn,'arn')" :title="copiedKey==='arn'?'¡Copiado!':'Copiar'">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
                     <dt>Estado</dt>
                     <dd>
                       <span :class="['lmd-state', data.basic.state]">{{ data.basic.state }}</span>
@@ -77,7 +77,7 @@
                     <dt>Timeout</dt>      <dd>{{ data.basic.timeout }} s</dd>
                     <dt>Efímero /tmp</dt> <dd>{{ data.basic.ephemeralStorage }} MB</dd>
                     <dt>Código</dt>       <dd>{{ fmtBytes(data.basic.codeSize) }}</dd>
-                    <dt>SHA256</dt>       <dd class="mono wrap" style="font-size:.72rem">{{ data.basic.codeHash }}</dd>
+                    <dt>SHA256</dt>       <dd class="mono wrap copyable" style="font-size:.72rem">{{ data.basic.codeHash }}<button class="copy-btn" @click.stop="copyField(data.basic.codeHash,'hash')" :title="copiedKey==='hash'?'¡Copiado!':'Copiar'">{{ copiedKey==='hash' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
@@ -138,7 +138,7 @@
                 <div class="lmd-card-title">VPC</div>
                 <template v-if="data.config.vpc">
                   <dl>
-                    <dt>VPC</dt>     <dd class="mono">{{ data.config.vpc.vpcId }}</dd>
+                    <dt>VPC</dt>     <dd class="mono copyable">{{ data.config.vpc.vpcId }}<button class="copy-btn" @click.stop="copyField(data.config.vpc.vpcId,'vpcid')" :title="copiedKey==='vpcid'?'¡Copiado!':'Copiar'">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
                     <dt>Subnets</dt> <dd>
                       <span v-for="s in data.config.vpc.subnetIds" :key="s" class="lmd-chip">{{ s }}</span>
                     </dd>
@@ -155,10 +155,10 @@
                 <div class="lmd-card-title">Otras opciones</div>
                 <dl>
                   <dt>Tracing (X-Ray)</dt>     <dd>{{ data.config.tracing || '—' }}</dd>
-                  <dt>DLQ (cola de errores)</dt><dd class="mono wrap">{{ data.config.dlq || '—' }}</dd>
+                  <dt>DLQ (cola de errores)</dt><dd class="mono wrap copyable">{{ data.config.dlq || '—' }}<button v-if="data.config.dlq" class="copy-btn" @click.stop="copyField(data.config.dlq,'dlq')" :title="copiedKey==='dlq'?'¡Copiado!':'Copiar'">{{ copiedKey==='dlq' ? '✓' : '⧉' }}</button></dd>
                   <dt>Concurrencia reservada</dt>
                   <dd>{{ data.config.reservedConcurrency !== null ? data.config.reservedConcurrency : 'Sin límite' }}</dd>
-                  <dt>KMS Key</dt>             <dd class="mono wrap">{{ data.config.kmsKeyArn || '—' }}</dd>
+                  <dt>KMS Key</dt>             <dd class="mono wrap copyable">{{ data.config.kmsKeyArn || '—' }}<button v-if="data.config.kmsKeyArn" class="copy-btn" @click.stop="copyField(data.config.kmsKeyArn,'kms')" :title="copiedKey==='kms'?'¡Copiado!':'Copiar'">{{ copiedKey==='kms' ? '✓' : '⧉' }}</button></dd>
                 </dl>
               </div>
 
@@ -625,6 +625,15 @@ const hasAnyMetric = computed(() => {
   if (!m) return false
   return Object.values(m).some(pts => pts.length > 0)
 })
+
+// ── Copy helpers ─────────────────────────────────────────────────────────────
+const copiedKey = ref(null)
+function copyField(val, key) {
+  if (!val || val === '—') return
+  navigator.clipboard?.writeText(String(val)).catch(() => {})
+  copiedKey.value = key
+  setTimeout(() => { if (copiedKey.value === key) copiedKey.value = null }, 1500)
+}
 </script>
 
 <style scoped>
@@ -931,4 +940,18 @@ dd.wrap { word-break: break-all; }
 .lmd-log-ts     { color: #8b949e; white-space: nowrap; flex-shrink: 0; }
 .lmd-log-stream { color: #a371f7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lmd-log-msg    { color: #e6edf3; white-space: pre-wrap; word-break: break-word; }
+
+/* Copy buttons */
+.copyable { display: inline-flex; align-items: flex-start; gap: 4px; width: 100%; min-width: 0; }
+.copyable span { flex: 1; min-width: 0; word-break: break-word; }
+.copy-btn {
+  background: none; border: none;
+  color: #8b949e; cursor: pointer;
+  font-size: .72rem; padding: 1px 3px;
+  border-radius: 3px; opacity: 0;
+  transition: opacity .15s, color .15s;
+  flex-shrink: 0; line-height: 1.5;
+}
+.copyable:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: #f0a500; background: rgba(240,165,0,.12); }
 </style>
