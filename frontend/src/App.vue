@@ -230,6 +230,18 @@
                :class="['sidebar-item', { active: vercelTab === r.id }]"
                @click.prevent="vercelTab = r.id">{{ r.label }}</a>
           </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.advanced') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.account') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
         </nav>
 
         <!-- GCP sidebar -->
@@ -455,9 +467,11 @@ const AWS_SIDEBAR = {
 }
 
 const VERCEL_SIDEBAR = {
-  projects:    [{ id: 'projects',  label: 'Projects' }],
-  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Functions' }],
-  config:      [{ id: 'domains',   label: 'Domains' }, { id: 'env-vars', label: 'Environment Variables' }],
+  projects:    [{ id: 'projects',    label: 'Projects' }],
+  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Functions' }, { id: 'checks', label: 'Checks' }],
+  config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records' }, { id: 'env-vars', label: 'Env Variables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs' }],
+  advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
+  account:     [{ id: 'activity',    label: 'Activity' }],
 }
 
 const GCP_SIDEBAR = {

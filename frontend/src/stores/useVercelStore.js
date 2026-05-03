@@ -22,6 +22,15 @@ export const useVercelStore = defineStore('vercel', () => {
   const envVars         = ref([])
   const functions       = ref([])
   const checks          = ref([])
+  const events          = ref([])
+  const aliases         = ref([])
+  const webhooks        = ref([])
+  const edgeConfigs     = ref([])
+  const edgeConfigItems = ref([])
+  const dnsRecords      = ref([])
+  const cronJobs        = ref([])
+  const selectedDomain      = ref(null)
+  const selectedEdgeConfig  = ref(null)
   const loading         = ref(false)
   const error           = ref(null)
 
@@ -46,6 +55,15 @@ export const useVercelStore = defineStore('vercel', () => {
     envVars.value         = []
     functions.value       = []
     checks.value          = []
+    events.value          = []
+    aliases.value         = []
+    webhooks.value        = []
+    edgeConfigs.value     = []
+    edgeConfigItems.value = []
+    dnsRecords.value      = []
+    cronJobs.value        = []
+    selectedDomain.value      = null
+    selectedEdgeConfig.value  = null
     error.value           = null
   }
 
@@ -56,6 +74,9 @@ export const useVercelStore = defineStore('vercel', () => {
     envVars.value         = []
     functions.value       = []
     checks.value          = []
+    dnsRecords.value      = []
+    cronJobs.value        = []
+    selectedDomain.value  = null
     error.value           = null
   }
 
@@ -158,6 +179,78 @@ export const useVercelStore = defineStore('vercel', () => {
     } catch (e) { setError(e); return null }
   }
 
+  // ─── New feature actions ──────────────────────────────────────────────────────
+
+  async function fetchEvents(limit = 50) {
+    loading.value = true; error.value = null
+    try {
+      events.value = await apiFetch(
+        `/api/cloud/vercel/events?limit=${limit}`,
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchAliases(limit = 50) {
+    loading.value = true; error.value = null
+    try {
+      aliases.value = await apiFetch(
+        `/api/cloud/vercel/aliases?limit=${limit}`,
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchWebhooks() {
+    loading.value = true; error.value = null
+    try {
+      webhooks.value = await apiFetch(
+        '/api/cloud/vercel/webhooks',
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchEdgeConfigs() {
+    loading.value = true; error.value = null
+    try {
+      edgeConfigs.value = await apiFetch(
+        '/api/cloud/vercel/edge-config',
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchEdgeConfigItems(id) {
+    loading.value = true; error.value = null
+    try {
+      edgeConfigItems.value = await apiFetch(
+        `/api/cloud/vercel/edge-config/${encodeURIComponent(id)}/items`,
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchDnsRecords(domain) {
+    loading.value = true; error.value = null
+    try {
+      dnsRecords.value = await apiFetch(
+        `/api/cloud/vercel/domains/${encodeURIComponent(domain)}/dns`,
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchCronJobs(projectId) {
+    loading.value = true; error.value = null
+    try {
+      cronJobs.value = await apiFetch(
+        `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/cron`,
+        { headers: headers() }
+      )
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
   return {
     // state
     activeProfileId,
@@ -169,6 +262,15 @@ export const useVercelStore = defineStore('vercel', () => {
     envVars,
     functions,
     checks,
+    events,
+    aliases,
+    webhooks,
+    edgeConfigs,
+    edgeConfigItems,
+    dnsRecords,
+    cronJobs,
+    selectedDomain,
+    selectedEdgeConfig,
     loading,
     error,
     // actions
@@ -184,5 +286,12 @@ export const useVercelStore = defineStore('vercel', () => {
     redeployDeployment,
     promoteDeployment,
     cancelDeployment,
+    fetchEvents,
+    fetchAliases,
+    fetchWebhooks,
+    fetchEdgeConfigs,
+    fetchEdgeConfigItems,
+    fetchDnsRecords,
+    fetchCronJobs,
   }
 })

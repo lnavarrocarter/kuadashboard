@@ -25,6 +25,15 @@
  *   PATCH /deployments/:deploymentId/cancel            → cancel an in-progress deployment
  *   GET  /deployments/:deploymentId/logs               → SSE stream of deployment build logs
  *
+ * Additional endpoints:
+ *   GET  /events                                        → account/team activity feed
+ *   GET  /aliases                                       → list all aliases
+ *   GET  /webhooks                                      → list webhooks
+ *   GET  /edge-config                                   → list edge config stores
+ *   GET  /edge-config/:id/items                         → list items in an edge config store
+ *   GET  /domains/:domain/dns                           → list DNS records for a domain
+ *   GET  /projects/:projectId/cron                      → list cron jobs for a project
+ *
  * OAuth endpoints (requires VERCEL_OAUTH_CLIENT_ID + VERCEL_OAUTH_CLIENT_SECRET in process.env):
  *   GET  /oauth/start                                  → redirect to Vercel authorization URL
  *   GET  /oauth/callback                               → exchange code for token, save to vault
@@ -408,6 +417,155 @@ router.get('/deployments/:deploymentId/logs', async (req, res) => {
     req.on('close', () => {
       try { nodeStream.destroy?.(); } catch (_) {}
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /events ─────────────────────────────────────────────────────────────
+
+router.get('/events', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    let qs = withTeam(`/v5/events?limit=${limit}`, teamId);
+    const data = await vercelFetch(qs, token);
+    const events = Array.isArray(data) ? data : (data.events || []);
+    res.json(events.map(e => ({
+      id:         e.id,
+      type:       e.type,
+      createdAt:  e.createdAt,
+      user:       e.user   ? { name: e.user.name, email: e.user.email, username: e.user.username } : null,
+      payload:    e.payload || {},
+      text:       e.text || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /aliases ─────────────────────────────────────────────────────────────
+
+router.get('/aliases', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    let qs = withTeam(`/v4/aliases?limit=${limit}`, teamId);
+    const data = await vercelFetch(qs, token);
+    res.json((data.aliases || []).map(a => ({
+      uid:        a.uid,
+      alias:      a.alias,
+      deployment: a.deployment ? { id: a.deployment.id, url: a.deployment.url, meta: a.deployment.meta } : null,
+      projectId:  a.projectId,
+      createdAt:  a.createdAt,
+      updatedAt:  a.updatedAt,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /webhooks ────────────────────────────────────────────────────────────
+
+router.get('/webhooks', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    let qs = withTeam('/v1/webhooks', teamId);
+    const data = await vercelFetch(qs, token);
+    const list = Array.isArray(data) ? data : (data.webhooks || []);
+    res.json(list.map(w => ({
+      id:        w.id,
+      url:       w.url,
+      events:    w.events || [],
+      projectIds: w.projectIds || [],
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /edge-config ─────────────────────────────────────────────────────────
+
+router.get('/edge-config', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    let qs = withTeam('/v1/edge-config', teamId);
+    const data = await vercelFetch(qs, token);
+    const list = Array.isArray(data) ? data : (data.edgeConfigs || []);
+    res.json(list.map(e => ({
+      id:        e.id,
+      slug:      e.slug,
+      digest:    e.digest,
+      itemCount: e.itemCount ?? null,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /edge-config/:id/items ───────────────────────────────────────────────
+
+router.get('/edge-config/:id/items', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const { id } = req.params;
+    let qs = withTeam(`/v1/edge-config/${encodeURIComponent(id)}/items`, teamId);
+    const data = await vercelFetch(qs, token);
+    const items = Array.isArray(data) ? data : (data.items || []);
+    res.json(items.map(i => ({
+      key:         i.key,
+      value:       i.value,
+      edgeConfigId: i.edgeConfigId,
+      createdAt:   i.createdAt,
+      updatedAt:   i.updatedAt,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /domains/:domain/dns ─────────────────────────────────────────────────
+
+router.get('/domains/:domain/dns', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const { domain } = req.params;
+    let qs = withTeam(`/v4/domains/${encodeURIComponent(domain)}/records`, teamId);
+    const data = await vercelFetch(qs, token);
+    res.json((data.records || []).map(r => ({
+      id:       r.id,
+      type:     r.type,
+      name:     r.name,
+      value:    r.value,
+      ttl:      r.ttl,
+      mxPriority: r.mxPriority,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /projects/:projectId/cron ────────────────────────────────────────────
+
+router.get('/projects/:projectId/cron', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const { projectId } = req.params;
+    let qs = withTeam(`/v1/projects/${encodeURIComponent(projectId)}/cron`, teamId);
+    const data = await vercelFetch(qs, token);
+    const jobs = Array.isArray(data) ? data : (data.crons || data.jobs || []);
+    res.json(jobs.map(j => ({
+      path:      j.path,
+      schedule:  j.schedule,
+      active:    j.active,
+      createdAt: j.createdAt,
+    })));
   } catch (err) { handleErr(res, err); }
 });
 

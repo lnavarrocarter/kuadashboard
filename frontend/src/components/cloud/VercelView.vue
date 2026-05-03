@@ -81,6 +81,7 @@
                   <button class="btn sm" @click="loadProjectDeployments(p)">{{ t('vercel.action.viewDeployments') }}</button>
                   <button class="btn sm" @click="loadProjectDomains(p)">{{ t('vercel.action.viewDomains') }}</button>
                   <button class="btn sm" @click="loadProjectEnvVars(p)">{{ t('vercel.action.viewEnvVars') }}</button>
+                  <button class="btn sm" @click="loadProjectCron(p)">{{ t('vercel.action.viewCron') }}</button>
                 </div>
               </td>
             </tr>
@@ -172,6 +173,7 @@
                       class="btn sm danger"
                       @click="triggerCancel(d)"
                     >{{ t('vercel.action.cancel') }}</button>
+                    <button class="btn sm" @click="viewChecks(d)">{{ t('vercel.action.checks') }}</button>
                   </div>
                 </td>
               </tr>
@@ -196,6 +198,7 @@
               <th>{{ t('vercel.col.redirect') }}</th>
               <th>{{ t('vercel.col.verified') }}</th>
               <th>{{ t('vercel.col.created') }}</th>
+              <th>{{ t('vercel.col.actions') }}</th>
             </tr></thead>
             <tbody>
               <tr v-for="d in filteredDomains" :key="d.name">
@@ -209,6 +212,9 @@
                   </span>
                 </td>
                 <td class="text-dim" style="white-space:nowrap">{{ d.createdAt ? formatDate(d.createdAt) : '—' }}</td>
+                <td>
+                  <button class="btn sm" @click="loadDnsRecords(d)">{{ t('vercel.action.viewDns') }}</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -281,6 +287,250 @@
         </template>
       </div>
 
+      <!-- ── Checks ───────────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'checks'" class="tab-panel">
+        <div v-if="!selectedDeploymentForChecks" class="empty-row text-dim">
+          {{ t('vercel.checks.noDeployment') }}
+        </div>
+        <template v-else>
+          <div class="context-banner">
+            <span>{{ t('vercel.checks.contextLabel') }}</span>
+            <strong class="mono-xs">{{ selectedDeploymentForChecks.id }}</strong>
+          </div>
+          <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+          <div v-else-if="!vercelStore.checks.length" class="empty-row">{{ t('vercel.checks.none') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>{{ t('vercel.col.name') }}</th>
+              <th>{{ t('vercel.col.status') }}</th>
+              <th>{{ t('vercel.col.conclusion') }}</th>
+              <th>{{ t('vercel.col.completedAt') }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="c in vercelStore.checks" :key="c.id">
+                <td class="fw-medium">{{ c.name }}</td>
+                <td><span :class="checkStatusClass(c.status)">{{ c.status }}</span></td>
+                <td>
+                  <span v-if="c.conclusion" :class="conclusionClass(c.conclusion)">{{ c.conclusion }}</span>
+                  <span v-else class="text-dim">—</span>
+                </td>
+                <td class="text-dim">{{ formatDate(c.completedAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </div>
+
+      <!-- ── DNS Records ──────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'dns-records'" class="tab-panel">
+        <div v-if="!vercelStore.selectedDomain" class="empty-row text-dim">
+          {{ t('vercel.dns.noDomain') }}
+        </div>
+        <template v-else>
+          <div class="context-banner">
+            <span>{{ t('vercel.dns.contextLabel') }}</span>
+            <strong>{{ vercelStore.selectedDomain }}</strong>
+            <button class="btn sm" style="margin-left:auto" @click="vercelStore.fetchDnsRecords(vercelStore.selectedDomain)">
+              <i data-lucide="refresh-cw"></i>
+            </button>
+          </div>
+          <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+          <div v-else-if="!filteredDnsRecords.length" class="empty-row">{{ t('vercel.dns.none') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>{{ t('vercel.col.type') }}</th>
+              <th>{{ t('vercel.col.name') }}</th>
+              <th>{{ t('vercel.col.value') }}</th>
+              <th>TTL</th>
+              <th>{{ t('vercel.col.updated') }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="r in filteredDnsRecords" :key="r.id">
+                <td><span class="badge-preview">{{ r.type }}</span></td>
+                <td class="mono-xs">{{ r.name || '@' }}</td>
+                <td class="mono-xs" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="r.value">{{ r.value }}</td>
+                <td class="text-dim">{{ r.ttl ?? '—' }}</td>
+                <td class="text-dim">{{ formatDate(r.updatedAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </div>
+
+      <!-- ── Aliases ──────────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'aliases'" class="tab-panel">
+        <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+        <div v-else-if="!filteredAliases.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.aliases.none') }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th>{{ t('vercel.col.alias') }}</th>
+            <th>{{ t('vercel.col.project') }}</th>
+            <th>{{ t('vercel.col.deployment') }}</th>
+            <th>{{ t('vercel.col.created') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="a in filteredAliases" :key="a.uid">
+              <td class="fw-medium mono-xs">{{ a.alias }}</td>
+              <td class="text-dim">{{ a.projectId || '—' }}</td>
+              <td>
+                <a
+                  v-if="a.deployment?.url"
+                  :href="`https://${a.deployment.url}`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="link-dim"
+                  @click.stop
+                >{{ a.deployment.url }}</a>
+                <span v-else class="text-dim mono-xs">{{ a.deployment?.id || '—' }}</span>
+              </td>
+              <td class="text-dim">{{ formatDate(a.createdAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Cron Jobs ────────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'cron'" class="tab-panel">
+        <div v-if="!vercelStore.selectedProject" class="empty-row text-dim">{{ t('vercel.noProjectSelected') }}</div>
+        <template v-else>
+          <div class="context-banner">
+            <span>{{ t('vercel.cron.contextLabel') }}</span>
+            <strong>{{ vercelStore.selectedProject.name }}</strong>
+          </div>
+          <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+          <div v-else-if="!filteredCronJobs.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.cron.none') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>{{ t('vercel.col.path') }}</th>
+              <th>{{ t('vercel.col.schedule') }}</th>
+              <th>{{ t('vercel.col.active') }}</th>
+              <th>{{ t('vercel.col.created') }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="j in filteredCronJobs" :key="j.path">
+                <td class="fw-medium mono-xs">{{ j.path }}</td>
+                <td class="mono-xs">{{ j.schedule }}</td>
+                <td>
+                  <span :class="j.active ? 'badge-ok' : 'badge-warn'">{{ j.active ? 'Active' : 'Inactive' }}</span>
+                </td>
+                <td class="text-dim">{{ formatDate(j.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </div>
+
+      <!-- ── Webhooks ─────────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'webhooks'" class="tab-panel">
+        <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+        <div v-else-if="!filteredWebhooks.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.webhooks.none') }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th>{{ t('vercel.col.url') }}</th>
+            <th>{{ t('vercel.webhooks.events') }}</th>
+            <th>{{ t('vercel.webhooks.projects') }}</th>
+            <th>{{ t('vercel.col.created') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="w in filteredWebhooks" :key="w.id">
+              <td class="mono-xs fw-medium" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="w.url">{{ w.url }}</td>
+              <td>
+                <span
+                  v-for="ev in (w.events || [])" :key="ev"
+                  class="badge-preview" style="margin-right:4px;font-size:10px"
+                >{{ ev }}</span>
+                <span v-if="!w.events?.length" class="text-dim">—</span>
+              </td>
+              <td class="text-dim">{{ w.projectIds?.length || 0 }}</td>
+              <td class="text-dim">{{ formatDate(w.createdAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Edge Config ──────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'edge-config'" class="tab-panel">
+        <!-- Store list -->
+        <template v-if="!vercelStore.selectedEdgeConfig">
+          <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+          <div v-else-if="!filteredEdgeConfigs.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.edgeConfig.none') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>{{ t('vercel.col.name') }}</th>
+              <th>{{ t('vercel.edgeConfig.itemCount') }}</th>
+              <th>{{ t('vercel.col.updated') }}</th>
+              <th>{{ t('vercel.col.actions') }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="ec in filteredEdgeConfigs" :key="ec.id" style="cursor:pointer" @click="openEdgeConfig(ec)">
+                <td>
+                  <div class="fw-medium">{{ ec.slug }}</div>
+                  <div class="text-dim mono-xs">{{ ec.id }}</div>
+                </td>
+                <td class="text-dim">{{ ec.itemCount ?? '—' }}</td>
+                <td class="text-dim">{{ formatDate(ec.updatedAt) }}</td>
+                <td>
+                  <button class="btn sm" @click.stop="openEdgeConfig(ec)">{{ t('vercel.edgeConfig.viewItems') }}</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+        <!-- Items view -->
+        <template v-else>
+          <div class="context-banner">
+            <button class="btn sm" @click="vercelStore.selectedEdgeConfig = null">← {{ t('vercel.back') }}</button>
+            <span>{{ t('vercel.edgeConfig.contextLabel') }}</span>
+            <strong>{{ vercelStore.selectedEdgeConfig.slug }}</strong>
+          </div>
+          <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+          <div v-else-if="!filteredEdgeConfigItems.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.edgeConfig.noItems') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr>
+              <th>{{ t('vercel.col.key') }}</th>
+              <th>{{ t('vercel.col.value') }}</th>
+              <th>{{ t('vercel.col.updated') }}</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="item in filteredEdgeConfigItems" :key="item.key">
+                <td class="fw-medium mono-xs">{{ item.key }}</td>
+                <td class="mono-xs" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="JSON.stringify(item.value)">{{ JSON.stringify(item.value) }}</td>
+                <td class="text-dim">{{ formatDate(item.updatedAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </div>
+
+      <!-- ── Activity ─────────────────────────────────────────────────────── -->
+      <div v-show="activeService === 'activity'" class="tab-panel">
+        <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
+        <div v-else-if="!filteredEvents.length" class="empty-row">{{ search ? t('vercel.noMatches') : t('vercel.activity.none') }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th>{{ t('vercel.col.event') }}</th>
+            <th>{{ t('vercel.col.user') }}</th>
+            <th>{{ t('vercel.col.created') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="ev in filteredEvents" :key="ev.id">
+              <td>
+                <div class="fw-medium">{{ ev.type }}</div>
+                <div v-if="ev.text" class="text-dim" style="font-size:11px">{{ ev.text }}</div>
+              </td>
+              <td>
+                <div v-if="ev.user">
+                  <div class="fw-medium">{{ ev.user.name || ev.user.username }}</div>
+                  <div class="text-dim" style="font-size:11px">{{ ev.user.email }}</div>
+                </div>
+                <span v-else class="text-dim">—</span>
+              </td>
+              <td class="text-dim" style="white-space:nowrap">{{ formatDate(ev.createdAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- ── Logs panel ───────────────────────────────────────────────────── -->
       <VercelDeploymentLogs
         v-if="logsDeployment"
@@ -332,6 +582,7 @@ const search                      = ref('')
 const deploymentTarget            = ref('')
 const logsDeployment              = ref(null)
 const selectedDeploymentForFunctions = ref(null)
+const selectedDeploymentForChecks    = ref(null)
 const confirmAction               = ref(null)
 const actionPending               = ref(false)
 
@@ -357,6 +608,20 @@ function reload(service) {
     vercelStore.fetchEnvVars(vercelStore.selectedProject.id)
   else if (svc === 'functions' && selectedDeploymentForFunctions.value)
     vercelStore.fetchFunctions(selectedDeploymentForFunctions.value.id)
+  else if (svc === 'checks' && selectedDeploymentForChecks.value)
+    vercelStore.fetchChecks(selectedDeploymentForChecks.value.id)
+  else if (svc === 'dns-records' && vercelStore.selectedDomain)
+    vercelStore.fetchDnsRecords(vercelStore.selectedDomain)
+  else if (svc === 'aliases')
+    vercelStore.fetchAliases()
+  else if (svc === 'cron' && vercelStore.selectedProject)
+    vercelStore.fetchCronJobs(vercelStore.selectedProject.id)
+  else if (svc === 'webhooks')
+    vercelStore.fetchWebhooks()
+  else if (svc === 'edge-config')
+    vercelStore.fetchEdgeConfigs()
+  else if (svc === 'activity')
+    vercelStore.fetchEvents()
 }
 
 function reloadDeployments() {
@@ -386,6 +651,11 @@ function loadProjectEnvVars(project) {
   vercelStore.fetchEnvVars(project.id)
 }
 
+function loadProjectCron(project) {
+  vercelStore.selectProject(project)
+  vercelStore.fetchCronJobs(project.id)
+}
+
 // ─── Deployment actions ───────────────────────────────────────────────────────
 
 function openLogs(deployment) {
@@ -395,6 +665,21 @@ function openLogs(deployment) {
 function viewFunctions(deployment) {
   selectedDeploymentForFunctions.value = deployment
   vercelStore.fetchFunctions(deployment.id)
+}
+
+function viewChecks(deployment) {
+  selectedDeploymentForChecks.value = deployment
+  vercelStore.fetchChecks(deployment.id)
+}
+
+function openEdgeConfig(ec) {
+  vercelStore.selectedEdgeConfig = ec
+  vercelStore.fetchEdgeConfigItems(ec.id)
+}
+
+function loadDnsRecords(domain) {
+  vercelStore.selectedDomain = domain.name
+  vercelStore.fetchDnsRecords(domain.name)
 }
 
 function triggerRedeploy(deployment) {
@@ -496,13 +781,87 @@ const filteredFunctions = computed(() => {
   )
 })
 
+const filteredDnsRecords = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.dnsRecords
+  return vercelStore.dnsRecords.filter(r =>
+    r.type?.toLowerCase().includes(q) ||
+    r.name?.toLowerCase().includes(q) ||
+    r.value?.toLowerCase().includes(q)
+  )
+})
+
+const filteredAliases = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.aliases
+  return vercelStore.aliases.filter(a =>
+    a.alias?.toLowerCase().includes(q) ||
+    a.projectId?.toLowerCase().includes(q) ||
+    a.deployment?.url?.toLowerCase().includes(q)
+  )
+})
+
+const filteredCronJobs = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.cronJobs
+  return vercelStore.cronJobs.filter(j =>
+    j.path?.toLowerCase().includes(q) ||
+    j.schedule?.toLowerCase().includes(q)
+  )
+})
+
+const filteredWebhooks = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.webhooks
+  return vercelStore.webhooks.filter(w =>
+    w.url?.toLowerCase().includes(q) ||
+    w.events?.some(ev => ev.toLowerCase().includes(q))
+  )
+})
+
+const filteredEdgeConfigs = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.edgeConfigs
+  return vercelStore.edgeConfigs.filter(e =>
+    e.slug?.toLowerCase().includes(q) ||
+    e.id?.toLowerCase().includes(q)
+  )
+})
+
+const filteredEdgeConfigItems = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.edgeConfigItems
+  return vercelStore.edgeConfigItems.filter(i =>
+    i.key?.toLowerCase().includes(q) ||
+    JSON.stringify(i.value)?.toLowerCase().includes(q)
+  )
+})
+
+const filteredEvents = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return vercelStore.events
+  return vercelStore.events.filter(ev =>
+    ev.type?.toLowerCase().includes(q) ||
+    ev.user?.name?.toLowerCase().includes(q) ||
+    ev.user?.email?.toLowerCase().includes(q) ||
+    ev.text?.toLowerCase().includes(q)
+  )
+})
+
 const activeRowCount = computed(() => {
   const s = props.activeService
-  if (s === 'projects')    return filteredProjects.value.length
-  if (s === 'deployments') return filteredDeployments.value.length
-  if (s === 'domains')     return filteredDomains.value.length
-  if (s === 'env-vars')    return filteredEnvVars.value.length
-  if (s === 'functions')   return filteredFunctions.value.length
+  if (s === 'projects')     return filteredProjects.value.length
+  if (s === 'deployments')  return filteredDeployments.value.length
+  if (s === 'domains')      return filteredDomains.value.length
+  if (s === 'env-vars')     return filteredEnvVars.value.length
+  if (s === 'functions')    return filteredFunctions.value.length
+  if (s === 'checks')       return vercelStore.checks.length
+  if (s === 'dns-records')  return filteredDnsRecords.value.length
+  if (s === 'aliases')      return filteredAliases.value.length
+  if (s === 'cron')         return filteredCronJobs.value.length
+  if (s === 'webhooks')     return filteredWebhooks.value.length
+  if (s === 'edge-config')  return vercelStore.selectedEdgeConfig ? filteredEdgeConfigItems.value.length : filteredEdgeConfigs.value.length
+  if (s === 'activity')     return filteredEvents.value.length
   return 0
 })
 
@@ -515,6 +874,23 @@ function stateClass(state) {
   if (s === 'BUILDING') return 'state-building'
   if (s === 'QUEUED')   return 'state-queued'
   if (s === 'CANCELED') return 'state-canceled'
+  return 'state-unknown'
+}
+
+function checkStatusClass(status) {
+  const s = (status || '').toLowerCase()
+  if (s === 'completed') return 'state-ready'
+  if (s === 'running')   return 'state-building'
+  if (s === 'registered') return 'state-queued'
+  return 'state-unknown'
+}
+
+function conclusionClass(conclusion) {
+  const c = (conclusion || '').toLowerCase()
+  if (c === 'succeeded') return 'state-ready'
+  if (c === 'failed')    return 'state-error'
+  if (c === 'canceled')  return 'state-canceled'
+  if (c === 'skipped')   return 'state-unknown'
   return 'state-unknown'
 }
 
