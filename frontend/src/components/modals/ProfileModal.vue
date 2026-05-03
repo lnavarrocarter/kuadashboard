@@ -169,6 +169,24 @@
 
             <!-- Vercel fields -->
             <template v-else-if="form.provider === 'vercel'">
+              <!-- OAuth button — only available inside Electron -->
+              <div v-if="isElectron && !isEdit" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                <button
+                  class="btn primary"
+                  style="justify-content:center;gap:8px;background:#000;border-color:#333;color:#fff"
+                  :disabled="oauthPending"
+                  @click="startVercelOAuth"
+                >
+                  <!-- Vercel triangle logo -->
+                  <svg width="14" height="12" viewBox="0 0 76 65" fill="currentColor"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
+                  {{ oauthPending ? 'Waiting for authorization…' : 'Connect with Vercel' }}
+                </button>
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
+                  <hr style="flex:1;border-color:var(--border)" />
+                  or enter token manually
+                  <hr style="flex:1;border-color:var(--border)" />
+                </div>
+              </div>
               <div class="field-label" style="margin-bottom:4px">
                 Keys
                 <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
@@ -267,7 +285,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../../composables/useI18n.js'
 
 const { t } = useI18n()
@@ -475,6 +493,45 @@ function submit() {
 
   emit('save', { name: name.trim(), category: category.trim(), provider, keys: finalKeys, meta: finalMeta })
 }
+
+// ── Vercel OAuth ───────────────────────────────────────────────────────────────
+const isElectron   = typeof window !== 'undefined' && !!window.kuaElectron
+const oauthPending = ref(false)
+let oauthHandlers  = []
+
+function startVercelOAuth() {
+  if (!window.kuaElectron?.startVercelOAuth) return
+  oauthPending.value = true
+  const name = form.value.name.trim() || 'Vercel'
+  window.kuaElectron.startVercelOAuth(name)
+}
+
+onMounted(() => {
+  if (!isElectron) return
+
+  const successHandler = window.kuaElectron.onVercelOAuthComplete?.((profile) => {
+    oauthPending.value = false
+    // Emit save with the profile returned by the backend OAuth callback
+    // App.vue treats this as a "select existing profile" event
+    emit('save', { oauthProfile: profile, provider: 'vercel' })
+    emit('close')
+  })
+
+  const errorHandler = window.kuaElectron.onVercelOAuthError?.((msg) => {
+    oauthPending.value = false
+    console.error('[ProfileModal] Vercel OAuth error:', msg)
+  })
+
+  if (successHandler) oauthHandlers.push(['vercel:oauth-complete', successHandler])
+  if (errorHandler)   oauthHandlers.push(['vercel:oauth-error', errorHandler])
+})
+
+onUnmounted(() => {
+  for (const [channel, handler] of oauthHandlers) {
+    window.kuaElectron?.removeListener?.(channel, handler)
+  }
+  oauthHandlers = []
+})
 </script>
 
 <style scoped>

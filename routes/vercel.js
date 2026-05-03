@@ -25,15 +25,24 @@
  *   PATCH /deployments/:deploymentId/cancel            → cancel an in-progress deployment
  *   GET  /deployments/:deploymentId/logs               → SSE stream of deployment build logs
  *
+ * OAuth endpoints (requires VERCEL_OAUTH_CLIENT_ID + VERCEL_OAUTH_CLIENT_SECRET in process.env):
+ *   GET  /oauth/start                                  → redirect to Vercel authorization URL
+ *   GET  /oauth/callback                               → exchange code for token, save to vault
+ *
  * Vercel REST API base: https://api.vercel.com
  */
 
 const express      = require('express');
+const crypto       = require('crypto');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
 
 const router = express.Router();
-const VERCEL_API = 'https://api.vercel.com';
+const VERCEL_API   = 'https://api.vercel.com';
+const VERCEL_OAUTH = 'https://vercel.com/api/oauth';
+
+// In-memory PKCE / state store (per-process, short-lived)
+const oauthStates = new Map(); // state → { createdAt, profileName }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -400,6 +409,122 @@ router.get('/deployments/:deploymentId/logs', async (req, res) => {
       try { nodeStream.destroy?.(); } catch (_) {}
     });
   } catch (err) { handleErr(res, err); }
+});
+
+// ─── OAuth: GET /oauth/start ──────────────────────────────────────────────────
+//
+// Redirects the browser to Vercel's OAuth authorization URL.
+// Requires VERCEL_OAUTH_CLIENT_ID in process.env.
+// The `profileName` query param is forwarded through the state so the callback
+// can create the profile with a meaningful name.
+//
+// Flow: frontend opens this URL via shell.openExternal() → Vercel authorizes
+//       → Vercel redirects to kua://vercel/callback?code=…&state=…
+//       → Electron intercepts the kua:// URL and POSTs to /oauth/callback
+
+router.get('/oauth/start', (req, res) => {
+  const clientId = process.env.VERCEL_OAUTH_CLIENT_ID;
+  if (!clientId) {
+    return res.status(501).json({ error: 'VERCEL_OAUTH_CLIENT_ID is not configured' });
+  }
+
+  // Generate a cryptographically random state to prevent CSRF
+  const state       = crypto.randomBytes(16).toString('hex');
+  const profileName = (req.query.profileName || 'Vercel').slice(0, 64);
+
+  oauthStates.set(state, { createdAt: Date.now(), profileName });
+
+  // Clean up states older than 10 minutes
+  const EXPIRE_MS = 10 * 60 * 1000;
+  for (const [k, v] of oauthStates.entries()) {
+    if (Date.now() - v.createdAt > EXPIRE_MS) oauthStates.delete(k);
+  }
+
+  const redirectUri = 'kua://vercel/callback';
+  const params = new URLSearchParams({
+    client_id:    clientId,
+    redirect_uri: redirectUri,
+    state,
+  });
+
+  res.redirect(`${VERCEL_OAUTH}/authorize?${params.toString()}`);
+});
+
+// ─── OAuth: POST /oauth/callback ──────────────────────────────────────────────
+//
+// Called by Electron after intercepting the kua://vercel/callback?code=…&state=…
+// deep-link. Exchanges the authorization code for an access token, then saves
+// a new credential profile to the vault.
+//
+// Body: { code: string, state: string }
+// Response: { id: string, name: string }  (the newly created profile)
+
+router.post('/oauth/callback', async (req, res) => {
+  const clientId     = process.env.VERCEL_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.VERCEL_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return res.status(501).json({ error: 'VERCEL_OAUTH_CLIENT_ID / VERCEL_OAUTH_CLIENT_SECRET are not configured' });
+  }
+
+  const { code, state } = req.body || {};
+  if (!code || !state) {
+    return res.status(400).json({ error: 'code and state are required' });
+  }
+
+  // Validate state to prevent CSRF
+  const stateData = oauthStates.get(state);
+  if (!stateData) {
+    return res.status(400).json({ error: 'Invalid or expired OAuth state' });
+  }
+  oauthStates.delete(state);
+
+  try {
+    // Exchange code for token
+    const tokenRes = await fetch(`${VERCEL_OAUTH}/access_token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri:  'kua://vercel/callback',
+      }).toString(),
+    });
+
+    if (!tokenRes.ok) {
+      const body = await tokenRes.json().catch(() => ({}));
+      const msg  = body?.error_description || body?.error || tokenRes.statusText;
+      return res.status(502).json({ error: `Token exchange failed: ${msg}` });
+    }
+
+    const tokenData = await tokenRes.json();
+    const token     = tokenData.access_token;
+    const teamId    = tokenData.team_id || null;
+
+    if (!token) {
+      return res.status(502).json({ error: 'No access_token in Vercel response' });
+    }
+
+    // Save to credential vault as a new profile
+    const store       = getStore();
+    const profileName = stateData.profileName || 'Vercel';
+    const keys        = { VERCEL_API_TOKEN: token };
+    if (teamId) keys.VERCEL_TEAM_ID = teamId;
+
+    const profile = await store.createProfile({ name: profileName, provider: 'vercel', keys });
+
+    auditLog.log({
+      category: 'vercel',
+      action:   'oauth-connect',
+      resource: profile.id,
+      details:  { name: profileName, hasTeamId: !!teamId },
+      level:    'info',
+    });
+
+    res.json({ id: profile.id, name: profile.name });
+  } catch (err) {
+    handleErr(res, err);
+  }
 });
 
 module.exports = router;

@@ -47,6 +47,15 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 - **Observabilidad** — Cloud Monitoring (alert policies + uptime checks), Cloud Logging (panel de consulta interactivo)
 - **IAM** — Cuentas de servicio (lista + claves)
 
+### Vercel
+- **Proyectos** — Navegar todos los proyectos con framework, estado del último deployment y URL de producción
+- **Deployments** — Listar deployments por proyecto, filtrar por destino (production/preview); redeployar, promover y cancelar
+- **Logs de Build** — Panel de logs en tiempo real vía SSE con auto-scroll
+- **Dominios** — Ver dominios personalizados, estado de verificación DNS y mapeos de rama git
+- **Variables de Entorno** — Listar claves de env vars por proyecto (valores nunca expuestos)
+- **Funciones** — Inspeccionar funciones serverless y edge en cualquier deployment
+- **OAuth** — Autorización con un clic desde el navegador (solo app Electron)
+
 ## Herramientas
 
 - **Port Forwarding** — Port forwards con un clic y gestor visual

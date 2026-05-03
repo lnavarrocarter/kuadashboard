@@ -33,6 +33,18 @@ const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
 
+// ─── Deep-link protocol (kua://) ──────────────────────────────────────────────
+// Register the kua:// custom URL scheme so Vercel OAuth can redirect back to
+// the app after authorization. On macOS/Linux this is handled via the
+// 'open-url' event; on Windows we receive the URL as a CLI argument.
+
+const KUA_PROTOCOL = 'kua';
+
+// Register as default protocol handler (must happen before app is ready on Windows)
+if (!app.isDefaultProtocolClient(KUA_PROTOCOL)) {
+  app.setAsDefaultProtocolClient(KUA_PROTOCOL);
+}
+
 // ─── macOS PATH fix ──────────────────────────────────────────────────────────
 // When Electron launches from the Dock or Finder on macOS it does NOT inherit
 // the user's login-shell PATH, so CLI tools installed via Homebrew
@@ -401,6 +413,77 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', stopBackend);
+
+// ─── Deep-link handler ────────────────────────────────────────────────────────
+// Handles kua://vercel/callback?code=…&state=… after Vercel OAuth redirect.
+// macOS/Linux: 'open-url' event fires with the full URL.
+// Windows: the URL is passed as a command-line argument to a second instance;
+//          we use the 'second-instance' event to capture it.
+
+function handleDeepLink(url) {
+  if (!url || !url.startsWith(`${KUA_PROTOCOL}://`)) return;
+  console.log('[electron] Deep-link received:', url);
+
+  try {
+    // kua://vercel/callback?code=…&state=…
+    // Parse by treating kua:// as https:// so URL constructor works
+    const parsed = new URL(url.replace(`${KUA_PROTOCOL}://`, 'https://'));
+    const host   = parsed.hostname; // 'vercel'
+    const path   = parsed.pathname; // '/callback'
+
+    if (host === 'vercel' && path === '/callback') {
+      const code  = parsed.searchParams.get('code');
+      const state = parsed.searchParams.get('state');
+
+      if (!code || !state) {
+        console.warn('[electron] kua://vercel/callback missing code or state');
+        return;
+      }
+
+      // Forward to our backend OAuth callback endpoint
+      fetch(`${BACKEND_URL}/api/cloud/vercel/oauth/callback`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, state }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (mainWindow) {
+            // Notify the renderer so it can refresh its profile list and
+            // auto-select the newly created Vercel profile
+            mainWindow.webContents.send('vercel:oauth-complete', data);
+          }
+        })
+        .catch(err => {
+          console.error('[electron] vercel oauth callback error:', err.message);
+          if (mainWindow) {
+            mainWindow.webContents.send('vercel:oauth-error', err.message);
+          }
+        });
+    }
+  } catch (err) {
+    console.error('[electron] handleDeepLink parse error:', err.message);
+  }
+}
+
+// macOS / Linux: app already running, URL comes via 'open-url'
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
+// Windows: second-instance event (app receives URL as argv)
+app.on('second-instance', (_event, argv) => {
+  // The deep-link URL is typically the last argv item on Windows
+  const deepLink = argv.find(a => a.startsWith(`${KUA_PROTOCOL}://`));
+  if (deepLink) handleDeepLink(deepLink);
+
+  // Bring the existing window to the foreground
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 // Prevent navigation to arbitrary URLs (security hardening)
 app.on('web-contents-created', (_event, contents) => {

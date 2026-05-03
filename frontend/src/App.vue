@@ -571,6 +571,17 @@ async function handleConnectionSave(payload) {
     return
   }
 
+  // Vercel OAuth flow: profile already created by backend callback, just select it
+  if (payload.oauthProfile && payload.provider === 'vercel') {
+    modals.addConnection = false
+    await envStore.fetchProfiles()
+    vercelProfileId.value = payload.oauthProfile.id
+    vercelStore.setActiveProfile(payload.oauthProfile.id)
+    toast(`Vercel account "${payload.oauthProfile.name}" connected`, 'success')
+    nextTick(() => createIcons({ icons }))
+    return
+  }
+
   const { name, category, provider, keys, meta } = payload
   const created = await envStore.createProfile({ name, category, provider, keys, meta })
   modals.addConnection = false
