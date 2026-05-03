@@ -139,7 +139,7 @@ async function doDelete() {
   deleteTarget.value = null
 }
 
-const providerLabel = p => ({ gcp: 'GCP', aws: 'AWS', generic: 'Generic' }[p] || p)
+const providerLabel = p => ({ gcp: 'GCP', aws: 'AWS', vercel: 'Vercel', generic: 'Generic' }[p] || p)
 
 /** Group profiles by category (empty string → no category, shown first) */
 const profilesByCategory = computed(() => {

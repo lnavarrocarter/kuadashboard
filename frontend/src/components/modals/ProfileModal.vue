@@ -26,6 +26,7 @@
             <select v-model="form.provider" class="ctrl-select" :disabled="isEdit" @change="gcpAuthMode = 'sa'">
               <option value="gcp">Google Cloud (GCP)</option>
               <option value="aws">Amazon Web Services (AWS)</option>
+              <option value="vercel">Vercel</option>
               <option value="generic">Generic / Other</option>
             </select>
           </label>
@@ -164,6 +165,23 @@
                   </select>
                 </label>
               </div>
+            </template>
+
+            <!-- Vercel fields -->
+            <template v-else-if="form.provider === 'vercel'">
+              <div class="field-label" style="margin-bottom:4px">
+                Keys
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+              </div>
+              <label class="field-label">
+                VERCEL_API_TOKEN
+                <input v-model="form.keys.VERCEL_API_TOKEN" class="ctrl-input" type="password" placeholder="••••••••••••••••••••" />
+              </label>
+              <label class="field-label">
+                VERCEL_TEAM_ID
+                <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — for team accounts)</span>
+                <input v-model="form.keys.VERCEL_TEAM_ID" class="ctrl-input" placeholder="team_XXXXXXXXXXXX" />
+              </label>
             </template>
 
             <!-- AWS fields -->
@@ -402,6 +420,10 @@ watch(() => props.show, (v) => {
         AWS_ACCESS_KEY_ID: '',
         AWS_SECRET_ACCESS_KEY: '',
         AWS_DEFAULT_REGION: '',
+        VERCEL_API_TOKEN: '',
+        VERCEL_TEAM_ID: '',
+        VERCEL_API_TOKEN: '',
+        VERCEL_TEAM_ID: '',
       },
       genericPairs: props.profile.keyNames?.map(k => ({
         key: k, value: '', tags: props.profile.meta?.[k]?.tags?.slice() || [], newTag: '',
@@ -439,6 +461,9 @@ function submit() {
     if (keys.AWS_ACCESS_KEY_ID)         finalKeys.AWS_ACCESS_KEY_ID = keys.AWS_ACCESS_KEY_ID
     if (keys.AWS_SECRET_ACCESS_KEY)     finalKeys.AWS_SECRET_ACCESS_KEY = keys.AWS_SECRET_ACCESS_KEY
     if (keys.AWS_DEFAULT_REGION)        finalKeys.AWS_DEFAULT_REGION = keys.AWS_DEFAULT_REGION
+  } else if (provider === 'vercel') {
+    if (keys.VERCEL_API_TOKEN)          finalKeys.VERCEL_API_TOKEN = keys.VERCEL_API_TOKEN
+    if (keys.VERCEL_TEAM_ID)            finalKeys.VERCEL_TEAM_ID = keys.VERCEL_TEAM_ID
   } else {
     for (const pair of genericPairs) {
       if (pair.key.trim()) {
