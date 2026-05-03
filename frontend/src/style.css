@@ -1480,6 +1480,7 @@ kbd {
 .provider-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
 .provider-gcp  { background: rgba(66,133,244,.2);  color: #4285f4; }
 .provider-aws  { background: rgba(255,153,0,.2);   color: #ff9900; }
+.provider-vercel { background: rgba(255,255,255,.12); color: #e0e0e0; }
 .provider-generic { background: rgba(78,201,176,.2); color: var(--teal); }
 .profile-name { font-size: 14px; font-weight: 600; color: #fff; }
 .profile-meta { display: flex; gap: 12px; font-size: 11px; }
