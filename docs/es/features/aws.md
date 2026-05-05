@@ -1,8 +1,8 @@
 # Integración AWS
 
-KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **19 servicios de AWS** sin salir del dashboard.
+KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **22 servicios de AWS** sin salir del dashboard.
 
-> **Novedades en v1.6.0:** tab Logs en Lambda con visor de CloudWatch y opción de crear log group; corrección del YAML en ECR Deploy to K8s + opción de crear Service; corrección de límites maxResults en Lex y Athena.
+> **Novedades en v1.7.0:** las sesiones EC2 SSH/RDP permanecen vivas como tabs restaurables; las mejoras de logs, YAML y métricas de Kubernetes quedan disponibles desde la superficie unificada de operación.
 
 ![KuaDashboard — vista general](/screenshots/dashboard-main.png)
 
@@ -31,6 +31,8 @@ Navega todas las instancias EC2 con detalle completo y control del ciclo de vida
 - Instance ID, nombre (tag), tipo, IP pública/privada, availability zone, fecha de lanzamiento
 - **Start** y **Stop** directamente desde la tabla
 - **SSH** — abre una sesión SSH interactiva en el navegador (disponible cuando la instancia está `running`)
+- **RDP** — abre un canvas de escritorio remoto Windows en el navegador (disponible para instancias Windows)
+- **Tabs remotos persistentes** — oculta ventanas SSH/RDP sin cerrar el WebSocket y restáuralas desde la bandeja flotante de sesiones
 - **Tags** — ver todos los tags del recurso
 - **Config** — ver la configuración JSON completa de la instancia
 - Columnas ordenables; búsqueda por nombre, ID, tipo o estado

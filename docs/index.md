@@ -25,10 +25,10 @@ features:
     details: AWS (EC2, ECS, EKS, Lambda, S3, DynamoDB, Secrets Manager and more) + GCP (Cloud Run, GKE, SQL, Storage) in one interface with persistent credentials.
   - icon: ☸️
     title: Kubernetes Management
-    details: Pods, Deployments, Services, Ingresses, ConfigMaps, PVCs, Nodes and more. Scale, restart, drain and cordon/uncordon with one click.
+    details: Pods, Deployments, Services, Ingresses, ConfigMaps, PVCs, Nodes and more. Auto-refresh, resource detail panel, YAML editor, metrics and one-click operations.
   - icon: 📺
     title: Live Logs & Shell
-    details: Log streaming via WebSocket. Interactive shell (exec) in pods. Integrated multi-tab local terminal.
+    details: Real-time logs for pods and workloads, search/date filters, downloads, interactive pod exec, local shell and persistent EC2 SSH/RDP sessions.
   - icon: 🔐
     title: Env Manager
     details: Encrypted credential profiles (AES-256) for AWS, GCP and generics. Import/export .env files. Secrets Manager integration.

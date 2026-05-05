@@ -475,6 +475,15 @@ function switchTab(t) {
   nextTick(() => createIcons({ icons }))
 }
 
+function reloadActiveTab() {
+  if (tab.value === 'releases') return loadReleases()
+  if (tab.value === 'repos') return loadRepos()
+  if (tab.value === 'search' && searchQuery.value.trim()) return searchCharts()
+  return Promise.resolve()
+}
+
+defineExpose({ reloadActiveTab })
+
 onMounted(() => {
   if (tab.value === 'repos') {
     loadRepos()

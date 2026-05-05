@@ -385,7 +385,49 @@ input, select, textarea { font: inherit; color: var(--text); }
   vertical-align: middle;
 }
 .rtable tbody tr:hover td { background: var(--bg-hover); }
+.rtable tbody tr.selected td { background: rgba(14,157,232,.12); }
 .rtable .col-actions { width: 1px; white-space: nowrap; }
+
+.kube-main-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.kube-main-split > .resource-table {
+  flex: 1;
+  min-width: 0;
+}
+.kube-resize-handle {
+  width: 7px;
+  flex: 0 0 7px;
+  cursor: col-resize;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+  position: relative;
+}
+.kube-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 40px;
+  border-radius: 2px;
+  background: var(--text-dim);
+  opacity: .45;
+  transform: translate(-50%, -50%);
+}
+.kube-resize-handle:hover,
+.kube-main-split.resizing .kube-resize-handle {
+  background: rgba(14,157,232,.14);
+}
+.kube-main-split.resizing,
+body.kube-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
 
 /* ── Sortable columns ────────────────────────────────────────────────────────── */
 .sortable-th {
@@ -913,6 +955,41 @@ input, select, textarea { font: inherit; color: var(--text); }
   border-left: 1px solid var(--border);
   height: 100%;
 }
+.term-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: #151515;
+  overflow-x: auto;
+}
+.term-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.term-filter-group.search { min-width: 220px; flex: 1; }
+.term-filter-group svg { width: 12px; height: 12px; flex-shrink: 0; }
+.term-filter-input {
+  height: 26px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  background: #0f0f0f;
+  color: var(--text);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.term-filter-input:focus { border-color: var(--accent); }
+.term-filter-input.date { width: 170px; }
+.term-filter-count { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+.term-mark { background: rgba(255, 193, 7, .32); color: #ffe9a3; border-radius: 2px; padding: 0 1px; }
 .term-btn-sep {
   width: 1px;
   height: 16px;
@@ -1391,6 +1468,74 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+.remote-session-dock {
+  position: fixed;
+  right: 18px;
+  bottom: 34px;
+  z-index: 750;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(760px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(17,17,17,.92);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  overflow-x: auto;
+}
+.remote-session-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 230px;
+  height: 28px;
+  padding: 0 5px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-row);
+  color: var(--text);
+  font-size: 11px;
+}
+.remote-session-tab:hover,
+.remote-session-tab.active {
+  border-color: var(--accent);
+  background: rgba(14,157,232,.16);
+}
+.remote-session-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.remote-session-kind {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 10px;
+}
+.remote-session-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-session-close {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  line-height: 1;
+  padding: 0;
+}
+.remote-session-close:hover {
+  color: var(--red);
+  background: rgba(244,67,54,.16);
 }
 .cloud-view-header {
   display: flex;

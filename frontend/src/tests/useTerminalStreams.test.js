@@ -40,8 +40,19 @@ describe('useTerminalStreams', () => {
       expect(payload.action).toBe('start')
       expect(payload.namespace).toBe('default')
       expect(payload.pod).toBe('my-pod')
+      expect(payload.resourceType).toBe('pods')
       expect(payload.container).toBe('nginx')
       expect(payload.tailLines).toBe(500)
+    })
+
+    it('sends workload resourceType when streaming deployment logs', () => {
+      const tab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      streams.startLogStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      const payload = JSON.parse(ws._lastSent)
+      expect(payload.resourceType).toBe('deployments')
+      expect(payload.pod).toBe('api')
     })
 
     it('pushes "sys" line with pod name on open', () => {
@@ -60,12 +71,45 @@ describe('useTerminalStreams', () => {
       expect(tab.lines.length).toBeGreaterThan(1)
     })
 
+    it('strips ANSI escape codes from pod logs', () => {
+      const tab = store.openLogsTab('default', 'pod', ['c'])
+      streams.startLogStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: '\x1b[32m[Nest] LOG\x1b[39m mapped route\n' }) })
+      const line = tab.lines.find(l => l.includes('[Nest] LOG'))
+      expect(line).toBeDefined()
+      expect(line).not.toContain('\x1b')
+    })
+
+    it('buffers partial pod log chunks until a full line arrives', () => {
+      const tab = store.openLogsTab('default', 'pod', ['c'])
+      streams.startLogStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      const initialCount = tab.lines.length
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: 'INFO start' }) })
+      expect(tab.lines).toHaveLength(initialCount)
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: 'ed\nWARN next\n' }) })
+      expect(tab.lines.some(l => l.includes('INFO started'))).toBe(true)
+      expect(tab.lines.some(l => l.includes('WARN next'))).toBe(true)
+    })
+
+    it('prefixes workload log lines with source pod', () => {
+      const tab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      streams.startLogStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'log', pod: 'api-abc123', data: 'INFO ready\n' }) })
+      expect(tab.lines.some(l => l.includes('[api-abc123] INFO ready'))).toBe(true)
+    })
+
     it('marks error lines with err class', () => {
       const tab = store.openLogsTab('default', 'pod', ['c'])
       streams.startLogStream(tab)
       const ws = getMockWs()
       ws._emit('open', {})
-      ws._emit('message', { data: JSON.stringify({ type: 'log', data: 'ERROR: something failed' }) })
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: 'ERROR: something failed\n' }) })
       const errLine = tab.lines.find(l => l.includes('term-line err'))
       expect(errLine).toBeDefined()
     })

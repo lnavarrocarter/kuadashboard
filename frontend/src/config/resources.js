@@ -26,6 +26,7 @@ export const RESOURCES = {
     cols:  ['Name', 'Namespace', 'Ready', 'Replicas', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, r.replicas, age(r.age)],
     actions: r => [
+      { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',       args: [r.namespace, r.name, r.containers, 'deployments'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',       args: ['deployments', r.namespace, r.name] },
       { icon: 'layers',      label: 'Scale',   cls: 'blue',  fn: 'openScale',      args: ['deployments', r.namespace, r.name, r.replicas] },
       { icon: 'file-code-2', label: 'YAML',    cls: 'blue',  fn: 'viewYaml',       args: ['deployments', r.namespace, r.name] },
@@ -37,6 +38,7 @@ export const RESOURCES = {
     cols:  ['Name', 'Namespace', 'Ready', 'Replicas', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, r.replicas, age(r.age)],
     actions: r => [
+      { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',      args: [r.namespace, r.name, r.containers, 'statefulsets'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',      args: ['statefulsets', r.namespace, r.name] },
       { icon: 'layers',      label: 'Scale',   cls: 'blue',  fn: 'openScale',    args: ['statefulsets', r.namespace, r.name, r.replicas] },
       { icon: 'file-code-2', label: 'YAML',    cls: 'blue',  fn: 'viewYaml',     args: ['statefulsets', r.namespace, r.name] },
@@ -48,6 +50,7 @@ export const RESOURCES = {
     cols:  ['Name', 'Namespace', 'Ready', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, age(r.age)],
     actions: r => [
+      { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',      args: [r.namespace, r.name, r.containers, 'daemonsets'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',      args: ['daemonsets', r.namespace, r.name] },
       { icon: 'file-code-2', label: 'YAML',    cls: 'blue',  fn: 'viewYaml',     args: ['daemonsets', r.namespace, r.name] },
       { icon: 'trash-2',     label: 'Delete',  cls: 'red',   fn: 'confirmDelete',args: ['daemonsets', r.namespace, r.name] },

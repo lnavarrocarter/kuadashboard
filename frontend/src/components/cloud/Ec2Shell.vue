@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ec2sh-backdrop" @mousedown.self="$emit('close')">
+    <div v-show="open" class="ec2sh-backdrop" @mousedown.self="$emit('close')">
       <div class="ec2sh-modal">
 
         <!-- Header -->
@@ -145,18 +145,12 @@ const form = ref({
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch(() => props.open, (val) => {
-  if (val) {
-    // Pre-fill host from instance
-    if (props.instance) {
-      form.value.host = props.instance.publicIp || props.instance.privateIp || ''
-    }
-    outputLines.value   = []
-    sessionStatus.value = 'disconnected'
-    nextTick(() => inputRef.value?.focus())
-  } else {
-    disconnectWs()
+  if (!val) return
+  if (props.instance && !form.value.host) {
+    form.value.host = props.instance.publicIp || props.instance.privateIp || ''
   }
-})
+  nextTick(() => inputRef.value?.focus())
+}, { immediate: true })
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const statusLabel = computed(() => {

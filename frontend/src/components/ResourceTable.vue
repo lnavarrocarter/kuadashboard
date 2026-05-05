@@ -33,7 +33,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in filtered" :key="rowKey(row)">
+          <tr
+            v-for="row in filtered"
+            :key="rowKey(row)"
+            :class="{ selected: selectedKey === rowKey(row) }"
+            @click="emit('select', store.resource, row)"
+          >
             <td v-for="(cell, i) in cfg.row(row)" :key="i" v-html="renderCell(cell)"></td>
             <td class="col-actions">
               <button
@@ -41,7 +46,7 @@
                 :key="action.fn + action.label"
                 :class="`action-btn icon-${action.icon} ${action.cls}`"
                 :title="action.label"
-                @click="emit('action', action.fn, action.args)"
+                @click.stop="emit('action', action.fn, action.args)"
               ></button>
             </td>
           </tr>
@@ -57,8 +62,8 @@ import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
 import { createIcons, icons } from 'lucide'
 
-const props = defineProps({ resource: String })
-const emit  = defineEmits(['action'])
+defineProps({ resource: String, selectedKey: String })
+const emit  = defineEmits(['action', 'select'])
 
 const store  = useKubeStore()
 const filter = ref('')

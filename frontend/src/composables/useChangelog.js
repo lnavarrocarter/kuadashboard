@@ -4,9 +4,24 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.6.2'
+export const CHANGELOG_VERSION = '1.7.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.7.0',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'new',    text: 'Kubernetes — auto-refresh por vista activa: Kubernetes, AWS, GCP y Helm actualizan sus recursos sin perder el contexto de trabajo' },
+      { type: 'new',    text: 'Kubernetes — panel lateral de detalle por recurso con resumen especializado, YAML estructurado, secciones por tipo y ancho ajustable' },
+      { type: 'new',    text: 'Kubernetes — metricas visuales para Pods usando metrics.k8s.io y deteccion de Prometheus, con acceso directo a Helm cuando no hay observabilidad instalada' },
+      { type: 'new',    text: 'Kubernetes Logs — streaming en tiempo real para Pods, Deployments, StatefulSets y DaemonSets con resolucion de pods por selector' },
+      { type: 'new',    text: 'Terminal Logs — buscador, filtros por fecha serializada, descarga de logs y conteo de lineas filtradas' },
+      { type: 'better', text: 'Terminal Logs — limpieza de secuencias ANSI/VT y buffer de fragmentos para serializar correctamente logs de frameworks como NestJS' },
+      { type: 'new',    text: 'YAML Editor — busqueda por confirmacion, boton Guardar, validacion/lint, estado de linea/columna/total de lineas, ruta de seccion y autocompletado con Ctrl+Space' },
+      { type: 'new',    text: 'AWS EC2 — sesiones SSH/RDP persistentes en tabs: ocultar una consola ya no corta la conexion y se puede reabrir desde la bandeja de sesiones' },
+      { type: 'fix',    text: 'AWS — resuelta advertencia de lint vue/no-v-for-template-key en la vista Athena' },
+    ],
+  },
   {
     version: '1.6.2',
     date: 'Abril 2026',

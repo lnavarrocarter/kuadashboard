@@ -246,6 +246,7 @@ function clients() {
     apps:       currentKc.makeApiClient(k8s.AppsV1Api),
     networking: currentKc.makeApiClient(k8s.NetworkingV1Api),
     batch:      currentKc.makeApiClient(k8s.BatchV1Api),
+    custom:     currentKc.makeApiClient(k8s.CustomObjectsApi),
     log:        new k8s.Log(currentKc),
   };
 }
@@ -260,6 +261,47 @@ function handleError(res, err) {
 }
 
 const PATCH_HEADERS = { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } };
+
+function selectorToString(selector = {}) {
+  const parts = [];
+  Object.entries(selector.matchLabels || {}).forEach(([key, value]) => parts.push(`${key}=${value}`));
+  (selector.matchExpressions || []).forEach(expr => {
+    const values = (expr.values || []).join(',');
+    if (expr.operator === 'In') parts.push(`${expr.key} in (${values})`);
+    else if (expr.operator === 'NotIn') parts.push(`${expr.key} notin (${values})`);
+    else if (expr.operator === 'Exists') parts.push(expr.key);
+    else if (expr.operator === 'DoesNotExist') parts.push(`!${expr.key}`);
+  });
+  return parts.join(',');
+}
+
+async function resolveLogPods(resourceType, namespace, name) {
+  const { apps, core } = clients();
+  let workload;
+  if (!resourceType || resourceType === 'pods') {
+    const podRes = await core.readNamespacedPod(name, namespace);
+    return [{ name, containers: podRes.body.spec?.containers?.map(c => c.name) || [] }];
+  }
+  if (resourceType === 'deployments') {
+    workload = (await apps.readNamespacedDeployment(name, namespace)).body;
+  } else if (resourceType === 'statefulsets') {
+    workload = (await apps.readNamespacedStatefulSet(name, namespace)).body;
+  } else if (resourceType === 'daemonsets') {
+    workload = (await apps.readNamespacedDaemonSet(name, namespace)).body;
+  } else {
+    throw new Error(`Unsupported log resource type: ${resourceType}`);
+  }
+
+  const labelSelector = selectorToString(workload.spec?.selector);
+  if (!labelSelector) throw new Error(`No pod selector found for ${resourceType}/${name}`);
+  const pods = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSelector);
+  return pods.body.items
+    .filter(pod => pod.status?.phase !== 'Succeeded' && pod.status?.phase !== 'Failed')
+    .map(pod => ({
+      name: pod.metadata.name,
+      containers: pod.spec?.containers?.map(c => c.name) || [],
+    }));
+}
 
 // ─── Contexts & Namespaces ────────────────────────────────────────────────────
 
@@ -367,6 +409,96 @@ app.get('/api/:namespace/pods/:name/yaml', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+app.get('/api/:namespace/pods/:name/metrics', async (req, res) => {
+  try {
+    const { custom } = clients();
+    const { namespace, name } = req.params;
+    const result = await custom.getNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods', name);
+    const body = result.body || result || {};
+    const containers = body.containers || [];
+    const cpuNano = containers.reduce((sum, c) => sum + parseCpu(c.usage?.cpu), 0);
+    const memoryBytes = containers.reduce((sum, c) => sum + parseMemory(c.usage?.memory), 0);
+    res.json({
+      timestamp: body.timestamp,
+      window: body.window,
+      containers: containers.map(c => ({ name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })),
+      cpu: {
+        nano: cpuNano,
+        cores: cpuNano / 1e9,
+        display: formatCpu(cpuNano),
+        percent: Math.min(100, Math.max(2, (cpuNano / 1e9) * 100)),
+      },
+      memory: {
+        bytes: memoryBytes,
+        display: formatBytes(memoryBytes),
+        percent: Math.min(100, Math.max(2, memoryBytes / (512 * 1024 * 1024) * 100)),
+      },
+    });
+  } catch (err) {
+    const message = err.body?.message || err.message || '';
+    if (err.statusCode === 404 || /metrics\.k8s\.io|not found|the server could not find/i.test(message)) {
+      return res.status(503).json({ error: 'Kubernetes Metrics API is not available. Install Metrics Server or Prometheus for resource usage.' });
+    }
+    handleError(res, err);
+  }
+});
+
+app.get('/api/monitoring/prometheus/status', async (_req, res) => {
+  try {
+    const { core } = clients();
+    const services = await core.listServiceForAllNamespaces();
+    const serviceList = services.body || services || {};
+    const matches = (serviceList.items || [])
+      .filter(svc => {
+        const text = [
+          svc.metadata?.name,
+          svc.metadata?.namespace,
+          ...Object.keys(svc.metadata?.labels || {}),
+          ...Object.values(svc.metadata?.labels || {}),
+        ].join(' ').toLowerCase();
+        return text.includes('prometheus');
+      })
+      .map(svc => ({
+        name: svc.metadata.name,
+        namespace: svc.metadata.namespace,
+        type: svc.spec?.type,
+        ports: (svc.spec?.ports || []).map(p => ({ name: p.name, port: p.port, targetPort: p.targetPort })),
+      }));
+    res.json({ available: matches.length > 0, services: matches });
+  } catch (err) { handleError(res, err); }
+});
+
+function parseCpu(value = '0') {
+  const raw = String(value);
+  const num = parseFloat(raw);
+  if (Number.isNaN(num)) return 0;
+  if (raw.endsWith('n')) return num;
+  if (raw.endsWith('u')) return num * 1000;
+  if (raw.endsWith('m')) return num * 1e6;
+  return num * 1e9;
+}
+
+function parseMemory(value = '0') {
+  const raw = String(value);
+  const num = parseFloat(raw);
+  if (Number.isNaN(num)) return 0;
+  const units = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1000, M: 1000 ** 2, G: 1000 ** 3, T: 1000 ** 4 };
+  const unit = raw.replace(String(num), '');
+  return num * (units[unit] || 1);
+}
+
+function formatCpu(nano) {
+  if (nano < 1e6) return `${Math.round(nano / 1000)}u`;
+  if (nano < 1e9) return `${Math.round(nano / 1e6)}m`;
+  return `${(nano / 1e9).toFixed(2)} cores`;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KiB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
+}
+
 app.delete('/api/:namespace/pods/:name', async (req, res) => {
   try {
     const { core } = clients();
@@ -398,6 +530,7 @@ app.get('/api/:namespace/deployments', async (req, res) => {
       replicas:  d.spec.replicas ?? 0,
       age:       d.metadata.creationTimestamp,
       images:    d.spec.template.spec.containers.map(c => c.image),
+      containers: d.spec.template.spec.containers.map(c => c.name),
     })));
   } catch (err) { handleError(res, err); }
 });
@@ -475,6 +608,7 @@ app.get('/api/:namespace/statefulsets', async (req, res) => {
       ready:     `${ss.status.readyReplicas ?? 0}/${ss.spec.replicas ?? 0}`,
       replicas:  ss.spec.replicas ?? 0,
       age:       ss.metadata.creationTimestamp,
+      containers: ss.spec.template.spec.containers.map(c => c.name),
     })));
   } catch (err) { handleError(res, err); }
 });
@@ -553,6 +687,7 @@ app.get('/api/:namespace/daemonsets', async (req, res) => {
       current:   ds.status.currentNumberScheduled ?? 0,
       ready:     ds.status.numberReady ?? 0,
       age:       ds.metadata.creationTimestamp,
+      containers: ds.spec.template.spec.containers.map(c => c.name),
     })));
   } catch (err) { handleError(res, err); }
 });
@@ -997,10 +1132,19 @@ app.put('/api/apply', async (req, res) => {
     const { yamlContent } = req.body;
     if (!yamlContent) return res.status(400).json({ error: 'yamlContent required' });
 
-    const obj       = yaml.load(yamlContent);
+    let obj;
+    try {
+      obj = yaml.load(yamlContent);
+    } catch (err) {
+      const mark = err.mark ? `line ${err.mark.line + 1}, column ${err.mark.column + 1}: ` : '';
+      return res.status(400).json({ error: `YAML validation error: ${mark}${err.reason || err.message}` });
+    }
+    if (!obj || typeof obj !== 'object') return res.status(400).json({ error: 'YAML must contain a Kubernetes object' });
     const kind      = obj.kind;
     const ns        = obj.metadata?.namespace || 'default';
     const name      = obj.metadata?.name;
+    if (!kind) return res.status(400).json({ error: 'YAML validation error: missing kind' });
+    if (!name) return res.status(400).json({ error: 'YAML validation error: missing metadata.name' });
     const { core, apps, networking } = clients();
 
     const MERGE = { headers: { 'Content-Type': 'application/merge-patch+json' } };
@@ -1030,21 +1174,19 @@ app.put('/api/apply', async (req, res) => {
 // ─── WebSocket – Log streaming ────────────────────────────────────────────────
 
 wss.on('connection', ws => {
-  let currentStream  = null;
-  let currentReq     = null;
+  let currentStreams = [];
+  let currentReqs    = [];
 
   function stopStream() {
-    if (currentReq) {
+    currentReqs.forEach(req => {
       try {
-        if (typeof currentReq.abort    === 'function') currentReq.abort();
-        if (typeof currentReq.destroy  === 'function') currentReq.destroy();
+        if (typeof req.abort    === 'function') req.abort();
+        if (typeof req.destroy  === 'function') req.destroy();
       } catch (_) {}
-      currentReq = null;
-    }
-    if (currentStream) {
-      try { currentStream.destroy(); } catch (_) {}
-      currentStream = null;
-    }
+    });
+    currentStreams.forEach(s => { try { s.destroy(); } catch (_) {} });
+    currentReqs = [];
+    currentStreams = [];
   }
 
   ws.on('message', async raw => {
@@ -1055,26 +1197,33 @@ wss.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopStream();
-      const { namespace, pod, container, previous, tailLines = 200 } = msg;
-
-      currentStream = new stream.PassThrough();
-      currentStream.on('data', chunk => {
-        if (ws.readyState === WebSocket.OPEN)
-          ws.send(JSON.stringify({ type: 'log', data: chunk.toString('utf-8') }));
-      });
+      const { namespace, pod, resourceType = 'pods', container, previous, tailLines = 200 } = msg;
 
       try {
         const { log } = clients();
-        currentReq = await log.log(
-          namespace, pod, container || null, currentStream,
-          err => {
-            if (err && ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'error', data: err.message }));
+        const pods = await resolveLogPods(resourceType, namespace, pod);
+        const selectedPods = pods.filter(p => !container || p.containers.includes(container));
+        if (!selectedPods.length) {
+          throw new Error(`No pods found for ${resourceType}/${pod}${container ? ` with container ${container}` : ''}`);
+        }
+        for (const targetPod of selectedPods) {
+          const logStream = new stream.PassThrough();
+          currentStreams.push(logStream);
+          logStream.on('data', chunk => {
             if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'done' }));
-          },
-          { follow: true, tailLines, previous: !!previous }
-        );
+              ws.send(JSON.stringify({ type: 'log', pod: targetPod.name, data: chunk.toString('utf-8') }));
+          });
+
+          const req = await log.log(
+            namespace, targetPod.name, container || null, logStream,
+            err => {
+              if (err && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'error', data: `${targetPod.name}: ${err.message}` }));
+            },
+            { follow: true, tailLines, previous: !!previous }
+          );
+          currentReqs.push(req);
+        }
       } catch (err) {
         if (ws.readyState === WebSocket.OPEN)
           ws.send(JSON.stringify({ type: 'error', data: err.message }));

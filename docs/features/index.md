@@ -12,7 +12,11 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 | **Restart** | Deployments, StatefulSets |
 | **Scale** | Deployments, StatefulSets |
 | **YAML View/Edit + Apply** | All resources |
-| **Live Log Streaming** | Pods (WebSocket, multi-container) |
+| **YAML Search/Lint/Save** | Confirmed search, validation, save button, section path and autocomplete |
+| **Resource Detail Panel** | Per-resource summaries, structured YAML tree, resizable side panel |
+| **Pod Metrics** | CPU/memory via metrics.k8s.io, Prometheus detection and Helm handoff |
+| **Live Log Streaming** | Pods, Deployments, StatefulSets, DaemonSets (WebSocket, multi-container) |
+| **Log Search/Download** | Text search, serialized date filters and `.log` export |
 | **Interactive Shell** | Pods (exec via WebSocket) |
 | **Delete** | All resources |
 | **Cordon / Uncordon** | Nodes |
@@ -26,7 +30,7 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - **Lambda** — List functions, view configs, invoke
 - **ECS** — Browse clusters, services, tasks
 - **EKS** — List clusters, view details
-- **EC2** — Manage instances, start/stop
+- **EC2** — Manage instances, start/stop, persistent SSH/RDP remote sessions
 - **S3** — Browse buckets, list/download objects
 - **API Gateway** — REST & HTTP APIs, integrations
 - **EventBridge** — Rules, targets, event buses
@@ -51,6 +55,7 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 
 - **Port Forwarding** — One-click port forwards with visual manager
 - **Local Shell** — Integrated terminal for local commands
+- **Persistent Remote Sessions** — EC2 SSH/RDP sessions stay alive while hidden and can be restored from session tabs
 - **Env Manager** — Store and manage cloud credentials/profiles
 
 ## UI
@@ -58,6 +63,7 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - Dark mode native design
 - Sortable, filterable resource tables
 - Multi-tab terminal panel
+- Resizable Kubernetes resource panel
 - Toast notifications
 - Modal dialogs for destructive actions
 - Status bar with context and namespace info

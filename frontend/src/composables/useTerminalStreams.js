@@ -18,6 +18,7 @@ export function useTerminalStreams() {
 
   function startLogStream(tab, previous = false) {
     store.stopStream(tab)
+    tab._logBuffers = {}
     tab.streaming = true
 
     const ws = markRaw(new WebSocket(wsUrl('/ws/logs')))
@@ -28,21 +29,25 @@ export function useTerminalStreams() {
         action: 'start',
         namespace:  tab.ns,
         pod:        tab.pod,
+        resourceType: tab.resourceType || 'pods',
         container:  tab.container || null,
         previous,
         tailLines:  500,
       }))
-      store.pushLine(tab, `▶ Streaming ${tab.pod}${tab.container ? ' / ' + tab.container : ''}`, 'sys')
+      const target = tab.resourceType && tab.resourceType !== 'pods' ? `${tab.resourceType}/${tab.pod}` : tab.pod
+      store.pushLine(tab, `▶ Streaming ${target}${tab.container ? ' / ' + tab.container : ''}`, 'sys')
     })
 
     ws.addEventListener('message', e => {
       let msg
       try { msg = JSON.parse(e.data) } catch (_) { return }
       if (msg.type === 'log') {
-        _appendLog(tab, msg.data)
+        _appendLog(tab, msg.data, msg.pod)
       } else if (msg.type === 'error') {
+        flushLogBuffers(tab)
         store.pushLine(tab, '✖ ' + msg.data, 'err')
       } else if (msg.type === 'done') {
+        flushLogBuffers(tab)
         tab.streaming = false
         store.pushLine(tab, '■ Stream ended', 'sys')
       }
@@ -50,6 +55,7 @@ export function useTerminalStreams() {
 
     ws.addEventListener('close', () => {
       if (tab.ws !== ws) return
+      flushLogBuffers(tab)
       tab.ws = null
       tab.streaming = false
     })
@@ -106,20 +112,36 @@ export function useTerminalStreams() {
     })
   }
 
-  function _appendLog(tab, raw) {
-    raw.split('\n').forEach(line => {
-      if (!line.trim()) return
-      let cls = ''
-      if (/error|exception|fatal|panic/i.test(line)) cls = 'err'
-      else if (/warn/i.test(line)) cls = 'warn'
-      else if (/\b(info|debug)\b/i.test(line)) cls = 'info'
-      store.pushLine(tab, line, cls)
+  function _appendLog(tab, raw, sourcePod = null) {
+    const key = sourcePod || '__default__'
+    const buffers = tab._logBuffers || (tab._logBuffers = {})
+    const clean = normalizeTerminalText(raw)
+    const text = `${buffers[key] || ''}${clean}`
+    const lines = text.split('\n')
+    buffers[key] = lines.pop() || ''
+    lines.forEach(line => pushLogLine(tab, line, sourcePod))
+  }
+
+  function pushLogLine(tab, line, sourcePod = null) {
+    if (!line.trim()) return
+    const text = sourcePod && tab.resourceType !== 'pods' ? `[${sourcePod}] ${line}` : line
+    let cls = ''
+    if (/error|exception|fatal|panic/i.test(text)) cls = 'err'
+    else if (/warn/i.test(text)) cls = 'warn'
+    else if (/\b(info|debug|log)\b/i.test(text)) cls = 'info'
+    store.pushLine(tab, text, cls)
+  }
+
+  function flushLogBuffers(tab) {
+    const buffers = tab._logBuffers || {}
+    Object.entries(buffers).forEach(([key, pending]) => {
+      if (pending) pushLogLine(tab, pending, key === '__default__' ? null : key)
     })
+    tab._logBuffers = {}
   }
 
   function _appendRaw(tab, raw, cls) {
-    // Strip ANSI escape codes
-    const clean = raw.replace(/\x1b\[[0-9;]*[mGKHFABCDSTJu]/g, '')
+    const clean = normalizeTerminalText(raw)
     clean.split('\n').forEach(line => {
       if (!line) return
       // Auto-classify if no class was forced
@@ -135,6 +157,17 @@ export function useTerminalStreams() {
     if (/warn(ing)?/i.test(l)) return 'warn'
     if (/\b(ok|done|success(ful)?|complete|passed|running|ready)\b/i.test(l)) return 'ok'
     return ''
+  }
+
+  function normalizeTerminalText(raw = '') {
+    return String(raw)
+      .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, '')
+      .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
+      .replace(/\x1b[()][A-B0-9]/g, '')
+      .replace(/\x1b[@-_]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
   }
 
   /** Connect to the local shell WebSocket (/ws/shell) */

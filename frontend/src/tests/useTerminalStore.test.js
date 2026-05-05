@@ -44,6 +44,21 @@ describe('useTerminalStore', () => {
       store.openLogsTab('ns-b', 'pod', ['app'])
       expect(store.tabs).toHaveLength(2)
     })
+
+    it('creates workload log tabs with resourceType metadata', () => {
+      const tab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      expect(tab.type).toBe('log')
+      expect(tab.resourceType).toBe('deployments')
+      expect(tab.pod).toBe('api')
+      expect(tab.label).toContain('deployments logs')
+    })
+
+    it('keeps pod and workload log tabs separate for same name', () => {
+      const podTab = store.openLogsTab('default', 'api', ['app'])
+      const deployTab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      expect(podTab.id).not.toBe(deployTab.id)
+      expect(store.tabs).toHaveLength(2)
+    })
   })
 
   describe('openExecTab()', () => {
@@ -158,6 +173,15 @@ describe('useTerminalStore', () => {
       store.pushLine(tab, '<script>alert("xss")</script>')
       expect(tab.lines[0]).toContain('&lt;script&gt;')
       expect(tab.lines[0]).not.toContain('<script>')
+    })
+
+    it('stores plain text and serialized timestamp metadata', () => {
+      const tab = store.openLogsTab('default', 'pod', ['c'])
+      store.pushLine(tab, '[Nest] 19 - 05/04/2026, 8:55:37 PM LOG started')
+      expect(tab.entries).toHaveLength(1)
+      expect(tab.entries[0].text).toContain('LOG started')
+      expect(new Date(tab.entries[0].serializedAt).getFullYear()).toBe(2026)
+      expect(new Date(tab.entries[0].serializedAt).getMonth()).toBe(4)
     })
   })
 
