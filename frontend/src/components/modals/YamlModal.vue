@@ -97,6 +97,11 @@ const props = defineProps({ show: Boolean, title: String, resourceType: String, 
 const emit  = defineEmits(['close'])
 
 const { toast } = useToast()
+const CLUSTER_RESOURCES = new Set([
+  'nodes', 'namespaces', 'pvs', 'storageclasses', 'ingressclasses',
+  'priorityclasses', 'runtimeclasses', 'mutatingwebhookconfigurations',
+  'validatingwebhookconfigurations',
+])
 const content = ref('')
 const error   = ref('')
 const lintError = ref('')
@@ -197,9 +202,9 @@ watch(() => props.show, async v => {
   searchQuery.value = ''
   activeMatch.value = -1
   try {
-    const url = props.resourceType === 'nodes'
-      ? `/api/nodes/${props.name}/yaml`
-      : `/api/${props.namespace}/${props.resourceType}/${props.name}/yaml`
+    const url = CLUSTER_RESOURCES.has(props.resourceType)
+      ? `/api/${props.resourceType}/${encodeURIComponent(props.name)}/yaml`
+      : `/api/${encodeURIComponent(props.namespace)}/${props.resourceType}/${encodeURIComponent(props.name)}/yaml`
     content.value = await api('GET', url)
     validateYaml()
   } catch (e) {

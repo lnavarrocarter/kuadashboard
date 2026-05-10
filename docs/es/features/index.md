@@ -8,21 +8,26 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 
 | Funcionalidad | Recursos |
 |---------------|----------|
-| **Navegar & Filtrar** | Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVCs, Nodes, Events |
+| **Navegar, Filtrar & Seleccionar** | Pods, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, Endpoints, EndpointSlices, ConfigMaps, Secrets, PVCs, PVs, StorageClasses, ResourceQuotas, LimitRanges, HPAs, PDBs, Leases, Nodes, Events y recursos de cluster |
 | **Reiniciar** | Deployments, StatefulSets |
 | **Escalar** | Deployments, StatefulSets |
 | **Ver/Editar YAML + Aplicar** | Todos los recursos |
 | **Buscar/Lint/Guardar YAML** | Búsqueda confirmada, validación, botón de guardado, ruta de sección y autocompletado |
-| **Panel de Detalle de Recursos** | Resúmenes por tipo, árbol YAML estructurado y panel lateral ajustable |
-| **Métricas de Pods** | CPU/memoria vía metrics.k8s.io, detección de Prometheus y acceso a Helm |
+| **Operaciones Masivas** | Seleccion multiple y eliminacion masiva para recursos soportados |
+| **Panel de Detalle de Recursos** | Resumen por tipo, secciones data/env editables, arbol YAML estructurado, eventos, metricas y panel lateral ajustable |
+| **Edicion de Config y Secrets** | Edicion clave/valor para ConfigMaps y Secrets, mas variables de entorno de workloads |
+| **Metricas & Eventos** | CPU/memoria via metrics.k8s.io, fallback Prometheus, metricas de Nodes y notificaciones de eventos relacionados |
+| **Flujo de Instalacion Helm** | Buscar charts, instalar/actualizar en el cluster activo, ver releases instalados y desinstalar releases |
 | **Streaming de Logs en Vivo** | Pods, Deployments, StatefulSets, DaemonSets (WebSocket, multi-contenedor) |
 | **Búsqueda/Descarga de Logs** | Búsqueda de texto, filtros por fecha serializada y exportación `.log` |
 | **Shell Interactiva** | Pods (exec vía WebSocket) |
 | **Eliminar** | Todos los recursos |
 | **Cordon / Uncordon** | Nodes |
 | **Drain** | Nodes (cordon + evict pods) |
+| **Ordenamiento por Age** | Formato de antiguedad legible con ordenamiento numerico por duracion |
 | **Multi-contexto** | Cambiar contextos desde el encabezado |
 | **Multi-namespace** | Selector global de namespace (incluyendo "Todos los namespaces") |
+| **Importar Kubeconfig** | Pegar YAML, elegir un archivo local en Electron o registrar una ruta kubeconfig existente |
 
 ## Proveedores Cloud
 
@@ -53,7 +58,8 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 
 ## Herramientas
 
-- **Port Forwarding** — Port forwards con un clic y gestor visual
+- **Port Forwarding** — Tuneles confiables para Services/Pods con resolucion del pod objetivo, estado persistente y auto-reconexion
+- **Helm** — Busqueda/instalacion de charts, inventario de releases, desinstalacion y preset de compatibilidad para metrics-server
 - **Shell Local** — Terminal integrada para comandos locales
 - **Sesiones Remotas Persistentes** — SSH/RDP a EC2 permanece vivo al ocultarse y puede restaurarse desde tabs de sesión
 - **Env Manager** — Almacenar y gestionar credenciales/perfiles cloud

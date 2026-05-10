@@ -100,30 +100,31 @@
         <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
-            <a v-for="r in ['pods','deployments','statefulsets','daemonsets']" :key="r"
+            <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
-            <a v-for="r in ['services','ingresses']" :key="r"
+            <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
-            <a v-for="r in ['configmaps','secrets']" :key="r"
+            <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === null && store.resource === 'pvcs' }]"
-               @click.prevent="setResource('pvcs')">PVC</a>
+            <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
+              :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+              @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
-            <a v-for="r in ['nodes','events']" :key="r"
+            <a v-for="r in ['nodes','namespaces','events']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
@@ -292,6 +293,7 @@
                 :selected-key="selectedKubeKey"
                 @action="handleAction"
                 @select="selectKubeResource"
+                @bulk-delete="openBulkDelete"
               />
               <div
                 v-if="selectedKubeResource"
@@ -342,7 +344,7 @@
     <DeleteModal      :show="modals.drain"          :message="modalData.drainMsg"            @confirm="confirmDrain"          @close="modals.drain = false" />
     <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" @confirm="confirmScale" @close="modals.scale = false" />
     <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
-    <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" @close="modals.portForward = false" @started="pfPanelVisible = true" />
+    <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help"                                                    @close="modals.help = false" />
     <ProfileModal
@@ -414,7 +416,12 @@ const LABELS = {
   pods: 'Pods', deployments: 'Deployments', statefulsets: 'StatefulSets',
   daemonsets: 'DaemonSets', services: 'Services', ingresses: 'Ingresses',
   configmaps: 'ConfigMaps', secrets: 'Secrets', pvcs: 'PVC',
-  nodes: 'Nodes', events: 'Events',
+  replicasets: 'ReplicaSets', jobs: 'Jobs', cronjobs: 'CronJobs',
+  endpointslices: 'EndpointSlices', endpoints: 'Endpoints', ingressclasses: 'IngressClasses', networkpolicies: 'NetworkPolicies',
+  resourcequotas: 'ResourceQuotas', limitranges: 'LimitRanges', hpas: 'HorizontalPodAutoscalers', pdbs: 'PodDisruptionBudgets',
+  priorityclasses: 'PriorityClasses', runtimeclasses: 'RuntimeClasses', leases: 'Leases',
+  mutatingwebhookconfigurations: 'MutatingWebhookConfigurations', validatingwebhookconfigurations: 'ValidatingWebhookConfigurations',
+  pvs: 'PersistentVolumes', storageclasses: 'StorageClasses', namespaces: 'Namespaces', nodes: 'Nodes', events: 'Events',
 }
 
 const AWS_SIDEBAR = {
@@ -518,10 +525,11 @@ watch(kubeDetailWidth, v => LS.set('kubeDetailWidth', String(v)))
 const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
 const modalData = reactive({
   deleteMsg: '', deletePending: null,
+  deleteManyPending: [],
   deleteContextMsg: '', deleteContextName: '',
   scaleName: '', scaleCurrent: 0, scalePending: null,
   yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '',
-  pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false,
+  pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false, pfResourceType: 'services',
   drainMsg: '', drainPending: null,
   connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
@@ -583,6 +591,7 @@ function deleteConnectionConfirm(provider) {
   modalData.deleteConnectionId   = id
   modalData.deleteConnectionMode = true
   modalData.deletePending        = null
+  modalData.deleteManyPending    = []
   modalData.deleteMsg            = `Delete profile "${profile.name}"? All stored keys will be permanently removed.`
   modals.delete                  = true
 }
@@ -680,7 +689,8 @@ function handleAction(fn, args) {
     viewYaml:        ([type, ns, name])     => openYaml(type, ns, name),
     confirmDelete:   ([type, ns, name])     => openDelete(type, ns, name),
     openScale:       ([type, ns, name, cur])=> openScale(type, ns, name, cur),
-    openPortForward: ([ns, name, ports])    => openPf(ns, name, ports),
+    openPortForward: ([ns, name, ports, resourceType]) => openPf(ns, name, ports, resourceType || 'services'),
+    openExternal:    ([url])                 => openExternalUrl(url),
     restart:         ([type, ns, name])     => doRestart(type, ns, name),
     cordonNode:      ([name, cordon])       => doCordon(name, cordon),
     confirmDrain:    ([name])               => openDrain(name),
@@ -692,11 +702,28 @@ function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = term
 function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers); startExecStream(tab) }
 function restartStream(tab, previous = false) { if (tab.type === 'exec') startExecStream(tab); else startLogStream(tab, previous) }
 
+function openExternalUrl(url) {
+  if (!url) return
+  if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
+  else window.open(url, '_blank')
+}
+
 function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name }); modals.yaml = true }
-function openDelete(type, ns, name)  { modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openDelete(type, ns, name)  { modalData.deleteManyPending = []; modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openBulkDelete(rows) {
+  const selected = Array.isArray(rows) ? rows : []
+  if (!selected.length) return
+  modalData.deleteConnectionMode = false
+  modalData.deletePending = null
+  modalData.deleteManyPending = selected.map(row => ({ type: store.resource, ns: row.namespace, name: row.name }))
+  const sample = selected.slice(0, 3).map(row => `${row.namespace}/${row.name}`).join(', ')
+  const more = selected.length > 3 ? ` y ${selected.length - 3} mas` : ''
+  modalData.deleteMsg = `Delete ${selected.length} ${LABELS[store.resource] || store.resource}: ${sample}${more}? Cannot be undone.`
+  modals.delete = true
+}
 function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
-function openPf(ns, name, ports)     { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${ns}/${name}`, pfManual: false }); modals.portForward = true }
-function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true }); modals.portForward = true }
+function openPf(ns, name, ports, resourceType = 'services') { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${resourceType}/${ns}/${name}`, pfManual: false, pfResourceType: resourceType }); modals.portForward = true }
+function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true, pfResourceType: 'services' }); modals.portForward = true }
 function openDrain(name)             { modalData.drainPending = name; modalData.drainMsg = `Drain node "${name}"? It will be cordoned and pods evicted.`; modals.drain = true }
 
 async function confirmDelete() {
@@ -712,12 +739,27 @@ async function confirmDelete() {
     }
     return
   }
+  const many = modalData.deleteManyPending || []
+  if (many.length) {
+    modals.delete = false
+    modalData.deleteManyPending = []
+    const results = await Promise.allSettled(many.map(item => deleteKubeResource(item.type, item.ns, item.name)))
+    const failed = results.filter(result => result.status === 'rejected')
+    const removed = results.length - failed.length
+    if (removed) toast(`Deleted ${removed} resource(s)`, failed.length ? 'warn' : 'success')
+    if (failed.length) toast(`${failed.length} resource(s) failed to delete`, 'error')
+    setTimeout(() => store.loadResources(), 600)
+    return
+  }
   const { type, ns, name } = modalData.deletePending; modals.delete = false
   try {
-    if (type === 'nodes') await api('DELETE', `/api/nodes/${name}`)
-    else await api('DELETE', `/api/${ns}/${type}/${name}`)
+    await deleteKubeResource(type, ns, name)
     toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources(), 600)
   } catch (e) { toast(e.message, 'error') }
+}
+function deleteKubeResource(type, ns, name) {
+  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`)
+  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`)
 }
 async function confirmScale(replicas) {
   const { type, ns, name } = modalData.scalePending; modals.scale = false

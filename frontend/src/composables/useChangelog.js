@@ -4,9 +4,25 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.7.0'
+export const CHANGELOG_VERSION = '1.8.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.8.0',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'new',    text: 'Kubernetes — seleccion multiple en tablas de recursos, eliminacion masiva y ordenamiento de Age por duracion real con formato dias/horas/minutos/segundos' },
+      { type: 'new',    text: 'Kubernetes — menu ampliado con mas recursos de workloads, networking, storage, config, policy, RBAC, scheduling, admission y cluster' },
+      { type: 'new',    text: 'ConfigMaps y Secrets — editor de datos en formato clave/valor, mapeo sencillo y vista de variables de entorno asociadas' },
+      { type: 'new',    text: 'Workloads — edicion de variables de entorno para contenedores desde el panel de detalle' },
+      { type: 'new',    text: 'Helm — busqueda de charts, instalacion directa en el cluster, gestion de releases instalados y estado/output de instalacion visible' },
+      { type: 'new',    text: 'Helm — preset de compatibilidad para metrics-server con flags de kubelet TLS y direccion preferida para clusters locales o self-signed' },
+      { type: 'new',    text: 'Observabilidad — metricas para Pods, workloads y Nodes con metrics.k8s.io y fallback via Prometheus detectado en Services del cluster' },
+      { type: 'new',    text: 'Eventos — visor de eventos y notificaciones relacionadas para recursos y Nodes desde el panel de detalle' },
+      { type: 'new',    text: 'Kubeconfig — importacion desde YAML pegado, archivo local mediante Electron y registro manual de rutas existentes' },
+      { type: 'fix',    text: 'Port Forwarding — tuneles mas estables para Services y Pods con resolucion de pod objetivo, estado persistente y reconexion' },
+    ],
+  },
   {
     version: '1.7.0',
     date: 'Mayo 2026',

@@ -9,6 +9,7 @@ server.js          // Main entry — Express app, K8s routes, WebSocket setup
 routes/
 ├── aws.js         // AWS service endpoints
 ├── gcp.js         // GCP service endpoints
+├── helm.js        // Helm repositories, chart search, install and releases
 ├── envManager.js  // Profile/credential management
 ├── localShell.js  // Local terminal WebSocket
 └── systemTools.js // CLI tool detection
@@ -29,6 +30,10 @@ routes/
 | POST | `/api/:ns/deployments/:name/restart` | Restart deployment |
 | POST | `/api/:ns/deployments/:name/scale` | Scale deployment |
 | POST | `/api/kubeconfig/import` | Import kubeconfig YAML |
+| POST | `/api/kubeconfig/path` | Register an existing kubeconfig file path |
+| GET | `/api/:ns/:resource/:name/metrics` | Metrics for Pods and workloads with Prometheus fallback |
+| GET | `/api/nodes/:name/metrics` | Node CPU/memory metrics |
+| GET | `/api/events/related` | Events related to a resource or Node |
 | POST | `/api/nodes/:name/cordon` | Cordon node |
 | POST | `/api/nodes/:name/uncordon` | Uncordon node |
 | POST | `/api/nodes/:name/drain` | Drain node |
@@ -40,6 +45,7 @@ routes/
 | `/api/cloud/gcp` | `routes/gcp.js` | GCP services |
 | `/api/cloud/envs` | `routes/envManager.js` | Profile management |
 | `/api/system` | `routes/systemTools.js` | CLI tool detection |
+| `/api/helm` | `routes/helm.js` | Helm repositories, chart search, install, release inventory and uninstall |
 
 ## WebSocket Endpoints
 
@@ -58,5 +64,10 @@ The server merges kubeconfig files from multiple sources:
 1. `KUBECONFIG` env var paths
 2. Default `~/.kube/config`
 3. UI-imported configs (`~/.kube/kuadashboard_merged.yaml`)
+4. Registered file paths (`~/.kube/kuadashboard_paths.json`)
 
 Merging is non-destructive — existing entries are never overwritten.
+
+## Metrics Fallback
+
+Kubernetes metrics first use the `metrics.k8s.io/v1beta1` API. If Metrics Server is unavailable, KuaDashboard discovers Prometheus Services and queries them through the Kubernetes API server Service proxy, preserving the user's current kubeconfig and context.

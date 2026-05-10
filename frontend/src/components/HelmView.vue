@@ -154,6 +154,7 @@
             <th>Version</th>
             <th>App Version</th>
             <th>Description</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -162,6 +163,11 @@
             <td>{{ c.version }}</td>
             <td>{{ c.app_version || '—' }}</td>
             <td class="text-dim" style="max-width:400px; white-space:normal">{{ c.description }}</td>
+            <td class="col-actions">
+              <button class="btn sm primary" title="Install chart" @click="openInstall(c)">
+                <i data-lucide="package-plus"></i> Install
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -227,6 +233,71 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Install chart modal ──────────────────────────────────────────── -->
+    <div v-if="installModal" class="modal-overlay" @click.self="closeInstall">
+      <div class="modal-box helm-install-modal">
+        <div class="modal-header">
+          <span>Install Chart</span>
+          <button class="btn-close" @click="closeInstall">✕</button>
+        </div>
+        <div class="modal-body install-body">
+          <div class="install-chart-summary">
+            <strong>{{ installForm.chart }}</strong>
+            <span class="text-dim">{{ installTarget?.description || '' }}</span>
+          </div>
+          <div class="install-grid">
+            <label class="form-label">
+              Release name
+              <input v-model.trim="installForm.releaseName" class="form-input" placeholder="my-release" />
+            </label>
+            <label class="form-label">
+              Namespace
+              <input v-model.trim="installForm.namespace" class="form-input" placeholder="default" />
+            </label>
+            <label class="form-label">
+              Version
+              <input v-model.trim="installForm.version" class="form-input" placeholder="latest" />
+            </label>
+            <label class="form-label install-check">
+              <input v-model="installForm.createNamespace" type="checkbox" />
+              Create namespace if needed
+            </label>
+            <label class="form-label install-check">
+              <input v-model="installForm.wait" type="checkbox" />
+              Wait until resources are ready
+            </label>
+          </div>
+          <div v-if="isMetricsServerInstall" class="install-preset-box">
+            <label class="form-label install-check">
+              <input v-model="metricsServerPreset" type="checkbox" @change="applyMetricsServerPreset" />
+              Metrics Server compatibility values
+            </label>
+            <p>
+              Adds kubelet TLS and address flags commonly needed in Docker Desktop, kind, minikube and self-signed clusters.
+            </p>
+          </div>
+          <div v-if="installing || installStatus" class="install-status-box">
+            <div class="install-status-head">
+              <i :data-lucide="installing ? 'loader-2' : 'check-circle-2'"></i>
+              <strong>{{ installStatus || 'Preparing installation…' }}</strong>
+            </div>
+            <pre v-if="installOutput">{{ installOutput }}</pre>
+          </div>
+          <label class="form-label">
+            Values YAML <span class="text-dim">(optional)</span>
+            <textarea v-model="installForm.values" class="form-input install-values" spellcheck="false" placeholder="replicaCount: 2"></textarea>
+          </label>
+          <div v-if="installError" class="error-inline">{{ installError }}</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="closeInstall">Cancel</button>
+          <button class="btn primary" :disabled="installing" @click="installChart">
+            <i data-lucide="package-plus"></i> {{ installing ? 'Installing…' : 'Install' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -234,12 +305,14 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useKubeStore } from '../stores/useKubeStore'
+import { useToast } from '../composables/useToast'
 
 const props = defineProps({
   initialTab: { type: String, default: 'releases' },
 })
 
 const store = useKubeStore()
+const { toast } = useToast()
 
 // ── State ──────────────────────────────────────────────────────────────────
 const tab = ref(props.initialTab)
@@ -272,6 +345,23 @@ const searchResults = ref(null)
 const searching     = ref(false)
 const searchError   = ref(null)
 
+// Install
+const installModal = ref(false)
+const installTarget = ref(null)
+const installing = ref(false)
+const installError = ref(null)
+const installStatus = ref('')
+const installOutput = ref('')
+const installForm = ref({ chart: '', releaseName: '', namespace: 'default', version: '', values: '', createNamespace: true, wait: false })
+const metricsServerPreset = ref(false)
+
+const METRICS_SERVER_VALUES = `args:
+  - --kubelet-insecure-tls
+  - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+apiService:
+  insecureSkipTLSVerify: true
+`
+
 // ── Computed ───────────────────────────────────────────────────────────────
 const filteredReleases = computed(() => {
   const q = filter.value.toLowerCase()
@@ -280,6 +370,8 @@ const filteredReleases = computed(() => {
     JSON.stringify(r).toLowerCase().includes(q)
   )
 })
+
+const isMetricsServerInstall = computed(() => isMetricsServerChart(installForm.value.chart))
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function currentContext() {
@@ -463,6 +555,97 @@ async function searchCharts() {
     searchError.value = err.message
   } finally {
     searching.value = false
+    await refreshIcons()
+  }
+}
+
+function chartToReleaseName(chartName = '') {
+  return String(chartName).split('/').pop()?.toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '') || ''
+}
+
+function isMetricsServerChart(chartName = '') {
+  const name = String(chartName).toLowerCase()
+  return name === 'metrics-server/metrics-server' || name.endsWith('/metrics-server')
+}
+
+function applyMetricsServerPreset() {
+  if (!isMetricsServerInstall.value) return
+  const currentValues = installForm.value.values.trim()
+  if (metricsServerPreset.value) {
+    if (!currentValues) installForm.value.values = METRICS_SERVER_VALUES
+    return
+  }
+  if (currentValues === METRICS_SERVER_VALUES.trim()) installForm.value.values = ''
+}
+
+function openInstall(chart) {
+  installTarget.value = chart
+  installError.value = null
+  installForm.value = {
+    chart: chart.name,
+    releaseName: chartToReleaseName(chart.name),
+    namespace: currentNamespace() === 'all' ? 'default' : currentNamespace(),
+    version: chart.version || '',
+    values: isMetricsServerChart(chart.name) ? METRICS_SERVER_VALUES : '',
+    createNamespace: true,
+    wait: false,
+  }
+  metricsServerPreset.value = isMetricsServerChart(chart.name)
+  installStatus.value = ''
+  installOutput.value = ''
+  installModal.value = true
+  refreshIcons()
+}
+
+function closeInstall() {
+  if (installing.value) return
+  installModal.value = false
+  installTarget.value = null
+  installError.value = null
+  installStatus.value = ''
+  installOutput.value = ''
+  metricsServerPreset.value = false
+}
+
+async function installChart() {
+  installError.value = null
+  if (!installForm.value.releaseName || !installForm.value.namespace) {
+    installError.value = 'Release name and namespace are required'
+    return
+  }
+  installing.value = true
+  installStatus.value = 'Sending install command to Helm…'
+  installOutput.value = ''
+  try {
+    const preset = metricsServerPreset.value ? 'metrics-server' : ''
+    const values = preset && installForm.value.values.trim() === METRICS_SERVER_VALUES.trim()
+      ? ''
+      : installForm.value.values
+    const body = { ...installForm.value, values, context: currentContext(), preset }
+    installStatus.value = installForm.value.wait ? 'Installing and waiting for readiness…' : 'Installing release…'
+    const res = await fetch('/api/helm/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    installOutput.value = data.output || data.status?.info?.notes || ''
+    installStatus.value = data.status?.info?.status ? `Release status: ${data.status.info.status}` : 'Release installed'
+    filter.value = installForm.value.releaseName
+    toast(`Helm release "${installForm.value.releaseName}" installed`, 'success')
+    installStatus.value = 'Refreshing installed releases…'
+    tab.value = 'releases'
+    await loadReleases()
+    installModal.value = false
+    installTarget.value = null
+  } catch (err) {
+    installError.value = err.message
+    installStatus.value = 'Installation failed'
+  } finally {
+    installing.value = false
     await refreshIcons()
   }
 }
@@ -670,4 +853,23 @@ onMounted(() => {
 }
 .btn.danger:hover { background: #c62828; }
 .btn.danger:disabled { opacity: .5; cursor: not-allowed; }
+.helm-install-modal { width: min(720px, 92vw); }
+.install-body { display: flex; flex-direction: column; gap: 12px; }
+.install-chart-summary { display: flex; flex-direction: column; gap: 3px; }
+.install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.install-check { flex-direction: row; align-items: center; align-self: end; min-height: 32px; }
+.install-check input { accent-color: var(--accent); }
+.install-preset-box { border: 1px solid rgba(14, 157, 232, .35); border-radius: 6px; background: rgba(14, 157, 232, .08); padding: 10px; }
+.install-preset-box p { margin-top: 4px; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
+.install-values { min-height: 150px; resize: vertical; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; line-height: 1.45; }
+.install-status-box { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); padding: 10px; }
+.install-status-head { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.install-status-head svg { width: 14px; height: 14px; }
+.install-status-head [data-lucide="loader-2"] { animation: spin 1s linear infinite; }
+.install-status-box pre { margin: 8px 0 0; max-height: 140px; overflow: auto; white-space: pre-wrap; color: var(--text-dim); font-size: 11px; line-height: 1.45; }
+.col-actions .btn svg { width: 12px; height: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 720px) {
+  .install-grid { grid-template-columns: 1fr; }
+}
 </style>

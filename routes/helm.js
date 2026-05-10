@@ -13,6 +13,7 @@
  *   DELETE /repos/:name                           → remove a repo (helm repo remove)
  *   POST /repos/update                            → update all repos (helm repo update)
  *   GET  /search            ?query=&repo=         → search charts in repos (helm search repo)
+ *   POST /install                                 → install/upgrade a chart
  */
 
 const express       = require('express');
@@ -28,6 +29,16 @@ const isWin     = process.platform === 'win32';
 
 const MERGED_KUBECONFIG  = path.join(os.homedir(), '.kube', 'kuadashboard_merged.yaml');
 const DEFAULT_KUBECONFIG = path.join(os.homedir(), '.kube', 'config');
+const KUBECONFIG_PATHS   = path.join(os.homedir(), '.kube', 'kuadashboard_paths.json');
+const SAFE_NAME_RE = /^[a-zA-Z0-9_\-\.]+$/;
+const SAFE_CHART_RE = /^[a-zA-Z0-9_\-\.]+\/[a-zA-Z0-9_\-\.]+$/;
+const SAFE_VERSION_RE = /^[a-zA-Z0-9_\-\.+]+$/;
+const METRICS_SERVER_PRESET = `args:
+  - --kubelet-insecure-tls
+  - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+apiService:
+  insecureSkipTLSVerify: true
+`;
 
 /**
  * Build the KUBECONFIG env-var string using the same sources as server.js:
@@ -46,7 +57,19 @@ function resolveKubeconfigEnv() {
   if (fs.existsSync(MERGED_KUBECONFIG) && !files.includes(MERGED_KUBECONFIG)) {
     files.push(MERGED_KUBECONFIG);
   }
+  readRegisteredKubeconfigPaths().forEach(file => {
+    if (!files.includes(file) && fs.existsSync(file)) files.push(file);
+  });
   return files.join(sep);
+}
+
+function readRegisteredKubeconfigPaths() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(KUBECONFIG_PATHS, 'utf8'));
+    return Array.isArray(parsed.paths) ? parsed.paths.filter(p => typeof p === 'string') : [];
+  } catch (_) {
+    return [];
+  }
 }
 
 // ─── Shell helper ─────────────────────────────────────────────────────────────
@@ -80,6 +103,23 @@ async function shellExec(cmd, timeout = 15000) {
 function helmBase(context) {
   // Quote the context name to handle ARN-style names with colons and slashes
   return context ? `helm --kube-context "${context}"` : 'helm';
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function validateName(value, label) {
+  if (!value || !SAFE_NAME_RE.test(value)) throw new Error(`Invalid ${label}`);
+}
+
+function validateChart(value) {
+  if (!value || !SAFE_CHART_RE.test(value)) throw new Error('Invalid chart name. Expected repo/chart');
+}
+
+function isMetricsServerChart(chart) {
+  const name = String(chart || '').toLowerCase();
+  return name === 'metrics-server/metrics-server' || name.endsWith('/metrics-server');
 }
 
 /**
@@ -227,6 +267,51 @@ router.get('/search', async (req, res) => {
     res.json(parseJson(stdout, []));
   } catch (err) {
     handleErr(res, err, 'search');
+  }
+});
+
+/**
+ * POST /install
+ * Body: { chart, releaseName, namespace, version?, values?, createNamespace?, wait?, context?, preset? }
+ */
+router.post('/install', async (req, res) => {
+  const { chart, releaseName, namespace = 'default', version = '', values = '', createNamespace = true, wait = false, context = '', preset = '' } = req.body || {};
+  const valuesFiles = [];
+  try {
+    validateChart(chart);
+    validateName(releaseName, 'release name');
+    validateName(namespace, 'namespace');
+    if (version && !SAFE_VERSION_RE.test(version)) throw new Error('Invalid chart version');
+
+    const base = helmBase(context);
+    const args = ['upgrade', '--install', shellQuote(releaseName), shellQuote(chart), '-n', shellQuote(namespace), '--timeout', '2m'];
+    if (createNamespace) args.push('--create-namespace');
+    if (wait) args.push('--wait');
+    if (version) args.push('--version', shellQuote(version));
+    if (preset === 'metrics-server' && isMetricsServerChart(chart)) {
+      const presetFile = path.join(os.tmpdir(), `kuadashboard-helm-preset-${Date.now()}-${Math.random().toString(16).slice(2)}.yaml`);
+      fs.writeFileSync(presetFile, METRICS_SERVER_PRESET, 'utf8');
+      valuesFiles.push(presetFile);
+      args.push('-f', shellQuote(presetFile));
+    }
+    if (String(values || '').trim()) {
+      const valuesFile = path.join(os.tmpdir(), `kuadashboard-helm-${Date.now()}-${Math.random().toString(16).slice(2)}.yaml`);
+      fs.writeFileSync(valuesFile, String(values), 'utf8');
+      valuesFiles.push(valuesFile);
+      args.push('-f', shellQuote(valuesFile));
+    }
+    const cmd = `${base} ${args.join(' ')}`;
+    const { stdout, stderr } = await shellExec(cmd, 2 * 60 * 1000);
+    let status = null;
+    try {
+      const statusResult = await shellExec(`${base} status ${shellQuote(releaseName)} -n ${shellQuote(namespace)} --output json`, 15000);
+      status = parseJson(statusResult.stdout, null);
+    } catch (_) {}
+    res.json({ success: true, output: (stdout + stderr).trim(), status });
+  } catch (err) {
+    handleErr(res, err, 'install');
+  } finally {
+    valuesFiles.forEach(file => fs.promises.unlink(file).catch(() => {}));
   }
 });
 

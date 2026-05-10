@@ -11,8 +11,9 @@ export const usePortForwardStore = defineStore('portforward', () => {
     try { list.value = await api('GET', '/api/portforwards') } catch (_) { list.value = [] }
   }
 
-  async function start(namespace, name, localPort, remotePort) {
-    const r = await api('POST', `/api/${namespace}/services/${name}/portforward`,
+  async function start(namespace, name, localPort, remotePort, resourceType = 'services') {
+    const type = resourceType === 'pods' ? 'pods' : 'services'
+    const r = await api('POST', `/api/${encodeURIComponent(namespace)}/${type}/${encodeURIComponent(name)}/portforward`,
       { localPort, remotePort })
     await load()
     persist()
@@ -33,7 +34,8 @@ export const usePortForwardStore = defineStore('portforward', () => {
     const saved = JSON.parse(localStorage.getItem(PF_STORE_KEY) || '[]')
     for (const pf of saved) {
       try {
-        await api('POST', `/api/${pf.namespace}/services/${pf.name}/portforward`,
+        const type = pf.resourceType === 'pods' ? 'pods' : 'services'
+        await api('POST', `/api/${encodeURIComponent(pf.namespace)}/${type}/${encodeURIComponent(pf.name)}/portforward`,
           { localPort: pf.localPort, remotePort: pf.remotePort })
       } catch (_) {}
     }

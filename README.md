@@ -24,17 +24,19 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 ## Funcionalidades
 
 ### ☸️ Kubernetes
-- Gestión completa: Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVCs, Nodes, Events
+- Gestión completa: Pods, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, ConfigMaps, Secrets, PVCs, PVs, StorageClasses, Nodes, Events y recursos de policy/RBAC/scheduling/admission
+- Tablas con selección múltiple, eliminación masiva y ordenamiento correcto por `Age` usando duración real
 - Auto-refresh por vista activa sin perder contexto
 - Live log streaming (WebSocket, multi-container) para Pods y workloads (Deployments, StatefulSets, DaemonSets)
 - Búsqueda, filtro por fecha y descarga de logs
 - Interactive shell (exec) en pods
 - Scale, restart, cordon/uncordon, drain con un clic
-- Panel lateral de detalle por recurso con YAML estructurado, secciones especializadas y métricas de Pods
+- Panel lateral de detalle por recurso con YAML estructurado, secciones especializadas, edición de ConfigMaps/Secrets/envs, métricas y eventos relacionados
 - YAML viewer/editor con búsqueda confirmada, validación/lint, guardado y autocompletado
-- Port-forward visual con auto-reconexión persistente
+- Port-forward visual con resolución de Pods para Services, estado persistente y auto-reconexión
 - Soporte multi-contexto y multi-namespace
-- Import kubeconfigs
+- Import kubeconfigs desde YAML pegado, archivo local o ruta registrada
+- Helm: búsqueda de charts, instalación en el cluster, releases instalados, desinstalación y preset para metrics-server
 
 ### ☁️ AWS — 22 servicios
 - **Cómputo**: EC2 (start/stop, SSH/RDP persistente en tabs), ECS (clusters, servicios, tareas), EKS, Lambda (invoke)
@@ -171,6 +173,15 @@ cd frontend && npm test
 ---
 
 ## Changelog
+
+### v1.8.0 (2026-05-10)
+- **Kubernetes Tables** — selección múltiple, eliminación masiva y columna `Age` con formato legible (`1day 3hrs 10min`, `2min`, `30sec`) ordenada por duración real
+- **Kubernetes Resources** — menú ampliado con más recursos de workloads, networking, storage, config, policy, RBAC, scheduling, admission y cluster
+- **ConfigMaps/Secrets/Envs** — edición clave/valor para ConfigMaps y Secrets, mapeo sencillo de datos y edición de variables de entorno en workloads
+- **Helm** — búsqueda de charts, instalación directa en el cluster, releases instalados/desinstalación, estado/output visible durante install y preset compatible para `metrics-server`
+- **Observabilidad** — métricas para Pods, workloads y Nodes vía `metrics.k8s.io`, fallback Prometheus y visor de eventos/notificaciones relacionadas
+- **Kubeconfig** — importación desde YAML pegado, selector de archivo Electron y registro manual de rutas kubeconfig existentes
+- **Port Forwarding** — túneles más confiables para Services y Pods con resolución del pod objetivo, sesiones persistentes y auto-reconexión
 
 ### v1.7.0 (2026-05-05)
 - **Auto-refresh** — actualización automática por vista activa para Kubernetes, AWS, GCP y Helm sin resetear el contexto de navegación

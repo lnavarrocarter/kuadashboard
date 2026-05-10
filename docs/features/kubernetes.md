@@ -6,13 +6,16 @@
 
 Browse all major Kubernetes resources with sortable, filterable tables:
 
-- **Workloads**: Pods, Deployments, StatefulSets, DaemonSets
-- **Network**: Services, Ingresses
+- **Workloads**: Pods, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs
+- **Network**: Services, Ingresses, IngressClasses, Endpoints, EndpointSlices, NetworkPolicies
 - **Config**: ConfigMaps, Secrets (values redacted by default)
-- **Storage**: PersistentVolumeClaims
-- **Cluster**: Nodes, Events
+- **Storage**: PersistentVolumeClaims, PersistentVolumes, StorageClasses
+- **Policy & Scheduling**: ResourceQuotas, LimitRanges, HPAs, PDBs, Leases, PriorityClasses, RuntimeClasses
+- **Admission & Cluster**: MutatingWebhookConfigurations, ValidatingWebhookConfigurations, Namespaces, Nodes, Events
 
-Each resource table shows key fields (name, namespace, status, age) and provides contextual actions.
+Each resource table shows key fields (name, namespace, status, age) and provides contextual actions. Tables support multi-select for bulk deletion where Kubernetes allows deletion of the selected resource type.
+
+The `Age` column is displayed as a readable duration and still sorts by the real elapsed time, so values such as `30sec`, `2min`, `23hrs 10min` and `1day 3hrs 10min` order correctly in both directions.
 
 Selecting a row opens a resizable detail panel with a resource-specific summary, labels, containers, networking, storage, events or scheduling fields depending on the resource type.
 
@@ -54,6 +57,12 @@ View and edit the full YAML manifest of any resource:
 - Edit in-place and save changes back to the cluster
 - Secret values are `[REDACTED]` for security
 
+## Config, Secrets & Environment Editing
+
+ConfigMaps and Secrets include a focused key/value editor so common edits do not require hand-editing the full manifest. Secret values remain protected in YAML views while still supporting controlled edits from the data tab.
+
+Workload detail panels expose container environment variables, making it easier to inspect and update env definitions without leaving the resource context.
+
 ## Resource Detail Panel
 
 Click any Kubernetes resource row to open a right-side detail panel:
@@ -61,8 +70,24 @@ Click any Kubernetes resource row to open a right-side detail panel:
 - **Overview** — resource-specific fields for Pods, workloads, Services, Ingresses, Secrets, PVCs, Nodes and Events
 - **YAML** — structured tree view of the live manifest
 - **Metrics** — CPU and memory cards for Pods using `metrics.k8s.io`
-- **Prometheus detection** — shows whether Prometheus services exist and offers a Helm handoff when monitoring is missing
+- **Metrics** — CPU and memory cards for Pods, workloads and Nodes using `metrics.k8s.io` where available
+- **Prometheus fallback** — discovers Prometheus services and queries them through the Kubernetes API server proxy when Metrics Server is unavailable
+- **Events** — related event and notification view for scheduling, image pull, health and lifecycle diagnostics
 - **Resizable layout** — drag the divider to adjust the panel width
+
+## Helm & Metrics Server
+
+The Helm view can search configured chart repositories, install charts into the active cluster and list installed releases. Install operations show output and release status so long-running installs are visible.
+
+When installing `metrics-server`, KuaDashboard offers a compatibility preset for local or self-signed clusters:
+
+```yaml
+args:
+	- --kubelet-insecure-tls
+	- --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+apiService:
+	insecureSkipTLSVerify: true
+```
 
 ## Scaling
 
@@ -84,5 +109,5 @@ Advanced node operations:
 
 - **Multi-context** — Switch between Kubernetes contexts from the header dropdown
 - **Multi-namespace** — Filter by namespace or view "All namespaces"
-- **Import kubeconfig** — Add new clusters directly from the UI
+- **Import kubeconfig** — Add new clusters directly from pasted YAML, a desktop file picker or a registered kubeconfig path
 - **Delete context** — Remove unwanted contexts

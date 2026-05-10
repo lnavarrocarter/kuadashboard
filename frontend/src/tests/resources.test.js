@@ -20,28 +20,40 @@ describe('age()', () => {
 
   it('returns seconds for < 60s ago', () => {
     const ts = new Date(now - 45 * 1000).toISOString()
-    expect(age(ts)).toBe('45s')
+    expect(age(ts)).toEqual({ text: '45sec', sort: 45 })
   })
 
-  it('returns minutes for < 1h ago', () => {
+  it('returns minutes and sort value for < 1h ago', () => {
     const ts = new Date(now - 30 * 60 * 1000).toISOString() // 30 minutes
-    expect(age(ts)).toBe('30m')
+    expect(age(ts)).toEqual({ text: '30min', sort: 1800 })
   })
 
-  it('returns hours for < 24h ago', () => {
-    const ts = new Date(now - 5 * 3600 * 1000).toISOString()
-    expect(age(ts)).toBe('5h')
+  it('returns hours and minutes with total minutes sort value', () => {
+    const ts = new Date(now - (2 * 3600 + 5 * 60) * 1000).toISOString()
+    expect(age(ts)).toEqual({ text: '2hrs 5min', sort: 7500 })
   })
 
-  it('returns days for >= 24h ago', () => {
-    const ts = new Date(now - 3 * 86400 * 1000).toISOString()
-    expect(age(ts)).toBe('3d')
+  it('returns days, hours and minutes for long durations', () => {
+    const ts = new Date(now - (1 * 86400 + 3 * 3600 + 10 * 60) * 1000).toISOString()
+    expect(age(ts)).toEqual({ text: '1day 3hrs 10min', sort: 97800 })
   })
 })
 
 describe('RESOURCES structure', () => {
   const resourceKeys = ['pods', 'deployments', 'statefulsets', 'daemonsets',
-    'services', 'ingresses', 'configmaps', 'secrets', 'pvcs', 'nodes', 'events']
+    'replicasets', 'jobs', 'cronjobs', 'services', 'endpointslices', 'endpoints',
+    'ingresses', 'ingressclasses', 'networkpolicies', 'configmaps', 'secrets',
+    'resourcequotas', 'limitranges', 'hpas', 'pdbs', 'priorityclasses',
+    'runtimeclasses', 'leases', 'mutatingwebhookconfigurations',
+    'validatingwebhookconfigurations', 'pvcs', 'pvs', 'storageclasses',
+    'namespaces', 'nodes', 'events']
+  const readOnlyKeys = new Set([
+    'nodes', 'events', 'replicasets', 'jobs', 'cronjobs', 'endpointslices',
+    'endpoints', 'ingressclasses', 'networkpolicies', 'resourcequotas',
+    'limitranges', 'hpas', 'pdbs', 'priorityclasses', 'runtimeclasses',
+    'leases', 'mutatingwebhookconfigurations', 'validatingwebhookconfigurations',
+    'pvs', 'storageclasses', 'namespaces',
+  ])
 
   it('exports all expected resource keys', () => {
     resourceKeys.forEach(key => {
@@ -66,12 +78,17 @@ describe('RESOURCES structure', () => {
         const fake = {
           name: 'test', namespace: 'default', status: 'Running', ready: '1/1',
           restarts: 0, age: new Date().toISOString(), nodeName: 'node1',
-          replicas: 2, type: 'ClusterIP', clusterIP: '10.0.0.1',
+          replicas: 2, desired: 2, current: 1, owner: 'Deployment/test', type: 'ClusterIP', clusterIP: '10.0.0.1',
           ports: '80/TCP', rawPorts: [], class: 'nginx', hosts: 'example.com',
           keys: 3, capacity: '1Gi', storageClass: 'standard', containers: ['nginx'],
           message: 'something', reason: 'Started', object: 'Pod/test',
           role: 'worker', version: 'v1.28', cpu: '1', memory: '2Gi',
           conditions: 'Ready',
+          completions: '1/1', active: 0, failed: 0, schedule: '* * * * *', suspend: 'No', lastSchedule: '-',
+          addressType: 'IPv4', endpoints: 1, controller: 'example.com/controller', parameters: '-', podSelector: 'app=test', types: 'Ingress', ingress: 1, egress: 0,
+          hard: 'pods:10', used: 'pods:1', items: 1, target: 'Deployment/test', min: 1, max: 3, holder: 'holder', renewTime: '-',
+          minAvailable: 1, maxUnavailable: '-', allowed: 1, value: 1000, globalDefault: 'No', description: 'desc', handler: 'runc', overhead: 'No', scheduling: 'No',
+          webhooks: 1, reclaimPolicy: 'Delete', claim: 'default/claim', provisioner: 'kubernetes.io/no-provisioner', volumeBindingMode: 'Immediate',
         }
         const row = r.row(fake)
         expect(Array.isArray(row)).toBe(true)
@@ -97,7 +114,7 @@ describe('RESOURCES structure', () => {
 
       it('actions() always include a Delete action', () => {
         const r = RESOURCES[key]
-        if (key === 'nodes' || key === 'events') return // read-only resources
+        if (readOnlyKeys.has(key)) return
         const actions = r.actions({ name: 'x', namespace: 'default', containers: [] })
         const hasDelete = actions.some(a => a.fn === 'confirmDelete')
         expect(hasDelete).toBe(true)

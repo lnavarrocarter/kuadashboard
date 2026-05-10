@@ -2,6 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '../composables/useApi'
 
+const CLUSTER_RESOURCES = new Set([
+  'nodes', 'namespaces', 'pvs', 'storageclasses', 'ingressclasses',
+  'priorityclasses', 'runtimeclasses', 'mutatingwebhookconfigurations',
+  'validatingwebhookconfigurations',
+])
+
 export const useKubeStore = defineStore('kube', () => {
   // ── State ──────────────────────────────────────────────────────────────────
   const resource  = ref('pods')
@@ -68,7 +74,7 @@ export const useKubeStore = defineStore('kube', () => {
     error.value   = null
     try {
       let url
-      if (resource.value === 'nodes')  url = '/api/nodes'
+      if (CLUSTER_RESOURCES.has(resource.value)) url = `/api/${resource.value}`
       else if (resource.value === 'events') url = `/api/${namespace.value}/events`
       else url = `/api/${namespace.value}/${resource.value}`
       rows.value = await api('GET', url)

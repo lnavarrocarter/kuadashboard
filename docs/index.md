@@ -25,7 +25,7 @@ features:
     details: AWS (EC2, ECS, EKS, Lambda, S3, DynamoDB, Secrets Manager and more) + GCP (Cloud Run, GKE, SQL, Storage) in one interface with persistent credentials.
   - icon: ☸️
     title: Kubernetes Management
-    details: Pods, Deployments, Services, Ingresses, ConfigMaps, PVCs, Nodes and more. Auto-refresh, resource detail panel, YAML editor, metrics and one-click operations.
+    details: Broad resource coverage with multi-select tables, bulk delete, editable ConfigMaps/Secrets/envs, kubeconfig import, metrics, events and one-click operations.
   - icon: 📺
     title: Live Logs & Shell
     details: Real-time logs for pods and workloads, search/date filters, downloads, interactive pod exec, local shell and persistent EC2 SSH/RDP sessions.
@@ -34,7 +34,10 @@ features:
     details: Encrypted credential profiles (AES-256) for AWS, GCP and generics. Import/export .env files. Secrets Manager integration.
   - icon: 🔌
     title: Port Forwarding
-    details: Port-forward to Services and Pods with one click. Persistent sessions with auto-reconnect. Integrated visual panel.
+    details: Reliable tunnels to Services and Pods with target pod resolution, persistent sessions, auto-reconnect and an integrated visual panel.
+  - icon: 📦
+    title: Helm Operations
+    details: Search charts, install them into the active cluster, review releases and use a metrics-server preset for local or self-signed clusters.
   - icon: 🖥️
     title: Desktop App
     details: Native experience on Windows, macOS and Linux via Electron. Integrated backend, auto-update and instant startup.
