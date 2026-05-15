@@ -2074,17 +2074,15 @@ app.put('/api/apply', async (req, res) => {
     if (!name) return res.status(400).json({ error: 'YAML validation error: missing metadata.name' });
     const { core, apps, networking } = clients();
 
-    const MERGE = { headers: { 'Content-Type': 'application/merge-patch+json' } };
-
     const handlers = {
-      Deployment:             () => apps.patchNamespacedDeployment(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Service:                () => core.patchNamespacedService(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Secret:                 () => core.patchNamespacedSecret(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Ingress:                () => networking.patchNamespacedIngress(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
+      Deployment:             () => apps.patchNamespacedDeployment(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Service:                () => core.patchNamespacedService(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Secret:                 () => core.patchNamespacedSecret(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Ingress:                () => networking.patchNamespacedIngress(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
     };
 
     if (!handlers[kind]) return res.status(400).json({ error: `Unsupported kind: ${kind}` });
