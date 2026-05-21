@@ -25,6 +25,8 @@ const ALLOWED_RECEIVE = new Set([
   'system-tools:changed',
   'server:ready',
   'server:error',
+  'vercel:oauth-complete',
+  'vercel:oauth-error',
 ]);
 
 contextBridge.exposeInMainWorld('kuaElectron', {
@@ -98,5 +100,24 @@ contextBridge.exposeInMainWorld('kuaElectron', {
    */
   openFileDialog(opts = {}) {
     return ipcRenderer.invoke('dialog:openFile', opts);
+  },
+
+  /** Open the Vercel OAuth start URL in the OS browser */
+  startVercelOAuth(profileName = 'Vercel') {
+    // Derive the backend origin from the current page URL (e.g. http://localhost:7190)
+    const origin = window.location.origin;
+    const params = new URLSearchParams({ profileName });
+    const url    = `${origin}/api/cloud/vercel/oauth/start?${params}`;
+    shell.openExternal(url);
+  },
+
+  /** Listen for successful Vercel OAuth completion — cb({ id, name }) */
+  onVercelOAuthComplete(cb) {
+    return this.on('vercel:oauth-complete', cb);
+  },
+
+  /** Listen for Vercel OAuth errors — cb(errorMessage) */
+  onVercelOAuthError(cb) {
+    return this.on('vercel:oauth-error', cb);
   },
 });

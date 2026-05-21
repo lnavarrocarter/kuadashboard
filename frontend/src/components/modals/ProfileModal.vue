@@ -26,6 +26,7 @@
             <select v-model="form.provider" class="ctrl-select" :disabled="isEdit" @change="gcpAuthMode = 'sa'">
               <option value="gcp">Google Cloud (GCP)</option>
               <option value="aws">Amazon Web Services (AWS)</option>
+              <option value="vercel">Vercel</option>
               <option value="generic">Generic / Other</option>
             </select>
           </label>
@@ -166,6 +167,41 @@
               </div>
             </template>
 
+            <!-- Vercel fields -->
+            <template v-else-if="form.provider === 'vercel'">
+              <!-- OAuth button — only available inside Electron -->
+              <div v-if="isElectron && !isEdit" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                <button
+                  class="btn primary"
+                  style="justify-content:center;gap:8px;background:#000;border-color:#333;color:#fff"
+                  :disabled="oauthPending"
+                  @click="startVercelOAuth"
+                >
+                  <!-- Vercel triangle logo -->
+                  <svg width="14" height="12" viewBox="0 0 76 65" fill="currentColor"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
+                  {{ oauthPending ? 'Waiting for authorization…' : 'Connect with Vercel' }}
+                </button>
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
+                  <hr style="flex:1;border-color:var(--border)" />
+                  or enter token manually
+                  <hr style="flex:1;border-color:var(--border)" />
+                </div>
+              </div>
+              <div class="field-label" style="margin-bottom:4px">
+                Keys
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+              </div>
+              <label class="field-label">
+                VERCEL_API_TOKEN
+                <input v-model="form.keys.VERCEL_API_TOKEN" class="ctrl-input" type="password" placeholder="••••••••••••••••••••" />
+              </label>
+              <label class="field-label">
+                VERCEL_TEAM_ID
+                <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — for team accounts)</span>
+                <input v-model="form.keys.VERCEL_TEAM_ID" class="ctrl-input" placeholder="team_XXXXXXXXXXXX" />
+              </label>
+            </template>
+
             <!-- AWS fields -->
             <template v-else-if="form.provider === 'aws'">
               <div class="field-label" style="margin-bottom:4px">
@@ -249,7 +285,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../../composables/useI18n.js'
 
 const { t } = useI18n()
@@ -402,6 +438,10 @@ watch(() => props.show, (v) => {
         AWS_ACCESS_KEY_ID: '',
         AWS_SECRET_ACCESS_KEY: '',
         AWS_DEFAULT_REGION: '',
+        VERCEL_API_TOKEN: '',
+        VERCEL_TEAM_ID: '',
+        VERCEL_API_TOKEN: '',
+        VERCEL_TEAM_ID: '',
       },
       genericPairs: props.profile.keyNames?.map(k => ({
         key: k, value: '', tags: props.profile.meta?.[k]?.tags?.slice() || [], newTag: '',
@@ -439,6 +479,9 @@ function submit() {
     if (keys.AWS_ACCESS_KEY_ID)         finalKeys.AWS_ACCESS_KEY_ID = keys.AWS_ACCESS_KEY_ID
     if (keys.AWS_SECRET_ACCESS_KEY)     finalKeys.AWS_SECRET_ACCESS_KEY = keys.AWS_SECRET_ACCESS_KEY
     if (keys.AWS_DEFAULT_REGION)        finalKeys.AWS_DEFAULT_REGION = keys.AWS_DEFAULT_REGION
+  } else if (provider === 'vercel') {
+    if (keys.VERCEL_API_TOKEN)          finalKeys.VERCEL_API_TOKEN = keys.VERCEL_API_TOKEN
+    if (keys.VERCEL_TEAM_ID)            finalKeys.VERCEL_TEAM_ID = keys.VERCEL_TEAM_ID
   } else {
     for (const pair of genericPairs) {
       if (pair.key.trim()) {
@@ -450,6 +493,45 @@ function submit() {
 
   emit('save', { name: name.trim(), category: category.trim(), provider, keys: finalKeys, meta: finalMeta })
 }
+
+// ── Vercel OAuth ───────────────────────────────────────────────────────────────
+const isElectron   = typeof window !== 'undefined' && !!window.kuaElectron
+const oauthPending = ref(false)
+let oauthHandlers  = []
+
+function startVercelOAuth() {
+  if (!window.kuaElectron?.startVercelOAuth) return
+  oauthPending.value = true
+  const name = form.value.name.trim() || 'Vercel'
+  window.kuaElectron.startVercelOAuth(name)
+}
+
+onMounted(() => {
+  if (!isElectron) return
+
+  const successHandler = window.kuaElectron.onVercelOAuthComplete?.((profile) => {
+    oauthPending.value = false
+    // Emit save with the profile returned by the backend OAuth callback
+    // App.vue treats this as a "select existing profile" event
+    emit('save', { oauthProfile: profile, provider: 'vercel' })
+    emit('close')
+  })
+
+  const errorHandler = window.kuaElectron.onVercelOAuthError?.((msg) => {
+    oauthPending.value = false
+    console.error('[ProfileModal] Vercel OAuth error:', msg)
+  })
+
+  if (successHandler) oauthHandlers.push(['vercel:oauth-complete', successHandler])
+  if (errorHandler)   oauthHandlers.push(['vercel:oauth-error', errorHandler])
+})
+
+onUnmounted(() => {
+  for (const [channel, handler] of oauthHandlers) {
+    window.kuaElectron?.removeListener?.(channel, handler)
+  }
+  oauthHandlers = []
+})
 </script>
 
 <style scoped>

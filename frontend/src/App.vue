@@ -20,6 +20,10 @@
           <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" @click="setProvider('gcp')">
             <i data-lucide="cloud-cog"></i> GCP
           </button>
+          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" @click="setProvider('vercel')">
+            <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
+            Vercel
+          </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
           <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
@@ -56,6 +60,14 @@
             </optgroup>
           </select>
         </template>
+        <template v-else-if="activeProvider === 'vercel'">
+          <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
+            <option value="">{{ t('vercel.noProfile') }}</option>
+            <optgroup v-if="envStore.vercelProfiles.length" :label="t('nav.storedProfiles')">
+              <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </optgroup>
+          </select>
+        </template>
       </div>
       <div class="header-right">
         <template v-if="activeProvider === 'kubernetes'">
@@ -73,6 +85,10 @@
         <template v-else-if="activeProvider === 'gcp'">
           <button class="btn btn-icon" :title="t('nav.addGcp')" @click="openAddConnection('gcp')"><i data-lucide="plus-circle"></i></button>
           <button class="btn btn-icon" :title="t('nav.deleteGcp')" :disabled="!gcpProfileId || gcpProfileId.startsWith('local:')" @click="deleteConnectionConfirm('gcp')"><i data-lucide="trash-2"></i></button>
+        </template>
+        <template v-else-if="activeProvider === 'vercel'">
+          <button class="btn btn-icon" :title="t('nav.addVercel')" @click="openAddConnection('vercel')"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" :title="t('nav.deleteVercel')" :disabled="!vercelProfileId" @click="deleteConnectionConfirm('vercel')"><i data-lucide="trash-2"></i></button>
         </template>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
         <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
@@ -195,6 +211,40 @@
           </div>
         </nav>
 
+        <!-- Vercel sidebar -->
+        <nav class="sidebar" v-if="activeProvider === 'vercel'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.projects') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.deployments') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.config') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.advanced') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('vercel.sidebar.account') }}</div>
+            <a v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
+               :class="['sidebar-item', { active: vercelTab === r.id }]"
+               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+          </div>
+        </nav>
+
         <!-- GCP sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'gcp'">
           <div class="sidebar-section">
@@ -312,8 +362,9 @@
               />
             </div>
           </template>
-          <AwsView  ref="awsViewRef" v-else-if="activeProvider === 'aws'"  :active-service="awsTab" />
-          <GcpView  ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"  :active-service="gcpTab" @connect-gke="handleGkeConnect" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
+          <VercelView  v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
         </main>
       </div>
 
@@ -331,7 +382,12 @@
         <span class="sb-item">{{ t('status.items', { n: store.rows.length }) }}</span>
       </template>
       <template v-else>
-        <span class="sb-item">{{ activeProvider === 'aws' ? 'Amazon Web Services' : 'Google Cloud Platform' }}</span>
+        <span class="sb-item">{{
+          activeProvider === 'aws' ? 'Amazon Web Services'
+          : activeProvider === 'gcp' ? 'Google Cloud Platform'
+          : activeProvider === 'vercel' ? 'Vercel'
+          : activeProvider
+        }}</span>
         <span class="sb-spacer"></span>
       </template>
       <span class="sb-sep">|</span>
@@ -371,6 +427,7 @@ import { usePortForwardStore } from './stores/usePortForwardStore'
 import { useTerminalStore }    from './stores/useTerminalStore'
 import { useAwsStore }         from './stores/useAwsStore'
 import { useGcpStore }         from './stores/useGcpStore'
+import { useVercelStore }      from './stores/useVercelStore'
 import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
@@ -385,6 +442,7 @@ import AuditLogView    from './components/AuditLogView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
+import VercelView      from './components/cloud/VercelView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -406,9 +464,10 @@ const updateStore = useUpdateStore()
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
 const termStore = useTerminalStore()
-const awsStore  = useAwsStore()
-const gcpStore  = useGcpStore()
-const envStore  = useEnvStore()
+const awsStore     = useAwsStore()
+const gcpStore     = useGcpStore()
+const vercelStore  = useVercelStore()
+const envStore     = useEnvStore()
 const { startLogStream, startExecStream, startLocalStream } = useTerminalStreams()
 const { toast } = useToast()
 
@@ -436,6 +495,14 @@ const AWS_SIDEBAR = {
   security:    [{ id: 'cognito', label: 'Cognito' }, { id: 'secrets', label: 'Secrets Manager' }],
 }
 
+const VERCEL_SIDEBAR = {
+  projects:    [{ id: 'projects',    label: 'Projects' }],
+  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Functions' }, { id: 'checks', label: 'Checks' }],
+  config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records' }, { id: 'env-vars', label: 'Env Variables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs' }],
+  advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
+  account:     [{ id: 'activity',    label: 'Activity' }],
+}
+
 const GCP_SIDEBAR = {
   compute:    [{ id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
   database:   [{ id: 'sql', label: 'Cloud SQL' }, { id: 'firestore', label: 'Firestore' }, { id: 'spanner', label: 'Cloud Spanner' }],
@@ -460,7 +527,7 @@ const LS = {
 }
 
 const pfPanelVisible  = ref(false)
-const activeProvider  = ref(LS.get('provider', 'kubernetes'))  // 'kubernetes' | 'aws' | 'gcp'
+const activeProvider  = ref(LS.get('provider', 'kubernetes'))  // 'kubernetes' | 'aws' | 'gcp' | 'vercel'
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
@@ -471,6 +538,7 @@ const isKubeResizing = ref(false)
 const helmViewRef     = ref(null)
 const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
+const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
@@ -508,17 +576,19 @@ async function reloadActiveProvider() {
 
 const awsLocalProfiles = ref([])
 const gcpLocalConfigs  = ref([])
-const awsProfileId     = ref(LS.get('awsProfile', ''))
-const gcpProfileId     = ref(LS.get('gcpProfile', ''))
+const awsProfileId     = ref(LS.get('awsProfile',    ''))
+const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
+const vercelProfileId  = ref(LS.get('vercelProfile', ''))
 const selectedKubeKey = computed(() => {
   const row = selectedKubeResource.value?.row
   return row ? row.name + (row.namespace || '') : ''
 })
 
 // Persistir cambios en localStorage automáticamente
-watch(activeProvider, v  => LS.set('provider',    v))
-watch(awsProfileId,   v  => LS.set('awsProfile',  v))
-watch(gcpProfileId,   v  => LS.set('gcpProfile',  v))
+watch(activeProvider,   v  => LS.set('provider',       v))
+watch(awsProfileId,     v  => LS.set('awsProfile',     v))
+watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
+watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
 watch(() => store.namespace, v => LS.set('kubeNs', v))
 watch(kubeDetailWidth, v => LS.set('kubeDetailWidth', String(v)))
 
@@ -537,8 +607,9 @@ const modalData = reactive({
 async function setProvider(p) {
   activeProvider.value = p
   if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
-  if (p === 'aws') { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
-  if (p === 'gcp') { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
+  if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
+  if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
+  if (p === 'vercel') { envStore.fetchProfiles() }
   nextTick(() => createIcons({ icons }))
 }
 
@@ -554,9 +625,13 @@ function onAwsProfileChange() {
 function onGcpProfileChange() {
   gcpStore.setActiveProfile(gcpProfileId.value || null)
 }
+function onVercelProfileChange() {
+  vercelStore.setActiveProfile(vercelProfileId.value || null)
+}
 function selectProfile(provider, id) {
-  if (provider === 'aws') { awsProfileId.value = id; awsStore.setActiveProfile(id) }
-  else                    { gcpProfileId.value = id; gcpStore.setActiveProfile(id) }
+  if (provider === 'aws')    { awsProfileId.value    = id; awsStore.setActiveProfile(id) }
+  else if (provider === 'vercel') { vercelProfileId.value = id; vercelStore.setActiveProfile(id) }
+  else                            { gcpProfileId.value    = id; gcpStore.setActiveProfile(id) }
 }
 function openAddConnection(provider) {
   modalData.connectionProvider = provider
@@ -573,18 +648,32 @@ async function handleConnectionSave(payload) {
     return
   }
 
+  // Vercel OAuth flow: profile already created by backend callback, just select it
+  if (payload.oauthProfile && payload.provider === 'vercel') {
+    modals.addConnection = false
+    await envStore.fetchProfiles()
+    vercelProfileId.value = payload.oauthProfile.id
+    vercelStore.setActiveProfile(payload.oauthProfile.id)
+    toast(`Vercel account "${payload.oauthProfile.name}" connected`, 'success')
+    nextTick(() => createIcons({ icons }))
+    return
+  }
+
   const { name, category, provider, keys, meta } = payload
   const created = await envStore.createProfile({ name, category, provider, keys, meta })
   modals.addConnection = false
   if (created) {
-    if (provider === 'aws') { awsProfileId.value = created.id; awsStore.setActiveProfile(created.id) }
-    if (provider === 'gcp') { gcpProfileId.value = created.id; gcpStore.setActiveProfile(created.id) }
+    if (provider === 'aws')    { awsProfileId.value    = created.id; awsStore.setActiveProfile(created.id) }
+    if (provider === 'gcp')    { gcpProfileId.value    = created.id; gcpStore.setActiveProfile(created.id) }
+    if (provider === 'vercel') { vercelProfileId.value = created.id; vercelStore.setActiveProfile(created.id) }
     toast(`Connection "${name}" added`, 'success')
     nextTick(() => createIcons({ icons }))
   }
 }
 function deleteConnectionConfirm(provider) {
-  const id = provider === 'aws' ? awsProfileId.value : gcpProfileId.value
+  const id = provider === 'aws' ? awsProfileId.value
+           : provider === 'vercel' ? vercelProfileId.value
+           : gcpProfileId.value
   if (!id || id.startsWith('local:')) return
   const profile = envStore.profiles.find(p => p.id === id)
   if (!profile) return

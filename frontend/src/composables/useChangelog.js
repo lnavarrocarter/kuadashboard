@@ -4,23 +4,30 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.8.0'
+export const CHANGELOG_VERSION = '1.9.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.9.0',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'new',    text: 'Vercel — integración completa: autenticación OAuth, proyectos, deployments, actividad, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config y Checks' },
+    ],
+  },
   {
     version: '1.8.0',
     date: 'Mayo 2026',
     items: [
-      { type: 'new',    text: 'Kubernetes — seleccion multiple en tablas de recursos, eliminacion masiva y ordenamiento de Age por duracion real con formato dias/horas/minutos/segundos' },
-      { type: 'new',    text: 'Kubernetes — menu ampliado con mas recursos de workloads, networking, storage, config, policy, RBAC, scheduling, admission y cluster' },
+      { type: 'new',    text: 'Kubernetes — selección múltiple en tablas de recursos, eliminación masiva y ordenamiento de Age por duración real con formato días/horas/minutos/segundos' },
+      { type: 'new',    text: 'Kubernetes — menú ampliado con más recursos de workloads, networking, storage, config, policy, RBAC, scheduling, admission y cluster' },
       { type: 'new',    text: 'ConfigMaps y Secrets — editor de datos en formato clave/valor, mapeo sencillo y vista de variables de entorno asociadas' },
-      { type: 'new',    text: 'Workloads — edicion de variables de entorno para contenedores desde el panel de detalle' },
-      { type: 'new',    text: 'Helm — busqueda de charts, instalacion directa en el cluster, gestion de releases instalados y estado/output de instalacion visible' },
-      { type: 'new',    text: 'Helm — preset de compatibilidad para metrics-server con flags de kubelet TLS y direccion preferida para clusters locales o self-signed' },
-      { type: 'new',    text: 'Observabilidad — metricas para Pods, workloads y Nodes con metrics.k8s.io y fallback via Prometheus detectado en Services del cluster' },
+      { type: 'new',    text: 'Workloads — edición de variables de entorno para contenedores desde el panel de detalle' },
+      { type: 'new',    text: 'Helm — búsqueda de charts, instalación directa en el cluster, gestión de releases instalados y estado/output de instalación visible' },
+      { type: 'new',    text: 'Helm — preset de compatibilidad para metrics-server con flags de kubelet TLS y dirección preferida para clusters locales o self-signed' },
+      { type: 'new',    text: 'Observabilidad — métricas para Pods, workloads y Nodes con metrics.k8s.io y fallback vía Prometheus detectado en Services del cluster' },
       { type: 'new',    text: 'Eventos — visor de eventos y notificaciones relacionadas para recursos y Nodes desde el panel de detalle' },
-      { type: 'new',    text: 'Kubeconfig — importacion desde YAML pegado, archivo local mediante Electron y registro manual de rutas existentes' },
-      { type: 'fix',    text: 'Port Forwarding — tuneles mas estables para Services y Pods con resolucion de pod objetivo, estado persistente y reconexion' },
+      { type: 'new',    text: 'Kubeconfig — importación desde YAML pegado, archivo local mediante Electron y registro manual de rutas existentes' },
+      { type: 'fix',    text: 'Port Forwarding — túneles más estables para Services y Pods con resolución de pod objetivo, estado persistente y reconexión' },
     ],
   },
   {
@@ -29,12 +36,12 @@ export const CHANGELOG = [
     items: [
       { type: 'new',    text: 'Kubernetes — auto-refresh por vista activa: Kubernetes, AWS, GCP y Helm actualizan sus recursos sin perder el contexto de trabajo' },
       { type: 'new',    text: 'Kubernetes — panel lateral de detalle por recurso con resumen especializado, YAML estructurado, secciones por tipo y ancho ajustable' },
-      { type: 'new',    text: 'Kubernetes — metricas visuales para Pods usando metrics.k8s.io y deteccion de Prometheus, con acceso directo a Helm cuando no hay observabilidad instalada' },
-      { type: 'new',    text: 'Kubernetes Logs — streaming en tiempo real para Pods, Deployments, StatefulSets y DaemonSets con resolucion de pods por selector' },
-      { type: 'new',    text: 'Terminal Logs — buscador, filtros por fecha serializada, descarga de logs y conteo de lineas filtradas' },
+      { type: 'new',    text: 'Kubernetes — métricas visuales para Pods usando metrics.k8s.io y detección de Prometheus, con acceso directo a Helm cuando no hay observabilidad instalada' },
+      { type: 'new',    text: 'Kubernetes Logs — streaming en tiempo real para Pods, Deployments, StatefulSets y DaemonSets con resolución de pods por selector' },
+      { type: 'new',    text: 'Terminal Logs — buscador, filtros por fecha serializada, descarga de logs y conteo de líneas filtradas' },
       { type: 'better', text: 'Terminal Logs — limpieza de secuencias ANSI/VT y buffer de fragmentos para serializar correctamente logs de frameworks como NestJS' },
-      { type: 'new',    text: 'YAML Editor — busqueda por confirmacion, boton Guardar, validacion/lint, estado de linea/columna/total de lineas, ruta de seccion y autocompletado con Ctrl+Space' },
-      { type: 'new',    text: 'AWS EC2 — sesiones SSH/RDP persistentes en tabs: ocultar una consola ya no corta la conexion y se puede reabrir desde la bandeja de sesiones' },
+      { type: 'new',    text: 'YAML Editor — búsqueda por confirmación, botón Guardar, validación/lint, estado de línea/columna/total de líneas, ruta de sección y autocompletado con Ctrl+Space' },
+      { type: 'new',    text: 'AWS EC2 — sesiones SSH/RDP persistentes en tabs: ocultar una consola ya no corta la conexión y se puede reabrir desde la bandeja de sesiones' },
       { type: 'fix',    text: 'AWS — resuelta advertencia de lint vue/no-v-for-template-key en la vista Athena' },
     ],
   },

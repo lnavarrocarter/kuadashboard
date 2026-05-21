@@ -19,6 +19,7 @@ const server = http.createServer(app);
 const envManagerRoutes  = require('./routes/envManager');
 const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
+const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
 const localShellRoutes  = require('./routes/localShell');
@@ -52,13 +53,14 @@ server.on('upgrade', (request, socket, head) => {
 app.use(express.json({ limit: '10mb' }));
 
 // ─── Mount cloud routes ───────────────────────────────────────────────────────
-app.use('/api/cloud/envs', envManagerRoutes);
-app.use('/api/cloud/gcp',  gcpRoutes);
-app.use('/api/cloud/aws',  awsRoutes);
-app.use('/api/helm',       helmRoutes);
-app.use('/api/system',     systemToolsRoutes);
-app.use('/api/local',      localShellRoutes);
-app.use('/api/audit',      auditLogRoutes);
+app.use('/api/cloud/envs',    envManagerRoutes);
+app.use('/api/cloud/gcp',     gcpRoutes);
+app.use('/api/cloud/aws',     awsRoutes);
+app.use('/api/cloud/vercel',  vercelRoutes);
+app.use('/api/helm',          helmRoutes);
+app.use('/api/system',        systemToolsRoutes);
+app.use('/api/local',         localShellRoutes);
+app.use('/api/audit',         auditLogRoutes);
 
 app.use(express.static(path.join(__dirname, 'public'), {
   etag:         false,

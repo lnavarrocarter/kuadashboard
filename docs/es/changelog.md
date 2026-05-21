@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.9.0 (Mayo 2026)
+
+### Vercel
+
+- Integración completa con Vercel mediante autenticación OAuth — conecta tu cuenta directamente desde el modal de perfil.
+- Vista de proyectos con estado de deployment, framework, región y acceso directo a la URL en vivo.
+- Detalle de deployments con pestañas de Actividad, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config y Checks.
+
 ## v1.8.0 (2026-05-10)
 
 ### Kubernetes
