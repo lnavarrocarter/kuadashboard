@@ -217,6 +217,12 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  async function fetchStepFnExecutionEvents(executionArn) {
+    try {
+      return await apiFetch(`/api/cloud/aws/stepfunctions/execution/events?executionArn=${encodeURIComponent(executionArn)}`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
   async function fetchEventBridgeConfig(bus, rule) {
     try {
       return await apiFetch(`/api/cloud/aws/eventbridge/config?bus=${encodeURIComponent(bus)}&rule=${encodeURIComponent(rule)}`, { headers: headers() })
@@ -896,7 +902,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchLambdas, invokeLambda,
     fetchApiGateways,
     fetchLogs,
-    fetchS3Buckets, fetchEcrRepos, fetchVpcs, fetchEventBridgeRules, fetchStepFunctions, fetchStepFnDiagram, fetchEventBridgeConfig, fetchEventBridgeLogs,
+    fetchS3Buckets, fetchEcrRepos, fetchVpcs, fetchEventBridgeRules, fetchStepFunctions, fetchStepFnDiagram, fetchStepFnExecutionEvents, fetchEventBridgeConfig, fetchEventBridgeLogs,
     fetchResourceConfig,
     fetchTags, saveTags,
     enableLambdaLogging, enableEcsLogging,

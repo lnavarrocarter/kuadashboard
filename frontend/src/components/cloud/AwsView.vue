@@ -424,6 +424,7 @@
                   <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">Config</button>
                   <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">Diagram</button>
+                  <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">Info</button>
                 </div>
               </td>
             </tr>
@@ -2304,6 +2305,7 @@
     <Ec2Rdp    :open="ec2RdpModal.open"   :instance="ec2RdpModal.instance"   @close="ec2RdpModal.open = false" />
     <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
     <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
+    <StepFnDetail :open="stepFnDetailModal.open" :sm="stepFnDetailModal.sm" :profile-id="selectedProfileId" @close="stepFnDetailModal.open = false" />
 
     <!-- API Gateway Routes & Integrations Modal -->
     <ApiGwIntegrations
@@ -3636,6 +3638,7 @@ import { useToast }     from '../../composables/useToast'
 import { useApi }       from '../../composables/useApi'
 import { useSortable }  from '../../composables/useSortable'
 import StepFnDiagram       from '../StepFnDiagram.vue'
+import StepFnDetail        from '../StepFnDetail.vue'
 import EventBridgeDetail   from '../EventBridgeDetail.vue'
 import EventBridgeLogs     from '../EventBridgeLogs.vue'
 import Ec2Shell            from './Ec2Shell.vue'
@@ -4684,6 +4687,14 @@ async function openDiagram(sm) {
   } finally {
     diagramModal.loading = false
   }
+}
+
+// ─── Step Functions Detail Modal ──────────────────────────────────────────────
+const stepFnDetailModal = reactive({ open: false, sm: null })
+
+function openStepFnDetail(sm) {
+  stepFnDetailModal.sm   = sm
+  stepFnDetailModal.open = true
 }
 
 const tagsModal = reactive({

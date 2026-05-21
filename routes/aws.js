@@ -1279,6 +1279,30 @@ router.get('/stepfunctions/config', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /stepfunctions/execution/events ─────────────────────────────────────
+
+router.get('/stepfunctions/execution/events', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { executionArn } = req.query;
+  if (!executionArn) return res.status(400).json({ error: 'executionArn query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, GetExecutionHistoryCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new GetExecutionHistoryCommand({
+        executionArn, maxResults: 1000, includeExecutionData: true, nextToken,
+      }));
+      all.push(...(resp.events || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+    res.json({ events: all });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /ec2/:id/config ──────────────────────────────────────────────────────
 
 router.get('/ec2/:id/config', async (req, res) => {
