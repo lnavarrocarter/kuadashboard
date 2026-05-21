@@ -4,9 +4,16 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.6.2'
+export const CHANGELOG_VERSION = '1.9.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.9.0',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'new',    text: 'Vercel — integración completa: autenticación OAuth, proyectos, deployments, actividad, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config y Checks' },
+    ],
+  },
   {
     version: '1.6.2',
     date: 'Abril 2026',
