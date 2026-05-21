@@ -160,6 +160,51 @@
               </template>
             </div>
 
+            <!-- ══ VERSIONES ══════════════════════════════════════════════ -->
+            <div v-show="activeTab === 'versions'" class="sfnd-section" style="flex-direction:row;gap:12px;overflow:hidden">
+              <!-- Version list -->
+              <div style="min-width:220px;max-width:260px;display:flex;flex-direction:column;gap:0;border-right:1px solid #222;overflow-y:auto">
+                <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1a1a1a">
+                  <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Versiones ({{ versions.length }})</span>
+                  <button class="btn sm" @click="loadVersions" :disabled="versionsLoading" style="font-size:10px;padding:2px 6px">↺</button>
+                </div>
+                <div v-if="versionsLoading" class="sfnd-spinner-wrap" style="padding:16px 0">
+                  <div class="sfnd-spinner"></div>
+                </div>
+                <div v-else-if="versionsError" class="sfnd-error" style="margin:8px">{{ versionsError }}</div>
+                <div v-else-if="!versions.length" class="sfnd-empty" style="padding:16px 12px;font-size:12px">Sin versiones publicadas.</div>
+                <div v-else>
+                  <div v-for="v in versions" :key="v.stateMachineVersionArn"
+                    :class="['sfnd-version-item', { selected: selectedVersion?.stateMachineVersionArn === v.stateMachineVersionArn }]"
+                    @click="loadVersionDefinition(v)">
+                    <div class="sfnd-version-label">
+                      <span class="mono-xs" style="font-size:10px">{{ v.stateMachineVersionArn?.split(':').pop() }}</span>
+                    </div>
+                    <div v-if="v.description" class="sfnd-version-desc text-dim">{{ v.description }}</div>
+                    <div class="text-dim" style="font-size:10px">{{ fmtDate(v.creationDate) }}</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Version definition -->
+              <div style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;min-width:0">
+                <div v-if="!selectedVersion" class="sfnd-empty" style="padding:24px">Selecciona una versión para ver su definición.</div>
+                <template v-else>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+                    <span style="font-size:12px;color:#888">Versión: <span class="mono-xs" style="color:#ccc">{{ selectedVersion.stateMachineVersionArn?.split(':').pop() }}</span></span>
+                    <div style="display:flex;gap:6px">
+                      <button v-if="versionDef" class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(versionDef,'vdef')">{{ copiedKey==='vdef' ? '✓ Copiado' : '⧉ Copiar' }}</button>
+                    </div>
+                  </div>
+                  <div v-if="versionDefLoading" class="sfnd-spinner-wrap" style="padding:20px 0">
+                    <div class="sfnd-spinner"></div>
+                    <span>Cargando definición...</span>
+                  </div>
+                  <div v-else-if="versionDefError" class="sfnd-error">{{ versionDefError }}</div>
+                  <pre v-else-if="versionDef" class="sfnd-json" style="flex:1;overflow:auto;margin:0">{{ fmtJson(versionDef) }}</pre>
+                </template>
+              </div>
+            </div>
+
           </template>
         </div>
 
@@ -188,6 +233,7 @@ const TABS = [
   { id: 'diagram',    label: 'Diagrama' },
   { id: 'executions', label: 'Ejecuciones' },
   { id: 'events',     label: 'Eventos' },
+  { id: 'versions',   label: 'Versiones' },
 ]
 
 const activeTab        = ref('details')
@@ -202,8 +248,44 @@ const eventsLoading     = ref(false)
 const eventsError       = ref(null)
 const events            = ref([])
 
+const versions          = ref([])
+const versionsLoading   = ref(false)
+const versionsError     = ref(null)
+const selectedVersion   = ref(null)
+const versionDef        = ref(null)
+const versionDefLoading = ref(false)
+const versionDefError   = ref(null)
+
 function switchTab(id) {
   activeTab.value = id
+  if (id === 'versions' && !versions.value.length && !versionsLoading.value) loadVersions()
+}
+
+async function loadVersions() {
+  if (!props.sm?.arn) return
+  versionsLoading.value = true; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
+  try {
+    const res = await awsStore.fetchStepFnVersions(props.sm.arn)
+    versions.value = res?.versions ?? []
+  } catch (e) {
+    versionsError.value = e?.message || 'Error cargando versiones'
+  } finally {
+    versionsLoading.value = false
+  }
+}
+
+async function loadVersionDefinition(v) {
+  selectedVersion.value = v; versionDef.value = null; versionDefError.value = null
+  versionDefLoading.value = true
+  try {
+    const res = await awsStore.fetchStepFnVersionDefinition(v.stateMachineVersionArn)
+    versionDef.value = res?.definition ?? null
+    if (!versionDef.value) versionDefError.value = 'No se encontró la definición de esta versión.'
+  } catch (e) {
+    versionDefError.value = e?.message || 'Error cargando definición'
+  } finally {
+    versionDefLoading.value = false
+  }
 }
 
 async function load() {
@@ -310,6 +392,7 @@ watch(() => props.open, (val) => {
   if (!val) {
     loaded.value = false; data.value = null; error.value = null
     selectedExecution.value = null; events.value = []; eventsError.value = null
+    versions.value = []; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
     activeTab.value = 'details'
   }
 })
@@ -318,6 +401,7 @@ watch(() => props.open, (val) => {
 watch(() => props.sm?.arn, () => {
   loaded.value = false; data.value = null; error.value = null
   selectedExecution.value = null; events.value = []
+  versions.value = []; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
   if (props.open) load()
 })
 </script>
@@ -511,4 +595,14 @@ dd { font-size: 12px; color: #ccc; margin: 0; word-break: break-word; }
 .sfnd-event-ts   { font-size: 10px; }
 .sfnd-event-prev { font-size: 10px; }
 .sfnd-event-details { margin-top: 6px; }
+
+/* ─── Versions ──────────────────────────────────────────────────────────────── */
+.sfnd-version-item {
+  padding: 10px 12px; border-bottom: 1px solid #1a1a1a;
+  cursor: pointer; transition: background .1s;
+}
+.sfnd-version-item:hover { background: rgba(96,165,250,.06); }
+.sfnd-version-item.selected { background: rgba(96,165,250,.1); }
+.sfnd-version-label { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.sfnd-version-desc { font-size: 11px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

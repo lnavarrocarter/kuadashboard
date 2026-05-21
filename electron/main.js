@@ -24,7 +24,6 @@ const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const path        = require('path');
 const { fork }    = require('child_process');
 const { execSync } = require('child_process');
-const { autoUpdater } = require('electron-updater');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -262,6 +261,7 @@ function buildMenu() {
           label: 'Check for Updates…',
           click: () => {
             if (!IS_DEV) {
+              const { autoUpdater } = require('electron-updater');
               autoUpdater.checkForUpdates().catch(err => {
                 console.warn('[updater] Manual check failed:', err.message);
               });
@@ -300,6 +300,7 @@ ipcMain.handle('dialog:openFile', async (event, opts = {}) => {
 
 ipcMain.on('app:check-updates', () => {
   if (!IS_DEV) {
+    const { autoUpdater } = require('electron-updater');
     autoUpdater.checkForUpdates().catch(err => {
       console.warn('[updater] IPC check failed:', err.message);
     });
@@ -309,6 +310,7 @@ ipcMain.on('app:check-updates', () => {
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
+  const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -355,6 +357,7 @@ ipcMain.on('app:install-update', () => {
     return;
   }
   try {
+    const { autoUpdater } = require('electron-updater');
     // Primary: quit + install + relaunch
     autoUpdater.quitAndInstall(false, true);
   } catch (err) {

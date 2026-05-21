@@ -1303,6 +1303,68 @@ router.get('/stepfunctions/execution/events', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /stepfunctions/executions/count ─────────────────────────────────────
+
+router.get('/stepfunctions/executions/count', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn } = req.query;
+  if (!arn) return res.status(400).json({ error: 'arn query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, ListExecutionsCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const [runningRes, failedRes, timedOutRes] = await Promise.allSettled([
+      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'RUNNING',   maxResults: 1000 })),
+      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'FAILED',    maxResults: 100  })),
+      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'TIMED_OUT', maxResults: 100  })),
+    ]);
+    res.json({
+      running:   runningRes.status  === 'fulfilled' ? (runningRes.value.executions?.length  || 0) : 0,
+      failed:    failedRes.status   === 'fulfilled' ? (failedRes.value.executions?.length   || 0) : 0,
+      timedOut:  timedOutRes.status === 'fulfilled' ? (timedOutRes.value.executions?.length || 0) : 0,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /stepfunctions/versions ─────────────────────────────────────────────
+
+router.get('/stepfunctions/versions', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn } = req.query;
+  if (!arn) return res.status(400).json({ error: 'arn query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, ListStateMachineVersionsCommand, DescribeStateMachineCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const all = [];
+    let nextToken;
+    do {
+      const resp = await client.send(new ListStateMachineVersionsCommand({ stateMachineArn: arn, maxResults: 100, nextToken }));
+      all.push(...(resp.stateMachineVersions || []));
+      nextToken = resp.nextToken;
+    } while (nextToken);
+    res.json({ versions: all });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /stepfunctions/versions/definition ───────────────────────────────────
+
+router.get('/stepfunctions/versions/definition', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { arn } = req.query;
+  if (!arn) return res.status(400).json({ error: 'arn query param required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SFNClient, DescribeStateMachineCommand } = require('@aws-sdk/client-sfn');
+    const client = new SFNClient(cfg);
+    const resp = await client.send(new DescribeStateMachineCommand({ stateMachineArn: arn }));
+    res.json({ definition: resp.definition ?? null, name: resp.name, stateMachineVersionArn: arn });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /ec2/:id/config ──────────────────────────────────────────────────────
 
 router.get('/ec2/:id/config', async (req, res) => {

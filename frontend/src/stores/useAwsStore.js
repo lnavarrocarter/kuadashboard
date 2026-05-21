@@ -223,6 +223,24 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  async function fetchStepFnExecutionCount(arn) {
+    try {
+      return await apiFetch(`/api/cloud/aws/stepfunctions/executions/count?arn=${encodeURIComponent(arn)}`, { headers: headers() })
+    } catch (e) { return { running: 0, failed: 0, timedOut: 0 } }
+  }
+
+  async function fetchStepFnVersions(arn) {
+    try {
+      return await apiFetch(`/api/cloud/aws/stepfunctions/versions?arn=${encodeURIComponent(arn)}`, { headers: headers() })
+    } catch (e) { return { versions: [] } }
+  }
+
+  async function fetchStepFnVersionDefinition(versionArn) {
+    try {
+      return await apiFetch(`/api/cloud/aws/stepfunctions/versions/definition?arn=${encodeURIComponent(versionArn)}`, { headers: headers() })
+    } catch (e) { return null }
+  }
+
   async function fetchEventBridgeConfig(bus, rule) {
     try {
       return await apiFetch(`/api/cloud/aws/eventbridge/config?bus=${encodeURIComponent(bus)}&rule=${encodeURIComponent(rule)}`, { headers: headers() })
@@ -902,7 +920,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchLambdas, invokeLambda,
     fetchApiGateways,
     fetchLogs,
-    fetchS3Buckets, fetchEcrRepos, fetchVpcs, fetchEventBridgeRules, fetchStepFunctions, fetchStepFnDiagram, fetchStepFnExecutionEvents, fetchEventBridgeConfig, fetchEventBridgeLogs,
+    fetchS3Buckets, fetchEcrRepos, fetchVpcs, fetchEventBridgeRules, fetchStepFunctions, fetchStepFnDiagram, fetchStepFnExecutionEvents, fetchStepFnExecutionCount, fetchStepFnVersions, fetchStepFnVersionDefinition, fetchEventBridgeConfig, fetchEventBridgeLogs,
     fetchResourceConfig,
     fetchTags, saveTags,
     enableLambdaLogging, enableEcsLogging,
