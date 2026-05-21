@@ -168,10 +168,13 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/win/*.exe
+            artifacts/win/latest.yml
             artifacts/mac/*.dmg
             artifacts/mac/*.zip
+            artifacts/mac/latest-mac.yml
             artifacts/linux/*.AppImage
             artifacts/linux/*.deb
+            artifacts/linux/latest-linux.yml
             artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
