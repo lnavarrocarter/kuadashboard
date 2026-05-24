@@ -13,6 +13,7 @@ export const useAiStore = defineStore('ai', () => {
   const streaming = ref(false)
   const error = ref('')
   const models = ref([])
+  const modelsLoading = ref(false)
   const ollamaStatus = ref(null)
 
   const aiProfiles = computed(() => envStore.profiles.filter(p => ['openai', 'anthropic'].includes(p.provider)))
@@ -32,11 +33,20 @@ export const useAiStore = defineStore('ai', () => {
     return ollamaStatus.value
   }
 
-  async function refreshModels() {
-    const res = await fetch('/api/ai/models')
-    const data = await res.json()
-    models.value = data.models || []
-    return data
+  async function refreshModels(prov, pid) {
+    const p = prov ?? provider.value
+    const id = pid ?? profileId.value
+    const params = new URLSearchParams({ provider: p })
+    if (id) params.set('profileId', id)
+    modelsLoading.value = true
+    try {
+      const res = await fetch(`/api/ai/models?${params}`)
+      const data = await res.json()
+      models.value = data.models || []
+      return data
+    } finally {
+      modelsLoading.value = false
+    }
   }
 
   async function pullModel(name) {
@@ -46,7 +56,7 @@ export const useAiStore = defineStore('ai', () => {
       body: JSON.stringify({ model: name }),
     })
     if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`)
-    await refreshModels()
+    await refreshModels('ollama')
   }
 
   async function sendMessage(text, context = {}) {
@@ -123,7 +133,7 @@ export const useAiStore = defineStore('ai', () => {
 
   return {
     provider, model, profileId, agent,
-    messages, streaming, error, models, ollamaStatus,
+    messages, streaming, error, models, modelsLoading, ollamaStatus,
     aiProfiles, providerProfiles,
     persist, refreshStatus, refreshModels, pullModel, sendMessage, clearMessages,
   }

@@ -21,11 +21,28 @@
           <option value="openai">OpenAI / GPT</option>
           <option value="anthropic">Anthropic / Claude</option>
         </select>
-        <input v-model="ai.model" class="ctrl-input" placeholder="model e.g. llama3.1:8b" />
-        <select v-if="ai.provider !== 'ollama'" v-model="ai.profileId" class="ctrl-select">
-          <option value="">No API key profile</option>
+
+        <select v-if="ai.provider !== 'ollama'" v-model="ai.profileId" class="ctrl-select" @change="onProfileChange">
+          <option value="">Sin perfil API</option>
           <option v-for="p in ai.providerProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
+
+        <div class="model-select-wrap" :class="{ 'full-width': ai.provider === 'ollama' }">
+          <select v-model="ai.model" class="ctrl-select" :disabled="ai.modelsLoading">
+            <option v-if="ai.modelsLoading" value="">Cargando modelos…</option>
+            <option v-for="m in ai.models" :key="m.name" :value="m.name">
+              {{ m.name }}{{ m.size ? ' (' + formatSize(m.size) + ')' : '' }}
+            </option>
+            <option v-if="!ai.modelsLoading && !ai.models.length" :value="ai.model">{{ ai.model || '— sin modelos —' }}</option>
+          </select>
+          <button class="btn btn-icon refresh-btn" :disabled="ai.modelsLoading" @click="reloadModels" title="Recargar modelos">
+            <i data-lucide="refresh-cw"></i>
+          </button>
+        </div>
+
+        <div v-if="ai.provider === 'ollama' && ollamaIndicator" class="ollama-status" :class="ollamaIndicator.cls">
+          <i :data-lucide="ollamaIndicator.icon"></i> {{ ollamaIndicator.label }}
+        </div>
       </section>
 
       <main class="ai-messages">
@@ -87,6 +104,13 @@ const ai = useAiStore()
 const input = ref('')
 const subtitle = computed(() => `${ai.agent} · ${ai.provider}:${ai.model}`)
 
+const ollamaIndicator = computed(() => {
+  const s = ai.ollamaStatus?.ollama
+  if (!s) return null
+  if (s.running) return { cls: 'ok', icon: 'circle-check', label: `Ollama ${s.version || 'running'}` }
+  return { cls: 'err', icon: 'circle-x', label: 'Ollama no disponible' }
+})
+
 watch(() => props.visible, v => {
   if (v) nextTick(() => createIcons({ icons }))
 })
@@ -95,13 +119,41 @@ watch(() => ai.messages.length, () => nextTick(() => createIcons({ icons })))
 
 onMounted(async () => {
   await Promise.allSettled([ai.refreshStatus(), ai.refreshModels()])
+  // Set default model to first in list if current model not found
+  if (ai.models.length && !ai.models.find(m => m.name === ai.model)) {
+    ai.model = ai.models[0].name
+  }
   nextTick(() => createIcons({ icons }))
 })
 
-function onProviderChange() {
-  if (ai.provider === 'ollama' && !ai.model) ai.model = 'llama3.1:8b'
-  if (ai.provider === 'openai') ai.model = ai.model || 'gpt-4o-mini'
-  if (ai.provider === 'anthropic') ai.model = ai.model || 'claude-3-5-haiku-latest'
+async function onProviderChange() {
+  ai.model = ''
+  await ai.refreshModels(ai.provider, ai.provider !== 'ollama' ? ai.profileId : undefined)
+  if (ai.models.length) ai.model = ai.models[0].name
+  nextTick(() => createIcons({ icons }))
+}
+
+async function onProfileChange() {
+  if (ai.provider === 'ollama') return
+  await ai.refreshModels(ai.provider, ai.profileId)
+  if (ai.models.length && !ai.models.find(m => m.name === ai.model)) {
+    ai.model = ai.models[0].name
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+async function reloadModels() {
+  await ai.refreshModels(ai.provider, ai.provider !== 'ollama' ? ai.profileId : undefined)
+  if (ai.models.length && !ai.models.find(m => m.name === ai.model)) {
+    ai.model = ai.models[0].name
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+function formatSize(bytes) {
+  if (!bytes) return ''
+  const gb = bytes / 1e9
+  return gb >= 1 ? `${gb.toFixed(1)}GB` : `${(bytes / 1e6).toFixed(0)}MB`
 }
 
 async function send() {
@@ -163,9 +215,25 @@ function commandsFrom(text) {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border, #333);
 }
-.ai-config input, .ai-config select:last-child {
-  grid-column: span 2;
+.model-select-wrap {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
+.model-select-wrap select { flex: 1; }
+.model-select-wrap.full-width { grid-column: span 2; }
+.refresh-btn { padding: 4px 6px; flex-shrink: 0; }
+.ollama-status {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.ollama-status.ok { color: #4ade80; background: rgba(74,222,128,.08); }
+.ollama-status.err { color: #f87171; background: rgba(248,113,113,.08); }
 .ai-messages {
   flex: 1;
   overflow: auto;

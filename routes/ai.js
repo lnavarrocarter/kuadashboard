@@ -192,6 +192,36 @@ router.get('/agents', (_req, res) => {
   res.json({ agents: listAgents() });
 });
 
+// Static fallback models per provider (used when API is unavailable or no key configured)
+const STATIC_MODELS = {
+  ollama: [
+    { name: 'llama3.1:8b' },
+    { name: 'llama3.2:3b' },
+    { name: 'mistral:7b' },
+    { name: 'phi4:14b' },
+    { name: 'gemma3:12b' },
+    { name: 'qwen2.5:7b' },
+    { name: 'deepseek-r1:8b' },
+  ],
+  openai: [
+    { name: 'gpt-4o' },
+    { name: 'gpt-4o-mini' },
+    { name: 'gpt-4-turbo' },
+    { name: 'gpt-4' },
+    { name: 'o1' },
+    { name: 'o1-mini' },
+    { name: 'o3-mini' },
+  ],
+  anthropic: [
+    { name: 'claude-opus-4-5' },
+    { name: 'claude-sonnet-4-5' },
+    { name: 'claude-haiku-4-5' },
+    { name: 'claude-3-5-sonnet-latest' },
+    { name: 'claude-3-5-haiku-latest' },
+    { name: 'claude-3-opus-latest' },
+  ],
+};
+
 router.get('/status', async (_req, res) => {
   try {
     const version = await fetchJson(`${OLLAMA_BASE_URL}/api/version`);
@@ -201,34 +231,68 @@ router.get('/status', async (_req, res) => {
   }
 });
 
-router.get('/models', async (_req, res) => {
+/**
+ * GET /api/ai/models?provider=ollama|openai|anthropic&profileId=<id>
+ *
+ * Returns the list of available models for the given provider.
+ * - ollama    → live list from local Ollama instance (/api/tags)
+ * - openai    → live list from OpenAI /v1/models filtered to GPT/O-series (needs API key)
+ * - anthropic → live list from Anthropic /v1/models (needs API key)
+ *
+ * Falls back to static model list when service is unavailable or no key provided.
+ */
+router.get('/models', async (req, res) => {
+  const provider = String(req.query.provider || 'ollama').toLowerCase();
+  const profileId = req.query.profileId;
+
   try {
-    const data = await fetchJson(`${OLLAMA_BASE_URL}/api/tags`);
-    const ollama = (data.models || []).map(model => ({
-      provider: 'ollama',
-      name: model.name,
-      size: model.size,
-      modifiedAt: model.modified_at,
-    }));
-    res.json({
-      models: [
-        ...ollama,
-        { provider: 'openai', name: DEFAULT_MODELS.openai },
-        { provider: 'openai', name: 'gpt-4o' },
-        { provider: 'anthropic', name: DEFAULT_MODELS.anthropic },
-        { provider: 'anthropic', name: 'claude-3-5-sonnet-latest' },
-      ],
-    });
+    if (provider === 'ollama') {
+      const data = await fetchJson(`${OLLAMA_BASE_URL}/api/tags`);
+      const models = (data.models || []).map(m => ({
+        name: m.name,
+        size: m.size,
+        modifiedAt: m.modified_at,
+      }));
+      return res.json({ models: models.length ? models : STATIC_MODELS.ollama });
+    }
+
+    // For cloud providers, try to fetch API key from profile
+    let apiKey = null;
+    let baseUrl = null;
+    if (profileId) {
+      const keys = await getStore().getRawKeys(profileId).catch(() => ({}));
+      apiKey = provider === 'openai'
+        ? (keys.OPENAI_API_KEY || keys.API_KEY)
+        : (keys.ANTHROPIC_API_KEY || keys.API_KEY);
+      baseUrl = keys.BASE_URL || null;
+    }
+
+    if (provider === 'openai') {
+      if (!apiKey) return res.json({ models: STATIC_MODELS.openai, static: true });
+      const url = `${(baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '')}/models`;
+      const data = await fetchJson(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+      const GPT_PATTERN = /^(gpt-|o\d)/i;
+      const models = (data.data || [])
+        .filter(m => GPT_PATTERN.test(m.id))
+        .sort((a, b) => (b.created || 0) - (a.created || 0))
+        .map(m => ({ name: m.id }));
+      return res.json({ models: models.length ? models : STATIC_MODELS.openai });
+    }
+
+    if (provider === 'anthropic') {
+      if (!apiKey) return res.json({ models: STATIC_MODELS.anthropic, static: true });
+      const url = `${(baseUrl || 'https://api.anthropic.com').replace(/\/$/, '')}/v1/models`;
+      const data = await fetchJson(url, {
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      });
+      const models = (data.data || []).map(m => ({ name: m.id }));
+      return res.json({ models: models.length ? models : STATIC_MODELS.anthropic });
+    }
+
+    res.status(400).json({ error: `Unknown provider: ${provider}` });
   } catch (err) {
-    res.json({
-      models: [
-        { provider: 'openai', name: DEFAULT_MODELS.openai },
-        { provider: 'openai', name: 'gpt-4o' },
-        { provider: 'anthropic', name: DEFAULT_MODELS.anthropic },
-        { provider: 'anthropic', name: 'claude-3-5-sonnet-latest' },
-      ],
-      ollamaError: err.message,
-    });
+    const fallback = STATIC_MODELS[provider] || [];
+    res.json({ models: fallback, error: err.message, static: true });
   }
 });
 
