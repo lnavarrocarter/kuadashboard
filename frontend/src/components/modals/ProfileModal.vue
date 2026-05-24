@@ -27,6 +27,8 @@
               <option value="gcp">Google Cloud (GCP)</option>
               <option value="aws">Amazon Web Services (AWS)</option>
               <option value="vercel">Vercel</option>
+              <option value="openai">OpenAI / GPT</option>
+              <option value="anthropic">Anthropic / Claude</option>
               <option value="generic">Generic / Other</option>
             </select>
           </label>
@@ -199,6 +201,23 @@
                 VERCEL_TEAM_ID
                 <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — for team accounts)</span>
                 <input v-model="form.keys.VERCEL_TEAM_ID" class="ctrl-input" placeholder="team_XXXXXXXXXXXX" />
+              </label>
+            </template>
+
+            <!-- AI provider fields -->
+            <template v-else-if="form.provider === 'openai' || form.provider === 'anthropic'">
+              <div class="field-label" style="margin-bottom:4px">
+                API
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+              </div>
+              <label class="field-label">
+                {{ form.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY' }}
+                <input v-model="form.keys.API_KEY" class="ctrl-input" type="password" placeholder="••••••••••••••••••••" />
+              </label>
+              <label class="field-label">
+                BASE_URL
+                <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — proxies / Azure-compatible endpoints)</span>
+                <input v-model="form.keys.BASE_URL" class="ctrl-input" :placeholder="form.provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'" />
               </label>
             </template>
 
@@ -408,6 +427,10 @@ const defaultForm = () => ({
     AWS_ACCESS_KEY_ID: '',
     AWS_SECRET_ACCESS_KEY: '',
     AWS_DEFAULT_REGION: '',
+    VERCEL_API_TOKEN: '',
+    VERCEL_TEAM_ID: '',
+    API_KEY: '',
+    BASE_URL: '',
   },
   genericPairs: [{ key: '', value: '', tags: [], newTag: '' }],
 })
@@ -440,8 +463,8 @@ watch(() => props.show, (v) => {
         AWS_DEFAULT_REGION: '',
         VERCEL_API_TOKEN: '',
         VERCEL_TEAM_ID: '',
-        VERCEL_API_TOKEN: '',
-        VERCEL_TEAM_ID: '',
+        API_KEY: '',
+        BASE_URL: '',
       },
       genericPairs: props.profile.keyNames?.map(k => ({
         key: k, value: '', tags: props.profile.meta?.[k]?.tags?.slice() || [], newTag: '',
@@ -482,6 +505,12 @@ function submit() {
   } else if (provider === 'vercel') {
     if (keys.VERCEL_API_TOKEN)          finalKeys.VERCEL_API_TOKEN = keys.VERCEL_API_TOKEN
     if (keys.VERCEL_TEAM_ID)            finalKeys.VERCEL_TEAM_ID = keys.VERCEL_TEAM_ID
+  } else if (provider === 'openai') {
+    if (keys.API_KEY)                   finalKeys.OPENAI_API_KEY = keys.API_KEY
+    if (keys.BASE_URL)                  finalKeys.BASE_URL = keys.BASE_URL
+  } else if (provider === 'anthropic') {
+    if (keys.API_KEY)                   finalKeys.ANTHROPIC_API_KEY = keys.API_KEY
+    if (keys.BASE_URL)                  finalKeys.BASE_URL = keys.BASE_URL
   } else {
     for (const pair of genericPairs) {
       if (pair.key.trim()) {

@@ -23,7 +23,7 @@
 const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const path        = require('path');
 const { fork }    = require('child_process');
-const { execSync } = require('child_process');
+const { execFile, execSync, spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
+const OLLAMA_URL   = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 
 // ─── Deep-link protocol (kua://) ──────────────────────────────────────────────
 // Register the kua:// custom URL scheme so Vercel OAuth can redirect back to
@@ -80,6 +81,7 @@ function expandMacPath() {
 let mainWindow    = null;
 let backendProcess = null;
 let backendReady  = false;
+let ollamaProcess = null;
 
 // ─── Backend (Express) ────────────────────────────────────────────────────────
 
@@ -139,6 +141,56 @@ function stopBackend() {
     backendProcess.kill('SIGTERM');
     backendProcess = null;
   }
+}
+
+// ─── Ollama local LLM runtime ────────────────────────────────────────────────
+
+async function getOllamaStatus() {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/version`);
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const data = await response.json();
+    return { installed: true, running: true, baseUrl: OLLAMA_URL, version: data.version || null };
+  } catch (err) {
+    return new Promise(resolve => {
+      execFile('ollama', ['--version'], { timeout: 3000 }, (execErr, stdout) => {
+        if (execErr) {
+          resolve({ installed: false, running: false, baseUrl: OLLAMA_URL, error: 'Ollama is not installed or not in PATH' });
+          return;
+        }
+        resolve({
+          installed: true,
+          running: false,
+          baseUrl: OLLAMA_URL,
+          version: stdout.trim().replace(/^ollama version\s*/i, '') || null,
+          error: err.message,
+        });
+      });
+    });
+  }
+}
+
+async function startOllama() {
+  const status = await getOllamaStatus();
+  if (status.running) return status;
+  if (!status.installed) return status;
+  if (ollamaProcess) return { ...status, starting: true };
+
+  ollamaProcess = spawn('ollama', ['serve'], {
+    env: process.env,
+    windowsHide: true,
+    detached: process.platform !== 'win32',
+    stdio: 'ignore',
+  });
+  ollamaProcess.unref();
+  ollamaProcess.on('exit', () => { ollamaProcess = null; });
+
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const next = await getOllamaStatus();
+    if (next.running) return next;
+  }
+  return { ...status, starting: false, error: 'Ollama did not start within 10 seconds' };
 }
 
 // ─── Browser Window ───────────────────────────────────────────────────────────
@@ -296,6 +348,22 @@ ipcMain.handle('dialog:openFile', async (event, opts = {}) => {
     properties: opts.properties || ['openFile'],
   });
   return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('ai:ollama-status', () => getOllamaStatus());
+
+ipcMain.handle('ai:ollama-start', () => startOllama());
+
+ipcMain.handle('ai:ollama-pull-model', async (_event, model) => {
+  const cleanModel = String(model || '').trim();
+  if (!cleanModel) throw new Error('Model name is required');
+  const response = await fetch(`${OLLAMA_URL}/api/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: cleanModel, stream: false }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
 });
 
 ipcMain.on('app:check-updates', () => {

@@ -24,6 +24,7 @@ export const useEnvStore = defineStore('envManager', () => {
   const gcpProfiles     = computed(() => profiles.value.filter(p => p.provider === 'gcp'))
   const awsProfiles     = computed(() => profiles.value.filter(p => p.provider === 'aws'))
   const vercelProfiles  = computed(() => profiles.value.filter(p => p.provider === 'vercel'))
+  const aiProfiles      = computed(() => profiles.value.filter(p => ['openai', 'anthropic'].includes(p.provider)))
   const genericProfiles = computed(() => profiles.value.filter(p => p.provider === 'generic'))
 
   function findById(id) {
@@ -147,7 +148,7 @@ export const useEnvStore = defineStore('envManager', () => {
 
   return {
     profiles, loading, error,
-    gcpProfiles, awsProfiles, vercelProfiles, genericProfiles,
+    gcpProfiles, awsProfiles, vercelProfiles, aiProfiles, genericProfiles,
     findById,
     fetchProfiles, fetchProfile,
     createProfile, updateProfile, deleteProfile, exportProfile, importEnv,

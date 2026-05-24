@@ -24,6 +24,9 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
+          <button :class="['provider-tab', { active: activeProvider === 'ai' }]" @click="setProvider('ai')">
+            <i data-lucide="sparkles"></i> AI
+          </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
           <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
@@ -91,6 +94,7 @@
           <button class="btn btn-icon" :title="t('nav.deleteVercel')" :disabled="!vercelProfileId" @click="deleteConnectionConfirm('vercel')"><i data-lucide="trash-2"></i></button>
         </template>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
+        <button class="btn btn-icon" :class="{ primary: aiPanelVisible }" title="AI Agent" @click="toggleAiPanel"><i data-lucide="sparkles"></i></button>
         <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
         <button class="btn btn-icon btn-lang" @click="toggleLang" :title="settings.lang === 'es' ? 'Switch to English' : 'Cambiar a Español'">
           <span class="lang-flag">{{ settings.lang === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
@@ -333,6 +337,16 @@
           </div>
         </nav>
 
+        <!-- AI sidebar -->
+        <nav class="sidebar" v-if="activeProvider === 'ai'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Agentes</div>
+            <a :class="['sidebar-item', { active: aiTab === 'chat' }]" @click.prevent="aiTab = 'chat'; aiPanelVisible = true">Chat</a>
+            <a :class="['sidebar-item', { active: aiTab === 'models' }]" @click.prevent="aiTab = 'models'">Modelos</a>
+            <a :class="['sidebar-item', { active: aiTab === 'projects' }]" @click.prevent="aiTab = 'projects'">Proyectos</a>
+          </div>
+        </nav>
+
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
@@ -365,10 +379,18 @@
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
           <VercelView  v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
+          <AIModelsPanel v-else-if="activeProvider === 'ai' && aiTab === 'models'" />
+          <AIProjectImport v-else-if="activeProvider === 'ai' && aiTab === 'projects'" />
+          <div v-else-if="activeProvider === 'ai'" class="ai-welcome">
+            <i data-lucide="sparkles"></i>
+            <h2>AI Agent</h2>
+            <p>Abre el chat global o gestiona modelos locales de Ollama.</p>
+            <button class="btn primary" @click="aiPanelVisible = true">Abrir chat</button>
+          </div>
         </main>
       </div>
 
-      <TerminalPanel @restartStream="restartStream" />
+      <TerminalPanel @restartStream="restartStream" @open-ai="openAiFromTerminal" />
     </div>
 
     <PortForwardPanel :visible="pfPanelVisible" @close="pfPanelVisible = false" @add="openPfManual" />
@@ -386,6 +408,7 @@
           activeProvider === 'aws' ? 'Amazon Web Services'
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
+          : activeProvider === 'ai' ? 'AI Agent'
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>
@@ -415,6 +438,12 @@
     <WelcomeModal />
     <UpdateNotice />
     <ToastContainer />
+    <AIChatPanel
+      :visible="aiPanelVisible"
+      :context="aiContext"
+      @close="aiPanelVisible = false"
+      @execute-command="executeAiCommand"
+    />
   </div>
 </template>
 
@@ -443,6 +472,9 @@ import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
+import AIChatPanel     from './components/AIChatPanel.vue'
+import AIModelsPanel   from './components/AIModelsPanel.vue'
+import AIProjectImport from './components/AIProjectImport.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -532,6 +564,7 @@ const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Mana
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
+const aiTab           = ref('chat')
 const selectedKubeResource = ref(null)
 const kubeDetailWidth = ref(Number(LS.get('kubeDetailWidth', '420')) || 420)
 const isKubeResizing = ref(false)
@@ -539,6 +572,8 @@ const helmViewRef     = ref(null)
 const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
 const vercelTab       = ref('projects')
+const aiPanelVisible  = ref(false)
+const aiContext       = ref({})
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
@@ -610,6 +645,7 @@ async function setProvider(p) {
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
   if (p === 'vercel') { envStore.fetchProfiles() }
+  if (p === 'ai')     { cloudView.value = null; aiPanelVisible.value = true; envStore.fetchProfiles() }
   nextTick(() => createIcons({ icons }))
 }
 
@@ -752,6 +788,45 @@ async function handleGkeConnect(contextName) {
 function openLocalShell() {
   const tab = termStore.openLocalTab()
   startLocalStream(tab)
+}
+
+function toggleAiPanel() {
+  aiContext.value = {
+    activeProvider: activeProvider.value,
+    activeService: activeProvider.value === 'aws' ? awsTab.value
+      : activeProvider.value === 'gcp' ? gcpTab.value
+      : activeProvider.value === 'vercel' ? vercelTab.value
+      : store.resource,
+  }
+  aiPanelVisible.value = !aiPanelVisible.value
+  nextTick(() => createIcons({ icons }))
+}
+
+function openAiFromTerminal(context) {
+  aiContext.value = {
+    activeProvider: activeProvider.value,
+    activeService: activeProvider.value === 'aws' ? awsTab.value
+      : activeProvider.value === 'gcp' ? gcpTab.value
+      : activeProvider.value === 'vercel' ? vercelTab.value
+      : store.resource,
+    terminal: context,
+  }
+  aiPanelVisible.value = true
+  nextTick(() => createIcons({ icons }))
+}
+
+function executeAiCommand(command) {
+  let tab = termStore.activeTab()
+  if (!tab || tab.type === 'log') {
+    openLocalShell()
+    tab = termStore.activeTab()
+  }
+  if (!tab?.ws || tab.ws.readyState !== 1) {
+    toast('Terminal no está lista para ejecutar comandos', 'error')
+    return
+  }
+  tab.ws.send(JSON.stringify({ action: 'stdin', data: `${command}\n` }))
+  termStore.pushLine(tab, command, 'cmd')
 }
 
 async function switchContext() {

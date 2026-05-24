@@ -4,9 +4,22 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.9.0'
+export const CHANGELOG_VERSION = '1.10.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.10.0',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'new',    text: 'Agente IA local — integración con Ollama como runtime LLM con soporte opcional para OpenAI y Anthropic Claude vía API key' },
+      { type: 'new',    text: 'Agente IA — 4 tipos de agente: DevOps, Bootstrap, Code Review y General, cada uno con system prompt especializado y contexto de recursos activos' },
+      { type: 'new',    text: 'Chat panel global — panel slideout lateral con streaming SSE, historial de mensajes y botones [▶ Ejecutar] para inyectar comandos al terminal activo' },
+      { type: 'new',    text: 'Gestión de modelos Ollama — descarga de modelos con progress bar, estado del proceso Ollama (running/stopped/not installed) y auto-start desde Electron' },
+      { type: 'new',    text: 'Bootstrap de proyectos — importación de repos GitHub o carpetas locales para que el agente detecte el stack y genere Dockerfile, docker-compose, manifests K8s y CI configs' },
+      { type: 'new',    text: 'Terminal Ask AI — botón ✨ en el panel de terminal para abrir el agente con contexto del tab activo (tipo, últimos 5 comandos, último output)' },
+      { type: 'new',    text: 'Perfiles OpenAI y Anthropic — soporte de API keys para ambos proveedores en el Gestor de Credenciales' },
+    ],
+  },
   {
     version: '1.9.0',
     date: 'Mayo 2026',

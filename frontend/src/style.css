@@ -1990,3 +1990,26 @@ kbd {
 .athena-history-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; background: var(--bg-modal, #252526); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
 .athena-history-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); }
 .athena-history-item:hover { background: rgba(255,255,255,.05); }
+
+/* ── AI Agent ───────────────────────────────────────────────────────────── */
+.ai-welcome {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text);
+}
+.ai-welcome svg {
+  width: 42px;
+  height: 42px;
+  color: var(--accent);
+}
+.ai-welcome h2,
+.ai-welcome p {
+  margin: 0;
+}
+.ai-welcome p {
+  color: var(--text-dim);
+}

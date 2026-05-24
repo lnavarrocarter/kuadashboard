@@ -211,6 +211,7 @@
       />
       <!-- Suggestion chip -->
       <span v-if="suggestion" class="term-suggestion" @click="applySuggestion">{{ suggestion }}</span>
+      <button class="btn btn-icon" title="Ask AI about this terminal" @click="openAi"><i data-lucide="sparkles"></i></button>
       <button class="btn btn-icon" title="Ctrl+C — interrupt" @click="sendCtrlC"><i data-lucide="x-circle"></i></button>
     </div>
 
@@ -719,7 +720,19 @@ function stopResize() {
   document.removeEventListener('mouseup', stopResize)
 }
 
-const emit = defineEmits(['restartStream'])
+const emit = defineEmits(['restartStream', 'openAi'])
+
+function openAi() {
+  const tab = activeTab.value
+  const entries = tab?.entries || []
+  emit('openAi', {
+    type: tab?.type,
+    context: tab?.context,
+    label: tab?.label || tab?.pod,
+    recentCommands: cmdHistory.value.slice(0, 5),
+    lastOutput: entries.slice(-20).map(e => e.text || htmlToText(e.html || '')).join('\n').slice(-4000),
+  })
+}
 
 onMounted(() => nextTick(() => createIcons({ icons })))
 onUnmounted(() => {

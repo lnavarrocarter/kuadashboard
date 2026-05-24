@@ -102,6 +102,19 @@ contextBridge.exposeInMainWorld('kuaElectron', {
     return ipcRenderer.invoke('dialog:openFile', opts);
   },
 
+  /** Ollama runtime helpers for local AI models */
+  ollamaStatus() {
+    return ipcRenderer.invoke('ai:ollama-status');
+  },
+
+  startOllama() {
+    return ipcRenderer.invoke('ai:ollama-start');
+  },
+
+  pullOllamaModel(model) {
+    return ipcRenderer.invoke('ai:ollama-pull-model', model);
+  },
+
   /** Open the Vercel OAuth start URL in the OS browser */
   startVercelOAuth(profileName = 'Vercel') {
     // Derive the backend origin from the current page URL (e.g. http://localhost:7190)

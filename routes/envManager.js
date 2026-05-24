@@ -33,7 +33,7 @@ function handleErr(res, err) {
 
 /** Validate that `provider` is one of the accepted values */
 function validateProvider(provider) {
-  return ['gcp', 'aws', 'generic'].includes(provider);
+  return ['gcp', 'aws', 'vercel', 'openai', 'anthropic', 'generic'].includes(provider);
 }
 
 // ─── GET /profiles ────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ router.post('/profiles', async (req, res) => {
     if (!name || typeof name !== 'string' || !name.trim())
       return res.status(400).json({ error: '`name` is required' });
     if (!validateProvider(provider))
-      return res.status(400).json({ error: '`provider` must be gcp | aws | generic' });
+      return res.status(400).json({ error: '`provider` must be gcp | aws | vercel | openai | anthropic | generic' });
 
     // Sanitize key names: only allow alphanumeric + underscores
     const sanitizedKeys = {};

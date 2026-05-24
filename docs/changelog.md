@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.10.0 (Mayo 2026)
+
+### AI Agent
+
+- Local AI agent integration using Ollama as the LLM runtime, with optional OpenAI and Anthropic Claude support via API key.
+- Four agent personas: DevOps, Bootstrap, Code Review and General — each with a specialized system prompt and active resource context injection.
+- Global chat slideout panel with real-time SSE streaming, message history and `[▶ Run]` buttons that inject commands directly into the active terminal tab.
+- Ollama model management: download models with a progress bar, see process status (running/stopped/not installed) and auto-start Ollama from Electron.
+- Bootstrap agent: import GitHub repositories or local folders, detect the tech stack and generate Dockerfile, docker-compose, Kubernetes manifests and CI configs.
+- Terminal ✨ button opens the AI agent pre-loaded with context from the active terminal tab (tab type, last 5 commands, last output).
+- OpenAI and Anthropic profiles in the Credential Manager with API key and optional base URL fields.
+
 ## v1.9.0 (Mayo 2026)
 
 ### Vercel
