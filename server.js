@@ -7,6 +7,7 @@ const fs         = require('fs');
 const os         = require('os');
 const path       = require('path');
 const stream     = require('stream');
+const request    = require('request');
 const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
@@ -49,7 +50,7 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // ─── Mount cloud routes ───────────────────────────────────────────────────────
 app.use('/api/cloud/envs',    envManagerRoutes);
@@ -82,6 +83,7 @@ let currentContext = "default"; // Placeholder until we load real contexts
 // Path where we persist imported contexts (merged kubeconfig)
 const MERGED_KUBECONFIG  = path.join(os.homedir(), '.kube', 'kuadashboard_merged.yaml');
 const DEFAULT_KUBECONFIG = path.join(os.homedir(), '.kube', 'config');
+const KUBECONFIG_PATHS   = path.join(os.homedir(), '.kube', 'kuadashboard_paths.json');
 
 /**
  * Merge clusters/users/contexts from `src` KubeConfig into `dst` KubeConfig
@@ -109,7 +111,40 @@ function resolveKubeConfigFiles() {
   if (!files.includes(DEFAULT_KUBECONFIG) && fs.existsSync(DEFAULT_KUBECONFIG)) {
     files.push(DEFAULT_KUBECONFIG);
   }
+  readRegisteredKubeconfigPaths().forEach(file => {
+    if (!files.includes(file) && fs.existsSync(file)) files.push(file);
+  });
   return files;
+}
+
+function expandUserPath(filePath = '') {
+  const raw = String(filePath || '').trim();
+  if (!raw) return '';
+  return raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : path.resolve(raw);
+}
+
+function readRegisteredKubeconfigPaths() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(KUBECONFIG_PATHS, 'utf8'));
+    return Array.isArray(parsed.paths) ? parsed.paths.filter(p => typeof p === 'string') : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeRegisteredKubeconfigPaths(paths) {
+  const kubeDir = path.join(os.homedir(), '.kube');
+  if (!fs.existsSync(kubeDir)) fs.mkdirSync(kubeDir, { mode: 0o700, recursive: true });
+  fs.writeFileSync(KUBECONFIG_PATHS, JSON.stringify({ paths }, null, 2), { mode: 0o600 });
+}
+
+function parseAndValidateKubeconfig(content) {
+  let parsed;
+  try { parsed = yaml.load(content); }
+  catch (e) { throw new Error(`YAML parse error: ${e.message}`); }
+  const validErr = validateKubeconfig(parsed);
+  if (validErr) throw new Error(validErr);
+  return parsed;
 }
 
 function loadKubeConfig(contextName) {
@@ -198,14 +233,7 @@ app.post('/api/kubeconfig/import', (req, res) => {
     const { yamlContent } = req.body;
     if (!yamlContent) return res.status(400).json({ error: 'yamlContent required' });
 
-    // Parse
-    let parsed;
-    try { parsed = yaml.load(yamlContent); }
-    catch (e) { return res.status(400).json({ error: `YAML parse error: ${e.message}` }); }
-
-    // Validate structure
-    const validErr = validateKubeconfig(parsed);
-    if (validErr) return res.status(400).json({ error: validErr });
+    const parsed = parseAndValidateKubeconfig(yamlContent);
 
     // Load existing merged config (if any) to merge into it
     let merged = { apiVersion: 'v1', kind: 'Config', clusters: [], users: [], contexts: [], preferences: {} };
@@ -242,15 +270,64 @@ app.post('/api/kubeconfig/import', (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+app.post('/api/kubeconfig/path', (req, res) => {
+  try {
+    const filePath = expandUserPath(req.body?.path || req.body?.filePath);
+    if (!filePath) return res.status(400).json({ error: 'path required' });
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: `Kubeconfig file not found: ${filePath}` });
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return res.status(400).json({ error: 'path must point to a file' });
+    const parsed = parseAndValidateKubeconfig(fs.readFileSync(filePath, 'utf8'));
+
+    const paths = readRegisteredKubeconfigPaths();
+    if (!paths.includes(filePath)) {
+      paths.push(filePath);
+      writeRegisteredKubeconfigPaths(paths);
+    }
+
+    loadKubeConfig(null);
+    const contexts = (parsed.contexts || []).map(ctx => ctx.name);
+    auditLog.log({
+      category: 'kubernetes', action: 'KubeConfig path registered',
+      resource: filePath, details: { contexts }, level: 'info',
+    });
+    res.json({ success: true, path: filePath, contexts });
+  } catch (err) { handleError(res, err); }
+});
+
 function clients() {
   return {
     core:       currentKc.makeApiClient(k8s.CoreV1Api),
     apps:       currentKc.makeApiClient(k8s.AppsV1Api),
     networking: currentKc.makeApiClient(k8s.NetworkingV1Api),
     batch:      currentKc.makeApiClient(k8s.BatchV1Api),
+    autoscaling: currentKc.makeApiClient(k8s.AutoscalingV2Api),
+    policy:     currentKc.makeApiClient(k8s.PolicyV1Api),
+    storage:    currentKc.makeApiClient(k8s.StorageV1Api),
+    coordination: currentKc.makeApiClient(k8s.CoordinationV1Api),
+    discovery:  currentKc.makeApiClient(k8s.DiscoveryV1Api),
+    admission:  currentKc.makeApiClient(k8s.AdmissionregistrationV1Api),
+    scheduling: currentKc.makeApiClient(k8s.SchedulingV1Api),
+    node:       currentKc.makeApiClient(k8s.NodeV1Api),
+    custom:     currentKc.makeApiClient(k8s.CustomObjectsApi),
     log:        new k8s.Log(currentKc),
   };
 }
+
+function summarizeObject(obj = {}) {
+  if (!obj || typeof obj !== 'object') return '-';
+  return Object.entries(obj).map(([k, v]) => `${k}:${v}`).join(', ') || '-';
+}
+
+function selectorText(selector = {}) {
+  const labels = Object.entries(selector.matchLabels || selector || {}).map(([k, v]) => `${k}=${v}`);
+  const expressions = (selector.matchExpressions || []).map(expr => `${expr.key} ${expr.operator}${expr.values?.length ? ` (${expr.values.join(',')})` : ''}`);
+  return [...labels, ...expressions].join(', ') || '-';
+}
+
+function listItems(result) { return result.body?.items || result.items || []; }
+
+function yamlResponse(res, obj) { res.type('text/plain').send(yaml.dump(obj.body || obj)); }
 
 // ─── Error helper ─────────────────────────────────────────────────────────────
 
@@ -262,6 +339,254 @@ function handleError(res, err) {
 }
 
 const PATCH_HEADERS = { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } };
+const JSON_PATCH_HEADERS = { headers: { 'Content-Type': 'application/json-patch+json' } };
+
+function selectorToString(selector = {}) {
+  const parts = [];
+  Object.entries(selector.matchLabels || {}).forEach(([key, value]) => parts.push(`${key}=${value}`));
+  (selector.matchExpressions || []).forEach(expr => {
+    const values = (expr.values || []).join(',');
+    if (expr.operator === 'In') parts.push(`${expr.key} in (${values})`);
+    else if (expr.operator === 'NotIn') parts.push(`${expr.key} notin (${values})`);
+    else if (expr.operator === 'Exists') parts.push(expr.key);
+    else if (expr.operator === 'DoesNotExist') parts.push(`!${expr.key}`);
+  });
+  return parts.join(',');
+}
+
+function eventTime(evt = {}) {
+  return evt.lastTimestamp || evt.eventTime || evt.metadata?.creationTimestamp || evt.firstTimestamp || null;
+}
+
+function normalizeEvent(evt = {}) {
+  const involved = evt.involvedObject || evt.regarding || {};
+  return {
+    name: evt.metadata?.name,
+    namespace: evt.metadata?.namespace || involved.namespace || '',
+    type: evt.type || 'Normal',
+    reason: evt.reason || '-',
+    object: `${involved.kind || 'Object'}/${involved.name || '-'}`,
+    objectKind: involved.kind || '',
+    objectName: involved.name || '',
+    objectNamespace: involved.namespace || evt.metadata?.namespace || '',
+    message: evt.message || evt.note || '',
+    source: evt.source?.component || evt.reportingController || evt.reportingInstance || '',
+    count: evt.count || evt.series?.count || 1,
+    firstTimestamp: evt.firstTimestamp || evt.eventTime || evt.metadata?.creationTimestamp,
+    lastTimestamp: eventTime(evt),
+    age: eventTime(evt),
+  };
+}
+
+function metricTotalsFromContainers(containers = []) {
+  const cpuNano = containers.reduce((sum, c) => sum + parseCpu(c.usage?.cpu), 0);
+  const memoryBytes = containers.reduce((sum, c) => sum + parseMemory(c.usage?.memory), 0);
+  return { cpuNano, memoryBytes };
+}
+
+function metricPayload({ cpuNano = 0, memoryBytes = 0, cpuCapacityNano = 1e9, memoryCapacityBytes = 512 * 1024 * 1024, items = [], containers = [], timestamp, window, source = 'metrics.k8s.io' } = {}) {
+  return {
+    timestamp,
+    window,
+    source,
+    items,
+    containers,
+    cpu: {
+      nano: cpuNano,
+      cores: cpuNano / 1e9,
+      display: formatCpu(cpuNano),
+      percent: Math.min(100, Math.max(2, (cpuNano / Math.max(cpuCapacityNano, 1)) * 100)),
+    },
+    memory: {
+      bytes: memoryBytes,
+      display: formatBytes(memoryBytes),
+      percent: Math.min(100, Math.max(2, (memoryBytes / Math.max(memoryCapacityBytes, 1)) * 100)),
+    },
+  };
+}
+
+function isMetricsApiUnavailable(err) {
+  const message = err.body?.message || err.message || '';
+  return err.statusCode === 404 || /metrics\.k8s\.io|not found|the server could not find|not have a resource type/i.test(message);
+}
+
+function metricsUnavailable(res, err) {
+  if (isMetricsApiUnavailable(err)) {
+    res.status(503).json({ error: 'Kubernetes Metrics API is not available. Install Metrics Server or Prometheus for resource usage.' });
+    return true;
+  }
+  return false;
+}
+
+function prometheusServiceScore(svc = {}) {
+  const labels = svc.metadata?.labels || {};
+  const name = (svc.metadata?.name || '').toLowerCase();
+  const text = [name, svc.metadata?.namespace, ...Object.keys(labels), ...Object.values(labels)].join(' ').toLowerCase();
+  if (/alertmanager|grafana|operator|node-exporter|kube-state-metrics/.test(text)) return 0;
+  let score = 0;
+  if (labels['app.kubernetes.io/name'] === 'prometheus' || labels.app === 'prometheus') score += 8;
+  if (name.includes('prometheus')) score += 5;
+  if ((svc.spec?.ports || []).some(port => Number(port.port) === 9090 || Number(port.targetPort) === 9090)) score += 4;
+  if ((svc.spec?.ports || []).some(port => /web|http|prometheus/.test(String(port.name || '').toLowerCase()))) score += 2;
+  return score;
+}
+
+async function discoverPrometheusServices() {
+  const { core } = clients();
+  const services = await core.listServiceForAllNamespaces();
+  return listItems(services)
+    .map(svc => ({ svc, score: prometheusServiceScore(svc) }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ svc }) => ({
+      name: svc.metadata.name,
+      namespace: svc.metadata.namespace,
+      type: svc.spec?.type,
+      ports: (svc.spec?.ports || []).map(p => ({ name: p.name, port: p.port, targetPort: p.targetPort })),
+    }));
+}
+
+function serviceProxyCandidates(svc = {}) {
+  const ports = svc.ports || [];
+  const preferred = ports
+    .filter(port => Number(port.port) === 9090 || /web|http|prometheus/.test(String(port.name || '').toLowerCase()));
+  const ordered = preferred.length ? preferred : ports;
+  const names = [svc.name];
+  ordered.forEach(port => {
+    if (port.name) names.push(`${svc.name}:${port.name}`, `http:${svc.name}:${port.name}`);
+    if (port.port) names.push(`${svc.name}:${port.port}`, `http:${svc.name}:${port.port}`);
+  });
+  return [...new Set(names)];
+}
+
+async function kubeApiGet(pathname) {
+  const cluster = currentKc.getCurrentCluster();
+  if (!cluster?.server) throw new Error('No active Kubernetes cluster server');
+  const opts = {
+    method: 'GET',
+    uri: `${cluster.server.replace(/\/$/, '')}${pathname}`,
+    json: false,
+    timeout: 10000,
+  };
+  await currentKc.applyToRequest(opts);
+  return new Promise((resolve, reject) => {
+    request(opts, (error, response, body) => {
+      if (error) return reject(error);
+      if (response.statusCode >= 200 && response.statusCode <= 299) return resolve(body);
+      const err = new Error(`HTTP ${response.statusCode}: ${String(body || '').slice(0, 220)}`);
+      err.statusCode = response.statusCode;
+      reject(err);
+    });
+  });
+}
+
+async function prometheusQuery(query) {
+  const services = await discoverPrometheusServices();
+  let lastErr = null;
+  for (const svc of services) {
+    for (const proxyName of serviceProxyCandidates(svc)) {
+      try {
+        const raw = await kubeApiGet(`/api/v1/namespaces/${encodeURIComponent(svc.namespace)}/services/${proxyName}/proxy/api/v1/query?query=${encodeURIComponent(query)}`);
+        const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (body?.status === 'success') return { body, service: svc };
+        lastErr = new Error(body?.error || 'Prometheus query failed');
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+  }
+  throw lastErr || new Error('No Prometheus service found');
+}
+
+function prometheusScalar(body) {
+  const value = body?.data?.result?.[0]?.value?.[1];
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function regexEscape(value = '') { return String(value).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'); }
+
+async function prometheusMetricsForPods(namespace, pods = []) {
+  const names = pods.map(pod => pod.metadata?.name || pod.name).filter(Boolean);
+  if (!names.length) throw new Error('No pods found for Prometheus metrics');
+  const podMatcher = names.length === 1 ? `pod="${names[0]}"` : `pod=~"${names.map(regexEscape).join('|')}"`;
+  const scope = `namespace="${namespace}",${podMatcher},container!="",container!="POD"`;
+  const [cpuResult, memoryResult] = await Promise.all([
+    prometheusQuery(`sum(rate(container_cpu_usage_seconds_total{${scope}}[5m]))`),
+    prometheusQuery(`sum(container_memory_working_set_bytes{${scope}})`),
+  ]);
+  const cpuNano = prometheusScalar(cpuResult.body) * 1e9;
+  const memoryBytes = prometheusScalar(memoryResult.body);
+  return metricPayload({
+    source: `Prometheus (${cpuResult.service.namespace}/${cpuResult.service.name})`,
+    items: names.map(name => ({ name, cpu: '-', memory: '-' })),
+    cpuNano,
+    memoryBytes,
+    cpuCapacityNano: Math.max(1e9, names.length * 1e9),
+    memoryCapacityBytes: Math.max(512 * 1024 * 1024, names.length * 512 * 1024 * 1024),
+  });
+}
+
+async function prometheusMetricsForNode(name) {
+  const instanceMatcher = `instance=~"${regexEscape(name)}(:[0-9]+)?"`;
+  const [cpuResult, memoryResult] = await Promise.all([
+    prometheusQuery(`sum(rate(node_cpu_seconds_total{${instanceMatcher},mode!="idle"}[5m]))`),
+    prometheusQuery(`sum(node_memory_MemTotal_bytes{${instanceMatcher}} - node_memory_MemAvailable_bytes{${instanceMatcher}})`),
+  ]);
+  return metricPayload({
+    source: `Prometheus (${cpuResult.service.namespace}/${cpuResult.service.name})`,
+    items: [{ name, cpu: '-', memory: '-' }],
+    cpuNano: prometheusScalar(cpuResult.body) * 1e9,
+    memoryBytes: prometheusScalar(memoryResult.body),
+  });
+}
+
+async function resolveMetricPods(resourceType, namespace, name) {
+  const { apps, core } = clients();
+  if (resourceType === 'pods') {
+    const pod = (await core.readNamespacedPod(name, namespace)).body;
+    return [pod];
+  }
+  let selector = '';
+  if (resourceType === 'deployments') selector = selectorToString((await apps.readNamespacedDeployment(name, namespace)).body.spec?.selector);
+  else if (resourceType === 'statefulsets') selector = selectorToString((await apps.readNamespacedStatefulSet(name, namespace)).body.spec?.selector);
+  else if (resourceType === 'daemonsets') selector = selectorToString((await apps.readNamespacedDaemonSet(name, namespace)).body.spec?.selector);
+  else if (resourceType === 'services') {
+    const service = (await core.readNamespacedService(name, namespace)).body;
+    selector = Object.entries(service.spec?.selector || {}).map(([key, value]) => `${key}=${value}`).join(',');
+  } else throw new Error(`Metrics are not supported for ${resourceType}`);
+  if (!selector) throw new Error(`No pod selector found for ${resourceType}/${name}`);
+  const pods = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, selector);
+  return pods.body.items.filter(pod => !['Succeeded', 'Failed'].includes(pod.status?.phase));
+}
+
+async function resolveLogPods(resourceType, namespace, name) {
+  const { apps, core } = clients();
+  let workload;
+  if (!resourceType || resourceType === 'pods') {
+    const podRes = await core.readNamespacedPod(name, namespace);
+    return [{ name, containers: podRes.body.spec?.containers?.map(c => c.name) || [] }];
+  }
+  if (resourceType === 'deployments') {
+    workload = (await apps.readNamespacedDeployment(name, namespace)).body;
+  } else if (resourceType === 'statefulsets') {
+    workload = (await apps.readNamespacedStatefulSet(name, namespace)).body;
+  } else if (resourceType === 'daemonsets') {
+    workload = (await apps.readNamespacedDaemonSet(name, namespace)).body;
+  } else {
+    throw new Error(`Unsupported log resource type: ${resourceType}`);
+  }
+
+  const labelSelector = selectorToString(workload.spec?.selector);
+  if (!labelSelector) throw new Error(`No pod selector found for ${resourceType}/${name}`);
+  const pods = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSelector);
+  return pods.body.items
+    .filter(pod => pod.status?.phase !== 'Succeeded' && pod.status?.phase !== 'Failed')
+    .map(pod => ({
+      name: pod.metadata.name,
+      containers: pod.spec?.containers?.map(c => c.name) || [],
+    }));
+}
 
 // ─── Contexts & Namespaces ────────────────────────────────────────────────────
 
@@ -337,6 +662,14 @@ app.get('/api/namespaces', async (_req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+app.get('/api/namespaces/:name/yaml', async (req, res) => {
+  try {
+    const { core } = clients();
+    const result = await core.readNamespace(req.params.name);
+    yamlResponse(res, result);
+  } catch (err) { handleError(res, err); }
+});
+
 // ─── Pods ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/:namespace/pods', async (req, res) => {
@@ -347,7 +680,9 @@ app.get('/api/:namespace/pods', async (req, res) => {
       ? await core.listPodForAllNamespaces()
       : await core.listNamespacedPod(namespace);
 
-    res.json(result.body.items.map(pod => ({
+    res.json(result.body.items.map(pod => {
+      const rawPorts = containerPorts(pod.spec.containers);
+      return {
       name:       pod.metadata.name,
       namespace:  pod.metadata.namespace,
       status:     pod.status.phase || 'Unknown',
@@ -356,9 +691,31 @@ app.get('/api/:namespace/pods', async (req, res) => {
       age:        pod.metadata.creationTimestamp,
       nodeName:   pod.spec.nodeName || '-',
       containers: pod.spec.containers.map(c => c.name),
-    })));
+      envCount:   containerEnvCount(pod.spec.containers),
+      rawPorts,
+      ports:      portsDisplay(rawPorts),
+    };
+    }));
   } catch (err) { handleError(res, err); }
 });
+
+function containerEnvCount(containers = []) {
+  return (containers || []).reduce((sum, container) => sum + (container.env?.length || 0), 0);
+}
+
+function containerPorts(containers = []) {
+  return (containers || []).flatMap(container => (container.ports || []).map(port => ({
+    name: port.name || '',
+    port: port.containerPort,
+    targetPort: port.containerPort,
+    protocol: port.protocol || 'TCP',
+    container: container.name,
+  })));
+}
+
+function portsDisplay(ports = []) {
+  return ports.length ? ports.map(port => `${port.name ? `${port.name}:` : ''}${port.port}/${port.protocol || 'TCP'}`).join(', ') : '-';
+}
 
 app.get('/api/:namespace/pods/:name/yaml', async (req, res) => {
   try {
@@ -368,6 +725,112 @@ app.get('/api/:namespace/pods/:name/yaml', async (req, res) => {
     res.type('text/plain').send(yaml.dump(result.body));
   } catch (err) { handleError(res, err); }
 });
+
+app.get('/api/:namespace/pods/:name/metrics', async (req, res) => {
+  const { namespace, name } = req.params;
+  try {
+    const { custom } = clients();
+    const result = await custom.getNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods', name);
+    const body = result.body || result || {};
+    const containers = body.containers || [];
+    const { cpuNano, memoryBytes } = metricTotalsFromContainers(containers);
+    res.json(metricPayload({
+      timestamp: body.timestamp,
+      window: body.window,
+      containers: containers.map(c => ({ name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })),
+      cpuNano,
+      memoryBytes,
+    }));
+  } catch (err) {
+    if (isMetricsApiUnavailable(err)) {
+      try {
+        const { core } = clients();
+        const pod = (await core.readNamespacedPod(name, namespace)).body;
+        return res.json(await prometheusMetricsForPods(namespace, [pod]));
+      } catch (promErr) {
+        return res.status(503).json({ error: `Metrics API unavailable and Prometheus query failed: ${promErr.message}` });
+      }
+    }
+    if (metricsUnavailable(res, err)) return;
+    handleError(res, err);
+  }
+});
+
+app.get('/api/:namespace/:resourceType/:name/metrics', async (req, res) => {
+  const { namespace, resourceType, name } = req.params;
+  let pods = [];
+  try {
+    const { custom } = clients();
+    pods = await resolveMetricPods(resourceType, namespace, name);
+    const podNames = new Set(pods.map(pod => pod.metadata.name));
+    const metricsResult = await custom.listNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods');
+    const metricItems = (metricsResult.body?.items || metricsResult.items || []).filter(item => podNames.has(item.metadata?.name));
+    const containers = metricItems.flatMap(item => (item.containers || []).map(c => ({ pod: item.metadata?.name, name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })));
+    const { cpuNano, memoryBytes } = metricTotalsFromContainers(containers.map(c => ({ usage: { cpu: c.cpu, memory: c.memory } })));
+    res.json(metricPayload({
+      timestamp: metricItems[0]?.timestamp,
+      window: metricItems[0]?.window,
+      containers,
+      items: metricItems.map(item => {
+        const totals = metricTotalsFromContainers(item.containers || []);
+        return { name: item.metadata?.name, cpu: formatCpu(totals.cpuNano), memory: formatBytes(totals.memoryBytes) };
+      }),
+      cpuNano,
+      memoryBytes,
+      cpuCapacityNano: Math.max(1e9, pods.length * 1e9),
+      memoryCapacityBytes: Math.max(512 * 1024 * 1024, pods.length * 512 * 1024 * 1024),
+    }));
+  } catch (err) {
+    if (isMetricsApiUnavailable(err)) {
+      try {
+        if (!pods.length) pods = await resolveMetricPods(resourceType, namespace, name);
+        return res.json(await prometheusMetricsForPods(namespace, pods));
+      } catch (promErr) {
+        return res.status(503).json({ error: `Metrics API unavailable and Prometheus query failed: ${promErr.message}` });
+      }
+    }
+    if (metricsUnavailable(res, err)) return;
+    handleError(res, err);
+  }
+});
+
+app.get('/api/monitoring/prometheus/status', async (_req, res) => {
+  try {
+    const matches = await discoverPrometheusServices();
+    res.json({ available: matches.length > 0, services: matches });
+  } catch (err) { handleError(res, err); }
+});
+
+function parseCpu(value = '0') {
+  const raw = String(value);
+  const num = parseFloat(raw);
+  if (Number.isNaN(num)) return 0;
+  if (raw.endsWith('n')) return num;
+  if (raw.endsWith('u')) return num * 1000;
+  if (raw.endsWith('m')) return num * 1e6;
+  return num * 1e9;
+}
+
+function parseMemory(value = '0') {
+  const raw = String(value);
+  const num = parseFloat(raw);
+  if (Number.isNaN(num)) return 0;
+  const units = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1000, M: 1000 ** 2, G: 1000 ** 3, T: 1000 ** 4 };
+  const unit = raw.replace(String(num), '');
+  return num * (units[unit] || 1);
+}
+
+function formatCpu(nano) {
+  if (nano < 1e6) return `${Math.round(nano / 1000)}u`;
+  if (nano < 1e9) return `${Math.round(nano / 1e6)}m`;
+  return `${(nano / 1e9).toFixed(2)} cores`;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KiB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
+}
 
 app.delete('/api/:namespace/pods/:name', async (req, res) => {
   try {
@@ -393,14 +856,22 @@ app.get('/api/:namespace/deployments', async (req, res) => {
       ? await apps.listDeploymentForAllNamespaces()
       : await apps.listNamespacedDeployment(namespace);
 
-    res.json(result.body.items.map(d => ({
+    res.json(result.body.items.map(d => {
+      const containers = d.spec.template.spec.containers || [];
+      const rawPorts = containerPorts(containers);
+      return {
       name:      d.metadata.name,
       namespace: d.metadata.namespace,
       ready:     `${d.status.readyReplicas ?? 0}/${d.spec.replicas ?? 0}`,
       replicas:  d.spec.replicas ?? 0,
       age:       d.metadata.creationTimestamp,
-      images:    d.spec.template.spec.containers.map(c => c.image),
-    })));
+      images:    containers.map(c => c.image),
+      containers: containers.map(c => c.name),
+      envCount:  containerEnvCount(containers),
+      rawPorts,
+      ports:     portsDisplay(rawPorts),
+    };
+    }));
   } catch (err) { handleError(res, err); }
 });
 
@@ -432,6 +903,49 @@ app.post('/api/:namespace/deployments/:name/scale', async (req, res) => {
     auditLog.log({
       category: 'kubernetes', action: 'Deployment scaled',
       resource: `${namespace}/${name}`, details: { replicas },
+      context: currentContext,
+    });
+    res.json({ success: true });
+  } catch (err) { handleError(res, err); }
+});
+
+app.put('/api/:namespace/deployments/:name/env', async (req, res) => {
+  try {
+    const { apps } = clients();
+    const { namespace, name } = req.params;
+    const containers = Array.isArray(req.body?.containers) ? req.body.containers : [];
+    if (!containers.length) return res.status(400).json({ error: 'containers required' });
+
+    const current = (await apps.readNamespacedDeployment(name, namespace)).body;
+    const templateContainers = current.spec?.template?.spec?.containers || [];
+    const operations = [];
+
+    containers.forEach(containerPatch => {
+      const containerName = String(containerPatch.name || '').trim();
+      if (!containerName) throw new Error('container name required');
+      const index = templateContainers.findIndex(container => container.name === containerName);
+      if (index === -1) throw new Error(`Container not found: ${containerName}`);
+
+      const env = Array.isArray(containerPatch.env) ? containerPatch.env.map(item => {
+        const envName = String(item.name || '').trim();
+        if (!envName) throw new Error(`Invalid env name in ${containerName}`);
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envName)) throw new Error(`Invalid env name: ${envName}`);
+        if (item.valueFrom && typeof item.valueFrom === 'object') return { name: envName, valueFrom: item.valueFrom };
+        return { name: envName, value: String(item.value ?? '') };
+      }) : [];
+
+      operations.push({
+        op: templateContainers[index].env ? 'replace' : 'add',
+        path: `/spec/template/spec/containers/${index}/env`,
+        value: env,
+      });
+    });
+
+    await apps.patchNamespacedDeployment(name, namespace, operations,
+      undefined, undefined, undefined, undefined, JSON_PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'Deployment environment updated',
+      resource: `${namespace}/${name}`, details: { containers: containers.map(container => container.name) },
       context: currentContext,
     });
     res.json({ success: true });
@@ -471,13 +985,21 @@ app.get('/api/:namespace/statefulsets', async (req, res) => {
       ? await apps.listStatefulSetForAllNamespaces()
       : await apps.listNamespacedStatefulSet(namespace);
 
-    res.json(result.body.items.map(ss => ({
+    res.json(result.body.items.map(ss => {
+      const containers = ss.spec.template.spec.containers || [];
+      const rawPorts = containerPorts(containers);
+      return {
       name:      ss.metadata.name,
       namespace: ss.metadata.namespace,
       ready:     `${ss.status.readyReplicas ?? 0}/${ss.spec.replicas ?? 0}`,
       replicas:  ss.spec.replicas ?? 0,
       age:       ss.metadata.creationTimestamp,
-    })));
+      containers: containers.map(c => c.name),
+      envCount:  containerEnvCount(containers),
+      rawPorts,
+      ports:     portsDisplay(rawPorts),
+    };
+    }));
   } catch (err) { handleError(res, err); }
 });
 
@@ -548,14 +1070,22 @@ app.get('/api/:namespace/daemonsets', async (req, res) => {
       ? await apps.listDaemonSetForAllNamespaces()
       : await apps.listNamespacedDaemonSet(namespace);
 
-    res.json(result.body.items.map(ds => ({
+    res.json(result.body.items.map(ds => {
+      const containers = ds.spec.template.spec.containers || [];
+      const rawPorts = containerPorts(containers);
+      return {
       name:      ds.metadata.name,
       namespace: ds.metadata.namespace,
       desired:   ds.status.desiredNumberScheduled ?? 0,
       current:   ds.status.currentNumberScheduled ?? 0,
       ready:     ds.status.numberReady ?? 0,
       age:       ds.metadata.creationTimestamp,
-    })));
+      containers: containers.map(c => c.name),
+      envCount:  containerEnvCount(containers),
+      rawPorts,
+      ports:     portsDisplay(rawPorts),
+    };
+    }));
   } catch (err) { handleError(res, err); }
 });
 
@@ -582,6 +1112,118 @@ app.get('/api/:namespace/daemonsets/:name/yaml', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+app.get('/api/:namespace/replicasets', async (req, res) => {
+  try {
+    const { apps } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await apps.listReplicaSetForAllNamespaces() : await apps.listNamespacedReplicaSet(namespace);
+    res.json(listItems(result).map(rs => ({
+      name: rs.metadata.name,
+      namespace: rs.metadata.namespace,
+      desired: rs.spec?.replicas ?? 0,
+      current: rs.status?.replicas ?? 0,
+      ready: rs.status?.readyReplicas ?? 0,
+      owner: (rs.metadata.ownerReferences || []).map(o => `${o.kind}/${o.name}`).join(', ') || '-',
+      age: rs.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/replicasets/:name/yaml', async (req, res) => {
+  try {
+    const { apps } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await apps.readNamespacedReplicaSet(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/jobs', async (req, res) => {
+  try {
+    const { batch } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await batch.listJobForAllNamespaces() : await batch.listNamespacedJob(namespace);
+    res.json(listItems(result).map(job => ({
+      name: job.metadata.name,
+      namespace: job.metadata.namespace,
+      completions: `${job.status?.succeeded ?? 0}/${job.spec?.completions ?? 1}`,
+      active: job.status?.active ?? 0,
+      failed: job.status?.failed ?? 0,
+      age: job.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/jobs/:name/yaml', async (req, res) => {
+  try {
+    const { batch } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await batch.readNamespacedJob(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+
+app.get('/api/pvs', async (_req, res) => {
+  try {
+    const { core } = clients();
+    const result = await core.listPersistentVolume();
+    res.json(listItems(result).map(pv => ({
+      name: pv.metadata.name,
+      status: pv.status?.phase || '-',
+      capacity: pv.spec?.capacity?.storage || '-',
+      storageClass: pv.spec?.storageClassName || '-',
+      reclaimPolicy: pv.spec?.persistentVolumeReclaimPolicy || '-',
+      claim: pv.spec?.claimRef ? `${pv.spec.claimRef.namespace}/${pv.spec.claimRef.name}` : '-',
+      age: pv.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/pvs/:name/yaml', async (req, res) => {
+  try {
+    const { core } = clients();
+    yamlResponse(res, await core.readPersistentVolume(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/storageclasses', async (_req, res) => {
+  try {
+    const { storage } = clients();
+    const result = await storage.listStorageClass();
+    res.json(listItems(result).map(sc => ({ name: sc.metadata.name, provisioner: sc.provisioner || '-', reclaimPolicy: sc.reclaimPolicy || '-', volumeBindingMode: sc.volumeBindingMode || '-', age: sc.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/storageclasses/:name/yaml', async (req, res) => {
+  try {
+    const { storage } = clients();
+    yamlResponse(res, await storage.readStorageClass(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+app.get('/api/:namespace/cronjobs', async (req, res) => {
+  try {
+    const { batch } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await batch.listCronJobForAllNamespaces() : await batch.listNamespacedCronJob(namespace);
+    res.json(listItems(result).map(cj => ({
+      name: cj.metadata.name,
+      namespace: cj.metadata.namespace,
+      schedule: cj.spec?.schedule || '-',
+      suspend: cj.spec?.suspend ? 'Yes' : 'No',
+      active: cj.status?.active?.length || 0,
+      lastSchedule: cj.status?.lastScheduleTime || '-',
+      age: cj.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/cronjobs/:name/yaml', async (req, res) => {
+  try {
+    const { batch } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await batch.readNamespacedCronJob(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
 // ─── Services ─────────────────────────────────────────────────────────────────
 
 app.get('/api/:namespace/services', async (req, res) => {
@@ -592,7 +1234,15 @@ app.get('/api/:namespace/services', async (req, res) => {
       ? await core.listServiceForAllNamespaces()
       : await core.listNamespacedService(namespace);
 
-    res.json(result.body.items.map(svc => ({
+    res.json(result.body.items.map(svc => {
+      const rawPorts = (svc.spec.ports || []).map(port => ({
+        name: port.name || '',
+        port: port.port,
+        targetPort: port.targetPort ?? port.port,
+        protocol: port.protocol || 'TCP',
+        nodePort: port.nodePort,
+      }));
+      return {
       name:       svc.metadata.name,
       namespace:  svc.metadata.namespace,
       type:       svc.spec.type,
@@ -601,9 +1251,11 @@ app.get('/api/:namespace/services', async (req, res) => {
                   || svc.status.loadBalancer?.ingress?.[0]?.ip
                   || svc.status.loadBalancer?.ingress?.[0]?.hostname
                   || '-',
-      ports: svc.spec.ports?.map(p => `${p.port}:${p.targetPort}/${p.protocol}`).join(', ') || '-',
+      ports: rawPorts.map(p => `${p.port}:${p.targetPort}/${p.protocol}`).join(', ') || '-',
+      rawPorts,
       age:   svc.metadata.creationTimestamp,
-    })));
+    };
+    }));
   } catch (err) { handleError(res, err); }
 });
 
@@ -624,7 +1276,40 @@ app.delete('/api/:namespace/services/:name', async (req, res) => {
 // Port-forward state: map localPort -> { server, id }
 const portForwards = new Map();
 
-app.post('/api/:namespace/services/:name/portforward', async (req, res) => {
+async function resolveServiceForwardTarget(namespace, name, requestedPort) {
+  const { core } = clients();
+  const svcRes = await core.readNamespacedService(name, namespace);
+  const service = svcRes.body;
+  const selector = service.spec?.selector || {};
+  const labelSel = Object.entries(selector).map(([k, v]) => `${k}=${v}`).join(',');
+  if (!labelSel) throw new Error(`Service ${namespace}/${name} has no selector; port-forward needs a backing pod.`);
+
+  const servicePort = (service.spec?.ports || []).find(port => Number(port.port) === requestedPort || Number(port.targetPort) === requestedPort) || service.spec?.ports?.[0];
+  if (!servicePort) throw new Error(`Service ${namespace}/${name} has no ports.`);
+
+  const podsRes = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSel);
+  const pod = podsRes.body.items.find(item => item.status.phase === 'Running' && item.status.containerStatuses?.some(c => c.ready))
+    || podsRes.body.items.find(item => item.status.phase === 'Running')
+    || podsRes.body.items[0];
+  if (!pod) throw new Error(`No pods found for service ${namespace}/${name}.`);
+
+  let targetPort = servicePort.targetPort ?? servicePort.port;
+  if (typeof targetPort === 'string') {
+    const named = (pod.spec?.containers || []).flatMap(container => container.ports || []).find(port => port.name === targetPort);
+    if (!named?.containerPort) throw new Error(`Target port "${targetPort}" was not found in pod ${pod.metadata.name}.`);
+    targetPort = named.containerPort;
+  }
+
+  return { podName: pod.metadata.name, targetPort: Number(targetPort), resourceType: 'services' };
+}
+
+async function resolvePodForwardTarget(namespace, name, requestedPort) {
+  const { core } = clients();
+  await core.readNamespacedPod(name, namespace);
+  return { podName: name, targetPort: requestedPort, resourceType: 'pods' };
+}
+
+async function startPortForward(req, res, resourceType) {
   try {
     const { namespace, name } = req.params;
     const { localPort, remotePort } = req.body;
@@ -635,36 +1320,39 @@ app.post('/api/:namespace/services/:name/portforward', async (req, res) => {
     if (portForwards.has(lp))
       return res.status(409).json({ error: `Port ${lp} is already forwarded` });
 
-    const forward  = new k8s.PortForward(currentKc);
+    const target = resourceType === 'pods'
+      ? await resolvePodForwardTarget(namespace, name, rp)
+      : await resolveServiceForwardTarget(namespace, name, rp);
+    const forward = new k8s.PortForward(currentKc);
     const tcpServer = net.createServer(async socket => {
       try {
-        // Find a pod backing this service
-        const { core } = clients();
-        const svcRes   = await core.readNamespacedService(name, namespace);
-        const selector = svcRes.body.spec.selector || {};
-        const labelSel = Object.entries(selector).map(([k,v]) => `${k}=${v}`).join(',');
-        const podsRes  = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSel);
-        const pod      = podsRes.body.items.find(p => p.status.phase === 'Running') || podsRes.body.items[0];
-        if (!pod) { socket.destroy(); return; }
-        await forward.portForward(namespace, pod.metadata.name, [rp], socket, null, socket);
+        await forward.portForward(namespace, target.podName, [target.targetPort], socket, null, socket);
       } catch (e) { socket.destroy(); }
     });
 
     tcpServer.listen(lp, '127.0.0.1', () => {
-      const id = `${namespace}/${name}:${lp}->${rp}`;
-      portForwards.set(lp, { server: tcpServer, id, namespace, name, localPort: lp, remotePort: rp });
+      const id = `${resourceType}/${namespace}/${name}:${lp}->${rp}`;
+      portForwards.set(lp, { server: tcpServer, id, namespace, name, localPort: lp, remotePort: rp, targetPort: target.targetPort, podName: target.podName, resourceType });
       auditLog.log({
         category: 'kubernetes', action: 'Port forward started',
-        resource: `${namespace}/${name}`, details: { localPort: lp, remotePort: rp },
+        resource: `${namespace}/${name}`, details: { localPort: lp, remotePort: rp, targetPort: target.targetPort, podName: target.podName, resourceType },
         context: currentContext,
       });
-      res.json({ success: true, id, localPort: lp, remotePort: rp });
+      res.json({ success: true, id, localPort: lp, remotePort: rp, targetPort: target.targetPort, podName: target.podName, resourceType });
     });
     tcpServer.on('error', err => {
       portForwards.delete(lp);
       if (!res.headersSent) handleError(res, err);
     });
   } catch (err) { handleError(res, err); }
+}
+
+app.post('/api/:namespace/services/:name/portforward', async (req, res) => {
+  startPortForward(req, res, 'services');
+});
+
+app.post('/api/:namespace/pods/:name/portforward', async (req, res) => {
+  startPortForward(req, res, 'pods');
 });
 
 app.delete('/api/portforward/:localPort', (req, res) => {
@@ -683,7 +1371,7 @@ app.delete('/api/portforward/:localPort', (req, res) => {
 
 app.get('/api/portforwards', (_req, res) => {
   const list = [];
-  portForwards.forEach(v => list.push({ id: v.id, localPort: v.localPort, remotePort: v.remotePort, namespace: v.namespace, name: v.name }));
+  portForwards.forEach(v => list.push({ id: v.id, localPort: v.localPort, remotePort: v.remotePort, targetPort: v.targetPort, podName: v.podName, namespace: v.namespace, name: v.name, resourceType: v.resourceType }));
   res.json(list);
 });
 
@@ -706,13 +1394,34 @@ app.get('/api/:namespace/ingresses', async (req, res) => {
       ? await networking.listIngressForAllNamespaces()
       : await networking.listNamespacedIngress(namespace);
 
-    res.json(result.body.items.map(ing => ({
-      name:      ing.metadata.name,
-      namespace: ing.metadata.namespace,
-      hosts:     ing.spec.rules?.map(r => r.host || '*').join(', ') || '-',
-      tls:       ing.spec.tls ? 'Yes' : 'No',
-      age:       ing.metadata.creationTimestamp,
-    })));
+    res.json(result.body.items.map(ing => {
+      const annotations = ing.metadata.annotations || {};
+      const hosts = (ing.spec.rules || []).map(rule => rule.host || '*').filter(Boolean);
+      const paths = (ing.spec.rules || []).flatMap(rule =>
+        (rule.http?.paths || []).map(path => `${rule.host || '*'}${path.path || '/'} -> ${path.backend?.service?.name || path.backend?.resource?.name || '-'}`)
+      );
+      const address = (ing.status.loadBalancer?.ingress || [])
+        .map(item => item.hostname || item.ip)
+        .filter(Boolean)
+        .join(', ');
+      const firstPath = (ing.spec.rules || []).flatMap(rule => rule.http?.paths || [])[0]?.path || '/';
+      const primaryHost = hosts.find(host => host && host !== '*') || address.split(', ')[0] || '';
+      const tlsHosts = new Set((ing.spec.tls || []).flatMap(tls => tls.hosts || []));
+      const scheme = ing.spec.tls?.length && (!primaryHost || tlsHosts.has(primaryHost) || !tlsHosts.size) ? 'https' : 'http';
+      const normalizedPath = firstPath.startsWith('/') ? firstPath : `/${firstPath}`;
+      const url = primaryHost ? `${scheme}://${primaryHost}${normalizedPath === '/' ? '' : normalizedPath}` : '';
+      return {
+        name:      ing.metadata.name,
+        namespace: ing.metadata.namespace,
+        class:     ing.spec.ingressClassName || annotations['kubernetes.io/ingress.class'] || '-',
+        hosts:     hosts.join(', ') || '-',
+        paths:     paths.join(', ') || '-',
+        address:   address || '-',
+        url:       url || '-',
+        tls:       ing.spec.tls ? 'Yes' : 'No',
+        age:       ing.metadata.creationTimestamp,
+      };
+    }));
   } catch (err) { handleError(res, err); }
 });
 
@@ -736,6 +1445,93 @@ app.get('/api/:namespace/ingresses/:name/yaml', async (req, res) => {
     const { namespace, name } = req.params;
     const result = await networking.readNamespacedIngress(name, namespace);
     res.type('text/plain').send(yaml.dump(result.body));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/endpoints', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await core.listEndpointsForAllNamespaces() : await core.listNamespacedEndpoints(namespace);
+    res.json(listItems(result).map(ep => ({
+      name: ep.metadata.name,
+      namespace: ep.metadata.namespace,
+      endpoints: (ep.subsets || []).reduce((sum, subset) => sum + (subset.addresses?.length || 0), 0),
+      ports: (ep.subsets || []).flatMap(subset => subset.ports || []).map(port => `${port.port}/${port.protocol || 'TCP'}`).join(', ') || '-',
+      age: ep.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/endpoints/:name/yaml', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await core.readNamespacedEndpoints(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/endpointslices', async (req, res) => {
+  try {
+    const { discovery } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await discovery.listEndpointSliceForAllNamespaces() : await discovery.listNamespacedEndpointSlice(namespace);
+    res.json(listItems(result).map(slice => ({
+      name: slice.metadata.name,
+      namespace: slice.metadata.namespace,
+      addressType: slice.addressType || '-',
+      endpoints: slice.endpoints?.length || 0,
+      ports: (slice.ports || []).map(port => `${port.name || port.port || '-'}:${port.port || '-'}${port.protocol ? `/${port.protocol}` : ''}`).join(', ') || '-',
+      age: slice.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/endpointslices/:name/yaml', async (req, res) => {
+  try {
+    const { discovery } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await discovery.readNamespacedEndpointSlice(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/ingressclasses', async (_req, res) => {
+  try {
+    const { networking } = clients();
+    const result = await networking.listIngressClass();
+    res.json(listItems(result).map(item => ({ name: item.metadata.name, controller: item.spec?.controller || '-', parameters: item.spec?.parameters?.name || '-', age: item.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/ingressclasses/:name/yaml', async (req, res) => {
+  try {
+    const { networking } = clients();
+    yamlResponse(res, await networking.readIngressClass(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/networkpolicies', async (req, res) => {
+  try {
+    const { networking } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await networking.listNetworkPolicyForAllNamespaces() : await networking.listNamespacedNetworkPolicy(namespace);
+    res.json(listItems(result).map(np => ({
+      name: np.metadata.name,
+      namespace: np.metadata.namespace,
+      podSelector: selectorText(np.spec?.podSelector),
+      types: (np.spec?.policyTypes || []).join(', ') || '-',
+      ingress: np.spec?.ingress?.length || 0,
+      egress: np.spec?.egress?.length || 0,
+      age: np.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/networkpolicies/:name/yaml', async (req, res) => {
+  try {
+    const { networking } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await networking.readNamespacedNetworkPolicy(name, namespace));
   } catch (err) { handleError(res, err); }
 });
 
@@ -778,6 +1574,32 @@ app.get('/api/:namespace/configmaps/:name/yaml', async (req, res) => {
     const { namespace, name } = req.params;
     const result = await core.readNamespacedConfigMap(name, namespace);
     res.type('text/plain').send(yaml.dump(result.body));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/configmaps/:name/data', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    const result = await core.readNamespacedConfigMap(name, namespace);
+    res.json({ data: result.body.data || {}, binaryKeys: Object.keys(result.body.binaryData || {}) });
+  } catch (err) { handleError(res, err); }
+});
+
+app.put('/api/:namespace/configmaps/:name/data', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    const data = normalizeTextData(req.body?.data);
+    const current = (await core.readNamespacedConfigMap(name, namespace)).body;
+    current.data = data;
+    await core.replaceNamespacedConfigMap(name, namespace, current);
+    auditLog.log({
+      category: 'kubernetes', action: 'ConfigMap data updated',
+      resource: `${namespace}/${name}`, details: { keys: Object.keys(data) },
+      context: currentContext,
+    });
+    res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
 
@@ -824,6 +1646,141 @@ app.get('/api/:namespace/secrets/:name/yaml', async (req, res) => {
       Object.keys(result.body.data).forEach(k => { result.body.data[k] = '[REDACTED]'; });
     }
     res.type('text/plain').send(yaml.dump(result.body));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/secrets/:name/data', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    const result = await core.readNamespacedSecret(name, namespace);
+    const data = {};
+    Object.entries(result.body.data || {}).forEach(([key, value]) => {
+      data[key] = Buffer.from(String(value || ''), 'base64').toString('utf8');
+    });
+    res.json({ type: result.body.type, immutable: !!result.body.immutable, data });
+  } catch (err) { handleError(res, err); }
+});
+
+app.put('/api/:namespace/secrets/:name/data', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    const plainData = normalizeTextData(req.body?.data);
+    const data = Object.fromEntries(Object.entries(plainData).map(([key, value]) => [key, Buffer.from(value, 'utf8').toString('base64')]));
+    const current = (await core.readNamespacedSecret(name, namespace)).body;
+    current.data = data;
+    await core.replaceNamespacedSecret(name, namespace, current);
+    auditLog.log({
+      category: 'kubernetes', action: 'Secret data updated',
+      resource: `${namespace}/${name}`, details: { keys: Object.keys(data) }, level: 'warning',
+      context: currentContext,
+    });
+    res.json({ success: true });
+  } catch (err) { handleError(res, err); }
+});
+
+function normalizeTextData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const normalized = {};
+  Object.entries(data).forEach(([key, value]) => {
+    const name = String(key || '').trim();
+    if (!name) throw new Error('data keys cannot be empty');
+    normalized[name] = String(value ?? '');
+  });
+  return normalized;
+}
+
+app.get('/api/:namespace/resourcequotas', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await core.listResourceQuotaForAllNamespaces() : await core.listNamespacedResourceQuota(namespace);
+    res.json(listItems(result).map(rq => ({ name: rq.metadata.name, namespace: rq.metadata.namespace, hard: summarizeObject(rq.status?.hard), used: summarizeObject(rq.status?.used), age: rq.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/resourcequotas/:name/yaml', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await core.readNamespacedResourceQuota(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/limitranges', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await core.listLimitRangeForAllNamespaces() : await core.listNamespacedLimitRange(namespace);
+    res.json(listItems(result).map(lr => ({ name: lr.metadata.name, namespace: lr.metadata.namespace, types: (lr.spec?.limits || []).map(item => item.type).join(', ') || '-', items: lr.spec?.limits?.length || 0, age: lr.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/limitranges/:name/yaml', async (req, res) => {
+  try {
+    const { core } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await core.readNamespacedLimitRange(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/hpas', async (req, res) => {
+  try {
+    const { autoscaling } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await autoscaling.listHorizontalPodAutoscalerForAllNamespaces() : await autoscaling.listNamespacedHorizontalPodAutoscaler(namespace);
+    res.json(listItems(result).map(hpa => ({
+      name: hpa.metadata.name,
+      namespace: hpa.metadata.namespace,
+      target: `${hpa.spec?.scaleTargetRef?.kind || '-'}/${hpa.spec?.scaleTargetRef?.name || '-'}`,
+      min: hpa.spec?.minReplicas ?? '-',
+      max: hpa.spec?.maxReplicas ?? '-',
+      current: hpa.status?.currentReplicas ?? 0,
+      age: hpa.metadata.creationTimestamp,
+    })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/hpas/:name/yaml', async (req, res) => {
+  try {
+    const { autoscaling } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await autoscaling.readNamespacedHorizontalPodAutoscaler(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/pdbs', async (req, res) => {
+  try {
+    const { policy } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await policy.listPodDisruptionBudgetForAllNamespaces() : await policy.listNamespacedPodDisruptionBudget(namespace);
+    res.json(listItems(result).map(pdb => ({ name: pdb.metadata.name, namespace: pdb.metadata.namespace, minAvailable: pdb.spec?.minAvailable ?? '-', maxUnavailable: pdb.spec?.maxUnavailable ?? '-', allowed: pdb.status?.disruptionsAllowed ?? 0, age: pdb.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/pdbs/:name/yaml', async (req, res) => {
+  try {
+    const { policy } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await policy.readNamespacedPodDisruptionBudget(name, namespace));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/leases', async (req, res) => {
+  try {
+    const { coordination } = clients();
+    const { namespace } = req.params;
+    const result = namespace === 'all' ? await coordination.listLeaseForAllNamespaces() : await coordination.listNamespacedLease(namespace);
+    res.json(listItems(result).map(lease => ({ name: lease.metadata.name, namespace: lease.metadata.namespace, holder: lease.spec?.holderIdentity || '-', renewTime: lease.spec?.renewTime || '-', age: lease.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/:namespace/leases/:name/yaml', async (req, res) => {
+  try {
+    const { coordination } = clients();
+    const { namespace, name } = req.params;
+    yamlResponse(res, await coordination.readNamespacedLease(name, namespace));
   } catch (err) { handleError(res, err); }
 });
 
@@ -911,6 +1868,100 @@ app.get('/api/nodes/:name/yaml', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+app.get('/api/nodes/:name/metrics', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const { core, custom } = clients();
+    const [nodeResult, metricsResult] = await Promise.all([
+      core.readNode(name),
+      custom.getClusterCustomObject('metrics.k8s.io', 'v1beta1', 'nodes', name),
+    ]);
+    const node = nodeResult.body || nodeResult || {};
+    const body = metricsResult.body || metricsResult || {};
+    const cpuNano = parseCpu(body.usage?.cpu);
+    const memoryBytes = parseMemory(body.usage?.memory);
+    res.json(metricPayload({
+      timestamp: body.timestamp,
+      window: body.window,
+      items: [{ name, cpu: body.usage?.cpu, memory: body.usage?.memory }],
+      cpuNano,
+      memoryBytes,
+      cpuCapacityNano: parseCpu(node.status?.allocatable?.cpu || node.status?.capacity?.cpu || '1'),
+      memoryCapacityBytes: parseMemory(node.status?.allocatable?.memory || node.status?.capacity?.memory || '512Mi'),
+    }));
+  } catch (err) {
+    if (isMetricsApiUnavailable(err)) {
+      try {
+        return res.json(await prometheusMetricsForNode(name));
+      } catch (promErr) {
+        return res.status(503).json({ error: `Metrics API unavailable and Prometheus query failed: ${promErr.message}` });
+      }
+    }
+    if (metricsUnavailable(res, err)) return;
+    handleError(res, err);
+  }
+});
+
+app.get('/api/priorityclasses', async (_req, res) => {
+  try {
+    const { scheduling } = clients();
+    const result = await scheduling.listPriorityClass();
+    res.json(listItems(result).map(pc => ({ name: pc.metadata.name, value: pc.value, globalDefault: pc.globalDefault ? 'Yes' : 'No', description: pc.description || '-', age: pc.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/priorityclasses/:name/yaml', async (req, res) => {
+  try {
+    const { scheduling } = clients();
+    yamlResponse(res, await scheduling.readPriorityClass(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/runtimeclasses', async (_req, res) => {
+  try {
+    const { node } = clients();
+    const result = await node.listRuntimeClass();
+    res.json(listItems(result).map(rc => ({ name: rc.metadata.name, handler: rc.handler || '-', overhead: rc.overhead ? 'Yes' : 'No', scheduling: rc.scheduling ? 'Yes' : 'No', age: rc.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/runtimeclasses/:name/yaml', async (req, res) => {
+  try {
+    const { node } = clients();
+    yamlResponse(res, await node.readRuntimeClass(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/mutatingwebhookconfigurations', async (_req, res) => {
+  try {
+    const { admission } = clients();
+    const result = await admission.listMutatingWebhookConfiguration();
+    res.json(listItems(result).map(wh => ({ name: wh.metadata.name, webhooks: wh.webhooks?.length || 0, age: wh.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/mutatingwebhookconfigurations/:name/yaml', async (req, res) => {
+  try {
+    const { admission } = clients();
+    yamlResponse(res, await admission.readMutatingWebhookConfiguration(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/validatingwebhookconfigurations', async (_req, res) => {
+  try {
+    const { admission } = clients();
+    const result = await admission.listValidatingWebhookConfiguration();
+    res.json(listItems(result).map(wh => ({ name: wh.metadata.name, webhooks: wh.webhooks?.length || 0, age: wh.metadata.creationTimestamp })));
+  } catch (err) { handleError(res, err); }
+});
+
+app.get('/api/validatingwebhookconfigurations/:name/yaml', async (req, res) => {
+  try {
+    const { admission } = clients();
+    yamlResponse(res, await admission.readValidatingWebhookConfiguration(req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
 app.post('/api/nodes/:name/cordon', async (req, res) => {
   try {
     const { core } = clients();
@@ -972,6 +2023,25 @@ app.post('/api/nodes/:name/drain', async (req, res) => {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
+app.get('/api/events/related', async (req, res) => {
+  try {
+    const { core } = clients();
+    const kind = String(req.query.kind || '').toLowerCase();
+    const name = String(req.query.name || '');
+    const namespace = String(req.query.namespace || '');
+    if (!kind || !name) return res.status(400).json({ error: 'kind and name are required' });
+    const result = namespace
+      ? await core.listNamespacedEvent(namespace)
+      : await core.listEventForAllNamespaces();
+    const events = listItems(result)
+      .map(normalizeEvent)
+      .filter(evt => evt.objectKind.toLowerCase() === kind && evt.objectName === name)
+      .sort((a, b) => new Date(b.lastTimestamp || 0) - new Date(a.lastTimestamp || 0));
+    const warnings = events.filter(evt => String(evt.type).toLowerCase() === 'warning').length;
+    res.json({ total: events.length, warnings, events });
+  } catch (err) { handleError(res, err); }
+});
+
 app.get('/api/:namespace/events', async (req, res) => {
   try {
     const { core } = clients();
@@ -980,15 +2050,7 @@ app.get('/api/:namespace/events', async (req, res) => {
       ? await core.listEventForAllNamespaces()
       : await core.listNamespacedEvent(namespace);
 
-    res.json(result.body.items.map(evt => ({
-      namespace:  evt.metadata.namespace,
-      type:       evt.type,
-      reason:     evt.reason,
-      object:     `${evt.involvedObject.kind}/${evt.involvedObject.name}`,
-      message:    evt.message,
-      count:      evt.count || 1,
-      age:        evt.lastTimestamp || evt.metadata.creationTimestamp,
-    })));
+    res.json(result.body.items.map(normalizeEvent));
   } catch (err) { handleError(res, err); }
 });
 
@@ -999,23 +2061,30 @@ app.put('/api/apply', async (req, res) => {
     const { yamlContent } = req.body;
     if (!yamlContent) return res.status(400).json({ error: 'yamlContent required' });
 
-    const obj       = yaml.load(yamlContent);
+    let obj;
+    try {
+      obj = yaml.load(yamlContent);
+    } catch (err) {
+      const mark = err.mark ? `line ${err.mark.line + 1}, column ${err.mark.column + 1}: ` : '';
+      return res.status(400).json({ error: `YAML validation error: ${mark}${err.reason || err.message}` });
+    }
+    if (!obj || typeof obj !== 'object') return res.status(400).json({ error: 'YAML must contain a Kubernetes object' });
     const kind      = obj.kind;
     const ns        = obj.metadata?.namespace || 'default';
     const name      = obj.metadata?.name;
+    if (!kind) return res.status(400).json({ error: 'YAML validation error: missing kind' });
+    if (!name) return res.status(400).json({ error: 'YAML validation error: missing metadata.name' });
     const { core, apps, networking } = clients();
 
-    const MERGE = { headers: { 'Content-Type': 'application/merge-patch+json' } };
-
     const handlers = {
-      Deployment:             () => apps.patchNamespacedDeployment(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Service:                () => core.patchNamespacedService(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Secret:                 () => core.patchNamespacedSecret(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      Ingress:                () => networking.patchNamespacedIngress(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
-      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, obj, undefined, undefined, undefined, undefined, MERGE),
+      Deployment:             () => apps.patchNamespacedDeployment(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Service:                () => core.patchNamespacedService(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Secret:                 () => core.patchNamespacedSecret(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Ingress:                () => networking.patchNamespacedIngress(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
     };
 
     if (!handlers[kind]) return res.status(400).json({ error: `Unsupported kind: ${kind}` });
@@ -1032,21 +2101,19 @@ app.put('/api/apply', async (req, res) => {
 // ─── WebSocket – Log streaming ────────────────────────────────────────────────
 
 wss.on('connection', ws => {
-  let currentStream  = null;
-  let currentReq     = null;
+  let currentStreams = [];
+  let currentReqs    = [];
 
   function stopStream() {
-    if (currentReq) {
+    currentReqs.forEach(req => {
       try {
-        if (typeof currentReq.abort    === 'function') currentReq.abort();
-        if (typeof currentReq.destroy  === 'function') currentReq.destroy();
+        if (typeof req.abort    === 'function') req.abort();
+        if (typeof req.destroy  === 'function') req.destroy();
       } catch (_) {}
-      currentReq = null;
-    }
-    if (currentStream) {
-      try { currentStream.destroy(); } catch (_) {}
-      currentStream = null;
-    }
+    });
+    currentStreams.forEach(s => { try { s.destroy(); } catch (_) {} });
+    currentReqs = [];
+    currentStreams = [];
   }
 
   ws.on('message', async raw => {
@@ -1057,26 +2124,33 @@ wss.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopStream();
-      const { namespace, pod, container, previous, tailLines = 200 } = msg;
-
-      currentStream = new stream.PassThrough();
-      currentStream.on('data', chunk => {
-        if (ws.readyState === WebSocket.OPEN)
-          ws.send(JSON.stringify({ type: 'log', data: chunk.toString('utf-8') }));
-      });
+      const { namespace, pod, resourceType = 'pods', container, previous, tailLines = 200 } = msg;
 
       try {
         const { log } = clients();
-        currentReq = await log.log(
-          namespace, pod, container || null, currentStream,
-          err => {
-            if (err && ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'error', data: err.message }));
+        const pods = await resolveLogPods(resourceType, namespace, pod);
+        const selectedPods = pods.filter(p => !container || p.containers.includes(container));
+        if (!selectedPods.length) {
+          throw new Error(`No pods found for ${resourceType}/${pod}${container ? ` with container ${container}` : ''}`);
+        }
+        for (const targetPod of selectedPods) {
+          const logStream = new stream.PassThrough();
+          currentStreams.push(logStream);
+          logStream.on('data', chunk => {
             if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'done' }));
-          },
-          { follow: true, tailLines, previous: !!previous }
-        );
+              ws.send(JSON.stringify({ type: 'log', pod: targetPod.name, data: chunk.toString('utf-8') }));
+          });
+
+          const req = await log.log(
+            namespace, targetPod.name, container || null, logStream,
+            err => {
+              if (err && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'error', data: `${targetPod.name}: ${err.message}` }));
+            },
+            { follow: true, tailLines, previous: !!previous }
+          );
+          currentReqs.push(req);
+        }
       } catch (err) {
         if (ws.readyState === WebSocket.OPEN)
           ws.send(JSON.stringify({ type: 'error', data: err.message }));

@@ -1370,11 +1370,13 @@ async function loadTab(id) {
   loaded[id] = true
 }
 
-async function reloadActiveTab() {
+async function reloadActiveTab(options = {}) {
   loaded[activeTab.value] = false
-  search.value = ''
+  if (!options.preserveSearch) search.value = ''
   await loadTab(activeTab.value)
 }
+
+defineExpose({ reloadActiveTab })
 
 async function loadAllTabs() {
   gcpStore.setActiveProfile(selectedProfileId.value)

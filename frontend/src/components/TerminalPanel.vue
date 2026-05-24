@@ -41,6 +41,14 @@
         <!-- Previous logs toggle (log tabs only) -->
         <label v-if="activeTab && !isShellTab" class="chk-label"><input type="checkbox" v-model="showPrevious" /> Prev</label>
         <div class="term-btn-sep"></div>
+        <button
+          v-if="activeTab"
+          class="btn btn-icon"
+          :class="{ primary: filtersOpen || filtersActive }"
+          title="Buscar y filtrar logs"
+          @click="filtersOpen = !filtersOpen"
+        ><i data-lucide="search"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" title="Descargar logs" @click="downloadLogs"><i data-lucide="download"></i></button>
         <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
@@ -64,6 +72,23 @@
         <button class="btn btn-icon" title="Minimise" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
         <button class="btn btn-icon" title="Close all tabs" @click="closeAll"><i data-lucide="x"></i></button>
       </div>
+    </div>
+
+    <div v-if="filtersOpen && activeTab && !minimised" class="term-filterbar">
+      <div class="term-filter-group search">
+        <i data-lucide="search"></i>
+        <input v-model="logSearch" class="term-filter-input" placeholder="Buscar en logs..." spellcheck="false" />
+      </div>
+      <label class="term-filter-group">
+        <span>Desde</span>
+        <input v-model="logFrom" class="term-filter-input date" type="datetime-local" />
+      </label>
+      <label class="term-filter-group">
+        <span>Hasta</span>
+        <input v-model="logTo" class="term-filter-input date" type="datetime-local" />
+      </label>
+      <span class="term-filter-count">{{ filteredLineCount }}/{{ lineCount }} lineas</span>
+      <button class="btn sm" :disabled="!filtersActive" @click="clearFilters">Limpiar</button>
     </div>
 
     <!-- ── Help overlay ─────────────────────────────────────────────────── -->
@@ -193,6 +218,7 @@
     <div v-show="!minimised" class="term-footer" ref="footerRef">
       <span>{{ statusText }}</span>
       <span v-if="activeTab?.context === 'local'" class="term-footer-cwd text-dim">{{ browserCwd }}</span>
+      <span v-if="filtersActive" class="text-dim">{{ filteredLineCount }} filtradas</span>
       <span id="termLineCount" style="margin-left:auto">{{ lineCount }} lines</span>
     </div>
   </div>
@@ -227,6 +253,10 @@ const minimised    = ref(false)
 const showPrevious = ref(false)
 const showHelp     = ref(false)
 const showBrowser  = ref(true)
+const filtersOpen  = ref(false)
+const logSearch    = ref('')
+const logFrom      = ref('')
+const logTo        = ref('')
 const cmdInput     = ref('')
 let resizing = false, startY = 0, startH = 0
 
@@ -242,7 +272,10 @@ const activeTab           = computed(() => store.tabs.find(t => t.id === store.a
 const isShellTab          = computed(() => ['exec', 'local', 'aws', 'gcp'].includes(activeTab.value?.type))
 const activeTabContainers = computed(() => activeTab.value?.containers || [])
 const activeContainer     = ref('')
-const bodyHtml            = computed(() => activeTab.value?.lines.join('') || '')
+const filtersActive       = computed(() => !!logSearch.value.trim() || !!logFrom.value || !!logTo.value)
+const filteredEntries     = computed(() => filterEntries(activeTab.value))
+const filteredLineCount   = computed(() => filteredEntries.value.length)
+const bodyHtml            = computed(() => filteredEntries.value.map(entryToHtml).join(''))
 const lineCount           = computed(() => activeTab.value?.lineCount ?? 0)
 
 const statusText = computed(() => {
@@ -262,6 +295,7 @@ const shellPlaceholder = computed(() => {
 watch(activeTab, tab => {
   if (tab) activeContainer.value = tab.container || ''
   showHelp.value = false
+  clearFilters()
   nextTick(() => createIcons({ icons }))
   // Seed browser when switching to a local tab
   if (tab?.context === 'local' && !browserCwd.value) {
@@ -301,6 +335,7 @@ function closeAll()   { [...store.tabs].forEach(t => store.closeTab(t.id)) }
 function clearLogs()  {
   if (!activeTab.value) return
   activeTab.value.lines     = []
+  activeTab.value.entries   = []
   activeTab.value.lineCount = 0
 }
 function stopActive() { if (activeTab.value) store.stopStream(activeTab.value) }
@@ -318,7 +353,73 @@ function popOut() {
   const tab = activeTab.value
   if (!tab) return
   const w = window.open('', '_blank', 'width=900,height=600')
-  w.document.write(`<html><body style="background:#111;color:#ccc;font-family:monospace;font-size:12px;white-space:pre-wrap;padding:10px">${tab.lines.join('')}</body></html>`)
+  w.document.write(`<html><body style="background:#111;color:#ccc;font-family:monospace;font-size:12px;white-space:pre-wrap;padding:10px">${bodyHtml.value}</body></html>`)
+}
+
+function clearFilters() {
+  logSearch.value = ''
+  logFrom.value = ''
+  logTo.value = ''
+}
+
+function filterEntries(tab) {
+  if (!tab) return []
+  const entries = tab.entries?.length ? tab.entries : (tab.lines || []).map((html, index) => ({ html, text: htmlToText(html), ts: '', time: index, cls: '' }))
+  const query = logSearch.value.trim().toLowerCase()
+  const from = logFrom.value ? new Date(logFrom.value).getTime() : null
+  const to = logTo.value ? new Date(logTo.value).getTime() : null
+  return entries.filter(entry => {
+    const text = entry.text || htmlToText(entry.html || '')
+    if (query && !text.toLowerCase().includes(query)) return false
+    const time = entry.serializedAt || entry.time
+    if (from && time < from) return false
+    if (to && time > to) return false
+    return true
+  })
+}
+
+function entryToHtml(entry) {
+  const text = escapeHtml(entry.text || htmlToText(entry.html || ''))
+  const highlighted = highlightText(text)
+  return `<div class="term-line${entry.cls ? ' ' + entry.cls : ''}"><span class="ts">${entry.ts || ''}</span>${highlighted}</div>`
+}
+
+function highlightText(escapedText) {
+  const query = logSearch.value.trim()
+  if (!query) return escapedText
+  const safe = escapeRegExp(escapeHtml(query))
+  return escapedText.replace(new RegExp(safe, 'gi'), match => `<mark class="term-mark">${match}</mark>`)
+}
+
+function downloadLogs() {
+  const tab = activeTab.value
+  if (!tab) return
+  const text = filteredEntries.value.map(entry => entry.text || htmlToText(entry.html || '')).join('\n')
+  const blob = new Blob([text + (text ? '\n' : '')], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${safeFileName(tab.label || tab.pod || 'logs')}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function htmlToText(html) {
+  return String(html).replace(/<span class="ts">.*?<\/span>/g, '').replace(/<[^>]+>/g, '')
+}
+
+function safeFileName(name) {
+  return String(name).replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'logs'
 }
 
 // ── Shell input ────────────────────────────────────────────────────────────

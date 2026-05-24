@@ -17,8 +17,15 @@ El servidor carga los archivos kubeconfig en este orden:
 1. **Variable de entorno `KUBECONFIG`** — soporta múltiples rutas (`;` en Windows, `:` en Unix)
 2. **`~/.kube/config`** — siempre incluido como fallback
 3. **`~/.kube/kuadashboard_merged.yaml`** — configs importados por la UI
+4. **Rutas kubeconfig registradas** — rutas agregadas desde el selector de archivos desktop o el formulario manual, guardadas en `~/.kube/kuadashboard_paths.json`
 
 Todos los configs se fusionan de forma no destructiva — clusters/contextos duplicados son ignorados.
+
+El modal de importacion soporta tres flujos:
+
+- Pegar YAML kubeconfig directamente en el modal
+- Elegir un archivo kubeconfig local desde la app desktop Electron
+- Registrar una ruta kubeconfig existente sin copiar su contenido
 
 ## Almacén de Credenciales
 

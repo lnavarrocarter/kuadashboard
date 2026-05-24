@@ -5,7 +5,11 @@
     <!-- Manual mode: shown when opened from pfPanel -->
     <div v-if="manualMode" style="display:flex;gap:8px;margin-bottom:8px">
       <input class="input" v-model="form.namespace" placeholder="namespace" style="flex:1" />
-      <input class="input" v-model="form.service"   placeholder="service"   style="flex:2" />
+      <select class="input" v-model="form.resourceType" style="flex:1">
+        <option value="services">service</option>
+        <option value="pods">pod</option>
+      </select>
+      <input class="input" v-model="form.service" :placeholder="form.resourceType === 'pods' ? 'pod' : 'service'" style="flex:2" />
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -42,6 +46,7 @@ const props = defineProps({
   ports: Array,
   label: String,
   manualMode: Boolean,
+  resourceType: { type: String, default: 'services' },
 })
 const emit  = defineEmits(['close', 'started'])
 
@@ -50,7 +55,7 @@ const kubeStore = useKubeStore()
 const { toast } = useToast()
 
 const error = ref('')
-const form  = ref({ namespace: '', service: '', remotePort: '', localPort: '' })
+const form  = ref({ namespace: '', service: '', resourceType: 'services', remotePort: '', localPort: '' })
 
 watch(() => props.show, v => {
   if (!v) return
@@ -61,6 +66,7 @@ watch(() => props.show, v => {
   form.value = {
     namespace:  props.namespace || kubeStore.namespace,
     service:    props.service   || '',
+    resourceType: props.resourceType || 'services',
     remotePort: firstPort || '',
     localPort:  firstPort || '',
   }
@@ -72,10 +78,10 @@ async function confirm() {
   const svc = form.value.service
   const lp  = parseInt(form.value.localPort,  10)
   const rp  = parseInt(form.value.remotePort, 10)
-  if (!ns || !svc) { error.value = 'Namespace y servicio son requeridos.'; return }
+  if (!ns || !svc) { error.value = 'Namespace y recurso son requeridos.'; return }
   if (!lp || !rp)  { error.value = 'Ambos puertos son requeridos.'; return }
   try {
-    const r = await pfStore.start(ns, svc, lp, rp)
+    const r = await pfStore.start(ns, svc, lp, rp, form.value.resourceType)
     toast(`Port-forward activo: localhost:${r.localPort} → ${r.remotePort}`, 'success')
     emit('close')
     emit('started')

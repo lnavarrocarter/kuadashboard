@@ -14,6 +14,7 @@
 - New **Versiones** tab in the Info panel — lists all published workflow versions with creation date, description and on-click ASL definition viewer with copy button.
 - Info modal refactored with five tabs: Detalles, Diagrama, Ejecuciones, Eventos and Versiones.
 
+
 ## v1.8.0 (2026-05-10)
 
 ### Kubernetes

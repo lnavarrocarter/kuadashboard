@@ -638,8 +638,7 @@
               <th>Databases</th>
               <th>Actions</th>
             </tr></thead>
-            <tbody>
-              <template v-for="cat in athenaEditor.catalogs" :key="cat.name">
+            <tbody v-for="cat in athenaEditor.catalogs" :key="cat.name">
                 <!-- Catalog row -->
                 <tr class="athena-cat-row" @click="cat._open = !cat._open" style="cursor:pointer">
                   <td style="font-weight:600;display:flex;align-items:center;gap:6px">
@@ -674,7 +673,6 @@
                     </td>
                   </tr>
                 </template>
-              </template>
             </tbody>
           </table>
         </div>
@@ -2315,9 +2313,40 @@
       </div>
     </div>
 
-    <!-- EC2 SSH Shell Modal -->
-    <Ec2Shell    :open="ec2ShellModal.open" :instance="ec2ShellModal.instance" @close="ec2ShellModal.open = false" />
-    <Ec2Rdp    :open="ec2RdpModal.open"   :instance="ec2RdpModal.instance"   @close="ec2RdpModal.open = false" />
+    <div v-if="remoteSessions.length" class="remote-session-dock">
+      <div
+        v-for="session in remoteSessions"
+        :key="session.id"
+        :class="['remote-session-tab', session.type, { active: session.open }]"
+        role="button"
+        tabindex="0"
+        :title="sessionTitle(session)"
+        @click="showRemoteSession(session.id)"
+        @keydown.enter.prevent="showRemoteSession(session.id)"
+        @keydown.space.prevent="showRemoteSession(session.id)"
+      >
+        <span class="remote-session-dot"></span>
+        <span class="remote-session-kind">{{ session.type.toUpperCase() }}</span>
+        <span class="remote-session-name">{{ session.instance?.name || session.instance?.id }}</span>
+        <button class="remote-session-close" title="Cerrar conexion" @click.stop="removeRemoteSession(session.id)">x</button>
+      </div>
+    </div>
+
+    <!-- EC2 remote sessions stay mounted so hiding a tab does not close SSH/RDP -->
+    <Ec2Shell
+      v-for="session in sshSessions"
+      :key="session.id"
+      :open="session.open"
+      :instance="session.instance"
+      @close="session.open = false"
+    />
+    <Ec2Rdp
+      v-for="session in rdpSessions"
+      :key="session.id"
+      :open="session.open"
+      :instance="session.instance"
+      @close="session.open = false"
+    />
     <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
     <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
     <StepFnDetail :open="stepFnDetailModal.open" :sm="stepFnDetailModal.sm" :profile-id="selectedProfileId" @close="stepFnDetailModal.open = false" />
@@ -3676,6 +3705,9 @@ const { sortBy, sortRows, sortIcon, thClass, resetSort } = useSortable()
 
 const selectedProfileId = ref(awsStore.activeProfileId || '')
 const localProfiles     = ref([])
+const remoteSessions    = ref([])
+const sshSessions       = computed(() => remoteSessions.value.filter(s => s.type === 'ssh'))
+const rdpSessions       = computed(() => remoteSessions.value.filter(s => s.type === 'rdp'))
 
 const TABS = [
   { id: 'ec2',          label: 'EC2'            },
@@ -3813,6 +3845,8 @@ async function reloadActiveTab() {
   loaded[activeTab.value] = false
   await loadTab(activeTab.value)
 }
+
+defineExpose({ reloadActiveTab })
 
 function switchTab(id) {
   activeTab.value = id
@@ -3969,16 +4003,42 @@ function lambdaStateClass(s) {
 
 // ─── EC2 SSH Shell Modal ──────────────────────────────────────────────────────
 
-const ec2ShellModal = reactive({ open: false, instance: null })
 function openEc2Shell(instance) {
-  Object.assign(ec2ShellModal, { open: true, instance })
+  openRemoteSession('ssh', instance)
 }
 
 // ─── EC2 RDP Info Modal ───────────────────────────────────────────────────────
 
-const ec2RdpModal = reactive({ open: false, instance: null })
 function openEc2Rdp(instance) {
-  Object.assign(ec2RdpModal, { open: true, instance })
+  openRemoteSession('rdp', instance)
+}
+
+function openRemoteSession(type, instance) {
+  const id = `${type}:${instance.id}`
+  let session = remoteSessions.value.find(s => s.id === id)
+  if (!session) {
+    session = { id, type, instance, open: true, createdAt: Date.now() }
+    remoteSessions.value.push(session)
+  } else {
+    session.instance = instance
+    session.open = true
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+function showRemoteSession(id) {
+  const session = remoteSessions.value.find(s => s.id === id)
+  if (session) session.open = true
+}
+
+function removeRemoteSession(id) {
+  const idx = remoteSessions.value.findIndex(s => s.id === id)
+  if (idx !== -1) remoteSessions.value.splice(idx, 1)
+}
+
+function sessionTitle(session) {
+  const host = session.instance?.publicIp || session.instance?.privateIp || ''
+  return `${session.type.toUpperCase()} ${session.instance?.name || session.instance?.id}${host ? ` - ${host}` : ''}`
 }
 
 // ─── EC2 Detail Modal ────────────────────────────────────────────────────────

@@ -116,30 +116,31 @@
         <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
-            <a v-for="r in ['pods','deployments','statefulsets','daemonsets']" :key="r"
+            <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
-            <a v-for="r in ['services','ingresses']" :key="r"
+            <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
-            <a v-for="r in ['configmaps','secrets']" :key="r"
+            <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === null && store.resource === 'pvcs' }]"
-               @click.prevent="setResource('pvcs')">PVC</a>
+            <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
+              :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+              @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
-            <a v-for="r in ['nodes','events']" :key="r"
+            <a v-for="r in ['nodes','namespaces','events']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
@@ -335,12 +336,34 @@
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
-          <HelmView v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
+          <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
-            <ResourceTable @action="handleAction" />
+            <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
+              <ResourceTable
+                :selected-key="selectedKubeKey"
+                @action="handleAction"
+                @select="selectKubeResource"
+                @bulk-delete="openBulkDelete"
+              />
+              <div
+                v-if="selectedKubeResource"
+                class="kube-resize-handle"
+                title="Ajustar panel"
+                @mousedown="startKubeResize"
+                @dblclick="resetKubePanelWidth"
+              ></div>
+              <KubeResourceDetailPanel
+                v-if="selectedKubeResource"
+                :resource-type="selectedKubeResource.type"
+                :resource="selectedKubeResource.row"
+                :style="{ width: `${kubeDetailWidth}px` }"
+                @close="selectedKubeResource = null"
+                @open-helm="openPrometheusHelm"
+              />
+            </div>
           </template>
-          <AwsView     v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
-          <GcpView     v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
           <VercelView  v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
         </main>
       </div>
@@ -377,7 +400,7 @@
     <DeleteModal      :show="modals.drain"          :message="modalData.drainMsg"            @confirm="confirmDrain"          @close="modals.drain = false" />
     <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" @confirm="confirmScale" @close="modals.scale = false" />
     <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
-    <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" @close="modals.portForward = false" @started="pfPanelVisible = true" />
+    <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help"                                                    @close="modals.help = false" />
     <ProfileModal
@@ -396,7 +419,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 
 import { useKubeStore }        from './stores/useKubeStore'
@@ -413,6 +436,7 @@ import { settings, applySettings } from './composables/useSettings'
 import { useI18n } from './composables/useI18n'
 
 import ResourceTable    from './components/ResourceTable.vue'
+import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import HelmView         from './components/HelmView.vue'
 import AuditLogView    from './components/AuditLogView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
@@ -451,7 +475,12 @@ const LABELS = {
   pods: 'Pods', deployments: 'Deployments', statefulsets: 'StatefulSets',
   daemonsets: 'DaemonSets', services: 'Services', ingresses: 'Ingresses',
   configmaps: 'ConfigMaps', secrets: 'Secrets', pvcs: 'PVC',
-  nodes: 'Nodes', events: 'Events',
+  replicasets: 'ReplicaSets', jobs: 'Jobs', cronjobs: 'CronJobs',
+  endpointslices: 'EndpointSlices', endpoints: 'Endpoints', ingressclasses: 'IngressClasses', networkpolicies: 'NetworkPolicies',
+  resourcequotas: 'ResourceQuotas', limitranges: 'LimitRanges', hpas: 'HorizontalPodAutoscalers', pdbs: 'PodDisruptionBudgets',
+  priorityclasses: 'PriorityClasses', runtimeclasses: 'RuntimeClasses', leases: 'Leases',
+  mutatingwebhookconfigurations: 'MutatingWebhookConfigurations', validatingwebhookconfigurations: 'ValidatingWebhookConfigurations',
+  pvs: 'PersistentVolumes', storageclasses: 'StorageClasses', namespaces: 'Namespaces', nodes: 'Nodes', events: 'Events',
 }
 
 const AWS_SIDEBAR = {
@@ -503,18 +532,46 @@ const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Mana
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
+const selectedKubeResource = ref(null)
+const kubeDetailWidth = ref(Number(LS.get('kubeDetailWidth', '420')) || 420)
+const isKubeResizing = ref(false)
+const helmViewRef     = ref(null)
+const awsViewRef      = ref(null)
+const gcpViewRef      = ref(null)
 const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
+let autoRefreshPending = false
 
 watch(() => settings.autoRefresh, (secs) => {
   clearInterval(autoRefreshTimer)
   if (secs > 0) autoRefreshTimer = setInterval(() => reloadActiveProvider(), secs * 1000)
-})
+}, { immediate: true })
 
-function reloadActiveProvider() {
-  if (activeProvider.value === 'kubernetes') store.loadResources()
+async function reloadActiveProvider() {
+  if (autoRefreshPending) return
+  autoRefreshPending = true
+  try {
+    if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
+      await helmViewRef.value?.reloadActiveTab?.()
+      return
+    }
+    if (cloudView.value) return
+    if (activeProvider.value === 'kubernetes') {
+      if (!store.loading) await store.loadResources()
+      return
+    }
+    if (activeProvider.value === 'aws') {
+      await awsViewRef.value?.reloadActiveTab?.()
+      return
+    }
+    if (activeProvider.value === 'gcp') {
+      await gcpViewRef.value?.reloadActiveTab?.({ preserveSearch: true })
+    }
+  } finally {
+    autoRefreshPending = false
+  }
 }
 
 const awsLocalProfiles = ref([])
@@ -522,6 +579,10 @@ const gcpLocalConfigs  = ref([])
 const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
+const selectedKubeKey = computed(() => {
+  const row = selectedKubeResource.value?.row
+  return row ? row.name + (row.namespace || '') : ''
+})
 
 // Persistir cambios en localStorage automáticamente
 watch(activeProvider,   v  => LS.set('provider',       v))
@@ -529,14 +590,16 @@ watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
 watch(() => store.namespace, v => LS.set('kubeNs', v))
+watch(kubeDetailWidth, v => LS.set('kubeDetailWidth', String(v)))
 
 const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
 const modalData = reactive({
   deleteMsg: '', deletePending: null,
+  deleteManyPending: [],
   deleteContextMsg: '', deleteContextName: '',
   scaleName: '', scaleCurrent: 0, scalePending: null,
   yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '',
-  pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false,
+  pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false, pfResourceType: 'services',
   drainMsg: '', drainPending: null,
   connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
@@ -617,6 +680,7 @@ function deleteConnectionConfirm(provider) {
   modalData.deleteConnectionId   = id
   modalData.deleteConnectionMode = true
   modalData.deletePending        = null
+  modalData.deleteManyPending    = []
   modalData.deleteMsg            = `Delete profile "${profile.name}"? All stored keys will be permanently removed.`
   modals.delete                  = true
 }
@@ -628,8 +692,45 @@ function toggleAuditLog() {
   cloudView.value = cloudView.value === 'audit' ? null : 'audit'
   nextTick(() => createIcons({ icons }))
 }
-function setResource(r)       { cloudView.value = null; store.resource = r; store.loadResources() }
+function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.resource = r; store.loadResources() }
 function setCloudView(view)   { cloudView.value = view }
+
+function selectKubeResource(type, row) {
+  selectedKubeResource.value = { type, row }
+  nextTick(() => createIcons({ icons }))
+}
+
+function startKubeResize(event) {
+  event.preventDefault()
+  isKubeResizing.value = true
+  document.body.classList.add('kube-resizing')
+  window.addEventListener('mousemove', onKubeResize)
+  window.addEventListener('mouseup', stopKubeResize)
+}
+
+function onKubeResize(event) {
+  const max = Math.min(Math.round(window.innerWidth * 0.72), Math.max(360, window.innerWidth - 260))
+  const next = window.innerWidth - event.clientX
+  kubeDetailWidth.value = Math.min(max, Math.max(320, next))
+}
+
+function stopKubeResize() {
+  isKubeResizing.value = false
+  document.body.classList.remove('kube-resizing')
+  window.removeEventListener('mousemove', onKubeResize)
+  window.removeEventListener('mouseup', stopKubeResize)
+}
+
+function resetKubePanelWidth() {
+  kubeDetailWidth.value = 420
+}
+
+function openPrometheusHelm() {
+  activeProvider.value = 'kubernetes'
+  cloudView.value = 'helm-repos'
+  selectedKubeResource.value = null
+  nextTick(() => createIcons({ icons }))
+}
 
 async function handleGkeConnect(contextName) {
   // Switch to the Kubernetes view
@@ -672,12 +773,13 @@ async function confirmDeleteContext() {
 
 function handleAction(fn, args) {
   const h = {
-    viewLogs:        ([ns, pod, c])         => openLogs(ns, pod, c),
+    viewLogs:        ([ns, pod, c, type])   => openLogs(ns, pod, c, type),
     openExec:        ([ns, pod, c])         => openExec(ns, pod, c),
     viewYaml:        ([type, ns, name])     => openYaml(type, ns, name),
     confirmDelete:   ([type, ns, name])     => openDelete(type, ns, name),
     openScale:       ([type, ns, name, cur])=> openScale(type, ns, name, cur),
-    openPortForward: ([ns, name, ports])    => openPf(ns, name, ports),
+    openPortForward: ([ns, name, ports, resourceType]) => openPf(ns, name, ports, resourceType || 'services'),
+    openExternal:    ([url])                 => openExternalUrl(url),
     restart:         ([type, ns, name])     => doRestart(type, ns, name),
     cordonNode:      ([name, cordon])       => doCordon(name, cordon),
     confirmDrain:    ([name])               => openDrain(name),
@@ -685,15 +787,32 @@ function handleAction(fn, args) {
   h[fn]?.(args)
 }
 
-function openLogs(ns, pod, containers) { const tab = termStore.openLogsTab(ns, pod, containers); startLogStream(tab, false) }
+function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType); startLogStream(tab, false) }
 function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers); startExecStream(tab) }
 function restartStream(tab, previous = false) { if (tab.type === 'exec') startExecStream(tab); else startLogStream(tab, previous) }
 
+function openExternalUrl(url) {
+  if (!url) return
+  if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
+  else window.open(url, '_blank')
+}
+
 function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name }); modals.yaml = true }
-function openDelete(type, ns, name)  { modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openDelete(type, ns, name)  { modalData.deleteManyPending = []; modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openBulkDelete(rows) {
+  const selected = Array.isArray(rows) ? rows : []
+  if (!selected.length) return
+  modalData.deleteConnectionMode = false
+  modalData.deletePending = null
+  modalData.deleteManyPending = selected.map(row => ({ type: store.resource, ns: row.namespace, name: row.name }))
+  const sample = selected.slice(0, 3).map(row => `${row.namespace}/${row.name}`).join(', ')
+  const more = selected.length > 3 ? ` y ${selected.length - 3} mas` : ''
+  modalData.deleteMsg = `Delete ${selected.length} ${LABELS[store.resource] || store.resource}: ${sample}${more}? Cannot be undone.`
+  modals.delete = true
+}
 function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
-function openPf(ns, name, ports)     { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${ns}/${name}`, pfManual: false }); modals.portForward = true }
-function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true }); modals.portForward = true }
+function openPf(ns, name, ports, resourceType = 'services') { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${resourceType}/${ns}/${name}`, pfManual: false, pfResourceType: resourceType }); modals.portForward = true }
+function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true, pfResourceType: 'services' }); modals.portForward = true }
 function openDrain(name)             { modalData.drainPending = name; modalData.drainMsg = `Drain node "${name}"? It will be cordoned and pods evicted.`; modals.drain = true }
 
 async function confirmDelete() {
@@ -709,12 +828,27 @@ async function confirmDelete() {
     }
     return
   }
+  const many = modalData.deleteManyPending || []
+  if (many.length) {
+    modals.delete = false
+    modalData.deleteManyPending = []
+    const results = await Promise.allSettled(many.map(item => deleteKubeResource(item.type, item.ns, item.name)))
+    const failed = results.filter(result => result.status === 'rejected')
+    const removed = results.length - failed.length
+    if (removed) toast(`Deleted ${removed} resource(s)`, failed.length ? 'warn' : 'success')
+    if (failed.length) toast(`${failed.length} resource(s) failed to delete`, 'error')
+    setTimeout(() => store.loadResources(), 600)
+    return
+  }
   const { type, ns, name } = modalData.deletePending; modals.delete = false
   try {
-    if (type === 'nodes') await api('DELETE', `/api/nodes/${name}`)
-    else await api('DELETE', `/api/${ns}/${type}/${name}`)
+    await deleteKubeResource(type, ns, name)
     toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources(), 600)
   } catch (e) { toast(e.message, 'error') }
+}
+function deleteKubeResource(type, ns, name) {
+  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`)
+  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`)
 }
 async function confirmScale(replicas) {
   const { type, ns, name } = modalData.scalePending; modals.scale = false
@@ -783,5 +917,10 @@ onMounted(async () => {
   updateStore.initListeners()
   nextTick(() => createIcons({ icons }))
 })
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(autoRefreshTimer); document.removeEventListener('keydown', onKey) })
+onUnmounted(() => {
+  clearInterval(clockTimer)
+  clearInterval(autoRefreshTimer)
+  document.removeEventListener('keydown', onKey)
+  stopKubeResize()
+})
 </script>

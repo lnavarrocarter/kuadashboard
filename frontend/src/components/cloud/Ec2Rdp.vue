@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="rdpc-backdrop" @mousedown.self="onBackdropClick">
+    <div v-show="open" class="rdpc-backdrop" @mousedown.self="onBackdropClick">
       <div class="rdpc-modal" :class="{ fullscreen: isFullscreen }">
 
         <!-- Header -->
@@ -160,14 +160,13 @@ const form = ref({
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch(() => props.open, val => {
-  if (val && props.instance) {
+  if (!val) return
+  if (props.instance && !form.value.host) {
     form.value.host = props.instance.publicIp || props.instance.privateIp || ''
-    sessionStatus.value = 'disconnected'
-    errorMsg.value = ''
-  } else if (!val) {
-    disconnectWs()
   }
-})
+  errorMsg.value = ''
+  nextTick(() => canvasRef.value?.focus())
+}, { immediate: true })
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const statusLabel = computed(() => ({

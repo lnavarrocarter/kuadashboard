@@ -1,6 +1,6 @@
 # Terminal & Shell
 
-KuaDashboard includes a powerful integrated terminal panel that gives you full interactive access to pod shells, log streams, EC2 SSH sessions and a local system shell — all from within the same window.
+KuaDashboard includes a powerful integrated terminal panel that gives you full interactive access to pod shells, log streams, EC2 SSH/RDP sessions and a local system shell — all from within the same window.
 
 ![KuaDashboard — pod overview](/screenshots/dashboard-pods.png)
 
@@ -9,27 +9,32 @@ KuaDashboard includes a powerful integrated terminal panel that gives you full i
 The terminal panel sits at the bottom of the main view and supports **multiple simultaneous tabs**, each colour-coded by context:
 
 | Context | Colour | Description |
-|---|---|---|
+| --- | --- | --- |
 | `pod` | Blue | Live log stream from a Kubernetes pod |
+| `workload` | Blue | Live log stream resolved from a Deployment, StatefulSet or DaemonSet selector |
 | `exec` | Purple | Interactive shell session inside a pod |
 | `local` | Green | Local system shell (bash / zsh / PowerShell) |
-| `ec2` | Teal | Browser-based SSH session to an EC2 instance |
+| `ec2` | Teal | Browser-based SSH/RDP session to an EC2 instance |
 
 ---
 
 ## Opening a Terminal Tab
 
-### Pod Logs
+### Pod and Workload Logs
 
-Stream real-time logs from any running pod:
+Stream real-time logs from any running pod or supported workload:
 
-1. Select a pod in the Kubernetes resource table
+1. Select a pod, deployment, statefulset or daemonset in the Kubernetes resource table
 2. Click the **Logs** action
 3. A new tab opens with live-streaming output via WebSocket
 
 For **multi-container pods**, select the container from the dropdown in the terminal header.
 
+For workloads, KuaDashboard resolves the current pods using the resource selector and prefixes each line with the source pod name when multiple pods are streaming.
+
 Toggle **Prev** in the toolbar to also include log output from the previous container instance (useful after a crash restart).
+
+Use the search button in the toolbar to filter log output by text, date/time range or both. Filtered logs can be downloaded as a `.log` file.
 
 ### Pod Exec (Shell)
 
@@ -40,6 +45,7 @@ Open an interactive shell session directly inside a pod:
 3. A terminal tab opens with a live PTY shell
 
 The exec session supports:
+
 - Full PTY mode (colours, cursor movement, terminal resize)
 - Container selection for multi-container pods
 - Standard keyboard shortcuts (Ctrl+C, Ctrl+D, Tab completion)
@@ -53,13 +59,15 @@ Access a local system shell without leaving the dashboard:
 
 Use the local shell for running `kubectl`, `aws`, `gcloud`, `helm`, or any CLI tools without switching windows.
 
-### EC2 SSH
+### EC2 SSH/RDP
 
-Open a browser-based SSH session to any running EC2 instance:
+Open a browser-based SSH or RDP session to any running EC2 instance:
 
 1. Go to **Cloud > AWS > EC2** tab
-2. Click **SSH** on a `running` instance
-3. A terminal tab opens with an authenticated SSH session
+2. Click **SSH** for Linux instances or **RDP** for Windows instances
+3. A remote session opens with the proper connection form
+
+Remote sessions are persistent. Closing the session window only hides it; the WebSocket remains alive and the session can be restored from the floating remote-session dock. Use **Disconnect** inside the session, or close the dock tab, when you want to end it.
 
 ---
 
@@ -68,9 +76,11 @@ Open a browser-based SSH session to any running EC2 instance:
 The header toolbar provides quick controls for the active tab:
 
 | Control | Description |
-|---|---|
+| --- | --- |
 | Container selector | Switch container in multi-container pod sessions |
 | **Prev** toggle | Include logs from the previous container instance (log tabs only) |
+| Search / filters | Filter logs by text and serialized date range |
+| Download | Export the current filtered log view to a `.log` file |
 | ✦ Clear | Erase all current output in the active tab |
 | ⏎ Wrap text | Toggle line wrapping for long log lines |
 | ↓ Scroll to end | Jump to the bottom of the output buffer |
@@ -95,7 +105,7 @@ Shell tabs (exec, local, EC2) display an input bar at the bottom with:
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
-|---|---|
+| --- | --- |
 | `↑` / `↓` | Navigate command history |
 | `Tab` | Path autocomplete |
 | `Enter` | Send command |
@@ -110,7 +120,7 @@ Shell tabs (exec, local, EC2) display an input bar at the bottom with:
 When a **local shell** tab is active, click the 📁 button to open the inline file browser panel on the left side of the terminal.
 
 | Action | Description |
-|---|---|
+| --- | --- |
 | Click a 📁 folder | Navigate into the directory (also runs `cd` in the shell) |
 | Click a 📄 file | Preview the file contents in the terminal output |
 | Double-click a file | Insert the full file path into the command input |
@@ -126,7 +136,7 @@ A breadcrumb trail shows your current location. The active working directory is 
 Log lines are colour-coded automatically to help you spot issues at a glance:
 
 | Colour | Meaning |
-|---|---|
+| --- | --- |
 | 🔴 Red | Error / exception / stderr |
 | 🟡 Yellow | Warning |
 | 🟢 Green | Success / OK |
@@ -165,7 +175,7 @@ You can have as many terminal tabs open as needed:
 ## Common CLI Commands (Quick Reference)
 
 | Command | Purpose |
-|---|---|
+| --- | --- |
 | `ls -la` | List files with details |
 | `pwd` | Show current directory |
 | `env` | Print environment variables |

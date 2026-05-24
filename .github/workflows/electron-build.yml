@@ -30,7 +30,7 @@ jobs:
             artifact-glob: '*.dmg'
           - os: ubuntu-latest
             platform: linux
-            artifact-glob: '*.{AppImage,deb}'
+            artifact-glob: '*.AppImage'
 
     runs-on: ${{ matrix.os }}
 
@@ -81,15 +81,29 @@ jobs:
         run: ls dist-electron/
         shell: bash
 
+      - name: Verify Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          shopt -s nullglob
+          packages=(dist-electron/*.AppImage dist-electron/*.deb)
+          if (( ${#packages[@]} == 0 )); then
+            echo "No Linux packages were generated. Expected .AppImage or .deb in dist-electron/."
+            ls -la dist-electron/
+            exit 1
+          fi
+        shell: bash
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: KuaDashboard-${{ matrix.platform }}
           path: |
             dist-electron/${{ matrix.artifact-glob }}
+            dist-electron/*.AppImage
+            dist-electron/*.deb
             dist-electron/*.zip
             dist-electron/latest*.yml
-          if-no-files-found: warn
+          if-no-files-found: error
 
   release:
     needs: build
@@ -154,10 +168,13 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/win/*.exe
+            artifacts/win/latest.yml
             artifacts/mac/*.dmg
             artifacts/mac/*.zip
+            artifacts/mac/latest-mac.yml
             artifacts/linux/*.AppImage
             artifacts/linux/*.deb
+            artifacts/linux/latest-linux.yml
             artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,8 @@
 
 KuaDashboard proporciona un gestor visual de port-forward construido sobre la API de port-forward de Kubernetes.
 
+El flujo de tuneles soporta Services y Pods. Para Services, KuaDashboard resuelve el mejor Pod asociado y el target port antes de abrir el tunel, haciendo mas confiables los forwards basados en selectors.
+
 ## Inicio Rápido
 
 1. Haz clic en un **Service** en la tabla de recursos
@@ -22,6 +24,8 @@ Alterna el panel con el botón **Puertos** en el encabezado. El panel muestra to
 
 - **Sesiones persistentes** — Los port forwards activos sobreviven a recargas de página (almacenados en localStorage)
 - **Auto-reconexión** — Restaura automáticamente los forwards al iniciar la app
+- **Resolucion de destino Service** — Encuentra un Pod listo asociado al Service cuando es posible
+- **Feedback de salud** — Muestra estado activo/error y mantiene visible la metadata de la sesion
 - **Modo manual** — Crea forwards especificando namespace, recurso y puertos manualmente
 - **Múltiples forwards** — Ejecuta tantos forwards simultáneos como necesites
 - **Contador badge** — El botón del encabezado muestra el número de forwards activos

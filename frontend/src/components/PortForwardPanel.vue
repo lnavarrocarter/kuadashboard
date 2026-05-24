@@ -17,12 +17,12 @@
       <div v-for="pf in pfStore.list" :key="pf.localPort" class="pf-item">
         <div class="pf-item-info">
           <span class="pf-item-ns">{{ pf.namespace }}</span>
-          <span class="pf-item-name">{{ pf.name }}</span>
+          <span class="pf-item-name">{{ pf.resourceType || 'services' }}/{{ pf.name }}</span>
           <span class="pf-item-ports">
             <a :href="`http://localhost:${pf.localPort}`" target="_blank" class="pf-open-link">
               localhost:{{ pf.localPort }}
             </a>
-            &rarr; {{ pf.remotePort }}
+            &rarr; {{ pf.targetPort || pf.remotePort }}
           </span>
         </div>
         <button class="btn sm danger pf-stop-btn" title="Stop" @click="stop(pf.localPort)">

@@ -1,6 +1,6 @@
 # Terminal & Shell
 
-KuaDashboard incluye un potente panel de terminal integrado que te da acceso interactivo completo a shells de pods, streams de logs, sesiones SSH a instancias EC2 y una shell local del sistema — todo desde la misma ventana.
+KuaDashboard incluye un potente panel de terminal integrado que te da acceso interactivo completo a shells de pods, streams de logs, sesiones SSH/RDP a instancias EC2 y una shell local del sistema — todo desde la misma ventana.
 
 ![KuaDashboard — vista de pods](/screenshots/dashboard-pods.png)
 
@@ -11,25 +11,30 @@ El panel de terminal se encuentra en la parte inferior de la vista principal y s
 | Contexto | Color | Descripción |
 |---|---|---|
 | `pod` | Azul | Stream de logs en tiempo real de un pod de Kubernetes |
+| `workload` | Azul | Stream de logs resuelto desde el selector de un Deployment, StatefulSet o DaemonSet |
 | `exec` | Morado | Sesión de shell interactiva dentro de un pod |
 | `local` | Verde | Shell local del sistema (bash / zsh / PowerShell) |
-| `ec2` | Teal | Sesión SSH en navegador a una instancia EC2 |
+| `ec2` | Teal | Sesión SSH/RDP en navegador a una instancia EC2 |
 
 ---
 
 ## Abrir una Pestaña de Terminal
 
-### Logs de Pod
+### Logs de Pod y Workload
 
-Transmite logs en tiempo real de cualquier pod en ejecución:
+Transmite logs en tiempo real de cualquier pod o workload soportado:
 
-1. Selecciona un pod en la tabla de recursos de Kubernetes
+1. Selecciona un pod, deployment, statefulset o daemonset en la tabla de recursos de Kubernetes
 2. Haz clic en la acción **Logs**
 3. Se abre una nueva pestaña con output en streaming en vivo vía WebSocket
 
 Para **pods multi-contenedor**, selecciona el contenedor desde el dropdown en el encabezado del terminal.
 
+Para workloads, KuaDashboard resuelve los pods actuales usando el selector del recurso y antepone el nombre del pod origen cuando el stream incluye múltiples pods.
+
 Activa **Prev** en la barra de herramientas para incluir también el output de la instancia anterior del contenedor (útil tras un reinicio por crash).
+
+Usa el botón de búsqueda en la barra de herramientas para filtrar logs por texto, rango de fecha/hora o ambos. Los logs filtrados pueden descargarse como archivo `.log`.
 
 ### Pod Exec (Shell)
 
@@ -53,13 +58,15 @@ Accede a una shell local del sistema sin salir del dashboard:
 
 Usa la shell local para ejecutar `kubectl`, `aws`, `gcloud`, `helm` o cualquier herramienta CLI sin cambiar de ventana.
 
-### SSH a EC2
+### SSH/RDP a EC2
 
-Abre una sesión SSH en el navegador a cualquier instancia EC2 en ejecución:
+Abre una sesión SSH o RDP en el navegador a cualquier instancia EC2 en ejecución:
 
 1. Ve a **Cloud > AWS > pestaña EC2**
-2. Haz clic en **SSH** en una instancia con estado `running`
-3. Se abre una pestaña de terminal con una sesión SSH autenticada
+2. Haz clic en **SSH** para instancias Linux o **RDP** para instancias Windows
+3. Se abre una sesión remota con el formulario de conexión correspondiente
+
+Las sesiones remotas son persistentes. Cerrar la ventana solo la oculta; el WebSocket permanece vivo y la sesión puede restaurarse desde la bandeja flotante de sesiones. Usa **Disconnect** dentro de la sesión, o cierra el tab de la bandeja, cuando quieras terminarla.
 
 ---
 
@@ -71,6 +78,8 @@ La barra de herramientas del encabezado ofrece controles rápidos para la pesta�
 |---|---|
 | Selector de contenedor | Cambiar contenedor en sesiones de pods multi-contenedor |
 | Toggle **Prev** | Incluir logs de la instancia anterior del contenedor (solo en pestañas de logs) |
+| Búsqueda / filtros | Filtrar logs por texto y rango de fecha serializada |
+| Descarga | Exportar la vista filtrada actual a un archivo `.log` |
 | ✦ Limpiar | Borrar todo el output actual de la pestaña activa |
 | ⏎ Ajustar texto | Activar/desactivar ajuste de línea para logs largos |
 | ↓ Ir al final | Saltar al final del buffer de output |

@@ -17,8 +17,15 @@ The server loads kubeconfig files in this order:
 1. **`KUBECONFIG` env var** — supports multiple paths (`;` on Windows, `:` on Unix)
 2. **`~/.kube/config`** — always included as fallback
 3. **`~/.kube/kuadashboard_merged.yaml`** — UI-imported configs
+4. **Registered kubeconfig paths** — paths added from the desktop file picker or manual path form, stored in `~/.kube/kuadashboard_paths.json`
 
 All configs are merged non-destructively — duplicate clusters/contexts are skipped.
+
+The import dialog supports three workflows:
+
+- Paste kubeconfig YAML directly into the modal
+- Pick a local kubeconfig file from the Electron desktop app
+- Register an existing kubeconfig path without copying its contents
 
 ## Credential Store
 

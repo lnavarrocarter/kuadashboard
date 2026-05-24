@@ -15,6 +15,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'AWS Step Functions — columna "Executions" en la tabla con conteos en vivo de ejecuciones activas (▶), fallidas (✗) y con timeout (⏱)' },
       { type: 'new',    text: 'AWS Step Functions — pestaña "Versiones" en el panel Info: lista de versiones publicadas del workflow con definición ASL y botón de copia por versión' },
       { type: 'better', text: 'AWS Step Functions — modal Info refactorizado con pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones' },
+
     ],
   },
   {

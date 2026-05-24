@@ -14,6 +14,7 @@
 - Nueva pestaña **Versiones** en el panel Info — lista todas las versiones publicadas del workflow con fecha, descripción y visor de definición ASL con botón de copia.
 - Modal Info refactorizado con cinco pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones.
 
+
 ## v1.8.0 (2026-05-10)
 
 ### Kubernetes
