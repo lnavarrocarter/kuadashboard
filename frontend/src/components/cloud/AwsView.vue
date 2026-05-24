@@ -406,6 +406,7 @@
             <th :class="thClass('name')"         @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th :class="thClass('type')"         @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
             <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th>Executions</th>
             <th>Tags</th><th>ARN</th><th>Actions</th>
           </tr></thead>
           <tbody>
@@ -413,6 +414,20 @@
               <td>{{ sm.name }}</td>
               <td><span :class="sm.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ sm.type }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(sm.creationDate) }}</td>
+              <td style="white-space:nowrap">
+                <template v-if="stepFnCounts[sm.arn]?.loading">
+                  <span class="text-dim" style="font-size:11px">…</span>
+                </template>
+                <template v-else-if="stepFnCounts[sm.arn]">
+                  <span v-if="stepFnCounts[sm.arn].running > 0"  class="status-ok"  style="font-size:11px;margin-right:4px">▶ {{ stepFnCounts[sm.arn].running }}</span>
+                  <span v-if="stepFnCounts[sm.arn].failed > 0"   class="status-err" style="font-size:11px;margin-right:4px">✗ {{ stepFnCounts[sm.arn].failed }}</span>
+                  <span v-if="stepFnCounts[sm.arn].timedOut > 0" class="status-warn" style="font-size:11px;margin-right:4px">⏱ {{ stepFnCounts[sm.arn].timedOut }}</span>
+                  <span v-if="stepFnCounts[sm.arn].running === 0 && stepFnCounts[sm.arn].failed === 0 && stepFnCounts[sm.arn].timedOut === 0" class="text-dim" style="font-size:11px">—</span>
+                </template>
+                <template v-else>
+                  <span class="text-dim" style="font-size:11px">—</span>
+                </template>
+              </td>
               <td>
                 <div class="tag-chips">
                   <span v-for="t in (sm.tags || [])" :key="t.key" class="tag-chip">{{ t.key }}={{ t.value }}</span>
@@ -424,6 +439,7 @@
                   <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">Config</button>
                   <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">Diagram</button>
+                  <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">Info</button>
                 </div>
               </td>
             </tr>
@@ -2333,6 +2349,7 @@
     />
     <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
     <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
+    <StepFnDetail :open="stepFnDetailModal.open" :sm="stepFnDetailModal.sm" :profile-id="selectedProfileId" @close="stepFnDetailModal.open = false" />
 
     <!-- API Gateway Routes & Integrations Modal -->
     <ApiGwIntegrations
@@ -3665,6 +3682,7 @@ import { useToast }     from '../../composables/useToast'
 import { useApi }       from '../../composables/useApi'
 import { useSortable }  from '../../composables/useSortable'
 import StepFnDiagram       from '../StepFnDiagram.vue'
+import StepFnDetail        from '../StepFnDetail.vue'
 import EventBridgeDetail   from '../EventBridgeDetail.vue'
 import EventBridgeLogs     from '../EventBridgeLogs.vue'
 import Ec2Shell            from './Ec2Shell.vue'
@@ -4745,6 +4763,42 @@ async function openDiagram(sm) {
     diagramModal.loading = false
   }
 }
+
+// ─── Step Functions Detail Modal ──────────────────────────────────────────────
+const stepFnDetailModal = reactive({ open: false, sm: null })
+
+function openStepFnDetail(sm) {
+  stepFnDetailModal.sm   = sm
+  stepFnDetailModal.open = true
+}
+
+// ─── Step Functions Execution Counts ─────────────────────────────────────────
+const stepFnCounts = reactive({})
+
+async function loadStepFnCounts() {
+  const sms = awsStore.stepFunctions
+  if (!sms?.length) return
+  const unloaded = sms.filter(sm => !stepFnCounts[sm.arn])
+  if (!unloaded.length) return
+  for (const sm of unloaded) {
+    stepFnCounts[sm.arn] = { loading: true, running: 0, failed: 0, timedOut: 0 }
+  }
+  await Promise.allSettled(unloaded.map(async sm => {
+    try {
+      const res = await awsStore.fetchStepFnExecutionCount(sm.arn)
+      stepFnCounts[sm.arn] = { loading: false, running: res?.running ?? 0, failed: res?.failed ?? 0, timedOut: res?.timedOut ?? 0 }
+    } catch {
+      stepFnCounts[sm.arn] = { loading: false, running: 0, failed: 0, timedOut: 0 }
+    }
+  }))
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'stepfn') loadStepFnCounts()
+})
+watch(() => awsStore.stepFunctions, (sms) => {
+  if (activeTab.value === 'stepfn' && sms?.length) loadStepFnCounts()
+})
 
 const tagsModal = reactive({
   open: false, loading: false, saving: false, error: null,

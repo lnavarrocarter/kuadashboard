@@ -8,6 +8,13 @@
 - Vista de proyectos con estado de deployment, framework, región y acceso directo a la URL en vivo.
 - Detalle de deployments con pestañas de Actividad, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config y Checks.
 
+### AWS Step Functions
+
+- Nueva columna **Executions** en la tabla de Step Functions con conteos en vivo de ejecuciones activas (▶), fallidas (✗) y con timeout (⏱).
+- Nueva pestaña **Versiones** en el panel Info — lista todas las versiones publicadas del workflow con fecha, descripción y visor de definición ASL con botón de copia.
+- Modal Info refactorizado con cinco pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones.
+
+
 ## v1.8.0 (2026-05-10)
 
 ### Kubernetes

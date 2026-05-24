@@ -12,6 +12,10 @@ export const CHANGELOG = [
     date: 'Mayo 2026',
     items: [
       { type: 'new',    text: 'Vercel — integración completa: autenticación OAuth, proyectos, deployments, actividad, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config y Checks' },
+      { type: 'new',    text: 'AWS Step Functions — columna "Executions" en la tabla con conteos en vivo de ejecuciones activas (▶), fallidas (✗) y con timeout (⏱)' },
+      { type: 'new',    text: 'AWS Step Functions — pestaña "Versiones" en el panel Info: lista de versiones publicadas del workflow con definición ASL y botón de copia por versión' },
+      { type: 'better', text: 'AWS Step Functions — modal Info refactorizado con pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones' },
+
     ],
   },
   {

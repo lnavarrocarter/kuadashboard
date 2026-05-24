@@ -8,6 +8,13 @@
 - Projects view with deployment status, framework, region and quick links to the live URL.
 - Deployment details with Activity feed, DNS Records, Aliases, Cron Jobs, Webhooks, Edge Config and Checks tabs.
 
+### AWS Step Functions
+
+- New **Executions** column in the Step Functions table showing live counts of running (▶), failed (✗) and timed-out (⏱) executions.
+- New **Versiones** tab in the Info panel — lists all published workflow versions with creation date, description and on-click ASL definition viewer with copy button.
+- Info modal refactored with five tabs: Detalles, Diagrama, Ejecuciones, Eventos and Versiones.
+
+
 ## v1.8.0 (2026-05-10)
 
 ### Kubernetes
