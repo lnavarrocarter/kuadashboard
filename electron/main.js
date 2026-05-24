@@ -20,7 +20,18 @@
  *     All Node/Electron access goes through preload.js contextBridge.
  */
 
-const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
+// Guard: detect if accidentally run as Node.js (e.g. ELECTRON_RUN_AS_NODE=1 set by VS Code)
+const _electronModule = require('electron');
+if (typeof _electronModule === 'string') {
+  console.error(
+    '\n[electron] ERROR: main.js is running as plain Node.js.\n' +
+    '  ELECTRON_RUN_AS_NODE is set to "1" (VS Code sets this in integrated terminals).\n' +
+    '  Run:  npm run electron:dev   (uses cross-env ELECTRON_RUN_AS_NODE=0)\n' +
+    '  Or launch from a regular terminal outside VS Code.\n'
+  );
+  process.exit(1);
+}
+const { app, BrowserWindow, ipcMain, shell, Menu } = _electronModule;
 const path        = require('path');
 const { fork }    = require('child_process');
 const { execFile, execSync, spawn } = require('child_process');
@@ -470,16 +481,21 @@ app.whenReady().then(async () => {
 
   buildMenu();
 
-  console.log('[electron] Starting backend…');
-  try {
-    await startBackend();
-    console.log('[electron] Backend ready. Creating window…');
-  } catch (err) {
-    console.error('[electron] Failed to start backend:', err.message);
-    // Still create the window so the user sees an error instead of a blank screen
+  // In dev mode, the backend is already running via nodemon (electron:dev script).
+  // Skip forking a second instance to avoid EADDRINUSE.
+  if (IS_DEV) {
+    console.log(`[electron] Dev mode — using existing backend at ${BACKEND_URL}`);
+    createWindow();
+  } else {
+    console.log('[electron] Starting backend…');
+    try {
+      await startBackend();
+      console.log('[electron] Backend ready. Creating window…');
+    } catch (err) {
+      console.error('[electron] Failed to start backend:', err.message);
+    }
+    createWindow();
   }
-
-  createWindow();
 
   // Check for updates after window is ready (production only)
   if (!IS_DEV) setupAutoUpdater();
