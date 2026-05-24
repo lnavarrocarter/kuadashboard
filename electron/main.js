@@ -24,11 +24,22 @@ const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const path        = require('path');
 const { fork }    = require('child_process');
 const { execFile, execSync, spawn } = require('child_process');
-const { autoUpdater } = require('electron-updater');
+
+// electron-updater accesses app.getVersion() on require — must be lazy-loaded
+// after app is ready to avoid crash in dev/unpackaged mode.
+let autoUpdater = null;
+function getAutoUpdater () {
+  if (!autoUpdater) {
+    try { autoUpdater = require('electron-updater').autoUpdater; } catch (_) {}
+  }
+  return autoUpdater;
+}
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// app.isPackaged is only safe to read after the module has fully loaded —
+// use a getter to avoid crash when electron bootstraps the main process.
+const IS_DEV       = process.env.NODE_ENV === 'development' || !(app && app.isPackaged);
 const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
@@ -41,10 +52,8 @@ const OLLAMA_URL   = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 
 const KUA_PROTOCOL = 'kua';
 
-// Register as default protocol handler (must happen before app is ready on Windows)
-if (!app.isDefaultProtocolClient(KUA_PROTOCOL)) {
-  app.setAsDefaultProtocolClient(KUA_PROTOCOL);
-}
+// Protocol registration moved inside app.whenReady() — app may not be available
+// at module load time when ELECTRON_RUN_AS_NODE is set (VS Code terminal).
 
 // ─── macOS PATH fix ──────────────────────────────────────────────────────────
 // When Electron launches from the Dock or Finder on macOS it does NOT inherit
@@ -314,7 +323,7 @@ function buildMenu() {
           label: 'Check for Updates…',
           click: () => {
             if (!IS_DEV) {
-              autoUpdater.checkForUpdates().catch(err => {
+              getAutoUpdater()?.checkForUpdates().catch(err => {
                 console.warn('[updater] Manual check failed:', err.message);
               });
             } else {
@@ -368,7 +377,7 @@ ipcMain.handle('ai:ollama-pull-model', async (_event, model) => {
 
 ipcMain.on('app:check-updates', () => {
   if (!IS_DEV) {
-    autoUpdater.checkForUpdates().catch(err => {
+    getAutoUpdater()?.checkForUpdates().catch(err => {
       console.warn('[updater] IPC check failed:', err.message);
     });
   }
@@ -377,10 +386,12 @@ ipcMain.on('app:check-updates', () => {
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  const au = getAutoUpdater();
+  if (!au) return;
+  au.autoDownload = true;
+  au.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('update-available', info => {
+  au.on('update-available', info => {
     console.log('[updater] Update available:', info.version);
     if (mainWindow) {
       mainWindow.webContents.send('update:available', {
@@ -390,7 +401,7 @@ function setupAutoUpdater() {
     }
   });
 
-  autoUpdater.on('update-downloaded', info => {
+  au.on('update-downloaded', info => {
     console.log('[updater] Update downloaded:', info.version);
     updateDownloaded = true;
     if (mainWindow) {
@@ -400,7 +411,7 @@ function setupAutoUpdater() {
     }
   });
 
-  autoUpdater.on('error', err => {
+  au.on('error', err => {
     console.error('[updater] Error:', err.message);
     if (mainWindow) {
       mainWindow.webContents.send('update:error', err.message);
@@ -408,7 +419,7 @@ function setupAutoUpdater() {
   });
 
   // Check for updates (silently — no dialogs)
-  autoUpdater.checkForUpdatesAndNotify().catch(err => {
+  au.checkForUpdatesAndNotify().catch(err => {
     console.warn('[updater] Check failed:', err.message);
   });
 }
@@ -424,7 +435,7 @@ ipcMain.on('app:install-update', () => {
   }
   try {
     // Primary: quit + install + relaunch
-    autoUpdater.quitAndInstall(false, true);
+    getAutoUpdater()?.quitAndInstall(false, true);
   } catch (err) {
     console.error('[updater] quitAndInstall failed:', err.message);
     // Fallback: just quit — autoInstallOnAppQuit will install on exit
@@ -446,6 +457,11 @@ app.whenReady().then(async () => {
   // the correct icon instead of the default Electron icon.
   if (process.platform === 'win32') {
     app.setAppUserModelId('dev.kua.kuadashboard');
+  }
+
+  // Register custom protocol handler (kua://) — safe to call after app is ready
+  if (app.isDefaultProtocolClient && !app.isDefaultProtocolClient(KUA_PROTOCOL)) {
+    app.setAsDefaultProtocolClient(KUA_PROTOCOL);
   }
 
   // Expand PATH on macOS before anything else so the backend and all child
@@ -561,3 +577,7 @@ app.on('web-contents-created', (_event, contents) => {
     }
   });
 });
+
+
+
+
