@@ -24,9 +24,6 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'ai' }]" @click="setProvider('ai')">
-            <i data-lucide="sparkles"></i> AI
-          </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
           <select class="ctrl-select" v-model="selectedContext" @change="switchContext">

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Transition name="ai-slide">
     <aside v-if="visible" class="ai-panel">
       <header class="ai-header">
@@ -31,7 +31,7 @@
           <select v-model="ai.model" class="ctrl-select" :disabled="ai.modelsLoading">
             <option v-if="ai.modelsLoading" value="">Cargando modelos…</option>
             <option v-for="m in ai.models" :key="m.name" :value="m.name">
-              {{ m.name }}{{ m.size ? ' (' + formatSize(m.size) + ')' : '' }}
+              {{ m.label || m.name }}{{ m.size ? ' (' + formatSize(m.size) + ')' : '' }}
             </option>
             <option v-if="!ai.modelsLoading && !ai.models.length" :value="ai.model">{{ ai.model || '— sin modelos —' }}</option>
           </select>
@@ -46,11 +46,33 @@
       </section>
 
       <main class="ai-messages">
-        <div v-if="!ai.messages.length" class="ai-empty">
+        <!-- No-profile CTA: cloud provider selected but no API key profile -->
+        <div v-if="needsProfile && !ai.messages.length" class="ai-no-profile">
+          <i :data-lucide="providerIcon" class="no-profile-icon"></i>
+          <strong>Configura tu API Key</strong>
+          <p>Para usar <em>{{ providerLabel }}</em> necesitas un perfil con tu API key.</p>
+          <button class="btn primary" @click="openAddProfile">
+            <i data-lucide="plus"></i>&nbsp;Agregar perfil {{ providerLabel }}
+          </button>
+          <button class="btn sm" @click="switchToOllama">
+            <i data-lucide="cpu"></i>&nbsp;Usar Ollama local (gratis)
+          </button>
+        </div>
+
+        <!-- Inline banner when there are messages but still no profile -->
+        <div v-if="needsProfile && ai.messages.length" class="ai-no-profile-banner">
+          <i :data-lucide="providerIcon"></i>
+          <span>Sin API key para {{ providerLabel }}</span>
+          <button class="btn sm primary" @click="openAddProfile">+ Agregar perfil</button>
+        </div>
+
+        <!-- Empty state when everything is configured -->
+        <div v-if="!needsProfile && !ai.messages.length" class="ai-empty">
           <i data-lucide="sparkles"></i>
           <strong>Pregunta sobre tus recursos o comandos</strong>
-          <span>Ej: “¿por qué crashea este pod?” o “genera el comando para ver logs de Lambda”.</span>
+          <span>Ej: "¿por qué crashea este pod?" o "genera el comando para ver logs de Lambda".</span>
         </div>
+
         <article
           v-for="(m, i) in ai.messages"
           :key="i"
@@ -80,19 +102,30 @@
         <div class="ai-actions">
           <span v-if="ai.error" class="text-red">{{ ai.error }}</span>
           <button class="btn sm" @click="ai.clearMessages" :disabled="ai.streaming">Limpiar</button>
-          <button class="btn primary" @click="send" :disabled="!input.trim() || ai.streaming">
+          <button class="btn primary" @click="send" :disabled="!input.trim() || ai.streaming || needsProfile">
             {{ ai.streaming ? 'Pensando…' : 'Enviar' }}
           </button>
         </div>
       </footer>
     </aside>
   </Transition>
+
+  <!-- ProfileModal opened inline from the no-profile CTA -->
+  <ProfileModal
+    v-if="showProfileModal"
+    :show="showProfileModal"
+    :default-provider="ai.provider"
+    @close="showProfileModal = false"
+    @save="onProfileSaved"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useAiStore } from '../stores/useAiStore'
+import { useEnvStore } from '../stores/useEnvStore'
+import ProfileModal from './modals/ProfileModal.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -101,8 +134,24 @@ const props = defineProps({
 defineEmits(['close', 'execute-command'])
 
 const ai = useAiStore()
+const envStore = useEnvStore()
 const input = ref('')
+const showProfileModal = ref(false)
+
 const subtitle = computed(() => `${ai.agent} · ${ai.provider}:${ai.model}`)
+
+// True when a cloud provider is selected but no API key profile has been chosen
+const needsProfile = computed(() =>
+  ai.provider !== 'ollama' && !ai.profileId
+)
+
+const providerLabel = computed(() =>
+  ai.provider === 'openai' ? 'OpenAI / GPT' : 'Anthropic / Claude'
+)
+
+const providerIcon = computed(() =>
+  ai.provider === 'openai' ? 'sparkles' : 'bot'
+)
 
 const ollamaIndicator = computed(() => {
   const s = ai.ollamaStatus?.ollama
@@ -119,7 +168,6 @@ watch(() => ai.messages.length, () => nextTick(() => createIcons({ icons })))
 
 onMounted(async () => {
   await Promise.allSettled([ai.refreshStatus(), ai.refreshModels()])
-  // Set default model to first in list if current model not found
   if (ai.models.length && !ai.models.find(m => m.name === ai.model)) {
     ai.model = ai.models[0].name
   }
@@ -154,6 +202,36 @@ function formatSize(bytes) {
   if (!bytes) return ''
   const gb = bytes / 1e9
   return gb >= 1 ? `${gb.toFixed(1)}GB` : `${(bytes / 1e6).toFixed(0)}MB`
+}
+
+function openAddProfile() {
+  showProfileModal.value = true
+  nextTick(() => createIcons({ icons }))
+}
+
+async function onProfileSaved(profileData) {
+  showProfileModal.value = false
+  // Save profile via envStore then refresh and auto-select the new one
+  try {
+    await envStore.createProfile(profileData)
+    await envStore.fetchProfiles()
+    // Auto-select the newly created profile
+    const newProfile = envStore.profiles
+      .filter(p => p.provider === ai.provider)
+      .at(-1)
+    if (newProfile) {
+      ai.profileId = newProfile.id
+      await onProfileChange()
+    }
+  } catch (e) {
+    console.error('[AIChatPanel] Failed to save profile:', e.message)
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+async function switchToOllama() {
+  ai.provider = 'ollama'
+  await onProviderChange()
 }
 
 async function send() {
@@ -242,6 +320,47 @@ function commandsFrom(text) {
   flex-direction: column;
   gap: 10px;
 }
+/* No-profile CTA — centered in empty state */
+.ai-no-profile {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  border: 1px dashed var(--border, #444);
+  border-radius: 12px;
+  background: rgba(14,157,232,.04);
+}
+.ai-no-profile .no-profile-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--accent, #0e9de8);
+  opacity: .7;
+}
+.ai-no-profile strong { font-size: 15px; }
+.ai-no-profile p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim, #aaa);
+  max-width: 280px;
+}
+.ai-no-profile em { font-style: normal; color: var(--text, #ddd); }
+/* Inline banner for when messages exist but no profile */
+.ai-no-profile-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(248,113,113,.08);
+  border: 1px solid rgba(248,113,113,.2);
+  font-size: 12px;
+  color: #f87171;
+  flex-shrink: 0;
+}
+.ai-no-profile-banner span { flex: 1; }
 .ai-empty {
   margin: auto;
   text-align: center;
