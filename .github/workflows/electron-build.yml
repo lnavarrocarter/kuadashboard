@@ -42,14 +42,6 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Disable problematic native modules to prevent cross-compilation errors
-        shell: bash
-        run: |
-          # Create .npmrc to skip optional dependencies that cause cross-compilation failures
-          cat >> .npmrc << EOF
-          optional=false
-          EOF
-
       - name: Install root dependencies
         run: npm ci
 
