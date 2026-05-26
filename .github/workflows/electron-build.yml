@@ -42,21 +42,26 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Disable problematic native modules to prevent cross-compilation errors
+        shell: bash
+        run: |
+          # Create .npmrc to skip optional dependencies that cause cross-compilation failures
+          cat >> .npmrc << EOF
+          optional=false
+          EOF
+
       - name: Install root dependencies
         run: npm ci
-        env:
-          npm_config_build_from_source: false
-          PREBUILD_TOKEN_CACHE_DIR: /tmp/prebuild-cache
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Workaround for cross-platform node-gyp issues
+      - name: Workaround for remaining native module build issues
         shell: bash
         run: |
-          # Rename problematic native modules to prevent compilation failures
-          # cpu-features and dtrace-provider fail on cross-platform builds
+          # If native modules exist, rename them to prevent electron-rebuild failures
+          # This happens on cross-platform builds (arm64->x64, etc)
           mv node_modules/cpu-features node_modules/cpu-features.bak 2>/dev/null || true
           mv node_modules/dtrace-provider node_modules/dtrace-provider.bak 2>/dev/null || true
 
@@ -87,14 +92,6 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-
-      - name: Restore native modules
-        shell: bash
-        if: always()
-        run: |
-          # Restore the renamed modules
-          mv node_modules/cpu-features.bak node_modules/cpu-features 2>/dev/null || true
-          mv node_modules/dtrace-provider.bak node_modules/dtrace-provider 2>/dev/null || true
 
       - name: List build output
         run: ls dist-electron/
