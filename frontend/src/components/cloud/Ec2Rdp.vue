@@ -74,6 +74,10 @@
           <div class="rdpc-toolbar">
             <span class="rdpc-conn-info">{{ form.user }}@{{ form.host }}:{{ form.port }}</span>
             <div class="rdpc-toolbar-btns">
+              <span v-if="pasteMsg" class="rdpc-paste-msg">{{ pasteMsg }}</span>
+              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="openPasteModal" title="Pegar texto en la sesion remota enfocada">
+                Paste text
+              </button>
               <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="sendCtrlAltDel" title="Enviar Ctrl+Alt+Del">
                 ⌨ Ctrl+Alt+Del
               </button>
@@ -83,6 +87,23 @@
               <span v-if="sessionStatus === 'connecting'" class="rdpc-conn-info">Conectando...</span>
               <button v-if="sessionStatus === 'ended'" class="rdpc-tbtn accent" @click="connect">↺ Reconectar</button>
               <button v-else-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="disconnect">Desconectar</button>
+            </div>
+          </div>
+
+          <div v-if="pasteModalOpen" class="rdpc-paste-panel">
+            <div class="rdpc-paste-head">
+              <span>Paste text into RDP</span>
+              <button class="rdpc-close" @click="closePasteModal">✕</button>
+            </div>
+            <textarea
+              v-model="pasteText"
+              class="rdpc-paste-textarea"
+              placeholder="Paste text here. It will be sent as keyboard input to the focused remote field."
+              spellcheck="false"
+            ></textarea>
+            <div class="rdpc-paste-actions">
+              <button class="btn" :disabled="!pasteText || pasteSending" @click="sendPasteText">{{ pasteSending ? 'Sending...' : 'Send text' }}</button>
+              <button class="btn btn-ghost" :disabled="pasteSending" @click="closePasteModal">Cancel</button>
             </div>
           </div>
 
@@ -148,6 +169,11 @@ const isFullscreen = ref(false)
 const canvasW      = ref(1280)
 const canvasH      = ref(800)
 const connectedHost = ref('')
+const pasteModalOpen = ref(false)
+const pasteText = ref('')
+const pasteSending = ref(false)
+const pasteMsg = ref('')
+let pasteMsgTimer = null
 
 const form = ref({
   host:       '',
@@ -427,6 +453,93 @@ function sendWinKey() {
   ])
 }
 
+function openPasteModal() {
+  pasteModalOpen.value = true
+  navigator.clipboard?.readText?.()
+    .then(text => { if (text && !pasteText.value) pasteText.value = text })
+    .catch(() => {})
+}
+
+function closePasteModal() {
+  if (pasteSending.value) return
+  pasteModalOpen.value = false
+  pasteText.value = ''
+  nextTick(() => canvasRef.value?.focus())
+}
+
+const SHIFT_CHARS = {
+  '!':'Digit1', '@':'Digit2', '#':'Digit3', '$':'Digit4', '%':'Digit5', '^':'Digit6', '&':'Digit7', '*':'Digit8', '(':'Digit9', ')':'Digit0',
+  '_':'Minus', '+':'Equal', '{':'BracketLeft', '}':'BracketRight', '|':'Backslash', ':':'Semicolon', '"':'Quote', '<':'Comma', '>':'Period', '?':'Slash', '~':'Backquote',
+}
+
+const BASE_CHARS = {
+  ' ':'Space', '`':'Backquote', '-':'Minus', '=':'Equal', '[':'BracketLeft', ']':'BracketRight', '\\':'Backslash', ';':'Semicolon', "'":'Quote', ',':'Comma', '.':'Period', '/':'Slash',
+}
+
+function charToKeySpec(char) {
+  if (char === '\n' || char === '\r') return { code: 'Enter' }
+  if (char === '\t') return { code: 'Tab' }
+  if (/^[a-z]$/.test(char)) return { code: 'Key' + char.toUpperCase() }
+  if (/^[A-Z]$/.test(char)) return { code: 'Key' + char, shift: true }
+  if (/^[0-9]$/.test(char)) return { code: 'Digit' + char }
+  if (BASE_CHARS[char]) return { code: BASE_CHARS[char] }
+  if (SHIFT_CHARS[char]) return { code: SHIFT_CHARS[char], shift: true }
+  return null
+}
+
+function sendKeyByCode(code, isDown) {
+  if (!ws.value || sessionStatus.value !== 'connected') return
+  const scanCode = SCAN[code]
+  if (scanCode === undefined) return
+  ws.value.send(JSON.stringify({
+    action:   'key',
+    code:     scanCode,
+    isDown:   !!isDown,
+    extended: EXTENDED_KEYS.has(code),
+  }))
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function sendKeyStroke(code, shift = false) {
+  if (shift) sendKeyByCode('ShiftLeft', true)
+  sendKeyByCode(code, true)
+  await delay(8)
+  sendKeyByCode(code, false)
+  if (shift) sendKeyByCode('ShiftLeft', false)
+  await delay(8)
+}
+
+async function sendPasteText() {
+  if (!pasteText.value || sessionStatus.value !== 'connected') return
+  pasteSending.value = true
+  let skipped = 0
+  try {
+    for (const char of pasteText.value.replace(/\r\n/g, '\n')) {
+      const spec = charToKeySpec(char)
+      if (!spec) {
+        skipped++
+        continue
+      }
+      await sendKeyStroke(spec.code, !!spec.shift)
+    }
+    showPasteMsg(skipped ? `Texto enviado (${skipped} caracteres omitidos)` : 'Texto enviado')
+    pasteModalOpen.value = false
+    pasteText.value = ''
+    nextTick(() => canvasRef.value?.focus())
+  } finally {
+    pasteSending.value = false
+  }
+}
+
+function showPasteMsg(message) {
+  pasteMsg.value = message
+  clearTimeout(pasteMsgTimer)
+  pasteMsgTimer = setTimeout(() => { pasteMsg.value = '' }, 2400)
+}
+
 // ── Fullscreen ────────────────────────────────────────────────────────────────
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
@@ -589,6 +702,7 @@ onUnmounted(() => disconnectWs())
 }
 .rdpc-conn-info { color: #58a6ff; font-family: monospace; font-size: 0.8rem; }
 .rdpc-toolbar-btns { display: flex; gap: 6px; align-items: center; }
+.rdpc-paste-msg { color: #8b949e; font-size: 0.74rem; white-space: nowrap; }
 .rdpc-tbtn {
   background: rgba(139,148,158,.12);
   border: 1px solid #30363d;
@@ -601,6 +715,38 @@ onUnmounted(() => disconnectWs())
 }
 .rdpc-tbtn:hover { background: rgba(255,255,255,.08); color: #e6edf3; }
 .rdpc-tbtn.accent { background: rgba(63,185,80,.15); border-color: #3fb950; color: #3fb950; }
+
+.rdpc-paste-panel {
+  border-bottom: 1px solid #21262d;
+  background: #0d1117;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rdpc-paste-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #e6edf3;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.rdpc-paste-textarea {
+  min-height: 86px;
+  max-height: 180px;
+  resize: vertical;
+  background: #161b22;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 0.82rem;
+  outline: none;
+}
+.rdpc-paste-textarea:focus { border-color: #388bfd; }
+.rdpc-paste-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 .rdpc-canvas-container {
   flex: 1; min-height: 0;

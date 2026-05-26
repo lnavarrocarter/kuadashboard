@@ -183,6 +183,33 @@ function createWindow() {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  setupContextMenu();
+}
+
+function setupContextMenu() {
+  if (!mainWindow) return;
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const items = [];
+
+    if (params.selectionText) {
+      items.push({ role: 'copy', label: 'Copy' });
+    }
+
+    if (params.isEditable) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push(
+        { role: 'cut', label: 'Cut', enabled: params.editFlags?.canCut !== false },
+        { role: 'copy', label: 'Copy', enabled: params.editFlags?.canCopy !== false },
+        { role: 'paste', label: 'Paste', enabled: params.editFlags?.canPaste !== false },
+      );
+    }
+
+    if (items.length) {
+      items.push({ type: 'separator' }, { role: 'selectAll', label: 'Select All' });
+      Menu.buildFromTemplate(items).popup({ window: mainWindow });
+    }
+  });
 }
 
 // ─── Application menu ─────────────────────────────────────────────────────────
@@ -207,6 +234,23 @@ function buildMenu() {
       label: 'File',
       submenu: [
         process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(process.platform === 'darwin'
+          ? [{ role: 'pasteAndMatchStyle' }]
+          : []),
+        { role: 'delete' },
+        { type: 'separator' },
+        { role: 'selectAll' },
       ],
     },
     {

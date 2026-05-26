@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.0 (Mayo 2026)
+## v1.9.0 (2026-05-26)
 
 ### Vercel
 
@@ -14,6 +14,18 @@
 - New **Versiones** tab in the Info panel — lists all published workflow versions with creation date, description and on-click ASL definition viewer with copy button.
 - Info modal refactored with five tabs: Detalles, Diagrama, Ejecuciones, Eventos and Versiones.
 
+### Terminal & Shell Improvements
+
+- **Native Copy/Paste Support**: Electron menu now includes Edit menu with native roles for copy, paste, cut, select all and standard keyboard shortcuts.
+- **Context Menu**: Right-click on selected text to copy; right-click on input fields to cut/paste/copy as native OS behavior.
+- **Copy Selected**: Button to copy currently selected terminal text without depending on keyboard shortcuts.
+- **Copy Output**: Button to copy the entire terminal output (all filtered lines), with timestamps automatically removed for clean text.
+- **Paste into Input**: Button to safely paste clipboard content into command input, with confirmation for multiline text to prevent accidental execution.
+- **Terminal Panel**: Full copy/paste UI in the bottom terminal panel used for Kubernetes, local shell, and AWS/GCP logs.
+- **Local Shell**: Dedicated copy/paste buttons in LocalShellView header for shell session management.
+- **SSH Terminal**: Ec2Shell now supports copy selected, copy output, and safe paste with Ctrl+C remaining as interrupt signal.
+- **RDP Paste Modal**: RDP session has a "Paste text" feature with textarea modal to send text as keyboard events to the focused remote field. Note: copy from RDP canvas is not available (render is pixels, not selectable text); use SSH or remote command to extract logs from Windows machines.
+- **Selection CSS Fix**: Terminal output areas now allow text selection (user-select: text) while preserving non-selectable decorative elements like timestamps and tab headers.
 
 ## v1.8.0 (2026-05-10)
 

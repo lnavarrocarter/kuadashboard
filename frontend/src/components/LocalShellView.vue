@@ -9,6 +9,10 @@
         <span class="lsh-status-text text-dim">{{ statusLabel }}</span>
       </div>
       <div class="lsh-header-actions">
+        <span v-if="clipboardMsg" class="text-dim">{{ clipboardMsg }}</span>
+        <button class="btn sm" @click="copySelectedOutput" title="Copy selected terminal text">Copy selected</button>
+        <button class="btn sm" @click="copyAllOutput" title="Copy all terminal output">Copy output</button>
+        <button class="btn sm" @click="pasteIntoInput" title="Paste clipboard into command input">Paste</button>
         <button class="btn sm" @click="toggleBrowser" :title="showBrowser ? 'Hide explorer' : 'Show explorer'">
           {{ showBrowser ? '◀ Explorer' : '▶ Explorer' }}
         </button>
@@ -19,10 +23,10 @@
 
     <!-- ── Breadcrumb ──────────────────────────────────────────────────────── -->
     <div class="lsh-breadcrumb" v-if="showBrowser">
-      <template v-for="(seg, i) in breadcrumbs" :key="seg.path">
+      <span v-for="(seg, i) in breadcrumbs" :key="seg.path">
         <span class="lsh-bc-sep" v-if="i > 0">{{ pathSep }}</span>
         <span class="lsh-bc-seg" @click="navigateTo(seg.path)" :title="seg.path">{{ seg.label }}</span>
-      </template>
+      </span>
       <span class="lsh-bc-refresh btn-icon" @click="refreshBrowser" title="Refresh">↻</span>
     </div>
 
@@ -181,6 +185,8 @@ const outputHtml  = computed(() => outputLines.value.join(''))
 const cmdInput    = ref('')
 const cmdHistory  = ref([])
 const historyIdx  = ref(-1)
+const clipboardMsg = ref('')
+let clipboardTimer = null
 
 // file browser
 const showBrowser    = ref(true)
@@ -347,6 +353,78 @@ function clearOutput() {
   outputLines.value = []
   // Also send ctrl+l to shell
   sendRaw('\x0C')
+}
+
+function htmlToText(html) {
+  const div = document.createElement('div')
+  div.innerHTML = String(html)
+  div.querySelectorAll('.ts').forEach(node => node.remove())
+  return div.textContent || div.innerText || ''
+}
+
+function getSelectedOutputText() {
+  const selection = window.getSelection?.()
+  if (!selection || selection.isCollapsed || !outputRef.value) return ''
+  const anchorNode = selection.anchorNode
+  const focusNode = selection.focusNode
+  if (!outputRef.value.contains(anchorNode) && !outputRef.value.contains(focusNode)) return ''
+  return selection.toString()
+}
+
+async function writeClipboardText(text, successMsg = 'Copied') {
+  if (!text) {
+    showClipboardMsg('No text selected')
+    return false
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    showClipboardMsg(successMsg)
+    return true
+  } catch (_) {
+    showClipboardMsg('Copy failed')
+    return false
+  }
+}
+
+function copySelectedOutput() {
+  writeClipboardText(getSelectedOutputText(), 'Selection copied')
+}
+
+function copyAllOutput() {
+  writeClipboardText(outputLines.value.map(htmlToText).join('\n'), 'Output copied')
+}
+
+async function pasteIntoInput() {
+  try {
+    const text = await navigator.clipboard?.readText?.()
+    if (!text) {
+      showClipboardMsg('Clipboard empty')
+      return
+    }
+    if (text.includes('\n') && !confirm('Clipboard has multiple lines. Paste into input without running it?')) return
+    cmdInput.value += text
+    showClipboardMsg('Pasted')
+    nextTick(() => inputRef.value?.focus())
+  } catch (_) {
+    showClipboardMsg('Paste failed')
+  }
+}
+
+function showClipboardMsg(message) {
+  clipboardMsg.value = message
+  clearTimeout(clipboardTimer)
+  clipboardTimer = setTimeout(() => { clipboardMsg.value = '' }, 1800)
 }
 
 function scrollToEnd() {

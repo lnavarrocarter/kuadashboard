@@ -1,0 +1,64 @@
+appId: dev.kua.kuadashboard
+productName: KuaDashboard
+asar: true
+buildDependenciesFromSource: false
+
+files:
+  - electron/**
+  - server.js
+  - routes/**
+  - lib/**
+  - public/**
+  - assets/icon.ico
+  - assets/icon.png
+  - "!node_modules/.cache"
+
+directories:
+  buildResources: assets
+  output: dist-electron
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  signAndEditExecutable: false
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.png
+  category: public.app-category.developer-tools
+  identity: null
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: assets/icon.png
+  category: Development
+
+nsis:
+  oneClick: true
+  installerLanguages:
+    - en_US
+    - es_ES
+  createDesktopShortcut: true
+
+publish:
+  - provider: github
+    owner: lnavarrocarter
+    repo: kuadashboard
+    releaseType: release
+
+electronDist: ./node_modules/electron/dist
+electronVersion: 31.7.7

@@ -49,6 +49,9 @@
           @click="filtersOpen = !filtersOpen"
         ><i data-lucide="search"></i></button>
         <button v-if="activeTab" class="btn btn-icon" title="Descargar logs" @click="downloadLogs"><i data-lucide="download"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" title="Copiar seleccion" @click="copySelectedOutput"><i data-lucide="copy"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" title="Copiar output" @click="copyAllOutput"><i data-lucide="clipboard"></i></button>
+        <button v-if="isShellTab" class="btn btn-icon" title="Pegar en terminal" @click="pasteIntoInput"><i data-lucide="clipboard-paste"></i></button>
         <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
@@ -217,6 +220,7 @@
     <!-- ── Footer ────────────────────────────────────────────────────────── -->
     <div v-show="!minimised" class="term-footer" ref="footerRef">
       <span>{{ statusText }}</span>
+      <span v-if="clipboardMsg" class="text-dim">{{ clipboardMsg }}</span>
       <span v-if="activeTab?.context === 'local'" class="term-footer-cwd text-dim">{{ browserCwd }}</span>
       <span v-if="filtersActive" class="text-dim">{{ filteredLineCount }} filtradas</span>
       <span id="termLineCount" style="margin-left:auto">{{ lineCount }} lines</span>
@@ -258,7 +262,9 @@ const logSearch    = ref('')
 const logFrom      = ref('')
 const logTo        = ref('')
 const cmdInput     = ref('')
+const clipboardMsg = ref('')
 let resizing = false, startY = 0, startH = 0
+let clipboardTimer = null
 
 // File viewer modal
 const fileViewerPath = ref(null)
@@ -404,6 +410,76 @@ function downloadLogs() {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+function getOutputText(entries = filteredEntries.value) {
+  return entries.map(entry => entry.text || htmlToText(entry.html || '')).join('\n')
+}
+
+function getSelectedOutputText() {
+  const selection = window.getSelection?.()
+  if (!selection || selection.isCollapsed || !bodyRef.value) return ''
+  const anchorNode = selection.anchorNode
+  const focusNode = selection.focusNode
+  if (!bodyRef.value.contains(anchorNode) && !bodyRef.value.contains(focusNode)) return ''
+  return selection.toString()
+}
+
+async function writeClipboardText(text, successMsg = 'Copiado') {
+  if (!text) {
+    showClipboardMsg('Sin texto para copiar')
+    return false
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    showClipboardMsg(successMsg)
+    return true
+  } catch (_) {
+    showClipboardMsg('No se pudo copiar')
+    return false
+  }
+}
+
+function copySelectedOutput() {
+  writeClipboardText(getSelectedOutputText(), 'Seleccion copiada')
+}
+
+function copyAllOutput() {
+  writeClipboardText(getOutputText(), 'Output copiado')
+}
+
+async function pasteIntoInput() {
+  if (!isShellTab.value) return
+  try {
+    const text = await navigator.clipboard?.readText?.()
+    if (!text) {
+      showClipboardMsg('Portapapeles vacio')
+      return
+    }
+    if (text.includes('\n') && !confirm('El texto tiene multiples lineas. Pegar en el input sin ejecutar?')) return
+    cmdInput.value += text
+    showClipboardMsg('Texto pegado')
+    nextTick(() => inputRef.value?.focus())
+  } catch (_) {
+    showClipboardMsg('No se pudo leer el portapapeles')
+  }
+}
+
+function showClipboardMsg(message) {
+  clipboardMsg.value = message
+  clearTimeout(clipboardTimer)
+  clipboardTimer = setTimeout(() => { clipboardMsg.value = '' }, 1800)
 }
 
 function escapeHtml(text) {

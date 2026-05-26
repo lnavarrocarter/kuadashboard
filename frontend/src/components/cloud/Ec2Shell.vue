@@ -75,6 +75,10 @@
           <div class="ec2sh-toolbar">
             <span class="ec2sh-conn-info">{{ form.user }}@{{ form.host }}:{{ form.port }}</span>
             <div class="ec2sh-toolbar-btns">
+              <span v-if="clipboardMsg" class="ec2sh-clip-msg">{{ clipboardMsg }}</span>
+              <button class="ec2sh-tbtn" title="Copy selected terminal text" @click="copySelectedOutput">Copy selected</button>
+              <button class="ec2sh-tbtn" title="Copy all terminal output" @click="copyAllOutput">Copy output</button>
+              <button class="ec2sh-tbtn" title="Paste clipboard into command input" @click="pasteIntoInput">Paste</button>
               <button class="ec2sh-tbtn" title="Ctrl+C" @click="sendCtrlC">&#x23F9; INT</button>
               <button class="ec2sh-tbtn" title="Ctrl+D" @click="sendCtrlD">EOF</button>
               <button class="ec2sh-tbtn" @click="clearOutput">Clear</button>
@@ -96,7 +100,7 @@
               @keydown.enter.prevent="sendCmd"
               @keydown.up.prevent="historyUp"
               @keydown.down.prevent="historyDown"
-              @keydown.c.exact="(e) => { if (e.ctrlKey) sendCtrlC() }"
+              @keydown.ctrl.c.prevent="sendCtrlC"
             />
           </div>
         </div>
@@ -132,6 +136,8 @@ const outputHtml    = computed(() => outputLines.value.join(''))
 const cmdInput      = ref('')
 const cmdHistory    = ref([])
 const historyIdx    = ref(-1)
+const clipboardMsg  = ref('')
+let clipboardTimer = null
 
 const form = ref({
   host:       '',
@@ -288,6 +294,78 @@ function pushSys(text, cls = 'sys') {
 function clearOutput() {
   outputLines.value = []
   sendRaw('\x0C')
+}
+
+function htmlToText(html) {
+  const div = document.createElement('div')
+  div.innerHTML = String(html)
+  div.querySelectorAll('.ts').forEach(node => node.remove())
+  return div.textContent || div.innerText || ''
+}
+
+function getSelectedOutputText() {
+  const selection = window.getSelection?.()
+  if (!selection || selection.isCollapsed || !outputRef.value) return ''
+  const anchorNode = selection.anchorNode
+  const focusNode = selection.focusNode
+  if (!outputRef.value.contains(anchorNode) && !outputRef.value.contains(focusNode)) return ''
+  return selection.toString()
+}
+
+async function writeClipboardText(text, successMsg = 'Copied') {
+  if (!text) {
+    showClipboardMsg('No text selected')
+    return false
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    showClipboardMsg(successMsg)
+    return true
+  } catch (_) {
+    showClipboardMsg('Copy failed')
+    return false
+  }
+}
+
+function copySelectedOutput() {
+  writeClipboardText(getSelectedOutputText(), 'Selection copied')
+}
+
+function copyAllOutput() {
+  writeClipboardText(outputLines.value.map(htmlToText).join('\n'), 'Output copied')
+}
+
+async function pasteIntoInput() {
+  try {
+    const text = await navigator.clipboard?.readText?.()
+    if (!text) {
+      showClipboardMsg('Clipboard empty')
+      return
+    }
+    if (text.includes('\n') && !confirm('Clipboard has multiple lines. Paste into input without running it?')) return
+    cmdInput.value += text
+    showClipboardMsg('Pasted')
+    nextTick(() => inputRef.value?.focus())
+  } catch (_) {
+    showClipboardMsg('Paste failed')
+  }
+}
+
+function showClipboardMsg(message) {
+  clipboardMsg.value = message
+  clearTimeout(clipboardTimer)
+  clipboardTimer = setTimeout(() => { clipboardMsg.value = '' }, 1800)
 }
 
 function scrollToEnd() {
@@ -516,6 +594,7 @@ onUnmounted(() => { disconnectWs() })
   font-size: 0.8rem;
 }
 .ec2sh-toolbar-btns { display: flex; gap: 6px; align-items: center; }
+.ec2sh-clip-msg { color: #8b949e; font-size: 0.74rem; white-space: nowrap; }
 .ec2sh-tbtn {
   background: rgba(139,148,158,.12);
   border: 1px solid #30363d;
@@ -540,6 +619,7 @@ onUnmounted(() => { disconnectWs() })
   background: #0d1117;
   min-height: 320px;
   max-height: 52vh;
+  user-select: text;
 }
 
 .ec2sh-input-bar {
