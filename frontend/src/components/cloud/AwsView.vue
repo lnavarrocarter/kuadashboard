@@ -1145,6 +1145,9 @@
               </div>
               <!-- ── Groups tab ──────────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'groups'" style="flex:1;overflow:auto;padding:8px">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+                  <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoGroup">+ Create Group</button>
+                </div>
                 <div v-if="cognitoState.loadingGroups" class="empty-row">Loading groups...</div>
                 <div v-else-if="!cognitoState.groups.length" class="empty-row">No groups in this user pool.</div>
                 <table v-else class="cloud-table">
@@ -3603,9 +3606,37 @@
       </div>
     </div>
 
+    <!-- ══ Cognito Create Group Modal ═════════════════════════════════════════ -->
+    <div v-if="cognitoGroupModal.open" class="modal-overlay" @click.self="cognitoGroupModal.open = false">
+      <div class="modal-box" style="width:460px;max-width:98vw">
+        <div class="modal-header">
+          <span style="font-weight:600">Create Group — {{ cognitoState.selectedPool?.name }}</span>
+          <button class="btn sm" @click="cognitoGroupModal.open = false">Close</button>
+        </div>
+        <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:12px;color:var(--text-muted)">Group Name *</label>
+            <input v-model="cognitoGroupModal.groupName" class="ctrl-input" placeholder="developers" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:12px;color:var(--text-muted)">Description</label>
+            <textarea v-model="cognitoGroupModal.description" class="ctrl-input" rows="3" placeholder="Short description for this group"></textarea>
+          </div>
+          <div v-if="cognitoGroupModal.error" class="alert-error">{{ cognitoGroupModal.error }}</div>
+          <div v-if="cognitoGroupModal.result" class="alert-success">{{ cognitoGroupModal.result }}</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" @click="submitCreateCognitoGroup" :disabled="cognitoGroupModal.loading">
+              {{ cognitoGroupModal.loading ? 'Creating...' : 'Create Group' }}
+            </button>
+            <button class="btn sm" @click="cognitoGroupModal.open = false">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ Cognito User Detail Slide-over ═════════════════════════════════════ -->
     <div v-if="cognitoUserDetail.open" class="modal-overlay" @click.self="cognitoUserDetail.open = false">
-      <div class="modal-box" style="width:600px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" style="width:760px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
             <div style="font-weight:600;font-size:13px">{{ cognitoUserDetail.username }}</div>
@@ -3639,14 +3670,99 @@
             </div>
           </div>
 
-          <!-- All Attributes as cards -->
+          <!-- MFA switch -->
           <div class="config-section">
-            <div class="config-title">Atributos del usuario</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-top:6px">
-              <div v-for="(v, k) in cognitoUserDetail.data.attributes" :key="k"
-                style="border:1px solid var(--border);border-radius:5px;padding:6px 10px">
-                <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;font-weight:600;margin-bottom:2px">{{ k }}</div>
-                <div class="mono-xs" style="word-break:break-all;font-size:12px">{{ v }}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div class="config-title" style="margin:0">MFA</div>
+                <div class="text-dim" style="font-size:11px;margin-top:4px">Habilita o deshabilita MFA para este usuario.</div>
+              </div>
+              <label v-if="!cognitoUserDetail.mfaEnabled" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input
+                  type="checkbox"
+                  v-model="cognitoUserDetail.mfaEnabled"
+                  :disabled="cognitoUserDetail.savingMfa"
+                  @change="onCognitoEnableMfaToggle"
+                />
+                <span class="text-dim" style="font-size:12px;font-weight:600">
+                  Activar MFA
+                </span>
+              </label>
+              <div v-else style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span class="status-ok" style="font-size:12px;font-weight:600">MFA habilitado</span>
+                <button class="btn sm danger" :disabled="cognitoUserDetail.savingMfa" @click="disableCognitoUserMfa">
+                  {{ cognitoUserDetail.savingMfa ? 'Procesando...' : 'Desactivar' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="cognitoUserDetail.mfaEnabled" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <span class="text-dim" style="font-size:11px">Método preferido</span>
+              <select
+                v-model="cognitoUserDetail.mfaMethod"
+                class="ctrl-input"
+                style="min-width:220px"
+                :disabled="cognitoUserDetail.savingMfa"
+              >
+                <option value="SMS_MFA">SMS</option>
+                <option value="SOFTWARE_TOKEN_MFA">Software Token (TOTP)</option>
+              </select>
+              <button
+                class="btn sm"
+                :disabled="cognitoUserDetail.savingMfa"
+                @click="applyCognitoUserMfaMethod"
+              >
+                {{ cognitoUserDetail.savingMfa ? 'Aplicando...' : 'Cambiar método' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Editable attributes -->
+          <div class="config-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div class="config-title" style="margin:0">Atributos editables</div>
+              <button class="btn sm" :disabled="cognitoUserDetail.savingAttributes" @click="saveCognitoUserAttributes">
+                {{ cognitoUserDetail.savingAttributes ? 'Guardando...' : 'Guardar atributos' }}
+              </button>
+            </div>
+            <div v-if="!cognitoUserDetail.editFields.length" class="text-dim" style="font-size:12px;padding:6px 0">No editable fields available for this user pool schema.</div>
+            <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:8px">
+              <div v-for="field in cognitoUserDetail.editFields" :key="field.name" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+                  <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;font-weight:600">{{ field.label }}</div>
+                  <span class="text-dim" style="font-size:10px">{{ field.description }}</span>
+                </div>
+                <input v-if="field.type === 'text'" v-model="cognitoUserDetail.editValues[field.name]" class="ctrl-input" style="width:100%" />
+                <label v-else style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)">
+                  <input v-model="cognitoUserDetail.editValues[field.name]" type="checkbox" />
+                  <span>{{ cognitoUserDetail.editValues[field.name] ? 'true' : 'false' }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Groups membership -->
+          <div class="config-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div class="config-title" style="margin:0">Grupos</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <select v-model="cognitoUserDetail.selectedGroup" class="ctrl-input" style="min-width:220px">
+                  <option value="">Select group to add</option>
+                  <option v-for="g in cognitoUserAvailableGroups()" :key="g.name" :value="g.name">{{ g.name }}</option>
+                </select>
+                <button class="btn sm" :disabled="cognitoUserDetail.savingGroup || !cognitoUserDetail.selectedGroup" @click="addCognitoUserGroup">
+                  {{ cognitoUserDetail.savingGroup ? 'Updating...' : 'Add to group' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="cognitoUserDetail.groupsLoading" class="text-dim" style="font-size:12px;padding:6px 0">Loading groups...</div>
+            <div v-else-if="!cognitoUserDetail.groups.length" class="text-dim" style="font-size:12px;padding:6px 0">This user is not assigned to any group.</div>
+            <div v-else style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+              <div v-for="g in cognitoUserDetail.groups" :key="g.name" style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:6px;padding:8px 10px">
+                <div>
+                  <div style="font-weight:600">{{ g.name }}</div>
+                  <div class="text-dim" style="font-size:11px">{{ g.description || '-' }}</div>
+                </div>
+                <button class="btn sm danger" :disabled="cognitoUserDetail.savingGroup" @click="removeCognitoUserGroup(g.name)">Remove</button>
               </div>
             </div>
           </div>
@@ -5214,15 +5330,273 @@ async function submitCreateCognitoUser() {
   } finally { cognitoCreateModal.loading = false }
 }
 
+// ─── Cognito Create Group Modal ───────────────────────────────────────────────
+const cognitoGroupModal = reactive({ open: false, loading: false, groupName: '', description: '', error: null, result: null })
+
+function openCreateCognitoGroup() {
+  Object.assign(cognitoGroupModal, { open: true, loading: false, groupName: '', description: '', error: null, result: null })
+}
+
+async function submitCreateCognitoGroup() {
+  if (!cognitoGroupModal.groupName.trim()) {
+    cognitoGroupModal.error = 'Group name is required'
+    return
+  }
+  cognitoGroupModal.loading = true
+  cognitoGroupModal.error = null
+  cognitoGroupModal.result = null
+  try {
+    const payload = {
+      groupName: cognitoGroupModal.groupName.trim(),
+      description: cognitoGroupModal.description.trim() || undefined,
+    }
+    const r = typeof awsStore.createCognitoGroup === 'function'
+      ? await awsStore.createCognitoGroup(cognitoState.selectedPool.id, payload)
+      : await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(cognitoState.selectedPool.id)}/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Profile-Id': awsStore.activeProfileId,
+        },
+        body: JSON.stringify(payload),
+      })
+    if (r?.success) {
+      cognitoGroupModal.result = `Group "${r.group?.name || cognitoGroupModal.groupName}" created.`
+      toast('Group created.', 'success')
+      await loadCognitoGroups()
+    } else {
+      cognitoGroupModal.error = awsStore.error || 'Failed to create group'
+    }
+  } finally { cognitoGroupModal.loading = false }
+}
+
 // ─── Cognito User Detail ──────────────────────────────────────────────────────
-const cognitoUserDetail = reactive({ open: false, loading: false, username: '', data: null })
+const cognitoUserDetail = reactive({
+  open: false,
+  loading: false,
+  savingAttributes: false,
+  savingGroup: false,
+  savingMfa: false,
+  username: '',
+  data: null,
+  groups: [],
+  groupsLoading: false,
+  editFields: [],
+  editValues: {},
+  selectedGroup: '',
+  mfaEnabled: false,
+  mfaMethod: 'SMS_MFA',
+})
+
+function isEditableCognitoField(field) {
+  return field?.Mutable !== false
+}
+
+function buildCognitoEditFields() {
+  const schema = cognitoState.poolConfig?.SchemaAttributes || []
+  const sourceFields = schema.length
+    ? schema.filter(isEditableCognitoField)
+    : Object.keys(cognitoUserDetail.data?.attributes || {}).map(name => ({ Name: name, AttributeDataType: 'String', Mutable: true }))
+  const fields = sourceFields.map(field => {
+    const name = field.Name
+    const value = cognitoUserDetail.data?.attributes?.[name]
+    const isBoolean = name === 'email_verified' || name === 'phone_number_verified'
+    return {
+      name,
+      label: name,
+      description: field.AttributeDataType || '',
+      type: isBoolean ? 'checkbox' : 'text',
+      value: isBoolean ? value === 'true' || value === true : (value ?? ''),
+    }
+  })
+  cognitoUserDetail.editFields = fields
+  const nextValues = {}
+  for (const field of fields) nextValues[field.name] = field.value
+  cognitoUserDetail.editValues = nextValues
+}
+
+async function loadCognitoUserGroups(username) {
+  cognitoUserDetail.groupsLoading = true
+  try {
+    cognitoUserDetail.groups = await awsStore.fetchCognitoUserGroups(cognitoState.selectedPool.id, username) || []
+    if (!cognitoUserDetail.selectedGroup) {
+      const remaining = (cognitoState.groups || []).find(g => !cognitoUserDetail.groups.some(current => current.name === g.name))
+      cognitoUserDetail.selectedGroup = remaining?.name || ''
+    }
+  } finally { cognitoUserDetail.groupsLoading = false }
+}
 
 async function openUserDetail(user) {
-  Object.assign(cognitoUserDetail, { open: true, loading: true, username: user.username, data: null })
+  Object.assign(cognitoUserDetail, {
+    open: true,
+    loading: true,
+    savingAttributes: false,
+    savingGroup: false,
+    savingMfa: false,
+    username: user.username,
+    data: null,
+    groups: [],
+    groupsLoading: false,
+    editFields: [],
+    editValues: {},
+    selectedGroup: '',
+    mfaEnabled: false,
+    mfaMethod: 'SMS_MFA',
+  })
   try {
     cognitoUserDetail.data = await awsStore.fetchCognitoUserDetail(cognitoState.selectedPool.id, user.username)
+    if (!cognitoState.poolConfig) {
+      cognitoState.poolConfig = await awsStore.fetchCognitoPoolConfig(cognitoState.selectedPool.id)
+    }
+    buildCognitoEditFields()
+    syncCognitoUserMfaState()
+    await loadCognitoUserGroups(user.username)
   } finally { cognitoUserDetail.loading = false }
 }
+
+async function refreshCognitoUserDetail() {
+  if (!cognitoUserDetail.username) return
+  cognitoUserDetail.data = await awsStore.fetchCognitoUserDetail(cognitoState.selectedPool.id, cognitoUserDetail.username)
+  buildCognitoEditFields()
+  syncCognitoUserMfaState()
+  await loadCognitoUserGroups(cognitoUserDetail.username)
+}
+
+function syncCognitoUserMfaState() {
+  const settings = cognitoUserDetail.data?.mfaSettingList || []
+  cognitoUserDetail.mfaEnabled = settings.length > 0
+  const preferred = cognitoUserDetail.data?.preferredMfa
+  if (preferred === 'SMS_MFA' || preferred === 'SOFTWARE_TOKEN_MFA') {
+    cognitoUserDetail.mfaMethod = preferred
+    return
+  }
+  if (settings.includes('SOFTWARE_TOKEN_MFA')) {
+    cognitoUserDetail.mfaMethod = 'SOFTWARE_TOKEN_MFA'
+  } else {
+    cognitoUserDetail.mfaMethod = 'SMS_MFA'
+  }
+}
+
+async function setCognitoUserMfaEnabled(nextEnabled) {
+  if (!cognitoUserDetail.username) return false
+  const previousEnabled = !nextEnabled
+  cognitoUserDetail.savingMfa = true
+  try {
+    const payloadMethod = nextEnabled ? cognitoUserDetail.mfaMethod : null
+    const r = await awsStore.setCognitoUserMfa(
+      cognitoState.selectedPool.id,
+      cognitoUserDetail.username,
+      nextEnabled,
+      payloadMethod,
+    )
+    if (r?.success) {
+      toast(nextEnabled ? 'MFA habilitado.' : 'MFA deshabilitado.', 'success')
+      await loadCognitoUsers()
+      await refreshCognitoUserDetail()
+      return true
+    } else {
+      cognitoUserDetail.mfaEnabled = previousEnabled
+      toast(awsStore.error || 'No se pudo actualizar MFA', 'error')
+      return false
+    }
+  } finally { cognitoUserDetail.savingMfa = false }
+}
+
+async function onCognitoEnableMfaToggle() {
+  await setCognitoUserMfaEnabled(!!cognitoUserDetail.mfaEnabled)
+}
+
+async function disableCognitoUserMfa() {
+  cognitoUserDetail.mfaEnabled = false
+  await setCognitoUserMfaEnabled(false)
+}
+
+async function applyCognitoUserMfaMethod() {
+  if (!cognitoUserDetail.mfaEnabled) return
+  cognitoUserDetail.savingMfa = true
+  try {
+    const r = await awsStore.setCognitoUserMfa(
+      cognitoState.selectedPool.id,
+      cognitoUserDetail.username,
+      true,
+      cognitoUserDetail.mfaMethod,
+    )
+    if (r?.success) {
+      toast('Método MFA actualizado.', 'success')
+      await refreshCognitoUserDetail()
+    } else {
+      toast(awsStore.error || 'No se pudo actualizar el método MFA', 'error')
+    }
+  } finally { cognitoUserDetail.savingMfa = false }
+}
+
+function cognitoUserAvailableGroups() {
+  return (cognitoState.groups || []).filter(group => !cognitoUserDetail.groups.some(current => current.name === group.name))
+}
+
+async function saveCognitoUserAttributes() {
+  if (!cognitoUserDetail.username) return
+  const attributes = {}
+  for (const field of cognitoUserDetail.editFields) {
+    const value = cognitoUserDetail.editValues[field.name]
+    if (field.type === 'checkbox') {
+      attributes[field.name] = !!value
+      continue
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed) continue
+      attributes[field.name] = trimmed
+      continue
+    }
+    if (value !== undefined && value !== null) attributes[field.name] = value
+  }
+  cognitoUserDetail.savingAttributes = true
+  try {
+    const r = await awsStore.updateCognitoUserAttributes(cognitoState.selectedPool.id, cognitoUserDetail.username, attributes)
+    if (r?.success) {
+      toast('Atributos actualizados.', 'success')
+      await loadCognitoUsers()
+      await refreshCognitoUserDetail()
+    } else {
+      toast(awsStore.error || 'No se pudo actualizar el usuario', 'error')
+    }
+  } finally { cognitoUserDetail.savingAttributes = false }
+}
+
+async function addCognitoUserGroup() {
+  if (!cognitoUserDetail.username || !cognitoUserDetail.selectedGroup) return
+  cognitoUserDetail.savingGroup = true
+  try {
+    const r = await awsStore.addCognitoUserToGroup(cognitoState.selectedPool.id, cognitoUserDetail.username, cognitoUserDetail.selectedGroup)
+    if (r?.success) {
+      toast('Grupo asignado.', 'success')
+      cognitoUserDetail.selectedGroup = ''
+      await refreshCognitoUserDetail()
+    } else {
+      toast(awsStore.error || 'No se pudo asignar el grupo', 'error')
+    }
+  } finally { cognitoUserDetail.savingGroup = false }
+}
+
+async function removeCognitoUserGroup(groupName) {
+  if (!cognitoUserDetail.username) return
+  if (!confirm(`Remove ${cognitoUserDetail.username} from group ${groupName}?`)) return
+  cognitoUserDetail.savingGroup = true
+  try {
+    const r = await awsStore.removeCognitoUserFromGroup(cognitoState.selectedPool.id, cognitoUserDetail.username, groupName)
+    if (r?.success) {
+      toast('Grupo removido.', 'success')
+      await refreshCognitoUserDetail()
+    } else {
+      toast(awsStore.error || 'No se pudo quitar el grupo', 'error')
+    }
+  } finally { cognitoUserDetail.savingGroup = false }
+}
+
+watch(() => cognitoState.poolConfig, () => {
+  if (cognitoUserDetail.open && cognitoUserDetail.data) buildCognitoEditFields()
+})
 
 // ─── DynamoDB Info Modal ─────────────────────────────────────────────────────
 const dynamoInfo = reactive({ open: false, loading: false, error: null, data: null, table: null })

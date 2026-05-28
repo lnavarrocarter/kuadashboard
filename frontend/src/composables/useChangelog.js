@@ -4,9 +4,22 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.9.0'
+export const CHANGELOG_VERSION = '1.9.1'
 
 export const CHANGELOG = [
+  {
+    version: '1.9.1',
+    date: 'Mayo 2026',
+    items: [
+      { type: 'fix',    text: 'AWS Cognito — búsqueda de usuarios mejorada para soportar texto libre sin errores de parseo de filtros en AWS' },
+      { type: 'new',    text: 'AWS Cognito — edición de atributos de usuario desde el modal de detalles' },
+      { type: 'new',    text: 'AWS Cognito — gestión de grupos por usuario desde detalles: asignar y remover memberships' },
+      { type: 'new',    text: 'AWS Cognito — control de MFA por usuario en detalles: activar con toggle, desactivar con acción y cambiar método preferido (SMS/TOTP)' },
+      { type: 'new',    text: 'AWS Cognito — creación de grupos con soporte de descripción en la pestaña Groups' },
+      { type: 'fix',    text: 'AWS Cognito — corregido error runtime de creación de grupos (createCognitoGroup is not a function) en estados stale de hot-reload' },
+      { type: 'fix',    text: 'AWS Cognito — alineado el estado MFA entre lista y detalles usando UserMFASettingList/PreferredMfaSetting con fallback de compatibilidad' },
+    ],
+  },
   {
     version: '1.9.0',
     date: 'Mayo 2026',
@@ -15,6 +28,10 @@ export const CHANGELOG = [
       { type: 'new',    text: 'AWS Step Functions — columna "Executions" en la tabla con conteos en vivo de ejecuciones activas (▶), fallidas (✗) y con timeout (⏱)' },
       { type: 'new',    text: 'AWS Step Functions — pestaña "Versiones" en el panel Info: lista de versiones publicadas del workflow con definición ASL y botón de copia por versión' },
       { type: 'better', text: 'AWS Step Functions — modal Info refactorizado con pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones' },
+      { type: 'new',    text: 'Terminal & Shell — soporte nativo de copy/paste en menú de Electron y menú contextual (click derecho)' },
+      { type: 'new',    text: 'Terminal & Shell — acciones Copy Selected, Copy Output y Paste into Input con confirmación para texto multilínea' },
+      { type: 'new',    text: 'Local Shell / EC2 SSH / panel de terminal — botones dedicados de copiar/pegar y flujo seguro de pegado' },
+      { type: 'better', text: 'Terminal output — fix de selección de texto (user-select: text) preservando elementos decorativos no seleccionables' },
 
     ],
   },
@@ -180,6 +197,13 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Port forwarding persistente entre sesiones' },
       { type: 'new',    text: 'Soporte AWS completo: 19 servicios incluyendo API Gateway, CloudFront, Route 53, DynamoDB, DocumentDB, Glue, Athena, Cognito y más' },
       { type: 'better', text: 'Panel de terminal con múltiples pestañas, highlight de líneas y resize' },
+    ],
+  },
+  {
+    version: '1.1.3',
+    date: 'Abril 2026',
+    items: [
+      { type: 'fix',    text: 'macOS — fix de auto-updater para target ZIP (requerido por electron-updater)' },
     ],
   },
   {

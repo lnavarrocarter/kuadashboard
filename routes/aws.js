@@ -3366,20 +3366,69 @@ router.get('/cognito/userpools/:id/users', async (req, res) => {
     const cfg = await resolveAwsConfig(profileId);
     const { CognitoIdentityProviderClient, ListUsersCommand } = require('@aws-sdk/client-cognito-identity-provider');
     const client = new CognitoIdentityProviderClient(cfg);
+    const rawFilter = (req.query.filter || '').trim();
+    const isAwsFilter = /^[A-Za-z_][\w:.-]*\s*(=|\^=|\$=|\*=|!=|<=|>=)\s*".*"$/.test(rawFilter);
     const params = {
       UserPoolId:       req.params.id,
       Limit:            parseInt(req.query.limit || '60', 10),
-      Filter:           req.query.filter || undefined,
       PaginationToken:  req.query.paginationToken || undefined,
     };
-    const resp = await client.send(new ListUsersCommand(params));
     const attrMap = (attrs) => {
       const m = {};
       for (const a of (attrs || [])) m[a.Name] = a.Value;
       return m;
     };
-    res.json({
-      users: (resp.Users || []).map(u => ({
+
+    if (!rawFilter || isAwsFilter) {
+      if (rawFilter) params.Filter = rawFilter;
+      const resp = await client.send(new ListUsersCommand(params));
+      return res.json({
+        users: (resp.Users || []).map(u => ({
+          username:      u.Username,
+          status:        u.UserStatus,
+          enabled:       u.Enabled,
+          created:       u.UserCreateDate,
+          modified:      u.UserLastModifiedDate,
+          attributes:    attrMap(u.Attributes),
+          email:         attrMap(u.Attributes)['email'] || null,
+          emailVerified: attrMap(u.Attributes)['email_verified'] === 'true',
+          phone:         attrMap(u.Attributes)['phone_number'] || null,
+          mfaEnabled:    (u.UserMFASettingList || []).length > 0 || !!u.PreferredMfaSetting || (u.MFAOptions || []).length > 0,
+          mfaSettingList: u.UserMFASettingList || [],
+          preferredMfa:  u.PreferredMfaSetting || null,
+          mfaOptions:    u.MFAOptions || [],
+        })),
+        paginationToken: resp.PaginationToken || null,
+      });
+    }
+
+    const term = rawFilter.toLowerCase();
+    const limit = Math.max(1, parseInt(req.query.limit || '60', 10));
+    const allUsers = [];
+    let nextToken = req.query.paginationToken || undefined;
+    do {
+      const resp = await client.send(new ListUsersCommand({
+        UserPoolId: req.params.id,
+        Limit: 60,
+        PaginationToken: nextToken,
+      }));
+      allUsers.push(...(resp.Users || []));
+      nextToken = resp.PaginationToken || null;
+    } while (nextToken);
+
+    const matched = allUsers.filter(u => {
+      const attrs = attrMap(u.Attributes);
+      const haystack = [
+        u.Username,
+        attrs.email,
+        attrs.phone_number,
+        ...Object.values(attrs),
+      ].filter(Boolean).map(v => String(v).toLowerCase());
+      return haystack.some(value => value.includes(term));
+    });
+
+    return res.json({
+      users: matched.slice(0, limit).map(u => ({
         username:      u.Username,
         status:        u.UserStatus,
         enabled:       u.Enabled,
@@ -3389,10 +3438,12 @@ router.get('/cognito/userpools/:id/users', async (req, res) => {
         email:         attrMap(u.Attributes)['email'] || null,
         emailVerified: attrMap(u.Attributes)['email_verified'] === 'true',
         phone:         attrMap(u.Attributes)['phone_number'] || null,
-        mfaEnabled:    (u.MFAOptions || []).length > 0,
+        mfaEnabled:    (u.UserMFASettingList || []).length > 0 || !!u.PreferredMfaSetting || (u.MFAOptions || []).length > 0,
+        mfaSettingList: u.UserMFASettingList || [],
+        preferredMfa:  u.PreferredMfaSetting || null,
         mfaOptions:    u.MFAOptions || [],
       })),
-      paginationToken: resp.PaginationToken || null,
+      paginationToken: null,
     });
   } catch (err) { handleErr(res, err); }
 });
@@ -3422,6 +3473,91 @@ router.get('/cognito/userpools/:id/users/:username', async (req, res) => {
       preferredMfa:   resp.PreferredMfaSetting || null,
       mfaSettingList: resp.UserMFASettingList || [],
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /cognito/userpools/:id/users/:username/groups  → list groups for a user
+router.get('/cognito/userpools/:id/users/:username/groups', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminListGroupsForUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    const resp = await client.send(new AdminListGroupsForUserCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+    }));
+    res.json((resp.Groups || []).map(g => ({
+      name:         g.GroupName,
+      description:  g.Description || '',
+      precedence:   g.Precedence ?? null,
+      roleArn:      g.RoleArn || null,
+      lastModified: g.LastModifiedDate || null,
+      createdDate:  g.CreationDate || null,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// PATCH /cognito/userpools/:id/users/:username  → update mutable user attributes
+router.patch('/cognito/userpools/:id/users/:username', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { attributes } = req.body || {};
+    if (!attributes || typeof attributes !== 'object') {
+      return res.status(400).json({ error: 'attributes object is required' });
+    }
+    const userAttributes = [];
+    for (const [name, value] of Object.entries(attributes)) {
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'string' && !value.trim()) continue;
+      userAttributes.push({ Name: name, Value: String(value) });
+    }
+    if (!userAttributes.length) return res.status(400).json({ error: 'No attributes to update' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminUpdateUserAttributesCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminUpdateUserAttributesCommand({
+      UserPoolId:     req.params.id,
+      Username:       req.params.username,
+      UserAttributes: userAttributes,
+    }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/groups/:groupname  → add user to group
+router.post('/cognito/userpools/:id/users/:username/groups/:groupname', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminAddUserToGroupCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminAddUserToGroupCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+      GroupName:  req.params.groupname,
+    }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /cognito/userpools/:id/users/:username/groups/:groupname  → remove user from group
+router.delete('/cognito/userpools/:id/users/:username/groups/:groupname', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminRemoveUserFromGroupCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+    await client.send(new AdminRemoveUserFromGroupCommand({
+      UserPoolId: req.params.id,
+      Username:   req.params.username,
+      GroupName:  req.params.groupname,
+    }));
+    res.json({ success: true });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -3493,6 +3629,53 @@ router.post('/cognito/userpools/:id/users/:username/set-password', async (req, r
       Password:   password,
       Permanent:  permanent,
     }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/users/:username/mfa  → enable/disable MFA
+router.post('/cognito/userpools/:id/users/:username/mfa', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { enabled, preferredMethod } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, AdminSetUserMFAPreferenceCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+
+    let smsEnabled = false;
+    let smsPreferred = false;
+    let swEnabled = false;
+    let swPreferred = false;
+
+    if (enabled) {
+      const method = preferredMethod === 'SOFTWARE_TOKEN_MFA' ? 'SOFTWARE_TOKEN_MFA' : 'SMS_MFA';
+      if (method === 'SOFTWARE_TOKEN_MFA') {
+        swEnabled = true;
+        swPreferred = true;
+      } else {
+        smsEnabled = true;
+        smsPreferred = true;
+      }
+    }
+
+    await client.send(new AdminSetUserMFAPreferenceCommand({
+      UserPoolId: req.params.id,
+      Username: req.params.username,
+      SMSMfaSettings: {
+        Enabled: smsEnabled,
+        PreferredMfa: smsPreferred,
+      },
+      SoftwareTokenMfaSettings: {
+        Enabled: swEnabled,
+        PreferredMfa: swPreferred,
+      },
+    }));
+
     res.json({ success: true });
   } catch (err) { handleErr(res, err); }
 });
@@ -3630,6 +3813,40 @@ router.get('/cognito/userpools/:id/groups', async (req, res) => {
       lastModified: g.LastModifiedDate || null,
       createdDate:  g.CreationDate || null,
     })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cognito/userpools/:id/groups  → create group in user pool
+router.post('/cognito/userpools/:id/groups', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { groupName, description } = req.body || {};
+    if (!groupName || !String(groupName).trim()) {
+      return res.status(400).json({ error: 'groupName is required' });
+    }
+
+    const cfg = await resolveAwsConfig(profileId);
+    const { CognitoIdentityProviderClient, CreateGroupCommand } = require('@aws-sdk/client-cognito-identity-provider');
+    const client = new CognitoIdentityProviderClient(cfg);
+
+    const resp = await client.send(new CreateGroupCommand({
+      UserPoolId: req.params.id,
+      GroupName: String(groupName).trim(),
+      Description: description ? String(description).trim() : undefined,
+    }));
+
+    res.status(201).json({
+      success: true,
+      group: {
+        name: resp.Group?.GroupName,
+        description: resp.Group?.Description || '',
+        precedence: resp.Group?.Precedence ?? null,
+        roleArn: resp.Group?.RoleArn || null,
+        lastModified: resp.Group?.LastModifiedDate || null,
+        createdDate: resp.Group?.CreationDate || null,
+      },
+    });
   } catch (err) { handleErr(res, err); }
 });
 

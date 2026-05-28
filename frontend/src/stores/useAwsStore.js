@@ -682,6 +682,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   async function fetchCognitoUsers(poolId, { limit = 60, paginationToken, filter } = {}) {
+    error.value = null
     try {
       const q = new URLSearchParams({ limit })
       if (paginationToken) q.set('paginationToken', paginationToken)
@@ -693,6 +694,37 @@ export const useAwsStore = defineStore('aws', () => {
   async function fetchCognitoUserDetail(poolId, username) {
     try {
       return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function fetchCognitoUserGroups(poolId, username) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}/groups`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function updateCognitoUserAttributes(poolId, username, attributes) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}`, {
+        method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attributes }),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function addCognitoUserToGroup(poolId, username, groupName) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}/groups/${encodeURIComponent(groupName)}`, {
+        method: 'POST', headers: headers(),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function removeCognitoUserFromGroup(poolId, username, groupName) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}/groups/${encodeURIComponent(groupName)}`, {
+        method: 'DELETE', headers: headers(),
+      })
     } catch (e) { setError(e); return null }
   }
 
@@ -718,6 +750,15 @@ export const useAwsStore = defineStore('aws', () => {
       return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}/set-password`, {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ password, permanent }),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function setCognitoUserMfa(poolId, username, enabled, preferredMethod) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/users/${encodeURIComponent(username)}/mfa`, {
+        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, preferredMethod }),
       })
     } catch (e) { setError(e); return null }
   }
@@ -761,6 +802,15 @@ export const useAwsStore = defineStore('aws', () => {
   async function fetchCognitoGroups(poolId) {
     try {
       return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/groups`, { headers: headers() })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function createCognitoGroup(poolId, groupData) {
+    try {
+      return await apiFetch(`/api/cloud/aws/cognito/userpools/${encodeURIComponent(poolId)}/groups`, {
+        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(groupData),
+      })
     } catch (e) { setError(e); return null }
   }
 
@@ -937,10 +987,12 @@ export const useAwsStore = defineStore('aws', () => {
     fetchCloudfrontConfig, fetchCloudfrontStats, createCloudfrontFromS3,
     fetchRoute53Zones, fetchRoute53Records,
     fetchCognitoUserPools, fetchCognitoPoolConfig,
-    fetchCognitoUsers, fetchCognitoUserDetail, createCognitoUser,
+    fetchCognitoUsers, fetchCognitoUserDetail, fetchCognitoUserGroups, createCognitoUser,
     resetCognitoUserPassword, setCognitoUserPassword,
+    setCognitoUserMfa,
     enableCognitoUser, disableCognitoUser, deleteCognitoUser,
-    fetchCognitoClients, fetchCognitoIdentityProviders, fetchCognitoGroups,
+    updateCognitoUserAttributes, addCognitoUserToGroup, removeCognitoUserFromGroup,
+    fetchCognitoClients, fetchCognitoIdentityProviders, fetchCognitoGroups, createCognitoGroup,
     fetchSecrets, fetchSecretConfig, importSecretToProfile, previewSecretKeys, importSelectedSecretKeys,
     fetchDataPipelines, activateDataPipeline, deactivateDataPipeline,
     fetchBedrockModels, fetchLexBots, fetchLexIntents, fetchLexLogs, fetchLexTestSets,

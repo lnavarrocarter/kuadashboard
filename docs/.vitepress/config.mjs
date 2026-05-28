@@ -5,6 +5,10 @@ const enNav = [
   { text: 'Guide', link: '/guide/getting-started' },
   { text: 'Features', link: '/features/' },
   { text: 'Changelog', link: '/changelog' },
+  { text: 'Legal', items: [
+    { text: 'Privacy Policy', link: '/privacy_policy' },
+    { text: 'EULA', link: '/EULA' },
+  ]},
   { text: 'Download', link: '/download' },
   { text: '💖 Sponsor', link: '/sponsor' },
   { text: 'Architecture', link: '/architecture/' },
@@ -16,6 +20,10 @@ const esNav = [
   { text: 'Guía', link: '/es/guide/getting-started' },
   { text: 'Funcionalidades', link: '/es/features/' },
   { text: 'Changelog', link: '/es/changelog' },
+  { text: 'Legal', items: [
+    { text: 'Privacy Policy', link: '/privacy_policy' },
+    { text: 'EULA', link: '/EULA' },
+  ]},
   { text: 'Descarga', link: '/es/download' },
   { text: '💖 Patrocinar', link: '/es/sponsor' },
   { text: 'Arquitectura', link: '/es/architecture/' },

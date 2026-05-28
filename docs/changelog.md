@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.9.1 (2026-05-28)
+
+### AWS Cognito
+
+- Fixed user search behavior in User Pools to support free-text lookups without triggering AWS filter parsing errors.
+- Added user attribute editing from the user details modal.
+- Added group membership management from user details: assign and remove groups for a selected user.
+- Added per-user MFA controls in details: enable via toggle, disable via action button, and preferred method switch (SMS/TOTP).
+- Added create-group flow with description support in the Groups tab.
+- Fixed runtime issue in group creation flow where the UI could fail with `createCognitoGroup is not a function` in stale hot-reload states.
+- Fixed MFA status mismatch between user list and details by aligning list calculation with Cognito MFA settings (`UserMFASettingList` / `PreferredMfaSetting`, with compatibility fallback).
+
 ## v1.9.0 (2026-05-26)
 
 ### Vercel
@@ -65,3 +77,112 @@
 - Terminal Logs search, serialized date filters, downloads and line counts.
 - YAML editor search, lint, save, line/column status, section path and autocomplete.
 - Persistent EC2 SSH/RDP sessions that can be hidden and reopened without closing the connection.
+
+## v1.6.2 (2026-04-29)
+
+- AWS EC2 Info copy buttons for key fields: Instance ID, AMI, Public/Private IP, Public/Private DNS, Key Pair and IAM Profile.
+- AWS Lambda Info copy buttons for key fields: ARN, SHA256, VPC ID, DLQ ARN and KMS Key ARN.
+- UX polish for copy actions: hover visibility and temporary visual confirmation.
+
+## v1.6.1 (2026-04-24)
+
+- AWS RDS: new per-instance panel with actions for Info, Configuration, Connection and password reset.
+- AWS RDS: redesigned detail modal with AWS-console style tabs (connectivity/security, monitoring/logs, configuration, maintenance/backups, migration/replicas, tags).
+- AWS RDS: Spanish translations completed for modal texts, buttons and status messages.
+- AWS Database: unified navigation and view under RDS, removing residual DocumentDB section from UI.
+- Documentation: expanded Spanish IAM minimum-permissions guide with RDS required actions.
+- Fixed mojibake encoding in HelpModal titles/comments.
+- Fixed Helm behavior for EKS ARN contexts by injecting full KUBECONFIG when invoking helm CLI.
+
+## v1.6.0 (2026-04-24)
+
+- AWS Lambda: dedicated Logs tab with CloudWatch events and selectable time ranges.
+- AWS Lambda: create log group flow with retention options when missing.
+- AWS ECR Deploy to K8s: optional Service creation (ClusterIP / NodePort / LoadBalancer).
+- Fixed generated deployment YAML indentation issue.
+- Added `--validate=false` to kubectl apply for compatibility in restricted API setups.
+- Fixed Athena UI error `sortedRows is not a function`.
+- Adjusted AWS Lex/Athena `maxResults` to supported API limits.
+
+## v1.5.0 (2026-04-23)
+
+- AWS S3: create bucket modal and per-bucket test action.
+- AWS ECR: image browser and direct deploy-to-Kubernetes flow.
+- AWS VPC: details panel with overview, subnets, security groups, route tables, IGW and NAT GW.
+- AWS Cognito: groups tab per user pool.
+
+## v1.4.3 (2026-04-23)
+
+- Windows app icon/taskbar behavior fix via App User Model ID.
+- Packaging metadata updates.
+
+## v1.4.2 (2026-04-21)
+
+- AWS Lambda details panel with multiple tabs and richer diagnostics.
+- AWS EC2 details panel with monitoring, security groups, volumes and console output.
+- EC2 SSH password authentication and PEM picker support.
+- OS-aware SSH/RDP actions with integrated RDP canvas.
+
+## v1.4.1 (2026-04-21)
+
+- Auto-updater robustness: `quitAndInstall` fallback handling.
+- UpdateNotice error state with manual download option.
+
+## v1.4.0 (2026-04-20)
+
+- GCP feature expansion (Cloud Run Jobs, Pub/Sub Subscriptions, VPC Networks, Cloud Monitoring, Cloud Logging, Cloud KMS).
+- Pagination improvements in Cloud Build, IAM Service Accounts and Cloud Tasks.
+- Observability section improvements in GCP sidebar.
+
+## v1.3.3 (2026-04-21)
+
+- macOS: migrate credential storage to native keychain using `@napi-rs/keyring`.
+- macOS updater compatibility fixes for release artifacts.
+
+## v1.3.2 (2026-04-21)
+
+- macOS auto-updater fix ensuring ZIP artifact availability.
+
+## v1.3.1 (2026-04-21)
+
+- macOS auto-updater fix ensuring ZIP artifact availability.
+
+## v1.3.0 (2026-04-21)
+
+- GCP phase expansion (Spanner, Redis, Cloud Tasks, Scheduler, Cloud Build, IAM Service Accounts).
+- Full EN/ES bilingual UI with reactive switching.
+- Header quick actions for language and theme.
+- Helm view and related UX improvements.
+- WebSocket and terminal reliability fixes.
+
+## v1.2.0 (2026-04-20)
+
+- GCP phase 1-2 additions: Secret Manager, Cloud Functions, GCS Browser, Artifact Registry, BigQuery, Cloud Workflows, Cloud DNS and Firestore.
+- Persistent port forwarding.
+- Expanded AWS coverage across core services.
+
+## v1.1.3 (2026-04-21)
+
+- macOS auto-updater ZIP target compatibility fix.
+
+## v1.1.2 (2026-04-20)
+
+- macOS: Electron now inherits login shell PATH when launched from Dock.
+- Update availability notice integrated in Help modal.
+
+## v1.1.1 (2026-04-20)
+
+- AWS/GCP credential selectors in global header.
+- Local Shell and Env Manager quick access from header.
+- Help modal with About, Releases and Feedback/Issues.
+- UI icon and refresh controls improvements.
+
+## v1.1.0 (2026-04-20)
+
+- Initial AWS/GCP sidebar navigation and credential selectors.
+- Early support for Step Functions, EventBridge, API Gateway, Pub/Sub and Cloud Functions.
+- SSH and terminal UX improvements.
+
+## v1.0.0 (2026-01-01)
+
+- Initial KUA release: Kubernetes dashboard, cloud views, env manager, port-forwarding and log/exec tooling.
