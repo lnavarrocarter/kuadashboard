@@ -1,4 +1,14 @@
 const { notarize } = require('@electron/notarize');
+const fs = require('fs');
+
+function resolveApiKey(raw) {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  if (fs.existsSync(trimmed)) {
+    return fs.readFileSync(trimmed, 'utf8');
+  }
+  return trimmed.replace(/\\n/g, '\n');
+}
 
 exports.default = async function notarizeApp(context) {
   const { electronPlatformName, appOutDir, packager } = context;
@@ -7,7 +17,7 @@ exports.default = async function notarizeApp(context) {
   const appName = packager.appInfo.productFilename;
   const appPath = `${appOutDir}/${appName}.app`;
 
-  const key = process.env.APPLE_API_KEY;
+  const key = resolveApiKey(process.env.APPLE_API_KEY);
   const keyId = process.env.APPLE_API_KEY_ID;
   const issuer = process.env.APPLE_API_ISSUER;
 
