@@ -2,6 +2,7 @@ appId: dev.kua.kuadashboard
 productName: KuaDashboard
 asar: true
 buildDependenciesFromSource: false
+afterSign: electron/notarize.js
 
 files:
   - electron/**
@@ -39,7 +40,8 @@ mac:
         - arm64
   icon: assets/icon.png
   category: public.app-category.developer-tools
-  identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
 
 linux:
   target:

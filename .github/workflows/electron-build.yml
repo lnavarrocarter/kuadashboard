@@ -84,6 +84,23 @@ jobs:
           VERCEL_OAUTH_CLIENT_ID: ${{ secrets.VERCEL_OAUTH_CLIENT_ID }}
           VERCEL_OAUTH_CLIENT_SECRET: ${{ secrets.VERCEL_OAUTH_CLIENT_SECRET }}
 
+      - name: Validate macOS signing secrets
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ -z "${CSC_LINK}" || -z "${CSC_KEY_PASSWORD}" || -z "${APPLE_API_KEY}" || -z "${APPLE_API_KEY_ID}" || -z "${APPLE_API_ISSUER}" || -z "${APPLE_TEAM_ID}" ]]; then
+            echo "Missing macOS signing/notarization secrets."
+            echo "Required: CSC_LINK, CSC_KEY_PASSWORD, APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER, APPLE_TEAM_ID"
+            exit 1
+          fi
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
       - name: Build Electron app
         run: npm run electron:build:${{ matrix.platform }}
         env:
