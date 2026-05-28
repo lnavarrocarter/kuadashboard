@@ -76,6 +76,8 @@ jobs:
         run: npm run electron:build:${{ matrix.platform }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERCEL_OAUTH_CLIENT_ID: ${{ secrets.VERCEL_OAUTH_CLIENT_ID }}
+          VERCEL_OAUTH_CLIENT_SECRET: ${{ secrets.VERCEL_OAUTH_CLIENT_SECRET }}
           ELECTRON_BUILDER_PUBLISH: never
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
