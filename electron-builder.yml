@@ -8,6 +8,7 @@ files:
   - server.js
   - routes/**
   - lib/**
+  - config/**
   - public/**
   - assets/icon.ico
   - assets/icon.png

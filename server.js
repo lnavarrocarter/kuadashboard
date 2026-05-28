@@ -12,6 +12,30 @@ const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
 
+function loadEnvFileIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, 'utf8');
+  const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx <= 0) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
+      process.env[key] = value;
+    }
+  }
+}
+
+// Load runtime env files for local/dev and packaged app builds.
+loadEnvFileIfExists(path.join(__dirname, '.env'));
+loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
+
 const app    = express();
 const server = http.createServer(app);
 
