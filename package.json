@@ -81,11 +81,13 @@
     "appId": "dev.kua.kuadashboard",
     "productName": "KuaDashboard",
     "asar": true,
+    "afterSign": "electron/notarize.js",
     "files": [
       "electron/**",
       "server.js",
       "routes/**",
       "lib/**",
+      "config/**",
       "public/**",
       "assets/icon.ico",
       "assets/icon.png",
@@ -127,7 +129,8 @@
       ],
       "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools",
-      "identity": null
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "linux": {
       "target": [
