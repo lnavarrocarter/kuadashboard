@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.10.0 (2026-06-09)
+
+### GCP — Paneles master-detail
+
+Los cuatro servicios principales de GCP estrenan un layout completo de panel dividido: lista de recursos a la izquierda y panel de detalle con tabs a la derecha, coherente con el patrón ya establecido en Cognito, Athena y Lex.
+
+- **Cloud Run** — tabs: Overview (configuración, imagen, escalado), Revisions (con % de tráfico), Variables (vars de entorno), Logs, Metrics.
+- **Compute VMs** — tabs: Overview (tags, labels, protección de borrado), Discos, Red (interfaces e IPs), Logs, Metrics.
+- **Cloud SQL** — tabs: Overview (backup y disponibilidad), Config (tipo de almacenamiento, flags), Connection (direcciones IP, connection name), Logs, Metrics.
+- **Cloud Functions** — tabs: Overview (runtime, recursos, trigger), Variables, Logs, Invoke (inline, reemplaza el modal flotante anterior), Metrics.
+
+### GCP — Métricas Cloud Monitoring embebidas
+
+El tab **Metrics** se incluye ahora en los cuatro paneles de servicio. Muestra tres gráficas de línea (Chart.js) obtenidas desde la API Cloud Monitoring v3, con selector de rango (1h / 3h / 6h / 24h) y botón de actualización.
+
+| Servicio | Gráficas |
+|---|---|
+| Cloud Run | Request Rate (req/s) · Latency p99 (ms) · Instance Count |
+| Compute VMs | CPU Utilization (%) · Network In (B/s) · Disk Read (B/s) |
+| Cloud SQL | CPU Utilization (%) · Connections · Disk Used (bytes) |
+| Cloud Functions | Execution Count (req/s) · Duration p99 (ns) · Active Instances |
+
+### GCP — GCS Upload y Delete
+
+- **Upload**: nuevo botón "⬆ Upload" en la barra del GCS Browser. Permite seleccionar múltiples archivos, los sube como binario raw a la carpeta actual y muestra un log de resultado por archivo (✓ / ✗).
+- **Delete**: botón "🗑 Delete" en el panel de preview del archivo. Pide confirmación antes de llamar a la nueva ruta `DELETE /storage/:bucket/object`.
+
+### GCP — Artifact Registry Deploy-to-K8s
+
+Artifact Registry se rediseña como panel master-detail con dos tabs:
+
+- **Packages & Tags** — vista en dos columnas: lista de packages a la izquierda y tabla de tags a la derecha. Cada fila de tag Docker tiene un botón **🚀 Deploy**.
+- **Deploy to K8s** — al pulsar Deploy se rellena automáticamente la referencia completa de imagen (`location-docker.pkg.dev/project/repo/pkg:tag`). El panel permite seleccionar el Namespace, el Deployment y el Container del cluster Kubernetes activo, muestra un resumen del despliegue y aplica el cambio con un clic.
+
+### Kubernetes
+
+- Nuevo endpoint `POST /api/:namespace/deployments/:name/set-image`: aplica un strategic-merge-patch sobre la imagen de un container específico y escribe una entrada en el audit log.
+
+### GCP — Visor de logs mejorado
+
+- Las entradas de log en todos los paneles de detalle usan colores según severidad: `ERROR`/`CRITICAL` → rojo, `WARNING` → ámbar, `INFO`/`NOTICE` → verde, `DEBUG`/`DEFAULT` → tenue.
+
 ## v1.9.3 (2026-06-09)
 
 ### AWS Amazon Lex

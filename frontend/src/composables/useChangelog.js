@@ -4,9 +4,31 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.9.3'
+export const CHANGELOG_VERSION = '1.10.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.10.0',
+    date: 'Junio 2026',
+    items: [
+      { type: 'new',    text: 'GCP Cloud Run — rediseño con panel master-detail: lista de servicios a la izquierda, tabs Overview (config/imagen/escalado), Revisions (con % de tráfico), Variables y Logs a la derecha' },
+      { type: 'new',    text: 'GCP Compute VMs — panel de detalle con tabs Overview (tags, labels, protection), Discos, Red (interfaces/IPs) y Logs desde Cloud Logging' },
+      { type: 'new',    text: 'GCP Cloud SQL — panel de detalle con tabs Overview (backup/disponibilidad), Config (storage/flags), Connection (IPs/connection name) y Logs' },
+      { type: 'new',    text: 'GCP Cloud Functions — panel de detalle con tabs Overview (runtime/recursos), Variables, Logs e Invoke inline (reemplaza el modal flotante)' },
+      { type: 'new',    text: 'GCP Métricas Cloud Monitoring — tab "Metrics" embebida en Cloud Run, VMs, SQL y Functions con 3 gráficas de línea por servicio, selector de rango (1h–24h) y refresh' },
+      { type: 'new',    text: 'GCP Cloud Run Metrics — Request Rate (req/s), Latency p99 (ms) e Instance Count vía Cloud Monitoring API' },
+      { type: 'new',    text: 'GCP Compute VM Metrics — CPU Utilization (%), Network In (B/s) y Disk Read (B/s) vía Cloud Monitoring API' },
+      { type: 'new',    text: 'GCP Cloud SQL Metrics — CPU Utilization (%), Connections y Disk Used (bytes) vía Cloud Monitoring API' },
+      { type: 'new',    text: 'GCP Cloud Functions Metrics — Execution Count (req/s), Duration p99 (ns) y Active Instances vía Cloud Monitoring API' },
+      { type: 'new',    text: 'GCP Cloud Storage — botón Upload en el GCS Browser: sube múltiples archivos a la carpeta actual con contador de progreso y log de resultados por archivo' },
+      { type: 'new',    text: 'GCP Cloud Storage — botón Delete en el panel de preview del GCS Browser: elimina el objeto seleccionado con confirmación' },
+      { type: 'new',    text: 'GCP Artifact Registry — rediseño con panel master-detail: lista de repos a la izquierda, tabs "Packages & Tags" y "Deploy to K8s" a la derecha' },
+      { type: 'new',    text: 'GCP Artifact Registry — Deploy to K8s: selecciona namespace, deployment y container del cluster activo, confirma el resumen y aplica el cambio de imagen con un clic' },
+      { type: 'new',    text: 'Kubernetes — endpoint set-image: actualiza la imagen de un container específico en un Deployment vía strategic merge patch (registrado en audit log)' },
+      { type: 'better', text: 'GCP — logs inline con visor de color por severidad (ERROR=rojo, WARNING=amarillo, INFO=verde) en todos los paneles de detalle' },
+      { type: 'better', text: 'GCP — detalle de VM ahora expone instanceId numérico necesario para queries de Cloud Monitoring Compute' },
+    ],
+  },
   {
     version: '1.9.3',
     date: 'Junio 2026',
