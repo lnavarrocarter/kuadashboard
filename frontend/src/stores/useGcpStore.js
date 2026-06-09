@@ -340,6 +340,16 @@ export const useGcpStore = defineStore('gcp', () => {
     return apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/detail`, { headers: headers() })
   }
 
+  async function fetchMonitoringTimeSeries(metric, filter, opts = {}) {
+    const params = new URLSearchParams({ metric })
+    if (filter)       params.append('filter', filter)
+    if (opts.hours)   params.append('hours', opts.hours)
+    if (opts.aligner) params.append('aligner', opts.aligner)
+    if (opts.period)  params.append('period', opts.period)
+    if (opts.reducer) params.append('reducer', opts.reducer)
+    return apiFetch(`/api/cloud/gcp/monitoring/timeseries?${params}`, { headers: headers() })
+  }
+
   async function deleteGcsObject(bucket, key) {
     return apiFetch(`/api/cloud/gcp/storage/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, {
       method: 'DELETE', headers: headers()
@@ -400,5 +410,7 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchCloudRunDetail, fetchVmDetail, fetchVmLogs, fetchSqlDetail, fetchFunctionDetail,
     // GCS mutations
     deleteGcsObject, uploadGcsObject,
+    // Cloud Monitoring
+    fetchMonitoringTimeSeries,
   }
 })

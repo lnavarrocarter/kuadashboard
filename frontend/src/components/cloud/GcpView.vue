@@ -65,7 +65,7 @@
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'revisions',label:'Revisions'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'}]" :key="t.id"
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'revisions',label:'Revisions'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
                 :class="['aws-tab-btn', crPanel.tab === t.id ? 'active' : '']" @click="crSwitchTab(t.id)">{{ t.label }}</button>
             </div>
             <!-- OVERVIEW -->
@@ -149,6 +149,20 @@
                   <span class="text-dim" style="flex-shrink:0;white-space:nowrap">{{ e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '' }}</span>
                   <span style="flex:1;word-break:break-all;white-space:pre-wrap">{{ e.message }}</span>
                 </div>
+              </div>
+            </div>
+            <!-- METRICS -->
+            <div v-show="crPanel.tab === 'metrics'" style="flex:1;overflow:auto;padding:12px">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                <select v-model="crMetrics.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option>
+                </select>
+                <button class="btn sm" @click="loadMetrics(crMetrics, CR_METRICS, crPanel.resource)" :disabled="crMetrics.loading">{{ crMetrics.loading ? 'Loading...' : 'Refresh' }}</button>
+              </div>
+              <div v-if="crMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading metrics...</div>
+              <div v-else-if="crMetrics.error" class="alert-error">{{ crMetrics.error }}</div>
+              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="crMetrics.data[m.key] || []" :color="m.color" />
               </div>
             </div>
           </div>
@@ -239,7 +253,7 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'disks',label:'Disks'},{id:'network',label:'Network'},{id:'logs',label:'Logs'}]" :key="t.id"
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'disks',label:'Disks'},{id:'network',label:'Network'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
                 :class="['aws-tab-btn', vmPanel.tab === t.id ? 'active' : '']" @click="vmSwitchTab(t.id)">{{ t.label }}</button>
             </div>
             <!-- OVERVIEW -->
@@ -325,6 +339,21 @@
                 </div>
               </div>
             </div>
+            <!-- METRICS -->
+            <div v-show="vmPanel.tab === 'metrics'" style="flex:1;overflow:auto;padding:12px">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                <select v-model="vmMetrics.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option>
+                </select>
+                <button class="btn sm" @click="vmSwitchTab('metrics')" :disabled="vmMetrics.loading">{{ vmMetrics.loading ? 'Loading...' : 'Refresh' }}</button>
+                <span v-if="!vmPanel.detail?.instanceId" class="text-dim" style="font-size:11px">⚠ Load Overview tab first to get instance ID for metrics</span>
+              </div>
+              <div v-if="vmMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading metrics...</div>
+              <div v-else-if="vmMetrics.error" class="alert-error">{{ vmMetrics.error }}</div>
+              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="vmMetrics.data[m.key] || []" :color="m.color" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -363,7 +392,7 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'config',label:'Config'},{id:'connection',label:'Connection'},{id:'logs',label:'Logs'}]" :key="t.id"
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'config',label:'Config'},{id:'connection',label:'Connection'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
                 :class="['aws-tab-btn', sqlPanel.tab === t.id ? 'active' : '']" @click="sqlSwitchTab(t.id)">{{ t.label }}</button>
             </div>
             <!-- OVERVIEW -->
@@ -458,6 +487,20 @@
                 </div>
               </div>
             </div>
+            <!-- METRICS -->
+            <div v-show="sqlPanel.tab === 'metrics'" style="flex:1;overflow:auto;padding:12px">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                <select v-model="sqlMetrics.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option>
+                </select>
+                <button class="btn sm" @click="loadMetrics(sqlMetrics, SQL_METRICS, sqlPanel.resource)" :disabled="sqlMetrics.loading">{{ sqlMetrics.loading ? 'Loading...' : 'Refresh' }}</button>
+              </div>
+              <div v-if="sqlMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading metrics...</div>
+              <div v-else-if="sqlMetrics.error" class="alert-error">{{ sqlMetrics.error }}</div>
+              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="sqlMetrics.data[m.key] || []" :color="m.color" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -521,7 +564,7 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'}]" :key="t.id"
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="t.id"
                 :class="['aws-tab-btn', fnPanel.tab === t.id ? 'active' : '']" @click="fnSwitchTab(t.id)">{{ t.label }}</button>
             </div>
             <!-- OVERVIEW -->
@@ -603,6 +646,20 @@
               <div v-if="fnPanel.invokeResult !== null">
                 <div style="font-size:12px;font-weight:600;margin-bottom:6px">Response</div>
                 <pre style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;overflow:auto;max-height:300px;white-space:pre-wrap;word-break:break-all">{{ fnPanel.invokeResult }}</pre>
+              </div>
+            </div>
+            <!-- METRICS -->
+            <div v-show="fnPanel.tab === 'metrics'" style="flex:1;overflow:auto;padding:12px">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                <select v-model="fnMetrics.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option>
+                </select>
+                <button class="btn sm" @click="loadMetrics(fnMetrics, FN_METRICS, fnPanel.resource)" :disabled="fnMetrics.loading">{{ fnMetrics.loading ? 'Loading...' : 'Refresh' }}</button>
+              </div>
+              <div v-if="fnMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading metrics...</div>
+              <div v-else-if="fnMetrics.error" class="alert-error">{{ fnMetrics.error }}</div>
+              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <GcpMetricsChart v-for="m in FN_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="fnMetrics.data[m.key] || []" :color="m.color" />
               </div>
             </div>
           </div>
@@ -1699,7 +1756,8 @@ import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
-import GcsBrowser     from './GcsBrowser.vue'
+import GcsBrowser       from './GcsBrowser.vue'
+import GcpMetricsChart  from './GcpMetricsChart.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'cloudrun' },
@@ -2103,6 +2161,8 @@ async function crSwitchTab(tab) {
       crPanel.logs = r?.entries || []
     } catch (e) { crPanel.logsError = e.message }
     finally { crPanel.logsLoading = false }
+  } else if (tab === 'metrics') {
+    await loadMetrics(crMetrics, CR_METRICS, svc)
   }
 }
 async function crLoadLogs() {
@@ -2140,6 +2200,9 @@ async function vmSwitchTab(tab) {
     finally { vmPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await vmLoadLogs()
+  } else if (tab === 'metrics') {
+    const target = { ...vm, instanceId: vmPanel.detail?.instanceId }
+    await loadMetrics(vmMetrics, VM_METRICS, target)
   }
 }
 async function vmLoadLogs() {
@@ -2177,6 +2240,8 @@ async function sqlSwitchTab(tab) {
     finally { sqlPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await sqlLoadLogs()
+  } else if (tab === 'metrics') {
+    await loadMetrics(sqlMetrics, SQL_METRICS, inst)
   }
 }
 async function sqlLoadLogs() {
@@ -2215,6 +2280,8 @@ async function fnSwitchTab(tab) {
     finally { fnPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await fnLoadLogs()
+  } else if (tab === 'metrics') {
+    await loadMetrics(fnMetrics, FN_METRICS, fn)
   }
 }
 async function fnLoadLogs() {
@@ -2238,6 +2305,77 @@ async function fnPanelDoInvoke() {
   } catch (e) { toast(e.message, 'error') }
   finally { fnPanel.invoking = false }
 }
+
+// ── Cloud Monitoring metrics ──────────────────────────────────────────────────
+const crMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
+const vmMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
+const sqlMetrics = reactive({ loading: false, error: null, hours: 1, data: {} })
+const fnMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
+
+async function loadMetrics(panel, metrics, target) {
+  panel.loading = true; panel.error = null; panel.data = {}
+  try {
+    const results = await Promise.all(
+      metrics.map(m => gcpStore.fetchMonitoringTimeSeries(m.metric, m.filter(target), {
+        hours: panel.hours, aligner: m.aligner || 'ALIGN_MEAN', period: m.period || '60', reducer: m.reducer || 'REDUCE_MEAN'
+      }).catch(() => ({ points: [] })))
+    )
+    const data = {}
+    metrics.forEach((m, i) => { data[m.key] = results[i]?.points || [] })
+    panel.data = data
+  } catch (e) { panel.error = e.message }
+  finally { panel.loading = false }
+}
+
+const CR_METRICS = [
+  { key: 'requests', metric: 'run.googleapis.com/request_count',
+    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
+    aligner: 'ALIGN_RATE', label: 'Request Rate', unit: 'req/s', color: '#818cf8' },
+  { key: 'latency', metric: 'run.googleapis.com/request_latencies',
+    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
+    aligner: 'ALIGN_PERCENTILE_99', label: 'Latency p99', unit: 'ms', color: '#f59e0b' },
+  { key: 'instances', metric: 'run.googleapis.com/container/instance_count',
+    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
+    aligner: 'ALIGN_MEAN', label: 'Instances', unit: '', color: '#34d399' },
+]
+
+const VM_METRICS = [
+  { key: 'cpu', metric: 'compute.googleapis.com/instance/cpu/utilization',
+    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
+    aligner: 'ALIGN_MEAN', label: 'CPU Utilization', unit: '%',
+    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'netIn', metric: 'compute.googleapis.com/instance/network/received_bytes_count',
+    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
+    aligner: 'ALIGN_RATE', label: 'Network In', unit: 'B/s', color: '#818cf8' },
+  { key: 'diskRead', metric: 'compute.googleapis.com/instance/disk/read_bytes_count',
+    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
+    aligner: 'ALIGN_RATE', label: 'Disk Read', unit: 'B/s', color: '#34d399' },
+]
+
+const SQL_METRICS = [
+  { key: 'cpu', metric: 'cloudsql.googleapis.com/database/cpu/utilization',
+    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
+    aligner: 'ALIGN_MEAN', label: 'CPU Utilization', unit: '%',
+    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'connections', metric: 'cloudsql.googleapis.com/database/network/connections',
+    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
+    aligner: 'ALIGN_MEAN', label: 'Connections', unit: '', color: '#818cf8' },
+  { key: 'diskBytes', metric: 'cloudsql.googleapis.com/database/disk/bytes_used',
+    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
+    aligner: 'ALIGN_MEAN', label: 'Disk Used', unit: 'B', color: '#34d399' },
+]
+
+const FN_METRICS = [
+  { key: 'executions', metric: 'cloudfunctions.googleapis.com/function/execution_count',
+    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
+    aligner: 'ALIGN_RATE', label: 'Executions', unit: 'req/s', color: '#818cf8' },
+  { key: 'duration', metric: 'cloudfunctions.googleapis.com/function/execution_times',
+    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
+    aligner: 'ALIGN_PERCENTILE_99', label: 'Duration p99', unit: 'ns', color: '#f59e0b' },
+  { key: 'active', metric: 'cloudfunctions.googleapis.com/function/active_instances',
+    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
+    aligner: 'ALIGN_MEAN', label: 'Active Instances', unit: '', color: '#34d399' },
+]
 
 // ── Function Invoke ──────────────────────────────────────────────────────────
 const fnInvokeOpen    = ref(false)
