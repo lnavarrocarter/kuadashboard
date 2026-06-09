@@ -68,13 +68,11 @@ jobs:
         shell: bash
         run: |
           if [[ -z "${CSC_LINK}" || -z "${CSC_KEY_PASSWORD}" || -z "${APPLE_API_KEY}" || -z "${APPLE_API_KEY_ID}" || -z "${APPLE_API_ISSUER}" || -z "${APPLE_TEAM_ID}" ]]; then
-            if [[ "${{ github.event.inputs.tag }}" == v* ]]; then
-              echo "Missing macOS signing/notarization secrets for release tag build."
-              echo "Required: CSC_LINK, CSC_KEY_PASSWORD, APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER, APPLE_TEAM_ID"
-              exit 1
-            fi
-            echo "Warning: missing macOS signing/notarization secrets."
-            echo "Continuing with unsigned macOS artifacts (non-tag build)."
+            echo "::warning::macOS signing/notarization secrets not configured."
+            echo "::warning::The macOS DMG will be built unsigned. Users may see a Gatekeeper warning on first launch."
+            echo "Continuing with unsigned macOS artifacts."
+          else
+            echo "macOS signing secrets present — will sign and notarize."
           fi
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}

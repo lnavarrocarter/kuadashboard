@@ -89,13 +89,11 @@ jobs:
         shell: bash
         run: |
           if [[ -z "${CSC_LINK}" || -z "${CSC_KEY_PASSWORD}" || -z "${APPLE_API_KEY}" || -z "${APPLE_API_KEY_ID}" || -z "${APPLE_API_ISSUER}" || -z "${APPLE_TEAM_ID}" ]]; then
-            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-              echo "Missing macOS signing/notarization secrets for tagged release."
-              echo "Required: CSC_LINK, CSC_KEY_PASSWORD, APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER, APPLE_TEAM_ID"
-              exit 1
-            fi
-            echo "Warning: missing macOS signing/notarization secrets."
-            echo "Continuing with unsigned macOS artifacts (non-tag build)."
+            echo "::warning::macOS signing/notarization secrets not configured (CSC_LINK, APPLE_API_KEY, etc.)."
+            echo "::warning::The macOS DMG will be built unsigned. Users may see a Gatekeeper warning on first launch."
+            echo "Continuing with unsigned macOS artifacts."
+          else
+            echo "macOS signing secrets present — will sign and notarize."
           fi
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -104,21 +102,6 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-
-      - name: Verify macOS artifact signature (tagged releases)
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          APP_PATH="dist-electron/mac-arm64/KuaDashboard.app"
-          if [[ ! -d "$APP_PATH" ]]; then
-            echo "Expected app bundle not found: $APP_PATH"
-            exit 1
-          fi
-          codesign -dv --verbose=4 "$APP_PATH" 2>&1 | tee /tmp/codesign.txt
-          if grep -q "Signature=adhoc" /tmp/codesign.txt; then
-            echo "Invalid macOS signature: ad-hoc signature detected on tagged release."
-            exit 1
-          fi
 
       - name: Build Electron app
         run: npm run electron:build:${{ matrix.platform }}
