@@ -340,6 +340,19 @@ export const useGcpStore = defineStore('gcp', () => {
     return apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/detail`, { headers: headers() })
   }
 
+  async function fetchArtifactTags(location, repo, pkg) {
+    return apiFetch(
+      `/api/cloud/gcp/artifact-registry/${encodeURIComponent(location)}/${encodeURIComponent(repo)}/packages/${encodeURIComponent(pkg)}/tags`,
+      { headers: headers() }
+    )
+  }
+  async function fetchArtifactRepoInfo(location, repo) {
+    return apiFetch(
+      `/api/cloud/gcp/artifact-registry/${encodeURIComponent(location)}/${encodeURIComponent(repo)}/info`,
+      { headers: headers() }
+    )
+  }
+
   async function fetchMonitoringTimeSeries(metric, filter, opts = {}) {
     const params = new URLSearchParams({ metric })
     if (filter)       params.append('filter', filter)
@@ -410,6 +423,8 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchCloudRunDetail, fetchVmDetail, fetchVmLogs, fetchSqlDetail, fetchFunctionDetail,
     // GCS mutations
     deleteGcsObject, uploadGcsObject,
+    // Artifact Registry extras
+    fetchArtifactTags, fetchArtifactRepoInfo,
     // Cloud Monitoring
     fetchMonitoringTimeSeries,
   }

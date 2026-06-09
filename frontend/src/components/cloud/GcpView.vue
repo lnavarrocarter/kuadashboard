@@ -711,29 +711,145 @@
       </div>
 
       <!-- Artifact Registry -->
-      <div v-show="activeTab === 'artifact'" class="tab-panel">
+      <div v-show="activeTab === 'artifact'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.artifact.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.artifact.error && !filteredArtifact.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredArtifact.length" class="empty-row">{{ search ? 'No matches.' : 'No Artifact Registry repositories found.' }}</div>
-        <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Location</th><th>Format</th><th>Description</th><th>Updated</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="r in filteredArtifact" :key="r.name">
-              <td>{{ r.name }}</td>
-              <td class="text-dim">{{ r.location }}</td>
-              <td class="text-dim">
-                <span class="badge-format">{{ r.format }}</span>
-              </td>
-              <td class="text-dim">{{ r.description || '--' }}</td>
-              <td class="text-dim">{{ r.updated ? new Date(r.updated).toLocaleDateString() : '--' }}</td>
-              <td>
-                <button class="btn sm" @click="openArtifactPackages(r)">
-                  <i data-lucide="package"></i> Packages
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else style="display:flex;flex:1;overflow:hidden">
+          <!-- LEFT: repo list -->
+          <div style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+            <div v-for="r in filteredArtifact" :key="r.name"
+              :class="['sidebar-item', arPanel.repo?.name === r.name ? 'active' : '']"
+              style="cursor:pointer" @click="selectArtifactRepo(r)">
+              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</div>
+              <div class="text-dim" style="font-size:10px">{{ r.location }}</div>
+              <div style="margin-top:4px">
+                <span class="badge-format" style="font-size:10px">{{ r.format }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT -->
+          <div v-if="!arPanel.repo" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a repository</div>
+          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <!-- Header -->
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-weight:700;font-size:15px">{{ arPanel.repo.name }}</div>
+                <span class="badge-format">{{ arPanel.repo.format }}</span>
+              </div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">
+                {{ arPanel.repo.location }}
+                <span v-if="arPanel.info?.imagePrefix"> · <span class="mono-xs">{{ arPanel.info.imagePrefix }}</span></span>
+              </div>
+            </div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+              <button v-for="t in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="t.id"
+                :class="['aws-tab-btn', arPanel.tab === t.id ? 'active' : '']" @click="arSwitchTab(t.id)">{{ t.label }}</button>
+            </div>
+            <!-- PACKAGES & TAGS -->
+            <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
+              <!-- Package list -->
+              <div style="width:200px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+                <div v-if="arPanel.pkgsLoading" style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">Loading...</div>
+                <div v-else-if="!arPanel.pkgs.length" style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">No packages</div>
+                <div v-for="pkg in arPanel.pkgs" :key="pkg.name"
+                  :class="['sidebar-item', arPanel.selectedPkg?.name === pkg.name ? 'active' : '']"
+                  style="cursor:pointer;padding:8px 12px" @click="selectArtifactPkg(pkg)">
+                  <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ pkg.displayName }}</div>
+                  <div class="text-dim" style="font-size:10px">{{ pkg.updated ? new Date(pkg.updated).toLocaleDateString() : '' }}</div>
+                </div>
+              </div>
+              <!-- Tag list -->
+              <div style="flex:1;overflow-y:auto">
+                <div v-if="!arPanel.selectedPkg" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px">Select a package</div>
+                <div v-else-if="arPanel.tagsLoading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim)">Loading tags...</div>
+                <div v-else-if="!arPanel.tags.length" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:12px">No tags found</div>
+                <div v-else>
+                  <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-dim);background:var(--surface)">
+                    {{ arPanel.tags.length }} tag(s) — {{ arPanel.selectedPkg.displayName }}
+                  </div>
+                  <table class="cloud-table">
+                    <thead><tr><th>Tag</th><th>Digest</th><th>Updated</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      <tr v-for="tag in arPanel.tags" :key="tag.name">
+                        <td><span style="font-size:12px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:1px 8px;color:#818cf8">{{ tag.name }}</span></td>
+                        <td class="mono-xs text-dim" style="font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis">{{ tag.version?.slice(0, 19) || '--' }}</td>
+                        <td class="text-dim" style="font-size:11px">{{ tag.updated ? new Date(tag.updated).toLocaleDateString() : '--' }}</td>
+                        <td>
+                          <button v-if="arPanel.repo.format === 'DOCKER'" class="btn sm primary" @click="arStartDeploy(tag)">🚀 Deploy</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- DEPLOY TO K8S -->
+            <div v-show="arPanel.tab === 'deploy'" style="flex:1;overflow:auto;padding:20px">
+              <div v-if="!arPanel.deployImage" class="empty-row" style="padding:40px">
+                Click <strong>Deploy</strong> on a tag in the Packages tab to pre-fill the image here.
+              </div>
+              <div v-else style="max-width:560px">
+                <div style="font-size:14px;font-weight:700;margin-bottom:16px">🚀 Deploy image to Kubernetes</div>
+                <!-- Image -->
+                <div style="margin-bottom:14px">
+                  <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Image</label>
+                  <input v-model="arPanel.deployImage" style="width:100%;font-family:monospace;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 10px;color:var(--text)" />
+                </div>
+                <!-- Namespace -->
+                <div style="margin-bottom:14px">
+                  <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Namespace</label>
+                  <div style="display:flex;gap:6px">
+                    <select v-model="arPanel.deployNs" @change="arLoadDeployments()" style="flex:1;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text)">
+                      <option value="">— select namespace —</option>
+                      <option v-for="ns in arPanel.namespaces" :key="ns" :value="ns">{{ ns }}</option>
+                    </select>
+                    <button class="btn sm" @click="arLoadNamespaces()" :disabled="arPanel.nsLoading">{{ arPanel.nsLoading ? '...' : '↺' }}</button>
+                  </div>
+                </div>
+                <!-- Deployment -->
+                <div style="margin-bottom:14px">
+                  <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Deployment</label>
+                  <select v-model="arPanel.deployDeployment" @change="arOnDeploymentSelect()" style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text)">
+                    <option value="">— select deployment —</option>
+                    <option v-for="d in arPanel.deployments" :key="d.name" :value="d">{{ d.name }}</option>
+                  </select>
+                </div>
+                <!-- Container -->
+                <div style="margin-bottom:20px">
+                  <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Container</label>
+                  <select v-model="arPanel.deployContainer" style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text)">
+                    <option value="">— select container —</option>
+                    <option v-for="c in arPanel.deployContainers" :key="c" :value="c">{{ c }}</option>
+                  </select>
+                  <div v-if="arPanel.deployDeployment && arPanel.deployContainers.length === 1" class="text-dim" style="font-size:10px;margin-top:3px">
+                    Current image: <span class="mono-xs">{{ arPanel.deployDeployment?.images?.[0] }}</span>
+                  </div>
+                </div>
+                <!-- Summary box -->
+                <div v-if="arPanel.deployImage && arPanel.deployNs && arPanel.deployDeployment && arPanel.deployContainer" style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px">
+                  <div style="font-weight:600;margin-bottom:6px">Deploy summary</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Deployment</span><span>{{ arPanel.deployNs }}/{{ arPanel.deployDeployment?.name }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Container</span><span class="mono-xs">{{ arPanel.deployContainer }}</span></div>
+                    <div class="kv-row"><span class="kv-k">New image</span><span class="mono-xs" style="color:#818cf8">{{ arPanel.deployImage }}</span></div>
+                  </div>
+                </div>
+                <!-- Actions -->
+                <div style="display:flex;gap:8px;align-items:center">
+                  <button class="btn primary" :disabled="!arPanel.deployImage || !arPanel.deployNs || !arPanel.deployDeployment || !arPanel.deployContainer || arPanel.deploying"
+                    @click="arApplyDeploy()">
+                    {{ arPanel.deploying ? 'Deploying...' : '🚀 Apply' }}
+                  </button>
+                  <span v-if="arPanel.deployResult" :class="arPanel.deployResult.ok ? 'status-ok' : 'status-err'" style="font-size:12px">
+                    {{ arPanel.deployResult.msg }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- BigQuery -->
@@ -2304,6 +2420,111 @@ async function fnPanelDoInvoke() {
     fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
   } catch (e) { toast(e.message, 'error') }
   finally { fnPanel.invoking = false }
+}
+
+// ── Artifact Registry master-detail panel ─────────────────────────────────────
+const arPanel = reactive({
+  repo: null, tab: 'packages', info: null,
+  pkgs: [], pkgsLoading: false,
+  selectedPkg: null, tags: [], tagsLoading: false,
+  // Deploy state
+  deployImage: '', deployNs: '', deployDeployment: null, deployContainer: '',
+  deployContainers: [], deployments: [], namespaces: [],
+  nsLoading: false, depsLoading: false, deploying: false, deployResult: null,
+})
+
+async function selectArtifactRepo(repo) {
+  const same = arPanel.repo?.name === repo.name
+  arPanel.repo = repo
+  if (!same) {
+    arPanel.tab = 'packages'; arPanel.info = null
+    arPanel.pkgs = []; arPanel.selectedPkg = null; arPanel.tags = []
+    arPanel.deployImage = ''; arPanel.deployResult = null
+    // Load packages + repo info in parallel
+    arPanel.pkgsLoading = true
+    const [pkgs, info] = await Promise.all([
+      gcpStore.fetchArtifactPackages(repo.location, repo.name).catch(() => []),
+      gcpStore.fetchArtifactRepoInfo(repo.location, repo.name).catch(() => null),
+    ])
+    arPanel.pkgs = pkgs || []
+    arPanel.info = info
+    arPanel.pkgsLoading = false
+  }
+}
+
+function arSwitchTab(tab) {
+  arPanel.tab = tab
+  if (tab === 'deploy' && !arPanel.namespaces.length) arLoadNamespaces()
+}
+
+async function selectArtifactPkg(pkg) {
+  arPanel.selectedPkg = pkg
+  arPanel.tags = []; arPanel.tagsLoading = true
+  try {
+    const tags = await gcpStore.fetchArtifactTags(arPanel.repo.location, arPanel.repo.name, pkg.name)
+    arPanel.tags = tags || []
+  } catch (e) { toast(e.message, 'error') }
+  finally { arPanel.tagsLoading = false }
+}
+
+function arStartDeploy(tag) {
+  // Build full image reference
+  const prefix = arPanel.info?.imagePrefix || `${arPanel.repo.location}-docker.pkg.dev`
+  const pkgName = arPanel.selectedPkg?.displayName || arPanel.selectedPkg?.name || ''
+  arPanel.deployImage = `${prefix}/${pkgName}:${tag.name}`
+  arPanel.deployResult = null
+  arPanel.tab = 'deploy'
+  if (!arPanel.namespaces.length) arLoadNamespaces()
+}
+
+async function arLoadNamespaces() {
+  arPanel.nsLoading = true
+  try {
+    const resp = await fetch('/api/namespaces')
+    const data = await resp.json()
+    arPanel.namespaces = (data || []).map(ns => ns.name || ns).filter(Boolean)
+  } catch (e) { toast('Could not load namespaces: ' + e.message, 'error') }
+  finally { arPanel.nsLoading = false }
+}
+
+async function arLoadDeployments() {
+  if (!arPanel.deployNs) { arPanel.deployments = []; return }
+  arPanel.depsLoading = true; arPanel.deployDeployment = null; arPanel.deployContainer = ''; arPanel.deployContainers = []
+  try {
+    const resp = await fetch(`/api/${encodeURIComponent(arPanel.deployNs)}/deployments`)
+    const data = await resp.json()
+    arPanel.deployments = data || []
+  } catch (e) { toast('Could not load deployments: ' + e.message, 'error') }
+  finally { arPanel.depsLoading = false }
+}
+
+function arOnDeploymentSelect() {
+  const d = arPanel.deployDeployment
+  arPanel.deployContainers = d?.containers || []
+  arPanel.deployContainer = arPanel.deployContainers.length === 1 ? arPanel.deployContainers[0] : ''
+}
+
+async function arApplyDeploy() {
+  if (!arPanel.deployImage || !arPanel.deployNs || !arPanel.deployDeployment || !arPanel.deployContainer) return
+  arPanel.deploying = true; arPanel.deployResult = null
+  const ns   = arPanel.deployNs
+  const name = arPanel.deployDeployment.name
+  const container = arPanel.deployContainer
+  const image = arPanel.deployImage
+  try {
+    const resp = await fetch(`/api/${encodeURIComponent(ns)}/deployments/${encodeURIComponent(name)}/set-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ container, image }),
+    })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data.error || resp.statusText)
+    arPanel.deployResult = { ok: true, msg: `✓ ${name}/${container} → ${image.split('/').pop()}` }
+    toast(`Deployed ${image.split('/').pop()} to ${name}`, 'success')
+  } catch (e) {
+    arPanel.deployResult = { ok: false, msg: `✗ ${e.message}` }
+    toast(e.message, 'error')
+  } finally { arPanel.deploying = false }
 }
 
 // ── Cloud Monitoring metrics ──────────────────────────────────────────────────

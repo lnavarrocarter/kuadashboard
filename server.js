@@ -916,6 +916,34 @@ app.post('/api/:namespace/deployments/:name/restart', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+// POST /api/:namespace/deployments/:name/set-image  body: { container, image }
+app.post('/api/:namespace/deployments/:name/set-image', async (req, res) => {
+  try {
+    const { apps } = clients();
+    const { namespace, name } = req.params;
+    const { container, image } = req.body;
+    if (!container || !image) return res.status(400).json({ error: 'container and image are required' });
+    // Strategic merge patch: update exactly one container's image
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            containers: [{ name: container, image }]
+          }
+        }
+      }
+    };
+    await apps.patchNamespacedDeployment(name, namespace, patch,
+      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+    auditLog.log({
+      category: 'kubernetes', action: 'Deployment image updated',
+      resource: `${namespace}/${name}`, details: { container, image },
+      context: currentContext,
+    });
+    res.json({ success: true, container, image });
+  } catch (err) { handleError(res, err); }
+});
+
 app.post('/api/:namespace/deployments/:name/scale', async (req, res) => {
   try {
     const { apps } = clients();

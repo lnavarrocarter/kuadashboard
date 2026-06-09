@@ -1250,6 +1250,55 @@ router.get('/artifact-registry/:location/:repo/packages', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// GET /artifact-registry/:location/:repo/packages/:pkg/tags → list image tags
+router.get('/artifact-registry/:location/:repo/packages/:pkg/tags', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { location, repo, pkg } = req.params;
+  try {
+    const authCtx   = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/${location}/repositories/${repo}/packages/${encodeURIComponent(pkg)}/tags?pageSize=100`,
+      authCtx
+    );
+    res.json((data.tags || []).map(t => ({
+      name:    t.name?.split('/tags/').pop(),
+      version: t.version?.split('/versions/').pop(),
+      created: t.createTime,
+      updated: t.updateTime,
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /artifact-registry/:location/:repo/image-url → build the registry hostname for this repo
+router.get('/artifact-registry/:location/:repo/info', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { location, repo } = req.params;
+  try {
+    const authCtx   = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/${location}/repositories/${repo}`,
+      authCtx
+    );
+    // Build image prefix: <location>-docker.pkg.dev/<project>/<repo>
+    const host = `${location}-docker.pkg.dev`;
+    res.json({
+      name:        data.name?.split('/').pop(),
+      format:      data.format,
+      location,
+      description: data.description || '',
+      created:     data.createTime,
+      updated:     data.updateTime,
+      imagePrefix: `${host}/${projectId}/${repo}`,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── BIGQUERY ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
