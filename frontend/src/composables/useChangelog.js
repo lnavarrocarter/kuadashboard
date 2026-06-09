@@ -4,9 +4,28 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.9.1'
+export const CHANGELOG_VERSION = '1.9.3'
 
 export const CHANGELOG = [
+  {
+    version: '1.9.3',
+    date: 'Junio 2026',
+    items: [
+      { type: 'better', text: 'AWS Amazon Lex — rediseño del módulo con layout master-detail de panel dividido (igual al de Cognito y Athena): lista de bots a la izquierda, detalle con tabs a la derecha' },
+      { type: 'better', text: 'AWS Amazon Lex — eliminados los 8 botones de acción de colores por fila; toda la funcionalidad (Intents, Aliases, Slot Types, Chat, Logs, Missed, Metrics, Test Set) unificada en tabs del panel de detalle' },
+      { type: 'better', text: 'AWS Amazon Lex — datos cargados bajo demanda por tab con caché por bot; Chat y Build desde Aliases ahora navegan a su tab correspondiente en lugar de abrir modales anidados' },
+    ],
+  },
+  {
+    version: '1.9.2',
+    date: 'Junio 2026',
+    items: [
+      { type: 'new',    text: 'AWS DynamoDB — edición de ítems en el modal Browse: botón ✏️ por fila abre editor JSON pre-llenado; al guardar ejecuta PutItem y refresca la página actual' },
+      { type: 'new',    text: 'AWS DynamoDB — eliminación de ítems por fila: botón 🗑 extrae la clave primaria automáticamente desde el key schema y pide confirmación antes de DeleteItem' },
+      { type: 'new',    text: 'AWS DynamoDB — botón New Item en el toolbar del Browse: abre editor JSON pre-llenado solo con los campos de clave para crear registros desde cero' },
+      { type: 'better', text: 'AWS DynamoDB — editor JSON valida sintaxis en tiempo real y bloquea el guardado si hay errores de parseo' },
+    ],
+  },
   {
     version: '1.9.1',
     date: 'Mayo 2026',

@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.9.3 (2026-06-09)
+
+### AWS Amazon Lex
+
+- Rediseño del módulo Lex con un **layout master-detail de panel dividido** (igual al de Cognito y Athena). El panel izquierdo lista todos los bots con estado, versión y fecha de actualización. Al hacer clic en un bot se abre el panel de detalle a la derecha.
+- Se eliminaron los 8 botones de acción de colores de cada fila. Toda la funcionalidad (Intents, Aliases, Slot Types, Chat, Logs, Missed, Metrics, Test Set) ahora está accesible mediante la barra de tabs del panel derecho.
+- Los datos se cargan bajo demanda por tab y se cachean mientras el bot esté seleccionado — cambiar de tab para el mismo bot no provoca una nueva llamada a la API.
+- Las acciones Chat y Build en el tab de Aliases ahora navegan a sus tabs correspondientes en lugar de abrir modales anidados.
+
+## v1.9.2 (2026-06-09)
+
+### AWS DynamoDB
+
+- Edición de ítems en el modal Browse: cada fila tiene un botón ✏️ que abre un editor JSON pre-llenado con los datos actuales del ítem. Al guardar se ejecuta un `PutItem` (reemplazo completo) y se refresca la página actual.
+- Eliminación de ítems por fila: el botón 🗑 extrae automáticamente los campos de la clave primaria desde el key schema de la tabla y pide confirmación antes de llamar a `DeleteItem`.
+- Botón **New Item** en la barra del modal Browse: abre el editor JSON pre-llenado solo con los campos de clave para crear un nuevo registro desde cero.
+- El editor JSON valida sintaxis en tiempo real y bloquea el guardado si hay errores de parseo.
+
+## v1.9.1 (2026-05-28)
+
+### AWS Cognito
+
+- Búsqueda libre de texto en User Pools sin errores de filtro de AWS.
+- Edición de atributos de usuario desde el modal de detalle.
+- Gestión de membresía de grupos desde el detalle de usuario: asignar y quitar grupos.
+- Controles de MFA por usuario: habilitar, deshabilitar y cambiar método preferido (SMS/TOTP).
+- Flujo de creación de grupos con soporte de descripción en el tab Groups.
+- Corrección de error en tiempo de ejecución en el flujo de creación de grupos con HMR.
+- Corrección del estado MFA en la lista de usuarios alineando el cálculo con los settings de Cognito.
+
 ## v1.9.0 (Mayo 2026)
 
 ### Vercel

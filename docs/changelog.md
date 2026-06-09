@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.9.3 (2026-06-09)
+
+### AWS Amazon Lex
+
+- Redesigned the Lex view with a **master-detail split-panel layout** (like Cognito and Athena). The left panel lists all bots with status, version and last-updated date. Clicking a bot opens the detail panel on the right.
+- Removed the 8 individual colored action buttons from each table row. All functionality (Intents, Aliases, Slot Types, Chat, Logs, Missed, Metrics, Test Set) is now accessible via a tab bar in the right panel.
+- Data is loaded on-demand per tab and cached for the active bot — switching tabs for the same bot does not re-fetch.
+- The Chat and Build actions inside the Aliases tab now navigate to their respective tabs instead of opening nested modals.
+
+## v1.9.2 (2026-06-09)
+
+### AWS DynamoDB
+
+- Added **item editing** in the Browse modal: each row now has an ✏️ button that opens a JSON editor pre-filled with the item's current data. Saving performs a `PutItem` (full replace) and refreshes the current page.
+- Added **item deletion** per row: the 🗑 button extracts the primary key fields automatically from the table's key schema and asks for confirmation before calling `DeleteItem`.
+- Added **New Item** button in the Browse modal toolbar: opens the JSON editor pre-filled with only the key fields so you can create a new record from scratch.
+- JSON editor validates syntax in real time and blocks saving when there are parse errors.
+
 ## v1.9.1 (2026-05-28)
 
 ### AWS Cognito
