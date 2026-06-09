@@ -1140,6 +1140,63 @@ router.get('/storage/:bucket/download', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// DELETE /storage/:bucket/object?key=... → delete a GCS object
+router.delete('/storage/:bucket/object', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ error: 'key is required' });
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const bucket  = req.params.bucket;
+    let token = authCtx.accessToken;
+    if (!token) {
+      const c = await authCtx.auth.getClient();
+      token = (await c.getAccessToken()).token;
+    }
+    const resp = await fetch(
+      `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(key)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!resp.ok && resp.status !== 204) {
+      const text = await resp.text();
+      throw Object.assign(new Error(text || `HTTP ${resp.status}`), { code: resp.status });
+    }
+    res.json({ deleted: key });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /storage/:bucket/upload?key=<object-key>&contentType=<mime>
+// Body: raw binary of the file (Content-Type: application/octet-stream or actual MIME)
+router.post('/storage/:bucket/upload', require('express').raw({ type: '*/*', limit: '500mb' }), async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const objectKey = req.query.key;
+  if (!objectKey) return res.status(400).json({ error: 'key query param is required' });
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const bucket  = req.params.bucket;
+    const mimeType = req.query.contentType || req.headers['x-content-type'] || 'application/octet-stream';
+    let token = authCtx.accessToken;
+    if (!token) {
+      const c = await authCtx.auth.getClient();
+      token = (await c.getAccessToken()).token;
+    }
+    const body = req.body; // Buffer from express.raw()
+    const up = await fetch(
+      `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(objectKey)}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': mimeType, 'Content-Length': body.length },
+        body
+      }
+    );
+    if (!up.ok) { const t = await up.text(); throw new Error(t || `HTTP ${up.status}`); }
+    const meta = await up.json();
+    res.json({ uploaded: objectKey, size: meta.size, contentType: meta.contentType });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── ARTIFACT REGISTRY ───────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2282,6 +2339,236 @@ router.get('/kms/keyrings', async (req, res) => {
       created:  k.createTime,
     }));
     res.json(keyrings);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── DETAIL ENDPOINTS (master-detail panels) ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /cloudrun/:region/:service/detail → full service details + revisions + env vars
+router.get('/cloudrun/:region/:service/detail', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { region, service } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(region) || !/^[a-zA-Z0-9\-_.]+$/.test(service)) {
+    return res.status(400).json({ error: 'Invalid region or service name' });
+  }
+  try {
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { ServicesClient, RevisionsClient } = require('@google-cloud/run').v2;
+    const svcClient = new ServicesClient({ auth });
+    const revClient = new RevisionsClient({ auth });
+    const name = `projects/${projectId}/locations/${region}/services/${service}`;
+    const [svc] = await svcClient.getService({ name });
+    // List revisions
+    const [revs] = await revClient.listRevisions({ parent: name });
+    const trafficMap = {};
+    (svc.traffic || []).forEach(t => { trafficMap[t.revision] = t.percent; });
+    const revisions = (revs || []).slice(0, 20).map(r => ({
+      name:       r.name?.split('/').pop(),
+      created:    r.createTime?.seconds ? new Date(Number(r.createTime.seconds) * 1000).toISOString() : null,
+      containers: r.containers?.length || 0,
+      traffic:    trafficMap[r.name?.split('/').pop()] ?? null,
+      ready:      r.reconciling === false,
+    }));
+    // Env vars from latest template
+    const container = svc.template?.containers?.[0];
+    const envVars = (container?.env || []).map(e => ({
+      name:  e.name,
+      value: e.value || (e.valueSource ? '[secret]' : ''),
+    }));
+    res.json({
+      name:         svc.name?.split('/').pop(),
+      region,
+      uri:          svc.uri,
+      status:       svc.reconciling ? 'reconciling' : 'ready',
+      minInstances: svc.template?.scaling?.minInstanceCount ?? 0,
+      maxInstances: svc.template?.scaling?.maxInstanceCount ?? null,
+      image:        container?.image || null,
+      cpu:          container?.resources?.limits?.cpu || null,
+      memory:       container?.resources?.limits?.memory || null,
+      port:         container?.ports?.[0]?.containerPort || null,
+      created:      svc.createTime?.seconds ? new Date(Number(svc.createTime.seconds) * 1000).toISOString() : null,
+      updated:      svc.updateTime?.seconds ? new Date(Number(svc.updateTime.seconds) * 1000).toISOString() : null,
+      serviceAccount: svc.template?.serviceAccount || null,
+      ingressTraffic: svc.ingress || null,
+      revisions,
+      envVars,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /compute/vms/:zone/:name/detail → full VM details (disks, network, tags, metadata)
+router.get('/compute/vms/:zone/:name/detail', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { zone, name } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(zone) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid zone or instance name' });
+  }
+  try {
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { InstancesClient } = require('@google-cloud/compute');
+    const client = new InstancesClient({ auth });
+    const [vm] = await client.get({ project: projectId, zone, instance: name });
+    const disks = (vm.disks || []).map(d => ({
+      deviceName: d.deviceName,
+      type:       d.type,
+      boot:       d.boot,
+      mode:       d.mode,
+      source:     d.source?.split('/').pop() || null,
+      autoDelete: d.autoDelete,
+      diskSizeGb: d.diskSizeGb || null,
+    }));
+    const networks = (vm.networkInterfaces || []).map(n => ({
+      name:       n.name,
+      network:    n.network?.split('/').pop(),
+      subnetwork: n.subnetwork?.split('/').pop(),
+      internalIp: n.networkIP,
+      externalIp: n.accessConfigs?.[0]?.natIP || null,
+      stackType:  n.stackType || null,
+    }));
+    const metadata = {};
+    (vm.metadata?.items || []).forEach(m => { metadata[m.key] = m.value; });
+    res.json({
+      name:         vm.name,
+      zone,
+      status:       vm.status,
+      machineType:  vm.machineType?.split('/').pop(),
+      cpuPlatform:  vm.cpuPlatform,
+      created:      vm.creationTimestamp,
+      tags:         vm.tags?.items || [],
+      labels:       vm.labels || {},
+      serviceAccount: vm.serviceAccounts?.[0]?.email || null,
+      deletionProtection: vm.deletionProtection,
+      disks,
+      networks,
+      metadata,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /compute/vms/:zone/:name/logs → Cloud Logging entries for VM
+router.get('/compute/vms/:zone/:name/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { zone, name } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(zone) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid zone or instance name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const hours = Math.min(parseInt(req.query.hours) || 3, 72);
+    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    const filter = [
+      `resource.type="gce_instance"`,
+      `resource.labels.instance_id="${name}"`,
+      `timestamp>="${since}"`,
+    ].join(' AND ');
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
+      resourceNames: [`projects/${projectId}`],
+      filter,
+      orderBy:  'timestamp desc',
+      pageSize: limit,
+    });
+    res.json({
+      entries: (data.entries || []).map(e => ({
+        timestamp: e.timestamp,
+        severity:  e.severity || 'DEFAULT',
+        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /sql/:instance/detail → full Cloud SQL instance details
+router.get('/sql/:instance/detail', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { instance } = req.params;
+  if (!/^[a-zA-Z0-9\-_]+$/.test(instance)) {
+    return res.status(400).json({ error: 'Invalid instance name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${instance}`,
+      authCtx
+    );
+    const s = data.settings || {};
+    res.json({
+      name:              data.name,
+      database:          data.databaseVersion,
+      region:            data.region,
+      zone:              data.gceZone,
+      state:             data.state,
+      tier:              s.tier,
+      storageType:       s.dataDiskType,
+      storageGb:         s.dataDiskSizeGb,
+      storageAutoResize: s.storageAutoResize,
+      backupEnabled:     s.backupConfiguration?.enabled,
+      backupTime:        s.backupConfiguration?.startTime,
+      maintenanceWindow: s.maintenanceWindow ? `day ${s.maintenanceWindow.day} hour ${s.maintenanceWindow.hour}` : null,
+      activationPolicy:  s.activationPolicy,
+      availabilityType:  s.availabilityType,
+      ipAddresses:       (data.ipAddresses || []).map(ip => ({ type: ip.type, address: ip.ipAddress })),
+      connectionName:    data.connectionName,
+      flags:             (s.databaseFlags || []).map(f => ({ name: f.name, value: f.value })),
+      created:           data.createTime,
+      selfLink:          data.selfLink,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /functions/:location/:name/detail → full Cloud Function details
+router.get('/functions/:location/:name/detail', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { location, name } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid location or function name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const data = await gcpFetch(
+      `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/${location}/functions/${name}`,
+      authCtx
+    );
+    const sc = data.serviceConfig || {};
+    const bc = data.buildConfig || {};
+    const et = data.eventTrigger || {};
+    const envVars = Object.entries(sc.environmentVariables || {}).map(([k, v]) => ({ name: k, value: v }));
+    res.json({
+      name:            data.name?.split('/').pop(),
+      location,
+      state:           data.state,
+      runtime:         bc.runtime,
+      trigger:         et.eventType ? 'EVENT' : 'HTTPS',
+      triggerType:     et.eventType || 'HTTP',
+      url:             sc.uri,
+      memory:          sc.availableMemory,
+      cpu:             sc.availableCpu,
+      timeout:         sc.timeoutSeconds,
+      minInstances:    sc.minInstanceCount ?? 0,
+      maxInstances:    sc.maxInstanceCount ?? null,
+      ingressSettings: sc.ingressSettings,
+      serviceAccount:  sc.serviceAccountEmail,
+      updated:         data.updateTime,
+      created:         data.createTime,
+      entryPoint:      bc.entryPoint,
+      sourceRepo:      bc.source?.repoSource?.repoName || null,
+      envVars,
+    });
   } catch (err) { handleErr(res, err); }
 });
 

@@ -29,28 +29,130 @@
       </div>
 
       <!-- Cloud Run -->
-      <div v-show="activeTab === 'cloudrun'" class="tab-panel">
+      <div v-show="activeTab === 'cloudrun'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Run services found.' }}</div>
-        <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Region</th><th>Status</th><th>Min</th><th>Max</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="svc in filteredCloudRun" :key="svc.name">
-              <td><a :href="svc.uri" target="_blank" class="link">{{ svc.name }}</a></td>
-              <td class="text-dim">{{ svc.region }}</td>
-              <td><span :class="statusClass(svc.status)">{{ svc.status }}</span></td>
-              <td>{{ svc.minInstances }}</td>
-              <td>{{ svc.maxInstances ?? '--' }}</td>
-              <td><div class="row-actions">
-                <button class="btn sm" @click="startCloudRun(svc)">Start</button>
-                <button class="btn sm danger" @click="stopCloudRun(svc)">Stop</button>
-                <button class="btn sm" @click="openLogs('cloudrun', svc)"><i data-lucide="scroll-text"></i> Logs</button>
-                <button class="btn sm" @click="openLogs('cloudrun', svc)"><i data-lucide="scroll-text"></i> Logs</button>
-              </div></td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else style="display:flex;flex:1;overflow:hidden">
+          <!-- LEFT: service list -->
+          <div style="width:260px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+            <div v-for="svc in filteredCloudRun" :key="svc.name"
+              :class="['sidebar-item', crPanel.resource?.name === svc.name ? 'active' : '']"
+              style="cursor:pointer" @click="selectCloudRun(svc)">
+              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ svc.name }}</div>
+              <div class="text-dim" style="font-size:10px">{{ svc.region }}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
+                <span :class="statusClass(svc.status)" style="font-size:10px">{{ svc.status }}</span>
+                <span class="text-dim" style="font-size:10px">min: {{ svc.minInstances }} / max: {{ svc.maxInstances ?? '∞' }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT: detail -->
+          <div v-if="!crPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a service to see details</div>
+          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <!-- Header -->
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="font-weight:700;font-size:15px">{{ crPanel.resource.name }}</div>
+                <span :class="statusClass(crPanel.resource.status)" style="font-size:11px">{{ crPanel.resource.status }}</span>
+                <a v-if="crPanel.resource.uri" :href="crPanel.resource.uri" target="_blank" class="link" style="font-size:11px">↗ Open URL</a>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn sm" @click="startCloudRun(crPanel.resource)">▶ Start</button>
+                  <button class="btn sm danger" @click="stopCloudRun(crPanel.resource)">■ Stop</button>
+                </div>
+              </div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }}</div>
+            </div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'revisions',label:'Revisions'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'}]" :key="t.id"
+                :class="['aws-tab-btn', crPanel.tab === t.id ? 'active' : '']" @click="crSwitchTab(t.id)">{{ t.label }}</button>
+            </div>
+            <!-- OVERVIEW -->
+            <div v-show="crPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="crPanel.detailError" class="alert-error">{{ crPanel.detailError }}</div>
+              <div v-else-if="crPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Service</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">URL</span><a :href="crPanel.detail.uri" target="_blank" class="link mono-xs">{{ crPanel.detail.uri }}</a></div>
+                    <div class="kv-row"><span class="kv-k">Region</span><span>{{ crPanel.detail.region }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Status</span><span :class="statusClass(crPanel.detail.status)">{{ crPanel.detail.status }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Ingress</span><span class="text-dim">{{ crPanel.detail.ingressTraffic || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ crPanel.detail.created ? new Date(crPanel.detail.created).toLocaleString() : '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Updated</span><span class="text-dim">{{ crPanel.detail.updated ? new Date(crPanel.detail.updated).toLocaleString() : '--' }}</span></div>
+                  </div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Container</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Image</span><span class="mono-xs text-dim" style="word-break:break-all">{{ crPanel.detail.image || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">CPU</span><span class="text-dim">{{ crPanel.detail.cpu || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Memory</span><span class="text-dim">{{ crPanel.detail.memory || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Port</span><span class="text-dim">{{ crPanel.detail.port || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Min instances</span><span class="text-dim">{{ crPanel.detail.minInstances }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Max instances</span><span class="text-dim">{{ crPanel.detail.maxInstances ?? '∞' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Service Account</span><span class="mono-xs text-dim" style="word-break:break-all">{{ crPanel.detail.serviceAccount || '--' }}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- REVISIONS -->
+            <div v-show="crPanel.tab === 'revisions'" style="flex:1;overflow:auto;padding:12px">
+              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="!crPanel.detail?.revisions?.length" class="empty-row">No revisions found.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Revision</th><th>Traffic</th><th>Created</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr v-for="r in crPanel.detail.revisions" :key="r.name">
+                    <td class="mono-xs">{{ r.name }}</td>
+                    <td>
+                      <span v-if="r.traffic != null" style="font-size:12px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:1px 8px;color:#818cf8">{{ r.traffic }}%</span>
+                      <span v-else class="text-dim">—</span>
+                    </td>
+                    <td class="text-dim" style="font-size:11px">{{ r.created ? new Date(r.created).toLocaleString() : '--' }}</td>
+                    <td><span :class="r.ready ? 'status-ok' : 'status-warn'">{{ r.ready ? 'Ready' : 'Pending' }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- VARIABLES -->
+            <div v-show="crPanel.tab === 'variables'" style="flex:1;overflow:auto;padding:12px">
+              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="!crPanel.detail?.envVars?.length" class="empty-row">No environment variables configured.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Name</th><th>Value</th></tr></thead>
+                <tbody>
+                  <tr v-for="v in crPanel.detail.envVars" :key="v.name">
+                    <td class="mono-xs" style="font-weight:600">{{ v.name }}</td>
+                    <td class="mono-xs text-dim">{{ v.value || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- LOGS -->
+            <div v-show="crPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+                <select v-model="crPanel.logsHours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option><option :value="72">Last 3d</option>
+                </select>
+                <button class="btn sm" @click="crLoadLogs()" :disabled="crPanel.logsLoading">{{ crPanel.logsLoading ? 'Loading...' : 'Refresh' }}</button>
+                <span class="text-dim" style="font-size:11px">{{ crPanel.logs.length }} entries</span>
+              </div>
+              <div v-if="crPanel.logsLoading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+              <div v-else-if="crPanel.logsError" class="alert-error" style="margin:12px">{{ crPanel.logsError }}</div>
+              <div v-else-if="!crPanel.logs.length" class="empty-row">No log entries in this time range.</div>
+              <div v-else style="flex:1;overflow:auto;padding:0 8px">
+                <div v-for="(e, i) in crPanel.logs" :key="i" style="display:flex;gap:8px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.03);font-size:11px;font-family:monospace">
+                  <span :style="`flex-shrink:0;width:58px;font-size:10px;${gcpLogColor(e.severity)}`">{{ (e.severity||'DEFAULT').slice(0,7) }}</span>
+                  <span class="text-dim" style="flex-shrink:0;white-space:nowrap">{{ e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '' }}</span>
+                  <span style="flex:1;word-break:break-all;white-space:pre-wrap">{{ e.message }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- GKE -->
@@ -104,52 +206,260 @@
       </div>
 
       <!-- Compute VMs -->
-      <div v-show="activeTab === 'vms'" class="tab-panel">
+      <div v-show="activeTab === 'vms'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? 'No matches.' : 'No Compute Engine VMs found.' }}</div>
-        <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Zone</th><th>Machine</th><th>Status</th><th>External IP</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="vm in filteredVms" :key="`${vm.zone}/${vm.name}`">
-              <td>{{ vm.name }}</td>
-              <td class="text-dim">{{ vm.zone }}</td>
-              <td class="text-dim">{{ vm.machineType }}</td>
-              <td><span :class="vmStatusClass(vm.status)">{{ vm.status }}</span></td>
-              <td class="text-dim">{{ vm.externalIp || '--' }}</td>
-              <td><div class="row-actions">
-                <button class="btn sm" @click="startVM(vm)" :disabled="vm.status === 'RUNNING'">Start</button>
-                <button class="btn sm danger" @click="stopVM(vm)" :disabled="vm.status === 'TERMINATED'">Stop</button>
-                <button class="btn sm" @click="openLogs('vms', vm)"><i data-lucide="scroll-text"></i> Logs</button>
-              </div></td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else style="display:flex;flex:1;overflow:hidden">
+          <!-- LEFT -->
+          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+            <div v-for="vm in filteredVms" :key="`${vm.zone}/${vm.name}`"
+              :class="['sidebar-item', vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone ? 'active' : '']"
+              style="cursor:pointer" @click="selectVm(vm)">
+              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ vm.name }}</div>
+              <div class="text-dim" style="font-size:10px">{{ vm.zone }}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+                <span :class="vmStatusClass(vm.status)" style="font-size:10px">{{ vm.status }}</span>
+                <span class="text-dim" style="font-size:10px">{{ vm.machineType }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT -->
+          <div v-if="!vmPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a VM to see details</div>
+          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="font-weight:700;font-size:15px">{{ vmPanel.resource.name }}</div>
+                <span :class="vmStatusClass(vmPanel.resource.status)" style="font-size:11px">{{ vmPanel.resource.status }}</span>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn sm" @click="startVM(vmPanel.resource)" :disabled="vmPanel.resource.status === 'RUNNING'">▶ Start</button>
+                  <button class="btn sm danger" @click="stopVM(vmPanel.resource)" :disabled="vmPanel.resource.status === 'TERMINATED'">■ Stop</button>
+                </div>
+              </div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
+            </div>
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'disks',label:'Disks'},{id:'network',label:'Network'},{id:'logs',label:'Logs'}]" :key="t.id"
+                :class="['aws-tab-btn', vmPanel.tab === t.id ? 'active' : '']" @click="vmSwitchTab(t.id)">{{ t.label }}</button>
+            </div>
+            <!-- OVERVIEW -->
+            <div v-show="vmPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="vmPanel.detailError" class="alert-error">{{ vmPanel.detailError }}</div>
+              <div v-else-if="vmPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Instance</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Status</span><span :class="vmStatusClass(vmPanel.detail.status)">{{ vmPanel.detail.status }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Zone</span><span class="text-dim">{{ vmPanel.detail.zone }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Machine Type</span><span class="text-dim">{{ vmPanel.detail.machineType }}</span></div>
+                    <div class="kv-row"><span class="kv-k">CPU Platform</span><span class="text-dim">{{ vmPanel.detail.cpuPlatform || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Deletion Protection</span><span :class="vmPanel.detail.deletionProtection ? 'status-ok' : 'status-warn'">{{ vmPanel.detail.deletionProtection ? 'Enabled' : 'Disabled' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ vmPanel.detail.created ? new Date(vmPanel.detail.created).toLocaleString() : '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Service Account</span><span class="mono-xs text-dim" style="word-break:break-all">{{ vmPanel.detail.serviceAccount || '--' }}</span></div>
+                  </div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Tags &amp; Labels</div>
+                  <div v-if="vmPanel.detail.tags?.length" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+                    <span v-for="tag in vmPanel.detail.tags" :key="tag" style="font-size:10px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:1px 7px;color:#818cf8">{{ tag }}</span>
+                  </div>
+                  <div v-else class="text-dim" style="font-size:12px;margin-bottom:8px">No tags</div>
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;margin-top:4px">Labels</div>
+                  <div v-if="Object.keys(vmPanel.detail.labels || {}).length" style="display:flex;flex-wrap:wrap;gap:4px">
+                    <span v-for="(v, k) in vmPanel.detail.labels" :key="k" style="font-size:10px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:10px;padding:1px 7px;color:#34d399">{{ k }}={{ v }}</span>
+                  </div>
+                  <div v-else class="text-dim" style="font-size:12px">No labels</div>
+                </div>
+              </div>
+            </div>
+            <!-- DISKS -->
+            <div v-show="vmPanel.tab === 'disks'" style="flex:1;overflow:auto;padding:12px">
+              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="!vmPanel.detail?.disks?.length" class="empty-row">No disks found.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Name</th><th>Type</th><th>Mode</th><th>Boot</th></tr></thead>
+                <tbody>
+                  <tr v-for="d in vmPanel.detail.disks" :key="d.source">
+                    <td class="mono-xs">{{ d.source?.split('/').pop() || d.source }}</td>
+                    <td class="text-dim">{{ d.type || '--' }}</td>
+                    <td class="text-dim">{{ d.mode || '--' }}</td>
+                    <td><span :class="d.boot ? 'status-ok' : 'text-dim'">{{ d.boot ? 'Yes' : 'No' }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- NETWORK -->
+            <div v-show="vmPanel.tab === 'network'" style="flex:1;overflow:auto;padding:12px">
+              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="!vmPanel.detail?.networks?.length" class="empty-row">No network interfaces found.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Network</th><th>Subnetwork</th><th>Internal IP</th><th>External IP</th></tr></thead>
+                <tbody>
+                  <tr v-for="n in vmPanel.detail.networks" :key="n.network">
+                    <td class="mono-xs">{{ n.network?.split('/').pop() || n.network }}</td>
+                    <td class="mono-xs text-dim">{{ n.subnetwork?.split('/').pop() || n.subnetwork }}</td>
+                    <td class="text-dim">{{ n.networkIP || '--' }}</td>
+                    <td class="text-dim">{{ n.accessConfigs?.[0]?.natIP || '--' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- LOGS -->
+            <div v-show="vmPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+                <select v-model="vmPanel.logsHours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option><option :value="72">Last 3d</option>
+                </select>
+                <button class="btn sm" @click="vmLoadLogs()" :disabled="vmPanel.logsLoading">{{ vmPanel.logsLoading ? 'Loading...' : 'Refresh' }}</button>
+                <span class="text-dim" style="font-size:11px">{{ vmPanel.logs.length }} entries</span>
+              </div>
+              <div v-if="vmPanel.logsLoading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+              <div v-else-if="vmPanel.logsError" class="alert-error" style="margin:12px">{{ vmPanel.logsError }}</div>
+              <div v-else-if="!vmPanel.logs.length" class="empty-row">No log entries in this time range.</div>
+              <div v-else style="flex:1;overflow:auto;padding:0 8px">
+                <div v-for="(e, i) in vmPanel.logs" :key="i" style="display:flex;gap:8px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.03);font-size:11px;font-family:monospace">
+                  <span :style="`flex-shrink:0;width:58px;font-size:10px;${gcpLogColor(e.severity)}`">{{ (e.severity||'DEFAULT').slice(0,7) }}</span>
+                  <span class="text-dim" style="flex-shrink:0;white-space:nowrap">{{ e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '' }}</span>
+                  <span style="flex:1;word-break:break-all;white-space:pre-wrap">{{ e.message }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Cloud SQL -->
-      <div v-show="activeTab === 'sql'" class="tab-panel">
+      <div v-show="activeTab === 'sql'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud SQL instances found.' }}</div>
-        <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Database</th><th>Region</th><th>Tier</th><th>IP</th><th>State</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="inst in filteredSql" :key="inst.name">
-              <td>{{ inst.name }}</td>
-              <td class="text-dim">{{ inst.database }}</td>
-              <td class="text-dim">{{ inst.region }}</td>
-              <td class="text-dim">{{ inst.tier }}</td>
-              <td class="text-dim">{{ inst.ipAddress || '--' }}</td>
-              <td><span :class="sqlStatusClass(inst.state)">{{ inst.state }}</span></td>
-              <td><div class="row-actions">
-                <button class="btn sm" @click="startSql(inst)" :disabled="inst.state === 'RUNNABLE'">Start</button>
-                <button class="btn sm danger" @click="stopSql(inst)" :disabled="inst.state !== 'RUNNABLE'">Stop</button>
-                <button class="btn sm" @click="openLogs('sql', inst)"><i data-lucide="scroll-text"></i> Logs</button>
-              </div></td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else style="display:flex;flex:1;overflow:hidden">
+          <!-- LEFT -->
+          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+            <div v-for="inst in filteredSql" :key="inst.name"
+              :class="['sidebar-item', sqlPanel.resource?.name === inst.name ? 'active' : '']"
+              style="cursor:pointer" @click="selectSql(inst)">
+              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inst.name }}</div>
+              <div class="text-dim" style="font-size:10px">{{ inst.database }} · {{ inst.region }}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+                <span :class="sqlStatusClass(inst.state)" style="font-size:10px">{{ inst.state }}</span>
+                <span class="text-dim" style="font-size:10px">{{ inst.tier }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT -->
+          <div v-if="!sqlPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select an instance to see details</div>
+          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="font-weight:700;font-size:15px">{{ sqlPanel.resource.name }}</div>
+                <span :class="sqlStatusClass(sqlPanel.resource.state)" style="font-size:11px">{{ sqlPanel.resource.state }}</span>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn sm" @click="startSql(sqlPanel.resource)" :disabled="sqlPanel.resource.state === 'RUNNABLE'">▶ Start</button>
+                  <button class="btn sm danger" @click="stopSql(sqlPanel.resource)" :disabled="sqlPanel.resource.state !== 'RUNNABLE'">■ Stop</button>
+                </div>
+              </div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
+            </div>
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'config',label:'Config'},{id:'connection',label:'Connection'},{id:'logs',label:'Logs'}]" :key="t.id"
+                :class="['aws-tab-btn', sqlPanel.tab === t.id ? 'active' : '']" @click="sqlSwitchTab(t.id)">{{ t.label }}</button>
+            </div>
+            <!-- OVERVIEW -->
+            <div v-show="sqlPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="sqlPanel.detailError" class="alert-error">{{ sqlPanel.detailError }}</div>
+              <div v-else-if="sqlPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Instance</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Database</span><span class="text-dim">{{ sqlPanel.detail.database }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Region</span><span class="text-dim">{{ sqlPanel.detail.region }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Zone</span><span class="text-dim">{{ sqlPanel.detail.zone }}</span></div>
+                    <div class="kv-row"><span class="kv-k">State</span><span :class="sqlStatusClass(sqlPanel.detail.state)">{{ sqlPanel.detail.state }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Availability</span><span class="text-dim">{{ sqlPanel.detail.availabilityType || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ sqlPanel.detail.created ? new Date(sqlPanel.detail.created).toLocaleString() : '--' }}</span></div>
+                  </div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Backup</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Enabled</span><span :class="sqlPanel.detail.backupEnabled ? 'status-ok' : 'status-warn'">{{ sqlPanel.detail.backupEnabled ? 'Yes' : 'No' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Backup Time</span><span class="text-dim">{{ sqlPanel.detail.backupTime || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Maintenance</span><span class="text-dim">{{ sqlPanel.detail.maintenanceWindow || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Activation</span><span class="text-dim">{{ sqlPanel.detail.activationPolicy || '--' }}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- CONFIG -->
+            <div v-show="sqlPanel.tab === 'config'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="sqlPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Storage</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Tier</span><span class="text-dim">{{ sqlPanel.detail.tier }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Storage Type</span><span class="text-dim">{{ sqlPanel.detail.storageType }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Storage GB</span><span class="text-dim">{{ sqlPanel.detail.storageGb }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Auto Resize</span><span :class="sqlPanel.detail.storageAutoResize ? 'status-ok' : 'text-dim'">{{ sqlPanel.detail.storageAutoResize ? 'Enabled' : 'Disabled' }}</span></div>
+                  </div>
+                </div>
+                <div v-if="sqlPanel.detail.flags?.length" style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Database Flags</div>
+                  <div class="kv-list">
+                    <div class="kv-row" v-for="f in sqlPanel.detail.flags" :key="f.name"><span class="kv-k mono-xs">{{ f.name }}</span><span class="text-dim">{{ f.value || 'on' }}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- CONNECTION -->
+            <div v-show="sqlPanel.tab === 'connection'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="sqlPanel.detail" style="display:grid;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Connection</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Connection Name</span><span class="mono-xs text-dim">{{ sqlPanel.detail.connectionName || '--' }}</span></div>
+                  </div>
+                </div>
+                <div v-if="sqlPanel.detail.ipAddresses?.length" style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">IP Addresses</div>
+                  <table class="cloud-table">
+                    <thead><tr><th>Type</th><th>IP Address</th></tr></thead>
+                    <tbody>
+                      <tr v-for="ip in sqlPanel.detail.ipAddresses" :key="ip.ipAddress">
+                        <td class="text-dim">{{ ip.type || '--' }}</td>
+                        <td class="mono-xs">{{ ip.ipAddress }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <!-- LOGS -->
+            <div v-show="sqlPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+                <select v-model="sqlPanel.logsHours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option><option :value="72">Last 3d</option>
+                </select>
+                <button class="btn sm" @click="sqlLoadLogs()" :disabled="sqlPanel.logsLoading">{{ sqlPanel.logsLoading ? 'Loading...' : 'Refresh' }}</button>
+                <span class="text-dim" style="font-size:11px">{{ sqlPanel.logs.length }} entries</span>
+              </div>
+              <div v-if="sqlPanel.logsLoading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+              <div v-else-if="sqlPanel.logsError" class="alert-error" style="margin:12px">{{ sqlPanel.logsError }}</div>
+              <div v-else-if="!sqlPanel.logs.length" class="empty-row">No log entries in this time range.</div>
+              <div v-else style="flex:1;overflow:auto;padding:0 8px">
+                <div v-for="(e, i) in sqlPanel.logs" :key="i" style="display:flex;gap:8px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.03);font-size:11px;font-family:monospace">
+                  <span :style="`flex-shrink:0;width:58px;font-size:10px;${gcpLogColor(e.severity)}`">{{ (e.severity||'DEFAULT').slice(0,7) }}</span>
+                  <span class="text-dim" style="flex-shrink:0;white-space:nowrap">{{ e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '' }}</span>
+                  <span style="flex:1;word-break:break-all;white-space:pre-wrap">{{ e.message }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Cloud Storage -->
@@ -177,36 +487,126 @@
       </div>
 
       <!-- Cloud Functions -->
-      <div v-show="activeTab === 'functions'" class="tab-panel">
+      <div v-show="activeTab === 'functions'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.functions.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.functions.error && !filteredFunctions.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredFunctions.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Functions found.' }}</div>
-        <table v-else class="cloud-table">
-          <thead><tr><th>Name</th><th>Location</th><th>Runtime</th><th>Trigger</th><th>State</th><th>URL</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="fn in filteredFunctions" :key="fn.name">
-              <td>{{ fn.name }}</td>
-              <td class="text-dim">{{ fn.location }}</td>
-              <td class="text-dim">{{ fn.runtime }}</td>
-              <td class="text-dim">{{ fn.trigger }}</td>
-              <td><span :class="fnStatusClass(fn.state)">{{ fn.state }}</span></td>
-              <td>
-                <a v-if="fn.url" :href="fn.url" target="_blank" class="link">Open</a>
-                <span v-else class="text-dim">--</span>
-              </td>
-              <td>
-                <div class="row-actions">
-                  <button class="btn sm" :disabled="fn.trigger !== 'HTTPS'" @click="openFnInvoke(fn)" title="Invoke function">
-                    <i data-lucide="play"></i> Invoke
-                  </button>
-                  <button class="btn sm" @click="openFnLogs(fn)" title="View logs">
-                    <i data-lucide="scroll-text"></i> Logs
-                  </button>
+        <div v-else style="display:flex;flex:1;overflow:hidden">
+          <!-- LEFT -->
+          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+            <div v-for="fn in filteredFunctions" :key="fn.name"
+              :class="['sidebar-item', fnPanel.resource?.name === fn.name ? 'active' : '']"
+              style="cursor:pointer" @click="selectFn(fn)">
+              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ fn.name }}</div>
+              <div class="text-dim" style="font-size:10px">{{ fn.location }}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
+                <span :class="fnStatusClass(fn.state)" style="font-size:10px">{{ fn.state }}</span>
+                <span class="text-dim" style="font-size:10px">{{ fn.runtime }}</span>
+                <span v-if="fn.trigger === 'HTTPS'" style="font-size:9px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#4ade80;border-radius:8px;padding:0 5px">HTTPS</span>
+              </div>
+            </div>
+          </div>
+          <!-- RIGHT -->
+          <div v-if="!fnPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a function to see details</div>
+          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="font-weight:700;font-size:15px">{{ fnPanel.resource.name }}</div>
+                <span :class="fnStatusClass(fnPanel.resource.state)" style="font-size:11px">{{ fnPanel.resource.state }}</span>
+                <a v-if="fnPanel.resource.url" :href="fnPanel.resource.url" target="_blank" class="link" style="font-size:11px">↗ URL</a>
+                <div style="margin-left:auto">
+                  <button class="btn sm primary" :disabled="fnPanel.resource.trigger !== 'HTTPS'" @click="fnPanelInvoke()">▶ Invoke</button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
+            </div>
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+              <button v-for="t in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'}]" :key="t.id"
+                :class="['aws-tab-btn', fnPanel.tab === t.id ? 'active' : '']" @click="fnSwitchTab(t.id)">{{ t.label }}</button>
+            </div>
+            <!-- OVERVIEW -->
+            <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
+              <div v-if="fnPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="fnPanel.detailError" class="alert-error">{{ fnPanel.detailError }}</div>
+              <div v-else-if="fnPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Function</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">State</span><span :class="fnStatusClass(fnPanel.detail.state)">{{ fnPanel.detail.state }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Runtime</span><span class="text-dim">{{ fnPanel.detail.runtime }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Trigger</span><span class="text-dim">{{ fnPanel.detail.trigger }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Entry Point</span><span class="mono-xs text-dim">{{ fnPanel.detail.entryPoint || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Service Account</span><span class="mono-xs text-dim" style="word-break:break-all">{{ fnPanel.detail.serviceAccount || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Ingress</span><span class="text-dim">{{ fnPanel.detail.ingressSettings || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Updated</span><span class="text-dim">{{ fnPanel.detail.updated ? new Date(fnPanel.detail.updated).toLocaleString() : '--' }}</span></div>
+                  </div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Resources</div>
+                  <div class="kv-list">
+                    <div class="kv-row"><span class="kv-k">Memory</span><span class="text-dim">{{ fnPanel.detail.memory || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">CPU</span><span class="text-dim">{{ fnPanel.detail.cpu || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Timeout</span><span class="text-dim">{{ fnPanel.detail.timeout || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Min Instances</span><span class="text-dim">{{ fnPanel.detail.minInstances ?? '0' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">Max Instances</span><span class="text-dim">{{ fnPanel.detail.maxInstances ?? '∞' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">URL</span><a v-if="fnPanel.detail.url" :href="fnPanel.detail.url" target="_blank" class="link mono-xs" style="word-break:break-all">{{ fnPanel.detail.url }}</a><span v-else class="text-dim">--</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- VARIABLES -->
+            <div v-show="fnPanel.tab === 'variables'" style="flex:1;overflow:auto;padding:12px">
+              <div v-if="fnPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+              <div v-else-if="!fnPanel.detail?.envVars?.length" class="empty-row">No environment variables configured.</div>
+              <table v-else class="cloud-table">
+                <thead><tr><th>Name</th><th>Value</th></tr></thead>
+                <tbody>
+                  <tr v-for="v in fnPanel.detail.envVars" :key="v.name">
+                    <td class="mono-xs" style="font-weight:600">{{ v.name }}</td>
+                    <td class="mono-xs text-dim">{{ v.value || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- LOGS -->
+            <div v-show="fnPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+                <select v-model="fnPanel.logsHours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option><option :value="72">Last 3d</option>
+                </select>
+                <button class="btn sm" @click="fnLoadLogs()" :disabled="fnPanel.logsLoading">{{ fnPanel.logsLoading ? 'Loading...' : 'Refresh' }}</button>
+                <span class="text-dim" style="font-size:11px">{{ fnPanel.logs.length }} entries</span>
+              </div>
+              <div v-if="fnPanel.logsLoading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+              <div v-else-if="fnPanel.logsError" class="alert-error" style="margin:12px">{{ fnPanel.logsError }}</div>
+              <div v-else-if="!fnPanel.logs.length" class="empty-row">No log entries in this time range.</div>
+              <div v-else style="flex:1;overflow:auto;padding:0 8px">
+                <div v-for="(e, i) in fnPanel.logs" :key="i" style="display:flex;gap:8px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,.03);font-size:11px;font-family:monospace">
+                  <span :style="`flex-shrink:0;width:58px;font-size:10px;${gcpLogColor(e.severity)}`">{{ (e.severity||'DEFAULT').slice(0,7) }}</span>
+                  <span class="text-dim" style="flex-shrink:0;white-space:nowrap">{{ e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '' }}</span>
+                  <span style="flex:1;word-break:break-all;white-space:pre-wrap">{{ e.message }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- INVOKE -->
+            <div v-show="fnPanel.tab === 'invoke'" style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px">JSON Payload</div>
+                <textarea v-model="fnPanel.invokePayload" rows="8" placeholder='{"key": "value"}' style="width:100%;font-family:monospace;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);resize:vertical"></textarea>
+              </div>
+              <div>
+                <button class="btn primary" @click="fnPanelDoInvoke()" :disabled="fnPanel.invoking || fnPanel.resource?.trigger !== 'HTTPS'">
+                  {{ fnPanel.invoking ? 'Invoking...' : '▶ Invoke' }}
+                </button>
+                <span v-if="fnPanel.resource?.trigger !== 'HTTPS'" class="text-dim" style="font-size:11px;margin-left:8px">Only HTTPS trigger functions can be invoked here.</span>
+              </div>
+              <div v-if="fnPanel.invokeResult !== null">
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px">Response</div>
+                <pre style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;overflow:auto;max-height:300px;white-space:pre-wrap;word-break:break-all">{{ fnPanel.invokeResult }}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Pub/Sub -->
@@ -1662,6 +2062,181 @@ const gcsBrowserBucket = ref('')
 function openGcsBrowser(bucket) {
   gcsBrowserBucket.value = bucket
   gcsBrowserOpen.value   = true
+}
+
+// ── GCP Log color helper ──────────────────────────────────────────────────────
+function gcpLogColor(severity) {
+  const s = (severity || '').toUpperCase()
+  if (['ERROR','CRITICAL','ALERT','EMERGENCY'].includes(s)) return 'color:#f87171'
+  if (s === 'WARNING') return 'color:#fbbf24'
+  if (['INFO','NOTICE'].includes(s)) return 'color:#4ade80'
+  return 'color:var(--text-dim)'
+}
+
+// ── Cloud Run master-detail panel ─────────────────────────────────────────────
+const crPanel = reactive({
+  resource: null, tab: 'overview',
+  detail: null, detailLoading: false, detailError: null,
+  logs: [], logsLoading: false, logsError: null, logsHours: 3
+})
+function selectCloudRun(svc) {
+  const same = crPanel.resource?.name === svc.name
+  crPanel.resource = svc
+  if (!same) { crPanel.tab = 'overview'; crPanel.detail = null; crPanel.logs = [] }
+  crSwitchTab(crPanel.tab)
+}
+async function crSwitchTab(tab) {
+  crPanel.tab = tab
+  const svc = crPanel.resource; if (!svc) return
+  if (tab === 'overview' || tab === 'revisions' || tab === 'variables') {
+    if (crPanel.detail && crPanel.detail._svc === svc.name) return
+    crPanel.detailLoading = true; crPanel.detailError = null
+    try {
+      const d = await gcpStore.fetchCloudRunDetail(svc.region, svc.name)
+      crPanel.detail = { ...d, _svc: svc.name }
+    } catch (e) { crPanel.detailError = e.message }
+    finally { crPanel.detailLoading = false }
+  } else if (tab === 'logs') {
+    crPanel.logsLoading = true; crPanel.logsError = null
+    try {
+      const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
+      crPanel.logs = r?.entries || []
+    } catch (e) { crPanel.logsError = e.message }
+    finally { crPanel.logsLoading = false }
+  }
+}
+async function crLoadLogs() {
+  const svc = crPanel.resource; if (!svc) return
+  crPanel.logsLoading = true; crPanel.logsError = null
+  try {
+    const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
+    crPanel.logs = r?.entries || []
+  } catch (e) { crPanel.logsError = e.message }
+  finally { crPanel.logsLoading = false }
+}
+
+// ── Compute VMs master-detail panel ──────────────────────────────────────────
+const vmPanel = reactive({
+  resource: null, tab: 'overview',
+  detail: null, detailLoading: false, detailError: null,
+  logs: [], logsLoading: false, logsError: null, logsHours: 3
+})
+function selectVm(vm) {
+  const same = vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone
+  vmPanel.resource = vm
+  if (!same) { vmPanel.tab = 'overview'; vmPanel.detail = null; vmPanel.logs = [] }
+  vmSwitchTab(vmPanel.tab)
+}
+async function vmSwitchTab(tab) {
+  vmPanel.tab = tab
+  const vm = vmPanel.resource; if (!vm) return
+  if (tab === 'overview' || tab === 'disks' || tab === 'network') {
+    if (vmPanel.detail && vmPanel.detail._key === `${vm.zone}/${vm.name}`) return
+    vmPanel.detailLoading = true; vmPanel.detailError = null
+    try {
+      const d = await gcpStore.fetchVmDetail(vm.zone, vm.name)
+      vmPanel.detail = { ...d, _key: `${vm.zone}/${vm.name}` }
+    } catch (e) { vmPanel.detailError = e.message }
+    finally { vmPanel.detailLoading = false }
+  } else if (tab === 'logs') {
+    await vmLoadLogs()
+  }
+}
+async function vmLoadLogs() {
+  const vm = vmPanel.resource; if (!vm) return
+  vmPanel.logsLoading = true; vmPanel.logsError = null
+  try {
+    const r = await gcpStore.fetchVmLogs(vm.zone, vm.name, { hours: vmPanel.logsHours })
+    vmPanel.logs = r?.entries || []
+  } catch (e) { vmPanel.logsError = e.message }
+  finally { vmPanel.logsLoading = false }
+}
+
+// ── Cloud SQL master-detail panel ─────────────────────────────────────────────
+const sqlPanel = reactive({
+  resource: null, tab: 'overview',
+  detail: null, detailLoading: false, detailError: null,
+  logs: [], logsLoading: false, logsError: null, logsHours: 3
+})
+function selectSql(inst) {
+  const same = sqlPanel.resource?.name === inst.name
+  sqlPanel.resource = inst
+  if (!same) { sqlPanel.tab = 'overview'; sqlPanel.detail = null; sqlPanel.logs = [] }
+  sqlSwitchTab(sqlPanel.tab)
+}
+async function sqlSwitchTab(tab) {
+  sqlPanel.tab = tab
+  const inst = sqlPanel.resource; if (!inst) return
+  if (tab === 'overview' || tab === 'config' || tab === 'connection') {
+    if (sqlPanel.detail && sqlPanel.detail._inst === inst.name) return
+    sqlPanel.detailLoading = true; sqlPanel.detailError = null
+    try {
+      const d = await gcpStore.fetchSqlDetail(inst.name)
+      sqlPanel.detail = { ...d, _inst: inst.name }
+    } catch (e) { sqlPanel.detailError = e.message }
+    finally { sqlPanel.detailLoading = false }
+  } else if (tab === 'logs') {
+    await sqlLoadLogs()
+  }
+}
+async function sqlLoadLogs() {
+  const inst = sqlPanel.resource; if (!inst) return
+  sqlPanel.logsLoading = true; sqlPanel.logsError = null
+  try {
+    const r = await gcpStore.fetchSqlLogs(inst.name, { hours: sqlPanel.logsHours })
+    sqlPanel.logs = r?.entries || []
+  } catch (e) { sqlPanel.logsError = e.message }
+  finally { sqlPanel.logsLoading = false }
+}
+
+// ── Cloud Functions master-detail panel ───────────────────────────────────────
+const fnPanel = reactive({
+  resource: null, tab: 'overview',
+  detail: null, detailLoading: false, detailError: null,
+  logs: [], logsLoading: false, logsError: null, logsHours: 3,
+  invokePayload: '{}', invokeResult: null, invoking: false
+})
+function selectFn(fn) {
+  const same = fnPanel.resource?.name === fn.name
+  fnPanel.resource = fn
+  if (!same) { fnPanel.tab = 'overview'; fnPanel.detail = null; fnPanel.logs = []; fnPanel.invokeResult = null }
+  fnSwitchTab(fnPanel.tab)
+}
+async function fnSwitchTab(tab) {
+  fnPanel.tab = tab
+  const fn = fnPanel.resource; if (!fn) return
+  if (tab === 'overview' || tab === 'variables') {
+    if (fnPanel.detail && fnPanel.detail._fn === fn.name) return
+    fnPanel.detailLoading = true; fnPanel.detailError = null
+    try {
+      const d = await gcpStore.fetchFunctionDetail(fn.location, fn.name)
+      fnPanel.detail = { ...d, _fn: fn.name }
+    } catch (e) { fnPanel.detailError = e.message }
+    finally { fnPanel.detailLoading = false }
+  } else if (tab === 'logs') {
+    await fnLoadLogs()
+  }
+}
+async function fnLoadLogs() {
+  const fn = fnPanel.resource; if (!fn) return
+  fnPanel.logsLoading = true; fnPanel.logsError = null
+  try {
+    const r = await gcpStore.fetchFunctionLogs(fn.location, fn.name, { hours: fnPanel.logsHours })
+    fnPanel.logs = r?.entries || []
+  } catch (e) { fnPanel.logsError = e.message }
+  finally { fnPanel.logsLoading = false }
+}
+function fnPanelInvoke() { fnPanel.tab = 'invoke' }
+async function fnPanelDoInvoke() {
+  const fn = fnPanel.resource; if (!fn) return
+  fnPanel.invoking = true; fnPanel.invokeResult = null
+  try {
+    let payload = {}
+    try { payload = JSON.parse(fnPanel.invokePayload || '{}') } catch { toast('Invalid JSON payload', 'error'); return }
+    const res = await gcpStore.invokeFunction(fn.location, fn.name, payload)
+    fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
+  } catch (e) { toast(e.message, 'error') }
+  finally { fnPanel.invoking = false }
 }
 
 // ── Function Invoke ──────────────────────────────────────────────────────────

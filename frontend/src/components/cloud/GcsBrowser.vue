@@ -13,15 +13,28 @@
           <button class="s3b-close" @click="$emit('close')">&#x2715;</button>
         </div>
 
-        <!-- Breadcrumb -->
-        <div class="s3b-breadcrumb">
-          <span class="s3b-crumb root" @click="navigate('')">&#x1F3E0; root</span>
-          <template v-for="(crumb, i) in breadcrumbs" :key="i">
-            <span class="s3b-sep">/</span>
-            <span class="s3b-crumb" :class="{ active: i === breadcrumbs.length - 1 }" @click="navigate(crumb.prefix)">
-              {{ crumb.label }}
-            </span>
-          </template>
+        <!-- Toolbar: breadcrumb + actions -->
+        <div class="s3b-toolbar">
+          <div class="s3b-breadcrumb-inner">
+            <span class="s3b-crumb root" @click="navigate('')">&#x1F3E0; root</span>
+            <template v-for="(crumb, i) in breadcrumbs" :key="i">
+              <span class="s3b-sep">/</span>
+              <span class="s3b-crumb" :class="{ active: i === breadcrumbs.length - 1 }" @click="navigate(crumb.prefix)">
+                {{ crumb.label }}
+              </span>
+            </template>
+          </div>
+          <div class="s3b-toolbar-actions">
+            <button class="s3b-btn accent" @click="triggerUpload()" :disabled="uploading" title="Upload files to current folder">
+              {{ uploading ? `Uploading (${uploadDone}/${uploadTotal})…` : '⬆ Upload' }}
+            </button>
+            <input ref="uploadInput" type="file" multiple style="display:none" @change="handleUploadFiles" />
+          </div>
+        </div>
+
+        <!-- Upload progress -->
+        <div v-if="uploadMessages.length" class="s3b-upload-log">
+          <span v-for="(m, i) in uploadMessages" :key="i" :class="m.ok ? 's3b-up-ok' : 's3b-up-err'">{{ m.text }}</span>
         </div>
 
         <!-- Main content -->
@@ -69,7 +82,10 @@
                 </div>
                 <div class="s3b-preview-actions">
                   <button class="s3b-btn accent" @click="downloadFile(selectedFile)" :disabled="downloading">
-                    {{ downloading ? 'Downloading...' : '&#x2913; Download' }}
+                    {{ downloading ? 'Downloading...' : '⬇ Download' }}
+                  </button>
+                  <button class="s3b-btn danger" @click="deleteSelectedFile()" :disabled="deleting">
+                    {{ deleting ? 'Deleting...' : '🗑 Delete' }}
                   </button>
                 </div>
               </div>
@@ -164,7 +180,15 @@ const previewLoading = ref(false)
 const previewError   = ref(null)
 const previewData    = ref(null)
 const downloading    = ref(false)
+const deleting       = ref(false)
 const filterText     = ref('')
+
+// Upload state
+const uploadInput    = ref(null)
+const uploading      = ref(false)
+const uploadDone     = ref(0)
+const uploadTotal    = ref(0)
+const uploadMessages = ref([])
 
 const breadcrumbs = computed(() => {
   const p = currentPrefix.value
@@ -283,6 +307,69 @@ async function downloadFile(file) {
   }
 }
 
+// ── Upload ────────────────────────────────────────────────────────────────────
+function triggerUpload() {
+  uploadMessages.value = []
+  uploadInput.value?.click()
+}
+
+async function handleUploadFiles(event) {
+  const filesToUpload = Array.from(event.target.files || [])
+  if (!filesToUpload.length) return
+  uploading.value  = true
+  uploadDone.value = 0
+  uploadTotal.value = filesToUpload.length
+  uploadMessages.value = []
+  const prefix = currentPrefix.value
+  for (const file of filesToUpload) {
+    const objectKey = prefix ? `${prefix}${file.name}` : file.name
+    try {
+      const arrayBuf = await file.arrayBuffer()
+      const body = new Uint8Array(arrayBuf)
+      const resp = await fetch(
+        `/api/cloud/gcp/storage/${encodeURIComponent(props.bucket)}/upload?key=${encodeURIComponent(objectKey)}&contentType=${encodeURIComponent(file.type || 'application/octet-stream')}`,
+        { method: 'POST', headers: { ...apiHeaders(), 'Content-Type': file.type || 'application/octet-stream' }, body }
+      )
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error || resp.statusText)
+      uploadMessages.value.push({ ok: true, text: `✓ ${file.name}` })
+    } catch (e) {
+      uploadMessages.value.push({ ok: false, text: `✗ ${file.name}: ${e.message}` })
+    }
+    uploadDone.value++
+  }
+  uploading.value = false
+  // Reset input so same files can be re-uploaded
+  if (uploadInput.value) uploadInput.value.value = ''
+  // Refresh listing
+  await loadFolder(currentPrefix.value)
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deleteSelectedFile() {
+  if (!selectedFile.value) return
+  const file = selectedFile.value
+  if (!window.confirm(`Delete "${file.key}"?\nThis cannot be undone.`)) return
+  deleting.value = true
+  try {
+    const resp = await fetch(
+      `/api/cloud/gcp/storage/${encodeURIComponent(props.bucket)}/object?key=${encodeURIComponent(file.key)}`,
+      { method: 'DELETE', headers: apiHeaders() }
+    )
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}))
+      throw new Error(data.error || resp.statusText)
+    }
+    selectedFile.value = null
+    previewData.value  = null
+    await loadFolder(currentPrefix.value)
+  } catch (e) {
+    alert('Delete failed: ' + e.message)
+  } finally {
+    deleting.value = false
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatSize(bytes) {
@@ -331,15 +418,25 @@ function fileIcon(name) {
 .s3b-badge.region { background: rgba(34,197,94,.12); color: #4ade80; }
 .s3b-close { background: none; border: none; cursor: pointer; color: #8b949e; font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 4px; }
 .s3b-close:hover { background: #21262d; color: #e6edf3; }
-.s3b-breadcrumb {
-  display: flex; align-items: center; gap: 2px; padding: 6px 16px;
-  font-size: 12px; background: #161b22; border-bottom: 1px solid #21262d; flex-shrink: 0; flex-wrap: wrap;
+.s3b-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 16px 5px 8px; background: #161b22; border-bottom: 1px solid #21262d; flex-shrink: 0; flex-wrap: wrap;
 }
+.s3b-breadcrumb-inner {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap; font-size: 12px;
+}
+.s3b-toolbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .s3b-crumb       { cursor: pointer; color: #8b949e; padding: 2px 6px; border-radius: 4px; }
 .s3b-crumb:hover,
 .s3b-crumb.root:hover { background: #21262d; color: #e6edf3; }
 .s3b-crumb.active { color: #e6edf3; cursor: default; }
 .s3b-sep          { color: #30363d; padding: 0 2px; }
+.s3b-upload-log {
+  display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 16px;
+  background: #0d1117; border-bottom: 1px solid #21262d; font-size: 11px; flex-shrink: 0;
+}
+.s3b-up-ok  { color: #4ade80; }
+.s3b-up-err { color: #f85149; }
 .s3b-content {
   display: flex; flex: 1; overflow: hidden;
 }
@@ -401,5 +498,7 @@ function fileIcon(name) {
 .s3b-btn.accent        { background: rgba(88,166,255,.18); border-color: #58a6ff; color: #58a6ff; }
 .s3b-btn.accent:hover  { background: rgba(88,166,255,.3); }
 .s3b-btn:disabled      { opacity: .5; cursor: not-allowed; }
+.s3b-btn.danger        { background: rgba(248,81,73,.15); border-color: rgba(248,81,73,.4); color: #f85149; }
+.s3b-btn.danger:hover  { background: rgba(248,81,73,.28); }
 .mono-xs { font-family: monospace; }
 </style>

@@ -320,6 +320,43 @@ export const useGcpStore = defineStore('gcp', () => {
     return apiFetch(`/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/logs?${params}`, { headers: headers() })
   }
 
+  // ─── Detail endpoints (master-detail panels) ──────────────────────────────
+  async function fetchCloudRunDetail(region, service) {
+    return apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(region)}/${encodeURIComponent(service)}/detail`, { headers: headers() })
+  }
+  async function fetchVmDetail(zone, name) {
+    return apiFetch(`/api/cloud/gcp/compute/vms/${encodeURIComponent(zone)}/${encodeURIComponent(name)}/detail`, { headers: headers() })
+  }
+  async function fetchVmLogs(zone, name, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    return apiFetch(`/api/cloud/gcp/compute/vms/${encodeURIComponent(zone)}/${encodeURIComponent(name)}/logs?${params}`, { headers: headers() })
+  }
+  async function fetchSqlDetail(instance) {
+    return apiFetch(`/api/cloud/gcp/sql/${encodeURIComponent(instance)}/detail`, { headers: headers() })
+  }
+  async function fetchFunctionDetail(location, name) {
+    return apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/detail`, { headers: headers() })
+  }
+
+  async function deleteGcsObject(bucket, key) {
+    return apiFetch(`/api/cloud/gcp/storage/${encodeURIComponent(bucket)}/object?key=${encodeURIComponent(key)}`, {
+      method: 'DELETE', headers: headers()
+    })
+  }
+
+  async function uploadGcsObject(bucket, key, file) {
+    const url = `/api/cloud/gcp/storage/${encodeURIComponent(bucket)}/upload?key=${encodeURIComponent(key)}&contentType=${encodeURIComponent(file.type || 'application/octet-stream')}`
+    const arrayBuf = await file.arrayBuffer()
+    const body = new Uint8Array(arrayBuf)
+    return apiFetch(url, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': file.type || 'application/octet-stream' },
+      body
+    })
+  }
+
   // Computed shortcuts for templates
   const cloudRunServices = { get value() { return tabs.value.cloudrun.data } }
   const gkeClusters      = { get value() { return tabs.value.gke.data } }
@@ -359,5 +396,9 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchKmsKeys,
     // Fase 1: Logs por recurso
     fetchCloudRunLogs, fetchGkeLogs, fetchVmSerialLog, fetchSqlLogs, fetchWorkflowLogs,
+    // Detail endpoints
+    fetchCloudRunDetail, fetchVmDetail, fetchVmLogs, fetchSqlDetail, fetchFunctionDetail,
+    // GCS mutations
+    deleteGcsObject, uploadGcsObject,
   }
 })
