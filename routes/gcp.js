@@ -447,6 +447,82 @@ router.post('/cloudrun/:region/:service/stop', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /cloudrun/:region/:service/logs ───────────────────────────────────────
+
+router.get('/cloudrun/:region/:service/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { region, service } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(region) || !/^[a-zA-Z0-9\-_]+$/.test(service)) {
+    return res.status(400).json({ error: 'Invalid region or service name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const hours = Math.min(parseInt(req.query.hours) || 3, 72);
+    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    const filter = [
+      `resource.type="cloud_run_revision"`,
+      `resource.labels.service_name="${service}"`,
+      `resource.labels.location="${region}"`,
+      `timestamp>="${since}"`,
+    ].join(' AND ');
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
+      resourceNames: [`projects/${projectId}`],
+      filter,
+      orderBy:  'timestamp desc',
+      pageSize: limit,
+    });
+    res.json({
+      entries: (data.entries || []).map(e => ({
+        timestamp: e.timestamp,
+        severity:  e.severity || 'DEFAULT',
+        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /gke/:location/:cluster/logs ─────────────────────────────────────────
+
+router.get('/gke/:location/:cluster/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { location, cluster } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(cluster)) {
+    return res.status(400).json({ error: 'Invalid location or cluster name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const hours = Math.min(parseInt(req.query.hours) || 3, 72);
+    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    const filter = [
+      `resource.type="k8s_cluster"`,
+      `resource.labels.cluster_name="${cluster}"`,
+      `resource.labels.location="${location}"`,
+      `timestamp>="${since}"`,
+    ].join(' AND ');
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
+      resourceNames: [`projects/${projectId}`],
+      filter,
+      orderBy:  'timestamp desc',
+      pageSize: limit,
+    });
+    res.json({
+      entries: (data.entries || []).map(e => ({
+        timestamp: e.timestamp,
+        severity:  e.severity || 'DEFAULT',
+        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+      })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /compute/vms ─────────────────────────────────────────────────────────
 
 router.get('/compute/vms', async (req, res) => {
@@ -493,11 +569,11 @@ router.post('/compute/vms/:zone/:name/start', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.start({ project: projectId, zone, instance: name });
     await operation.promise();
+    res.json({ success: true, instance: name, zone, action: 'start' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM started',
       resource: `${zone}/${name}`, context: profileId,
     });
-    res.json({ success: true, instance: name, zone, action: 'start' });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -515,12 +591,39 @@ router.post('/compute/vms/:zone/:name/stop', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.stop({ project: projectId, zone, instance: name });
     await operation.promise();
+    res.json({ success: true, instance: name, zone, action: 'stop' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM stopped',
       resource: `${zone}/${name}`, level: 'warning',
       context: profileId,
     });
-    res.json({ success: true, instance: name, zone, action: 'stop' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /compute/vms/:zone/:name/serial-log ──────────────────────────────────
+
+router.get('/compute/vms/:zone/:name/serial-log', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { zone, name } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(zone) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid zone or instance name' });
+  }
+  try {
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const { InstancesClient } = require('@google-cloud/compute');
+    const client = new InstancesClient({ auth });
+    const [result] = await client.getSerialPortOutput({ project: projectId, zone, instance: name, port: 1, start: -limit });
+    const lines = (result.contents || '').split('\n').filter(Boolean);
+    res.json({
+      entries: lines.slice(-limit).map(line => ({
+        timestamp: null,
+        severity: 'DEFAULT',
+        message: line,
+      })),
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -585,11 +688,11 @@ router.post('/sql/:instance/start', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'ALWAYS' } }
     );
+    res.json({ success: true, instance: req.params.instance, action: 'start' });
     auditLog.log({
       category: 'gcp', action: 'Cloud SQL instance started',
       resource: req.params.instance, context: profileId,
     });
-    res.json({ success: true, instance: req.params.instance, action: 'start' });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -606,12 +709,49 @@ router.post('/sql/:instance/stop', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'NEVER' } }
     );
+    res.json({ success: true, instance: req.params.instance, action: 'stop' });
     auditLog.log({
       category: 'gcp', action: 'Cloud SQL instance stopped',
       resource: req.params.instance, level: 'warning',
       context: profileId,
     });
-    res.json({ success: true, instance: req.params.instance, action: 'stop' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /sql/:instance/logs ───────────────────────────────────────────────────
+
+router.get('/sql/:instance/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { instance } = req.params;
+  if (!/^[a-zA-Z0-9\-_]+$/.test(instance)) {
+    return res.status(400).json({ error: 'Invalid instance name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const hours = Math.min(parseInt(req.query.hours) || 3, 72);
+    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    const filter = [
+      `resource.type="cloudsql_database"`,
+      `resource.labels.database_id="${projectId}:${instance}"`,
+      `timestamp>="${since}"`,
+    ].join(' AND ');
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
+      resourceNames: [`projects/${projectId}`],
+      filter,
+      orderBy:  'timestamp desc',
+      pageSize: limit,
+    });
+    res.json({
+      entries: (data.entries || []).map(e => ({
+        timestamp: e.timestamp,
+        severity:  e.severity || 'DEFAULT',
+        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+      })),
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1228,6 +1368,43 @@ router.get('/workflows/:location/:name/definition', async (req, res) => {
       authCtx
     );
     res.json({ sourceContents: data.sourceContents || '', name: data.name });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /workflows/:location/:name/logs → Cloud Logging entries for a workflow
+router.get('/workflows/:location/:name/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const { location, name } = req.params;
+  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid location or workflow name' });
+  }
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const hours = Math.min(parseInt(req.query.hours) || 3, 72);
+    const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    const filter = [
+      `resource.type="workflows.googleapis.com/Workflow"`,
+      `resource.labels.workflow_name="${name}"`,
+      `resource.labels.location="${location}"`,
+      `timestamp>="${since}"`,
+    ].join(' AND ');
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
+      resourceNames: [`projects/${projectId}`],
+      filter,
+      orderBy:  'timestamp desc',
+      pageSize: limit,
+    });
+    res.json({
+      entries: (data.entries || []).map(e => ({
+        timestamp: e.timestamp,
+        severity:  e.severity || 'DEFAULT',
+        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+      })),
+    });
   } catch (err) { handleErr(res, err); }
 });
 

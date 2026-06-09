@@ -45,6 +45,8 @@
               <td><div class="row-actions">
                 <button class="btn sm" @click="startCloudRun(svc)">Start</button>
                 <button class="btn sm danger" @click="stopCloudRun(svc)">Stop</button>
+                <button class="btn sm" @click="openLogs('cloudrun', svc)"><i data-lucide="scroll-text"></i> Logs</button>
+                <button class="btn sm" @click="openLogs('cloudrun', svc)"><i data-lucide="scroll-text"></i> Logs</button>
               </div></td>
             </tr>
           </tbody>
@@ -94,6 +96,7 @@
                   <i data-lucide="plug"></i>
                   {{ connectingCluster === c.name ? 'Connecting…' : 'Connect' }}
                 </button>
+                <button class="btn sm" @click="openLogs('gke', c)"><i data-lucide="scroll-text"></i> Logs</button>
               </td>
             </tr>
           </tbody>
@@ -117,6 +120,7 @@
               <td><div class="row-actions">
                 <button class="btn sm" @click="startVM(vm)" :disabled="vm.status === 'RUNNING'">Start</button>
                 <button class="btn sm danger" @click="stopVM(vm)" :disabled="vm.status === 'TERMINATED'">Stop</button>
+                <button class="btn sm" @click="openLogs('vms', vm)"><i data-lucide="scroll-text"></i> Logs</button>
               </div></td>
             </tr>
           </tbody>
@@ -141,6 +145,7 @@
               <td><div class="row-actions">
                 <button class="btn sm" @click="startSql(inst)" :disabled="inst.state === 'RUNNABLE'">Start</button>
                 <button class="btn sm danger" @click="stopSql(inst)" :disabled="inst.state !== 'RUNNABLE'">Stop</button>
+                <button class="btn sm" @click="openLogs('sql', inst)"><i data-lucide="scroll-text"></i> Logs</button>
               </div></td>
             </tr>
           </tbody>
@@ -318,6 +323,7 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openWfExecutions(wf)"><i data-lucide="play-circle"></i> Executions</button>
                   <button class="btn sm" @click="openWfDefinition(wf)"><i data-lucide="file-code-2"></i> Definition</button>
+                  <button class="btn sm" @click="openLogs('workflows', wf)"><i data-lucide="scroll-text"></i> Logs</button>
                 </div>
               </td>
             </tr>
@@ -729,6 +735,33 @@
           <div v-else-if="!fnLogsEntries.length" class="empty-row">No log entries in the last 3 hours.</div>
           <div v-else class="gcp-log-list">
             <div v-for="(entry, i) in fnLogsEntries" :key="i" class="gcp-log-entry">
+              <span class="gcp-log-ts">{{ entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--' }}</span>
+              <span :class="['gcp-log-sev', logSeverityClass(entry.severity)]">{{ (entry.severity || 'DEFAULT').slice(0,3) }}</span>
+              <span class="gcp-log-msg">{{ entry.message }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ══ Resource Logs Modal (cloudrun, gke, vms, sql, workflows) ═══════════ -->
+  <Teleport to="body">
+    <div v-if="resLogsOpen" class="gcp-modal-backdrop" @mousedown.self="resLogsOpen = false">
+      <div class="gcp-modal gcp-modal-wide">
+        <div class="gcp-modal-header">
+          <span>&#x1F4DC; {{ resLogsType }} Logs: {{ resLogsTarget?.name || resLogsTarget?.service }}</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn sm" :disabled="resLogsLoading" @click="reloadResLogs()">&#x21BA; Refresh</button>
+            <button class="s3b-close" @click="resLogsOpen = false">&#x2715;</button>
+          </div>
+        </div>
+        <div class="gcp-modal-body gcp-logs-body">
+          <div v-if="resLogsLoading" class="empty-row">Loading logs…</div>
+          <div v-else-if="resLogsError" class="s3b-error">{{ resLogsError }}</div>
+          <div v-else-if="!resLogsEntries.length" class="empty-row">No log entries in the last 3 hours.</div>
+          <div v-else class="gcp-log-list">
+            <div v-for="(entry, i) in resLogsEntries" :key="i" class="gcp-log-entry">
               <span class="gcp-log-ts">{{ entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '--' }}</span>
               <span :class="['gcp-log-sev', logSeverityClass(entry.severity)]">{{ (entry.severity || 'DEFAULT').slice(0,3) }}</span>
               <span class="gcp-log-msg">{{ entry.message }}</span>
@@ -1683,6 +1716,56 @@ function logSeverityClass(s) {
   if (s === 'WARNING') return 'log-warn'
   if (s === 'INFO') return 'log-info'
   return 'log-default'
+}
+
+// ── Resource Logs (cloudrun, gke, vms, sql, workflows) ──────────────────────
+const resLogsOpen    = ref(false)
+const resLogsType    = ref('')
+const resLogsTarget  = ref(null)
+const resLogsEntries = ref([])
+const resLogsLoading = ref(false)
+const resLogsError   = ref(null)
+
+async function openLogs(type, target) {
+  resLogsType.value   = type
+  resLogsTarget.value = target
+  resLogsEntries.value = []
+  resLogsError.value   = null
+  resLogsOpen.value    = true
+  await reloadResLogs()
+}
+
+async function reloadResLogs() {
+  const type   = resLogsType.value
+  const target = resLogsTarget.value
+  if (!target) return
+  resLogsLoading.value = true
+  resLogsError.value   = null
+  try {
+    let res
+    switch (type) {
+      case 'cloudrun':
+        res = await gcpStore.fetchCloudRunLogs(target.region, target.name)
+        break
+      case 'gke':
+        res = await gcpStore.fetchGkeLogs(target.location, target.name)
+        break
+      case 'vms':
+        res = await gcpStore.fetchVmSerialLog(target.zone, target.name)
+        break
+      case 'sql':
+        res = await gcpStore.fetchSqlLogs(target.name)
+        break
+      case 'workflows':
+        res = await gcpStore.fetchWorkflowLogs(target.location || target.region, target.name)
+        break
+      default:
+        resLogsError.value = `Unknown log type: ${type}`
+        return
+    }
+    resLogsEntries.value = res?.entries || []
+  } catch (e) { resLogsError.value = e.message }
+  finally { resLogsLoading.value = false }
 }
 
 // ── Secret Manager ───────────────────────────────────────────────────────────

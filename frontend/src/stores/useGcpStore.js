@@ -1,52 +1,6 @@
-/**
- * stores/useGcpStore.js
- * Pinia store for Google Cloud Platform resources.
- *
- * Each tab has its own { data, loading, error } state so a PERMISSION_DENIED
- * on one API does not block the others from loading.
- */
 import { defineStore } from 'pinia'
-import { ref, reactive } from 'vue'
+import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
-
-// Extract the "enable API" URL from a PERMISSION_DENIED gRPC error message.
-function extractEnableUrl(msg) {
-  if (!msg) return null
-
-  const m = msg.match(/https:\/\/console\.developers\.google\.com\/apis\/api\/[^\s]+/)
-  if (m) return m[0]
-
-  try {
-    const parsed = JSON.parse(msg)
-    const fromMeta = parsed?.error?.details
-      ?.find(d => d?.metadata?.activationUrl)
-      ?.metadata?.activationUrl
-    if (fromMeta) return fromMeta
-
-    const fromHelp = parsed?.error?.details
-      ?.find(d => Array.isArray(d?.links) && d.links.length)
-      ?.links?.[0]?.url
-    return fromHelp || null
-  } catch {
-    return null
-  }
-}
-
-function normalizeErrorMessage(msg) {
-  if (!msg) return 'Unknown GCP error'
-  try {
-    const parsed = JSON.parse(msg)
-    const apiMsg = parsed?.error?.message
-    if (apiMsg) return apiMsg
-  } catch {
-    // Non-JSON message, return as-is.
-  }
-  return msg
-}
-
-function makeTab() {
-  return reactive({ data: [], loading: false, error: null, enableUrl: null, nextPageToken: null, loadingMore: false })
-}
 
 export const useGcpStore = defineStore('gcp', () => {
   const { apiFetch } = useApi()
@@ -54,378 +8,322 @@ export const useGcpStore = defineStore('gcp', () => {
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
 
-  const tabs = reactive({
-    cloudrun:  makeTab(),
-    gke:       makeTab(),
-    vms:       makeTab(),
-    sql:       makeTab(),
-    storage:   makeTab(),
-    functions: makeTab(),
-    pubsub:    makeTab(),
-    secrets:   makeTab(),
-    artifact:  makeTab(),
-    bigquery:  makeTab(),
-    workflows: makeTab(),
-    dns:       makeTab(),
-    firestore: makeTab(),
-    spanner:   makeTab(),
-    memorystore: makeTab(),
-    tasks:     makeTab(),
-    scheduler: makeTab(),
-    build:     makeTab(),
-    iam:       makeTab(),
+  function createTab() {
+    return { data: [], loading: false, error: null, enableUrl: null, nextPageToken: null, loadingMore: false }
+  }
+
+  const tabs = ref({
+    cloudrun: createTab(), gke: createTab(), vms: createTab(), sql: createTab(),
+    storage: createTab(), functions: createTab(), pubsub: createTab(),
+    secrets: createTab(), artifact: createTab(), bigquery: createTab(),
+    workflows: createTab(), dns: createTab(), firestore: createTab(),
+    spanner: createTab(), memorystore: createTab(), tasks: createTab(),
+    scheduler: createTab(), build: createTab(), iam: createTab(),
     // Fase 4
-    cloudrunJobs: makeTab(),
-    pubsubSubs:   makeTab(),
-    vpc:          makeTab(),
-    monitoring:   makeTab(),
-    logging:      makeTab(),
-    kms:          makeTab(),
+    cloudrunJobs: createTab(), pubsubSubs: createTab(), vpc: createTab(),
+    monitoring: createTab(), logging: createTab(), kms: createTab(),
   })
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
-
   function headers() {
     if (!activeProfileId.value) throw new Error('No GCP profile selected')
     return { 'X-Profile-Id': activeProfileId.value }
   }
 
-  function resetTab(tab) {
-    tab.data         = []
-    tab.loading      = false
-    tab.error        = null
-    tab.enableUrl    = null
-    tab.nextPageToken = null
-    tab.loadingMore  = false
+  function setError(e, tabKey) {
+    const msg = e.message || String(e)
+    tabs.value[tabKey].error = msg
+    const match = msg.match(/https?:\/\/[^\s]+/)
+    tabs.value[tabKey].enableUrl = match ? match[0] : null
   }
 
-  async function fetchTab(tab, url) {
-    tab.loading      = true
-    tab.error        = null
-    tab.enableUrl    = null
+  async function fetchTab(tabKey, url) {
+    const tab = tabs.value[tabKey]
+    tab.loading = true
+    tab.error = null
     tab.nextPageToken = null
     try {
-      const result = await apiFetch(url, { headers: headers() })
-      if (result && typeof result === 'object' && !Array.isArray(result) && Array.isArray(result.items)) {
-        tab.data         = result.items
-        tab.nextPageToken = result.nextPageToken || null
+      const res = await apiFetch(url, { headers: headers() })
+      if (Array.isArray(res)) {
+        tab.data = res
+      } else if (res && res.items) {
+        tab.data = res.items
+        tab.nextPageToken = res.nextPageToken || null
       } else {
-        tab.data         = result
-        tab.nextPageToken = null
+        tab.data = []
       }
     } catch (e) {
-      const raw = e?.message || String(e)
-      tab.error = normalizeErrorMessage(raw)
-      tab.enableUrl = extractEnableUrl(raw) || extractEnableUrl(tab.error)
+      setError(e, tabKey)
+      tab.data = []
     } finally {
       tab.loading = false
     }
   }
 
-  async function appendTab(tab, url) {
+  async function appendTab(tabKey, url) {
+    const tab = tabs.value[tabKey]
     if (!tab.nextPageToken) return
-    tab.loadingMore  = true
-    tab.error        = null
+    tab.loadingMore = true
     try {
-      const result = await apiFetch(url, { headers: headers() })
-      if (result && typeof result === 'object' && !Array.isArray(result) && Array.isArray(result.items)) {
-        tab.data         = [...tab.data, ...result.items]
-        tab.nextPageToken = result.nextPageToken || null
+      const res = await apiFetch(url, { headers: headers() })
+      if (res && res.items) {
+        tab.data.push(...res.items)
+        tab.nextPageToken = res.nextPageToken || null
       }
-    } catch (e) {
-      const raw = e?.message || String(e)
-      tab.error = normalizeErrorMessage(raw)
-    } finally {
-      tab.loadingMore = false
-    }
+    } catch (e) { setError(e, tabKey) }
+    finally { tab.loadingMore = false }
   }
 
-  // ─── Actions ─────────────────────────────────────────────────────────────────
-
+  // ─── setActiveProfile ────────────────────────────────────────────────────────
   function setActiveProfile(id) {
     activeProfileId.value = id
-    Object.values(tabs).forEach(resetTab)
-  }
-
-  function fetchCloudRunServices() { return fetchTab(tabs.cloudrun,  '/api/cloud/gcp/cloudrun') }
-  function fetchGkeClusters()      { return fetchTab(tabs.gke,       '/api/cloud/gcp/gke') }
-  function fetchVMs()              { return fetchTab(tabs.vms,       '/api/cloud/gcp/compute/vms') }
-  function fetchSqlInstances()     { return fetchTab(tabs.sql,       '/api/cloud/gcp/sql') }
-  function fetchBuckets()          { return fetchTab(tabs.storage,   '/api/cloud/gcp/storage/buckets') }
-  function fetchFunctions()        { return fetchTab(tabs.functions, '/api/cloud/gcp/functions') }
-  function fetchPubSubTopics()     { return fetchTab(tabs.pubsub,    '/api/cloud/gcp/pubsub/topics') }
-  function fetchSecrets()          { return fetchTab(tabs.secrets,   '/api/cloud/gcp/secrets') }
-  function fetchArtifactRegistry() { return fetchTab(tabs.artifact,  '/api/cloud/gcp/artifact-registry') }
-  function fetchBigQueryDatasets() { return fetchTab(tabs.bigquery,  '/api/cloud/gcp/bigquery/datasets') }
-  function fetchWorkflows()        { return fetchTab(tabs.workflows, '/api/cloud/gcp/workflows') }
-  function fetchDnsZones()         { return fetchTab(tabs.dns,       '/api/cloud/gcp/dns/zones') }
-  function fetchFirestoreDbs()     { return fetchTab(tabs.firestore, '/api/cloud/gcp/firestore/databases') }
-  function fetchSpannerInstances() { return fetchTab(tabs.spanner,   '/api/cloud/gcp/spanner/instances') }
-  function fetchMemorystore()      { return fetchTab(tabs.memorystore, '/api/cloud/gcp/memorystore/instances') }
-  function fetchTaskQueues()       { return fetchTab(tabs.tasks,     '/api/cloud/gcp/tasks/queues') }
-  function fetchSchedulerJobs()    { return fetchTab(tabs.scheduler, '/api/cloud/gcp/scheduler/jobs') }
-  function fetchBuilds()           { return fetchTab(tabs.build,     '/api/cloud/gcp/build/builds') }
-  function fetchIamServiceAccounts() { return fetchTab(tabs.iam,    '/api/cloud/gcp/iam/service-accounts') }
-
-  // ── Fase 4 base fetches ──────────────────────────────────────────────────────
-  function fetchCloudRunJobs()         { return fetchTab(tabs.cloudrunJobs, '/api/cloud/gcp/cloudrun-jobs') }
-  function fetchPubSubSubscriptions()  { return fetchTab(tabs.pubsubSubs,   '/api/cloud/gcp/pubsub/subscriptions') }
-  function fetchVpcNetworks()          { return fetchTab(tabs.vpc,          '/api/cloud/gcp/vpc/networks') }
-  function fetchAlertPolicies()        { return fetchTab(tabs.monitoring,   '/api/cloud/gcp/monitoring/alerts') }
-  function fetchKmsKeyrings()          { return fetchTab(tabs.kms,          '/api/cloud/gcp/kms/keyrings') }
-
-  // Logging is query-based: no auto-fetch, but we expose a query action
-  async function queryLogs(filter = '', limit = 100, hours = 3) {
-    tabs.logging.loading = true
-    tabs.logging.error   = null
-    try {
-      const result = await apiFetch('/api/cloud/gcp/logging/query', {
-        method: 'POST',
-        headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filter, limit, hours }),
-      })
-      tabs.logging.data = result.entries || []
-      tabs.logging.nextPageToken = result.nextPageToken || null
-    } catch (e) {
-      const raw = e?.message || String(e)
-      tabs.logging.error = normalizeErrorMessage(raw)
-      tabs.logging.enableUrl = extractEnableUrl(raw) || extractEnableUrl(tabs.logging.error)
-    } finally {
-      tabs.logging.loading = false
-    }
-  }
-
-  // ── Fase 4 drill-down actions ─────────────────────────────────────────────
-  async function runCloudRunJob(location, job) {
-    return apiFetch(`/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/run`, {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: '{}',
+    Object.values(tabs.value).forEach(t => {
+      t.data = []
+      t.loading = false
+      t.error = null
+      t.enableUrl = null
+      t.nextPageToken = null
+      t.loadingMore = false
     })
   }
 
-  async function fetchJobExecutions(location, job) {
-    return apiFetch(
-      `/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/executions`,
-      { headers: headers() }
-    )
-  }
+  // ─── Base fetch functions ────────────────────────────────────────────────────
+  async function fetchCloudRunServices()    { return fetchTab('cloudrun',    '/api/cloud/gcp/cloudrun') }
+  async function fetchGkeClusters()         { return fetchTab('gke',         '/api/cloud/gcp/gke') }
+  async function fetchVMs()                 { return fetchTab('vms',         '/api/cloud/gcp/compute/vms') }
+  async function fetchSqlInstances()        { return fetchTab('sql',         '/api/cloud/gcp/sql') }
+  async function fetchBuckets()             { return fetchTab('storage',     '/api/cloud/gcp/storage/buckets') }
+  async function fetchFunctions()           { return fetchTab('functions',   '/api/cloud/gcp/functions') }
+  async function fetchPubSubTopics()        { return fetchTab('pubsub',      '/api/cloud/gcp/pubsub/topics') }
+  async function fetchSecrets()             { return fetchTab('secrets',     '/api/cloud/gcp/secrets') }
+  async function fetchArtifactRegistry()    { return fetchTab('artifact',    '/api/cloud/gcp/artifact-registry') }
+  async function fetchBigQueryDatasets()    { return fetchTab('bigquery',    '/api/cloud/gcp/bigquery/datasets') }
+  async function fetchWorkflows()           { return fetchTab('workflows',   '/api/cloud/gcp/workflows') }
+  async function fetchDnsZones()            { return fetchTab('dns',         '/api/cloud/gcp/dns/zones') }
+  async function fetchFirestoreDbs()        { return fetchTab('firestore',   '/api/cloud/gcp/firestore/databases') }
+  async function fetchSpannerInstances()    { return fetchTab('spanner',     '/api/cloud/gcp/spanner/instances') }
+  async function fetchMemorystore()         { return fetchTab('memorystore', '/api/cloud/gcp/memorystore/instances') }
+  async function fetchTaskQueues()          { return fetchTab('tasks',       '/api/cloud/gcp/tasks/queues') }
+  async function fetchSchedulerJobs()       { return fetchTab('scheduler',   '/api/cloud/gcp/scheduler/jobs') }
+  async function fetchBuilds()              { return fetchTab('build',       '/api/cloud/gcp/build/builds') }
+  async function fetchIamServiceAccounts()  { return fetchTab('iam',         '/api/cloud/gcp/iam/service-accounts') }
 
-  async function fetchVpcSubnets(network) {
-    return apiFetch(`/api/cloud/gcp/vpc/networks/${encodeURIComponent(network)}/subnets`, { headers: headers() })
-  }
-
-  async function fetchUptimeChecks() {
-    return apiFetch('/api/cloud/gcp/monitoring/uptime-checks', { headers: headers() })
-  }
-
-  async function fetchKmsKeys(location, keyring) {
-    return apiFetch(
-      `/api/cloud/gcp/kms/keyrings/${encodeURIComponent(location)}/${encodeURIComponent(keyring)}/keys`,
-      { headers: headers() }
-    )
-  }
-
+  // ─── Cloud Run actions ──────────────────────────────────────────────────────
   async function startCloudRunService(region, service) {
     try {
-      return await apiFetch(`/api/cloud/gcp/cloudrun/${region}/${service}/start`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.cloudrun.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(region)}/${encodeURIComponent(service)}/start`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'cloudrun'); return null }
   }
-
   async function stopCloudRunService(region, service) {
     try {
-      return await apiFetch(`/api/cloud/gcp/cloudrun/${region}/${service}/stop`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.cloudrun.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(region)}/${encodeURIComponent(service)}/stop`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'cloudrun'); return null }
   }
 
+  // ─── VM actions ─────────────────────────────────────────────────────────────
   async function startVM(zone, name) {
     try {
-      return await apiFetch(`/api/cloud/gcp/compute/vms/${zone}/${name}/start`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.vms.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/compute/vms/${encodeURIComponent(zone)}/${encodeURIComponent(name)}/start`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'vms'); return null }
   }
-
   async function stopVM(zone, name) {
     try {
-      return await apiFetch(`/api/cloud/gcp/compute/vms/${zone}/${name}/stop`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.vms.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/compute/vms/${encodeURIComponent(zone)}/${encodeURIComponent(name)}/stop`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'vms'); return null }
   }
 
-  async function startSqlInstance(name) {
+  // ─── SQL actions ────────────────────────────────────────────────────────────
+  async function startSqlInstance(instance) {
     try {
-      return await apiFetch(`/api/cloud/gcp/sql/${name}/start`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.sql.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/sql/${encodeURIComponent(instance)}/start`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'sql'); return null }
   }
-
-  async function stopSqlInstance(name) {
+  async function stopSqlInstance(instance) {
     try {
-      return await apiFetch(`/api/cloud/gcp/sql/${name}/stop`, {
-        method: 'POST', headers: headers(),
-      })
-    } catch (e) { tabs.sql.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/sql/${encodeURIComponent(instance)}/stop`, { method: 'POST', headers: headers() })
+    } catch (e) { setError(e, 'sql'); return null }
   }
 
+  // ─── Functions ──────────────────────────────────────────────────────────────
   async function invokeFunction(location, name, payload = {}) {
     try {
-      return await apiFetch(
-        `/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/invoke`,
-        { method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
-      )
-    } catch (e) { tabs.functions.error = e.message; return null }
+      return await apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/invoke`, { method: 'POST', headers: headers(), body: JSON.stringify(payload) })
+    } catch (e) { setError(e, 'functions'); return null }
   }
-
   async function fetchFunctionLogs(location, name, opts = {}) {
     const params = new URLSearchParams()
-    if (opts.limit)  params.append('limit', opts.limit)
-    if (opts.hours)  params.append('hours', opts.hours)
-    return apiFetch(
-      `/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/logs?${params}`,
-      { headers: headers() }
-    )
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    const qs = params.toString()
+    return apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(name)}/logs${qs ? '?' + qs : ''}`, { headers: headers() })
   }
 
+  // ─── Secrets ────────────────────────────────────────────────────────────────
   async function previewSecretKeys(name) {
     return apiFetch(`/api/cloud/gcp/secrets/${encodeURIComponent(name)}/preview-keys`, { headers: headers() })
   }
-
   async function importSecretKeys(name, body) {
-    return apiFetch(`/api/cloud/gcp/secrets/${encodeURIComponent(name)}/import-selected`, {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    })
+    return apiFetch(`/api/cloud/gcp/secrets/${encodeURIComponent(name)}/import-selected`, { method: 'POST', headers: headers(), body: JSON.stringify(body) })
   }
 
+  // ─── Artifact Registry ──────────────────────────────────────────────────────
   async function fetchArtifactPackages(location, repo) {
-    return apiFetch(
-      `/api/cloud/gcp/artifact-registry/${encodeURIComponent(location)}/${encodeURIComponent(repo)}/packages`,
-      { headers: headers() }
-    )
+    return apiFetch(`/api/cloud/gcp/artifact-registry/${encodeURIComponent(location)}/${encodeURIComponent(repo)}/packages`, { headers: headers() })
   }
 
-  // ── BigQuery ────────────────────────────────────────────────────────────────
+  // ─── BigQuery ───────────────────────────────────────────────────────────────
   async function fetchBigQueryTables(dataset) {
     return apiFetch(`/api/cloud/gcp/bigquery/datasets/${encodeURIComponent(dataset)}/tables`, { headers: headers() })
   }
-
   async function runBigQuery(query) {
-    return apiFetch('/api/cloud/gcp/bigquery/query', {
-      method: 'POST',
-      headers: { ...headers(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-    })
+    return apiFetch('/api/cloud/gcp/bigquery/query', { method: 'POST', headers: headers(), body: JSON.stringify({ query }) })
   }
-
   async function pollBigQueryJob(jobId) {
     return apiFetch(`/api/cloud/gcp/bigquery/query/${encodeURIComponent(jobId)}`, { headers: headers() })
   }
 
-  // ── Cloud Workflows ─────────────────────────────────────────────────────────
+  // ─── Workflows ──────────────────────────────────────────────────────────────
   async function fetchWorkflowExecutions(location, name) {
-    return apiFetch(
-      `/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/executions`,
-      { headers: headers() }
-    )
+    return apiFetch(`/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/executions`, { headers: headers() })
   }
-
   async function fetchWorkflowDefinition(location, name) {
-    return apiFetch(
-      `/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/definition`,
-      { headers: headers() }
-    )
+    return apiFetch(`/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/definition`, { headers: headers() })
   }
 
-  // ── Cloud DNS ───────────────────────────────────────────────────────────────
+  // ─── DNS ────────────────────────────────────────────────────────────────────
   async function fetchDnsRecords(zone) {
     return apiFetch(`/api/cloud/gcp/dns/zones/${encodeURIComponent(zone)}/records`, { headers: headers() })
   }
 
-  // ── Firestore ───────────────────────────────────────────────────────────────
+  // ─── Firestore ──────────────────────────────────────────────────────────────
   async function fetchFirestoreCollections(db) {
     return apiFetch(`/api/cloud/gcp/firestore/databases/${encodeURIComponent(db)}/collections`, { headers: headers() })
   }
-
   async function fetchFirestoreDocuments(db, collection, opts = {}) {
     const params = new URLSearchParams()
     if (opts.pageToken) params.append('pageToken', opts.pageToken)
-    if (opts.pageSize)  params.append('pageSize',  opts.pageSize)
-    return apiFetch(
-      `/api/cloud/gcp/firestore/databases/${encodeURIComponent(db)}/collections/${encodeURIComponent(collection)}/documents?${params}`,
-      { headers: headers() }
-    )
+    if (opts.pageSize) params.append('pageSize', opts.pageSize)
+    const qs = params.toString()
+    return apiFetch(`/api/cloud/gcp/firestore/databases/${encodeURIComponent(db)}/collections/${encodeURIComponent(collection)}/documents${qs ? '?' + qs : ''}`, { headers: headers() })
   }
 
-  // ── Cloud Spanner ────────────────────────────────────────────────────────────
+  // ─── Spanner ────────────────────────────────────────────────────────────────
   async function fetchSpannerDatabases(instance) {
     return apiFetch(`/api/cloud/gcp/spanner/instances/${encodeURIComponent(instance)}/databases`, { headers: headers() })
   }
-
   async function querySpanner(instance, database, sql) {
-    return apiFetch(`/api/cloud/gcp/spanner/instances/${encodeURIComponent(instance)}/databases/${encodeURIComponent(database)}/query`, {
-      method: 'POST',
-      headers: { ...headers(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sql }),
-    })
+    return apiFetch(`/api/cloud/gcp/spanner/instances/${encodeURIComponent(instance)}/databases/${encodeURIComponent(database)}/query`, { method: 'POST', headers: headers(), body: JSON.stringify({ sql }) })
   }
 
-  // ── Cloud Tasks ──────────────────────────────────────────────────────────────
+  // ─── Task Queues ────────────────────────────────────────────────────────────
   async function fetchQueueTasks(location, queue) {
     return apiFetch(`/api/cloud/gcp/tasks/queues/${encodeURIComponent(location)}/${encodeURIComponent(queue)}/tasks`, { headers: headers() })
   }
 
-  // ── Cloud Scheduler ──────────────────────────────────────────────────────────
-  async function runSchedulerJob(location, name) {
-    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(name)}/run`, {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: '{}',
-    })
+  // ─── Cloud Scheduler ────────────────────────────────────────────────────────
+  async function runSchedulerJob(location, job) {
+    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/run`, { method: 'POST', headers: headers() })
+  }
+  async function pauseSchedulerJob(location, job) {
+    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/pause`, { method: 'POST', headers: headers() })
+  }
+  async function resumeSchedulerJob(location, job) {
+    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/resume`, { method: 'POST', headers: headers() })
   }
 
-  async function pauseSchedulerJob(location, name) {
-    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(name)}/pause`, {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: '{}',
-    })
-  }
-
-  async function resumeSchedulerJob(location, name) {
-    return apiFetch(`/api/cloud/gcp/scheduler/jobs/${encodeURIComponent(location)}/${encodeURIComponent(name)}/resume`, {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: '{}',
-    })
-  }
-
-  // ── Cloud Build ──────────────────────────────────────────────────────────────
+  // ─── Cloud Build ────────────────────────────────────────────────────────────
   async function fetchBuildLogs(id) {
     return apiFetch(`/api/cloud/gcp/build/builds/${encodeURIComponent(id)}/logs`, { headers: headers() })
   }
 
-  // ── IAM Service Accounts ─────────────────────────────────────────────────────
+  // ─── IAM ────────────────────────────────────────────────────────────────────
   async function fetchIamKeys(email) {
     return apiFetch(`/api/cloud/gcp/iam/service-accounts/${encodeURIComponent(email)}/keys`, { headers: headers() })
   }
 
+  // ─── fetchMore ──────────────────────────────────────────────────────────────
   function fetchMoreBuilds() {
-    if (!tabs.build.nextPageToken) return
-    return appendTab(tabs.build, `/api/cloud/gcp/build/builds?pageToken=${encodeURIComponent(tabs.build.nextPageToken)}`)
+    if (!tabs.value.build.nextPageToken) return
+    return appendTab('build', `/api/cloud/gcp/build/builds?pageToken=${encodeURIComponent(tabs.value.build.nextPageToken)}`)
   }
-
   function fetchMoreIamServiceAccounts() {
-    if (!tabs.iam.nextPageToken) return
-    return appendTab(tabs.iam, `/api/cloud/gcp/iam/service-accounts?pageToken=${encodeURIComponent(tabs.iam.nextPageToken)}`)
+    if (!tabs.value.iam.nextPageToken) return
+    return appendTab('iam', `/api/cloud/gcp/iam/service-accounts?pageToken=${encodeURIComponent(tabs.value.iam.nextPageToken)}`)
+  }
+  function fetchMoreQueueTasks(location, queue) {
+    if (!tabs.value.tasks.nextPageToken) return
+    return appendTab('tasks', `/api/cloud/gcp/tasks/queues/${encodeURIComponent(location)}/${encodeURIComponent(queue)}/tasks?pageToken=${encodeURIComponent(tabs.value.tasks.nextPageToken)}`)
   }
 
-  function fetchMoreQueueTasks(location, queue) {
-    if (!tabs.tasks.nextPageToken) return
-    return appendTab(tabs.tasks, `/api/cloud/gcp/tasks/queues/${encodeURIComponent(location)}/${encodeURIComponent(queue)}/tasks?pageToken=${encodeURIComponent(tabs.tasks.nextPageToken)}`)
+  // ─── Fase 4 ─────────────────────────────────────────────────────────────────
+  async function fetchCloudRunJobs()        { return fetchTab('cloudrunJobs', '/api/cloud/gcp/cloudrun-jobs') }
+  async function fetchPubSubSubscriptions() { return fetchTab('pubsubSubs',   '/api/cloud/gcp/pubsub/subscriptions') }
+  async function fetchVpcNetworks()         { return fetchTab('vpc',          '/api/cloud/gcp/vpc/networks') }
+  async function fetchAlertPolicies()       { return fetchTab('monitoring',   '/api/cloud/gcp/monitoring/alerts') }
+  async function fetchKmsKeyrings()         { return fetchTab('kms',          '/api/cloud/gcp/kms/keyrings') }
+  async function fetchUptimeChecks() {
+    try {
+      const res = await apiFetch('/api/cloud/gcp/monitoring/uptime-checks', { headers: headers() })
+      tabs.value.monitoring.data = Array.isArray(res) ? res : (res?.uptimeChecks || [])
+      return tabs.value.monitoring.data
+    } catch (e) { setError(e, 'monitoring'); return [] }
+  }
+
+  async function fetchKmsKeys(location, ring) {
+    return apiFetch(`/api/cloud/gcp/kms/keyrings/${encodeURIComponent(location)}/${encodeURIComponent(ring)}/keys`, { headers: headers() })
+  }
+  async function fetchVpcSubnets(network) {
+    return apiFetch(`/api/cloud/gcp/vpc/networks/${encodeURIComponent(network)}/subnets`, { headers: headers() })
+  }
+  async function runCloudRunJob(location, job) {
+    return apiFetch(`/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/run`, { method: 'POST', headers: headers() })
+  }
+  async function fetchJobExecutions(location, job) {
+    return apiFetch(`/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/executions`, { headers: headers() })
+  }
+  async function queryLogs(filter, limit = 100, hours = 3) {
+    try {
+      const res = await apiFetch('/api/cloud/gcp/logging/query', { method: 'POST', headers: headers(), body: JSON.stringify({ filter, limit, hours }) })
+      tabs.value.logging.data = res?.entries || []
+      return res
+    } catch (e) { setError(e, 'logging'); return null }
+  }
+
+  // ─── Fase 1: Logs por recurso ──────────────────────────────────────────────
+  async function fetchCloudRunLogs(region, service, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    return apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(region)}/${encodeURIComponent(service)}/logs?${params}`, { headers: headers() })
+  }
+  async function fetchGkeLogs(location, cluster, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    return apiFetch(`/api/cloud/gcp/gke/${encodeURIComponent(location)}/${encodeURIComponent(cluster)}/logs?${params}`, { headers: headers() })
+  }
+  async function fetchVmSerialLog(zone, name, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    return apiFetch(`/api/cloud/gcp/compute/vms/${encodeURIComponent(zone)}/${encodeURIComponent(name)}/serial-log?${params}`, { headers: headers() })
+  }
+  async function fetchSqlLogs(instance, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    return apiFetch(`/api/cloud/gcp/sql/${encodeURIComponent(instance)}/logs?${params}`, { headers: headers() })
+  }
+  async function fetchWorkflowLogs(location, name, opts = {}) {
+    const params = new URLSearchParams()
+    if (opts.limit) params.append('limit', opts.limit)
+    if (opts.hours) params.append('hours', opts.hours)
+    return apiFetch(`/api/cloud/gcp/workflows/${encodeURIComponent(location)}/${encodeURIComponent(name)}/logs?${params}`, { headers: headers() })
   }
 
   // Computed shortcuts for templates
-  const cloudRunServices = { get value() { return tabs.cloudrun.data } }
-  const gkeClusters      = { get value() { return tabs.gke.data } }
-  const vms              = { get value() { return tabs.vms.data } }
+  const cloudRunServices = { get value() { return tabs.value.cloudrun.data } }
+  const gkeClusters      = { get value() { return tabs.value.gke.data } }
+  const vms              = { get value() { return tabs.value.vms.data } }
 
   return {
     activeProfileId, tabs,
@@ -459,5 +357,7 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchVpcSubnets,
     fetchUptimeChecks,
     fetchKmsKeys,
+    // Fase 1: Logs por recurso
+    fetchCloudRunLogs, fetchGkeLogs, fetchVmSerialLog, fetchSqlLogs, fetchWorkflowLogs,
   }
 })
