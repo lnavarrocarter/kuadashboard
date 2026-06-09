@@ -555,6 +555,24 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  async function putDynamoItem(table, item) {
+    try {
+      return await apiFetch(`/api/cloud/aws/dynamodb/${encodeURIComponent(table)}/item`, {
+        method: 'PUT', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item }),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function deleteDynamoItem(table, key) {
+    try {
+      return await apiFetch(`/api/cloud/aws/dynamodb/${encodeURIComponent(table)}/item`, {
+        method: 'DELETE', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
   // ─── Athena ──────────────────────────────────────────────────────────────────
 
   async function fetchAthenaWorkgroups() {
@@ -980,7 +998,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchGlueJobConfig, fetchGlueConnections, fetchGlueLogs,
     fetchRdsClusters, fetchRdsConfig, fetchRdsConnectionStrings, resetRdsPassword,
     fetchDocdbClusters, fetchDocdbConnectionStrings, fetchDocdbConfig, resetDocdbPassword, createDocdbCluster,
-    fetchDynamoTables, fetchDynamoTableConfig, scanDynamoTable, queryDynamoTable, createDynamoTable,
+    fetchDynamoTables, fetchDynamoTableConfig, scanDynamoTable, queryDynamoTable, createDynamoTable, putDynamoItem, deleteDynamoItem,
     fetchAthenaWorkgroups, fetchAthenaWorkgroupConfig, fetchAthenaCatalogs, fetchAthenaCatalogInfo, fetchAthenaTables, fetchAthenaHistory, startAthenaQuery, getAthenaQueryResult,
     fetchGlueTables,
     fetchCloudfrontDists, invalidateCloudfront,

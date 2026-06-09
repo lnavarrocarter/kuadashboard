@@ -2901,6 +2901,40 @@ router.post('/dynamodb/:table/query', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// PUT /dynamodb/:table/item  → put (create or replace) an item
+router.put('/dynamodb/:table/item', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { table } = req.params;
+    const { item } = req.body || {};
+    if (!item || typeof item !== 'object') return res.status(400).json({ error: 'item object is required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+    const { marshall } = require('@aws-sdk/util-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    await client.send(new PutItemCommand({ TableName: table, Item: marshall(item, { removeUndefinedValues: true }) }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /dynamodb/:table/item  → delete an item by key
+router.delete('/dynamodb/:table/item', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { table } = req.params;
+    const { key } = req.body || {};
+    if (!key || typeof key !== 'object') return res.status(400).json({ error: 'key object is required' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { DynamoDBClient, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
+    const { marshall } = require('@aws-sdk/util-dynamodb');
+    const client = new DynamoDBClient(cfg);
+    await client.send(new DeleteItemCommand({ TableName: table, Key: marshall(key, { removeUndefinedValues: true }) }));
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
 // POST /dynamodb  → create a new DynamoDB table
 router.post('/dynamodb', async (req, res) => {
   const profileId = requireProfileId(req, res);
