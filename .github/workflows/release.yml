@@ -83,7 +83,16 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Build
-        run: npm run ${{ matrix.cmd }}
+        shell: bash
+        run: |
+          # Unset empty signing vars so electron-builder does an unsigned build
+          # instead of failing with "not a file" on an empty CSC_LINK path.
+          if [[ -z "${CSC_LINK}" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "No signing secrets — building unsigned."
+          fi
+          npm run ${{ matrix.cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERCEL_OAUTH_CLIENT_ID: ${{ secrets.VERCEL_OAUTH_CLIENT_ID }}
