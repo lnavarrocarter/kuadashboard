@@ -415,6 +415,7 @@
     <WelcomeModal />
     <UpdateNotice />
     <ToastContainer />
+    <AwsSessionAlert />
   </div>
 </template>
 
@@ -457,6 +458,7 @@ import DonationModal    from './components/modals/DonationModal.vue'
 import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
+import AwsSessionAlert  from './components/AwsSessionAlert.vue'
 import { useUpdateStore } from './stores/useUpdateStore'
 
 const { t } = useI18n()
@@ -589,6 +591,21 @@ watch(activeProvider,   v  => LS.set('provider',       v))
 watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
+
+// Sanear ids de perfil persistidos cuando la lista de perfiles cambia:
+// si el perfil activo fue eliminado (p.ej. desde el Env Manager) se limpia,
+// y si queda exactamente un perfil del proveedor se selecciona solo.
+watch(() => envStore.profiles, (profiles) => {
+  if (envStore.error) return   // no tocar la selección si la carga falló
+  const exists = id => !id || id.startsWith('local:') || profiles.some(p => p.id === id)
+  if (!exists(awsProfileId.value))    { awsProfileId.value    = ''; awsStore.setActiveProfile(null) }
+  if (!exists(gcpProfileId.value))    { gcpProfileId.value    = ''; gcpStore.setActiveProfile(null) }
+  if (!exists(vercelProfileId.value)) { vercelProfileId.value = ''; vercelStore.setActiveProfile(null) }
+  if (!awsProfileId.value) {
+    const aws = profiles.filter(p => p.provider === 'aws')
+    if (aws.length === 1) { awsProfileId.value = aws[0].id; awsStore.setActiveProfile(aws[0].id) }
+  }
+}, { deep: true })
 watch(() => store.namespace, v => LS.set('kubeNs', v))
 watch(kubeDetailWidth, v => LS.set('kubeDetailWidth', String(v)))
 
