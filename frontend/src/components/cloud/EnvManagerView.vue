@@ -39,6 +39,10 @@
               </div>
             </div>
             <div class="profile-name">{{ profile.name }}</div>
+            <!-- SSO session expiry badge -->
+            <div v-if="ssoExpiry(profile)" class="sso-expiry-badge" :class="ssoExpiry(profile).cls">
+              {{ ssoExpiry(profile).label }}
+            </div>
             <div class="profile-meta text-dim">
               <span>{{ t('env.keys', { n: profile.keyNames?.length || 0 }) }}</span>
               <span>{{ t('env.updated', { time: relativeTime(profile.updatedAt) }) }}</span>
@@ -100,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useEnvStore }    from '../../stores/useEnvStore'
 import ProfileModal       from '../modals/ProfileModal.vue'
 import ImportEnvModal     from '../modals/ImportEnvModal.vue'
@@ -160,6 +164,22 @@ const profilesByCategory = computed(() => {
   return sorted
 })
 
+// ── SSO session expiry badge ───────────────────────────────────────────────────
+const now = ref(Date.now())
+let nowTick = null
+onMounted(() => { nowTick = setInterval(() => { now.value = Date.now() }, 30_000) })
+onUnmounted(() => clearInterval(nowTick))
+
+function ssoExpiry(profile) {
+  const expiresAt = profile.meta?.__sso?.expiresAt
+  if (!expiresAt) return null
+  const ms = expiresAt - now.value
+  if (ms <= 0) return { label: 'SSO · sesión expirada', cls: 'expired' }
+  const mins = Math.round(ms / 60000)
+  const rel  = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`
+  return { label: `SSO · expira en ${rel}`, cls: mins < 15 ? 'warning' : 'ok' }
+}
+
 function relativeTime(iso) {
   if (!iso) return '—'
   const diff = Date.now() - new Date(iso).getTime()
@@ -182,6 +202,28 @@ function relativeTime(iso) {
   color: var(--text-dim, #888);
   margin-bottom: 8px;
   padding-left: 2px;
+}
+
+.sso-expiry-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 2px 9px;
+  margin: 4px 0 2px;
+}
+.sso-expiry-badge.ok {
+  background: color-mix(in srgb, var(--green, #3fbf6f) 15%, transparent);
+  color: var(--green, #3fbf6f);
+}
+.sso-expiry-badge.warning {
+  background: color-mix(in srgb, var(--yellow, #e0b341) 15%, transparent);
+  color: var(--yellow, #e0b341);
+}
+.sso-expiry-badge.expired {
+  background: color-mix(in srgb, var(--red, #e05c5c) 15%, transparent);
+  color: var(--red, #e05c5c);
 }
 
 .key-chip-tag {

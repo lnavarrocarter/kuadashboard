@@ -42,6 +42,7 @@ const express      = require('express');
 const fs           = require('fs');
 const path         = require('path');
 const os           = require('os');
+const crypto       = require('crypto');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
 
@@ -51,8 +52,17 @@ const router = express.Router();
 
 function handleErr(res, err) {
   console.error('[aws]', err.message);
-  const status = err.$metadata?.httpStatusCode || 500;
-  res.status(status).json({ error: err.message });
+  let status  = err.$metadata?.httpStatusCode || 500;
+  let message = err.message;
+  // Temporary credentials (STS / IAM Identity Center) expire after a few hours —
+  // surface a clear, actionable message instead of the raw SDK error.
+  if (/ExpiredToken|expired/i.test(err.name || '') || /security token.*expired/i.test(message)) {
+    status  = 401;
+    message = 'AWS session credentials have expired. Refresh them (e.g. "aws sso login" or re-copy from IAM Identity Center) and update the profile.';
+  } else if (/UnrecognizedClientException|InvalidClientTokenId/.test(err.name || '')) {
+    message = `${message} — if you are using temporary credentials (key starts with "ASIA"), make sure the profile also includes AWS_SESSION_TOKEN.`;
+  }
+  res.status(status).json({ error: message });
 }
 
 /**
@@ -78,7 +88,8 @@ function readLocalAwsProfiles() {
     }
   }
 
-  // Parse config file for region overrides (profile names prefixed with "profile ")
+  // Parse config file (profile names prefixed with "profile "). Captures region
+  // overrides plus sso_* keys so SSO profiles ("aws configure sso") are detected.
   if (fs.existsSync(cfgFile)) {
     const lines = fs.readFileSync(cfgFile, 'utf8').split('\n');
     let current = null;
@@ -88,20 +99,34 @@ function readLocalAwsProfiles() {
       if (m) { current = m[1]; profiles[current] = profiles[current] || {}; continue; }
       if (!current) continue;
       const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
-      if (kv && kv[1].toLowerCase() === 'region') {
+      if (!kv) continue;
+      const key = kv[1].toLowerCase();
+      if (key === 'region') {
         if (!profiles[current].region) profiles[current].region = kv[2].trim();
+      } else if (key.startsWith('sso_')) {
+        profiles[current][key] = kv[2].trim();
       }
     }
   }
 
+  // "sso-session <name>" sections are token config, not usable profiles — drop them
   return Object.entries(profiles)
-    .filter(([, data]) => data.aws_access_key_id || data.aws_secret_access_key)
-    .map(([name, data]) => ({ name, region: data.region || 'us-east-1' }));
+    .filter(([name]) => !name.startsWith('sso-session '))
+    .filter(([, data]) =>
+      data.aws_access_key_id || data.aws_secret_access_key ||
+      data.sso_start_url || data.sso_session || data.sso_account_id)
+    .map(([name, data]) => ({
+      name,
+      region: data.region || 'us-east-1',
+      sso:    !!(data.sso_start_url || data.sso_session || data.sso_account_id),
+    }));
 }
 
 /**
  * Build AWS credentials config from a profile identifier.
- * - "local:<name>"  → use named profile from ~/.aws/credentials via fromIni
+ * - "local:<name>"  → use named profile from ~/.aws/credentials or ~/.aws/config via fromIni.
+ *                     Supports static keys, session tokens (aws_session_token) and
+ *                     SSO profiles ("aws configure sso" — requires an active "aws sso login" session).
  * - "<uuid>"        → look up stored profile in credentialStore
  */
 async function resolveAwsConfig(profileId) {
@@ -125,6 +150,7 @@ async function resolveAwsConfig(profileId) {
 
   const accessKeyId     = keys['AWS_ACCESS_KEY_ID'];
   const secretAccessKey = keys['AWS_SECRET_ACCESS_KEY'];
+  const sessionToken    = keys['AWS_SESSION_TOKEN'];
   if (!accessKeyId || !secretAccessKey)
     throw Object.assign(
       new Error('Profile is missing AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY'),
@@ -132,7 +158,9 @@ async function resolveAwsConfig(profileId) {
     );
 
   return {
-    credentials: { accessKeyId, secretAccessKey },
+    credentials: sessionToken
+      ? { accessKeyId, secretAccessKey, sessionToken }
+      : { accessKeyId, secretAccessKey },
     region: keys['AWS_DEFAULT_REGION'] || 'us-east-1',
   };
 }
@@ -152,6 +180,184 @@ function requireProfileId(req, res) {
   if (!id) { res.status(400).json({ error: 'X-Profile-Id header is required' }); return null; }
   return id;
 }
+
+// ─── IAM Identity Center (SSO) device-authorization login ────────────────────
+//
+// Implements the same browser-based flow the AWS CLI uses for "aws sso login":
+//   GET  /sso/local-profiles → SSO profiles detected in ~/.aws/config
+//   POST /sso/start          → register OIDC client + start device authorization;
+//                              returns the verification URL to open in a browser
+//   POST /sso/poll           → poll until the user approves in the browser
+//   GET  /sso/accounts       → accounts + roles visible to the authorized session
+//   POST /sso/credentials    → exchange the SSO token for role credentials
+//                              (access key / secret / session token / expiration)
+//
+// Pending login sessions live in memory only and die with the device code (~10 min).
+
+const ssoLoginSessions = new Map(); // sessionId → { region, clientId, clientSecret, deviceCode, accessToken, expiresAt }
+
+function gcSsoSessions() {
+  for (const [id, s] of ssoLoginSessions) if (Date.now() > s.expiresAt) ssoLoginSessions.delete(id);
+}
+
+/** Parse ~/.aws/config into raw sections: { "profile x": {...}, "sso-session y": {...} } */
+function parseAwsConfigSections() {
+  const cfgFile  = path.join(os.homedir(), '.aws', 'config');
+  const sections = {};
+  if (!fs.existsSync(cfgFile)) return sections;
+  let current = null;
+  for (const raw of fs.readFileSync(cfgFile, 'utf8').split('\n')) {
+    const line = raw.trim();
+    const m = line.match(/^\[([^\]]+)\]$/);
+    if (m) { current = m[1]; sections[current] = sections[current] || {}; continue; }
+    if (!current) continue;
+    const kv = line.match(/^([\w.]+)\s*=\s*(.+)$/);
+    if (kv) sections[current][kv[1].toLowerCase()] = kv[2].trim();
+  }
+  return sections;
+}
+
+router.get('/sso/local-profiles', (_req, res) => {
+  try {
+    const sections = parseAwsConfigSections();
+    const out = [];
+    for (const [section, data] of Object.entries(sections)) {
+      if (section.startsWith('sso-session ')) continue;
+      const name = section.replace(/^profile\s+/, '');
+      // Modern profiles reference an [sso-session] block; legacy ones inline sso_start_url
+      const sess      = data.sso_session ? (sections[`sso-session ${data.sso_session}`] || {}) : {};
+      const startUrl  = data.sso_start_url || sess.sso_start_url;
+      const ssoRegion = data.sso_region    || sess.sso_region;
+      if (!startUrl) continue;
+      out.push({
+        name,
+        startUrl,
+        ssoRegion: ssoRegion || 'us-east-1',
+        accountId: data.sso_account_id || '',
+        roleName:  data.sso_role_name  || '',
+        region:    data.region || 'us-east-1',
+      });
+    }
+    res.json(out);
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/sso/start', async (req, res) => {
+  try {
+    const { startUrl, ssoRegion } = req.body || {};
+    if (!startUrl) return res.status(400).json({ error: 'startUrl is required' });
+    const region = ssoRegion || 'us-east-1';
+    const { SSOOIDCClient, RegisterClientCommand, StartDeviceAuthorizationCommand } =
+      require('@aws-sdk/client-sso-oidc');
+    const oidc = new SSOOIDCClient({ region });
+    const reg  = await oidc.send(new RegisterClientCommand({
+      clientName: 'kuadashboard', clientType: 'public',
+    }));
+    const auth = await oidc.send(new StartDeviceAuthorizationCommand({
+      clientId: reg.clientId, clientSecret: reg.clientSecret, startUrl,
+    }));
+    gcSsoSessions();
+    const sessionId = crypto.randomUUID();
+    ssoLoginSessions.set(sessionId, {
+      region,
+      clientId:     reg.clientId,
+      clientSecret: reg.clientSecret,
+      deviceCode:   auth.deviceCode,
+      expiresAt:    Date.now() + (auth.expiresIn || 600) * 1000,
+    });
+    auditLog.log({
+      category: 'aws', action: 'SSO device authorization started', resource: startUrl,
+    });
+    res.json({
+      sessionId,
+      verificationUri:         auth.verificationUri,
+      verificationUriComplete: auth.verificationUriComplete,
+      userCode:                auth.userCode,
+      expiresIn:               auth.expiresIn,
+      interval:                auth.interval || 5,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/sso/poll', async (req, res) => {
+  try {
+    const sess = ssoLoginSessions.get(req.body?.sessionId);
+    if (!sess) return res.status(404).json({ error: 'SSO login session not found or expired — start again' });
+    if (sess.accessToken) return res.json({ status: 'authorized' });
+    const { SSOOIDCClient, CreateTokenCommand } = require('@aws-sdk/client-sso-oidc');
+    const oidc = new SSOOIDCClient({ region: sess.region });
+    try {
+      const tok = await oidc.send(new CreateTokenCommand({
+        clientId:     sess.clientId,
+        clientSecret: sess.clientSecret,
+        grantType:    'urn:ietf:params:oauth:grant-type:device_code',
+        deviceCode:   sess.deviceCode,
+      }));
+      sess.accessToken = tok.accessToken;
+      return res.json({ status: 'authorized' });
+    } catch (e) {
+      if (e.name === 'AuthorizationPendingException' || e.name === 'SlowDownException')
+        return res.json({ status: 'pending' });
+      if (e.name === 'ExpiredTokenException')  { ssoLoginSessions.delete(req.body.sessionId); return res.json({ status: 'expired' }); }
+      if (e.name === 'AccessDeniedException')  { ssoLoginSessions.delete(req.body.sessionId); return res.json({ status: 'denied' }); }
+      throw e;
+    }
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/sso/accounts', async (req, res) => {
+  try {
+    const sess = ssoLoginSessions.get(req.query.sessionId);
+    if (!sess?.accessToken) return res.status(400).json({ error: 'SSO session not authorized yet' });
+    const { SSOClient, ListAccountsCommand, ListAccountRolesCommand } = require('@aws-sdk/client-sso');
+    const sso = new SSOClient({ region: sess.region });
+    const accounts = [];
+    let nextToken;
+    do {
+      const page = await sso.send(new ListAccountsCommand({ accessToken: sess.accessToken, nextToken }));
+      accounts.push(...(page.accountList || []));
+      nextToken = page.nextToken;
+    } while (nextToken);
+    const out = [];
+    for (const acc of accounts) {
+      const roles = [];
+      let roleToken;
+      do {
+        const page = await sso.send(new ListAccountRolesCommand({
+          accessToken: sess.accessToken, accountId: acc.accountId, nextToken: roleToken,
+        }));
+        roles.push(...(page.roleList || []).map(r => r.roleName));
+        roleToken = page.nextToken;
+      } while (roleToken);
+      out.push({ accountId: acc.accountId, accountName: acc.accountName, email: acc.emailAddress, roles });
+    }
+    res.json(out);
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/sso/credentials', async (req, res) => {
+  try {
+    const { sessionId, accountId, roleName } = req.body || {};
+    const sess = ssoLoginSessions.get(sessionId);
+    if (!sess?.accessToken) return res.status(400).json({ error: 'SSO session not authorized yet' });
+    if (!accountId || !roleName) return res.status(400).json({ error: 'accountId and roleName are required' });
+    const { SSOClient, GetRoleCredentialsCommand } = require('@aws-sdk/client-sso');
+    const sso = new SSOClient({ region: sess.region });
+    const out = await sso.send(new GetRoleCredentialsCommand({
+      accessToken: sess.accessToken, accountId, roleName,
+    }));
+    const c = out.roleCredentials || {};
+    auditLog.log({
+      category: 'aws', action: 'SSO role credentials issued', resource: `${accountId}/${roleName}`,
+    });
+    res.json({
+      accessKeyId:     c.accessKeyId,
+      secretAccessKey: c.secretAccessKey,
+      sessionToken:    c.sessionToken,
+      expiration:      c.expiration,   // epoch milliseconds
+    });
+  } catch (err) { handleErr(res, err); }
+});
 
 // ─── GET /regions ─────────────────────────────────────────────────────────────
 

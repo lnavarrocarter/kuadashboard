@@ -12,11 +12,23 @@ Las credenciales de AWS pueden configurarse de múltiples formas:
 
 | Método | Descripción |
 |---|---|
-| **Env Manager** | Perfiles nombrados con `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y `AWS_DEFAULT_REGION` |
+| **Env Manager** | Perfiles nombrados con `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (opcional, para credenciales temporales) y `AWS_DEFAULT_REGION` |
 | **AWS CLI** | Lee `~/.aws/credentials` y `~/.aws/config` automáticamente |
-| **Perfiles locales** | Selecciona cualquier perfil nombrado de tu `~/.aws/credentials` |
+| **Perfiles locales** | Selecciona cualquier perfil nombrado de tu `~/.aws/credentials` o `~/.aws/config`, incluyendo perfiles SSO creados con `aws configure sso` |
 | **Variables de entorno** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
 | **Roles IAM** | Al ejecutar en infraestructura AWS (EC2, tarea ECS, Lambda, etc.) |
+
+### Credenciales temporales (STS / IAM Identity Center)
+
+Los perfiles soportan credenciales de sesión temporales — las que emite AWS STS o el portal de acceso de IAM Identity Center (SSO), donde la access key empieza con `ASIA`. Pega los tres valores (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) en el formulario del perfil o impórtalos desde un archivo `.env`. Cuando la sesión expira, el dashboard muestra un mensaje claro pidiendo renovar las credenciales.
+
+Alternativamente, si ya usas `aws sso login` desde la terminal, tus perfiles SSO aparecen en la lista de **perfiles locales** y el SDK resuelve la sesión cacheada automáticamente — sin copy-paste mientras la sesión SSO esté activa.
+
+### Login SSO integrado (sin copy-paste)
+
+Al crear un perfil AWS, elige **"Iniciar sesión temporal (SSO)"**. KuaDashboard detecta tus perfiles SSO de `~/.aws/config` (o pegas la start URL una sola vez), abre el portal de acceso de AWS en tu navegador, y al aprobar captura las credenciales temporales y las guarda en el vault cifrado automáticamente — el mismo flujo de device-authorization que usa el AWS CLI.
+
+El dashboard vigila la expiración de la sesión: las tarjetas de perfil muestran un badge con cuenta regresiva en vivo, y cuando quedan menos de 15 minutos aparece una alerta persistente con un botón **"Renovar sesión"** de un clic que repite el login del navegador y refresca las credenciales guardadas.
 
 Selecciona el perfil activo y la región desde los dropdowns en el encabezado del panel AWS.
 

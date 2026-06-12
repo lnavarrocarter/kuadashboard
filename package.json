@@ -51,6 +51,8 @@
     "@aws-sdk/client-s3": "^3.1032.0",
     "@aws-sdk/client-secrets-manager": "^3.1033.0",
     "@aws-sdk/client-sfn": "^3.1032.0",
+    "@aws-sdk/client-sso": "^3.1068.0",
+    "@aws-sdk/client-sso-oidc": "^3.1068.0",
     "@aws-sdk/credential-providers": "^3.1032.0",
     "@aws-sdk/util-dynamodb": "^3.996.2",
     "@google-cloud/compute": "^4.0.0",
