@@ -650,6 +650,10 @@ async function handleConnectionSave(payload) {
 
   // Vercel OAuth flow: profile already created by backend callback, just select it
   if (payload.oauthProfile && payload.provider === 'vercel') {
+    if (!payload.oauthProfile.id || !payload.oauthProfile.name) {
+      toast('Vercel OAuth failed: invalid callback response', 'error')
+      return
+    }
     modals.addConnection = false
     await envStore.fetchProfiles()
     vercelProfileId.value = payload.oauthProfile.id
