@@ -481,9 +481,26 @@ function handleDeepLink(url) {
     if (host === 'vercel' && path === '/callback') {
       const code  = parsed.searchParams.get('code');
       const state = parsed.searchParams.get('state');
+      const oauthError = parsed.searchParams.get('error');
+      const oauthErrorDescription = parsed.searchParams.get('error_description');
+
+      if (oauthError) {
+        const message = oauthErrorDescription
+          ? `Vercel OAuth failed: ${oauthErrorDescription}`
+          : `Vercel OAuth failed: ${oauthError}`;
+        console.error('[electron] vercel oauth callback error:', message);
+        if (mainWindow) {
+          mainWindow.webContents.send('vercel:oauth-error', message);
+        }
+        return;
+      }
 
       if (!code || !state) {
-        console.warn('[electron] kua://vercel/callback missing code or state');
+        const message = 'Vercel OAuth callback missing code or state';
+        console.warn(`[electron] ${message}`);
+        if (mainWindow) {
+          mainWindow.webContents.send('vercel:oauth-error', message);
+        }
         return;
       }
 
@@ -493,7 +510,17 @@ function handleDeepLink(url) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ code, state }),
       })
-        .then(r => r.json())
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const message = data?.error || `OAuth callback failed (${response.status})`;
+            throw new Error(message);
+          }
+          if (!data?.id || !data?.name) {
+            throw new Error('OAuth callback returned invalid profile data');
+          }
+          return data;
+        })
         .then(data => {
           if (mainWindow) {
             // Notify the renderer so it can refresh its profile list and
