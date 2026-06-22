@@ -195,6 +195,7 @@
                   <svg width="14" height="12" viewBox="0 0 76 65" fill="currentColor"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
                   {{ oauthPending ? 'Waiting for authorization…' : 'Connect with Vercel' }}
                 </button>
+                <span v-if="oauthErrorMsg" class="text-red" style="font-size:12px">{{ oauthErrorMsg }}</span>
                 <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
                   <hr style="flex:1;border-color:var(--border)" />
                   or enter token manually
@@ -739,10 +740,12 @@ function submit() {
 // ── Vercel OAuth ───────────────────────────────────────────────────────────────
 const isElectron   = typeof window !== 'undefined' && !!window.kuaElectron
 const oauthPending = ref(false)
+const oauthErrorMsg = ref('')
 let oauthHandlers  = []
 
 function startVercelOAuth() {
   if (!window.kuaElectron?.startVercelOAuth) return
+  oauthErrorMsg.value = ''
   oauthPending.value = true
   const name = form.value.name.trim() || 'Vercel'
   window.kuaElectron.startVercelOAuth(name)
@@ -753,6 +756,7 @@ onMounted(() => {
 
   const successHandler = window.kuaElectron.onVercelOAuthComplete?.((profile) => {
     oauthPending.value = false
+    oauthErrorMsg.value = ''
     // Emit save with the profile returned by the backend OAuth callback
     // App.vue treats this as a "select existing profile" event
     emit('save', { oauthProfile: profile, provider: 'vercel' })
@@ -761,7 +765,7 @@ onMounted(() => {
 
   const errorHandler = window.kuaElectron.onVercelOAuthError?.((msg) => {
     oauthPending.value = false
-    console.error('[ProfileModal] Vercel OAuth error:', msg)
+    oauthErrorMsg.value = msg || 'Vercel OAuth failed'
   })
 
   if (successHandler) oauthHandlers.push(['vercel:oauth-complete', successHandler])
