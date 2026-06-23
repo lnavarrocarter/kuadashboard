@@ -729,6 +729,9 @@
                 <option v-for="wg in awsStore.athenaWorkgroups" :key="wg.name" :value="wg.name">{{ wg.name }}</option>
               </select>
               <span v-if="athenaEditor.selectedDb" class="text-dim" style="font-size:11px">{{ athenaEditor.selectedCatalog }}.{{ athenaEditor.selectedDb }}</span>
+              <input v-if="!athenaSelectedWgOutputLocation" v-model="athenaEditor.outputLocation" class="ctrl-input" type="text"
+                placeholder="s3://bucket/path — output location (workgroup has none configured)"
+                style="font-size:11px;min-width:280px" title="This workgroup has no query result location configured in AWS. Provide an S3 path to use for this query." />
               <div style="flex:1"></div>
               <button class="btn sm" @click="loadAthenaHistory" title="Query history">📋 History</button>
               <button class="btn" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e;font-size:12px"
@@ -2811,6 +2814,9 @@
           <textarea v-model="athenaModal.query" rows="5" class="ctrl-input"
             style="font-family:monospace;font-size:12px;resize:vertical"
             placeholder="SELECT * FROM my_database.my_table LIMIT 10;"></textarea>
+          <input v-if="!athenaModal.workgroup?.outputLocation" v-model="athenaModal.outputLocation" class="ctrl-input" type="text"
+            placeholder="s3://bucket/path — output location (workgroup has none configured)"
+            title="This workgroup has no query result location configured in AWS. Provide an S3 path to use for this query." />
           <div style="display:flex;align-items:center;gap:8px">
             <button class="btn" @click="submitAthenaQuery" :disabled="athenaModal.loading || !athenaModal.query.trim()">
               {{ athenaModal.loading ? 'Running...' : '▶ Run Query' }}
@@ -5062,19 +5068,26 @@ async function runGlueJob(job) {
 
 const athenaModal = reactive({
   open: false, loading: false, workgroup: null,
-  query: '', queryId: null, status: null, results: null, error: null,
+  query: '', outputLocation: '', queryId: null, status: null, results: null, error: null,
 })
 
 function openAthenaQuery(wg) {
-  Object.assign(athenaModal, { open: true, workgroup: wg, query: '', queryId: null, status: null, results: null, error: null, loading: false })
+  Object.assign(athenaModal, { open: true, workgroup: wg, query: '', outputLocation: '', queryId: null, status: null, results: null, error: null, loading: false })
 }
 
 async function submitAthenaQuery() {
   if (!athenaModal.query.trim()) return
   athenaModal.loading = true; athenaModal.error = null; athenaModal.results = null; athenaModal.status = null
   try {
-    const r = await awsStore.startAthenaQuery(athenaModal.query, athenaModal.workgroup?.name, athenaModal.workgroup?.outputLocation)
-    if (!r?.queryExecutionId) { athenaModal.error = awsStore.error || 'Failed to start query'; return }
+    const outputLocation = athenaModal.workgroup?.outputLocation || athenaModal.outputLocation.trim() || undefined
+    const r = await awsStore.startAthenaQuery(athenaModal.query, athenaModal.workgroup?.name, outputLocation)
+    if (!r?.queryExecutionId) {
+      const msg = awsStore.error || 'Failed to start query'
+      athenaModal.error = !outputLocation && /output location/i.test(msg)
+        ? `${msg} Enter an S3 path above and run again.`
+        : msg
+      return
+    }
     athenaModal.queryId = r.queryExecutionId
     // Poll until done (max 30s)
     for (let i = 0; i < 30; i++) {
@@ -5709,7 +5722,7 @@ async function openAthenaWgInfo(wg) {
 }
 
 function openAthenaWgQuery(wg) {
-  Object.assign(athenaModal, { open: true, workgroup: wg, query: '', queryId: null, status: null, results: null, error: null, loading: false })
+  Object.assign(athenaModal, { open: true, workgroup: wg, query: '', outputLocation: '', queryId: null, status: null, results: null, error: null, loading: false })
 }
 
 // ─── Athena Catalog Info Modal ────────────────────────────────────────────────
@@ -5738,6 +5751,7 @@ const athenaEditor = reactive({
   selectedCatalog: '',
   selectedDb: '',
   selectedTable: '',
+  outputLocation: '',
   catalogs: [],
   catalogsLoading: false,
   running: false,
@@ -5751,6 +5765,12 @@ const athenaEditor = reactive({
   history: [],
   historyLoading: false,
 })
+
+// Workgroups created without a query result location need the user to supply
+// one manually (AWS rejects StartQueryExecution otherwise); see athenaEditor.outputLocation.
+const athenaSelectedWgOutputLocation = computed(() =>
+  awsStore.athenaWorkgroups.find(w => w.name === athenaEditor.selectedWorkgroup)?.outputLocation
+)
 
 async function loadAthenaCatalogs() {
   athenaEditor.catalogsLoading = true
@@ -5794,9 +5814,15 @@ async function runAthenaEditorQuery() {
   athenaEditor.running = true; athenaEditor.error = null; athenaEditor.results = null; athenaEditor.status = null; athenaEditor.queryId = null
   try {
     const wg = athenaEditor.selectedWorkgroup || awsStore.athenaWorkgroups?.[0]?.name || 'primary'
-    const outputLocation = awsStore.athenaWorkgroups.find(w => w.name === wg)?.outputLocation
+    const outputLocation = athenaSelectedWgOutputLocation.value || athenaEditor.outputLocation.trim() || undefined
     const r = await awsStore.startAthenaQuery(athenaEditor.sql, wg, outputLocation)
-    if (!r?.queryExecutionId) { athenaEditor.error = awsStore.error || 'Failed to start query'; return }
+    if (!r?.queryExecutionId) {
+      const msg = awsStore.error || 'Failed to start query'
+      athenaEditor.error = !outputLocation && /output location/i.test(msg)
+        ? `${msg} Enter an S3 path in the field next to the workgroup selector and run again.`
+        : msg
+      return
+    }
     athenaEditor.queryId = r.queryExecutionId
     for (let i = 0; i < 60; i++) {
       await new Promise(res => setTimeout(res, 1000))
