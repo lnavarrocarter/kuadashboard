@@ -630,17 +630,24 @@ router.post('/oauth/callback', async (req, res) => {
     return res.status(501).json({ error: 'VERCEL_OAUTH_CLIENT_ID / VERCEL_OAUTH_CLIENT_SECRET are not configured' });
   }
 
-  const { code, state } = req.body || {};
-  if (!code || !state) {
-    return res.status(400).json({ error: 'code and state are required' });
+  const { code, state, configurationId, teamId: marketplaceTeamId, next, source } = req.body || {};
+  if (!code || (!state && !configurationId)) {
+    return res.status(400).json({ error: 'code and either state or configurationId are required' });
   }
 
-  // Validate state to prevent CSRF
-  const stateData = oauthStates.get(state);
-  if (!stateData) {
-    return res.status(400).json({ error: 'Invalid or expired OAuth state' });
+  // Determine flow: marketplace (configurationId) vs standard OAuth (state)
+  const isMarketplace = !!configurationId;
+  let profileName = 'Vercel';
+
+  if (!isMarketplace) {
+    // Standard OAuth: validate CSRF state
+    const stateData = oauthStates.get(state);
+    if (!stateData) {
+      return res.status(400).json({ error: 'Invalid or expired OAuth state' });
+    }
+    oauthStates.delete(state);
+    profileName = stateData.profileName || 'Vercel';
   }
-  oauthStates.delete(state);
 
   try {
     // Exchange code for token
@@ -663,17 +670,18 @@ router.post('/oauth/callback', async (req, res) => {
 
     const tokenData = await tokenRes.json();
     const token     = tokenData.access_token;
-    const teamId    = tokenData.team_id || null;
+    // Prefer teamId from token response; fall back to marketplace param
+    const teamId    = tokenData.team_id || marketplaceTeamId || null;
 
     if (!token) {
       return res.status(502).json({ error: 'No access_token in Vercel response' });
     }
 
     // Save to credential vault as a new profile
-    const store       = getStore();
-    const profileName = stateData.profileName || 'Vercel';
-    const keys        = { VERCEL_API_TOKEN: token };
+    const store = getStore();
+    const keys  = { VERCEL_API_TOKEN: token };
     if (teamId) keys.VERCEL_TEAM_ID = teamId;
+    if (configurationId) keys.VERCEL_CONFIGURATION_ID = configurationId;
 
     const profile = await store.createProfile({ name: profileName, provider: 'vercel', keys });
 
@@ -681,11 +689,11 @@ router.post('/oauth/callback', async (req, res) => {
       category: 'vercel',
       action:   'oauth-connect',
       resource: profile.id,
-      details:  { name: profileName, hasTeamId: !!teamId },
+      details:  { name: profileName, hasTeamId: !!teamId, isMarketplace, configurationId },
       level:    'info',
     });
 
-    res.json({ id: profile.id, name: profile.name });
+    res.json({ id: profile.id, name: profile.name, next: next || null });
   } catch (err) {
     handleErr(res, err);
   }

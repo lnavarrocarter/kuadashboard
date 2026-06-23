@@ -42,15 +42,29 @@ If automatic forwarding fails, use the link above manually to return to the app.
 				return
 			}
 
-			if (!code || !state) {
+			// Marketplace flow: code + configurationId (no state)
+			const configurationId = url.searchParams.get('configurationId')
+			const next            = url.searchParams.get('next')
+			const teamId          = url.searchParams.get('teamId')
+			const source          = url.searchParams.get('source')
+
+			if (!code || (!state && !configurationId)) {
 				container.innerHTML = '<p style="margin:0 0 .5rem;color:#d29922;font-weight:600;">Missing OAuth parameters</p>' +
-					'<p style="margin:0;">This page expects code and state query parameters from Vercel.</p>'
+					'<p style="margin:0;">This page expects code and state (or configurationId) query parameters from Vercel.</p>'
 				document.body.appendChild(container)
 				return
 			}
 
 			document.body.appendChild(container)
-			window.location.replace(`kua://vercel/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`)
+
+			// Build deep-link forwarding all Vercel params
+			const deepParams = new URLSearchParams({ code })
+			if (state)           deepParams.set('state', state)
+			if (configurationId) deepParams.set('configurationId', configurationId)
+			if (teamId)          deepParams.set('teamId', teamId)
+			if (next)            deepParams.set('next', next)
+			if (source)          deepParams.set('source', source)
+			window.location.replace(`kua://vercel/callback?${deepParams.toString()}`)
 		})()
 	}
 </script>

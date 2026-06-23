@@ -479,9 +479,13 @@ function handleDeepLink(url) {
     const path   = parsed.pathname; // '/callback'
 
     if (host === 'vercel' && path === '/callback') {
-      const code  = parsed.searchParams.get('code');
-      const state = parsed.searchParams.get('state');
-      const oauthError = parsed.searchParams.get('error');
+      const code            = parsed.searchParams.get('code');
+      const state           = parsed.searchParams.get('state');
+      const configurationId = parsed.searchParams.get('configurationId');
+      const teamId          = parsed.searchParams.get('teamId');
+      const next            = parsed.searchParams.get('next');
+      const source          = parsed.searchParams.get('source');
+      const oauthError      = parsed.searchParams.get('error');
       const oauthErrorDescription = parsed.searchParams.get('error_description');
 
       if (oauthError) {
@@ -495,8 +499,8 @@ function handleDeepLink(url) {
         return;
       }
 
-      if (!code || !state) {
-        const message = 'Vercel OAuth callback missing code or state';
+      if (!code || (!state && !configurationId)) {
+        const message = 'Vercel OAuth callback missing code and state/configurationId';
         console.warn(`[electron] ${message}`);
         if (mainWindow) {
           mainWindow.webContents.send('vercel:oauth-error', message);
@@ -508,7 +512,7 @@ function handleDeepLink(url) {
       fetch(`${BACKEND_URL}/api/cloud/vercel/oauth/callback`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, state }),
+        body:    JSON.stringify({ code, state, configurationId, teamId, next, source }),
       })
         .then(async (response) => {
           const data = await response.json().catch(() => ({}));
@@ -526,6 +530,14 @@ function handleDeepLink(url) {
             // Notify the renderer so it can refresh its profile list and
             // auto-select the newly created Vercel profile
             mainWindow.webContents.send('vercel:oauth-complete', data);
+          }
+          // Marketplace flow: Vercel requires a redirect to `next` to mark
+          // the integration as installed. Open it in the OS browser.
+          if (data?.next) {
+            const nextUrl = data.next;
+            if (/^https:\/\/vercel\.com\//.test(nextUrl)) {
+              shell.openExternal(nextUrl);
+            }
           }
         })
         .catch(err => {
