@@ -99,6 +99,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, status: 'healthy' });
+});
+
 // ─── KubeConfig state ─────────────────────────────────────────────────────────
 
 let currentKc      = null;
