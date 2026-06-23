@@ -4,9 +4,18 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.10.2'
+export const CHANGELOG_VERSION = '1.10.3'
 
 export const CHANGELOG = [
+  {
+    version: '1.10.3',
+    date: 'Junio 2026',
+    items: [
+      { type: 'new',    text: 'Vercel OAuth — redirect HTTPS a la página de callback pública para completar la autorización sin depender de kua://' },
+      { type: 'new',    text: 'Vercel OAuth — página de callback con auto-forward del code/state hacia la app de escritorio' },
+      { type: 'better', text: 'Vercel OAuth — soporte explícito de VERCEL_OAUTH_REDIRECT_URI en runtime para alinear builds locales y empaquetados' },
+    ],
+  },
   {
     version: '1.10.2',
     date: 'Junio 2026',

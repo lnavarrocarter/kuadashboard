@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.10.3 (2026-06-22)
+
+### Callback OAuth de Vercel
+
+- Se cambió el redirect OAuth de Vercel a la página HTTPS `https://lnavarrocarter.github.io/kuadashboard/vercel-callback` para completar la autorización sin depender del redirect con protocolo custom.
+- Se agregó una página de callback con auto-forward que devuelve `code` y `state` a la app de escritorio usando el flujo existente de Vercel.
+- Se agregó soporte para `VERCEL_OAUTH_REDIRECT_URI` en la configuración runtime para que los builds locales y empaquetados queden alineados con el callback HTTPS.
+
 ## v1.10.2 (2026-06-22)
 
 ### AWS — Credenciales temporales + SSO en navegador
