@@ -23,7 +23,7 @@ Vercel credentials can be configured in two ways:
 
 1. Click **Add Connection** and select **Vercel**
 2. Click **Connect with Vercel** — your default browser opens the Vercel authorization page
-3. Authorize KuaDashboard — Vercel redirects back to the app via the `kua://` deep-link
+3. Authorize KuaDashboard — Vercel redirects to the HTTPS callback page (`https://lnavarrocarter.github.io/kuadashboard/vercel-callback`), which automatically hands the authorization code back to the app via the `kua://` deep-link
 4. The profile is saved automatically and selected as active
 
 > **Note:** OAuth requires `VERCEL_OAUTH_CLIENT_ID` and `VERCEL_OAUTH_CLIENT_SECRET` to be set in the app environment. These are bundled in the official release.
