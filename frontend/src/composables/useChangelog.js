@@ -4,9 +4,19 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.10.3'
+export const CHANGELOG_VERSION = '1.10.4'
 
 export const CHANGELOG = [
+  {
+    version: '1.10.4',
+    date: 'Junio 2026',
+    items: [
+      { type: 'fix',    text: 'Vercel Marketplace — soporte completo del flujo OAuth de Marketplace con configurationId, teamId y next' },
+      { type: 'fix',    text: 'Vercel OAuth — callback ya no falla con "Missing OAuth parameters" en flujo de Marketplace (sin state)' },
+      { type: 'new',    text: 'Vercel Marketplace — al completar la autorización se abre la URL next de Vercel para marcar la integración como instalada' },
+      { type: 'better', text: 'Vercel Marketplace — VERCEL_CONFIGURATION_ID y VERCEL_TEAM_ID del Marketplace se persisten en el perfil de credenciales' },
+    ],
+  },
   {
     version: '1.10.3',
     date: 'Junio 2026',

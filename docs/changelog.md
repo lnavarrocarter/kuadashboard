@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.4 (2026-06-22)
+
+### Vercel Marketplace OAuth
+
+- Added full support for the Vercel Marketplace integration flow: the callback page now handles `configurationId`, `teamId`, `next`, and `source` parameters in addition to the standard `code`+`state` OAuth flow.
+- Fixed "Missing OAuth parameters" error that appeared when Vercel Marketplace redirected to the callback page without a `state` parameter.
+- After completing Marketplace authorization, the app now opens the Vercel `next` URL in the browser so the integration is marked as installed.
+- `VERCEL_CONFIGURATION_ID` and `VERCEL_TEAM_ID` from the Marketplace flow are persisted in the credential profile.
+
 ## v1.10.3 (2026-06-22)
 
 ### Vercel OAuth Callback
