@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.10.2 (2026-06-22)
+
+### AWS — Credenciales temporales + SSO en navegador
+
+- Soporte completo para `AWS_SESSION_TOKEN` en perfiles guardados y resolución de credenciales AWS, habilitando sesiones temporales de STS de extremo a extremo.
+- Nuevo flujo de autorización por dispositivo de IAM Identity Center (SSO) desde navegador, con selección de cuenta/rol y captura automática de credenciales temporales.
+- Seguimiento de expiración de sesión SSO y renovación con un clic mediante metadata persistida (`meta.__sso`).
+
+### Seguridad, estabilidad y UX
+
+- Restricción a localhost para endpoints de perfiles locales de AWS y bootstrap SSO, evitando exposición remota de configuración local de la estación de trabajo.
+- Ajuste de sanitización en Env Manager para conservar metadata estructurada reservada en `meta.__sso` (start URL, región, cuenta/rol y expiración), manteniendo el comportamiento previo de tags para claves normales.
+- Endurecimiento de apertura de ventana SSO usando `noopener,noreferrer`.
+- Normalización de finales de línea en `public/index.html` para eliminar `CR` residuales y reducir diffs ruidosos.
+
 ## v1.10.0 (2026-06-09)
 
 ### GCP — Paneles master-detail
