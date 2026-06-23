@@ -181,6 +181,27 @@ function requireProfileId(req, res) {
   return id;
 }
 
+function isLoopbackAddress(remote = '') {
+  return remote === '127.0.0.1' ||
+         remote === '::1' ||
+         remote === '::ffff:127.0.0.1';
+}
+
+function requireLocalRequest(req, res, next) {
+  const remote = req.socket?.remoteAddress || '';
+  if (!isLoopbackAddress(remote)) {
+    return res.status(403).json({
+      error: 'This endpoint is only available from localhost for security reasons.',
+    });
+  }
+  next();
+}
+
+// Local workstation profile discovery and browser SSO bootstrap should not be
+// accessible from non-local network clients.
+router.use('/local-profiles', requireLocalRequest);
+router.use('/sso', requireLocalRequest);
+
 // ─── IAM Identity Center (SSO) device-authorization login ────────────────────
 //
 // Implements the same browser-based flow the AWS CLI uses for "aws sso login":

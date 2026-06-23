@@ -60,7 +60,7 @@ export function useAwsSso() {
       sessionId             = data.sessionId
       verificationUrl.value = data.verificationUriComplete || data.verificationUri
       userCode.value        = data.userCode || ''
-      window.open(verificationUrl.value, '_blank')
+      window.open(verificationUrl.value, '_blank', 'noopener,noreferrer')
       phase.value = 'waiting'
 
       const intervalMs = Math.max((data.interval || 5) * 1000, 2000)
