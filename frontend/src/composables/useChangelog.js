@@ -4,9 +4,22 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.10.0'
+export const CHANGELOG_VERSION = '1.10.2'
 
 export const CHANGELOG = [
+  {
+    version: '1.10.2',
+    date: 'Junio 2026',
+    items: [
+      { type: 'new',    text: 'AWS — soporte completo de credenciales temporales con AWS_SESSION_TOKEN en perfiles guardados y resolución de sesiones STS' },
+      { type: 'new',    text: 'AWS IAM Identity Center (SSO) — flujo browser-based con autorización por dispositivo, listado de cuentas/roles y captura automática de credenciales temporales' },
+      { type: 'new',    text: 'AWS SSO — seguimiento de expiración y renovación de sesión con metadata estructurada persistida en meta.__sso' },
+      { type: 'fix',    text: 'Seguridad AWS — endpoints de perfiles locales y bootstrap SSO restringidos a localhost para evitar exposición remota de metadata local' },
+      { type: 'fix',    text: 'Env Manager — sanitización de meta actualizada para preservar __sso (startUrl, ssoRegion, accountId, roleName, expiresAt) sin romper tags en claves genéricas' },
+      { type: 'fix',    text: 'Frontend SSO — window.open endurecido con noopener,noreferrer para mitigar reverse-tabnabbing' },
+      { type: 'fix',    text: 'Build output — normalización de line endings en public/index.html para eliminar caracteres CR residuales' },
+    ],
+  },
   {
     version: '1.10.0',
     date: 'Junio 2026',

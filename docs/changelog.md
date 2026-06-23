@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.10.2 (2026-06-22)
+
+### AWS — Temporary Credentials + Browser SSO
+
+- Added support for `AWS_SESSION_TOKEN` in stored credential profiles and AWS resolution, enabling STS / temporary credentials end-to-end.
+- Added browser-based IAM Identity Center (SSO) device authorization flow with account/role credential exchange and automatic temporary credential capture.
+- Added SSO session expiry tracking and renewal support through stored SSO metadata (`meta.__sso`) and one-click renewal flows.
+
+### Security, Reliability, and UX
+
+- Restricted local AWS profile discovery and SSO bootstrap endpoints to localhost-only access to prevent workstation metadata exposure from remote clients.
+- Updated Env Manager metadata sanitization to preserve reserved structured `meta.__sso` fields (start URL, region, account/role, expiration) while keeping existing tags behavior for normal keys.
+- Hardened SSO browser popups by opening verification links with `noopener,noreferrer`.
+- Normalized generated `public/index.html` line endings to remove stray carriage-return artifacts and avoid noisy diffs.
+
 ## v1.10.0 (2026-06-09)
 
 ### GCP — Master-detail panels

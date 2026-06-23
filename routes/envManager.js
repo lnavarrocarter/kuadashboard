@@ -36,6 +36,32 @@ function validateProvider(provider) {
   return ['gcp', 'aws', 'generic'].includes(provider);
 }
 
+/**
+ * Sanitize profile metadata.
+ * - Generic keys keep the existing { tags: string[] } shape.
+ * - Reserved key "__sso" persists structured AWS SSO session info.
+ */
+function sanitizeMeta(meta = {}) {
+  const sanitizedMeta = {};
+  for (const [k, v] of Object.entries(meta || {})) {
+    if (k === '__sso') {
+      if (!v || typeof v !== 'object') continue;
+      const startUrl  = typeof v.startUrl === 'string' ? v.startUrl.trim() : '';
+      if (!startUrl) continue;
+      const ssoRegion = typeof v.ssoRegion === 'string' && v.ssoRegion.trim() ? v.ssoRegion.trim() : 'us-east-1';
+      const accountId = typeof v.accountId === 'string' ? v.accountId.trim() : '';
+      const roleName  = typeof v.roleName === 'string' ? v.roleName.trim() : '';
+      const expNum    = Number(v.expiresAt);
+      const expiresAt = Number.isFinite(expNum) ? Math.max(0, Math.trunc(expNum)) : null;
+      sanitizedMeta.__sso = { startUrl, ssoRegion, accountId, roleName, expiresAt };
+      continue;
+    }
+    if (!/^[A-Z0-9_]+$/i.test(k)) continue;
+    sanitizedMeta[k] = { tags: Array.isArray(v?.tags) ? v.tags.map(String) : [] };
+  }
+  return sanitizedMeta;
+}
+
 // ─── GET /profiles ────────────────────────────────────────────────────────────
 
 router.get('/profiles', async (_req, res) => {
@@ -66,12 +92,7 @@ router.post('/profiles', async (req, res) => {
       sanitizedKeys[k] = v;
     }
 
-    // Sanitize meta: only allow valid key names, tags as string array
-    const sanitizedMeta = {};
-    for (const [k, v] of Object.entries(meta || {})) {
-      if (!/^[A-Z0-9_]+$/i.test(k)) continue;
-      sanitizedMeta[k] = { tags: Array.isArray(v?.tags) ? v.tags.map(String) : [] };
-    }
+    const sanitizedMeta = sanitizeMeta(meta);
 
     const store   = getStore();
     const profile = await store.createProfile({
@@ -111,11 +132,7 @@ router.put('/profiles/:id', async (req, res) => {
       sanitizedKeys[k] = v;
     }
 
-    const sanitizedMeta = {};
-    for (const [k, v] of Object.entries(meta || {})) {
-      if (!/^[A-Z0-9_]+$/i.test(k)) continue;
-      sanitizedMeta[k] = { tags: Array.isArray(v?.tags) ? v.tags.map(String) : [] };
-    }
+    const sanitizedMeta = sanitizeMeta(meta);
 
     const store   = getStore();
     const updated = await store.updateProfile(req.params.id, {
@@ -206,11 +223,7 @@ router.post('/import', async (req, res) => {
     if (!Object.keys(keys).length)
       return res.status(400).json({ error: 'No valid KEY=value pairs found in the provided .env content' });
 
-    const sanitizedMeta = {};
-    for (const [k, v] of Object.entries(meta || {})) {
-      if (!/^[A-Z0-9_]+$/i.test(k)) continue;
-      sanitizedMeta[k] = { tags: Array.isArray(v?.tags) ? v.tags.map(String) : [] };
-    }
+    const sanitizedMeta = sanitizeMeta(meta);
 
     const store   = getStore();
     const profile = await store.createProfile({

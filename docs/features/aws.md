@@ -12,11 +12,23 @@ AWS credentials can be configured in multiple ways:
 
 | Method | Description |
 |---|---|
-| **Env Manager** | Store named profiles with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_DEFAULT_REGION` |
+| **Env Manager** | Store named profiles with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (optional, for temporary credentials), and `AWS_DEFAULT_REGION` |
 | **AWS CLI** | Reads `~/.aws/credentials` and `~/.aws/config` automatically |
-| **Local profiles** | Select any named profile from your existing `~/.aws/credentials` |
+| **Local profiles** | Select any named profile from your existing `~/.aws/credentials` or `~/.aws/config`, including SSO profiles created with `aws configure sso` |
 | **Environment variables** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
 | **IAM roles** | When running on AWS infrastructure (EC2, ECS task, Lambda, etc.) |
+
+### Temporary credentials (STS / IAM Identity Center)
+
+Profiles support temporary session credentials — the kind issued by AWS STS or the IAM Identity Center (SSO) access portal, where the access key starts with `ASIA`. Paste the three values (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) into the profile form or import them from a `.env` file. When the session expires, the dashboard shows a clear message asking you to refresh the credentials.
+
+Alternatively, if you already use `aws sso login` from the terminal, your SSO profiles appear in the **local profiles** list and the SDK resolves the cached session automatically — no copy-pasting needed while the SSO session is active.
+
+### Built-in SSO login (no copy-paste at all)
+
+When creating an AWS profile, choose **"Iniciar sesión temporal (SSO)"**. KuaDashboard detects your SSO profiles from `~/.aws/config` (or you paste the start URL once), opens the AWS access portal in your browser, and once you approve it captures the temporary credentials and stores them in the encrypted vault automatically — the same device-authorization flow the AWS CLI uses.
+
+The dashboard tracks the session expiration: profile cards show a live countdown badge, and when less than 15 minutes remain a persistent alert appears with a one-click **"Renovar sesión"** button that re-runs the browser login and refreshes the stored credentials.
 
 Select your active profile and region from the dropdowns in the AWS panel header. All API calls use the selected profile credentials.
 
