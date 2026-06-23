@@ -288,13 +288,21 @@ const layout = computed(() => {
   if (!parsed.value || !parsed.value.States) return { nodes: [], edges: [], startAt: '', pos: {} }
   const { StartAt, States } = parsed.value
 
-  // BFS to assign deepest level
+  // BFS to assign deepest level (longest path from StartAt).
+  // Step Functions definitions can contain cycles (e.g. Wait/retry polling
+  // loops), which would make this relaxation loop run forever. Cap the
+  // number of times a node can be re-queued so cyclic graphs still
+  // terminate instead of freezing the UI.
+  const totalStates = Object.keys(States).length
   const level = {}
+  const visitCount = {}
   const queue = [{ name: StartAt, lvl: 0 }]
   level[StartAt] = 0
 
   while (queue.length) {
     const { name, lvl } = queue.shift()
+    visitCount[name] = (visitCount[name] || 0) + 1
+    if (visitCount[name] > totalStates) continue // cycle guard
     const state = States[name]
     if (!state) continue
     for (const { name: next } of getNexts(state)) {
