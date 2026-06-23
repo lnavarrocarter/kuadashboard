@@ -15,6 +15,11 @@
 - Hardened SSO browser popups by opening verification links with `noopener,noreferrer`.
 - Normalized generated `public/index.html` line endings to remove stray carriage-return artifacts and avoid noisy diffs.
 
+### Additional AWS Fixes
+
+- Fixed Step Functions diagram rendering freeze for state machines with cycles by adding a cycle guard in BFS level assignment (`StepFnDiagram.vue`).
+- Fixed Athena query failures when the selected workgroup has no configured output location by allowing an explicit S3 output override in the Query Editor and workgroup query modal.
+
 ## v1.10.0 (2026-06-09)
 
 ### GCP — Master-detail panels

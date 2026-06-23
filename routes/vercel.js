@@ -49,6 +49,7 @@ const auditLog     = require('../lib/auditLog');
 const router = express.Router();
 const VERCEL_API   = 'https://api.vercel.com';
 const VERCEL_OAUTH = 'https://vercel.com/api/oauth';
+const DEFAULT_VERCEL_OAUTH_REDIRECT_URI = 'https://lnavarrocarter.github.io/kuadashboard/vercel-callback';
 
 // In-memory PKCE / state store (per-process, short-lived)
 const oauthStates = new Map(); // state → { createdAt, profileName }
@@ -124,6 +125,10 @@ function withTeam(qs, teamId) {
   if (!teamId) return qs;
   const sep = qs.includes('?') ? '&' : '?';
   return `${qs}${sep}teamId=${encodeURIComponent(teamId)}`;
+}
+
+function getVercelRedirectUri() {
+  return process.env.VERCEL_OAUTH_REDIRECT_URI || DEFAULT_VERCEL_OAUTH_REDIRECT_URI;
 }
 
 // ─── GET /teams ───────────────────────────────────────────────────────────────
@@ -577,7 +582,8 @@ router.get('/projects/:projectId/cron', async (req, res) => {
 // can create the profile with a meaningful name.
 //
 // Flow: frontend opens this URL via shell.openExternal() → Vercel authorizes
-//       → Vercel redirects to kua://vercel/callback?code=…&state=…
+//       → Vercel redirects to the HTTPS callback page
+//       → the callback page forwards to kua://vercel/callback?code=…&state=…
 //       → Electron intercepts the kua:// URL and POSTs to /oauth/callback
 
 router.get('/oauth/start', (req, res) => {
@@ -598,7 +604,7 @@ router.get('/oauth/start', (req, res) => {
     if (Date.now() - v.createdAt > EXPIRE_MS) oauthStates.delete(k);
   }
 
-  const redirectUri = 'kua://vercel/callback';
+  const redirectUri = getVercelRedirectUri();
   const params = new URLSearchParams({
     client_id:    clientId,
     redirect_uri: redirectUri,
@@ -645,7 +651,7 @@ router.post('/oauth/callback', async (req, res) => {
         client_id:     clientId,
         client_secret: clientSecret,
         code,
-        redirect_uri:  'kua://vercel/callback',
+        redirect_uri:  getVercelRedirectUri(),
       }).toString(),
     });
 

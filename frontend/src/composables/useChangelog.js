@@ -18,6 +18,8 @@ export const CHANGELOG = [
       { type: 'fix',    text: 'Env Manager — sanitización de meta actualizada para preservar __sso (startUrl, ssoRegion, accountId, roleName, expiresAt) sin romper tags en claves genéricas' },
       { type: 'fix',    text: 'Frontend SSO — window.open endurecido con noopener,noreferrer para mitigar reverse-tabnabbing' },
       { type: 'fix',    text: 'Build output — normalización de line endings en public/index.html para eliminar caracteres CR residuales' },
+      { type: 'fix',    text: 'AWS Step Functions — corregido congelamiento de la UI al renderizar diagramas con ciclos (guard de ciclo en asignación BFS de niveles)' },
+      { type: 'fix',    text: 'AWS Athena — añadido override de output S3 para ejecutar queries cuando el workgroup no tiene output location configurado' },
     ],
   },
   {

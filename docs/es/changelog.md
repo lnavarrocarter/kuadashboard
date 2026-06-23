@@ -15,6 +15,11 @@
 - Endurecimiento de apertura de ventana SSO usando `noopener,noreferrer`.
 - Normalización de finales de línea en `public/index.html` para eliminar `CR` residuales y reducir diffs ruidosos.
 
+### Fixes AWS adicionales
+
+- Corregido el congelamiento del render de diagramas de Step Functions en máquinas de estado con ciclos, agregando una protección de ciclo en la asignación BFS de niveles (`StepFnDiagram.vue`).
+- Corregidos los fallos de ejecución en Athena cuando el workgroup no tiene output location configurado, permitiendo definir un override S3 explícito en el Query Editor y en el modal de consulta por workgroup.
+
 ## v1.10.0 (2026-06-09)
 
 ### GCP — Paneles master-detail
