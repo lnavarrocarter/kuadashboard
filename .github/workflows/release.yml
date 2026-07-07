@@ -42,6 +42,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
+      - name: Workaround for remaining native module build issues
+        shell: bash
+        run: |
+          # If native modules exist, rename them to prevent electron-rebuild failures
+          # This happens on cross-platform builds (arm64->x64, etc)
+          mv node_modules/cpu-features node_modules/cpu-features.bak 2>/dev/null || true
+          mv node_modules/dtrace-provider node_modules/dtrace-provider.bak 2>/dev/null || true
+
       - name: Fix distutils for node-gyp (macOS)
         if: runner.os == 'macOS'
         run: pip3 install setuptools --break-system-packages
