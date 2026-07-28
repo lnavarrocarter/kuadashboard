@@ -1,0 +1,1446 @@
+{
+  "root": "/Users/lnavarrocarter/Local/dev/personal/kuadashboard",
+  "built": 1781029701,
+  "files": {
+    ".env": {
+      "path": ".env",
+      "lang": "env",
+      "lines": 31,
+      "size": 1744,
+      "summary": "# ─── KuaDashboard — Environment Variables ───────────────────────",
+      "mod_time": 1779987362
+    },
+    "README.md": {
+      "path": "README.md",
+      "lang": "md",
+      "lines": 327,
+      "size": 15492,
+      "summary": "# KUA — Know Unified Administration",
+      "mod_time": 1778433517
+    },
+    "assets/dmg-license.txt": {
+      "path": "assets/dmg-license.txt",
+      "lang": "text",
+      "lines": 18,
+      "size": 709,
+      "summary": "IMPORTANT — macOS Gatekeeper Notice",
+      "mod_time": 1776707146
+    },
+    "config/runtime.env": {
+      "path": "config/runtime.env",
+      "lang": "env",
+      "lines": 6,
+      "size": 183,
+      "summary": "# Runtime secrets bundled into Electron builds.",
+      "mod_time": 1779971717
+    },
+    "dist-electron/builder-debug.yml": {
+      "path": "dist-electron/builder-debug.yml",
+      "lang": "yaml",
+      "lines": 66,
+      "size": 2196,
+      "summary": "x64:",
+      "mod_time": 1779985371
+    },
+    "dist-electron/builder-effective-config.yaml": {
+      "path": "dist-electron/builder-effective-config.yaml",
+      "lang": "yaml",
+      "lines": 57,
+      "size": 1083,
+      "summary": "directories:",
+      "mod_time": 1779985090
+    },
+    "dist-electron/latest-mac.yml": {
+      "path": "dist-electron/latest-mac.yml",
+      "lang": "yaml",
+      "lines": 17,
+      "size": 824,
+      "summary": "version: 1.9.1",
+      "mod_time": 1779985375
+    },
+    "dist-electron/latest.yml": {
+      "path": "dist-electron/latest.yml",
+      "lang": "yaml",
+      "lines": 8,
+      "size": 352,
+      "summary": "version: 1.9.0",
+      "mod_time": 1779809888
+    },
+    "dist-electron/linux-arm64-unpacked/LICENSE.electron.txt": {
+      "path": "dist-electron/linux-arm64-unpacked/LICENSE.electron.txt",
+      "lang": "text",
+      "lines": 21,
+      "size": 1096,
+      "summary": "Copyright (c) Electron contributors",
+      "mod_time": 1779809140
+    },
+    "dist-electron/linux-arm64-unpacked/LICENSES.chromium.html": {
+      "path": "dist-electron/linux-arm64-unpacked/LICENSES.chromium.html",
+      "lang": "web",
+      "lines": 0,
+      "size": 9522413,
+      "mod_time": 1779809140
+    },
+    "dist-electron/linux-arm64-unpacked/resources/app-update.yml": {
+      "path": "dist-electron/linux-arm64-unpacked/resources/app-update.yml",
+      "lang": "yaml",
+      "lines": 4,
+      "size": 100,
+      "summary": "owner: lnavarrocarter",
+      "mod_time": 1779809165
+    },
+    "dist-electron/linux-arm64-unpacked/vk_swiftshader_icd.json": {
+      "path": "dist-electron/linux-arm64-unpacked/vk_swiftshader_icd.json",
+      "lang": "json",
+      "lines": 1,
+      "size": 107,
+      "summary": "{\"file_format_version\": \"1.0.0\", \"ICD\": {\"library_path\": \"./libvk_swiftshader.so\", \"api_version\": \"1.0.5\"}}",
+      "mod_time": 1779809140
+    },
+    "dist-electron/mac-arm64/KuaDashboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json": {
+      "path": "dist-electron/mac-arm64/KuaDashboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json",
+      "lang": "json",
+      "lines": 1,
+      "size": 110,
+      "summary": "{\"file_format_version\": \"1.0.0\", \"ICD\": {\"library_path\": \"./libvk_swiftshader.dylib\", \"api_version\": \"1.0.5\"}}",
+      "mod_time": 1779985160
+    },
+    "dist-electron/mac-arm64/KuaDashboard.app/Contents/Resources/app-update.yml": {
+      "path": "dist-electron/mac-arm64/KuaDashboard.app/Contents/Resources/app-update.yml",
+      "lang": "yaml",
+      "lines": 4,
+      "size": 100,
+      "summary": "owner: lnavarrocarter",
+      "mod_time": 1779985207
+    },
+    "dist-electron/mac/KuaDashboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json": {
+      "path": "dist-electron/mac/KuaDashboard.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json",
+      "lang": "json",
+      "lines": 1,
+      "size": 110,
+      "summary": "{\"file_format_version\": \"1.0.0\", \"ICD\": {\"library_path\": \"./libvk_swiftshader.dylib\", \"api_version\": \"1.0.5\"}}",
+      "mod_time": 1779985110
+    },
+    "dist-electron/mac/KuaDashboard.app/Contents/Resources/app-update.yml": {
+      "path": "dist-electron/mac/KuaDashboard.app/Contents/Resources/app-update.yml",
+      "lang": "yaml",
+      "lines": 4,
+      "size": 100,
+      "summary": "owner: lnavarrocarter",
+      "mod_time": 1779985131
+    },
+    "dist-electron/win-unpacked/LICENSE.electron.txt": {
+      "path": "dist-electron/win-unpacked/LICENSE.electron.txt",
+      "lang": "text",
+      "lines": 21,
+      "size": 1096,
+      "summary": "Copyright (c) Electron contributors",
+      "mod_time": 1779809848
+    },
+    "dist-electron/win-unpacked/LICENSES.chromium.html": {
+      "path": "dist-electron/win-unpacked/LICENSES.chromium.html",
+      "lang": "web",
+      "lines": 0,
+      "size": 9451912,
+      "mod_time": 1779809848
+    },
+    "dist-electron/win-unpacked/resources/app-update.yml": {
+      "path": "dist-electron/win-unpacked/resources/app-update.yml",
+      "lang": "yaml",
+      "lines": 4,
+      "size": 100,
+      "summary": "owner: lnavarrocarter",
+      "mod_time": 1779809857
+    },
+    "dist-electron/win-unpacked/vk_swiftshader_icd.json": {
+      "path": "dist-electron/win-unpacked/vk_swiftshader_icd.json",
+      "lang": "json",
+      "lines": 1,
+      "size": 106,
+      "summary": "{\"file_format_version\": \"1.0.0\", \"ICD\": {\"library_path\": \".\\\\vk_swiftshader.dll\", \"api_version\": \"1.0.5\"}}",
+      "mod_time": 1779809848
+    },
+    "docs/EULA.md": {
+      "path": "docs/EULA.md",
+      "lang": "md",
+      "lines": 67,
+      "size": 2667,
+      "summary": "# End User License Agreement (EULA)",
+      "mod_time": 1779968155
+    },
+    "docs/KUA_Concept.md": {
+      "path": "docs/KUA_Concept.md",
+      "lang": "md",
+      "lines": 110,
+      "size": 2109,
+      "summary": "# KUA — Know Unified Administration",
+      "mod_time": 1776752781
+    },
+    "docs/ROADMAP.md": {
+      "path": "docs/ROADMAP.md",
+      "lang": "md",
+      "lines": 142,
+      "size": 6098,
+      "summary": "# 🗺️ KuaDashboard — Roadmap del Producto",
+      "mod_time": 1781022294
+    },
+    "docs/architecture/backend.md": {
+      "path": "docs/architecture/backend.md",
+      "lang": "md",
+      "lines": 73,
+      "size": 3130,
+      "summary": "# Backend API",
+      "mod_time": 1778433503
+    },
+    "docs/architecture/electron.md": {
+      "path": "docs/architecture/electron.md",
+      "lang": "md",
+      "lines": 94,
+      "size": 3359,
+      "summary": "# Electron Integration",
+      "mod_time": 1776714147
+    },
+    "docs/architecture/frontend.md": {
+      "path": "docs/architecture/frontend.md",
+      "lang": "md",
+      "lines": 78,
+      "size": 2501,
+      "summary": "# Frontend (Vue 3)",
+      "mod_time": 1776706595
+    },
+    "docs/architecture/index.md": {
+      "path": "docs/architecture/index.md",
+      "lang": "md",
+      "lines": 67,
+      "size": 4456,
+      "summary": "# Architecture Overview",
+      "mod_time": 1776706595
+    },
+    "docs/changelog.md": {
+      "path": "docs/changelog.md",
+      "lang": "md",
+      "lines": 206,
+      "size": 11549,
+      "summary": "# Changelog",
+      "mod_time": 1781019124
+    },
+    "docs/download.md": {
+      "path": "docs/download.md",
+      "lang": "md",
+      "lines": 103,
+      "size": 2527,
+      "summary": "# Download KuaDashboard",
+      "mod_time": 1777055834
+    },
+    "docs/es/architecture/backend.md": {
+      "path": "docs/es/architecture/backend.md",
+      "lang": "md",
+      "lines": 74,
+      "size": 3350,
+      "summary": "# Backend API",
+      "mod_time": 1778433509
+    },
+    "docs/es/architecture/electron.md": {
+      "path": "docs/es/architecture/electron.md",
+      "lang": "md",
+      "lines": 60,
+      "size": 2582,
+      "summary": "# Integración Electron",
+      "mod_time": 1776752781
+    },
+    "docs/es/architecture/frontend.md": {
+      "path": "docs/es/architecture/frontend.md",
+      "lang": "md",
+      "lines": 50,
+      "size": 1628,
+      "summary": "# Frontend (Vue 3)",
+      "mod_time": 1776752781
+    },
+    "docs/es/architecture/index.md": {
+      "path": "docs/es/architecture/index.md",
+      "lang": "md",
+      "lines": 59,
+      "size": 4036,
+      "summary": "# Resumen de Arquitectura",
+      "mod_time": 1776752781
+    },
+    "docs/es/changelog.md": {
+      "path": "docs/es/changelog.md",
+      "lang": "md",
+      "lines": 85,
+      "size": 5687,
+      "summary": "# Changelog",
+      "mod_time": 1781022279
+    },
+    "docs/es/download.md": {
+      "path": "docs/es/download.md",
+      "lang": "md",
+      "lines": 93,
+      "size": 2509,
+      "summary": "# Descargar KuaDashboard",
+      "mod_time": 1777055834
+    },
+    "docs/es/features/aws.md": {
+      "path": "docs/es/features/aws.md",
+      "lang": "md",
+      "lines": 287,
+      "size": 14103,
+      "summary": "# Integración AWS",
+      "mod_time": 1777995104
+    },
+    "docs/es/features/gcp.md": {
+      "path": "docs/es/features/gcp.md",
+      "lang": "md",
+      "lines": 165,
+      "size": 6346,
+      "summary": "# Integración GCP",
+      "mod_time": 1776782537
+    },
+    "docs/es/features/index.md": {
+      "path": "docs/es/features/index.md",
+      "lang": "md",
+      "lines": 84,
+      "size": 5462,
+      "summary": "# Resumen de Funcionalidades",
+      "mod_time": 1779810021
+    },
+    "docs/es/features/kubernetes.md": {
+      "path": "docs/es/features/kubernetes.md",
+      "lang": "md",
+      "lines": 112,
+      "size": 5733,
+      "summary": "# Funcionalidades de Kubernetes",
+      "mod_time": 1778433471
+    },
+    "docs/es/features/port-forwarding.md": {
+      "path": "docs/es/features/port-forwarding.md",
+      "lang": "md",
+      "lines": 40,
+      "size": 1756,
+      "summary": "# Port Forwarding",
+      "mod_time": 1778433487
+    },
+    "docs/es/features/terminal.md": {
+      "path": "docs/es/features/terminal.md",
+      "lang": "md",
+      "lines": 185,
+      "size": 7887,
+      "summary": "# Terminal \u0026 Shell",
+      "mod_time": 1777995104
+    },
+    "docs/es/features/vercel.md": {
+      "path": "docs/es/features/vercel.md",
+      "lang": "md",
+      "lines": 131,
+      "size": 5295,
+      "summary": "# Integración Vercel",
+      "mod_time": 1779810021
+    },
+    "docs/es/guide/aws-iam-permisos-minimos.md": {
+      "path": "docs/es/guide/aws-iam-permisos-minimos.md",
+      "lang": "md",
+      "lines": 521,
+      "size": 8947,
+      "summary": "# AWS IAM - permisos minimos por servicio",
+      "mod_time": 1777317344
+    },
+    "docs/es/guide/certificate-order-zoze-001347-us.md": {
+      "path": "docs/es/guide/certificate-order-zoze-001347-us.md",
+      "lang": "md",
+      "lines": 61,
+      "size": 2729,
+      "summary": "# Documento de Soporte de Certificacion",
+      "mod_time": 1777391086
+    },
+    "docs/es/guide/code-signing.md": {
+      "path": "docs/es/guide/code-signing.md",
+      "lang": "md",
+      "lines": 167,
+      "size": 5430,
+      "summary": "# Firma de Codigo y Notarizacion",
+      "mod_time": 1777055834
+    },
+    "docs/es/guide/configuration.md": {
+      "path": "docs/es/guide/configuration.md",
+      "lang": "md",
+      "lines": 62,
+      "size": 2069,
+      "summary": "# Configuración",
+      "mod_time": 1778433497
+    },
+    "docs/es/guide/electron.md": {
+      "path": "docs/es/guide/electron.md",
+      "lang": "md",
+      "lines": 93,
+      "size": 2976,
+      "summary": "# App de Escritorio Electron",
+      "mod_time": 1776752781
+    },
+    "docs/es/guide/getting-started.md": {
+      "path": "docs/es/guide/getting-started.md",
+      "lang": "md",
+      "lines": 61,
+      "size": 1740,
+      "summary": "# Primeros Pasos",
+      "mod_time": 1776752781
+    },
+    "docs/es/guide/installation.md": {
+      "path": "docs/es/guide/installation.md",
+      "lang": "md",
+      "lines": 88,
+      "size": 2416,
+      "summary": "# Instalación",
+      "mod_time": 1777055834
+    },
+    "docs/es/index.md": {
+      "path": "docs/es/index.md",
+      "lang": "md",
+      "lines": 44,
+      "size": 1956,
+      "summary": "---",
+      "mod_time": 1778433435
+    },
+    "docs/es/sponsor.md": {
+      "path": "docs/es/sponsor.md",
+      "lang": "md",
+      "lines": 188,
+      "size": 8173,
+      "summary": "# Patrocinar KuaDashboard",
+      "mod_time": 1777055834
+    },
+    "docs/features/aws.md": {
+      "path": "docs/features/aws.md",
+      "lang": "md",
+      "lines": 287,
+      "size": 12492,
+      "summary": "# AWS Integration",
+      "mod_time": 1777995104
+    },
+    "docs/features/gcp.md": {
+      "path": "docs/features/gcp.md",
+      "lang": "md",
+      "lines": 165,
+      "size": 5598,
+      "summary": "# GCP Integration",
+      "mod_time": 1776782510
+    },
+    "docs/features/index.md": {
+      "path": "docs/features/index.md",
+      "lang": "md",
+      "lines": 84,
+      "size": 4936,
+      "summary": "# Features Overview",
+      "mod_time": 1779810021
+    },
+    "docs/features/kubernetes.md": {
+      "path": "docs/features/kubernetes.md",
+      "lang": "md",
+      "lines": 113,
+      "size": 5283,
+      "summary": "# Kubernetes Features",
+      "mod_time": 1778433462
+    },
+    "docs/features/port-forwarding.md": {
+      "path": "docs/features/port-forwarding.md",
+      "lang": "md",
+      "lines": 40,
+      "size": 1595,
+      "summary": "# Port Forwarding",
+      "mod_time": 1778433476
+    },
+    "docs/features/terminal.md": {
+      "path": "docs/features/terminal.md",
+      "lang": "md",
+      "lines": 186,
+      "size": 6848,
+      "summary": "# Terminal \u0026 Shell",
+      "mod_time": 1777995104
+    },
+    "docs/features/vercel.md": {
+      "path": "docs/features/vercel.md",
+      "lang": "md",
+      "lines": 131,
+      "size": 4819,
+      "summary": "# Vercel Integration",
+      "mod_time": 1779810021
+    },
+    "docs/guide/certificate-order-zoze-001347-us.md": {
+      "path": "docs/guide/certificate-order-zoze-001347-us.md",
+      "lang": "md",
+      "lines": 61,
+      "size": 2543,
+      "summary": "# Certification Support Document",
+      "mod_time": 1777391070
+    },
+    "docs/guide/code-signing.md": {
+      "path": "docs/guide/code-signing.md",
+      "lang": "md",
+      "lines": 167,
+      "size": 5155,
+      "summary": "# Code Signing and Notarization",
+      "mod_time": 1777055834
+    },
+    "docs/guide/configuration.md": {
+      "path": "docs/guide/configuration.md",
+      "lang": "md",
+      "lines": 62,
+      "size": 1855,
+      "summary": "# Configuration",
+      "mod_time": 1778433493
+    },
+    "docs/guide/electron.md": {
+      "path": "docs/guide/electron.md",
+      "lang": "md",
+      "lines": 128,
+      "size": 3838,
+      "summary": "# Electron Desktop App",
+      "mod_time": 1776714147
+    },
+    "docs/guide/getting-started.md": {
+      "path": "docs/guide/getting-started.md",
+      "lang": "md",
+      "lines": 93,
+      "size": 2423,
+      "summary": "# Getting Started",
+      "mod_time": 1776752781
+    },
+    "docs/guide/installation.md": {
+      "path": "docs/guide/installation.md",
+      "lang": "md",
+      "lines": 108,
+      "size": 2863,
+      "summary": "# Installation",
+      "mod_time": 1777055834
+    },
+    "docs/index.md": {
+      "path": "docs/index.md",
+      "lang": "md",
+      "lines": 44,
+      "size": 1895,
+      "summary": "---",
+      "mod_time": 1778433429
+    },
+    "docs/package-lock.json": {
+      "path": "docs/package-lock.json",
+      "lang": "json",
+      "lines": 2526,
+      "size": 88248,
+      "summary": "{",
+      "mod_time": 1776752781
+    },
+    "docs/package.json": {
+      "path": "docs/package.json",
+      "lang": "json",
+      "lines": 15,
+      "size": 271,
+      "summary": "{",
+      "mod_time": 1776752781
+    },
+    "docs/privacy_policy.md": {
+      "path": "docs/privacy_policy.md",
+      "lang": "md",
+      "lines": 75,
+      "size": 2863,
+      "summary": "# Privacy Policy",
+      "mod_time": 1779968148
+    },
+    "docs/sponsor.md": {
+      "path": "docs/sponsor.md",
+      "lang": "md",
+      "lines": 188,
+      "size": 7785,
+      "summary": "# Sponsor KuaDashboard",
+      "mod_time": 1777055834
+    },
+    "docs/vercel-callback.md": {
+      "path": "docs/vercel-callback.md",
+      "lang": "md",
+      "lines": 17,
+      "size": 631,
+      "summary": "# Vercel OAuth Callback",
+      "mod_time": 1779970510
+    },
+    "docs/vercel-integration-details.md": {
+      "path": "docs/vercel-integration-details.md",
+      "lang": "md",
+      "lines": 22,
+      "size": 1456,
+      "summary": "# KuaDashboard Integration",
+      "mod_time": 1779970487
+    },
+    "electron-builder.yml": {
+      "path": "electron-builder.yml",
+      "lang": "yaml",
+      "lines": 67,
+      "size": 1148,
+      "summary": "appId: dev.kua.kuadashboard",
+      "mod_time": 1779983126
+    },
+    "electron/main.js": {
+      "path": "electron/main.js",
+      "lang": "js",
+      "lines": 542,
+      "size": 19874,
+      "symbols": [
+        "expandMacPath",
+        "startBackend",
+        "stopBackend",
+        "createWindow",
+        "setupContextMenu",
+        "buildMenu",
+        "setupAutoUpdater",
+        "handleDeepLink"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1779810021
+    },
+    "electron/main_test.js": {
+      "path": "electron/main_test.js",
+      "lang": "js",
+      "lines": 5,
+      "size": 243,
+      "summary": "'use strict';",
+      "mod_time": 1779810021
+    },
+    "electron/notarize.js": {
+      "path": "electron/notarize.js",
+      "lang": "js",
+      "lines": 37,
+      "size": 1061,
+      "symbols": [
+        "resolveApiKey"
+      ],
+      "summary": "const { notarize } = require('@electron/notarize');",
+      "mod_time": 1779987054
+    },
+    "electron/preload.js": {
+      "path": "electron/preload.js",
+      "lang": "js",
+      "lines": 123,
+      "size": 3980,
+      "summary": "'use strict';",
+      "mod_time": 1779810021
+    },
+    "frontend/README.md": {
+      "path": "frontend/README.md",
+      "lang": "md",
+      "lines": 5,
+      "size": 385,
+      "summary": "# Vue 3 + Vite",
+      "mod_time": 1776706595
+    },
+    "frontend/index.html": {
+      "path": "frontend/index.html",
+      "lang": "web",
+      "lines": 14,
+      "size": 446,
+      "summary": "\u003c!doctype html\u003e",
+      "mod_time": 1776752781
+    },
+    "frontend/package-lock.json": {
+      "path": "frontend/package-lock.json",
+      "lang": "json",
+      "lines": 2884,
+      "size": 100979,
+      "summary": "{",
+      "mod_time": 1776707150
+    },
+    "frontend/package.json": {
+      "path": "frontend/package.json",
+      "lang": "json",
+      "lines": 29,
+      "size": 605,
+      "summary": "{",
+      "mod_time": 1776706595
+    },
+    "frontend/src/composables/useApi.js": {
+      "path": "frontend/src/composables/useApi.js",
+      "lang": "js",
+      "lines": 42,
+      "size": 1468,
+      "symbols": [
+        "api",
+        "useApi",
+        "apiFetch"
+      ],
+      "summary": "// Thin wrapper around fetch — throws Error with server message on failure",
+      "mod_time": 1776706595
+    },
+    "frontend/src/composables/useChangelog.js": {
+      "path": "frontend/src/composables/useChangelog.js",
+      "lang": "js",
+      "lines": 276,
+      "size": 19420,
+      "symbols": [
+        "CHANGELOG_VERSION",
+        "CHANGELOG"
+      ],
+      "summary": "/**",
+      "mod_time": 1781022610
+    },
+    "frontend/src/composables/useI18n.js": {
+      "path": "frontend/src/composables/useI18n.js",
+      "lang": "js",
+      "lines": 57,
+      "size": 1813,
+      "symbols": [
+        "interpolate",
+        "useI18n",
+        "t",
+        "getT"
+      ],
+      "summary": "/**",
+      "mod_time": 1776752781
+    },
+    "frontend/src/composables/useSettings.js": {
+      "path": "frontend/src/composables/useSettings.js",
+      "lang": "js",
+      "lines": 58,
+      "size": 1721,
+      "symbols": [
+        "load",
+        "settings",
+        "applySettings"
+      ],
+      "summary": "import { reactive, watch } from 'vue'",
+      "mod_time": 1776752781
+    },
+    "frontend/src/composables/useSortable.js": {
+      "path": "frontend/src/composables/useSortable.js",
+      "lang": "js",
+      "lines": 59,
+      "size": 1701,
+      "symbols": [
+        "useSortable",
+        "sortBy",
+        "resetSort",
+        "sortRows",
+        "sortIcon",
+        "thClass"
+      ],
+      "summary": "import { ref } from 'vue'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/composables/useTerminalStreams.js": {
+      "path": "frontend/src/composables/useTerminalStreams.js",
+      "lang": "js",
+      "lines": 223,
+      "size": 7307,
+      "symbols": [
+        "wsUrl",
+        "useTerminalStreams",
+        "startLogStream",
+        "startExecStream",
+        "_appendLog",
+        "pushLogLine",
+        "flushLogBuffers",
+        "_appendRaw",
+        "autoClassify",
+        "normalizeTerminalText",
+        "startLocalStream"
+      ],
+      "summary": "import { markRaw } from 'vue'",
+      "mod_time": 1777995104
+    },
+    "frontend/src/composables/useToast.js": {
+      "path": "frontend/src/composables/useToast.js",
+      "lang": "js",
+      "lines": 15,
+      "size": 388,
+      "symbols": [
+        "useToast",
+        "toast"
+      ],
+      "summary": "import { ref } from 'vue'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/config/resources.js": {
+      "path": "frontend/src/config/resources.js",
+      "lang": "js",
+      "lines": 250,
+      "size": 12925,
+      "symbols": [
+        "age",
+        "RESOURCES"
+      ],
+      "summary": "// Resource table column / row / action definitions",
+      "mod_time": 1778433771
+    },
+    "frontend/src/locales/en.js": {
+      "path": "frontend/src/locales/en.js",
+      "lang": "js",
+      "lines": 447,
+      "size": 24666,
+      "summary": "/**",
+      "mod_time": 1779810021
+    },
+    "frontend/src/locales/es.js": {
+      "path": "frontend/src/locales/es.js",
+      "lang": "js",
+      "lines": 445,
+      "size": 25613,
+      "summary": "/**",
+      "mod_time": 1779810021
+    },
+    "frontend/src/main.js": {
+      "path": "frontend/src/main.js",
+      "lang": "js",
+      "lines": 8,
+      "size": 186,
+      "summary": "import { createApp } from 'vue'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/stores/useAwsStore.js": {
+      "path": "frontend/src/stores/useAwsStore.js",
+      "lang": "js",
+      "lines": 1021,
+      "size": 43425,
+      "symbols": [
+        "useAwsStore",
+        "headers",
+        "setError",
+        "setActiveProfile",
+        "fetchRegions",
+        "fetchEksClusters",
+        "fetchEcsServices",
+        "startEcsService",
+        "stopEcsService",
+        "fetchEc2Instances",
+        "startEc2Instance",
+        "stopEc2Instance",
+        "fetchLambdas",
+        "invokeLambda",
+        "fetchApiGateways",
+        "fetchLogs",
+        "fetchS3Buckets",
+        "fetchEcrRepos",
+        "fetchVpcs",
+        "fetchEventBridgeRules",
+        "fetchStepFunctions",
+        "fetchStepFnDiagram",
+        "fetchStepFnExecutionEvents",
+        "fetchStepFnExecutionCount",
+        "fetchStepFnVersions",
+        "fetchStepFnVersionDefinition",
+        "fetchEventBridgeConfig",
+        "fetchEventBridgeLogs",
+        "fetchResourceConfig",
+        "fetchTags",
+        "saveTags",
+        "enableLambdaLogging",
+        "enableEcsLogging",
+        "fetchApigwIntegrations",
+        "addEksKubeconfig",
+        "fetchS3Objects",
+        "fetchS3ObjectContent",
+        "createS3Bucket",
+        "testS3Bucket",
+        "fetchEcrImages",
+        "applyK8sManifest",
+        "fetchGlueJobs",
+        "fetchGlueDatabases",
+        "runGlueJob",
+        "fetchGlueJobRuns",
+        "fetchGlueJobConfig",
+        "fetchGlueConnections",
+        "fetchGlueLogs",
+        "fetchRdsClusters",
+        "fetchRdsConfig",
+        "fetchRdsConnectionStrings",
+        "resetRdsPassword",
+        "fetchDocdbClusters",
+        "fetchDocdbConnectionStrings",
+        "fetchDocdbConfig",
+        "resetDocdbPassword",
+        "createDocdbCluster",
+        "fetchDynamoTables",
+        "fetchDynamoTableConfig",
+        "scanDynamoTable"
+      ],
+      "summary": "/**",
+      "mod_time": 1781015494
+    },
+    "frontend/src/stores/useEnvStore.js": {
+      "path": "frontend/src/stores/useEnvStore.js",
+      "lang": "js",
+      "lines": 155,
+      "size": 5328,
+      "symbols": [
+        "useEnvStore",
+        "findById",
+        "fetchProfiles",
+        "fetchProfile",
+        "createProfile",
+        "updateProfile",
+        "deleteProfile",
+        "exportProfile",
+        "importEnv"
+      ],
+      "summary": "/**",
+      "mod_time": 1779810021
+    },
+    "frontend/src/stores/useGcpStore.js": {
+      "path": "frontend/src/stores/useGcpStore.js",
+      "lang": "js",
+      "lines": 404,
+      "size": 23832,
+      "symbols": [
+        "useGcpStore",
+        "createTab",
+        "headers",
+        "setError",
+        "fetchTab",
+        "appendTab",
+        "setActiveProfile",
+        "fetchCloudRunServices",
+        "fetchGkeClusters",
+        "fetchVMs",
+        "fetchSqlInstances",
+        "fetchBuckets",
+        "fetchFunctions",
+        "fetchPubSubTopics",
+        "fetchSecrets",
+        "fetchArtifactRegistry",
+        "fetchBigQueryDatasets",
+        "fetchWorkflows",
+        "fetchDnsZones",
+        "fetchFirestoreDbs",
+        "fetchSpannerInstances",
+        "fetchMemorystore",
+        "fetchTaskQueues",
+        "fetchSchedulerJobs",
+        "fetchBuilds",
+        "fetchIamServiceAccounts",
+        "startCloudRunService",
+        "stopCloudRunService",
+        "startVM",
+        "stopVM",
+        "startSqlInstance",
+        "stopSqlInstance",
+        "invokeFunction",
+        "fetchFunctionLogs",
+        "previewSecretKeys",
+        "importSecretKeys",
+        "fetchArtifactPackages",
+        "fetchBigQueryTables",
+        "runBigQuery",
+        "pollBigQueryJob",
+        "fetchWorkflowExecutions",
+        "fetchWorkflowDefinition",
+        "fetchDnsRecords",
+        "fetchFirestoreCollections",
+        "fetchFirestoreDocuments",
+        "fetchSpannerDatabases",
+        "querySpanner",
+        "fetchQueueTasks",
+        "runSchedulerJob",
+        "pauseSchedulerJob",
+        "resumeSchedulerJob",
+        "fetchBuildLogs",
+        "fetchIamKeys",
+        "fetchMoreBuilds",
+        "fetchMoreIamServiceAccounts",
+        "fetchMoreQueueTasks",
+        "fetchCloudRunJobs",
+        "fetchPubSubSubscriptions",
+        "fetchVpcNetworks",
+        "fetchAlertPolicies"
+      ],
+      "summary": "import { defineStore } from 'pinia'",
+      "mod_time": 1781023873
+    },
+    "frontend/src/stores/useKubeStore.js": {
+      "path": "frontend/src/stores/useKubeStore.js",
+      "lang": "js",
+      "lines": 95,
+      "size": 3437,
+      "symbols": [
+        "useKubeStore",
+        "loadContexts",
+        "switchContext",
+        "deleteContext",
+        "loadNamespaces",
+        "loadResources"
+      ],
+      "summary": "import { defineStore } from 'pinia'",
+      "mod_time": 1778430275
+    },
+    "frontend/src/stores/usePortForwardStore.js": {
+      "path": "frontend/src/stores/usePortForwardStore.js",
+      "lang": "js",
+      "lines": 46,
+      "size": 1468,
+      "symbols": [
+        "usePortForwardStore",
+        "load",
+        "start",
+        "stop",
+        "persist",
+        "autoRestore"
+      ],
+      "summary": "import { defineStore } from 'pinia'",
+      "mod_time": 1778429224
+    },
+    "frontend/src/stores/useTerminalStore.js": {
+      "path": "frontend/src/stores/useTerminalStore.js",
+      "lang": "js",
+      "lines": 154,
+      "size": 5244,
+      "symbols": [
+        "useTerminalStore",
+        "nextTabId",
+        "activeTab",
+        "openLogsTab",
+        "openExecTab",
+        "openLocalTab",
+        "openCloudTab",
+        "activateTab",
+        "closeTab",
+        "stopStream",
+        "pushLine",
+        "parseSerializedDate"
+      ],
+      "summary": "import { defineStore } from 'pinia'",
+      "mod_time": 1777995104
+    },
+    "frontend/src/stores/useUpdateStore.js": {
+      "path": "frontend/src/stores/useUpdateStore.js",
+      "lang": "js",
+      "lines": 45,
+      "size": 1282,
+      "symbols": [
+        "useUpdateStore",
+        "initListeners",
+        "installUpdate",
+        "checkForUpdates"
+      ],
+      "summary": "import { defineStore } from 'pinia'",
+      "mod_time": 1776784612
+    },
+    "frontend/src/stores/useVercelStore.js": {
+      "path": "frontend/src/stores/useVercelStore.js",
+      "lang": "js",
+      "lines": 297,
+      "size": 9584,
+      "symbols": [
+        "useVercelStore",
+        "headers",
+        "setError",
+        "setActiveProfile",
+        "selectProject",
+        "fetchTeams",
+        "fetchProjects",
+        "fetchDeployments",
+        "fetchDomains",
+        "fetchEnvVars",
+        "fetchFunctions",
+        "fetchChecks",
+        "redeployDeployment",
+        "promoteDeployment",
+        "cancelDeployment",
+        "fetchEvents",
+        "fetchAliases",
+        "fetchWebhooks",
+        "fetchEdgeConfigs",
+        "fetchEdgeConfigItems",
+        "fetchDnsRecords",
+        "fetchCronJobs"
+      ],
+      "summary": "/**",
+      "mod_time": 1779810021
+    },
+    "frontend/src/style.css": {
+      "path": "frontend/src/style.css",
+      "lang": "web",
+      "lines": 1998,
+      "size": 75340,
+      "summary": "/* ── Variables ─────────────────────────────────\ufffd",
+      "mod_time": 1779810021
+    },
+    "frontend/src/tests/resources.test.js": {
+      "path": "frontend/src/tests/resources.test.js",
+      "lang": "js",
+      "lines": 124,
+      "size": 5331,
+      "summary": "import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'",
+      "mod_time": 1778432520
+    },
+    "frontend/src/tests/setup.js": {
+      "path": "frontend/src/tests/setup.js",
+      "lang": "js",
+      "lines": 49,
+      "size": 1457,
+      "symbols": [
+        "MockWebSocket"
+      ],
+      "summary": "// Global test setup for jsdom environment",
+      "mod_time": 1776752781
+    },
+    "frontend/src/tests/useApi.test.js": {
+      "path": "frontend/src/tests/useApi.test.js",
+      "lang": "js",
+      "lines": 74,
+      "size": 2661,
+      "symbols": [
+        "mockFetch"
+      ],
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/tests/useGcpStore.test.js": {
+      "path": "frontend/src/tests/useGcpStore.test.js",
+      "lang": "js",
+      "lines": 925,
+      "size": 38390,
+      "symbols": [
+        "mockFetchOk",
+        "mockFetchPaginated",
+        "mockFetchError",
+        "mockFetchNetworkError"
+      ],
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1776782024
+    },
+    "frontend/src/tests/useKubeStore.test.js": {
+      "path": "frontend/src/tests/useKubeStore.test.js",
+      "lang": "js",
+      "lines": 178,
+      "size": 6696,
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/tests/usePortForwardStore.test.js": {
+      "path": "frontend/src/tests/usePortForwardStore.test.js",
+      "lang": "js",
+      "lines": 101,
+      "size": 3479,
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1776706595
+    },
+    "frontend/src/tests/useTerminalStore.test.js": {
+      "path": "frontend/src/tests/useTerminalStore.test.js",
+      "lang": "js",
+      "lines": 199,
+      "size": 6940,
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1777995104
+    },
+    "frontend/src/tests/useTerminalStreams.test.js": {
+      "path": "frontend/src/tests/useTerminalStreams.test.js",
+      "lang": "js",
+      "lines": 215,
+      "size": 8154,
+      "symbols": [
+        "getMockWs"
+      ],
+      "summary": "import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'",
+      "mod_time": 1777995104
+    },
+    "frontend/src/tests/useToast.test.js": {
+      "path": "frontend/src/tests/useToast.test.js",
+      "lang": "js",
+      "lines": 60,
+      "size": 1865,
+      "summary": "import { describe, it, expect, vi, beforeEach } from 'vitest'",
+      "mod_time": 1776706595
+    },
+    "frontend/vite.config.js": {
+      "path": "frontend/vite.config.js",
+      "lang": "js",
+      "lines": 25,
+      "size": 770,
+      "summary": "import { defineConfig } from 'vite'",
+      "mod_time": 1776752781
+    },
+    "lib/auditLog.js": {
+      "path": "lib/auditLog.js",
+      "lang": "js",
+      "lines": 183,
+      "size": 6809,
+      "symbols": [
+        "ensureDataDir",
+        "loadFromDisk",
+        "rotateIfNeeded",
+        "appendToDisk",
+        "log",
+        "getLogs",
+        "clearLogs",
+        "exportCsv"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1779810021
+    },
+    "lib/credentialStore.js": {
+      "path": "lib/credentialStore.js",
+      "lang": "js",
+      "lines": 340,
+      "size": 12549,
+      "symbols": [
+        "resolvePassphrase",
+        "FileStore",
+        "KeyringStore",
+        "createStore",
+        "getStore"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1776757691
+    },
+    "lib/crypto.js": {
+      "path": "lib/crypto.js",
+      "lang": "js",
+      "lines": 103,
+      "size": 3732,
+      "symbols": [
+        "getOrCreateSalt",
+        "deriveKey",
+        "encrypt",
+        "decrypt",
+        "maskSecret"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1776706595
+    },
+    "package-lock.json": {
+      "path": "package-lock.json",
+      "lang": "json",
+      "lines": 11734,
+      "size": 443132,
+      "summary": "{",
+      "mod_time": 1779983136
+    },
+    "package.json": {
+      "path": "package.json",
+      "lang": "json",
+      "lines": 162,
+      "size": 5086,
+      "summary": "{",
+      "mod_time": 1781019127
+    },
+    "public/assets/index-C1pYuYYr.css": {
+      "path": "public/assets/index-C1pYuYYr.css",
+      "lang": "web",
+      "lines": 0,
+      "size": 160720,
+      "mod_time": 1781023525
+    },
+    "public/assets/index-QsqJgvM2.js": {
+      "path": "public/assets/index-QsqJgvM2.js",
+      "lang": "js",
+      "lines": 0,
+      "size": 1384721,
+      "mod_time": 1781023525
+    },
+    "public/index.html": {
+      "path": "public/index.html",
+      "lang": "web",
+      "lines": 15,
+      "size": 545,
+      "summary": "\u003c!doctype html\u003e",
+      "mod_time": 1781023525
+    },
+    "routes/auditLog.js": {
+      "path": "routes/auditLog.js",
+      "lang": "js",
+      "lines": 83,
+      "size": 3063,
+      "summary": "'use strict';",
+      "mod_time": 1777055834
+    },
+    "routes/aws.js": {
+      "path": "routes/aws.js",
+      "lang": "js",
+      "lines": 4627,
+      "size": 213777,
+      "symbols": [
+        "handleErr",
+        "readLocalAwsProfiles",
+        "resolveAwsConfig",
+        "requireProfileId"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1781015478
+    },
+    "routes/envManager.js": {
+      "path": "routes/envManager.js",
+      "lang": "js",
+      "lines": 231,
+      "size": 9331,
+      "symbols": [
+        "handleErr",
+        "validateProvider",
+        "parseDotenv"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1777055834
+    },
+    "routes/gcp.js": {
+      "path": "routes/gcp.js",
+      "lang": "js",
+      "lines": 2605,
+      "size": 118041,
+      "symbols": [
+        "gcloudExec",
+        "readGcloudConfigs",
+        "getGcloudAccessToken",
+        "handleErr",
+        "resolveGcpAuth",
+        "requireProfileId",
+        "gcpFetch",
+        "fetchBody"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1781023857
+    },
+    "routes/helm.js": {
+      "path": "routes/helm.js",
+      "lang": "js",
+      "lines": 318,
+      "size": 11464,
+      "symbols": [
+        "resolveKubeconfigEnv",
+        "readRegisteredKubeconfigPaths",
+        "shellExec",
+        "helmBase",
+        "shellQuote",
+        "validateName",
+        "validateChart",
+        "isMetricsServerChart",
+        "parseJson",
+        "handleErr"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1778432776
+    },
+    "routes/localShell.js": {
+      "path": "routes/localShell.js",
+      "lang": "js",
+      "lines": 220,
+      "size": 7428,
+      "symbols": [
+        "safePath",
+        "fmtSize",
+        "iconFor",
+        "listDir"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1776706595
+    },
+    "routes/systemTools.js": {
+      "path": "routes/systemTools.js",
+      "lang": "js",
+      "lines": 158,
+      "size": 6487,
+      "symbols": [
+        "shellExec",
+        "detectVersion"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1776714902
+    },
+    "routes/vercel.js": {
+      "path": "routes/vercel.js",
+      "lang": "js",
+      "lines": 688,
+      "size": 27484,
+      "symbols": [
+        "handleErr",
+        "requireProfileId",
+        "resolveVercelAuth",
+        "vercelFetch",
+        "withTeam"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1779810021
+    },
+    "scripts/capture-screenshots.js": {
+      "path": "scripts/capture-screenshots.js",
+      "lang": "js",
+      "lines": 72,
+      "size": 2506,
+      "symbols": [
+        "dismissModals",
+        "clickSidebar"
+      ],
+      "summary": "/**",
+      "mod_time": 1776714147
+    },
+    "scripts/generate-icons.js": {
+      "path": "scripts/generate-icons.js",
+      "lang": "js",
+      "lines": 230,
+      "size": 8179,
+      "symbols": [
+        "clamp",
+        "inRoundedRect",
+        "dist",
+        "crc32",
+        "pngChunk",
+        "resizePng",
+        "buildPngForSize"
+      ],
+      "summary": "#!/usr/bin/env node",
+      "mod_time": 1776706595
+    },
+    "server.js": {
+      "path": "server.js",
+      "lang": "js",
+      "lines": 2667,
+      "size": 110180,
+      "symbols": [
+        "loadEnvFileIfExists",
+        "mergeKc",
+        "resolveKubeConfigFiles",
+        "expandUserPath",
+        "readRegisteredKubeconfigPaths",
+        "writeRegisteredKubeconfigPaths",
+        "parseAndValidateKubeconfig",
+        "loadKubeConfig",
+        "validateKubeconfig",
+        "clients",
+        "summarizeObject",
+        "selectorText",
+        "listItems",
+        "yamlResponse",
+        "handleError",
+        "selectorToString",
+        "eventTime",
+        "normalizeEvent",
+        "metricTotalsFromContainers",
+        "metricPayload",
+        "isMetricsApiUnavailable",
+        "metricsUnavailable",
+        "prometheusServiceScore",
+        "discoverPrometheusServices",
+        "serviceProxyCandidates",
+        "kubeApiGet",
+        "prometheusQuery",
+        "prometheusScalar",
+        "regexEscape",
+        "prometheusMetricsForPods",
+        "prometheusMetricsForNode",
+        "resolveMetricPods",
+        "resolveLogPods",
+        "containerEnvCount",
+        "containerPorts",
+        "portsDisplay",
+        "parseCpu",
+        "parseMemory",
+        "formatCpu",
+        "formatBytes",
+        "resolveServiceForwardTarget",
+        "resolvePodForwardTarget",
+        "startPortForward",
+        "normalizeTextData",
+        "stopStream",
+        "stopExec",
+        "stripAnsi",
+        "flushBuf",
+        "start",
+        "send",
+        "cleanup"
+      ],
+      "summary": "'use strict';",
+      "mod_time": 1779971724
+    }
+  }
+}
