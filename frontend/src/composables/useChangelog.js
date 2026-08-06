@@ -4,9 +4,32 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.10.4'
+export const CHANGELOG_VERSION = '1.11.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.11.0',
+    date: 'Agosto 2026',
+    items: [
+      { type: 'new',    text: 'APM local — espacio de aplicaciones por perfil con recursos Lambda, Kubernetes, SQS, EventBridge, Step Functions y ECS confirmados explícitamente' },
+      { type: 'new',    text: 'Discovery AWS — preview read-only de CloudFormation y ECS para importar topología sin asociaciones automáticas ni inferencia de dependencias' },
+      { type: 'new',    text: 'Observabilidad EKS — dashboard de Container Insights con métricas agrupadas por namespace, workload, pod o nodo' },
+      { type: 'better', text: 'Coste y privacidad — polling desactivado por defecto, presupuesto máximo de 100.000 lecturas AWS al mes y almacenamiento local sin logs, payloads ni credenciales' },
+      { type: 'new',    text: 'SQLite privado — agregados UTC de 30 minutos, umbrales locales, cursores, retención automática y cierre seguro dentro del directorio de datos de KUA' },
+      { type: 'better', text: 'Auto-refresh — actualización silenciosa cada 5 segundos para Kubernetes, AWS, GCP y Vercel con caché stale-while-revalidate y pausa al ocultar la ventana' },
+      { type: 'better', text: 'Terminal Logs — seguimiento en vivo, navegación por bloques, selección de pod para workloads y memoria acotada a las 5.000 líneas más recientes' },
+      { type: 'fix',    text: 'Kubernetes — compatibilidad con firmas actuales del cliente, YAML editable sin campos administrados y protección frente a respuestas de recursos obsoletas' },
+      { type: 'fix',    text: 'Runtime — reparación idempotente del ABI nativo de SQLite, empaquetado Electron y puerto Vite estricto para un dev:full estable' },
+    ],
+  },
+  {
+    version: '1.10.5',
+    date: 'Julio 2026',
+    items: [
+      { type: 'fix',    text: 'Desarrollo — puertos separados para backend estable (7190), backend dev/Electron (7192) y frontend Vite (7193)' },
+      { type: 'fix',    text: 'Release — workaround de módulos nativos opcionales para evitar fallos de electron-rebuild en builds multiplataforma' },
+    ],
+  },
   {
     version: '1.10.4',
     date: 'Junio 2026',

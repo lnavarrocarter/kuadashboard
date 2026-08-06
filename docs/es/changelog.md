@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.11.0 (2026-08-06)
+
+### Observabilidad local de aplicaciones
+
+- Nuevo espacio de aplicaciones por perfil para recursos Lambda, Kubernetes, SQS, EventBridge, Step Functions y ECS confirmados explícitamente.
+- Discovery read-only de despliegues CloudFormation y ECS con preview antes de importar. KUA nunca selecciona candidatos ni crea dependencias automáticamente.
+- Almacén privado SQLite con agregados UTC de 30 minutos, umbrales locales, cursores de recolección, historial de ejecuciones, retención y health checks.
+- Colectores Lambda y Kubernetes con paginación reanudable, deduplicación, estados parciales y captura oportunista de métricas ya cargadas en la interfaz.
+- Topología manual por aplicación, umbrales de salud configurables, tendencias locales e historial de métricas aislado por perfil.
+
+### EKS Container Insights
+
+- Nuevo dashboard de observabilidad EKS basado en consultas read-only a CloudWatch Container Insights.
+- Las métricas se pueden agrupar por namespace, workload, pod o nodo, mostrando contexto del clúster y sus node groups junto a las series.
+- La recolección informa cuando Container Insights no está disponible o devuelve datos parciales, sin provisionar agentes, dashboards, alarmas ni otros recursos AWS.
+
+### Controles de coste y privacidad
+
+- El polling automático APM permanece desactivado por defecto y la recolección se habilita explícitamente por aplicación.
+- Límite local estricto de 100.000 lecturas AWS por perfil y mes calendario.
+- KUA almacena sólo identificadores confirmados, configuración, cursores, contadores, estado de recolección y agregados. No persiste líneas de CloudWatch Logs, payloads, credenciales, secretos, variables de entorno ni tags arbitrarios.
+- Los buckets, cursores y ejecuciones expiran a los 90 días; los registros de presupuesto expiran a los 15 meses.
+
+### Estabilidad de refresco y terminal
+
+- Refresco silencioso y estable cada 5 segundos para Kubernetes, AWS, GCP y Vercel, pausado cuando la ventana está oculta.
+- Cachés en memoria stale-while-revalidate para listados cloud y Kubernetes, invalidadas después de mutaciones y cambios de contexto.
+- El refresco en segundo plano conserva la identidad de datos sin cambios e ignora respuestas obsoletas después de navegar entre recursos.
+- Terminal Logs conserva hasta 5.000 líneas, renderiza ventanas de 1.000, permite pausar/reanudar el seguimiento y seleccionar un pod individual para logs de workloads.
+
+### Compatibilidad runtime y Kubernetes
+
+- Reparación idempotente de módulos nativos para `better-sqlite3`, soporte de unpack/rebuild en Electron, permisos privados para la base y puerto Vite estricto.
+- Actualización de patches Kubernetes para las firmas actuales del cliente y eliminación de campos administrados por el servidor antes de aplicar YAML editado.
+- Cierre limpio del scheduler/base APM y health reporting en el backend local.
+
+## v1.10.5 (2026-07-07)
+
+### Estabilidad de desarrollo y release
+
+- Separación de puertos para backend estable (`7190`), backend de desarrollo/Electron (`7192`) y frontend Vite (`7193`).
+- Workaround en el workflow de release para módulos nativos opcionales que podían fallar durante electron-rebuild multiplataforma.
+
 ## v1.10.4 (2026-06-22)
 
 ### OAuth de Vercel Marketplace
@@ -53,7 +96,7 @@ Los cuatro servicios principales de GCP estrenan un layout completo de panel div
 El tab **Metrics** se incluye ahora en los cuatro paneles de servicio. Muestra tres gráficas de línea (Chart.js) obtenidas desde la API Cloud Monitoring v3, con selector de rango (1h / 3h / 6h / 24h) y botón de actualización.
 
 | Servicio | Gráficas |
-|---|---|
+| --- | --- |
 | Cloud Run | Request Rate (req/s) · Latency p99 (ms) · Instance Count |
 | Compute VMs | CPU Utilization (%) · Network In (B/s) · Disk Read (B/s) |
 | Cloud SQL | CPU Utilization (%) · Connections · Disk Used (bytes) |
@@ -71,7 +114,7 @@ Artifact Registry se rediseña como panel master-detail con dos tabs:
 - **Packages & Tags** — vista en dos columnas: lista de packages a la izquierda y tabla de tags a la derecha. Cada fila de tag Docker tiene un botón **🚀 Deploy**.
 - **Deploy to K8s** — al pulsar Deploy se rellena automáticamente la referencia completa de imagen (`location-docker.pkg.dev/project/repo/pkg:tag`). El panel permite seleccionar el Namespace, el Deployment y el Container del cluster Kubernetes activo, muestra un resumen del despliegue y aplica el cambio con un clic.
 
-### Kubernetes
+### Integración con Kubernetes
 
 - Nuevo endpoint `POST /api/:namespace/deployments/:name/set-image`: aplica un strategic-merge-patch sobre la imagen de un container específico y escribe una entrada en el audit log.
 
@@ -122,7 +165,6 @@ Artifact Registry se rediseña como panel master-detail con dos tabs:
 - Nueva columna **Executions** en la tabla de Step Functions con conteos en vivo de ejecuciones activas (▶), fallidas (✗) y con timeout (⏱).
 - Nueva pestaña **Versiones** en el panel Info — lista todas las versiones publicadas del workflow con fecha, descripción y visor de definición ASL con botón de copia.
 - Modal Info refactorizado con cinco pestañas: Detalles, Diagrama, Ejecuciones, Eventos y Versiones.
-
 
 ## v1.8.0 (2026-05-10)
 

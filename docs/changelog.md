@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.11.0 (2026-08-06)
+
+### Local Application Observability
+
+- Added a profile-scoped application workspace for explicitly confirmed Lambda, Kubernetes, SQS, EventBridge, Step Functions, and ECS resources.
+- Added read-only CloudFormation and ECS deployment discovery with a preview-first import flow. KUA never selects candidates or creates dependency edges automatically.
+- Added a private SQLite telemetry store with 30-minute UTC aggregates, local thresholds, collection cursors, run history, retention cleanup, and health checks.
+- Added Lambda and Kubernetes collectors with resumable pagination, deduplication, partial-result states, and opportunistic capture from metrics already loaded in the UI.
+- Added manual application topology, configurable health thresholds, local trend forecasts, and per-profile metric history.
+
+### EKS Container Insights
+
+- Added an EKS observability dashboard backed by read-only CloudWatch Container Insights queries.
+- Metrics can be grouped by namespace, workload, pod, or node, with cluster and node group context shown alongside the time series.
+- Collection reports unavailable or partial Container Insights data without provisioning agents, dashboards, alarms, or other AWS resources.
+
+### Cost and Privacy Guardrails
+
+- Automatic APM polling remains disabled by default and collection must be enabled explicitly per application.
+- Enforced a local hard limit of 100,000 AWS read requests per profile and calendar month.
+- KUA stores only confirmed identifiers, configuration, cursors, request counters, collection status, and metric aggregates. It does not persist CloudWatch log lines, payloads, credentials, secrets, environment variables, or arbitrary tags.
+- Metric buckets, cursors, and collection runs expire after 90 days; request-budget records expire after 15 months.
+
+### Refresh and Terminal Reliability
+
+- Added stable five-second background refresh for Kubernetes, AWS, GCP, and Vercel, paused while the window is hidden.
+- Added in-memory stale-while-revalidate caches for cloud and Kubernetes list endpoints, invalidated after mutations and context changes.
+- Background refresh preserves object identity for unchanged data and ignores stale responses after resource navigation.
+- Terminal logs now retain at most 5,000 lines, render 1,000-line windows, support live-follow pause/resume, and allow selecting an individual pod for workload logs.
+
+### Runtime and Kubernetes Compatibility
+
+- Added idempotent native-module repair for `better-sqlite3`, Electron unpacking/rebuild support, private database file permissions, and a strict Vite development port.
+- Updated Kubernetes patch calls for the current client signatures and removed server-managed fields before applying edited YAML.
+- Added clean APM scheduler/database shutdown and health reporting for the local backend.
+
+## v1.10.5 (2026-07-07)
+
+### Development and Release Reliability
+
+- Separated the stable backend (`7190`), development/Electron backend (`7192`), and Vite frontend (`7193`) ports.
+- Added a release-workflow workaround for optional native modules that could fail during cross-platform Electron rebuilds.
+
 ## v1.10.4 (2026-06-22)
 
 ### Vercel Marketplace OAuth
@@ -53,7 +96,7 @@ All four core GCP services now have a full split-panel master-detail layout: a r
 A **Metrics** tab is now embedded in all four service panels. Each tab shows three Chart.js line charts pulled from the Cloud Monitoring v3 API with a configurable time range (1h / 3h / 6h / 24h) and a Refresh button.
 
 | Service | Charts |
-|---|---|
+| --- | --- |
 | Cloud Run | Request Rate (req/s) · Latency p99 (ms) · Instance Count |
 | Compute VMs | CPU Utilization (%) · Network In (B/s) · Disk Read (B/s) |
 | Cloud SQL | CPU Utilization (%) · Connections · Disk Used (bytes) |
@@ -71,7 +114,7 @@ Artifact Registry is redesigned as a master-detail panel with two tabs:
 - **Packages & Tags** — two-column view: packages list on the left, tag table on the right. Each Docker tag row has a **🚀 Deploy** button.
 - **Deploy to K8s** — clicking Deploy pre-fills the full image reference (`location-docker.pkg.dev/project/repo/pkg:tag`). The panel then lets you select the target Namespace, Deployment and Container from the active Kubernetes cluster, shows a deploy summary and applies the change with a single click.
 
-### Kubernetes
+### Kubernetes Deployment Integration
 
 - New `POST /api/:namespace/deployments/:name/set-image` endpoint: performs a strategic-merge-patch on one container's image and writes an audit log entry.
 
