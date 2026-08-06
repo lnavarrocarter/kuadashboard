@@ -17,7 +17,9 @@ export const useKubeStore = defineStore('kube', () => {
   const currentContext = ref('')
   const namespaces = ref([])
   const loading   = ref(false)
+  const refreshing = ref(false)
   const error     = ref(null)
+  let resourceRequestId = 0
 
   // pending confirmations
   const pending = ref({ delete: null, scale: null, drain: null, deleteContext: null })
@@ -69,26 +71,39 @@ export const useKubeStore = defineStore('kube', () => {
     }
   }
 
-  async function loadResources() {
-    loading.value = true
-    error.value   = null
+  async function loadResources({ silent = false, background = false, force = false } = {}) {
+    const requestId = ++resourceRequestId
+    const targetResource = resource.value
+    const targetNamespace = namespace.value
+    if (silent) {
+      if (!background) refreshing.value = true
+    } else loading.value = true
+    error.value = null
     try {
       let url
-      if (CLUSTER_RESOURCES.has(resource.value)) url = `/api/${resource.value}`
-      else if (resource.value === 'events') url = `/api/${namespace.value}/events`
-      else url = `/api/${namespace.value}/${resource.value}`
-      rows.value = await api('GET', url)
+      if (CLUSTER_RESOURCES.has(targetResource)) url = `/api/${targetResource}`
+      else if (targetResource === 'events') url = `/api/${targetNamespace}/events`
+      else url = `/api/${targetNamespace}/${targetResource}`
+      if (force) url += '?refresh=1'
+      const nextRows = await api('GET', url)
+      if (requestId !== resourceRequestId) return
+      if (JSON.stringify(nextRows) !== JSON.stringify(rows.value)) rows.value = nextRows
     } catch (e) {
+      if (requestId !== resourceRequestId) return
+      if (silent) return
       rows.value  = []
       error.value = e.message
     } finally {
-      loading.value = false
+      if (requestId === resourceRequestId) {
+        loading.value = false
+        refreshing.value = false
+      }
     }
   }
 
   return {
     resource, namespace, rows, contexts, currentContext,
-    namespaces, loading, error, pending,
+    namespaces, loading, refreshing, error, pending,
     loadContexts, switchContext, deleteContext,
     loadNamespaces, loadResources,
   }

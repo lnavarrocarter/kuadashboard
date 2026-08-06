@@ -597,32 +597,41 @@ watch(
   { immediate: true }
 )
 
-function reload(service) {
-  const svc = service || props.activeService
-  if (svc === 'projects')    vercelStore.fetchProjects()
+function reload(service, options = {}) {
+  const svc = typeof service === 'string' ? service : props.activeService
+  let load = null
+  if (svc === 'projects') load = () => vercelStore.fetchProjects()
   else if (svc === 'deployments' && vercelStore.selectedProject)
-    vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: deploymentTarget.value })
+    load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: deploymentTarget.value })
   else if (svc === 'domains' && vercelStore.selectedProject)
-    vercelStore.fetchDomains(vercelStore.selectedProject.id)
+    load = () => vercelStore.fetchDomains(vercelStore.selectedProject.id)
   else if (svc === 'env-vars' && vercelStore.selectedProject)
-    vercelStore.fetchEnvVars(vercelStore.selectedProject.id)
+    load = () => vercelStore.fetchEnvVars(vercelStore.selectedProject.id)
   else if (svc === 'functions' && selectedDeploymentForFunctions.value)
-    vercelStore.fetchFunctions(selectedDeploymentForFunctions.value.id)
+    load = () => vercelStore.fetchFunctions(selectedDeploymentForFunctions.value.id)
   else if (svc === 'checks' && selectedDeploymentForChecks.value)
-    vercelStore.fetchChecks(selectedDeploymentForChecks.value.id)
+    load = () => vercelStore.fetchChecks(selectedDeploymentForChecks.value.id)
   else if (svc === 'dns-records' && vercelStore.selectedDomain)
-    vercelStore.fetchDnsRecords(vercelStore.selectedDomain)
+    load = () => vercelStore.fetchDnsRecords(vercelStore.selectedDomain)
   else if (svc === 'aliases')
-    vercelStore.fetchAliases()
+    load = () => vercelStore.fetchAliases()
   else if (svc === 'cron' && vercelStore.selectedProject)
-    vercelStore.fetchCronJobs(vercelStore.selectedProject.id)
+    load = () => vercelStore.fetchCronJobs(vercelStore.selectedProject.id)
   else if (svc === 'webhooks')
-    vercelStore.fetchWebhooks()
+    load = () => vercelStore.fetchWebhooks()
   else if (svc === 'edge-config')
-    vercelStore.fetchEdgeConfigs()
+    load = () => vercelStore.fetchEdgeConfigs()
   else if (svc === 'activity')
-    vercelStore.fetchEvents()
+    load = () => vercelStore.fetchEvents()
+  if (!load) return Promise.resolve()
+  return options.background ? vercelStore.runInBackground(load) : load()
 }
+
+function reloadActiveTab(options = {}) {
+  return reload(props.activeService, options)
+}
+
+defineExpose({ reloadActiveTab })
 
 function reloadDeployments() {
   if (!vercelStore.selectedProject) return

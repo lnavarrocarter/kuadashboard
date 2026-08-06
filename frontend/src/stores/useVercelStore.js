@@ -10,7 +10,8 @@ import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
 export const useVercelStore = defineStore('vercel', () => {
-  const { apiFetch } = useApi()
+  const { apiFetch: request } = useApi()
+  let backgroundRequests = 0
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
@@ -42,6 +43,26 @@ export const useVercelStore = defineStore('vercel', () => {
   }
 
   function setError(e) { error.value = e?.message || String(e) }
+
+  function apiFetch(path, options = {}) {
+    return request(path, {
+      ...options,
+      background: backgroundRequests > 0,
+      stabilize: true,
+    })
+  }
+
+  async function runInBackground(callback) {
+    backgroundRequests += 1
+    try {
+      const pending = callback()
+      loading.value = false
+      return await pending
+    } finally {
+      backgroundRequests -= 1
+      loading.value = false
+    }
+  }
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
@@ -275,6 +296,7 @@ export const useVercelStore = defineStore('vercel', () => {
     error,
     // actions
     setActiveProfile,
+    runInBackground,
     selectProject,
     fetchTeams,
     fetchProjects,

@@ -1971,16 +1971,17 @@ const fetchMap = {
   kms:          () => gcpStore.fetchKmsKeyrings(),
 }
 
-async function loadTab(id) {
+async function loadTab(id, options = {}) {
   if (loaded[id]) return
-  await fetchMap[id]?.()
+  const load = () => fetchMap[id]?.()
+  await (options.background ? gcpStore.runInBackground(load) : load())
   loaded[id] = true
 }
 
 async function reloadActiveTab(options = {}) {
   loaded[activeTab.value] = false
   if (!options.preserveSearch) search.value = ''
-  await loadTab(activeTab.value)
+  await loadTab(activeTab.value, options)
 }
 
 defineExpose({ reloadActiveTab })

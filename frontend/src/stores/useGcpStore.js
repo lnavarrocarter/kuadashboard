@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
 export const useGcpStore = defineStore('gcp', () => {
-  const { apiFetch } = useApi()
+  const { apiFetch: request } = useApi()
+  let backgroundRequests = 0
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
@@ -37,26 +38,46 @@ export const useGcpStore = defineStore('gcp', () => {
     tabs.value[tabKey].enableUrl = match ? match[0] : null
   }
 
+  function apiFetch(path, options = {}) {
+    return request(path, {
+      ...options,
+      background: backgroundRequests > 0,
+      stabilize: true,
+    })
+  }
+
+  async function runInBackground(callback) {
+    backgroundRequests += 1
+    try {
+      return await callback()
+    } finally {
+      backgroundRequests -= 1
+    }
+  }
+
   async function fetchTab(tabKey, url) {
     const tab = tabs.value[tabKey]
-    tab.loading = true
-    tab.error = null
-    tab.nextPageToken = null
+    const background = backgroundRequests > 0
+    if (!background) {
+      tab.loading = true
+      tab.error = null
+      tab.nextPageToken = null
+    }
     try {
       const res = await apiFetch(url, { headers: headers() })
       if (Array.isArray(res)) {
-        tab.data = res
+        if (tab.data !== res) tab.data = res
       } else if (res && res.items) {
-        tab.data = res.items
+        if (tab.data !== res.items) tab.data = res.items
         tab.nextPageToken = res.nextPageToken || null
       } else {
         tab.data = []
       }
     } catch (e) {
       setError(e, tabKey)
-      tab.data = []
+      if (!background) tab.data = []
     } finally {
-      tab.loading = false
+      if (!background) tab.loading = false
     }
   }
 
@@ -388,7 +409,7 @@ export const useGcpStore = defineStore('gcp', () => {
   return {
     activeProfileId, tabs,
     cloudRunServices, gkeClusters, vms,
-    setActiveProfile,
+    setActiveProfile, runInBackground,
     fetchCloudRunServices, fetchGkeClusters, fetchVMs,
     fetchSqlInstances, fetchBuckets, fetchFunctions, fetchPubSubTopics,
     fetchSecrets, fetchArtifactRegistry,

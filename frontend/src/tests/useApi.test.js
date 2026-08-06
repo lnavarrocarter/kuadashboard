@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { api } from '../composables/useApi'
+import { api, useApi } from '../composables/useApi'
 
 function mockFetch({ ok = true, status = 200, json = null, text = '' }) {
   const ct = json !== null ? 'application/json' : 'text/plain'
@@ -70,5 +70,31 @@ describe('useApi – api()', () => {
       text: () => Promise.resolve('service unavailable'),
     })
     await expect(api('DELETE', '/api/something')).rejects.toThrow('service unavailable')
+  })
+})
+
+describe('useApi – apiFetch()', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('marks background requests for API caching', async () => {
+    global.fetch = mockFetch({ json: [] })
+    const { apiFetch } = useApi()
+    await apiFetch('/api/cloud/aws/ec2', { background: true })
+    expect(fetch.mock.calls[0][1].headers['X-KUA-Background']).toBe('1')
+  })
+
+  it('preserves response identity when a stabilized list is unchanged', async () => {
+    global.fetch = vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve([{ id: 'stable' }]),
+    }))
+    const { apiFetch } = useApi()
+    const first = await apiFetch('/api/cloud/aws/ec2', { stabilize: true })
+    const second = await apiFetch('/api/cloud/aws/ec2', { stabilize: true, background: true })
+    expect(second).toBe(first)
   })
 })

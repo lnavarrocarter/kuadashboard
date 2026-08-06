@@ -13,7 +13,7 @@
       </div>
       <div class="toolbar-right">
         <input v-model="filter" class="search-input" placeholder="Filter..." />
-        <button class="btn btn-icon" title="Refresh (R)" @click="store.loadResources()">
+        <button class="btn btn-icon" :class="{ refreshing: store.refreshing }" :disabled="store.loading || store.refreshing" title="Refresh (R)" @click="store.loadResources({ silent: true, force: true })">
           <i data-lucide="refresh-cw"></i>
         </button>
       </div>
@@ -212,7 +212,7 @@ function renderCell(cell) {
 function onKey(e) {
   if (e.key === 'r' && !e.ctrlKey && !e.metaKey &&
       !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
-    store.loadResources()
+    store.loadResources({ silent: true, force: true })
   }
 }
 

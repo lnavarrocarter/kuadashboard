@@ -21,6 +21,7 @@ describe('useKubeStore', () => {
       expect(store.currentContext).toBe('')
       expect(store.namespaces).toEqual([])
       expect(store.loading).toBe(false)
+      expect(store.refreshing).toBe(false)
       expect(store.error).toBeNull()
     })
   })
@@ -115,6 +116,12 @@ describe('useKubeStore', () => {
       expect(spy).toHaveBeenCalledWith('GET', '/api/default/events')
     })
 
+    it('forces API revalidation for a manual refresh', async () => {
+      const spy = vi.spyOn(ApiModule, 'api').mockResolvedValue([])
+      await store.loadResources({ silent: true, force: true })
+      expect(spy).toHaveBeenCalledWith('GET', '/api/default/pods?refresh=1')
+    })
+
     it('sets loading true while fetching then false', async () => {
       let resolveFn
       vi.spyOn(ApiModule, 'api').mockReturnValue(new Promise(r => { resolveFn = r }))
@@ -123,6 +130,54 @@ describe('useKubeStore', () => {
       resolveFn([])
       await p
       expect(store.loading).toBe(false)
+    })
+
+    it('refreshes silently without clearing the current rows', async () => {
+      let resolveFn
+      store.rows = [{ name: 'pod-old' }]
+      vi.spyOn(ApiModule, 'api').mockReturnValue(new Promise(resolve => { resolveFn = resolve }))
+      const request = store.loadResources({ silent: true })
+      expect(store.loading).toBe(false)
+      expect(store.refreshing).toBe(true)
+      expect(store.rows).toEqual([{ name: 'pod-old' }])
+      resolveFn([{ name: 'pod-new' }])
+      await request
+      expect(store.rows).toEqual([{ name: 'pod-new' }])
+      expect(store.refreshing).toBe(false)
+    })
+
+    it('refreshes in the background without exposing loading state', async () => {
+      let resolveFn
+      store.rows = [{ name: 'pod-old' }]
+      vi.spyOn(ApiModule, 'api').mockReturnValue(new Promise(resolve => { resolveFn = resolve }))
+      const request = store.loadResources({ silent: true, background: true })
+      expect(store.loading).toBe(false)
+      expect(store.refreshing).toBe(false)
+      resolveFn([{ name: 'pod-new' }])
+      await request
+      expect(store.rows).toEqual([{ name: 'pod-new' }])
+    })
+
+    it('preserves row identity when background data is unchanged', async () => {
+      store.rows = [{ name: 'pod-stable', status: 'Running' }]
+      const currentRows = store.rows
+      vi.spyOn(ApiModule, 'api').mockResolvedValue([{ name: 'pod-stable', status: 'Running' }])
+      await store.loadResources({ silent: true, background: true })
+      expect(store.rows).toBe(currentRows)
+    })
+
+    it('ignores an older response after the resource changes', async () => {
+      const resolvers = []
+      vi.spyOn(ApiModule, 'api').mockImplementation(() => new Promise(resolve => resolvers.push(resolve)))
+      store.resource = 'pods'
+      const podsRequest = store.loadResources({ silent: true })
+      store.resource = 'deployments'
+      const deploymentsRequest = store.loadResources({ silent: true })
+      resolvers[1]([{ name: 'deployment-current' }])
+      await deploymentsRequest
+      resolvers[0]([{ name: 'pod-stale' }])
+      await podsRequest
+      expect(store.rows).toEqual([{ name: 'deployment-current' }])
     })
 
     it('sets error and empty rows on failure', async () => {

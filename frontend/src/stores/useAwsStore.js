@@ -10,7 +10,8 @@ import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
 export const useAwsStore = defineStore('aws', () => {
-  const { apiFetch } = useApi()
+  const { apiFetch: request } = useApi()
+  let backgroundRequests = 0
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId  = ref(null)
@@ -51,6 +52,26 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   function setError(e) { error.value = e.message }
+
+  function apiFetch(path, options = {}) {
+    return request(path, {
+      ...options,
+      background: backgroundRequests > 0,
+      stabilize: true,
+    })
+  }
+
+  async function runInBackground(callback) {
+    backgroundRequests += 1
+    try {
+      const pending = callback()
+      loading.value = false
+      return await pending
+    } finally {
+      backgroundRequests -= 1
+      loading.value = false
+    }
+  }
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
@@ -344,6 +365,15 @@ export const useAwsStore = defineStore('aws', () => {
     try {
       return await apiFetch(`/api/cloud/aws/eks/${encodeURIComponent(name)}/add-kubeconfig`, {
         method: 'POST',
+        headers: headers(),
+      })
+    } catch (e) { setError(e); return null }
+  }
+
+  async function fetchEksObservability(name, { hours = 3, groupBy = 'namespace' } = {}) {
+    try {
+      const query = new URLSearchParams({ hours: String(hours), groupBy })
+      return await apiFetch(`/api/cloud/aws/eks/${encodeURIComponent(name)}/observability?${query}`, {
         headers: headers(),
       })
     } catch (e) { setError(e); return null }
@@ -981,7 +1011,7 @@ export const useAwsStore = defineStore('aws', () => {
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
     bedrockModels, lexBots, cfnStacks,
     loading, error,
-    setActiveProfile,
+    setActiveProfile, runInBackground,
     fetchRegions, fetchEksClusters,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
@@ -992,7 +1022,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchResourceConfig,
     fetchTags, saveTags,
     enableLambdaLogging, enableEcsLogging,
-    fetchApigwIntegrations, addEksKubeconfig, fetchS3Objects, fetchS3ObjectContent,
+    fetchApigwIntegrations, addEksKubeconfig, fetchEksObservability, fetchS3Objects, fetchS3ObjectContent,
     // New services
     fetchGlueJobs, fetchGlueDatabases, runGlueJob, fetchGlueJobRuns,
     fetchGlueJobConfig, fetchGlueConnections, fetchGlueLogs,

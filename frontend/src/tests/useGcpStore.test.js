@@ -126,6 +126,27 @@ describe('fetchTab loading lifecycle', () => {
     await store.fetchGkeClusters()
     expect(store.tabs.gke.error).toBeNull()
   })
+
+  it('refreshes in background without loading or replacing unchanged data', async () => {
+    store.setActiveProfile('proj-1')
+    mockFetchOk([{ name: 'service-1' }])
+    await store.fetchCloudRunServices()
+    const previous = store.tabs.cloudrun.data
+
+    let resolveFn
+    global.fetch = vi.fn().mockReturnValue(new Promise(resolve => { resolveFn = resolve }))
+    const pending = store.runInBackground(() => store.fetchCloudRunServices())
+    expect(store.tabs.cloudrun.loading).toBe(false)
+    expect(fetch.mock.calls[0][1].headers['X-KUA-Background']).toBe('1')
+    resolveFn({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve([{ name: 'service-1' }]),
+    })
+    await pending
+    expect(store.tabs.cloudrun.data).toBe(previous)
+  })
 })
 
 // ─── headers guard ────────────────────────────────────────────────────────────
