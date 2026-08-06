@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 7193,
+    strictPort: true,
     proxy: {
       '/api': { target: `http://localhost:${process.env.VITE_BACKEND_PORT || 7190}`, changeOrigin: true },
       '/ws':  { target: `ws://localhost:${process.env.VITE_BACKEND_PORT || 7190}`,   ws: true, changeOrigin: true },

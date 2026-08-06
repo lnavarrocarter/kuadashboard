@@ -1,6 +1,9 @@
 appId: dev.kua.kuadashboard
 productName: KuaDashboard
 asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**
+npmRebuild: true
 buildDependenciesFromSource: false
 afterSign: electron/notarize.js
 

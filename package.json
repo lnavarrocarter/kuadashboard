@@ -8,8 +8,12 @@
   },
   "main": "electron/main.js",
   "scripts": {
+    "native:node": "node scripts/ensure-node-native.js",
+    "prestart": "npm run native:node",
     "start": "cross-env PORT=7190 node server.js",
+    "predev": "npm run native:node",
     "dev": "cross-env PORT=7192 nodemon server.js",
+    "predev:full": "npm run native:node",
     "dev:full": "concurrently -n backend,frontend -c cyan,yellow \"cross-env PORT=7192 nodemon server.js\" \"cross-env VITE_BACKEND_PORT=7192 npm run dev --prefix frontend\"",
     "build:frontend": "cross-env ELECTRON_BUILD=1 npm run build --prefix frontend",
     "electron:dev": "concurrently -n backend,frontend,electron -c cyan,yellow,green \"cross-env PORT=7192 nodemon server.js\" \"cross-env VITE_BACKEND_PORT=7192 npm run dev --prefix frontend\" \"wait-on http://localhost:7192 && cross-env PORT=7192 electron .\"",
@@ -62,6 +66,7 @@
     "@kubernetes/client-node": "^0.20.0",
     "@napi-rs/keyring": "^1.2.0",
     "adm-zip": "^0.5.17",
+    "better-sqlite3": "12.11.1",
     "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "google-auth-library": "^9.0.0",
@@ -83,6 +88,10 @@
     "appId": "dev.kua.kuadashboard",
     "productName": "KuaDashboard",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ],
+    "npmRebuild": true,
     "afterSign": "electron/notarize.js",
     "files": [
       "electron/**",
@@ -159,6 +168,6 @@
     ]
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=20"
   }
 }

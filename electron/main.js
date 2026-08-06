@@ -87,6 +87,7 @@ function startBackend() {
     const env = {
       ...process.env,
       PORT:                    String(BACKEND_PORT),
+      KUA_DATA_DIR:            app.getPath('userData'),
       // Activate KeytarStore automatically (we are in Electron)
       KUADASHBOARD_STORE:      'keytar',
       // Disable color codes in child process stdout
