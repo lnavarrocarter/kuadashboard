@@ -11,6 +11,14 @@ const request    = require('request');
 const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
+const { KubeResponseCache } = require('./lib/kubeResponseCache');
+const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
+const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
+const {
+  buildKubeConfig,
+  kubeConfigPaths,
+  readRegisteredKubeconfigPaths,
+} = require('./lib/kubeConfigManager');
 
 function loadEnvFileIfExists(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -38,17 +46,44 @@ loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
 
 const app    = express();
 const server = http.createServer(app);
+const apmDatabase = getApmDatabase();
+const apmCleanupInterval = setInterval(() => {
+  try {
+    const removed = apmDatabase.cleanup();
+    if (removed.metrics || removed.cursors || removed.runs || removed.usage) {
+      console.log('[apm] Retention cleanup:', removed);
+    }
+  } catch (err) {
+    console.error('[apm] Retention cleanup failed:', err.message);
+  }
+}, 24 * 60 * 60 * 1000);
+apmCleanupInterval.unref();
+const cloudResponseCaches = {
+  aws: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
+  gcp: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
+  vercel: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
+};
 
 // ─── Cloud integration routes ─────────────────────────────────────────────────
 const envManagerRoutes  = require('./routes/envManager');
 const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
+const { createApmRouter } = require('./routes/apm');
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
+const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
+const { KubeCollector } = require('./lib/apm/kubeCollector');
+const { ApmScheduler } = require('./lib/apm/scheduler');
+const apmScheduler = new ApmScheduler({
+  database: apmDatabase,
+  awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
+  kubeCollector: new KubeCollector({ database: apmDatabase }),
+});
+apmScheduler.start();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
 const wss        = new WebSocket.Server({ noServer: true });
@@ -76,10 +111,107 @@ server.on('upgrade', (request, socket, head) => {
 
 app.use(express.json({ limit: '10mb' }));
 
+const CLOUD_LIST_PATHS = {
+  aws: new Set([
+    '/regions', '/eks', '/ecs', '/ec2', '/lambda', '/apigateway', '/s3', '/ecr',
+    '/vpc', '/eventbridge', '/stepfunctions', '/glue/jobs', '/glue/databases',
+    '/athena/workgroups', '/rds', '/dynamodb', '/cloudfront', '/route53/zones',
+    '/cognito/userpools', '/secrets', '/datapipeline', '/bedrock', '/lex',
+    '/cloudformation/stacks',
+  ]),
+  gcp: new Set([
+    '/cloudrun', '/gke', '/compute/vms', '/sql', '/storage/buckets', '/functions',
+    '/pubsub/topics', '/secrets', '/artifact-registry', '/bigquery/datasets',
+    '/workflows', '/dns/zones', '/firestore/databases', '/spanner/instances',
+    '/memorystore/instances', '/tasks/queues', '/scheduler/jobs', '/build/builds',
+    '/iam/service-accounts', '/cloudrun-jobs', '/pubsub/subscriptions', '/vpc/networks',
+    '/monitoring/alerts', '/kms/keyrings',
+  ]),
+};
+const cloudRevalidations = new Set();
+
+function cloudListRequest(req) {
+  const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
+  const match = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(\/.*)$/);
+  if (!match) return null;
+  const [, provider, relativePath] = match;
+  const isVercelList = provider === 'vercel' && (
+    ['/teams', '/projects', '/events', '/aliases', '/webhooks', '/edge-config'].includes(relativePath)
+    || /^\/projects\/[^/]+\/(deployments|domains|cron)$/.test(relativePath)
+    || /^\/deployments\/[^/]+\/(functions|checks)$/.test(relativePath)
+    || /^\/domains\/[^/]+\/dns$/.test(relativePath)
+  );
+  if (!isVercelList && !CLOUD_LIST_PATHS[provider]?.has(relativePath)) return null;
+  const profileId = req.get('X-Profile-Id') || '';
+  const url = new URL(req.originalUrl, 'http://localhost');
+  url.searchParams.sort();
+  return { provider, key: `${profileId}\u0000${url.pathname}${url.search}`, profileId };
+}
+
+function revalidateCloudList(originalUrl, cacheRequest) {
+  const revalidationKey = `${cacheRequest.provider}\u0000${cacheRequest.key}`;
+  if (cloudRevalidations.has(revalidationKey)) return;
+  const address = server.address();
+  if (!address) return;
+  cloudRevalidations.add(revalidationKey);
+  const request = http.request({
+    hostname: '127.0.0.1',
+    port: address.port,
+    path: originalUrl,
+    method: 'GET',
+    headers: {
+      'X-KUA-Cache-Revalidate': '1',
+      'X-Profile-Id': cacheRequest.profileId,
+    },
+  }, response => {
+    response.resume();
+    response.on('end', () => cloudRevalidations.delete(revalidationKey));
+  });
+  request.on('error', () => cloudRevalidations.delete(revalidationKey));
+  request.end();
+}
+
+app.use('/api/cloud', (req, res, next) => {
+  const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
+  const provider = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(?:\/|$)/)?.[1];
+  if (req.method !== 'GET') {
+    if (provider) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) cloudResponseCaches[provider].clear();
+      });
+    }
+    return next();
+  }
+
+  const cacheRequest = cloudListRequest(req);
+  if (!cacheRequest) return next();
+  const cache = cloudResponseCaches[cacheRequest.provider];
+  const revalidating = req.get('X-KUA-Cache-Revalidate') === '1';
+  const background = req.get('X-KUA-Background') === '1';
+  const cached = background && !revalidating ? cache.read(cacheRequest.key) : null;
+  if (cached) {
+    res.setHeader('X-KUA-Cache', cached.state);
+    res.json(cached.value);
+    if (cached.state === 'stale') {
+      setImmediate(() => revalidateCloudList(req.originalUrl, cacheRequest));
+    }
+    return;
+  }
+
+  const sendJson = res.json.bind(res);
+  res.json = body => {
+    if (res.statusCode < 400) cache.write(cacheRequest.key, body);
+    res.setHeader('X-KUA-Cache', revalidating ? 'revalidated' : 'miss');
+    return sendJson(body);
+  };
+  next();
+});
+
 // ─── Mount cloud routes ───────────────────────────────────────────────────────
 app.use('/api/cloud/envs',    envManagerRoutes);
 app.use('/api/cloud/gcp',     gcpRoutes);
 app.use('/api/cloud/aws',     awsRoutes);
+app.use('/api/observability/aws', createApmRouter({ database: apmDatabase, scheduler: apmScheduler, auditLog }));
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
@@ -100,64 +232,30 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, status: 'healthy' });
+  res.json({
+    ok: true,
+    status: 'healthy',
+    apm: apmDatabase.health(),
+    apmScheduler: apmScheduler.health(),
+  });
 });
 
 // ─── KubeConfig state ─────────────────────────────────────────────────────────
 
 let currentKc      = null;
 let currentContext = "default"; // Placeholder until we load real contexts
+const kubeResponseCache = new KubeResponseCache();
 
 // Path where we persist imported contexts (merged kubeconfig)
-const MERGED_KUBECONFIG  = path.join(os.homedir(), '.kube', 'kuadashboard_merged.yaml');
-const DEFAULT_KUBECONFIG = path.join(os.homedir(), '.kube', 'config');
-const KUBECONFIG_PATHS   = path.join(os.homedir(), '.kube', 'kuadashboard_paths.json');
-
-/**
- * Merge clusters/users/contexts from `src` KubeConfig into `dst` KubeConfig
- * without overwriting existing entries (non-destructive).
- */
-function mergeKc(dst, src) {
-  src.clusters.forEach(c   => { if (!dst.clusters.find(x => x.name === c.name))   dst.clusters.push(c); });
-  src.users.forEach(u      => { if (!dst.users.find(x => x.name === u.name))       dst.users.push(u); });
-  src.contexts.forEach(ctx => { if (!dst.contexts.find(x => x.name === ctx.name)) dst.contexts.push(ctx); });
-}
-
-/**
- * Collect all kubeconfig file paths to load, respecting the KUBECONFIG env var
- * exactly like kubectl does (paths separated by ; on Windows, : elsewhere).
- */
-function resolveKubeConfigFiles() {
-  const envVar = process.env.KUBECONFIG || '';
-  const sep    = process.platform === 'win32' ? ';' : ':';
-  const fromEnv = envVar
-    ? envVar.split(sep).map(p => p.trim()).filter(p => p && fs.existsSync(p))
-    : [];
-
-  // Always include the default ~/.kube/config if present
-  const files = [...fromEnv];
-  if (!files.includes(DEFAULT_KUBECONFIG) && fs.existsSync(DEFAULT_KUBECONFIG)) {
-    files.push(DEFAULT_KUBECONFIG);
-  }
-  readRegisteredKubeconfigPaths().forEach(file => {
-    if (!files.includes(file) && fs.existsSync(file)) files.push(file);
-  });
-  return files;
-}
+const {
+  mergedKubeconfig: MERGED_KUBECONFIG,
+  registeredPaths: KUBECONFIG_PATHS,
+} = kubeConfigPaths();
 
 function expandUserPath(filePath = '') {
   const raw = String(filePath || '').trim();
   if (!raw) return '';
   return raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(2)) : path.resolve(raw);
-}
-
-function readRegisteredKubeconfigPaths() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(KUBECONFIG_PATHS, 'utf8'));
-    return Array.isArray(parsed.paths) ? parsed.paths.filter(p => typeof p === 'string') : [];
-  } catch (_) {
-    return [];
-  }
 }
 
 function writeRegisteredKubeconfigPaths(paths) {
@@ -176,51 +274,13 @@ function parseAndValidateKubeconfig(content) {
 }
 
 function loadKubeConfig(contextName) {
-  const kc    = new k8s.KubeConfig();
-  const files = resolveKubeConfigFiles();
-  const loaded = [];
-
-  if (files.length === 0) {
-    // Last resort: in-cluster / default discovery
-    kc.loadFromDefault();
-    loaded.push('(default discovery)');
-  } else {
-    // Load first file as base, then merge the rest
-    kc.loadFromFile(files[0]);
-    loaded.push(files[0]);
-    for (let i = 1; i < files.length; i++) {
-      try {
-        const extra = new k8s.KubeConfig();
-        extra.loadFromFile(files[i]);
-        mergeKc(kc, extra);
-        loaded.push(files[i]);
-      } catch (e) { console.warn(`[warn] Could not load ${files[i]}:`, e.message); }
-    }
-  }
-
-  // Merge manually imported contexts (via Import UI)
-  if (fs.existsSync(MERGED_KUBECONFIG)) {
-    try {
-      const extra = new k8s.KubeConfig();
-      extra.loadFromFile(MERGED_KUBECONFIG);
-      mergeKc(kc, extra);
-      loaded.push(MERGED_KUBECONFIG);
-    } catch (e) { console.warn('[warn] Could not load merged kubeconfig:', e.message); }
-  }
-
-  if (contextName) kc.setCurrentContext(contextName);
-
-  // If no current context is set, fall back to the first available
-  let resolved = kc.getCurrentContext();
-  if (!resolved && kc.getContexts().length) {
-    resolved = kc.getContexts()[0].name;
-    kc.setCurrentContext(resolved);
-  }
-  currentContext = resolved;
-  currentKc      = kc;
+  const { kubeConfig, context, loaded } = buildKubeConfig(contextName);
+  currentContext = context;
+  currentKc = kubeConfig;
+  kubeResponseCache.clear();
   console.log(`[kubeconfig] Loaded ${loaded.length} file(s): ${loaded.join(', ')}`);
-  console.log(`[kubeconfig] Active context: ${currentContext} (${kc.getContexts().length} contexts total)`);
-  return kc;
+  console.log(`[kubeconfig] Active context: ${currentContext} (${kubeConfig.getContexts().length} contexts total)`);
+  return kubeConfig;
 }
 
 loadKubeConfig(null);
@@ -356,6 +416,16 @@ function selectorText(selector = {}) {
 function listItems(result) { return result.body?.items || result.items || []; }
 
 function yamlResponse(res, obj) { res.type('text/plain').send(yaml.dump(obj.body || obj)); }
+
+function editableKubernetesObject(obj) {
+  const editable = { ...obj, metadata: { ...(obj.metadata || {}) } };
+  delete editable.status;
+  [
+    'creationTimestamp', 'deletionGracePeriodSeconds', 'deletionTimestamp',
+    'generation', 'managedFields', 'resourceVersion', 'selfLink', 'uid',
+  ].forEach(field => delete editable.metadata[field]);
+  return editable;
+}
 
 // ─── Error helper ─────────────────────────────────────────────────────────────
 
@@ -605,6 +675,7 @@ async function resolveLogPods(resourceType, namespace, name) {
     throw new Error(`Unsupported log resource type: ${resourceType}`);
   }
 
+
   const labelSelector = selectorToString(workload.spec?.selector);
   if (!labelSelector) throw new Error(`No pod selector found for ${resourceType}/${name}`);
   const pods = await core.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSelector);
@@ -615,6 +686,76 @@ async function resolveLogPods(resourceType, namespace, name) {
       containers: pod.spec?.containers?.map(c => c.name) || [],
     }));
 }
+
+const KUBE_CLUSTER_LISTS = new Set([
+  'namespaces', 'nodes', 'pvs', 'storageclasses', 'ingressclasses',
+  'priorityclasses', 'runtimeclasses', 'mutatingwebhookconfigurations',
+  'validatingwebhookconfigurations',
+]);
+const KUBE_NAMESPACED_LISTS = new Set([
+  'pods', 'deployments', 'statefulsets', 'daemonsets', 'replicasets', 'jobs',
+  'cronjobs', 'services', 'endpointslices', 'endpoints', 'ingresses',
+  'networkpolicies', 'configmaps', 'secrets', 'resourcequotas', 'limitranges',
+  'hpas', 'pdbs', 'leases', 'pvcs', 'events',
+]);
+const kubeRevalidations = new Set();
+
+function kubeListCacheKey(req) {
+  const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] !== 'api') return null;
+  const isClusterList = parts.length === 2 && KUBE_CLUSTER_LISTS.has(parts[1]);
+  const isNamespacedList = parts.length === 3 && KUBE_NAMESPACED_LISTS.has(parts[2]);
+  return isClusterList || isNamespacedList ? `${currentContext}\u0000${pathname}` : null;
+}
+
+function revalidateKubeList(originalUrl, key) {
+  if (kubeRevalidations.has(key)) return;
+  const address = server.address();
+  if (!address) return;
+  kubeRevalidations.add(key);
+  const request = http.request({
+    hostname: '127.0.0.1',
+    port: address.port,
+    path: originalUrl,
+    method: 'GET',
+    headers: { 'X-KUA-Cache-Revalidate': '1' },
+  }, response => {
+    response.resume();
+    response.on('end', () => kubeRevalidations.delete(key));
+  });
+  request.on('error', () => kubeRevalidations.delete(key));
+  request.end();
+}
+
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 400) kubeResponseCache.clear();
+    });
+    return next();
+  }
+
+  const key = kubeListCacheKey(req);
+  if (!key) return next();
+  const revalidating = req.get('X-KUA-Cache-Revalidate') === '1';
+  const forceRefresh = req.query.refresh === '1';
+  const cached = !revalidating && !forceRefresh ? kubeResponseCache.read(key) : null;
+  if (cached) {
+    res.setHeader('X-KUA-Cache', cached.state);
+    res.json(cached.value);
+    if (cached.state === 'stale') setImmediate(() => revalidateKubeList(req.originalUrl, key));
+    return;
+  }
+
+  const sendJson = res.json.bind(res);
+  res.json = body => {
+    if (res.statusCode < 400 && Array.isArray(body)) kubeResponseCache.write(key, body);
+    res.setHeader('X-KUA-Cache', revalidating ? 'revalidated' : 'miss');
+    return sendJson(body);
+  };
+  next();
+});
 
 // ─── Contexts & Namespaces ────────────────────────────────────────────────────
 
@@ -795,7 +936,7 @@ app.get('/api/:namespace/:resourceType/:name/metrics', async (req, res) => {
     const metricItems = (metricsResult.body?.items || metricsResult.items || []).filter(item => podNames.has(item.metadata?.name));
     const containers = metricItems.flatMap(item => (item.containers || []).map(c => ({ pod: item.metadata?.name, name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })));
     const { cpuNano, memoryBytes } = metricTotalsFromContainers(containers.map(c => ({ usage: { cpu: c.cpu, memory: c.memory } })));
-    res.json(metricPayload({
+    const payload = metricPayload({
       timestamp: metricItems[0]?.timestamp,
       window: metricItems[0]?.window,
       containers,
@@ -807,7 +948,20 @@ app.get('/api/:namespace/:resourceType/:name/metrics', async (req, res) => {
       memoryBytes,
       cpuCapacityNano: Math.max(1e9, pods.length * 1e9),
       memoryCapacityBytes: Math.max(512 * 1024 * 1024, pods.length * 512 * 1024 * 1024),
-    }));
+    });
+    try {
+      captureKubernetesMetrics({
+        database: apmDatabase,
+        kubeContext: currentContext,
+        namespace,
+        resourceType,
+        name,
+        metrics: payload,
+      });
+    } catch (captureError) {
+      console.error('[apm] Opportunistic Kubernetes capture failed:', captureError.message);
+    }
+    res.json(payload);
   } catch (err) {
     if (isMetricsApiUnavailable(err)) {
       try {
@@ -911,7 +1065,7 @@ app.post('/api/:namespace/deployments/:name/restart', async (req, res) => {
       annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() }
     }}}};
     await apps.patchNamespacedDeployment(name, namespace, patch,
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'Deployment restarted',
       resource: `${namespace}/${name}`, context: currentContext,
@@ -938,7 +1092,7 @@ app.post('/api/:namespace/deployments/:name/set-image', async (req, res) => {
       }
     };
     await apps.patchNamespacedDeployment(name, namespace, patch,
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'Deployment image updated',
       resource: `${namespace}/${name}`, details: { container, image },
@@ -955,7 +1109,7 @@ app.post('/api/:namespace/deployments/:name/scale', async (req, res) => {
     const replicas = parseInt(req.body.replicas, 10);
     if (isNaN(replicas) || replicas < 0) return res.status(400).json({ error: 'Invalid replicas' });
     await apps.patchNamespacedDeployment(name, namespace, { spec: { replicas } },
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'Deployment scaled',
       resource: `${namespace}/${name}`, details: { replicas },
@@ -998,7 +1152,7 @@ app.put('/api/:namespace/deployments/:name/env', async (req, res) => {
     });
 
     await apps.patchNamespacedDeployment(name, namespace, operations,
-      undefined, undefined, undefined, undefined, JSON_PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, JSON_PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'Deployment environment updated',
       resource: `${namespace}/${name}`, details: { containers: containers.map(container => container.name) },
@@ -1067,7 +1221,7 @@ app.post('/api/:namespace/statefulsets/:name/restart', async (req, res) => {
       annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() }
     }}}};
     await apps.patchNamespacedStatefulSet(name, namespace, patch,
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'StatefulSet restarted',
       resource: `${namespace}/${name}`, context: currentContext,
@@ -1083,7 +1237,7 @@ app.post('/api/:namespace/statefulsets/:name/scale', async (req, res) => {
     const replicas = parseInt(req.body.replicas, 10);
     if (isNaN(replicas) || replicas < 0) return res.status(400).json({ error: 'Invalid replicas' });
     await apps.patchNamespacedStatefulSet(name, namespace, { spec: { replicas } },
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes', action: 'StatefulSet scaled',
       resource: `${namespace}/${name}`, details: { replicas },
@@ -2024,7 +2178,7 @@ app.post('/api/nodes/:name/cordon', async (req, res) => {
     const { name } = req.params;
     const unschedulable = req.body.cordon !== false;
     await core.patchNode(name, { spec: { unschedulable } },
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
     auditLog.log({
       category: 'kubernetes',
       action: unschedulable ? 'Node cordoned' : 'Node uncordoned',
@@ -2041,7 +2195,7 @@ app.post('/api/nodes/:name/drain', async (req, res) => {
 
     // 1. Cordon
     await core.patchNode(name, { spec: { unschedulable: true } },
-      undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
 
     // 2. List all non-DaemonSet, non-mirror pods on the node
     const podsRes = await core.listPodForAllNamespaces(
@@ -2131,16 +2285,17 @@ app.put('/api/apply', async (req, res) => {
     if (!kind) return res.status(400).json({ error: 'YAML validation error: missing kind' });
     if (!name) return res.status(400).json({ error: 'YAML validation error: missing metadata.name' });
     const { core, apps, networking } = clients();
+    const patch = editableKubernetesObject(obj);
 
     const handlers = {
-      Deployment:             () => apps.patchNamespacedDeployment(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      Service:                () => core.patchNamespacedService(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      Secret:                 () => core.patchNamespacedSecret(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      Ingress:                () => networking.patchNamespacedIngress(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
-      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, obj, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Deployment:             () => apps.patchNamespacedDeployment(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      StatefulSet:            () => apps.patchNamespacedStatefulSet(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      DaemonSet:              () => apps.patchNamespacedDaemonSet(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Service:                () => core.patchNamespacedService(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      ConfigMap:              () => core.patchNamespacedConfigMap(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Secret:                 () => core.patchNamespacedSecret(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      Ingress:                () => networking.patchNamespacedIngress(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
+      PersistentVolumeClaim:  () => core.patchNamespacedPersistentVolumeClaim(name, ns, patch, undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS),
     };
 
     if (!handlers[kind]) return res.status(400).json({ error: `Unsupported kind: ${kind}` });
@@ -2180,14 +2335,20 @@ wss.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopStream();
-      const { namespace, pod, resourceType = 'pods', container, previous, tailLines = 200 } = msg;
+      const { namespace, pod, resourceType = 'pods', container, selectedPod, previous, tailLines = 200 } = msg;
 
       try {
         const { log } = clients();
         const pods = await resolveLogPods(resourceType, namespace, pod);
-        const selectedPods = pods.filter(p => !container || p.containers.includes(container));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'targets', pods: pods.map(target => target.name) }));
+        }
+        const selectedPods = pods.filter(target =>
+          (!selectedPod || target.name === selectedPod)
+          && (!container || target.containers.includes(container))
+        );
         if (!selectedPods.length) {
-          throw new Error(`No pods found for ${resourceType}/${pod}${container ? ` with container ${container}` : ''}`);
+          throw new Error(`No pods found for ${resourceType}/${pod}${selectedPod ? ` matching ${selectedPod}` : ''}${container ? ` with container ${container}` : ''}`);
         }
         for (const targetPod of selectedPods) {
           const logStream = new stream.PassThrough();
@@ -2697,3 +2858,28 @@ server.listen(PORT, () => {
   console.log(`\n  KuaDashboard running → http://localhost:${PORT}`);
   console.log(`  Context: ${currentContext}\n`);
 });
+
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearInterval(apmCleanupInterval);
+  apmScheduler.stop();
+  console.log(`[server] ${signal} received, shutting down`);
+
+  const forceExit = setTimeout(() => {
+    closeApmDatabase();
+    process.exit(1);
+  }, 5000);
+  forceExit.unref();
+
+  server.close(() => {
+    clearTimeout(forceExit);
+    closeApmDatabase();
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

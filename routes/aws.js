@@ -45,6 +45,15 @@ const os           = require('os');
 const crypto       = require('crypto');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
+const { getApmDatabase } = require('../lib/apm/database');
+const { captureLambdaCloudWatchMetrics, captureLambdaLogEvents } = require('../lib/apm/opportunisticCapture');
+const { readLocalAwsProfiles, resolveAwsConfig } = require('../lib/awsProfileResolver');
+const {
+  GROUP_DIMENSIONS,
+  METRIC_DEFINITIONS,
+  aggregateMetricResults,
+  buildMetricQueries,
+} = require('../lib/eksObservability');
 
 const router = express.Router();
 
@@ -63,106 +72,6 @@ function handleErr(res, err) {
     message = `${message} — if you are using temporary credentials (key starts with "ASIA"), make sure the profile also includes AWS_SESSION_TOKEN.`;
   }
   res.status(status).json({ error: message });
-}
-
-/**
- * Parse ~/.aws/credentials and return an array of profile objects.
- * Each entry: { name, region }  (keys are NOT exposed)
- */
-function readLocalAwsProfiles() {
-  const credFile = path.join(os.homedir(), '.aws', 'credentials');
-  const cfgFile  = path.join(os.homedir(), '.aws', 'config');
-  const profiles = {};
-
-  // Parse credentials file
-  if (fs.existsSync(credFile)) {
-    const lines = fs.readFileSync(credFile, 'utf8').split('\n');
-    let current = null;
-    for (const raw of lines) {
-      const line = raw.trim();
-      const m = line.match(/^\[([^\]]+)\]$/);
-      if (m) { current = m[1]; profiles[current] = profiles[current] || {}; continue; }
-      if (!current) continue;
-      const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
-      if (kv) profiles[current][kv[1].toLowerCase()] = kv[2].trim();
-    }
-  }
-
-  // Parse config file (profile names prefixed with "profile "). Captures region
-  // overrides plus sso_* keys so SSO profiles ("aws configure sso") are detected.
-  if (fs.existsSync(cfgFile)) {
-    const lines = fs.readFileSync(cfgFile, 'utf8').split('\n');
-    let current = null;
-    for (const raw of lines) {
-      const line = raw.trim();
-      const m = line.match(/^\[(?:profile\s+)?([^\]]+)\]$/);
-      if (m) { current = m[1]; profiles[current] = profiles[current] || {}; continue; }
-      if (!current) continue;
-      const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
-      if (!kv) continue;
-      const key = kv[1].toLowerCase();
-      if (key === 'region') {
-        if (!profiles[current].region) profiles[current].region = kv[2].trim();
-      } else if (key.startsWith('sso_')) {
-        profiles[current][key] = kv[2].trim();
-      }
-    }
-  }
-
-  // "sso-session <name>" sections are token config, not usable profiles — drop them
-  return Object.entries(profiles)
-    .filter(([name]) => !name.startsWith('sso-session '))
-    .filter(([, data]) =>
-      data.aws_access_key_id || data.aws_secret_access_key ||
-      data.sso_start_url || data.sso_session || data.sso_account_id)
-    .map(([name, data]) => ({
-      name,
-      region: data.region || 'us-east-1',
-      sso:    !!(data.sso_start_url || data.sso_session || data.sso_account_id),
-    }));
-}
-
-/**
- * Build AWS credentials config from a profile identifier.
- * - "local:<name>"  → use named profile from ~/.aws/credentials or ~/.aws/config via fromIni.
- *                     Supports static keys, session tokens (aws_session_token) and
- *                     SSO profiles ("aws configure sso" — requires an active "aws sso login" session).
- * - "<uuid>"        → look up stored profile in credentialStore
- */
-async function resolveAwsConfig(profileId) {
-  if (profileId.startsWith('local:')) {
-    const profileName = profileId.slice(6);
-    const { fromIni } = require('@aws-sdk/credential-providers');
-    const credFile    = path.join(os.homedir(), '.aws', 'credentials');
-    const profiles    = readLocalAwsProfiles();
-    const prof        = profiles.find(p => p.name === profileName);
-    if (!prof) throw Object.assign(new Error(`Local AWS profile not found: ${profileName}`), { $metadata: { httpStatusCode: 404 } });
-    return {
-      credentials: fromIni({ profile: profileName, filepath: credFile }),
-      region: prof.region,
-    };
-  }
-
-  // Stored profile
-  const store = getStore();
-  const keys  = await store.getRawKeys(profileId);
-  if (!keys) throw Object.assign(new Error('Credential profile not found'), { $metadata: { httpStatusCode: 404 } });
-
-  const accessKeyId     = keys['AWS_ACCESS_KEY_ID'];
-  const secretAccessKey = keys['AWS_SECRET_ACCESS_KEY'];
-  const sessionToken    = keys['AWS_SESSION_TOKEN'];
-  if (!accessKeyId || !secretAccessKey)
-    throw Object.assign(
-      new Error('Profile is missing AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY'),
-      { $metadata: { httpStatusCode: 400 } }
-    );
-
-  return {
-    credentials: sessionToken
-      ? { accessKeyId, secretAccessKey, sessionToken }
-      : { accessKeyId, secretAccessKey },
-    region: keys['AWS_DEFAULT_REGION'] || 'us-east-1',
-  };
 }
 
 // ─── GET /local-profiles ──────────────────────────────────────────────────────
@@ -415,13 +324,137 @@ router.get('/eks', async (req, res) => {
     );
     res.json(details.map(c => ({
       name:     c.name,
+      arn:      c.arn,
       status:   c.status,
       version:  c.version,
       region:   cfg.region,
       endpoint: c.endpoint,
       roleArn:  c.roleArn,
       createdAt: c.createdAt,
+      tags:     c.tags || {},
     })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /eks/:name/observability ────────────────────────────────────────────
+// Container Insights metrics grouped by their native Kubernetes dimensions.
+
+router.get('/eks/:name/observability', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const clusterName = req.params.name;
+    const groupBy = String(req.query.groupBy || 'namespace').toLowerCase();
+    if (!GROUP_DIMENSIONS[groupBy]) {
+      return res.status(400).json({
+        error: `groupBy must be one of: ${Object.keys(GROUP_DIMENSIONS).join(', ')}`,
+      });
+    }
+
+    const requestedHours = Number.parseInt(req.query.hours, 10) || 3;
+    const hours = [1, 3, 6, 12, 24, 72].includes(requestedHours) ? requestedHours : 3;
+    const period = hours <= 3 ? 60 : hours <= 24 ? 300 : 900;
+    const now = new Date();
+    const start = new Date(now.getTime() - hours * 60 * 60 * 1000);
+
+    const {
+      EKSClient,
+      DescribeClusterCommand,
+      DescribeNodegroupCommand,
+      ListNodegroupsCommand,
+    } = require('@aws-sdk/client-eks');
+    const {
+      CloudWatchClient,
+      GetMetricDataCommand,
+      ListMetricsCommand,
+    } = require('@aws-sdk/client-cloudwatch');
+
+    const eks = new EKSClient(cfg);
+    const cloudWatch = new CloudWatchClient(cfg);
+    const [clusterResult, nodegroupListResult] = await Promise.allSettled([
+      eks.send(new DescribeClusterCommand({ name: clusterName })),
+      eks.send(new ListNodegroupsCommand({ clusterName })),
+    ]);
+    if (clusterResult.status === 'rejected') throw clusterResult.reason;
+
+    const nodegroupNames = nodegroupListResult.status === 'fulfilled'
+      ? nodegroupListResult.value.nodegroups || []
+      : [];
+    const nodegroupResults = await Promise.allSettled(nodegroupNames.map(nodegroupName =>
+      eks.send(new DescribeNodegroupCommand({ clusterName, nodegroupName }))
+    ));
+    const nodegroups = nodegroupResults
+      .filter(result => result.status === 'fulfilled' && result.value.nodegroup)
+      .map(result => {
+        const nodegroup = result.value.nodegroup;
+        const amiType = nodegroup.amiType || '';
+        return {
+          name: nodegroup.nodegroupName,
+          status: nodegroup.status,
+          architecture: amiType.includes('ARM_64') ? 'arm64' : amiType ? 'x86_64' : 'unknown',
+          amiType,
+          capacityType: nodegroup.capacityType || 'ON_DEMAND',
+          instanceTypes: nodegroup.instanceTypes || [],
+          scaling: nodegroup.scalingConfig || {},
+          labels: nodegroup.labels || {},
+          tags: nodegroup.tags || {},
+        };
+      });
+
+    const catalog = [];
+    let nextToken;
+    let pages = 0;
+    do {
+      const page = await cloudWatch.send(new ListMetricsCommand({
+        Namespace: 'ContainerInsights',
+        Dimensions: [{ Name: 'ClusterName', Value: clusterName }],
+        NextToken: nextToken,
+      }));
+      catalog.push(...(page.Metrics || []));
+      nextToken = page.NextToken;
+      pages += 1;
+    } while (nextToken && pages < 4);
+
+    const availableGroupings = Object.entries(GROUP_DIMENSIONS)
+      .filter(([candidate, dimension]) => catalog.some(metric =>
+        METRIC_DEFINITIONS[metric.MetricName]?.groups.includes(candidate) &&
+        metric.Dimensions?.some(item => item.Name === dimension)
+      ))
+      .map(([candidate]) => candidate);
+    const descriptors = buildMetricQueries(catalog, groupBy, period);
+    let metricDataResults = [];
+    if (descriptors.length) {
+      const metricData = await cloudWatch.send(new GetMetricDataCommand({
+        MetricDataQueries: descriptors.map(descriptor => descriptor.query),
+        StartTime: start,
+        EndTime: now,
+        ScanBy: 'TimestampAscending',
+      }));
+      metricDataResults = metricData.MetricDataResults || [];
+    }
+    const aggregated = aggregateMetricResults(descriptors, metricDataResults);
+    const cluster = clusterResult.value.cluster;
+
+    res.json({
+      cluster: {
+        name: cluster.name,
+        arn: cluster.arn,
+        region: cfg.region,
+        version: cluster.version,
+        status: cluster.status,
+        tags: cluster.tags || {},
+      },
+      source: 'CloudWatch Container Insights',
+      containerInsightsAvailable: catalog.length > 0,
+      availableGroupings,
+      groupBy,
+      hours,
+      period,
+      partial: Boolean(nextToken) || descriptors.length >= 450,
+      nodegroups,
+      ...aggregated,
+    });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -908,6 +941,18 @@ router.get('/logs/lambda/:name', async (req, res) => {
     const startTime    = Date.now() - minutes * 60 * 1000;
 
     const resp = await client.send(new FilterLogEventsCommand({ logGroupName, limit, startTime }));
+    try {
+      captureLambdaLogEvents({
+        database: getApmDatabase(),
+        profileId,
+        region: cfg.region,
+        functionName: req.params.name,
+        logGroupName,
+        events: resp.events || [],
+      });
+    } catch (captureError) {
+      console.warn('[apm] Opportunistic Lambda capture failed:', captureError.message);
+    }
     res.json({
       logGroupName,
       events: (resp.events || []).map(e => ({
@@ -1720,6 +1765,19 @@ router.get('/lambda/:name/details', async (req, res) => {
     let policy = null;
     if (policyRes.status === 'fulfilled') {
       try { policy = JSON.parse(policyRes.value.Policy); } catch (_) {}
+    }
+
+    try {
+      captureLambdaCloudWatchMetrics({
+        database: getApmDatabase(),
+        profileId,
+        region: cfg.region,
+        functionName: name,
+        logGroupName: cfg2?.LoggingConfig?.LogGroup || `/aws/lambda/${name}`,
+        metrics,
+      });
+    } catch (captureError) {
+      console.warn('[apm] Opportunistic Lambda metrics capture failed:', captureError.message);
     }
 
     res.json({
