@@ -47,12 +47,22 @@ describe('useTerminalStreams', () => {
 
     it('sends workload resourceType when streaming deployment logs', () => {
       const tab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      tab.selectedPod = 'api-abc123'
       streams.startLogStream(tab)
       const ws = getMockWs()
       ws._emit('open', {})
       const payload = JSON.parse(ws._lastSent)
       expect(payload.resourceType).toBe('deployments')
       expect(payload.pod).toBe('api')
+      expect(payload.selectedPod).toBe('api-abc123')
+    })
+
+    it('stores workload pod targets announced by the server', () => {
+      const tab = store.openLogsTab('default', 'api', ['app'], 'deployments')
+      streams.startLogStream(tab)
+      const ws = getMockWs()
+      ws._emit('message', { data: JSON.stringify({ type: 'targets', pods: ['api-a', 'api-b'] }) })
+      expect(tab.logPods).toEqual(['api-a', 'api-b'])
     })
 
     it('pushes "sys" line with pod name on open', () => {

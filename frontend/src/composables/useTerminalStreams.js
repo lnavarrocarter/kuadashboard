@@ -31,6 +31,7 @@ export function useTerminalStreams() {
         pod:        tab.pod,
         resourceType: tab.resourceType || 'pods',
         container:  tab.container || null,
+        selectedPod: tab.selectedPod || null,
         previous,
         tailLines:  500,
       }))
@@ -43,6 +44,8 @@ export function useTerminalStreams() {
       try { msg = JSON.parse(e.data) } catch (_) { return }
       if (msg.type === 'log') {
         _appendLog(tab, msg.data, msg.pod)
+      } else if (msg.type === 'targets') {
+        tab.logPods = Array.isArray(msg.pods) ? msg.pods : []
       } else if (msg.type === 'error') {
         flushLogBuffers(tab)
         store.pushLine(tab, '✖ ' + msg.data, 'err')

@@ -29,6 +29,16 @@
       </div>
 
       <div class="term-header-actions">
+        <select
+          v-if="activeTab?.type === 'log' && activeTab.resourceType !== 'pods' && activeLogPods.length"
+          class="ctrl-select sm term-pod-select"
+          v-model="activePod"
+          title="Filtrar logs por pod"
+          @change="changePod"
+        >
+          <option value="">Todos los pods</option>
+          <option v-for="pod in activeLogPods" :key="pod" :value="pod">{{ pod }}</option>
+        </select>
         <!-- Container selector (pod exec only) -->
         <select
           v-if="activeTab?.context === 'pod' || !activeTab?.context"
@@ -54,6 +64,13 @@
         <button v-if="isShellTab" class="btn btn-icon" title="Pegar en terminal" @click="pasteIntoInput"><i data-lucide="clipboard-paste"></i></button>
         <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
+        <button
+          v-if="activeTab && !isShellTab"
+          class="btn btn-icon"
+          :class="{ primary: followLogs }"
+          title="Seguir logs en vivo"
+          @click="enableFollow"
+        ><i data-lucide="radio"></i></button>
         <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
         <div class="term-btn-sep"></div>
         <!-- File browser toggle (local shell only) -->
@@ -190,6 +207,7 @@
         :class="{ wrap: store.wrap }"
         ref="bodyRef"
         v-html="bodyHtml"
+        @scroll="handleBodyScroll"
       ></div>
     </div>
 
@@ -224,6 +242,11 @@
       <span v-if="activeTab?.context === 'local'" class="term-footer-cwd text-dim">{{ browserCwd }}</span>
       <span v-if="filtersActive" class="text-dim">{{ filteredLineCount }} filtradas</span>
       <span id="termLineCount" style="margin-left:auto">{{ lineCount }} lines</span>
+      <div v-if="activeTab && !isShellTab" class="term-log-nav">
+        <button class="btn btn-icon" title="Bloque anterior" :disabled="!hasOlderLogs" @click="showOlderLogs"><i data-lucide="chevron-up"></i></button>
+        <span>{{ visibleRangeLabel }}</span>
+        <button class="btn btn-icon" title="Bloque siguiente" :disabled="!hasNewerLogs" @click="showNewerLogs"><i data-lucide="chevron-down"></i></button>
+      </div>
     </div>
   </div>
   </Transition>
@@ -263,8 +286,11 @@ const logFrom      = ref('')
 const logTo        = ref('')
 const cmdInput     = ref('')
 const clipboardMsg = ref('')
+const followLogs    = ref(true)
+const visibleEnd    = ref(null)
 let resizing = false, startY = 0, startH = 0
 let clipboardTimer = null
+const LOG_RENDER_WINDOW = 1000
 
 // File viewer modal
 const fileViewerPath = ref(null)
@@ -277,12 +303,25 @@ const CTX_LABELS = { pod: 'k8s', local: 'local', aws: 'AWS', gcp: 'GCP' }
 const activeTab           = computed(() => store.tabs.find(t => t.id === store.activeId) || null)
 const isShellTab          = computed(() => ['exec', 'local', 'aws', 'gcp'].includes(activeTab.value?.type))
 const activeTabContainers = computed(() => activeTab.value?.containers || [])
+const activeLogPods       = computed(() => activeTab.value?.logPods || [])
 const activeContainer     = ref('')
+const activePod           = ref('')
 const filtersActive       = computed(() => !!logSearch.value.trim() || !!logFrom.value || !!logTo.value)
 const filteredEntries     = computed(() => filterEntries(activeTab.value))
 const filteredLineCount   = computed(() => filteredEntries.value.length)
-const bodyHtml            = computed(() => filteredEntries.value.map(entryToHtml).join(''))
+const renderedEnd         = computed(() => followLogs.value
+  ? filteredEntries.value.length
+  : Math.min(visibleEnd.value ?? filteredEntries.value.length, filteredEntries.value.length))
+const renderedStart       = computed(() => Math.max(0, renderedEnd.value - LOG_RENDER_WINDOW))
+const renderedEntries     = computed(() => filteredEntries.value.slice(renderedStart.value, renderedEnd.value))
+const bodyHtml            = computed(() => renderedEntries.value.map(entryToHtml).join(''))
 const lineCount           = computed(() => activeTab.value?.lineCount ?? 0)
+const hasOlderLogs        = computed(() => renderedStart.value > 0)
+const hasNewerLogs        = computed(() => renderedEnd.value < filteredEntries.value.length)
+const visibleRangeLabel   = computed(() => {
+  if (!filteredEntries.value.length) return '0 / 0'
+  return `${renderedStart.value + 1}-${renderedEnd.value} / ${filteredEntries.value.length}`
+})
 
 const statusText = computed(() => {
   const tab = activeTab.value
@@ -300,6 +339,9 @@ const shellPlaceholder = computed(() => {
 
 watch(activeTab, tab => {
   if (tab) activeContainer.value = tab.container || ''
+  activePod.value = tab?.selectedPod || ''
+  followLogs.value = true
+  visibleEnd.value = null
   showHelp.value = false
   clearFilters()
   nextTick(() => createIcons({ icons }))
@@ -320,9 +362,17 @@ watch(
   }
 )
 
-watch(bodyHtml, () => nextTick(() => {
-  if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
-}), { flush: 'post' })
+watch(bodyHtml, () => {
+  if (!followLogs.value) return
+  nextTick(() => {
+    if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
+  })
+}, { flush: 'post' })
+
+watch([logSearch, logFrom, logTo], () => {
+  followLogs.value = true
+  visibleEnd.value = null
+})
 
 watch(isShellTab, v => { if (v) nextTick(() => inputRef.value?.focus()) })
 watch(activeTab,  () => { showPrevious.value = false })
@@ -343,13 +393,63 @@ function clearLogs()  {
   activeTab.value.lines     = []
   activeTab.value.entries   = []
   activeTab.value.lineCount = 0
+  followLogs.value = true
+  visibleEnd.value = null
 }
 function stopActive() { if (activeTab.value) store.stopStream(activeTab.value) }
-function scrollEnd()  { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight }
+function scrollEnd()  {
+  if (!isShellTab.value) enableFollow()
+  else if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
+}
+
+function enableFollow() {
+  followLogs.value = true
+  visibleEnd.value = null
+  nextTick(() => {
+    if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
+  })
+}
+
+function handleBodyScroll() {
+  const body = bodyRef.value
+  if (!body || !followLogs.value || isShellTab.value) return
+  const distanceFromEnd = body.scrollHeight - body.scrollTop - body.clientHeight
+  if (distanceFromEnd > 32) {
+    visibleEnd.value = filteredEntries.value.length
+    followLogs.value = false
+  }
+}
+
+function showOlderLogs() {
+  if (!hasOlderLogs.value) return
+  const currentEnd = followLogs.value ? filteredEntries.value.length : renderedEnd.value
+  followLogs.value = false
+  visibleEnd.value = Math.max(LOG_RENDER_WINDOW, currentEnd - LOG_RENDER_WINDOW)
+  nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = 0 })
+}
+
+function showNewerLogs() {
+  if (!hasNewerLogs.value) return
+  const nextEnd = Math.min(filteredEntries.value.length, renderedEnd.value + LOG_RENDER_WINDOW)
+  if (nextEnd === filteredEntries.value.length) {
+    enableFollow()
+    return
+  }
+  visibleEnd.value = nextEnd
+  nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = 0 })
+}
 
 function changeContainer() {
   if (!activeTab.value) return
   activeTab.value.container = activeContainer.value
+  store.stopStream(activeTab.value)
+  clearLogs()
+  emit('restartStream', activeTab.value, showPrevious.value)
+}
+
+function changePod() {
+  if (!activeTab.value || activeTab.value.type !== 'log') return
+  activeTab.value.selectedPod = activePod.value
   store.stopStream(activeTab.value)
   clearLogs()
   emit('restartStream', activeTab.value, showPrevious.value)

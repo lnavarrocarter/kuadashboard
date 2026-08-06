@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useTerminalStore } from '../stores/useTerminalStore'
+import { TERMINAL_MAX_LINES, useTerminalStore } from '../stores/useTerminalStore'
 
 describe('useTerminalStore', () => {
   let store
@@ -27,6 +27,8 @@ describe('useTerminalStore', () => {
       expect(tab.pod).toBe('my-pod')
       expect(tab.containers).toEqual(['nginx'])
       expect(tab.container).toBe('nginx')
+      expect(tab.logPods).toEqual([])
+      expect(tab.selectedPod).toBe('')
       expect(store.visible).toBe(true)
       expect(store.activeId).toBe(tab.id)
       expect(store.tabs).toHaveLength(1)
@@ -182,6 +184,17 @@ describe('useTerminalStore', () => {
       expect(tab.entries[0].text).toContain('LOG started')
       expect(new Date(tab.entries[0].serializedAt).getFullYear()).toBe(2026)
       expect(new Date(tab.entries[0].serializedAt).getMonth()).toBe(4)
+    })
+
+    it('retains only the newest terminal lines', () => {
+      const tab = store.openLogsTab('default', 'pod', ['c'])
+      for (let index = 0; index < TERMINAL_MAX_LINES + 10; index += 1) {
+        store.pushLine(tab, `line-${index}`)
+      }
+      expect(tab.entries).toHaveLength(TERMINAL_MAX_LINES)
+      expect(tab.lines).toHaveLength(TERMINAL_MAX_LINES)
+      expect(tab.lineCount).toBe(TERMINAL_MAX_LINES)
+      expect(tab.entries[0].text).toBe('line-10')
     })
   })
 

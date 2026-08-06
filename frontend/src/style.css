@@ -581,6 +581,7 @@ body.kube-resizing {
   width: 16px; height: 16px; border: 2px solid var(--border);
   border-top-color: var(--accent); border-radius: 50%;
   animation: spin .7s linear infinite; vertical-align: middle; }
+.btn.refreshing svg { animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .error-state {
@@ -920,8 +921,10 @@ body.kube-resizing {
   background: #1a1a1a;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
   height: 34px;
+  position: relative;
+  z-index: 20;
   user-select: none;
 }
 
@@ -979,6 +982,34 @@ body.kube-resizing {
   border-left: 1px solid var(--border);
   height: 100%;
 }
+.term-header-actions .btn[title] { position: relative; }
+.term-header-actions .btn[title]::after {
+  content: attr(title);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #202124;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .38);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.term-header-actions .btn[title]:hover::after,
+.term-header-actions .btn[title]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+.term-pod-select { max-width: 220px; }
 .term-filterbar {
   display: flex;
   align-items: center;
@@ -1036,6 +1067,17 @@ body.kube-resizing {
   user-select: text;
 }
 .term-body.wrap { white-space: pre-wrap; word-break: break-all; }
+
+.term-log-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.term-log-nav .btn { width: 22px; height: 20px; min-height: 20px; }
+.term-log-nav svg { width: 12px; height: 12px; }
 
 .term-line { display: block; }
 .term-line .ts { color: #555; font-size: 10px; margin-right: 8px; user-select: none; }

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+export const TERMINAL_MAX_LINES = 5000
+
 export const useTerminalStore = defineStore('terminal', () => {
   const tabs     = ref([])   // [{ id, ns, pod, containers, container, ws, lines, lineCount, streaming, type }]
   const activeId = ref(null)
@@ -28,6 +30,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       label: `${pod} (${isPod ? 'logs' : `${resourceType} logs`})`,
       containers: containers || [],
       container: containers?.[0] || null,
+      logPods: [], selectedPod: '',
       ws: null, lines: [], entries: [], lineCount: 0, streaming: false
     }
     tabs.value.push(tab)
@@ -122,7 +125,12 @@ export const useTerminalStore = defineStore('terminal', () => {
     if (!tab.entries) tab.entries = []
     tab.entries.push({ ts, time: now.getTime(), text, cls, html, serializedAt: parseSerializedDate(text) })
     tab.lines.push(html)
-    tab.lineCount++
+    const overflow = tab.entries.length - TERMINAL_MAX_LINES
+    if (overflow > 0) {
+      tab.entries.splice(0, overflow)
+      tab.lines.splice(0, overflow)
+    }
+    tab.lineCount = tab.entries.length
     return html
   }
 
