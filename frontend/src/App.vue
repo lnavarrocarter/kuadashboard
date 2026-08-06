@@ -156,6 +156,12 @@
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
           <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.observability') }}</div>
+            <a v-for="r in AWS_SIDEBAR.observability" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+              @click.prevent="awsTab = r.id">{{ t(r.labelKey) }}</a>
+          </div>
+          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
@@ -364,7 +370,7 @@
           </template>
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
-          <VercelView  v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
+          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
         </main>
       </div>
 
@@ -486,6 +492,7 @@ const LABELS = {
 }
 
 const AWS_SIDEBAR = {
+  observability: [{ id: 'apm', labelKey: 'apm.applications' }],
   compute:     [{ id: 'ec2', label: 'EC2' }, { id: 'lambda', label: 'Lambda' }],
   containers:  [{ id: 'ecs', label: 'ECS' }, { id: 'eks', label: 'EKS' }, { id: 'ecr', label: 'ECR' }],
   networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }, { id: 'cloudfront', label: 'CloudFront' }, { id: 'route53', label: 'Route 53' }],
@@ -540,6 +547,7 @@ const isKubeResizing = ref(false)
 const helmViewRef     = ref(null)
 const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
+const vercelViewRef   = ref(null)
 const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
@@ -552,7 +560,7 @@ watch(() => settings.autoRefresh, (secs) => {
 }, { immediate: true })
 
 async function reloadActiveProvider() {
-  if (autoRefreshPending) return
+  if (autoRefreshPending || document.hidden) return
   autoRefreshPending = true
   try {
     if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
@@ -561,15 +569,19 @@ async function reloadActiveProvider() {
     }
     if (cloudView.value) return
     if (activeProvider.value === 'kubernetes') {
-      if (!store.loading) await store.loadResources()
+      if (!store.loading && !store.refreshing) await store.loadResources({ silent: true, background: true })
       return
     }
     if (activeProvider.value === 'aws') {
-      await awsViewRef.value?.reloadActiveTab?.()
+      await awsViewRef.value?.reloadActiveTab?.({ background: true })
       return
     }
     if (activeProvider.value === 'gcp') {
-      await gcpViewRef.value?.reloadActiveTab?.({ preserveSearch: true })
+      await gcpViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
+      return
+    }
+    if (activeProvider.value === 'vercel') {
+      await vercelViewRef.value?.reloadActiveTab?.({ background: true })
     }
   } finally {
     autoRefreshPending = false
@@ -858,13 +870,13 @@ async function confirmDelete() {
     const removed = results.length - failed.length
     if (removed) toast(`Deleted ${removed} resource(s)`, failed.length ? 'warn' : 'success')
     if (failed.length) toast(`${failed.length} resource(s) failed to delete`, 'error')
-    setTimeout(() => store.loadResources(), 600)
+    setTimeout(() => store.loadResources({ silent: true }), 600)
     return
   }
   const { type, ns, name } = modalData.deletePending; modals.delete = false
   try {
     await deleteKubeResource(type, ns, name)
-    toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources(), 600)
+    toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 600)
   } catch (e) { toast(e.message, 'error') }
 }
 function deleteKubeResource(type, ns, name) {
@@ -873,20 +885,20 @@ function deleteKubeResource(type, ns, name) {
 }
 async function confirmScale(replicas) {
   const { type, ns, name } = modalData.scalePending; modals.scale = false
-  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas }); toast(`Scaled ${name} to ${replicas}`, 'success'); setTimeout(() => store.loadResources(), 800) }
+  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas }); toast(`Scaled ${name} to ${replicas}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
   catch (e) { toast(e.message, 'error') }
 }
 async function doRestart(type, ns, name) {
-  try { await api('POST', `/api/${ns}/${type}/${name}/restart`); toast(`Restarted ${name}`, 'success'); setTimeout(() => store.loadResources(), 1000) }
+  try { await api('POST', `/api/${ns}/${type}/${name}/restart`); toast(`Restarted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 1000) }
   catch (e) { toast(e.message, 'error') }
 }
 async function doCordon(name, cordon) {
-  try { await api('POST', `/api/nodes/${name}/cordon`, { cordon }); toast(`Node ${name} ${cordon ? 'cordoned' : 'uncordoned'}`, 'success'); setTimeout(() => store.loadResources(), 800) }
+  try { await api('POST', `/api/nodes/${name}/cordon`, { cordon }); toast(`Node ${name} ${cordon ? 'cordoned' : 'uncordoned'}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
   catch (e) { toast(e.message, 'error') }
 }
 async function confirmDrain() {
   const name = modalData.drainPending; modals.drain = false
-  try { const r = await api('POST', `/api/nodes/${name}/drain`); toast(`Node ${name} drained. Evicted: ${r.evicted}`, r.failed ? 'warn' : 'success'); setTimeout(() => store.loadResources(), 800) }
+  try { const r = await api('POST', `/api/nodes/${name}/drain`); toast(`Node ${name} drained. Evicted: ${r.evicted}`, r.failed ? 'warn' : 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
   catch (e) { toast(e.message, 'error') }
 }
 

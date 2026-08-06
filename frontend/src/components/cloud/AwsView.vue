@@ -7,9 +7,9 @@
     </div>
 
     <template v-else>
-      <div v-if="awsStore.error" class="alert-error">{{ awsStore.error }}</div>
+      <div v-if="activeTab !== 'apm' && awsStore.error" class="alert-error">{{ awsStore.error }}</div>
 
-      <div class="aws-toolbar">
+      <div v-if="activeTab !== 'apm'" class="aws-toolbar">
         <input
           v-model="search[activeTab]"
           class="ctrl-input aws-search"
@@ -22,6 +22,18 @@
       </div>
 
            TAB PANELS
+
+      <ApmObservabilityView
+        v-show="activeTab === 'apm'"
+        ref="apmViewRef"
+        :profile-id="selectedProfileId"
+        :lambdas="awsStore.lambdas"
+        :ecs-services="awsStore.ecsServices"
+        :event-bridge-rules="awsStore.eventBridgeRules"
+        :step-functions="awsStore.stepFunctions"
+        :load-inventory="loadApmInventory"
+        @open-lambda-logs="name => openLogs('lambda', name)"
+      />
 
       <div v-show="activeTab === 'ec2'" class="tab-panel">
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
@@ -149,6 +161,9 @@
               </td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm" title="Open Container Insights dashboard" @click="openEksObservability(c)">
+                    <i data-lucide="chart-no-axes-combined"></i> Metrics
+                  </button>
                   <button class="btn sm" @click="openConfig('eks', `EKS: ${c.name}`, c, { name: c.name })">Config</button>
                   <button class="btn sm" style="background:rgba(63,185,80,.18);border-color:#3fb950;color:#3fb950"
                     @click="addEksToKubeconfig(c)" :disabled="c.status !== 'ACTIVE'">Add to Dashboard</button>
@@ -3731,6 +3746,12 @@
       </div>
     </div>
 
+    <EksObservabilityDashboard
+      :open="eksObservabilityModal.open"
+      :cluster="eksObservabilityModal.cluster"
+      @close="eksObservabilityModal.open = false"
+    />
+
   </div>
 </template>
 
@@ -3752,8 +3773,10 @@ import Ec2Rdp              from './Ec2Rdp.vue'
 import Ec2RdpInfo          from './Ec2RdpInfo.vue'
 import Ec2Detail           from './Ec2Detail.vue'
 import LambdaDetail        from './LambdaDetail.vue'
+import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
+import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'ec2' },
@@ -3772,6 +3795,7 @@ const sshSessions       = computed(() => remoteSessions.value.filter(s => s.type
 const rdpSessions       = computed(() => remoteSessions.value.filter(s => s.type === 'rdp'))
 
 const TABS = [
+  { id: 'apm',          label: 'Applications'   },
   { id: 'ec2',          label: 'EC2'            },
   { id: 'ecs',          label: 'ECS'            },
   { id: 'eks',          label: 'EKS'            },
@@ -3797,6 +3821,7 @@ const TABS = [
 ]
 
 const activeTab  = ref('ec2')
+const apmViewRef = ref(null)
 const tabLoading = ref(false)
 const loaded     = reactive(Object.fromEntries(TABS.map(t => [t.id, false])))
 
@@ -3961,6 +3986,7 @@ function tabCount(id) {
 }
 
 const fetchMap = {
+  apm:          () => apmViewRef.value?.refreshLocal(),
   ec2:          () => awsStore.fetchEc2Instances(),
   ecs:          () => awsStore.fetchEcsServices(),
   eks:          () => awsStore.fetchEksClusters(),
@@ -3985,20 +4011,30 @@ const fetchMap = {
   secrets:      () => awsStore.fetchSecrets(),
 }
 
-async function loadTab(id) {
+async function loadApmInventory() {
+  await Promise.all([
+    awsStore.fetchLambdas(),
+    awsStore.fetchEcsServices(),
+    awsStore.fetchEventBridgeRules(),
+    awsStore.fetchStepFunctions(),
+  ])
+}
+
+async function loadTab(id, options = {}) {
   if (loaded[id]) return
-  tabLoading.value = true
+  if (!options.background) tabLoading.value = true
   try {
-    await fetchMap[id]?.()
+    const load = () => fetchMap[id]?.()
+    await (options.background ? awsStore.runInBackground(load) : load())
     loaded[id] = true
   } finally {
-    tabLoading.value = false
+    if (!options.background) tabLoading.value = false
   }
 }
 
-async function reloadActiveTab() {
+async function reloadActiveTab(options = {}) {
   loaded[activeTab.value] = false
-  await loadTab(activeTab.value)
+  await loadTab(activeTab.value, options)
 }
 
 defineExpose({ reloadActiveTab })
@@ -4234,6 +4270,12 @@ async function openApigwRoutes(api) {
 }
 
 // ─── EKS Add to Dashboard ─────────────────────────────────────────────────────
+
+const eksObservabilityModal = reactive({ open: false, cluster: null })
+
+function openEksObservability(cluster) {
+  Object.assign(eksObservabilityModal, { open: true, cluster })
+}
 
 async function addEksToKubeconfig(cluster) {
   try {

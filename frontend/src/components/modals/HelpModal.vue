@@ -226,6 +226,8 @@
               </div>
               <select v-model.number="settings.autoRefresh" class="ctrl-select" style="width:130px;font-size:12px">
                 <option :value="0">{{ t('help.autoRefreshOff') }}</option>
+                <option :value="5">{{ t('help.autoRefresh5s') }}</option>
+                <option :value="10">{{ t('help.autoRefresh10s') }}</option>
                 <option :value="30">{{ t('help.autoRefresh30s') }}</option>
                 <option :value="60">{{ t('help.autoRefresh1m') }}</option>
                 <option :value="120">{{ t('help.autoRefresh2m') }}</option>
@@ -331,8 +333,9 @@ const ACCENT_OPTIONS = [
 
 function resetSettings() {
   Object.assign(settings, {
+    settingsVersion: 2,
     theme: 'dark', lang: 'es', fontSize: 'normal',
-    compactMode: false, showClock: true, autoRefresh: 0, accentColor: 'blue',
+    compactMode: false, showClock: true, autoRefresh: 5, accentColor: 'blue',
   })
 }
 

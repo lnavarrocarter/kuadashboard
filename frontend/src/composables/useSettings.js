@@ -1,21 +1,29 @@
 import { reactive, watch } from 'vue'
 
 const STORAGE_KEY = 'kua:settings'
+const SETTINGS_VERSION = 2
 
 const DEFAULTS = {
+  settingsVersion: SETTINGS_VERSION,
   theme:        'dark',    // 'dark' | 'light'
   lang:         'es',      // 'es' | 'en'
   fontSize:     'normal',  // 'small' | 'normal' | 'large'
   compactMode:  false,     // reduce row padding
   showClock:    true,      // clock in header
-  autoRefresh:  0,         // 0 = off, seconds interval
+  autoRefresh:  5,         // 0 = off, seconds interval
   accentColor:  'blue',    // 'blue' | 'teal' | 'purple' | 'orange'
 }
 
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
-    return { ...DEFAULTS, ...saved }
+    const loaded = { ...DEFAULTS, ...saved }
+    if ((saved.settingsVersion || 0) < SETTINGS_VERSION) {
+      loaded.settingsVersion = SETTINGS_VERSION
+      loaded.autoRefresh = DEFAULTS.autoRefresh
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(loaded))
+    }
+    return loaded
   } catch {
     return { ...DEFAULTS }
   }
