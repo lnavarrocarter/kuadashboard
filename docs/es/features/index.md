@@ -65,6 +65,10 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 - **Funciones** — Inspeccionar funciones serverless y edge en cualquier deployment
 - **OAuth** — Autorización con un clic desde el navegador (solo app Electron)
 
+## Observabilidad
+
+- **[APM local de aplicaciones](./observability.md)** — Pertenencia confirmada de Lambda y Kubernetes, agregados UTC de 30 minutos, umbrales locales, dependencias manuales y controles de coste sin provisionar recursos cloud.
+
 ## Herramientas
 
 - **Port Forwarding** — Tuneles confiables para Services/Pods con resolucion del pod objetivo, estado persistente y auto-reconexion

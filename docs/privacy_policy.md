@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-05-28
+Last updated: 2026-08-04
 
 This Privacy Policy explains how KuaDashboard handles information when you use the desktop application, web interface, and cloud integrations.
 
@@ -22,6 +22,14 @@ Depending on enabled features, KuaDashboard may process:
 - Account identifiers required by provider APIs
 - Credentials and tokens you provide
 - Logs and command outputs you explicitly request in the UI
+
+## Local Application Observability
+
+The optional application observability feature stores its data in a local SQLite database. It persists application configuration, confirmed resource identifiers, manual dependency edges, collection status, request-budget counters, thresholds, cursors, and 30-minute metric aggregates.
+
+It does not persist raw CloudWatch log lines, request or response payloads, credentials, secrets, environment variables, or arbitrary resource tags. Candidate analysis uses inventory already loaded in the interface, returns only application-identity fields and scores, and does not create associations automatically.
+
+APM metric buckets, cursors, and collection runs are deleted after 90 days. AWS request-budget records are retained for 15 months. Deleting an application cascades to its local APM data. Users can erase all APM history by closing KUA and deleting the local `apm-observability.sqlite3` database and its WAL companion files.
 
 ## Credential Storage
 
@@ -55,6 +63,8 @@ Reasonable safeguards are implemented to reduce risk, including encrypted creden
 ## Data Retention
 
 Data retained by KuaDashboard is primarily local and under your control. You can remove profiles, credentials, and related local state from the application.
+
+Feature-specific retention periods, including the application observability periods above, are enforced by local cleanup and do not affect data retained by third-party cloud providers.
 
 ## Third-Party Services
 
