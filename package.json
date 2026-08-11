@@ -1,6 +1,6 @@
 {
   "name": "kuadashboard",
-  "version": "1.11.2",
+  "version": "1.11.3",
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
   "author": {
     "name": "lnavarrocarter",
@@ -20,7 +20,7 @@
     "electron:pack": "npm run build:frontend && electron-builder --dir",
     "electron:build": "npm run build:frontend && electron-builder",
     "electron:build:win": "npm run build:frontend && electron-builder --win",
-    "electron:build:mac": "npm run build:frontend && electron-builder --mac",
+    "electron:build:mac": "node scripts/build-mac.js",
     "electron:build:linux": "npm run build:frontend && electron-builder --linux",
     "electron:build:all": "npm run build:frontend && electron-builder --win --mac --linux",
     "icons:generate": "node scripts/generate-icons.js",
@@ -123,20 +123,8 @@
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        "dmg",
+        "zip"
       ],
       "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools",

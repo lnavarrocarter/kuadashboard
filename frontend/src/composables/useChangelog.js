@@ -4,9 +4,18 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.11.2'
+export const CHANGELOG_VERSION = '1.11.3'
 
 export const CHANGELOG = [
+  {
+    version: '1.11.3',
+    date: 'Agosto 2026',
+    items: [
+      { type: 'fix',    text: 'macOS Intel — corregido el módulo nativo SQLite ARM64 incluido por error, que impedía iniciar el backend después de instalar la aplicación' },
+      { type: 'better', text: 'Release macOS — builds x64 y ARM64 aislados y secuenciales, con validación de arquitectura dentro de los ZIP finales' },
+      { type: 'better', text: 'Actualizaciones macOS — manifiesto combinado para conservar los artefactos x64 y ARM64' },
+    ],
+  },
   {
     version: '1.11.2',
     date: 'Agosto 2026',

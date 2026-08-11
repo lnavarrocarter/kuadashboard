@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.11.3 (2026-08-11)
+
+### Hotfix de empaquetado macOS
+
+- Se corrigió el paquete de macOS Intel que incluía el binario nativo ARM64 de `better-sqlite3`, lo que impedía iniciar el backend después de instalar la aplicación.
+- Los artefactos macOS x64 y ARM64 ahora se generan en procesos aislados y secuenciales para impedir que una dependencia nativa sea reemplazada mientras se archiva otra arquitectura.
+- Se agregaron validaciones de arquitectura para el ejecutable Electron y el módulo nativo SQLite dentro de ambos ZIP finales antes de publicar un release.
+- Se conserva un manifiesto de actualización macOS combinado con los artefactos ZIP/DMG para x64 y ARM64.
+
 ## v1.11.2 (2026-08-11)
 
 ### APM multicloud y sin proveedor
