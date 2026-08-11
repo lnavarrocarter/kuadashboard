@@ -7,7 +7,7 @@
         <div class="setup-section-title">{{ t('apm.identity') }}</div>
         <div class="scope-banner">
           <i data-lucide="cloud-cog"></i>
-          <span><small>{{ t('apm.awsScope') }}</small><strong>{{ profileName }} · {{ deploymentCatalog?.scope?.accountId || t('apm.accountPending') }} · {{ form.region }}</strong></span>
+          <span><small>{{ providerLabel }} {{ t('apm.platformScope') }}</small><strong>{{ profileName }} · {{ form.region }}</strong></span>
         </div>
         <div class="setup-grid">
           <label>{{ t('apm.name') }}<input v-model.trim="form.name" class="ctrl-input" required placeholder="orders" /></label>
@@ -17,19 +17,19 @@
         </div>
       </section>
 
-      <section class="setup-section">
+      <section v-if="provider !== 'generic'" class="setup-section">
         <div class="setup-section-head">
           <div>
-            <div class="setup-section-title">{{ t('apm.awsInventory') }}</div>
-            <div class="setup-hint">{{ t('apm.awsInventoryHint') }}</div>
+            <div class="setup-section-title">{{ providerLabel }} {{ t('apm.platformInventory') }}</div>
+            <div class="setup-hint">{{ t('apm.platformInventoryHint') }}</div>
           </div>
-          <button class="btn sm" type="button" :disabled="!profileId || !loadInventory || loadingInventory" @click="refreshInventory">
+          <button v-if="provider === 'aws'" class="btn sm" type="button" :disabled="!profileId || !loadInventory || loadingInventory" @click="refreshInventory">
             <i :data-lucide="loadingInventory ? 'loader-2' : 'list-restart'"></i>
             {{ loadingInventory ? t('apm.loadingInventory') : t('apm.loadInventory') }}
           </button>
         </div>
         <template v-if="inventoryResources.length">
-          <input v-model.trim="inventorySearch" class="ctrl-input" :placeholder="t('apm.filterInventoryResources')" />
+          <input v-model.trim="inventorySearch" class="ctrl-input" :placeholder="t('apm.filterPlatformResources')" />
           <div class="resource-picker inventory-resources">
             <label v-for="resource in filteredInventoryResources" :key="resource.key" class="resource-option">
               <input v-model="selectedInventoryKeys" type="checkbox" :value="resource.key" />
@@ -46,7 +46,7 @@
         <div v-else-if="inventoryLoaded" class="setup-empty">{{ t('apm.noInventoryResources') }}</div>
       </section>
 
-      <section class="setup-section">
+      <section v-if="provider === 'aws'" class="setup-section">
         <div class="setup-section-head">
           <div>
             <div class="setup-section-title">{{ t('apm.deploymentImport') }}</div>
@@ -95,7 +95,7 @@
         </template>
       </section>
 
-      <section class="setup-section">
+      <section v-if="provider === 'aws'" class="setup-section">
         <div class="setup-section-head">
           <div>
             <div class="setup-section-title">{{ t('apm.lambdaFunctions') }}</div>
@@ -127,9 +127,45 @@
       </section>
 
       <section class="setup-section">
+        <div class="setup-section-head">
+          <div>
+            <div class="setup-section-title">{{ t('apm.kubernetesWorkloads') }}</div>
+            <div class="setup-hint">{{ t(provider === 'vercel' ? 'apm.vercelKubernetesWorkloadsHint' : 'apm.kubernetesWorkloadsHint', { provider: providerLabel }) }}</div>
+          </div>
+          <button class="btn sm" type="button" :disabled="!profileId || loadingEksWorkloads" @click="loadEksWorkloads">
+            <i :data-lucide="loadingEksWorkloads ? 'loader-2' : 'scan-search'"></i>
+            {{ loadingEksWorkloads ? t('apm.detectingKubernetesWorkloads') : t('apm.detectKubernetesWorkloads') }}
+          </button>
+        </div>
+        <template v-if="eksCatalog">
+          <div v-if="eksCatalog.failedContexts?.length" class="setup-warning">
+            <i data-lucide="triangle-alert"></i>
+            <span>{{ t('apm.kubernetesContextsUnreachable', { contexts: eksCatalog.failedContexts.map(item => item.context).join(', ') }) }}</span>
+          </div>
+          <div class="setup-tools deployment-tools">
+            <input v-model.trim="eksSearch" class="ctrl-input setup-search" :placeholder="t('apm.filterKubernetesWorkloads')" />
+            <span class="setup-hint">{{ t('apm.kubernetesReadEstimate', { count: eksCatalog.estimate?.kubernetesRequests || 0 }) }}</span>
+          </div>
+          <div v-if="filteredEksWorkloads.length" class="resource-picker eks-workloads">
+            <label v-for="workload in filteredEksWorkloads" :key="workload.key" class="resource-option">
+              <input v-model="selectedEksKeys" type="checkbox" :value="workload.key" />
+              <i data-lucide="boxes"></i>
+              <span>
+                <strong>{{ workload.name }}</strong>
+                <small>{{ workload.kind }} · {{ workload.namespace }}</small>
+                <small>{{ workload.context }}</small>
+              </span>
+            </label>
+          </div>
+          <div v-else class="setup-empty">{{ t('apm.noKubernetesWorkloads') }}</div>
+          <div class="setup-hint">{{ t('apm.manualKubernetesSelection', { count: selectedEksKeys.length }) }}</div>
+        </template>
+      </section>
+
+      <section class="setup-section">
         <label class="resource-toggle">
           <input v-model="form.includeKubernetes" type="checkbox" />
-          <span><strong>{{ t('apm.addKubernetes') }}</strong><small>{{ t('apm.kubernetesHint') }}</small></span>
+          <span><strong>{{ t('apm.addKubernetesManually') }}</strong><small>{{ t('apm.kubernetesHint') }}</small></span>
         </label>
         <div v-if="form.includeKubernetes" class="setup-grid kube-grid">
           <label>{{ t('apm.context') }}<input v-model.trim="form.kubeContext" class="ctrl-input" required placeholder="aws-eks-dev" /></label>
@@ -143,13 +179,19 @@
         </div>
       </section>
 
-      <section class="cost-notice">
+      <section v-if="provider === 'aws'" class="cost-notice">
         <i data-lucide="shield-check"></i>
         <div>
           <strong>{{ t('apm.costGuard') }}</strong>
           <p>{{ t('apm.costForecast', { count: selectedLambdaCount, maximum: maximumForecast.toLocaleString() }) }}</p>
           <p>{{ t('apm.costDisclaimer') }}</p>
         </div>
+        <label class="poll-toggle"><input v-model="form.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
+      </section>
+
+      <section v-else class="cost-notice">
+        <i data-lucide="database"></i>
+        <div><strong>{{ t('apm.localMetrics') }}</strong><p>{{ t('apm.multicloudPollingHint') }}</p></div>
         <label class="poll-toggle"><input v-model="form.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
       </section>
 
@@ -180,7 +222,9 @@ import { apmResourceIcon, apmResourceLabel, apmResourceLocation } from './resour
 
 const props = defineProps({
   show: Boolean,
+  provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
+  platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
   eventBridgeRules: { type: Array, default: () => [] },
@@ -195,12 +239,14 @@ const discovering = ref(false)
 const loadingDeployments = ref(false)
 const previewingDeployments = ref(false)
 const loadingInventory = ref(false)
+const loadingEksWorkloads = ref(false)
 const inventoryLoaded = ref(false)
 const error = ref('')
 const lambdaSearch = ref('')
 const inventorySearch = ref('')
 const deploymentSearch = ref('')
 const deploymentResourceSearch = ref('')
+const eksSearch = ref('')
 const discovery = ref([])
 const discoveryEstimate = ref(null)
 const discoveryName = ref('')
@@ -210,8 +256,10 @@ const deploymentEstimate = ref(null)
 const selectedStackNames = ref([])
 const selectedDeploymentKeys = ref([])
 const selectedInventoryKeys = ref([])
+const eksCatalog = ref(null)
+const selectedEksKeys = ref([])
 const form = reactive({
-  name: '', region: 'us-east-1', environment: '', team: '', pollingEnabled: false,
+  name: '', region: defaultRegion(), environment: '', team: '', pollingEnabled: false,
   costAcknowledged: false, lambdaNames: [], includeKubernetes: false,
   kubeContext: '', namespace: 'default', kind: 'Deployment', workloadName: '',
 })
@@ -220,6 +268,7 @@ const filteredLambdas = computed(() => {
   const query = lambdaSearch.value.toLowerCase()
   return props.lambdas.filter(fn => !query || fn.name.toLowerCase().includes(query))
 })
+const providerLabel = computed(() => ({ generic: t('observability.general'), aws: 'AWS', gcp: 'GCP', vercel: 'Vercel' })[props.provider] || props.provider)
 const profileName = computed(() => props.profileId.replace(/^local:/, '') || t('apm.noProfile'))
 const filteredDeployments = computed(() => {
   const query = deploymentSearch.value.toLowerCase()
@@ -236,6 +285,11 @@ const selectedDeploymentResources = computed(() => {
   return deploymentResources.value.filter(resource => selected.has(resource.key))
 })
 const inventoryResources = computed(() => [
+  ...props.platformResources.map(resource => ({
+    ...resource,
+    provider: props.provider,
+    associationSource: resource.associationSource || 'manual',
+  })),
   ...props.ecsServices.map(resource => ({
     type: 'ecs',
     key: resource.arn || `AWS::ECS::Service:${resource.cluster}/${resource.name}`,
@@ -277,6 +331,15 @@ const selectedAssociatedResources = computed(() => [...new Map([
   ...selectedDeploymentResources.value,
   ...selectedInventoryResources.value,
 ].map(resource => [resource.key, resource])).values()])
+const filteredEksWorkloads = computed(() => {
+  const query = eksSearch.value.toLowerCase()
+  return (eksCatalog.value?.workloads || []).filter(workload =>
+    !query || `${workload.name} ${workload.kind} ${workload.namespace} ${workload.context}`.toLowerCase().includes(query))
+})
+const selectedEksWorkloads = computed(() => {
+  const selected = new Set(selectedEksKeys.value)
+  return (eksCatalog.value?.workloads || []).filter(workload => selected.has(workload.key))
+})
 const deploymentResourceCounts = computed(() => deploymentResources.value.reduce((counts, resource) => {
   counts[resource.type] = (counts[resource.type] || 0) + 1
   return counts
@@ -285,7 +348,8 @@ const selectedLambdaCount = computed(() => new Set([
   ...form.lambdaNames,
   ...selectedAssociatedResources.value.filter(resource => resource.type === 'lambda').map(resource => resource.name),
 ]).size)
-const selectedResourceCount = computed(() => form.lambdaNames.length + selectedAssociatedResources.value.length)
+const selectedResourceCount = computed(() =>
+  form.lambdaNames.length + selectedAssociatedResources.value.length + selectedEksWorkloads.value.length)
 const maximumForecast = computed(() => selectedLambdaCount.value * 48 * 30 * 2)
 const canSubmit = computed(() =>
   !!props.profileId && !!form.name && !!form.region &&
@@ -296,6 +360,13 @@ const canSubmit = computed(() =>
 const resourceIcon = apmResourceIcon
 const resourceLabel = apmResourceLabel
 const resourceLocation = apmResourceLocation
+
+function defaultRegion() {
+  if (props.provider === 'generic') return 'local'
+  if (props.provider === 'gcp') return 'us-central1'
+  if (props.provider === 'vercel') return 'global'
+  return 'us-east-1'
+}
 
 function candidateFor(fn) {
   if (discoveryName.value !== form.name) return null
@@ -323,7 +394,7 @@ async function analyzeCandidates() {
   discovering.value = true
   error.value = ''
   try {
-    store.setActiveProfile(props.profileId)
+    store.setActiveProfile(props.profileId, props.provider)
     const result = await store.discoverCandidates({
       name: form.name,
       environment: form.environment,
@@ -349,7 +420,7 @@ async function loadDeployments() {
   loadingDeployments.value = true
   error.value = ''
   try {
-    store.setActiveProfile(props.profileId)
+    store.setActiveProfile(props.profileId, props.provider)
     deploymentCatalog.value = await store.loadDeployments(form.region)
     selectedStackNames.value = []
     deploymentResources.value = []
@@ -395,9 +466,24 @@ async function refreshInventory() {
   }
 }
 
+async function loadEksWorkloads() {
+  if (!props.profileId || loadingEksWorkloads.value) return
+  loadingEksWorkloads.value = true
+  error.value = ''
+  try {
+    store.setActiveProfile(props.profileId, props.provider)
+    eksCatalog.value = await store.loadKubernetesWorkloads()
+    selectedEksKeys.value = []
+  } catch (requestError) {
+    error.value = requestError.message
+  } finally {
+    loadingEksWorkloads.value = false
+  }
+}
+
 function reset() {
   Object.assign(form, {
-    name: '', region: 'us-east-1', environment: '', team: '', pollingEnabled: false,
+    name: '', region: defaultRegion(), environment: '', team: '', pollingEnabled: false,
     costAcknowledged: false, lambdaNames: [], includeKubernetes: false,
     kubeContext: '', namespace: 'default', kind: 'Deployment', workloadName: '',
   })
@@ -405,6 +491,7 @@ function reset() {
   inventorySearch.value = ''
   deploymentSearch.value = ''
   deploymentResourceSearch.value = ''
+  eksSearch.value = ''
   discovery.value = []
   discoveryEstimate.value = null
   discoveryName.value = ''
@@ -414,6 +501,8 @@ function reset() {
   selectedStackNames.value = []
   selectedDeploymentKeys.value = []
   selectedInventoryKeys.value = []
+  eksCatalog.value = null
+  selectedEksKeys.value = []
   inventoryLoaded.value = false
   error.value = ''
 }
@@ -424,8 +513,9 @@ async function submit() {
   error.value = ''
   let application = null
   try {
-    store.setActiveProfile(props.profileId)
+    store.setActiveProfile(props.profileId, props.provider)
     application = await store.createApplication({
+      provider: props.provider,
       name: form.name,
       region: form.region,
       environment: form.environment,
@@ -436,6 +526,7 @@ async function submit() {
       if (selectedAssociatedResources.value.some(resource => resource.type === 'lambda' && resource.name === name)) continue
       const fn = props.lambdas.find(item => item.name === name)
       await store.addResource(application.id, {
+        provider: props.provider,
         type: 'lambda',
         key: fn?.arn || `${form.region}:${name}`,
         arn: fn?.arn || null,
@@ -446,6 +537,7 @@ async function submit() {
     }
     for (const resource of selectedAssociatedResources.value) {
       await store.addResource(application.id, {
+        provider: props.provider,
         type: resource.type,
         key: resource.key,
         arn: resource.arn,
@@ -456,8 +548,21 @@ async function submit() {
         associationSource: resource.associationSource,
       })
     }
+    for (const workload of selectedEksWorkloads.value) {
+      await store.addResource(application.id, {
+        provider: props.provider,
+        type: 'kubernetes',
+        key: workload.key,
+        kubeContext: workload.context,
+        namespace: workload.namespace,
+        kind: workload.kind,
+        name: workload.name,
+        associationSource: 'manual',
+      })
+    }
     if (form.includeKubernetes) {
       await store.addResource(application.id, {
+        provider: props.provider,
         type: 'kubernetes',
         key: `${form.kubeContext}/${form.namespace}/${form.kind}/${form.workloadName}`,
         kubeContext: form.kubeContext,
@@ -497,6 +602,8 @@ watch(() => props.show, visible => {
 .setup-section-title { color: var(--text); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .setup-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .setup-hint, .setup-empty { color: var(--text-dim); font-size: 10px; line-height: 1.4; }
+.setup-warning { display: flex; align-items: flex-start; gap: 7px; padding: 8px 10px; border: 1px solid rgba(210,153,34,.45); border-radius: 6px; background: rgba(210,153,34,.07); color: #d29922; font-size: 10px; line-height: 1.4; }
+.setup-warning > svg { flex: 0 0 auto; width: 14px; height: 14px; }
 .scope-banner { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-block: 1px solid var(--border); }
 .scope-banner > svg { width: 18px; height: 18px; color: #58a6ff; }
 .scope-banner span { display: flex; flex-direction: column; gap: 2px; }
@@ -522,6 +629,7 @@ watch(() => props.show, visible => {
 .resource-summary small { margin-left: auto; color: var(--text-dim); }
 .deployment-resources { max-height: 240px; }
 .inventory-resources { max-height: 210px; }
+.eks-workloads { max-height: 240px; }
 .resource-picker { max-height: 174px; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 7px; }
 .resource-option { min-width: 0; display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .resource-option:nth-child(odd) { border-right: 1px solid var(--border); }

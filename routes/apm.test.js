@@ -10,7 +10,7 @@ const express = require('express');
 const { ApmDatabase } = require('../lib/apm/database');
 const { createApmRouter } = require('./apm');
 
-async function fixture({ deploymentReader } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
   const database = new ApmDatabase({
     filePath: path.join(directory, 'apm.sqlite3'),
@@ -35,6 +35,9 @@ async function fixture({ deploymentReader } = {}) {
     scheduler,
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
+    eksWorkloadReader,
+    topologyReader,
+    processTracer,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -199,6 +202,118 @@ test('deployment routes pass the profile scope and preserve explicit stack selec
       ['list', { profileId: 'local:dev', region: 'us-west-2' }],
       ['preview', { profileId: 'local:dev', region: 'us-west-2', stackNames: ['orders'] }],
     ]);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('EKS discovery returns an explicit workload preview', async () => {
+  const calls = [];
+  const subject = await fixture({
+    eksWorkloadReader: {
+      async listWorkloads() {
+        calls.push('list');
+        return {
+          estimate: { awsRequests: 0, kubernetesRequests: 3 },
+          contexts: ['arn:aws:eks:us-east-1:123:cluster/dev'],
+          workloads: [{
+            key: 'arn:aws:eks:us-east-1:123:cluster/dev/orders/Deployment/api',
+            context: 'arn:aws:eks:us-east-1:123:cluster/dev',
+            namespace: 'orders',
+            kind: 'Deployment',
+            name: 'api',
+          }],
+        };
+      },
+    },
+  });
+  try {
+    const result = await subject.request('/eks-workloads');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.workloads[0].name, 'api');
+    assert.deepEqual(result.body.estimate, { awsRequests: 0, kubernetesRequests: 3 });
+    assert.deepEqual(calls, ['list']);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('cloud topology analysis is explicit and never confirms ASL suggestions automatically', async () => {
+  const calls = [];
+  const subject = await fixture({
+    topologyReader: {
+      async analyze(input) {
+        calls.push(input);
+        return {
+          requests: 1,
+          unresolvedReferences: [],
+          failedResources: [],
+          suggestions: [{
+            sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes',
+            confidence: 1, confirmed: false,
+            evidence: [{ type: 'asl_reference', values: ['Invoke worker', 'orders-worker'] }],
+          }],
+        };
+      },
+    },
+  });
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    for (const resource of [
+      { id: 'flow', type: 'stepfunctions', key: 'flow', name: 'orders-flow', arn: 'arn:flow', associationSource: 'manual' },
+      { id: 'worker', type: 'lambda', key: 'worker', name: 'orders-worker', arn: 'arn:worker', associationSource: 'manual' },
+    ]) {
+      await subject.request(`/applications/${application.body.id}/resources`, { method: 'POST', body: resource });
+    }
+
+    const analysis = await subject.request(`/applications/${application.body.id}/topology/analyze-cloud`, { method: 'POST' });
+
+    assert.equal(analysis.status, 200);
+    assert.equal(analysis.body.analysis.suggestions[0].confirmed, false);
+    assert.equal(analysis.body.analysis.cloudScan.requests, 1);
+    assert.equal(subject.database.listEdges(application.body.id).length, 0);
+    assert.equal(calls[0].application.profileId, 'local:dev');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('process trace is scoped, explicit and does not persist topology changes', async () => {
+  const calls = [];
+  const subject = await fixture({
+    processTracer: {
+      async trace(input) {
+        calls.push(input);
+        return {
+          requests: 3, searchedFlows: 1, inspectedExecutions: 1,
+          traces: [{ executionArn: 'arn:execution:one', matchPaths: ['$.requestId'], inputShape: { requestId: 'string' }, timeline: [] }],
+        };
+      },
+    },
+  });
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    await subject.request(`/applications/${application.body.id}/resources`, {
+      method: 'POST',
+      body: { type: 'stepfunctions', key: 'orders-flow', name: 'orders-flow', arn: 'arn:flow', associationSource: 'manual' },
+    });
+
+    const result = await subject.request(`/applications/${application.body.id}/process-traces`, {
+      method: 'POST', body: { requestId: 'req-123', includeData: true },
+    });
+
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body.traces[0].matchPaths, ['$.requestId']);
+    assert.equal(calls[0].application.profileId, 'local:dev');
+    assert.equal(calls[0].resources.length, 1);
+    assert.equal(calls[0].requestId, 'req-123');
+    assert.equal(calls[0].includeData, true);
+    assert.equal(subject.database.listEdges(application.body.id).length, 0);
+    assert.equal(subject.database.listResources(application.body.id).length, 1);
   } finally {
     await subject.close();
   }

@@ -30,6 +30,9 @@
               <option value="generic">Generic / Other</option>
             </select>
           </label>
+          <button class="btn sm credential-guide-link" type="button" @click="openCredentialGuide">
+            {{ t('profile.credentialsGuide') }}
+          </button>
 
           <!-- GCP auth mode toggle -->
           <template v-if="form.provider === 'gcp' && !isEdit">
@@ -208,7 +211,16 @@
               </div>
               <label class="field-label">
                 VERCEL_API_TOKEN
-                <input v-model="form.keys.VERCEL_API_TOKEN" class="ctrl-input" type="password" placeholder="••••••••••••••••••••" />
+                <input
+                  v-model="form.keys.VERCEL_API_TOKEN"
+                  class="ctrl-input"
+                  type="password"
+                  :aria-invalid="!isEdit && !form.keys.VERCEL_API_TOKEN.trim()"
+                  placeholder="••••••••••••••••••••"
+                />
+                <span v-if="!isEdit && !form.keys.VERCEL_API_TOKEN.trim()" class="profile-validation-error">
+                  {{ t('profile.vercelTokenRequired') }}
+                </span>
               </label>
               <label class="field-label">
                 VERCEL_TEAM_ID
@@ -398,6 +410,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../../composables/useI18n.js'
 import { useAwsSso } from '../../composables/useAwsSso.js'
+import { settings } from '../../composables/useSettings.js'
 
 const { t } = useI18n()
 
@@ -641,6 +654,8 @@ const defaultForm = () => ({
     AWS_SECRET_ACCESS_KEY: '',
     AWS_SESSION_TOKEN: '',
     AWS_DEFAULT_REGION: '',
+    VERCEL_API_TOKEN: '',
+    VERCEL_TEAM_ID: '',
   },
   genericPairs: [{ key: '', value: '', tags: [], newTag: '' }],
 })
@@ -691,8 +706,18 @@ const canSave = computed(() => {
   // SSO mode on a new profile: credentials must be captured before saving
   if (form.value.provider === 'aws' && awsAuthMode.value === 'sso' && !isEdit.value && !ssoCaptured.value)
     return false
+  if (form.value.provider === 'vercel' && !isEdit.value && !form.value.keys.VERCEL_API_TOKEN.trim())
+    return false
   return true
 })
+
+function openCredentialGuide() {
+  const languagePath = settings.lang === 'es' ? '/es' : ''
+  const provider = form.value.provider === 'generic' ? '' : `#${form.value.provider}`
+  const url = `https://lnavarrocarter.github.io/kuadashboard${languagePath}/guide/credentials${provider}`
+  if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
+  else window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 function addPair()       { form.value.genericPairs.push({ key: '', value: '', tags: [], newTag: '' }) }
 function removePair(idx) { form.value.genericPairs.splice(idx, 1) }
@@ -789,6 +814,15 @@ onUnmounted(() => {
   border: 1px solid var(--border, #333);
   border-radius: 8px;
   padding: 4px;
+}
+.credential-guide-link {
+  align-self: flex-start;
+  color: var(--accent);
+}
+.profile-validation-error {
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 400;
 }
 .auth-mode-tab {
   flex: 1;

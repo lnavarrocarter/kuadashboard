@@ -211,7 +211,14 @@ app.use('/api/cloud', (req, res, next) => {
 app.use('/api/cloud/envs',    envManagerRoutes);
 app.use('/api/cloud/gcp',     gcpRoutes);
 app.use('/api/cloud/aws',     awsRoutes);
-app.use('/api/observability/aws', createApmRouter({ database: apmDatabase, scheduler: apmScheduler, auditLog }));
+for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
+  app.use(`/api/observability/${provider}`, createApmRouter({
+    database: apmDatabase,
+    scheduler: apmScheduler,
+    auditLog,
+    provider,
+  }));
+}
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);

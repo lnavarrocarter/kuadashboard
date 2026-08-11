@@ -4,9 +4,23 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.11.0'
+export const CHANGELOG_VERSION = '1.11.2'
 
 export const CHANGELOG = [
+  {
+    version: '1.11.2',
+    date: 'Agosto 2026',
+    items: [
+      { type: 'new',    text: 'APM multicloud — aplicaciones aisladas por proveedor para AWS, GCP y Vercel, más un ámbito General sin proveedor para Kubernetes' },
+      { type: 'new',    text: 'Topología inteligente — evaluación local explicable con puntuación, cobertura, recursos aislados y separación entre relaciones genéricas y dependencias operativas' },
+      { type: 'new',    text: 'AWS Step Functions — análisis ASL bajo demanda para Lambda, subflujos, SQS, ECS y S3, con referencias externas agregables y confirmación explícita' },
+      { type: 'new',    text: 'Trazas de procesos — búsqueda por request/correlation ID, ARN de ejecución o ARN de Step Function, con selector de ejecuciones recientes' },
+      { type: 'new',    text: 'Requests y responses — inspección opcional por ejecución y por paso con campos sensibles ocultos, estructuras acotadas y sin persistencia de payloads' },
+      { type: 'better', text: 'Credenciales — guía bilingüe para AWS, GCP, Vercel y Kubernetes, persistencia corregida de perfiles y soporte más claro para configuración local' },
+      { type: 'fix',    text: 'Vercel — endpoints y versiones API actuales, compatibilidad con respuestas Cron nuevas y antiguas, y errores upstream más precisos' },
+      { type: 'fix',    text: 'APM — migración SQLite por columnas explícitas, carga GCP diferida, scoping estricto por perfil/proveedor y presupuesto AWS aplicado a análisis y trazas' },
+    ],
+  },
   {
     version: '1.11.0',
     date: 'Agosto 2026',

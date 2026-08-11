@@ -24,6 +24,14 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
+          <button
+            :class="['provider-tab', { active: activeProvider === 'observability' }]"
+            :disabled="!hasCloudConnections"
+            :title="hasCloudConnections ? t('nav.observability') : t('nav.observabilityRequiresProvider')"
+            @click="setProvider('observability')"
+          >
+            <i data-lucide="chart-no-axes-combined"></i> {{ t('nav.observability') }}
+          </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
           <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
@@ -66,6 +74,26 @@
             <optgroup v-if="envStore.vercelProfiles.length" :label="t('nav.storedProfiles')">
               <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
             </optgroup>
+          </select>
+        </template>
+        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'">
+          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
+            <option value="">{{ t('aws.noProfile') }}</option>
+            <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
+          </select>
+        </template>
+        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'">
+          <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
+            <option value="">{{ t('gcp.noProfile') }}</option>
+            <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            <option v-for="c in gcpLocalConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">{{ c.name }}</option>
+          </select>
+        </template>
+        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'">
+          <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
+            <option value="">{{ t('vercel.noProfile') }}</option>
+            <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </template>
       </div>
@@ -155,12 +183,6 @@
 
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('sidebar.observability') }}</div>
-            <a v-for="r in AWS_SIDEBAR.observability" :key="r.id"
-               :class="['sidebar-item', { active: awsTab === r.id }]"
-              @click.prevent="awsTab = r.id">{{ t(r.labelKey) }}</a>
-          </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
@@ -326,16 +348,34 @@
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
           </div>
           <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('sidebar.observability') }}</div>
-            <a v-for="r in GCP_SIDEBAR.observability" :key="r.id"
-               :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
-          </div>
-          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.iam') }}</div>
             <a v-for="r in GCP_SIDEBAR.iam" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
                @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+          </div>
+        </nav>
+
+        <nav class="sidebar observability-sidebar" v-if="activeProvider === 'observability'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('observability.platform') }}</div>
+            <button
+              v-for="provider in availableObservabilityProviders"
+              :key="provider.id"
+              :class="['observability-provider-tab', { active: observabilityProvider === provider.id }]"
+              @click="selectObservabilityProvider(provider.id)"
+            >
+              <i :data-lucide="provider.icon"></i>
+              <span><strong>{{ provider.label }}</strong><small>{{ provider.description }}</small></span>
+            </button>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('observability.view') }}</div>
+            <a
+              v-for="option in currentObservabilityOptions"
+              :key="option.id"
+              :class="['sidebar-item', { active: observabilitySelections[observabilityProvider] === option.id }]"
+              @click.prevent="observabilitySelections[observabilityProvider] = option.id"
+            >{{ option.labelKey ? t(option.labelKey) : option.label }}</a>
           </div>
         </nav>
 
@@ -371,6 +411,27 @@
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
+          <ApmObservabilityView
+            ref="observabilityViewRef"
+            v-else-if="activeProvider === 'observability' && observabilityProvider === 'generic'"
+            provider="generic"
+            profile-id="local"
+          />
+          <AwsView
+            ref="observabilityViewRef"
+            v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'"
+            :active-service="observabilitySelections.aws"
+          />
+          <GcpView
+            ref="observabilityViewRef"
+            v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'"
+            :active-service="observabilitySelections.gcp"
+          />
+          <VercelView
+            ref="observabilityViewRef"
+            v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
+            :active-service="observabilitySelections.vercel"
+          />
         </main>
       </div>
 
@@ -392,6 +453,7 @@
           activeProvider === 'aws' ? 'Amazon Web Services'
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
+          : activeProvider === 'observability' ? `${t('nav.observability')} / ${currentObservabilityProviderLabel.toUpperCase()}`
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>
@@ -450,6 +512,7 @@ import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
+import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -492,7 +555,6 @@ const LABELS = {
 }
 
 const AWS_SIDEBAR = {
-  observability: [{ id: 'apm', labelKey: 'apm.applications' }],
   compute:     [{ id: 'ec2', label: 'EC2' }, { id: 'lambda', label: 'Lambda' }],
   containers:  [{ id: 'ecs', label: 'ECS' }, { id: 'eks', label: 'EKS' }, { id: 'ecr', label: 'ECR' }],
   networking:  [{ id: 'vpc', label: 'VPC' }, { id: 'apigw', label: 'API Gateway' }, { id: 'cloudfront', label: 'CloudFront' }, { id: 'route53', label: 'Route 53' }],
@@ -506,7 +568,7 @@ const AWS_SIDEBAR = {
 
 const VERCEL_SIDEBAR = {
   projects:    [{ id: 'projects',    label: 'Projects' }],
-  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Functions' }, { id: 'checks', label: 'Checks' }],
+  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Deployment Files' }, { id: 'checks', label: 'Checks' }],
   config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records' }, { id: 'env-vars', label: 'Env Variables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs' }],
   advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
   account:     [{ id: 'activity',    label: 'Activity' }],
@@ -525,8 +587,27 @@ const GCP_SIDEBAR = {
   cache:      [{ id: 'memorystore', label: 'Memorystore' }],
   async:      [{ id: 'tasks', label: 'Cloud Tasks' }, { id: 'scheduler', label: 'Cloud Scheduler' }],
   devops:     [{ id: 'build', label: 'Cloud Build' }],
-  observability: [{ id: 'monitoring', label: 'Cloud Monitoring' }, { id: 'logging', label: 'Cloud Logging' }],
   iam:        [{ id: 'iam', label: 'Service Accounts' }],
+}
+
+const OBSERVABILITY_OPTIONS = {
+  generic: [
+    { id: 'apm', labelKey: 'apm.applications' },
+  ],
+  aws: [
+    { id: 'apm', labelKey: 'apm.applications' },
+  ],
+  gcp: [
+    { id: 'apm', labelKey: 'apm.applications' },
+    { id: 'monitoring', label: 'Cloud Monitoring' },
+    { id: 'logging', label: 'Cloud Logging' },
+  ],
+  vercel: [
+    { id: 'apm', labelKey: 'apm.applications' },
+    { id: 'activity', label: 'Activity' },
+    { id: 'deployments', label: 'Deployments' },
+    { id: 'checks', label: 'Checks' },
+  ],
 }
 
 // ─── localStorage helpers ────────────────────────────────────────────────────
@@ -536,7 +617,7 @@ const LS = {
 }
 
 const pfPanelVisible  = ref(false)
-const activeProvider  = ref(LS.get('provider', 'kubernetes'))  // 'kubernetes' | 'aws' | 'gcp' | 'vercel'
+const activeProvider  = ref(LS.get('provider', 'kubernetes'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
@@ -548,6 +629,7 @@ const helmViewRef     = ref(null)
 const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
 const vercelViewRef   = ref(null)
+const observabilityViewRef = ref(null)
 const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
@@ -582,6 +664,10 @@ async function reloadActiveProvider() {
     }
     if (activeProvider.value === 'vercel') {
       await vercelViewRef.value?.reloadActiveTab?.({ background: true })
+      return
+    }
+    if (activeProvider.value === 'observability') {
+      await observabilityViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
     }
   } finally {
     autoRefreshPending = false
@@ -593,6 +679,35 @@ const gcpLocalConfigs  = ref([])
 const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
+const observabilityProvider = ref(LS.get('observabilityProvider', 'generic'))
+const observabilitySelections = reactive({
+  generic: 'apm',
+  aws: LS.get('observabilityAwsView', 'apm'),
+  gcp: LS.get('observabilityGcpView', 'apm'),
+  vercel: LS.get('observabilityVercelView', 'apm'),
+})
+const availableObservabilityProviders = computed(() => [
+  {
+    id: 'generic', label: t('observability.general'), icon: 'boxes',
+    description: t('observability.generalDescription'), available: true,
+  },
+  {
+    id: 'aws', label: 'AWS', icon: 'cloud', description: t('observability.awsDescription'),
+    available: envStore.awsProfiles.length > 0 || awsLocalProfiles.value.length > 0 || awsProfileId.value.startsWith('local:'),
+  },
+  {
+    id: 'gcp', label: 'GCP', icon: 'cloud-cog', description: t('observability.gcpDescription'),
+    available: envStore.gcpProfiles.length > 0 || gcpLocalConfigs.value.length > 0 || gcpProfileId.value.startsWith('local:'),
+  },
+  {
+    id: 'vercel', label: 'Vercel', icon: 'triangle', description: t('observability.vercelDescription'),
+    available: envStore.vercelProfiles.length > 0,
+  },
+].filter(provider => provider.available))
+const hasCloudConnections = computed(() => availableObservabilityProviders.value.length > 0)
+const currentObservabilityOptions = computed(() => OBSERVABILITY_OPTIONS[observabilityProvider.value] || [])
+const currentObservabilityProviderLabel = computed(() =>
+  availableObservabilityProviders.value.find(provider => provider.id === observabilityProvider.value)?.label || observabilityProvider.value)
 const selectedKubeKey = computed(() => {
   const row = selectedKubeResource.value?.row
   return row ? row.name + (row.namespace || '') : ''
@@ -603,6 +718,10 @@ watch(activeProvider,   v  => LS.set('provider',       v))
 watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
+watch(observabilityProvider, v => LS.set('observabilityProvider', v))
+watch(() => observabilitySelections.aws, v => LS.set('observabilityAwsView', v))
+watch(() => observabilitySelections.gcp, v => LS.set('observabilityGcpView', v))
+watch(() => observabilitySelections.vercel, v => LS.set('observabilityVercelView', v))
 
 // Sanear ids de perfil persistidos cuando la lista de perfiles cambia:
 // si el perfil activo fue eliminado (p.ej. desde el Env Manager) se limpia,
@@ -616,6 +735,15 @@ watch(() => envStore.profiles, (profiles) => {
   if (!awsProfileId.value) {
     const aws = profiles.filter(p => p.provider === 'aws')
     if (aws.length === 1) { awsProfileId.value = aws[0].id; awsStore.setActiveProfile(aws[0].id) }
+  }
+}, { deep: true })
+watch(availableObservabilityProviders, providers => {
+  if (!providers.length) {
+    if (activeProvider.value === 'observability') activeProvider.value = 'kubernetes'
+    return
+  }
+  if (!providers.some(provider => provider.id === observabilityProvider.value)) {
+    observabilityProvider.value = providers[0].id
   }
 }, { deep: true })
 watch(() => store.namespace, v => LS.set('kubeNs', v))
@@ -634,11 +762,22 @@ const modalData = reactive({
 })
 
 async function setProvider(p) {
+  if (p === 'observability' && !hasCloudConnections.value) return
   activeProvider.value = p
   if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
   if (p === 'vercel') { envStore.fetchProfiles() }
+  if (p === 'observability') selectObservabilityProvider(observabilityProvider.value)
+  nextTick(() => createIcons({ icons }))
+}
+
+function selectObservabilityProvider(provider) {
+  if (!availableObservabilityProviders.value.some(item => item.id === provider)) return
+  observabilityProvider.value = provider
+  if (provider === 'aws') onAwsProfileChange()
+  if (provider === 'gcp') onGcpProfileChange()
+  if (provider === 'vercel') onVercelProfileChange()
   nextTick(() => createIcons({ icons }))
 }
 
@@ -694,8 +833,8 @@ async function handleConnectionSave(payload) {
 
   const { name, category, provider, keys, meta } = payload
   const created = await envStore.createProfile({ name, category, provider, keys, meta })
-  modals.addConnection = false
   if (created) {
+    modals.addConnection = false
     if (provider === 'aws')    { awsProfileId.value    = created.id; awsStore.setActiveProfile(created.id) }
     if (provider === 'gcp')    { gcpProfileId.value    = created.id; gcpStore.setActiveProfile(created.id) }
     if (provider === 'vercel') { vercelProfileId.value = created.id; vercelStore.setActiveProfile(created.id) }
@@ -933,6 +1072,11 @@ onMounted(async () => {
   await store.loadResources()
   await pfStore.autoRestore()
   await envStore.fetchProfiles()
+  await Promise.all([loadAwsLocalProfiles(), loadGcpLocalConfigs()])
+  if (activeProvider.value === 'observability' && !hasCloudConnections.value) activeProvider.value = 'kubernetes'
+  if (hasCloudConnections.value && !availableObservabilityProviders.value.some(provider => provider.id === observabilityProvider.value)) {
+    observabilityProvider.value = availableObservabilityProviders.value[0].id
+  }
   // Restaurar perfil AWS guardado
   if (awsProfileId.value) {
     awsStore.setActiveProfile(awsProfileId.value)

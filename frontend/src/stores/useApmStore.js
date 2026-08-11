@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useApi } from '../composables/useApi'
 
 const RANGE_MS = {
@@ -12,6 +12,7 @@ const RANGE_MS = {
 
 export const useApmStore = defineStore('apm', () => {
   const { apiFetch } = useApi()
+  const activeProvider = ref('aws')
   const activeProfileId = ref(null)
   const applications = ref([])
   const selectedApplicationId = ref(null)
@@ -25,6 +26,9 @@ export const useApmStore = defineStore('apm', () => {
   const team = ref('')
   const loading = ref(false)
   const collecting = ref(false)
+  const analyzingTopology = ref(false)
+  const tracingProcess = ref(false)
+  const processTrace = ref(null)
   const error = ref(null)
 
   const selectedApplication = computed(() =>
@@ -40,7 +44,7 @@ export const useApmStore = defineStore('apm', () => {
   })
 
   function headers(json = false) {
-    if (!activeProfileId.value) throw new Error('No AWS profile selected')
+    if (!activeProfileId.value) throw new Error('No cloud profile selected')
     return {
       'X-Profile-Id': activeProfileId.value,
       ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -48,7 +52,7 @@ export const useApmStore = defineStore('apm', () => {
   }
 
   function request(path, options = {}) {
-    return apiFetch(`/api/observability/aws${path}`, options)
+    return apiFetch(`/api/observability/${activeProvider.value}${path}`, options)
   }
 
   function resetApplicationData() {
@@ -56,10 +60,12 @@ export const useApmStore = defineStore('apm', () => {
     topology.value = { application: null, resources: [], edges: [] }
     forecast.value = null
     series.value = {}
+    processTrace.value = null
   }
 
-  function setActiveProfile(profileId) {
-    if (activeProfileId.value === (profileId || null)) return
+  function setActiveProfile(profileId, provider = 'aws') {
+    if (activeProfileId.value === (profileId || null) && activeProvider.value === provider) return
+    activeProvider.value = provider
     activeProfileId.value = profileId || null
     applications.value = []
     selectedApplicationId.value = null
@@ -197,6 +203,66 @@ export const useApmStore = defineStore('apm', () => {
     })
   }
 
+  async function confirmDependency(applicationId, dependency) {
+    await request(`/applications/${applicationId}/edges`, {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({
+        sourceResourceId: dependency.sourceResourceId,
+        targetResourceId: dependency.targetResourceId,
+        relationType: dependency.relationType,
+      }),
+    })
+    await loadSelectedApplication()
+  }
+
+  async function analyzeCloudTopology(applicationId) {
+    analyzingTopology.value = true
+    error.value = null
+    try {
+      topology.value = await request(`/applications/${applicationId}/topology/analyze-cloud`, {
+        method: 'POST',
+        headers: headers(),
+      })
+      return topology.value.analysis
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      analyzingTopology.value = false
+    }
+  }
+
+  async function traceProcess(applicationId, query, { includeData = false } = {}) {
+    const value = String(query || '').trim()
+    const payload = value.includes(':execution:')
+      ? { executionArn: value }
+      : value.includes(':stateMachine:')
+        ? { stateMachineArn: value }
+        : { requestId: value }
+      payload.includeData = includeData
+    tracingProcess.value = true
+    error.value = null
+    try {
+      const recentExecutions = processTrace.value?.availableExecutions || []
+      const result = await request(`/applications/${applicationId}/process-traces`, {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify(payload),
+      })
+      if (payload.executionArn && recentExecutions.length && !result.availableExecutions?.length) {
+        result.availableExecutions = recentExecutions
+      }
+      processTrace.value = result
+      return processTrace.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      tracingProcess.value = false
+    }
+  }
+
   async function discoverCandidates(application, resources) {
     return request('/candidates', {
       method: 'POST',
@@ -216,6 +282,10 @@ export const useApmStore = defineStore('apm', () => {
       headers: headers(true),
       body: JSON.stringify({ region, stackNames }),
     })
+  }
+
+  async function loadKubernetesWorkloads() {
+    return request('/kubernetes-workloads', { headers: headers() })
   }
 
   async function updateThresholds(applicationId, thresholds) {
@@ -256,6 +326,7 @@ export const useApmStore = defineStore('apm', () => {
   }
 
   return {
+    activeProvider,
     activeProfileId,
     applications,
     selectedApplicationId,
@@ -273,6 +344,9 @@ export const useApmStore = defineStore('apm', () => {
     team,
     loading,
     collecting,
+    analyzingTopology,
+    tracingProcess,
+    processTrace,
     error,
     setActiveProfile,
     loadApplications,
@@ -285,12 +359,20 @@ export const useApmStore = defineStore('apm', () => {
     updateApplication,
     deleteApplication,
     addResource,
+    confirmDependency,
+    analyzeCloudTopology,
+    traceProcess,
     discoverCandidates,
     loadDeployments,
     previewDeploymentResources,
+    loadKubernetesWorkloads,
     updateThresholds,
     collectNow,
   }
 })
 
 export { RANGE_MS }
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useApmStore, import.meta.hot))
+}

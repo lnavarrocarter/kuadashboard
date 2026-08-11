@@ -125,12 +125,13 @@ function openCreate() { editingProfile.value = null; showModal.value = true }
 function openEdit(p)  { editingProfile.value = p;    showModal.value = true }
 
 async function handleSave({ name, category, provider, keys, meta }) {
+  let saved = null
   if (editingProfile.value) {
-    await envStore.updateProfile(editingProfile.value.id, { name, category, keys, meta })
+    saved = await envStore.updateProfile(editingProfile.value.id, { name, category, keys, meta })
   } else {
-    await envStore.createProfile({ name, category, provider, keys, meta })
+    saved = await envStore.createProfile({ name, category, provider, keys, meta })
   }
-  showModal.value = false
+  if (saved) showModal.value = false
 }
 
 function onImported() {

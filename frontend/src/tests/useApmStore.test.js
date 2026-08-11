@@ -31,6 +31,35 @@ describe('profile-scoped local reads', () => {
     expect(store.activeProfileId).toBe('local:other')
   })
 
+  it('resets state when the provider changes and uses its isolated route', async () => {
+    global.fetch = vi.fn((url) => {
+      expect(url).toContain('/api/observability/gcp/applications')
+      return response([])
+    })
+    store.setActiveProfile('shared-profile', 'aws')
+    store.applications = [{ id: 'aws-app' }]
+    store.setActiveProfile('shared-profile', 'gcp')
+
+    expect(store.applications).toEqual([])
+    expect(store.activeProvider).toBe('gcp')
+    await store.loadApplications()
+    expect(global.fetch).toHaveBeenCalledOnce()
+  })
+
+  it('loads provider-free applications from the local generic scope', async () => {
+    global.fetch = vi.fn((url, options) => {
+      expect(url).toContain('/api/observability/generic/applications')
+      expect(options.headers['X-Profile-Id']).toBe('local')
+      return response([])
+    })
+    store.setActiveProfile('local', 'generic')
+
+    await store.loadApplications()
+
+    expect(store.activeProvider).toBe('generic')
+    expect(global.fetch).toHaveBeenCalledOnce()
+  })
+
   it('refreshes only SQLite-backed GET endpoints', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(options.headers['X-Profile-Id']).toBe('local:dev')
@@ -104,5 +133,60 @@ describe('explicit writes', () => {
     const thresholds = await store.updateThresholds('app-a', { errorRatePercent: 2 })
     expect(thresholds.durationMs).toBe(750)
     expect(store.applications[0].thresholds.errorRatePercent).toBe(2)
+  })
+
+  it('replaces topology with explicit cloud analysis without confirming suggestions', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toContain('/applications/app-a/topology/analyze-cloud')
+      expect(options.method).toBe('POST')
+      return response({
+        application: { id: 'app-a' }, resources: [], edges: [],
+        analysis: { suggestions: [{ confirmed: false, relationType: 'invokes' }] },
+      })
+    })
+    store.setActiveProfile('local:prod')
+    store.selectedApplicationId = 'app-a'
+
+    const analysis = await store.analyzeCloudTopology('app-a')
+
+    expect(analysis.suggestions[0].confirmed).toBe(false)
+    expect(store.topology.edges).toEqual([])
+  })
+
+  it('classifies Step Function and execution ARNs before tracing', async () => {
+    const bodies = []
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toContain('/applications/app-a/process-traces')
+      bodies.push(JSON.parse(options.body))
+      return response({ traces: [] })
+    })
+    store.setActiveProfile('local:prod')
+
+    await store.traceProcess('app-a', 'arn:aws:states:us-east-1:123:stateMachine:orders')
+    await store.traceProcess('app-a', 'arn:aws:states:us-east-1:123:execution:orders:run-id', { includeData: true })
+
+    expect(bodies).toEqual([
+      { stateMachineArn: 'arn:aws:states:us-east-1:123:stateMachine:orders', includeData: false },
+      { executionArn: 'arn:aws:states:us-east-1:123:execution:orders:run-id', includeData: true },
+    ])
+  })
+
+  it('preserves recent executions while opening a selected trace', async () => {
+    global.fetch = vi.fn()
+      .mockImplementationOnce(() => response({
+        traces: [{ executionArn: 'arn:execution:first' }],
+        availableExecutions: [{ executionArn: 'arn:execution:first' }, { executionArn: 'arn:execution:second' }],
+      }))
+      .mockImplementationOnce(() => response({
+        traces: [{ executionArn: 'arn:execution:second' }], availableExecutions: [], dataIncluded: true,
+      }))
+    store.setActiveProfile('local:prod')
+
+    await store.traceProcess('app-a', 'arn:aws:states:us-east-1:123:stateMachine:orders')
+    await store.traceProcess('app-a', 'arn:execution:second', { includeData: true })
+
+    expect(store.processTrace.availableExecutions).toHaveLength(2)
+    expect(store.processTrace.traces[0].executionArn).toBe('arn:execution:second')
+    expect(store.processTrace.dataIncluded).toBe(true)
   })
 })

@@ -21,8 +21,6 @@
         <button class="btn sm" @click="reloadActiveTab" :disabled="tabLoading" title="Refresh"><i data-lucide="refresh-cw"></i></button>
       </div>
 
-           TAB PANELS
-
       <ApmObservabilityView
         v-show="activeTab === 'apm'"
         ref="apmViewRef"
@@ -1795,8 +1793,6 @@
       </div>
 
     </template>
-
-         MODALS
 
     <!-- ── Create S3 Bucket Modal ─────────────────────────────────────────── -->
     <div v-if="createS3Modal.open" class="modal-overlay" @click.self="createS3Modal.open = false">

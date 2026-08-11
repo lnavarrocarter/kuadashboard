@@ -65,6 +65,12 @@
             </div>
             <div class="application-actions">
               <span :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
+              <button class="btn sm btn-icon" :title="t('apm.editApplication')" @click="openEditApplication">
+                <i data-lucide="pencil"></i>
+              </button>
+              <button class="btn sm btn-icon danger" :title="t('apm.deleteApplication')" @click="deleteApplicationOpen = true">
+                <i data-lucide="trash-2"></i>
+              </button>
               <button class="btn sm btn-icon" :title="t('apm.configureThresholds')" @click="openThresholds">
                 <i data-lucide="sliders-horizontal"></i>
               </button>
@@ -87,6 +93,7 @@
           <div class="apm-view-tabs">
             <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'">{{ t('apm.overview') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
+            <button v-if="provider === 'aws'" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
             <button :class="{ active: activeView === 'resources' }" @click="activeView = 'resources'">{{ t('apm.resources') }}</button>
           </div>
 
@@ -115,7 +122,19 @@
             v-else-if="activeView === 'topology'"
             :topology="store.topology"
             :selected-resource-id="selectedResourceId"
+            :can-analyze-cloud="provider === 'aws'"
+            :analyzing-cloud="store.analyzingTopology"
             @select="selectResource"
+            @confirm-dependency="confirmDependency"
+            @analyze-cloud="analyzeCloudTopology"
+            @add-cloud-resource="addCloudResource"
+          />
+
+          <ApmProcessTrace
+            v-else-if="activeView === 'traces'"
+            :result="store.processTrace"
+            :loading="store.tracingProcess"
+            @trace="traceProcess"
           />
 
           <section v-else class="resource-table-wrap">
@@ -138,7 +157,9 @@
 
     <ApmSetupModal
       :show="setupOpen"
+      :provider="provider"
       :profile-id="profileId"
+      :platform-resources="platformResources"
       :lambdas="lambdas"
       :ecs-services="ecsServices"
       :event-bridge-rules="eventBridgeRules"
@@ -147,6 +168,39 @@
       @close="setupOpen = false"
       @created="onCreated"
     />
+
+    <BaseModal :show="editApplicationOpen" @close="editApplicationOpen = false">
+      <template #title><i data-lucide="pencil"></i> {{ t('apm.editApplication') }}</template>
+      <form class="application-editor" @submit.prevent="saveApplication">
+        <label>{{ t('apm.name') }}<input v-model.trim="applicationForm.name" class="ctrl-input" required /></label>
+        <label>{{ t('apm.environment') }}<input v-model.trim="applicationForm.environment" class="ctrl-input" /></label>
+        <label>{{ t('apm.team') }}<input v-model.trim="applicationForm.team" class="ctrl-input" /></label>
+        <label class="application-polling"><input v-model="applicationForm.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
+        <div v-if="applicationError" class="alert-error">{{ applicationError }}</div>
+      </form>
+      <template #footer>
+        <button class="btn" @click="editApplicationOpen = false">{{ t('action.cancel') }}</button>
+        <button class="btn primary" :disabled="savingApplication || !applicationForm.name" @click="saveApplication">
+          <i :data-lucide="savingApplication ? 'loader-2' : 'check'"></i>
+          {{ savingApplication ? t('apm.savingApplication') : t('action.save') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal :show="deleteApplicationOpen" @close="deleteApplicationOpen = false">
+      <template #title><i data-lucide="trash-2"></i> {{ t('apm.deleteApplication') }}</template>
+      <div class="delete-application-copy">
+        <p>{{ t('apm.deleteApplicationDescription', { name: store.selectedApplication?.name || '' }) }}</p>
+        <small>{{ t('apm.deleteApplicationWarning') }}</small>
+      </div>
+      <template #footer>
+        <button class="btn" @click="deleteApplicationOpen = false">{{ t('action.cancel') }}</button>
+        <button class="btn danger" :disabled="deletingApplication" @click="deleteApplication">
+          <i :data-lucide="deletingApplication ? 'loader-2' : 'trash-2'"></i>
+          {{ deletingApplication ? t('apm.deletingApplication') : t('action.delete') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <BaseModal :show="confirmCollect" @close="confirmCollect = false">
       <template #title><i data-lucide="cloud-download"></i> {{ t('apm.collectTitle') }}</template>
@@ -208,10 +262,13 @@ import { useApmStore } from '../../../stores/useApmStore'
 import { useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
+import ApmProcessTrace from './ApmProcessTrace.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
 
 const props = defineProps({
+  provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
+  platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
   eventBridgeRules: { type: Array, default: () => [] },
@@ -223,6 +280,12 @@ const store = useApmStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
 const setupOpen = ref(false)
+const editApplicationOpen = ref(false)
+const deleteApplicationOpen = ref(false)
+const savingApplication = ref(false)
+const deletingApplication = ref(false)
+const applicationError = ref('')
+const applicationForm = reactive({ name: '', environment: '', team: '', pollingEnabled: false })
 const confirmCollect = ref(false)
 const thresholdsOpen = ref(false)
 const savingThresholds = ref(false)
@@ -329,6 +392,47 @@ async function collectNow() {
   await loadCharts()
 }
 
+function openEditApplication() {
+  const application = store.selectedApplication
+  if (!application) return
+  Object.assign(applicationForm, {
+    name: application.name,
+    environment: application.environment || '',
+    team: application.team || '',
+    pollingEnabled: !!application.pollingEnabled,
+  })
+  applicationError.value = ''
+  editApplicationOpen.value = true
+}
+
+async function saveApplication() {
+  if (!store.selectedApplicationId || !applicationForm.name || savingApplication.value) return
+  savingApplication.value = true
+  applicationError.value = ''
+  try {
+    await store.updateApplication(store.selectedApplicationId, { ...applicationForm })
+    await store.loadSelectedApplication()
+    editApplicationOpen.value = false
+  } catch (requestError) {
+    applicationError.value = requestError.message
+  } finally {
+    savingApplication.value = false
+  }
+}
+
+async function deleteApplication() {
+  const applicationId = store.selectedApplicationId
+  if (!applicationId || deletingApplication.value) return
+  deletingApplication.value = true
+  try {
+    await store.deleteApplication(applicationId)
+    deleteApplicationOpen.value = false
+    await loadCharts()
+  } finally {
+    deletingApplication.value = false
+  }
+}
+
 function openThresholds() {
   const current = store.selectedApplication?.thresholds || {}
   for (const threshold of thresholdDefinitions.value) {
@@ -377,16 +481,46 @@ function selectResource(resource) {
   selectedResourceId.value = resource?.id || ''
 }
 
+async function confirmDependency(dependency) {
+  if (!store.selectedApplicationId) return
+  await store.confirmDependency(store.selectedApplicationId, dependency)
+  if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
+  renderIcons()
+}
+
+async function analyzeCloudTopology() {
+  if (!store.selectedApplicationId) return
+  await store.analyzeCloudTopology(store.selectedApplicationId)
+  renderIcons()
+}
+
+async function addCloudResource(reference) {
+  if (!store.selectedApplicationId || !reference?.candidate) return
+  await store.addResource(store.selectedApplicationId, reference.candidate)
+  await store.analyzeCloudTopology(store.selectedApplicationId)
+  renderIcons()
+}
+
+async function traceProcess(query, includeData) {
+  if (!store.selectedApplicationId) return
+  await store.traceProcess(store.selectedApplicationId, query, { includeData })
+  renderIcons()
+}
+
 function renderIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
 watch(() => props.profileId, async profileId => {
-  store.setActiveProfile(profileId)
+  store.setActiveProfile(profileId, props.provider)
   if (profileId) await refreshLocal()
 }, { immediate: true })
+watch(() => props.provider, async provider => {
+  store.setActiveProfile(props.profileId, provider)
+  if (props.profileId) await refreshLocal()
+})
 watch(activeView, () => mainEl.value?.scrollTo({ top: 0 }))
-watch([activeView, setupOpen, confirmCollect, thresholdsOpen], renderIcons)
+watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen], renderIcons)
 onMounted(renderIcons)
 defineExpose({ refreshLocal })
 </script>
@@ -418,6 +552,12 @@ defineExpose({ refreshLocal })
 .application-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .application-copy strong, .application-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .application-copy strong { font-size: 11px; }
+.application-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.application-editor label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 10px; }
+.application-editor .application-polling { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+.application-editor .alert-error { grid-column: 1 / -1; }
+.delete-application-copy p { margin: 0 0 8px; }
+.delete-application-copy small { color: var(--text-dim); }
 .application-copy small { color: var(--text-dim); font-size: 9px; }
 .application-row > svg { width: 13px; color: #3fb950; }
 .application-empty { display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--text-dim); font-size: 10px; padding: 28px 8px; }

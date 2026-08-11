@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.11.2 (2026-08-11)
+
+### Multicloud and Provider-free APM
+
+- Extended application observability from AWS to isolated AWS, GCP, and Vercel scopes, plus a provider-free **General** scope for Kubernetes applications.
+- Moved Observability into the primary navigation and added application editing, deletion, resource management, and provider-aware setup flows.
+- Added explicit-column SQLite migrations for provider-scoped applications and resources, preserving existing APM data safely.
+- Added bilingual credential setup guides for AWS, GCP, Vercel, and Kubernetes, with improved profile persistence and lazy provider loading.
+
+### Explainable Topology Intelligence
+
+- Added a local structural evaluator with topology score, connected coverage, isolated-resource detection, findings, and explainable dependency suggestions.
+- Generic `related_to` relationships are now reported separately and do not count as operational causality.
+- Added explicit, read-only AWS definition analysis for associated Step Functions.
+- ASL analysis recognizes direct and optimized Lambda calls, nested Step Functions, SQS sends, ECS tasks, and S3 SDK operations.
+- External ASL references remain suggestions: users must add the resource, reanalyze, and explicitly confirm the dependency. KUA never creates causal edges automatically.
+
+### Process Requests and Execution Traces
+
+- Added an AWS **Traces** tab that accepts a request/correlation ID, execution ARN, or associated Step Function ARN.
+- Pasting a Step Function ARN lists up to 10 recent executions and traces the latest run; any listed execution can then be selected directly.
+- Step Functions execution history provides an ordered timeline with Lambda, ECS, S3, nested workflow, status, duration, and failure evidence.
+- Added an explicit **Show sanitized request/response** option for execution-level and per-step inputs, parameters, outputs, errors, and causes.
+- Common credential and personal-data fields are redacted, large strings/arrays are bounded, event payloads are requested only on demand, and trace data is never persisted.
+- All trace and topology reads remain scoped to associated resources and consume the existing per-profile AWS request budget. KUA does not invoke production workloads or enable logging automatically.
+
+### Vercel and Reliability Fixes
+
+- Updated Vercel API paths and versions, preserved upstream error details, and supported both current and legacy Cron response shapes.
+- Corrected provider-specific copy, profile handling, environment management behavior, and resource presentation across the multicloud views.
+- Added focused backend and frontend coverage for migrations, scoping, ASL extraction, topology analysis, request tracing, sanitization, Vercel compatibility, and profile workflows.
+
 ## v1.11.0 (2026-08-06)
 
 ### Local Application Observability

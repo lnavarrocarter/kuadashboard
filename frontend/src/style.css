@@ -206,6 +206,12 @@ input, select, textarea { font: inherit; color: var(--text); }
   color: #fff;
 }
 .provider-tab.active i, .provider-tab.active svg { color: #fff; }
+.provider-tab:disabled {
+  cursor: not-allowed;
+  opacity: .38;
+  background: transparent;
+  color: var(--text-dim);
+}
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 .layout {
@@ -246,6 +252,40 @@ input, select, textarea { font: inherit; color: var(--text); }
 }
 .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
 .sidebar-item.active { background: var(--bg-sel); color: #fff; font-weight: 500; }
+
+.observability-provider-tab {
+  width: calc(100% - 16px);
+  min-height: 48px;
+  margin: 3px 8px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+}
+.observability-provider-tab:hover { background: var(--bg-hover); color: var(--text); }
+.observability-provider-tab.active {
+  border-color: var(--accent);
+  background: var(--bg-sel);
+  color: #fff;
+}
+.observability-provider-tab svg { width: 16px; height: 16px; }
+.observability-provider-tab span { min-width: 0; }
+.observability-provider-tab strong,
+.observability-provider-tab small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.observability-provider-tab strong { font-size: 12px; }
+.observability-provider-tab small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.observability-provider-tab.active small { color: rgba(255,255,255,.72); }
 
 /* Connections section header with inline + button */
 .sidebar-title-action {

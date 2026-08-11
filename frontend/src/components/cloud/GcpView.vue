@@ -9,8 +9,16 @@
 
     <template v-else>
 
+      <ApmObservabilityView
+        v-show="activeTab === 'apm'"
+        ref="apmViewRef"
+        provider="gcp"
+        :profile-id="selectedProfileId"
+        :platform-resources="apmPlatformResources"
+      />
+
       <!-- Toolbar -->
-      <div class="aws-toolbar">
+      <div v-if="activeTab !== 'apm'" class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" placeholder="Filter..." />
         <span class="text-dim" style="font-size:12px">
           <template v-if="currentTab.loading">Loading...</template>
@@ -20,7 +28,7 @@
       </div>
 
       <!-- Permission denied banner -->
-      <div v-if="currentTab.error" class="api-disabled-banner">
+      <div v-if="activeTab !== 'apm' && currentTab.error" class="api-disabled-banner">
         <span>{{ currentTab.error }}</span>
         <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank"
            class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0">
@@ -1874,6 +1882,7 @@ import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
 import GcsBrowser       from './GcsBrowser.vue'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
+import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'cloudrun' },
@@ -1889,6 +1898,7 @@ const { apiFetch } = useApi()
 const selectedProfileId  = ref(gcpStore.activeProfileId || '')
 const localConfigs       = ref([])
 const connectingCluster  = ref(null)
+const apmViewRef          = ref(null)
 
 onMounted(async () => {
   envStore.fetchProfiles()
@@ -1910,6 +1920,7 @@ function onProfileChange() {
 }
 
 const TABS = [
+  { id: 'apm',         label: 'Applications' },
   { id: 'cloudrun',    label: 'Cloud Run' },
   { id: 'gke',         label: 'GKE' },
   { id: 'vms',         label: 'Compute VMs' },
@@ -1939,10 +1950,14 @@ const TABS = [
 ]
 
 const activeTab = ref('cloudrun')
-const loaded    = reactive({ cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
+const loaded    = reactive({ apm: false, cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
 const search    = ref('')
 
 const fetchMap = {
+  apm:         async () => {
+    await Promise.allSettled([gcpStore.fetchCloudRunServices(), gcpStore.fetchFunctions()])
+    await apmViewRef.value?.refreshLocal?.()
+  },
   cloudrun:    () => gcpStore.fetchCloudRunServices(),
   gke:         () => gcpStore.fetchGkeClusters(),
   vms:         () => gcpStore.fetchVMs(),
@@ -1989,7 +2004,7 @@ defineExpose({ reloadActiveTab })
 async function loadAllTabs() {
   gcpStore.setActiveProfile(selectedProfileId.value)
   Object.keys(loaded).forEach(k => { loaded[k] = false })
-  await Promise.allSettled(TABS.map(t => loadTab(t.id)))
+  await loadTab(activeTab.value)
 }
 
 function switchTab(id) {
@@ -2002,7 +2017,7 @@ watch(() => props.activeService, (newTab) => {
   if (newTab && newTab !== activeTab.value) switchTab(newTab)
 }, { immediate: true })
 
-const currentTab = computed(() => gcpStore.tabs[activeTab.value])
+const currentTab = computed(() => gcpStore.tabs[activeTab.value] || { data: [], loading: false, error: null })
 function tabCount(id)    { return gcpStore.tabs[id]?.data?.length ?? 0 }
 function tabHasError(id) { return !!gcpStore.tabs[id]?.error }
 
@@ -2018,6 +2033,16 @@ const filteredVms        = computed(() => filterRows(gcpStore.tabs.vms.data))
 const filteredSql        = computed(() => filterRows(gcpStore.tabs.sql.data))
 const filteredStorage    = computed(() => filterRows(gcpStore.tabs.storage.data))
 const filteredFunctions  = computed(() => filterRows(gcpStore.tabs.functions.data))
+const apmPlatformResources = computed(() => [
+  ...gcpStore.tabs.cloudrun.data.map(service => ({
+    type: 'gcp-cloud-run', key: `${service.region}/${service.name}`, name: service.name,
+    service: service.region, kind: 'Cloud Run Service',
+  })),
+  ...gcpStore.tabs.functions.data.map(fn => ({
+    type: 'gcp-function', key: `${fn.location}/${fn.name}`, name: fn.name,
+    service: fn.location, kind: `Cloud Function ${fn.runtime || ''}`.trim(),
+  })),
+])
 const filteredPubSub     = computed(() => filterRows(gcpStore.tabs.pubsub.data))
 const filteredSecrets    = computed(() => filterRows(gcpStore.tabs.secrets.data))
 const filteredArtifact   = computed(() => filterRows(gcpStore.tabs.artifact.data))

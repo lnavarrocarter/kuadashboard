@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.11.2 (2026-08-11)
+
+### APM multicloud y sin proveedor
+
+- Se extendió la observabilidad de aplicaciones desde AWS a ámbitos aislados para AWS, GCP y Vercel, más un ámbito **General** sin proveedor para aplicaciones Kubernetes.
+- Observabilidad ahora forma parte de la navegación principal e incluye edición, eliminación, gestión de recursos y configuración según el proveedor.
+- Se agregaron migraciones SQLite por columnas explícitas para aplicaciones y recursos por proveedor, conservando de forma segura los datos APM existentes.
+- Nuevas guías bilingües de credenciales para AWS, GCP, Vercel y Kubernetes, con persistencia de perfiles corregida y carga diferida por proveedor.
+
+### Inteligencia de topología explicable
+
+- Nuevo evaluador estructural local con puntuación, cobertura conectada, detección de recursos aislados, hallazgos y sugerencias de dependencia explicables.
+- Las relaciones genéricas `related_to` se informan por separado y no cuentan como causalidad operacional.
+- Nuevo análisis AWS explícito y de solo lectura para las definiciones de Step Functions asociadas.
+- El análisis ASL reconoce invocaciones Lambda directas y optimizadas, subflujos Step Functions, envíos SQS, tareas ECS y operaciones SDK de S3.
+- Las referencias ASL externas siguen siendo sugerencias: el usuario debe agregar el recurso, analizar nuevamente y confirmar la dependencia. KUA nunca crea relaciones causales automáticamente.
+
+### Requests de procesos y trazas de ejecución
+
+- Nueva pestaña AWS **Trazas** que acepta request/correlation ID, ARN de ejecución o ARN de una Step Function asociada.
+- Al pegar el ARN de una Step Function se muestran hasta 10 ejecuciones recientes y se traza la última; luego se puede seleccionar directamente cualquier ejecución de la lista.
+- El historial de Step Functions genera un timeline ordenado con Lambda, ECS, S3, subflujos, estados, duración y evidencia de fallos.
+- Nueva opción explícita **Mostrar request/response sanitizados** para entradas, parámetros, salidas, errores y causas de la ejecución y de cada paso.
+- Los campos habituales de credenciales y datos personales se ocultan, strings y arrays grandes se limitan, los payloads se solicitan sólo bajo demanda y las trazas nunca se persisten.
+- Todas las lecturas de trazas y topología permanecen limitadas a recursos asociados y consumen el presupuesto AWS por perfil. KUA no invoca workloads productivos ni habilita logging automáticamente.
+
+### Correcciones Vercel y estabilidad
+
+- Se actualizaron rutas y versiones API de Vercel, se conservaron errores upstream y se soportan las respuestas Cron actuales y antiguas.
+- Se corrigieron textos por proveedor, manejo de perfiles, comportamiento de Env Manager y presentación de recursos en las vistas multicloud.
+- Se agregó cobertura backend y frontend para migraciones, scoping, extracción ASL, evaluación de topología, trazas, sanitización, compatibilidad Vercel y perfiles.
+
 ## v1.11.0 (2026-08-06)
 
 ### Observabilidad local de aplicaciones

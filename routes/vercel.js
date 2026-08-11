@@ -50,6 +50,19 @@ const router = express.Router();
 const VERCEL_API   = 'https://api.vercel.com';
 const VERCEL_OAUTH = 'https://vercel.com/api/oauth';
 const DEFAULT_VERCEL_OAUTH_REDIRECT_URI = 'https://lnavarrocarter.github.io/kuadashboard/vercel-callback';
+const VERCEL_ENDPOINTS = Object.freeze({
+  projects: '/v10/projects',
+  project: projectId => `/v9/projects/${encodeURIComponent(projectId)}`,
+  deployments: '/v7/deployments',
+  events: '/v3/events',
+  deploymentFiles: deploymentId => `/v6/deployments/${encodeURIComponent(deploymentId)}/files`,
+  deploymentEvents: deploymentId => `/v3/deployments/${encodeURIComponent(deploymentId)}/events`,
+});
+
+function cronDefinitions(project) {
+  if (Array.isArray(project?.crons)) return project.crons;
+  return Array.isArray(project?.crons?.definitions) ? project.crons.definitions : [];
+}
 
 // In-memory PKCE / state store (per-process, short-lived)
 const oauthStates = new Map(); // state → { createdAt, profileName }
@@ -100,6 +113,7 @@ async function resolveVercelAuth(profileId) {
  */
 async function vercelFetch(path, token, options = {}) {
   const url = `${VERCEL_API}${path}`;
+  const method = options.method || 'GET';
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -112,7 +126,13 @@ async function vercelFetch(path, token, options = {}) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const msg  = body?.error?.message || body?.message || res.statusText;
-    throw Object.assign(new Error(`Vercel API error: ${msg}`), { status: res.status });
+    const code = body?.error?.code || body?.code || null;
+    const diagnostic = code ? ` (${code})` : '';
+    throw Object.assign(new Error(`Vercel API${diagnostic} ${method} ${path}: ${msg}`), {
+      status: res.status,
+      code,
+      upstreamPath: path,
+    });
   }
 
   const ct = res.headers.get('content-type') || '';
@@ -156,13 +176,18 @@ router.get('/projects', async (req, res) => {
   if (!profileId) return;
   try {
     const { token, teamId } = await resolveVercelAuth(profileId);
-    const qs = withTeam('/v9/projects?limit=100', teamId);
+    const qs = withTeam(`${VERCEL_ENDPOINTS.projects}?limit=100`, teamId);
     const data = await vercelFetch(qs, token);
-    res.json((data.projects || []).map(p => ({
+    const projects = Array.isArray(data) ? data : (data.projects || []);
+    res.json(projects.map(p => ({
       id:          p.id,
       name:        p.name,
       framework:   p.framework,
       nodeVersion: p.nodeVersion,
+      region:      p.serverlessFunctionRegion || p.resourceConfig?.functionDefaultRegions?.[0] || null,
+      paused:      !!p.paused,
+      analyticsEnabled: !!p.analytics?.enabledAt,
+      speedInsightsEnabled: !!p.speedInsights?.id,
       updatedAt:   p.updatedAt,
       createdAt:   p.createdAt,
       latestDeployments: (p.latestDeployments || []).slice(0, 1).map(d => ({
@@ -187,7 +212,7 @@ router.get('/projects/:projectId/deployments', async (req, res) => {
     const { projectId } = req.params;
     const limit  = Math.min(parseInt(req.query.limit, 10) || 20, 100);
     const target = req.query.target || '';  // 'production' | 'preview' | ''
-    let qs = `/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=${limit}`;
+    let qs = `${VERCEL_ENDPOINTS.deployments}?projectId=${encodeURIComponent(projectId)}&limit=${limit}`;
     if (target) qs += `&target=${encodeURIComponent(target)}`;
     qs = withTeam(qs, teamId);
 
@@ -204,6 +229,13 @@ router.get('/projects/:projectId/deployments', async (req, res) => {
       creator:    d.creator ? { email: d.creator.email, username: d.creator.username } : null,
       meta:       d.meta || {},
       source:     d.source,
+      inspectorUrl: d.inspectorUrl || null,
+      errorCode:    d.errorCode || null,
+      errorMessage: d.errorMessage || null,
+      checksState: d.checksState || null,
+      checksConclusion: d.checksConclusion || null,
+      readySubstate: d.readySubstate || null,
+      rollbackCandidate: d.isRollbackCandidate ?? null,
     })));
   } catch (err) { handleErr(res, err); }
 });
@@ -264,21 +296,17 @@ router.get('/deployments/:deploymentId/functions', async (req, res) => {
   try {
     const { token, teamId } = await resolveVercelAuth(profileId);
     const { deploymentId } = req.params;
-    const qs = withTeam(`/v13/deployments/${encodeURIComponent(deploymentId)}/files`, teamId);
+    const qs = withTeam(VERCEL_ENDPOINTS.deploymentFiles(deploymentId), teamId);
     const data = await vercelFetch(qs, token);
 
-    // Filter to serverless/edge function files
     const files = Array.isArray(data) ? data : (data.files || []);
-    const fns = files.filter(f =>
-      f.type === 'lambda' || f.type === 'edge' ||
-      (f.name && (f.name.includes('/api/') || f.name.endsWith('.js') || f.name.endsWith('.ts')))
-    );
-    res.json(fns.map(f => ({
+    res.json(files.map(f => ({
       name:   f.name,
       type:   f.type,
       uid:    f.uid,
       mode:   f.mode,
       symlink: f.symlink,
+      size:   f.size ?? null,
     })));
   } catch (err) { handleErr(res, err); }
 });
@@ -384,7 +412,7 @@ router.get('/deployments/:deploymentId/logs', async (req, res) => {
   try {
     const { token, teamId } = await resolveVercelAuth(profileId);
     const { deploymentId } = req.params;
-    let qs = `/v2/deployments/${encodeURIComponent(deploymentId)}/events?direction=forward&follow=1`;
+    let qs = `${VERCEL_ENDPOINTS.deploymentEvents(deploymentId)}?direction=forward&follow=1`;
     qs = withTeam(qs, teamId);
 
     const upstream = await fetch(`${VERCEL_API}${qs}`, {
@@ -433,7 +461,7 @@ router.get('/events', async (req, res) => {
   try {
     const { token, teamId } = await resolveVercelAuth(profileId);
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
-    let qs = withTeam(`/v5/events?limit=${limit}`, teamId);
+    let qs = withTeam(`${VERCEL_ENDPOINTS.events}?limit=${limit}`, teamId);
     const data = await vercelFetch(qs, token);
     const events = Array.isArray(data) ? data : (data.events || []);
     res.json(events.map(e => ({
@@ -562,9 +590,9 @@ router.get('/projects/:projectId/cron', async (req, res) => {
   try {
     const { token, teamId } = await resolveVercelAuth(profileId);
     const { projectId } = req.params;
-    let qs = withTeam(`/v1/projects/${encodeURIComponent(projectId)}/cron`, teamId);
+    const qs = withTeam(VERCEL_ENDPOINTS.project(projectId), teamId);
     const data = await vercelFetch(qs, token);
-    const jobs = Array.isArray(data) ? data : (data.crons || data.jobs || []);
+    const jobs = cronDefinitions(data);
     res.json(jobs.map(j => ({
       path:      j.path,
       schedule:  j.schedule,
@@ -700,3 +728,6 @@ router.post('/oauth/callback', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.VERCEL_ENDPOINTS = VERCEL_ENDPOINTS;
+module.exports.vercelFetch = vercelFetch;
+module.exports.cronDefinitions = cronDefinitions;

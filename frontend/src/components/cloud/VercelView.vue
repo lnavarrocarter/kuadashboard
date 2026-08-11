@@ -8,11 +8,18 @@
     </div>
 
     <template v-else>
+      <ApmObservabilityView
+        v-if="activeService === 'apm'"
+        ref="apmViewRef"
+        provider="vercel"
+        :profile-id="vercelStore.activeProfileId"
+        :platform-resources="apmPlatformResources"
+      />
       <!-- Error banner -->
-      <div v-if="vercelStore.error" class="alert-error">{{ vercelStore.error }}</div>
+      <div v-if="activeService !== 'apm' && vercelStore.error" class="alert-error">{{ vercelStore.error }}</div>
 
       <!-- Toolbar -->
-      <div class="aws-toolbar">
+      <div v-if="activeService !== 'apm'" class="aws-toolbar">
         <input
           v-model="search"
           class="ctrl-input aws-search"
@@ -40,6 +47,8 @@
             <th>{{ t('vercel.col.latestState') }}</th>
             <th>{{ t('vercel.col.latestUrl') }}</th>
             <th>{{ t('vercel.col.repo') }}</th>
+            <th>{{ t('vercel.col.runtime') }}</th>
+            <th>{{ t('vercel.col.insights') }}</th>
             <th>{{ t('vercel.col.updated') }}</th>
             <th>{{ t('vercel.col.actions') }}</th>
           </tr></thead>
@@ -75,6 +84,15 @@
                 <span v-else class="text-dim">—</span>
               </td>
               <td class="text-dim">{{ p.link?.repo || '—' }}</td>
+              <td class="text-dim">
+                <div>{{ p.nodeVersion || '—' }}</div>
+                <small>{{ p.region || '—' }}</small>
+              </td>
+              <td>
+                <span v-if="p.analyticsEnabled" class="capability-dot">Analytics</span>
+                <span v-if="p.speedInsightsEnabled" class="capability-dot">Speed</span>
+                <span v-if="!p.analyticsEnabled && !p.speedInsightsEnabled" class="text-dim">—</span>
+              </td>
               <td class="text-dim" style="white-space:nowrap">{{ p.updatedAt ? formatDate(p.updatedAt) : '—' }}</td>
               <td>
                 <div class="row-actions" @click.stop>
@@ -124,6 +142,7 @@
             <thead><tr>
               <th>{{ t('vercel.col.deploymentId') }}</th>
               <th>{{ t('vercel.col.state') }}</th>
+              <th>{{ t('vercel.col.diagnostics') }}</th>
               <th>{{ t('vercel.col.target') }}</th>
               <th>{{ t('vercel.col.url') }}</th>
               <th>{{ t('vercel.col.creator') }}</th>
@@ -137,6 +156,17 @@
                   <div class="text-dim mono-xs">{{ d.id }}</div>
                 </td>
                 <td><span :class="stateClass(d.state)">{{ d.state }}</span></td>
+                <td>
+                  <div v-if="d.errorCode || d.errorMessage" class="deployment-diagnostic" :title="d.errorMessage">
+                    <strong>{{ d.errorCode || t('vercel.deploymentError') }}</strong>
+                    <small>{{ d.errorMessage }}</small>
+                  </div>
+                  <div v-else class="deployment-health">
+                    <span v-if="d.readySubstate">{{ d.readySubstate }}</span>
+                    <span v-if="d.checksConclusion" :class="conclusionClass(d.checksConclusion)">{{ d.checksConclusion }}</span>
+                    <span v-if="!d.readySubstate && !d.checksConclusion" class="text-dim">—</span>
+                  </div>
+                </td>
                 <td>
                   <span :class="d.target === 'production' ? 'badge-prod' : 'badge-preview'">
                     {{ d.target || 'preview' }}
@@ -156,6 +186,9 @@
                 <td class="text-dim" style="white-space:nowrap">{{ d.createdAt ? formatDate(d.createdAt) : '—' }}</td>
                 <td>
                   <div class="row-actions">
+                    <a v-if="d.inspectorUrl" class="btn sm" :href="d.inspectorUrl" target="_blank" rel="noopener noreferrer">
+                      {{ t('vercel.action.inspect') }}
+                    </a>
                     <button class="btn sm" @click="openLogs(d)">{{ t('vercel.action.logs') }}</button>
                     <button class="btn sm" @click="viewFunctions(d)">{{ t('vercel.action.functions') }}</button>
                     <button
@@ -256,7 +289,7 @@
         </template>
       </div>
 
-      <!-- ── Functions ────────────────────────────────────────────────────── -->
+      <!-- ── Deployment Files ─────────────────────────────────────────────── -->
       <div v-show="activeService === 'functions'" class="tab-panel">
         <div v-if="!selectedDeploymentForFunctions" class="empty-row">{{ t('vercel.functions.selectDeployment') }}</div>
         <template v-else>
@@ -270,9 +303,10 @@
           </div>
           <table v-else class="cloud-table">
             <thead><tr>
-              <th>{{ t('vercel.col.functionName') }}</th>
+              <th>{{ t('vercel.col.fileName') }}</th>
               <th>{{ t('vercel.col.type') }}</th>
               <th>{{ t('vercel.col.mode') }}</th>
+              <th>{{ t('vercel.col.size') }}</th>
             </tr></thead>
             <tbody>
               <tr v-for="f in filteredFunctions" :key="f.uid || f.name">
@@ -281,6 +315,7 @@
                   <span :class="f.type === 'edge' ? 'badge-prod' : 'badge-preview'">{{ f.type || 'lambda' }}</span>
                 </td>
                 <td class="text-dim">{{ f.mode !== undefined ? f.mode.toString(8) : '—' }}</td>
+                <td class="text-dim">{{ formatBytes(f.size) }}</td>
               </tr>
             </tbody>
           </table>
@@ -570,6 +605,7 @@ import { ref, computed, watch } from 'vue'
 import { useVercelStore } from '../../stores/useVercelStore'
 import { useI18n }        from '../../composables/useI18n.js'
 import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
+import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'projects' },
@@ -585,6 +621,14 @@ const selectedDeploymentForFunctions = ref(null)
 const selectedDeploymentForChecks    = ref(null)
 const confirmAction               = ref(null)
 const actionPending               = ref(false)
+const apmViewRef                  = ref(null)
+const apmPlatformResources = computed(() => vercelStore.projects.map(project => ({
+  type: 'vercel-project',
+  key: project.id,
+  name: project.name,
+  service: project.region || '',
+  kind: project.framework ? `Vercel ${project.framework}` : 'Vercel Project',
+})))
 
 // ─── Load data when tab/profile changes ──────────────────────────────────────
 
@@ -600,7 +644,11 @@ watch(
 function reload(service, options = {}) {
   const svc = typeof service === 'string' ? service : props.activeService
   let load = null
-  if (svc === 'projects') load = () => vercelStore.fetchProjects()
+  if (svc === 'apm') load = async () => {
+    await vercelStore.fetchProjects()
+    await apmViewRef.value?.refreshLocal?.()
+  }
+  else if (svc === 'projects') load = () => vercelStore.fetchProjects()
   else if (svc === 'deployments' && vercelStore.selectedProject)
     load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: deploymentTarget.value })
   else if (svc === 'domains' && vercelStore.selectedProject)
@@ -908,6 +956,13 @@ function formatDate(val) {
   const d = new Date(typeof val === 'number' ? val : val)
   return d.toLocaleString()
 }
+
+function formatBytes(value) {
+  if (!Number.isFinite(value)) return '—'
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
 </script>
 
 <style scoped>
@@ -947,4 +1002,8 @@ function formatDate(val) {
   background: var(--accent, #5b6ef5);
   color: #fff;
 }
+.capability-dot { display: inline-block; margin: 1px 4px 1px 0; padding: 1px 5px; border: 1px solid rgba(96,165,250,.35); border-radius: 3px; color: #60a5fa; font-size: 10px; }
+.deployment-diagnostic { display: flex; max-width: 230px; flex-direction: column; gap: 2px; color: #f87171; }
+.deployment-diagnostic small { overflow: hidden; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
+.deployment-health { display: flex; align-items: center; gap: 6px; }
 </style>

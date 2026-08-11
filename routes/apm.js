@@ -3,9 +3,22 @@
 const express = require('express');
 const { discoverResourceCandidates } = require('../lib/apm/correlation');
 const { createAwsDeploymentReader } = require('../lib/apm/awsDeploymentReader');
+const { createEksWorkloadReader } = require('../lib/apm/eksWorkloadReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
+const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
+const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
+const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 
-function createApmRouter({ database, scheduler, auditLog, deploymentReader = createAwsDeploymentReader() }) {
+function createApmRouter({
+  database,
+  scheduler,
+  auditLog,
+  provider = 'aws',
+  deploymentReader = createAwsDeploymentReader(),
+  eksWorkloadReader = createEksWorkloadReader(),
+  topologyReader = createAwsTopologyReader(),
+  processTracer = createAwsProcessTracer(),
+}) {
   if (!database || !scheduler) throw new Error('database and scheduler are required');
   const router = express.Router();
 
@@ -19,7 +32,7 @@ function createApmRouter({ database, scheduler, auditLog, deploymentReader = cre
     const profile = profileId(req, res);
     if (!profile) return null;
     const application = database.getApplication(req.params.applicationId);
-    if (!application || application.profileId !== profile) {
+    if (!application || application.profileId !== profile || application.provider !== provider) {
       res.status(404).json({ error: 'Application not found' });
       return null;
     }
@@ -39,14 +52,14 @@ function createApmRouter({ database, scheduler, auditLog, deploymentReader = cre
   router.get('/applications', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;
-    res.json(database.listApplications({ profileId: profile, region: req.query.region || undefined }));
+    res.json(database.listApplications({ provider, profileId: profile, region: req.query.region || undefined }));
   });
 
   router.post('/applications', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;
     try {
-      const application = database.createApplication({ ...req.body, profileId: profile });
+      const application = database.createApplication({ ...req.body, provider, profileId: profile });
       log('Application created', application.name, profile, { region: application.region });
       res.status(201).json(application);
     } catch (error) { handleError(res, error); }
@@ -60,7 +73,7 @@ function createApmRouter({ database, scheduler, auditLog, deploymentReader = cre
         resources.some(resource => !resource || typeof resource !== 'object' || Array.isArray(resource))) {
       return res.status(400).json({ error: 'resources must be an array with at most 500 objects' });
     }
-    const applications = database.listApplications({ profileId: profile });
+    const applications = database.listApplications({ provider, profileId: profile });
     const candidateApplication = req.body?.application;
     if (candidateApplication?.name && !applications.some(application =>
       application.name.trim().toLowerCase() === String(candidateApplication.name).trim().toLowerCase())) {
@@ -94,6 +107,17 @@ function createApmRouter({ database, scheduler, auditLog, deploymentReader = cre
       }));
     } catch (error) { handleError(res, error); }
   });
+
+  async function listKubernetesWorkloads(req, res) {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    try {
+      res.json(await eksWorkloadReader.listWorkloads({ provider }));
+    } catch (error) { handleError(res, error); }
+  }
+
+  router.get('/kubernetes-workloads', listKubernetesWorkloads);
+  router.get('/eks-workloads', listKubernetesWorkloads);
 
   router.get('/applications/:applicationId', (req, res) => {
     const application = scopedApplication(req, res);
@@ -179,11 +203,48 @@ function createApmRouter({ database, scheduler, auditLog, deploymentReader = cre
   router.get('/applications/:applicationId/topology', (req, res) => {
     const application = scopedApplication(req, res);
     if (!application) return;
+    const resources = database.listResources(application.id);
+    const edges = database.listEdges(application.id);
     res.json({
       application,
-      resources: database.listResources(application.id),
-      edges: database.listEdges(application.id),
+      resources,
+      edges,
+      analysis: analyzeTopology(application, resources, edges),
     });
+  });
+
+  router.post('/applications/:applicationId/topology/analyze-cloud', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    if (provider !== 'aws') return res.status(400).json({ error: 'Cloud topology analysis is only available for AWS applications' });
+    try {
+      const resources = database.listResources(application.id);
+      const edges = database.listEdges(application.id);
+      const evidence = await topologyReader.analyze({ application, resources, edges });
+      log('Cloud topology analyzed', application.name, application.profileId, { requests: evidence.requests });
+      res.json({ application, resources, edges, analysis: analyzeTopology(application, resources, edges, evidence) });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/applications/:applicationId/process-traces', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    if (provider !== 'aws') return res.status(400).json({ error: 'Process tracing is only available for AWS applications' });
+    try {
+      const result = await processTracer.trace({
+        application,
+        resources: database.listResources(application.id),
+        database,
+        requestId: req.body?.requestId,
+        executionArn: req.body?.executionArn,
+        stateMachineArn: req.body?.stateMachineArn,
+        includeData: req.body?.includeData === true,
+      });
+      log('Process trace queried', application.name, application.profileId, {
+        requests: result.requests, traces: result.traces.length,
+      });
+      res.json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   router.post('/applications/:applicationId/edges', (req, res) => {
