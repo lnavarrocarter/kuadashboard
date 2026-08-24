@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Architecture Workspace Foundation
+
+- Added a new profile-scoped **Architecture** workspace for application diagrams, initially targeting AWS.
+- Added a provider-neutral graph model for scopes, sources, nodes, relationships, groups, evidence, and persistent layout.
+- Added a private `architecture.sqlite3` store with WAL, optimistic graph revisions, immutable snapshots, and safe server shutdown.
+- Added profile-isolated APIs for creating projects, reading and updating graph drafts, and creating or browsing snapshots.
+- Added the first Vue workspace for project creation, graph summaries, and local snapshot history.
+- Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
+
 ## v1.11.3 (2026-08-11)
 
 ### macOS Packaging Hotfix

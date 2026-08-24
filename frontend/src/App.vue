@@ -32,6 +32,9 @@
           >
             <i data-lucide="chart-no-axes-combined"></i> {{ t('nav.observability') }}
           </button>
+          <button :class="['provider-tab', { active: activeProvider === 'architecture' }]" @click="setProvider('architecture')">
+            <i data-lucide="network"></i> Architecture
+          </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
           <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
@@ -94,6 +97,17 @@
           <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
             <option value="">{{ t('vercel.noProfile') }}</option>
             <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </template>
+        <template v-else-if="activeProvider === 'architecture'">
+          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
+            <option value="">{{ t('aws.noProfile') }}</option>
+            <optgroup v-if="envStore.awsProfiles.length" :label="t('nav.storedProfiles')">
+              <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </optgroup>
+            <optgroup v-if="awsLocalProfiles.length" label="~/.aws/credentials">
+              <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
+            </optgroup>
           </select>
         </template>
       </div>
@@ -432,6 +446,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
             :active-service="observabilitySelections.vercel"
           />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="awsProfileId" />
         </main>
       </div>
 
@@ -454,6 +469,7 @@
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
           : activeProvider === 'observability' ? `${t('nav.observability')} / ${currentObservabilityProviderLabel.toUpperCase()}`
+          : activeProvider === 'architecture' ? 'Architecture / AWS'
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>
@@ -513,6 +529,7 @@ import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
 import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
+import ArchitectureView from './components/architecture/ArchitectureView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -768,6 +785,7 @@ async function setProvider(p) {
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
   if (p === 'vercel') { envStore.fetchProfiles() }
+  if (p === 'architecture' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (p === 'observability') selectObservabilityProvider(observabilityProvider.value)
   nextTick(() => createIcons({ icons }))
 }

@@ -36,6 +36,7 @@ Mejoras incrementales sobre la base actual, priorizando madurez y cobertura.
 ### UX / Calidad de Vida
 | Feature | Prioridad | Esfuerzo |
 |---|---|---|
+| **Architecture workspace** — diagramas editables desde AWS, código y evidencia operacional | Alta | Incremental |
 | **Dashboard home page** — resumen cross-provider con widgets configurables | Alta | 3 sprints |
 | **Multi-ventana / tabs** — abrir vistas en ventanas separadas | Media | 2 sprints |
 | **Keyboard shortcuts** — navegación completa por teclado | Baja | 1 sprint |

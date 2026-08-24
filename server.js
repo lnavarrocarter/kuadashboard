@@ -13,6 +13,7 @@ const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
 const { KubeResponseCache } = require('./lib/kubeResponseCache');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
+const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
 const {
   buildKubeConfig,
@@ -47,6 +48,7 @@ loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
 const app    = express();
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
+const architectureDatabase = getArchitectureDatabase();
 const apmCleanupInterval = setInterval(() => {
   try {
     const removed = apmDatabase.cleanup();
@@ -69,6 +71,7 @@ const envManagerRoutes  = require('./routes/envManager');
 const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
 const { createApmRouter } = require('./routes/apm');
+const { createArchitectureRouter } = require('./routes/architecture');
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
@@ -219,6 +222,7 @@ for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
     provider,
   }));
 }
+app.use('/api/architecture', createArchitectureRouter({ database: architectureDatabase, auditLog }));
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
@@ -2877,6 +2881,7 @@ function shutdown(signal) {
 
   const forceExit = setTimeout(() => {
     closeApmDatabase();
+    closeArchitectureDatabase();
     process.exit(1);
   }, 5000);
   forceExit.unref();
@@ -2884,6 +2889,7 @@ function shutdown(signal) {
   server.close(() => {
     clearTimeout(forceExit);
     closeApmDatabase();
+    closeArchitectureDatabase();
     process.exit(0);
   });
 }

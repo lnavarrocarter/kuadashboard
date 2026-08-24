@@ -1,5 +1,16 @@
 # Changelog
 
+## Sin publicar
+
+### Base del espacio Architecture
+
+- Nuevo espacio **Architecture** aislado por perfil para diagramas de aplicaciones, inicialmente orientado a AWS.
+- Nuevo modelo de grafo independiente del proveedor para ámbitos, fuentes, nodos, relaciones, grupos, evidencia y layout persistente.
+- Nuevo almacenamiento privado `architecture.sqlite3` con WAL, revisiones optimistas del grafo, snapshots inmutables y cierre seguro del servidor.
+- Nuevas APIs aisladas por perfil para crear proyectos, leer y actualizar borradores del grafo, y crear o consultar snapshots.
+- Primer workspace Vue para crear proyectos, consultar el resumen del grafo y mantener historial local de snapshots.
+- Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
+
 ## v1.11.3 (2026-08-11)
 
 ### Hotfix de empaquetado macOS

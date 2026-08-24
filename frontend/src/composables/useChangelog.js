@@ -8,6 +8,16 @@ export const CHANGELOG_VERSION = '1.11.3'
 
 export const CHANGELOG = [
   {
+    version: '1.12.0-dev',
+    date: 'Agosto 2026 · En desarrollo',
+    items: [
+      { type: 'new',    text: 'Architecture — nuevo espacio por perfil para crear proyectos de arquitectura de aplicaciones orientados inicialmente a AWS' },
+      { type: 'new',    text: 'Modelo de grafo — ámbitos, fuentes, nodos, relaciones, grupos, evidencia y layout con contrato independiente del proveedor' },
+      { type: 'new',    text: 'Snapshots locales — base SQLite privada con revisiones optimistas, historial inmutable y aislamiento por perfil' },
+      { type: 'better', text: 'Workspace Architecture — creación de proyectos, resumen del grafo e historial de snapshots desde la navegación principal' },
+    ],
+  },
+  {
     version: '1.11.3',
     date: 'Agosto 2026',
     items: [
