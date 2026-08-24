@@ -83,6 +83,22 @@ describe('ArchitectureCanvas', () => {
     ])
   })
 
+  it('opens the selected Step Functions workflow diagram', async () => {
+    const workflow = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'aws:workflow', name: 'ProcessOrder', resourceType: 'stepfunctions' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: workflow }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('.canvas-inspector > button.btn').trigger('click')
+
+    expect(wrapper.emitted('inspect-workflow')).toEqual([[workflow.document.nodes[0]]])
+  })
+
   it('emits canonical relationship and rounded layout operations', async () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('.connect-nodes').trigger('click')

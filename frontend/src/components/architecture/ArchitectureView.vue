@@ -83,11 +83,35 @@
               @imported="showDiscovery = false"
             />
 
+            <div class="architecture-view-tabs">
+              <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
+                <i data-lucide="route"></i> Routes
+              </button>
+              <button :class="['btn', 'sm', { primary: activeView === 'canvas' }]" @click="activeView = 'canvas'">
+                <i data-lucide="network"></i> Canvas
+              </button>
+            </div>
+
+            <ArchitectureRoutes
+              v-if="store.graph && activeView === 'routes'"
+              :graph="store.graph"
+              @inspect-workflow="openWorkflow"
+            />
+
             <ArchitectureCanvas
-              v-if="store.graph"
+              v-if="store.graph && activeView === 'canvas'"
               :graph="store.graph"
               :saving="store.saving"
               @operation="applyCanvasOperation"
+              @inspect-workflow="openWorkflow"
+            />
+
+            <StepFnDetail
+              :open="Boolean(selectedWorkflow)"
+              :sm="selectedWorkflow"
+              :profile-id="profileId"
+              initial-tab="diagram"
+              @close="selectedWorkflow = null"
             />
 
             <section v-if="store.snapshots.length" class="snapshot-list">
@@ -130,19 +154,27 @@
 import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useAwsStore } from '../../stores/useAwsStore'
+import StepFnDetail from '../StepFnDetail.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
+import ArchitectureRoutes from './ArchitectureRoutes.vue'
 
 const props = defineProps({ profileId: { type: String, default: '' } })
 const store = useArchitectureStore()
+const awsStore = useAwsStore()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
 const showDiscovery = ref(false)
+const activeView = ref('routes')
+const selectedWorkflow = ref(null)
 
 async function loadProfile(profileId) {
   showDiscovery.value = false
+  selectedWorkflow.value = null
   store.setActiveProfile(profileId || null)
+  awsStore.setActiveProfile(profileId || null)
   if (profileId) await store.loadProjects()
   nextTick(() => createIcons({ icons }))
 }
@@ -176,6 +208,10 @@ async function restoreSnapshot(snapshot) {
 async function applyCanvasOperation(operation, reason) {
   await store.applyOperation(operation, { reason })
   nextTick(() => createIcons({ icons }))
+}
+
+function openWorkflow(node) {
+  selectedWorkflow.value = node?.arn ? { name: node.name, arn: node.arn } : null
 }
 
 function changeLabel(type) {
@@ -214,6 +250,7 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-stats div:last-child { border-right: 0; }
 .architecture-stats span { color: var(--text-dim); font-size: 12px; }
 .architecture-stats strong { font-size: 20px; }
+.architecture-view-tabs { margin-bottom: 8px; display: flex; gap: 6px; }
 .canvas-message, .architecture-empty { position: relative; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-dim); }
 .canvas-message i, .architecture-empty i { width: 32px; height: 32px; color: #2f81f7; }
 .canvas-message strong, .architecture-empty strong { color: var(--text); }

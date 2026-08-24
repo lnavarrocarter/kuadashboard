@@ -45,6 +45,11 @@
           <span>
             <strong>{{ candidate.name }}</strong>
             <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence</small>
+            <span class="application-types">
+              <span v-for="item in candidate.resourceTypes" :key="item.type">
+                <i :data-lucide="resourceIcon(item.type)"></i>{{ item.count }} {{ resourceLabel(item.type) }}
+              </span>
+            </span>
           </span>
           <button class="btn sm primary" :disabled="store.saving" @click="drawApplication(candidate)">
             <i :data-lucide="store.saving ? 'loader-2' : 'workflow'"></i>
@@ -210,6 +215,9 @@ onMounted(refreshIcons)
 .application-row { min-height: 52px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
 .application-row > span { display: flex; flex-direction: column; min-width: 0; }
 .application-row small { color: var(--text-dim); }
+.application-types { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
+.application-types span { padding: 2px 5px; display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; font-size: 10px; }
+.application-types :deep(svg) { width: 11px; height: 11px; }
 .inventory-warning { margin: 10px 12px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; color: #d29922; border-left: 3px solid #d29922; background: var(--bg-hover); }
 .inventory-warning :deep(svg) { width: 15px; height: 15px; flex: none; }
 @media (max-width: 760px) {

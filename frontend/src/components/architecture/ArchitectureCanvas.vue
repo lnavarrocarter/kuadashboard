@@ -61,6 +61,11 @@
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
+        <button
+          v-if="selectedNode.resourceType === 'stepfunctions'"
+          class="btn sm"
+          @click="emit('inspect-workflow', selectedNode)"
+        ><i data-lucide="workflow"></i> Workflow diagram</button>
         <div class="inspector-actions">
           <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> Save</button>
           <button class="btn sm danger" :disabled="saving" @click="removeNode"><i data-lucide="trash-2"></i> Delete</button>
@@ -105,7 +110,7 @@ const props = defineProps({
   graph: { type: Object, required: true },
   saving: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation'])
+const emit = defineEmits(['operation', 'inspect-workflow'])
 
 const nodeTypes = [
   { value: 'service', label: 'Service' },

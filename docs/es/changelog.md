@@ -23,6 +23,9 @@
 - Nuevo inventario regional directo para Lambda, EventBridge y Step Functions, usando los stacks CloudFormation como enriquecimiento opcional en lugar de exigirlos para el discovery.
 - Los recursos AWS conectados ahora se identifican como aplicaciones candidatas mediante evidencia de targets EventBridge y ASL, listas para selección explícita; los previews truncados al límite de 500 recursos se informan claramente.
 - Las aplicaciones identificadas ahora se dibujan directamente con una acción: el preview validado se reutiliza durante cinco minutos, el panel de discovery se cierra después de importar y los diagramas grandes reciben un layout adaptativo más ancho.
+- Nuevo discovery regional directo de event source mappings de Lambda para completar rutas SQS a Lambda sin depender de CloudFormation.
+- Nueva vista Routes que agrupa rutas causales por evento EventBridge o workflow y muestra evidencia del bus, patrón y programación.
+- Los recursos Step Functions ahora abren su diagrama ASL interno configurable desde Routes o Canvas, mientras la composición del candidato indica qué aplicaciones contienen workflows y otros tipos de recursos AWS.
 - El discovery Architecture consume el presupuesto AWS existente por perfil; las plantillas se analizan localmente y nunca se persisten ni se devuelven al frontend.
 - Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
 

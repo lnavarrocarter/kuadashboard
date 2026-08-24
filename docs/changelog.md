@@ -23,6 +23,9 @@
 - Added direct regional inventory for Lambda, EventBridge, and Step Functions, with CloudFormation stacks as optional enrichment instead of a discovery requirement.
 - Connected AWS resources are now identified as application candidates from EventBridge target and ASL evidence, ready for explicit selection; truncated 500-resource previews are clearly reported.
 - Identified applications can now be drawn directly with one action: the validated preview is reused for five minutes, the discovery panel closes after import, and large diagrams receive a wider adaptive layout.
+- Added direct regional Lambda event source mapping discovery so SQS-to-Lambda triggers complete application paths without requiring CloudFormation.
+- Added an application Routes view that groups causal paths by EventBridge event or workflow entrypoint and displays event bus, pattern, and schedule evidence.
+- Step Functions resources now open their configurable internal ASL diagram from either Routes or Canvas, while candidate composition shows which applications contain workflows and other AWS resource types.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 

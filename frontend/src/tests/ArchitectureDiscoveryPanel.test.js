@@ -28,11 +28,14 @@ describe('ArchitectureDiscoveryPanel', () => {
       applicationCandidates: [{
         id: 'application:orders', name: 'OrderQueue application',
         nodeIds: ['node:rule', 'node:queue'], resourceCount: 2, relationshipCount: 1, confidence: 0.99,
+        resourceTypes: [{ type: 'eventbridge', count: 1 }, { type: 'sqs', count: 1 }],
       }],
     }
     store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
 
     const wrapper = mount(ArchitectureDiscoveryPanel)
+    expect(wrapper.get('.application-types').text()).toContain('1 EventBridge rule')
+    expect(wrapper.get('.application-types').text()).toContain('1 SQS queue')
     await wrapper.get('.application-row button').trigger('click')
 
     expect(wrapper.get('.inventory-warning').text()).toContain('500-resource preview limit')
