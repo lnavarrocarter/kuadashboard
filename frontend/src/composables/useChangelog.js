@@ -15,6 +15,8 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Modelo de grafo — ámbitos, fuentes, nodos, relaciones, grupos, evidencia y layout con contrato independiente del proveedor' },
       { type: 'new',    text: 'Snapshots locales — base SQLite privada con revisiones optimistas, historial inmutable y aislamiento por perfil' },
       { type: 'better', text: 'Workspace Architecture — creación de proyectos, resumen del grafo e historial de snapshots desde la navegación principal' },
+      { type: 'new',    text: 'Operaciones e historial — cambios tipados del grafo con revisión optimista, limpieza en cascada y registro semántico por perfil' },
+      { type: 'better', text: 'Comparación y restauración — diff contra snapshots y recuperación transaccional que conserva el historial en una nueva revisión inmutable' },
     ],
   },
   {

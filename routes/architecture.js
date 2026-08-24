@@ -1,10 +1,12 @@
 'use strict';
 
 const express = require('express');
+const { ArchitectureGraphService } = require('../lib/architecture/graphService');
 
-function createArchitectureRouter({ database, auditLog }) {
+function createArchitectureRouter({ database, auditLog, graphService }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
+  const service = graphService || new ArchitectureGraphService({ database });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -74,6 +76,32 @@ function createArchitectureRouter({ database, auditLog }) {
     } catch (error) { handleError(res, error); }
   });
 
+  router.post('/projects/:projectId/operations', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const graph = service.applyOperation(project.id, req.body?.operation, {
+        expectedRevision: req.body?.expectedRevision,
+        author: project.profileId,
+        reason: req.body?.reason,
+      });
+      log('Graph operation applied', project.name, project.profileId, {
+        projectId: project.id,
+        operation: req.body?.operation?.type,
+        revision: graph.revision,
+      });
+      res.json(graph);
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.get('/projects/:projectId/changes', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json(database.listChanges(project.id, { limit: req.query.limit }));
+    } catch (error) { handleError(res, error); }
+  });
+
   router.get('/projects/:projectId/snapshots', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
@@ -100,6 +128,35 @@ function createArchitectureRouter({ database, auditLog }) {
     const snapshot = database.getSnapshot(project.id, req.params.snapshotId);
     if (!snapshot) return res.status(404).json({ error: 'Architecture snapshot not found' });
     res.json(snapshot);
+  });
+
+  router.get('/projects/:projectId/snapshots/:snapshotId/diff', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json(service.diffSnapshot(project.id, req.params.snapshotId));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/snapshots/:snapshotId/revert', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const result = service.revertSnapshot(project.id, req.params.snapshotId, {
+        expectedRevision: req.body?.expectedRevision,
+        name: req.body?.name,
+        description: req.body?.description,
+        reason: req.body?.reason,
+        author: project.profileId,
+      });
+      log('Snapshot reverted', project.name, project.profileId, {
+        projectId: project.id,
+        sourceSnapshotId: req.params.snapshotId,
+        snapshotId: result.snapshot.id,
+        revision: result.graph.revision,
+      });
+      res.status(201).json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   return router;

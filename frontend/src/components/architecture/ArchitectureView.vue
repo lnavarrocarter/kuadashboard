@@ -89,6 +89,27 @@
                 <span class="snapshot-version">v{{ snapshot.version }}</span>
                 <span><strong>{{ snapshot.name }}</strong><small>Revision {{ snapshot.sourceRevision }}</small></span>
                 <time>{{ new Date(snapshot.createdAt).toLocaleString() }}</time>
+                <button class="btn sm btn-icon" title="Compare with current graph" @click="compareSnapshot(snapshot.id)">
+                  <i data-lucide="git-compare-arrows"></i>
+                </button>
+                <button class="btn sm btn-icon" title="Restore this snapshot" :disabled="store.saving" @click="restoreSnapshot(snapshot)">
+                  <i data-lucide="history"></i>
+                </button>
+              </div>
+            </section>
+
+            <section v-if="store.snapshotDiff" class="architecture-diff">
+              <span><i data-lucide="git-compare-arrows"></i> Compared with v{{ store.snapshotDiff.snapshot.version }}</span>
+              <strong>{{ store.snapshotDiff.diff.changeCount }} change{{ store.snapshotDiff.diff.changeCount === 1 ? '' : 's' }}</strong>
+              <button class="btn sm btn-icon" title="Close comparison" @click="store.snapshotDiff = null"><i data-lucide="x"></i></button>
+            </section>
+
+            <section v-if="store.changes.length" class="change-list">
+              <header><span>Change history</span><small>Latest {{ store.changes.length }} revisions</small></header>
+              <div v-for="change in store.changes" :key="change.id" class="change-row">
+                <span class="change-revision">r{{ change.revision }}</span>
+                <span><strong>{{ changeLabel(change.type) }}</strong><small>{{ change.reason || change.subjectId || change.subjectType }}</small></span>
+                <time>{{ new Date(change.createdAt).toLocaleString() }}</time>
               </div>
             </section>
           </template>
@@ -128,6 +149,21 @@ async function submitSnapshot() {
   const snapshot = await store.createSnapshot({ name: snapshotName.value })
   if (snapshot) snapshotName.value = ''
   nextTick(() => createIcons({ icons }))
+}
+
+async function compareSnapshot(snapshotId) {
+  await store.compareSnapshot(snapshotId)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function restoreSnapshot(snapshot) {
+  if (!window.confirm(`Restore snapshot v${snapshot.version} "${snapshot.name}"? A new snapshot will preserve the restored state.`)) return
+  await store.revertSnapshot(snapshot.id, { reason: `Restore snapshot v${snapshot.version}` })
+  nextTick(() => createIcons({ icons }))
+}
+
+function changeLabel(type) {
+  return String(type || '').split('.').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
 watch(() => props.profileId, loadProfile)
@@ -170,11 +206,17 @@ onMounted(() => loadProfile(props.profileId))
 .canvas-message strong, .architecture-empty strong { color: var(--text); }
 .architecture-empty.compact { min-height: 160px; }
 .architecture-error { margin: 10px 18px 0; }
-.snapshot-list { margin-top: 14px; border-top: 1px solid var(--border); }
-.snapshot-list > header, .snapshot-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
-.snapshot-list > header { justify-content: space-between; color: var(--text-dim); }
+.snapshot-list, .change-list { margin-top: 14px; border-top: 1px solid var(--border); }
+.snapshot-list > header, .snapshot-row, .change-list > header, .change-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.snapshot-list > header, .change-list > header { justify-content: space-between; color: var(--text-dim); }
 .snapshot-version { width: 38px; color: #2f81f7; font-weight: 700; }
-.snapshot-row time { margin-left: auto; color: var(--text-dim); font-size: 12px; }
+.snapshot-row time, .change-row time { margin-left: auto; color: var(--text-dim); font-size: 12px; }
+.architecture-diff { margin-top: 12px; min-height: 42px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; border: 1px solid #2f81f7; border-radius: 5px; background: color-mix(in srgb, #2f81f7 10%, transparent); }
+.architecture-diff span { display: flex; align-items: center; gap: 7px; }
+.architecture-diff strong { margin-left: auto; }
+.change-revision { width: 38px; color: var(--text-dim); font-family: monospace; }
+.change-row > span:nth-child(2) { display: flex; flex-direction: column; }
+.change-row small { color: var(--text-dim); }
 @media (max-width: 850px) {
   .architecture-create { grid-template-columns: 1fr; }
   .architecture-layout { grid-template-columns: 1fr; }

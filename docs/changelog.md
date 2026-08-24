@@ -9,6 +9,9 @@
 - Added a private `architecture.sqlite3` store with WAL, optimistic graph revisions, immutable snapshots, and safe server shutdown.
 - Added profile-isolated APIs for creating projects, reading and updating graph drafts, and creating or browsing snapshots.
 - Added the first Vue workspace for project creation, graph summaries, and local snapshot history.
+- Added typed graph operations with cascading cleanup, optimistic revision checks, and semantic change history.
+- Added snapshot comparison and transactional restore, which always creates a new revision and immutable snapshot instead of rewriting history.
+- Added workspace controls for comparing snapshots, restoring prior graph states, and browsing recent revision history.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 
 ## v1.11.3 (2026-08-11)

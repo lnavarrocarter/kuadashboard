@@ -96,3 +96,64 @@ test('API reports revision conflicts without overwriting the graph', async () =>
     await subject.close();
   }
 });
+
+test('API applies typed operations and exposes diff, revert and change history', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'checkout' } });
+    const projectId = created.body.id;
+    const added = await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        reason: 'Initial component',
+        operation: { type: 'node.upsert', value: { id: 'manual:api', name: 'Checkout API', manual: true } },
+      },
+    });
+    assert.equal(added.status, 200);
+    assert.equal(added.body.revision, 1);
+    const baseline = await subject.request(`/projects/${projectId}/snapshots`, {
+      method: 'POST', body: { name: 'Baseline' },
+    });
+    await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 1,
+        operation: { type: 'layout.set', value: { 'manual:api': { x: 120, y: 80 } } },
+      },
+    });
+
+    const diff = await subject.request(`/projects/${projectId}/snapshots/${baseline.body.id}/diff`);
+    assert.equal(diff.status, 200);
+    assert.equal(diff.body.diff.changeCount, 1);
+    const reverted = await subject.request(`/projects/${projectId}/snapshots/${baseline.body.id}/revert`, {
+      method: 'POST', body: { expectedRevision: 2, reason: 'Undo layout experiment' },
+    });
+    assert.equal(reverted.status, 201);
+    assert.equal(reverted.body.graph.revision, 3);
+    assert.deepEqual(reverted.body.graph.document.layout, {});
+
+    const changes = await subject.request(`/projects/${projectId}/changes`);
+    assert.deepEqual(changes.body.map(change => change.type), [
+      'snapshot.revert', 'layout.set', 'node.upsert',
+    ]);
+    assert.equal(changes.body[2].author, 'local:dev');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API requires an expected revision for typed graph mutations', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'guarded' } });
+    const result = await subject.request(`/projects/${created.body.id}/operations`, {
+      method: 'POST',
+      body: { operation: { type: 'node.upsert', value: { id: 'manual:api', name: 'API' } } },
+    });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error, 'expectedRevision must be a non-negative integer');
+  } finally {
+    await subject.close();
+  }
+});
