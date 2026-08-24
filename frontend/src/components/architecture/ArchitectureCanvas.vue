@@ -31,8 +31,8 @@
 
     <div class="canvas-body">
       <VueFlow
-        :nodes="flowNodes"
-        :edges="flowEdges"
+        :nodes="displayNodes"
+        :edges="displayEdges"
         class="architecture-flow"
         :default-viewport="{ x: 40, y: 40, zoom: 0.9 }"
         :min-zoom="0.25"
@@ -52,7 +52,13 @@
             <span :class="['node-icon', `node-icon--${presentationForType(data.resourceType).tone}`]">
               <i :data-lucide="presentationForType(data.resourceType).icon"></i>
             </span>
-            <span><strong>{{ data.label }}</strong><small>{{ typeLabel(data.resourceType) }}</small></span>
+            <span>
+              <strong class="node-title">
+                <span v-if="data.method" :class="['api-method', `api-method--${data.method.toLowerCase()}`]">{{ data.method }}</span>
+                {{ data.label }}
+              </strong>
+              <small>{{ typeLabel(data.resourceType) }}</small>
+            </span>
           </div>
         </template>
       </VueFlow>
@@ -75,6 +81,21 @@
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
+        <section v-if="selectedNodeReferences.length" class="component-references">
+          <span class="inspector-section-title">References</span>
+          <button
+            v-for="reference in selectedNodeReferences"
+            :key="reference.key"
+            class="component-reference"
+            @click="selectReferencedNode(reference.node)"
+          >
+            <i :data-lucide="reference.direction === 'outgoing' ? 'arrow-up-right' : 'arrow-down-left'"></i>
+            <span>
+              <strong>{{ referenceTitle(reference) }}</strong>
+              <small>{{ referenceMeta(reference) }}</small>
+            </span>
+          </button>
+        </section>
         <button
           v-if="selectedNode.resourceType === 'stepfunctions'"
           class="btn sm"
@@ -147,9 +168,53 @@ const flowEdges = ref([])
 const layoutDirection = ref('horizontal')
 const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
-const { fitView, setViewport } = useVueFlow()
+const { fitView, setCenter, setViewport } = useVueFlow()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
+const selectedNodeReferences = computed(() => {
+  if (!selectedNode.value || !props.graph?.document) return []
+  const nodesById = new Map(props.graph.document.nodes.map(node => [node.id, node]))
+  const references = props.graph.document.edges
+    .filter(edge => edge.status !== 'rejected' && (edge.sourceNodeId === selectedNode.value.id || edge.targetNodeId === selectedNode.value.id))
+    .map(edge => {
+      const outgoing = edge.sourceNodeId === selectedNode.value.id
+      const node = nodesById.get(outgoing ? edge.targetNodeId : edge.sourceNodeId)
+      return node ? {
+        key: `${edge.id}:${node.id}`,
+        edge,
+        node,
+        direction: outgoing ? 'outgoing' : 'incoming',
+        route: edge.evidence?.find(item => item.route)?.route || '',
+      } : null
+    })
+    .filter(Boolean)
+  const identity = reference => `${reference.direction}:${reference.node.kind || reference.node.resourceType}:${reference.node.name}`.toLowerCase()
+  const semantic = new Set(references
+    .filter(reference => reference.route || reference.edge.relationType !== 'depends_on')
+    .map(identity))
+  const unique = new Map()
+  for (const reference of references) {
+    if (reference.edge.relationType === 'depends_on' && semantic.has(identity(reference))) continue
+    const key = `${identity(reference)}:${reference.route}:${reference.edge.relationType}`
+    if (!unique.has(key)) unique.set(key, reference)
+  }
+  return [...unique.values()]
+})
+const focusedNodeIds = computed(() => selectedNode.value
+  ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
+  : null)
+const displayNodes = computed(() => flowNodes.value.map(node => focusedNodeIds.value
+  ? { ...node, style: { ...node.style, opacity: focusedNodeIds.value.has(node.id) ? 1 : 0.14 } }
+  : node))
+const displayEdges = computed(() => flowEdges.value.map(edge => focusedNodeIds.value
+  ? {
+      ...edge,
+      style: {
+        ...edge.style,
+        opacity: edge.source === selectedNode.value.id || edge.target === selectedNode.value.id ? 1 : 0.035,
+      },
+    }
+  : edge))
 
 function manualId(prefix) {
   const value = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -160,14 +225,24 @@ function syncGraph() {
   const document = props.graph?.document
   if (!document) return
   const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(document.nodes.length * 1.6))))
-  flowNodes.value = document.nodes.map((node, index) => ({
+  flowNodes.value = document.nodes.map((node, index) => {
+    const route = document.edges
+      .filter(edge => edge.sourceNodeId === node.id && edge.status !== 'rejected')
+      .flatMap(edge => edge.evidence || [])
+      .find(item => item.route)
+    return {
     id: node.id,
     position: document.layout[node.id] || {
       x: 80 + (index % columns) * 220,
       y: 70 + Math.floor(index / columns) * 150,
     },
-    data: { label: node.name || node.label || node.id, resourceType: node.resourceType || 'service' },
-  }))
+      data: {
+        label: route?.routePath || node.name || node.label || node.id,
+        method: route?.method || '',
+        resourceType: node.resourceType || 'service',
+      },
+    }
+  })
   flowEdges.value = document.edges.filter(edge => edge.status !== 'rejected').map(edge => ({
     id: edge.id,
     source: edge.sourceNodeId,
@@ -237,7 +312,15 @@ function selectNode({ node }) {
   selectedNode.value = props.graph.document.nodes.find(item => item.id === node.id) || null
   editDraft.name = selectedNode.value?.name || selectedNode.value?.label || ''
   editDraft.resourceType = selectedNode.value?.resourceType || 'service'
+  const flowNode = flowNodes.value.find(item => item.id === node.id)
+  if (flowNode?.position) {
+    nextTick(() => setCenter(flowNode.position.x + 80, flowNode.position.y + 30, { zoom: 0.85, duration: 250 }))
+  }
   refreshIcons()
+}
+
+function selectReferencedNode(node) {
+  selectNode({ node })
 }
 
 function selectEdge({ edge }) {
@@ -283,11 +366,26 @@ function nodeName(nodeId) {
   return props.graph.document.nodes.find(node => node.id === nodeId)?.name || nodeId
 }
 
+function referenceTitle(reference) {
+  return reference.node.resourceType === 'api-route' && reference.route
+    ? reference.route
+    : reference.node.name
+}
+
+function referenceMeta(reference) {
+  const relation = relationshipLabel(reference.edge.relationType)
+  const type = typeLabel(reference.node.resourceType)
+  return reference.route && reference.node.resourceType !== 'api-route'
+    ? `${reference.route} · ${type}`
+    : `${relation} · ${type}`
+}
+
 function typeLabel(resourceType) {
   return nodeTypes.find(option => option.value === resourceType)?.label || {
     lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
     ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
     sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: 'Secret',
+    'api-route': 'API Gateway route', 'api-integration': 'API Gateway integration', apigateway: 'API Gateway', apigatewayv2: 'API Gateway V2',
   }[resourceType] || String(resourceType || 'AWS resource').replaceAll('-', ' ')
 }
 
@@ -296,7 +394,7 @@ function relationshipStatus(status) {
 }
 
 function relationshipLabel(relationType) {
-  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on' }[relationType]
+  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on', routes_to: 'routes to' }[relationType]
     || String(relationType || 'depends_on').replaceAll('_', ' ')
 }
 
@@ -323,6 +421,7 @@ onMounted(refreshIcons)
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
 .architecture-node { min-width: 155px; display: flex; align-items: center; gap: 9px; color: var(--text); text-align: left; }
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
+.node-title { display: flex; align-items: center; gap: 6px; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
 .node-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 30px; border: 1px solid transparent; border-radius: 5px; color: white; }
 .node-icon :deep(svg) { width: 16px; height: 16px; }
@@ -334,6 +433,11 @@ onMounted(refreshIcons)
 .node-icon--management { background: #39788f; }
 .node-icon--neutral { background: #59636e; }
 .node-icon--security-simple { border-color: #b74856; background: transparent; color: #d75a68; }
+.api-method { min-width: 31px; padding: 2px 4px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 9px; line-height: 1; text-align: center; color: #fff; background: #6e7781; }
+.api-method--get { background: #287f3b; }
+.api-method--post { background: #2869a8; }
+.api-method--put, .api-method--patch { background: #9a6700; }
+.api-method--delete { background: #b4232d; }
 .canvas-empty { position: absolute; inset: 48px 0 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); text-align: center; }
 .canvas-empty i { width: 34px; height: 34px; color: #2f81f7; }
 .canvas-empty strong { color: var(--text); }
@@ -343,6 +447,14 @@ onMounted(refreshIcons)
 .canvas-inspector label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 11px; }
 .canvas-inspector .ctrl-input, .canvas-inspector .ctrl-select { width: 100%; }
 .inspector-id { color: var(--text-dim); word-break: break-all; }
+.component-references { display: flex; flex-direction: column; gap: 5px; }
+.inspector-section-title { color: var(--text-dim); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.component-reference { width: 100%; padding: 7px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
+.component-reference:hover { border-color: #2f81f7; }
+.component-reference > svg { width: 14px; height: 14px; flex: 0 0 14px; color: #58a6ff; }
+.component-reference > span { min-width: 0; display: flex; flex-direction: column; }
+.component-reference strong, .component-reference small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.component-reference small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
 .inspector-actions { display: flex; justify-content: space-between; gap: 7px; }
 .relationship-direction { padding: 3px 0; }
 .relationship-status { width: fit-content; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
@@ -355,6 +467,7 @@ onMounted(refreshIcons)
 :deep(.vue-flow__handle) { width: 9px; height: 9px; background: #2f81f7; border: 2px solid var(--bg-panel); }
 :deep(.vue-flow__edge-path) { stroke: #7d8590; stroke-width: 1.8; }
 :deep(.vue-flow__edge.selected .vue-flow__edge-path) { stroke: #2f81f7; }
+:deep(.vue-flow__node), :deep(.vue-flow__edge) { transition: opacity .16s ease; }
 @media (max-width: 760px) {
   .canvas-toolbar { flex-wrap: wrap; }
   .canvas-toolbar .ctrl-input { width: calc(100% - 153px); }

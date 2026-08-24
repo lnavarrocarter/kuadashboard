@@ -30,6 +30,8 @@
 - Architecture can now map every resource from explicitly selected CloudFormation stacks, including isolated resources and previously unsupported AWS services, without widening the APM resource contract.
 - CloudFormation evidence now identifies S3 notifications, IAM role and policy attachments, workload roles, Lambda permissions, and governed resources with dedicated relationship semantics.
 - The Canvas can arrange request flow horizontally or vertically using persisted causal levels and crossing reduction; dense diagrams start at a readable zoom with optional relationship labels and recognizable AWS service icons.
+- API Gateway methods and HTTP API routes now display their resolved HTTP method and path, preserve direct route-to-Lambda evidence, and expose navigable component references in the Canvas inspector.
+- Selecting a Canvas component now centers it at a readable zoom and dims unrelated nodes and edges, keeping direct dependencies visible in dense application topologies.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 

@@ -78,6 +78,40 @@ describe('ArchitectureCanvas', () => {
     expect(architectureResourcePresentation('sns')).toEqual({ icon: 'megaphone', tone: 'application' })
     expect(architectureResourcePresentation('iam-policy')).toEqual({ icon: 'file-key', tone: 'security-simple' })
     expect(architectureResourcePresentation('policy')).toEqual({ icon: 'file-text', tone: 'security-simple' })
+    expect(architectureResourcePresentation('api-route')).toEqual({ icon: 'route', tone: 'network' })
+  })
+
+  it('shows API Gateway method details and navigates to the existing Lambda reference', async () => {
+    const routeGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'route', name: 'GetOrdersMethod', resourceType: 'api-route', kind: 'AWS::ApiGateway::Method' },
+          { id: 'lambda', name: 'orders-worker', resourceType: 'lambda', kind: 'AWS::Lambda::Function' },
+          { id: 'bucket', name: 'audit-bucket', resourceType: 's3', kind: 'AWS::S3::Bucket' },
+        ],
+        edges: [{
+          id: 'route-lambda', sourceNodeId: 'route', targetNodeId: 'lambda', relationType: 'routes_to',
+          status: 'automatic', confidence: 0.99,
+          evidence: [{
+            type: 'cloudformation_reference', path: 'Resources.GetOrders.Properties.Integration.Uri',
+            intrinsic: 'Fn::Sub', method: 'GET', routePath: '/orders', route: 'GET /orders',
+          }],
+        }],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: routeGraph }, global: { stubs } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes')[0].data).toMatchObject({
+      label: '/orders', method: 'GET', resourceType: 'api-route',
+    })
+
+    await wrapper.get('.select-node').trigger('click')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').map(node => node.style?.opacity || 1)).toEqual([1, 1, 0.14])
+    expect(wrapper.get('.component-reference').text()).toContain('orders-worker')
+    expect(wrapper.get('.component-reference').text()).toContain('GET /orders')
+    await wrapper.get('.component-reference').trigger('click')
+    expect(wrapper.get('.canvas-inspector input').element.value).toBe('orders-worker')
   })
 
   it('arranges request flow by graph depth in either direction', async () => {

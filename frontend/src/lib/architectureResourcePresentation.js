@@ -14,6 +14,8 @@ const RESOURCE_PRESENTATION = Object.freeze({
   'iam-policy': { icon: 'file-key', tone: 'security-simple' },
   policy: { icon: 'file-text', tone: 'security-simple' },
   api: { icon: 'braces', tone: 'network' },
+  'api-route': { icon: 'route', tone: 'network' },
+  'api-integration': { icon: 'plug', tone: 'network' },
   ecs: { icon: 'container', tone: 'compute' },
   logs: { icon: 'logs', tone: 'management' },
   secret: { icon: 'key-round', tone: 'security-simple' },
