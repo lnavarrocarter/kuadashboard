@@ -21,6 +21,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Discovery AWS — preview read-only de CloudFormation y ECS con selección explícita e importación atómica de recursos y relaciones inferidas' },
       { type: 'new',    text: 'Relaciones automáticas — clasificación por umbral de confianza con evidencia visible y estados diferenciados para relaciones automáticas y sugeridas' },
       { type: 'better', text: 'Revisión humana — acciones para aceptar o rechazar relaciones inferidas, preservando la decisión y el historial frente a nuevos discovery' },
+      { type: 'new',    text: 'Semántica AWS — relaciones triggers, invokes y runs on para EventBridge, Step Functions, ECS y event source mappings SQS a Lambda' },
       { type: 'better', text: 'Coste y privacidad — discovery Architecture integrado al presupuesto AWS por perfil, sin persistir ni exponer plantillas CloudFormation' },
     ],
   },

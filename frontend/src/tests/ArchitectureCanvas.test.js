@@ -101,20 +101,21 @@ describe('ArchitectureCanvas', () => {
           { id: 'node:queue', name: 'Queue', resourceType: 'sqs' },
         ],
         edges: [{
-          id: 'edge:worker-queue', sourceNodeId: 'node:worker', targetNodeId: 'node:queue',
-          relationType: 'depends_on', status: 'automatic', confidence: 0.95,
-          evidence: [{ type: 'cloudformation_reference', intrinsic: 'Ref', path: 'Resources.Worker.Properties.Queue' }],
+          id: 'edge:queue-worker', sourceNodeId: 'node:queue', targetNodeId: 'node:worker',
+          relationType: 'triggers', status: 'automatic', confidence: 0.99,
+          evidence: [{ type: 'cloudformation_reference', intrinsic: 'AWS::Lambda::EventSourceMapping', path: 'Resources.QueueMapping.Properties' }],
         }],
         layout: {},
       },
     }
     const wrapper = mount(ArchitectureCanvas, { props: { graph: relationshipGraph }, global: { stubs } })
     await wrapper.get('.select-edge').trigger('click')
-    expect(wrapper.get('.relationship-status').text()).toContain('Automatic · 95%')
+    expect(wrapper.get('.relationship-direction').text()).toContain('triggers')
+    expect(wrapper.get('.relationship-status').text()).toContain('Automatic · 99%')
     await wrapper.get('.canvas-inspector .danger').trigger('click')
 
     expect(wrapper.emitted('operation')[0]).toEqual([
-      { type: 'edge.review', subjectId: 'edge:worker-queue', value: { decision: 'reject' } },
+      { type: 'edge.review', subjectId: 'edge:queue-worker', value: { decision: 'reject' } },
       'Reject inferred relationship',
     ])
   })

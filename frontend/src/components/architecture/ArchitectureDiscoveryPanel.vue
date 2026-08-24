@@ -57,7 +57,7 @@
       </div>
       <div v-if="store.discoveryPreview.relationshipSuggestions.length" class="suggestion-list">
         <div v-for="suggestion in store.discoveryPreview.relationshipSuggestions" :key="suggestion.id" class="suggestion-row">
-          <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>depends on</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
+          <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>{{ relationshipLabel(suggestion.relationType) }}</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
           <span class="confidence">{{ Math.round(suggestion.confidence * 100) }}%</span>
           <span :class="['outcome-badge', suggestion.confidence >= threshold ? 'automatic' : 'suggested']">
             {{ suggestion.confidence >= threshold ? 'Automatic' : 'Review' }}
@@ -122,6 +122,11 @@ function resourceLabel(type) {
 
 function nodeName(nodeId) {
   return store.discoveryPreview.nodes.find(node => node.id === nodeId)?.name || nodeId
+}
+
+function relationshipLabel(relationType) {
+  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on' }[relationType]
+    || String(relationType || 'depends_on').replaceAll('_', ' ')
 }
 
 function refreshIcons() {

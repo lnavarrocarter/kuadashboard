@@ -73,7 +73,7 @@
           <button class="btn sm btn-icon" title="Close inspector" @click="clearSelection"><i data-lucide="x"></i></button>
         </header>
         <strong>{{ nodeName(selectedEdge.sourceNodeId) }}</strong>
-        <span class="relationship-direction"><i data-lucide="arrow-down"></i> depends on</span>
+        <span class="relationship-direction"><i data-lucide="arrow-down"></i> {{ relationshipLabel(selectedEdge.relationType) }}</span>
         <strong>{{ nodeName(selectedEdge.targetNodeId) }}</strong>
         <span :class="['relationship-status', selectedEdge.status]">
           {{ relationshipStatus(selectedEdge.status) }} · {{ Math.round(selectedEdge.confidence * 100) }}% confidence
@@ -140,7 +140,7 @@ function syncGraph() {
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
-    label: ['automatic', 'suggested'].includes(edge.status) ? relationshipStatus(edge.status) : (edge.relationType === 'depends_on' ? '' : edge.relationType),
+    label: `${relationshipLabel(edge.relationType)} · ${relationshipStatus(edge.status)}`,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
     style: edge.status === 'suggested'
@@ -242,6 +242,11 @@ function typeLabel(resourceType) {
 
 function relationshipStatus(status) {
   return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
+}
+
+function relationshipLabel(relationType) {
+  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on' }[relationType]
+    || String(relationType || 'depends_on').replaceAll('_', ' ')
 }
 
 function iconForType(resourceType) {
