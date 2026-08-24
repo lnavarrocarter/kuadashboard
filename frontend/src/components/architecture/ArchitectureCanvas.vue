@@ -15,12 +15,17 @@
         <i data-lucide="plus"></i> Add component
       </button>
       <span class="canvas-layout-controls">
-        <select v-model="layoutDirection" class="ctrl-select" title="Request flow direction">
+        <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement">
+          <option value="request-flow">Request flow</option>
+          <option value="resource-type">Resource type sections</option>
+        </select>
+        <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" title="Request flow direction">
           <option value="horizontal">Flow left to right</option>
           <option value="vertical">Flow top to bottom</option>
         </select>
         <button class="btn sm" :disabled="saving || !flowNodes.length" @click="arrangeFlow">
-          <i data-lucide="layout-dashboard"></i> Arrange flow
+          <i :data-lucide="layoutMode === 'resource-type' ? 'rows-3' : 'layout-dashboard'"></i>
+          {{ layoutMode === 'resource-type' ? 'Arrange by type' : 'Arrange flow' }}
         </button>
         <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="showEdgeLabels = !showEdgeLabels">
           <i data-lucide="tags"></i> Labels
@@ -59,6 +64,12 @@
               </strong>
               <small>{{ typeLabel(data.resourceType) }}</small>
             </span>
+          </div>
+        </template>
+        <template #node-resource-section="{ data }">
+          <div class="resource-section">
+            <span><i :data-lucide="presentationForType(data.resourceType).icon"></i> {{ typeLabel(data.resourceType) }}</span>
+            <strong>{{ data.count }}</strong>
           </div>
         </template>
       </VueFlow>
@@ -137,7 +148,7 @@ import { createIcons, icons } from 'lucide'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MarkerType, useVueFlow, VueFlow } from '@vue-flow/core'
-import { requestFlowLayout } from '../../lib/architectureLayout'
+import { requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -165,7 +176,9 @@ const editNodeTypes = computed(() => nodeTypes.some(option => option.value === e
   : [...nodeTypes, { value: editDraft.resourceType, label: typeLabel(editDraft.resourceType) }])
 const flowNodes = ref([])
 const flowEdges = ref([])
+const layoutMode = ref('request-flow')
 const layoutDirection = ref('horizontal')
+const resourceSections = ref([])
 const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
 const { fitView, setCenter, setViewport } = useVueFlow()
@@ -203,18 +216,40 @@ const selectedNodeReferences = computed(() => {
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
-const displayNodes = computed(() => flowNodes.value.map(node => focusedNodeIds.value
-  ? { ...node, style: { ...node.style, opacity: focusedNodeIds.value.has(node.id) ? 1 : 0.14 } }
-  : node))
-const displayEdges = computed(() => flowEdges.value.map(edge => focusedNodeIds.value
-  ? {
-      ...edge,
-      style: {
-        ...edge.style,
-        opacity: edge.source === selectedNode.value.id || edge.target === selectedNode.value.id ? 1 : 0.035,
-      },
-    }
-  : edge))
+const sectionNodes = computed(() => layoutMode.value === 'resource-type' ? resourceSections.value.map(section => ({
+  id: `section:${section.type}`,
+  type: 'resource-section',
+  position: { x: section.x, y: section.y },
+  data: { resourceType: section.type, count: section.count },
+  style: { width: `${section.width}px`, height: `${section.height}px` },
+  selectable: false,
+  draggable: false,
+  connectable: false,
+  focusable: false,
+  zIndex: -1,
+})) : [])
+function withoutOpacity(item) {
+  const { opacity: _opacity, ...style } = item.style || {}
+  return { ...item, style: Object.keys(style).length ? style : undefined }
+}
+const displayNodes = computed(() => [...sectionNodes.value, ...flowNodes.value.map(node => {
+  const visible = withoutOpacity(node)
+  return focusedNodeIds.value
+    ? { ...visible, style: { ...visible.style, opacity: focusedNodeIds.value.has(node.id) ? 1 : 0.14 } }
+    : visible
+})])
+const displayEdges = computed(() => flowEdges.value.map(edge => {
+  const visible = withoutOpacity(edge)
+  return focusedNodeIds.value
+    ? {
+        ...visible,
+        style: {
+          ...visible.style,
+          opacity: edge.source === selectedNode.value.id || edge.target === selectedNode.value.id ? 1 : 0.035,
+        },
+      }
+    : visible
+}))
 
 function manualId(prefix) {
   const value = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -250,9 +285,13 @@ function syncGraph() {
     label: showEdgeLabels.value ? `${relationshipLabel(edge.relationType)} · ${relationshipStatus(edge.status)}` : undefined,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
-    style: edge.status === 'suggested'
-      ? { stroke: '#d29922', strokeDasharray: '6 4' }
-      : edge.status === 'automatic' ? { stroke: '#2f81f7' } : undefined,
+    type: layoutMode.value === 'resource-type' ? 'straight' : 'default',
+    style: {
+      ...(edge.status === 'suggested'
+        ? { stroke: '#d29922', strokeDasharray: '6 4' }
+        : edge.status === 'automatic' ? { stroke: '#2f81f7' } : {}),
+      ...(layoutMode.value === 'resource-type' ? { strokeOpacity: 0.28, strokeWidth: 1.2 } : {}),
+    },
   }))
   if (selectedNode.value) selectedNode.value = document.nodes.find(node => node.id === selectedNode.value.id) || null
   if (selectedEdge.value) selectedEdge.value = document.edges.find(edge => edge.id === selectedEdge.value.id) || null
@@ -268,6 +307,17 @@ function syncGraph() {
 function arrangeFlow() {
   if (props.saving || !props.graph?.document?.nodes?.length) return
   fitAfterSync.value = true
+  if (layoutMode.value === 'resource-type') {
+    const result = resourceTypeLayout(props.graph.document)
+    resourceSections.value = result.sections
+    clearSelection()
+    emit('operation', {
+      type: 'layout.set',
+      value: result.layout,
+    }, 'Arrange resources by type')
+    return
+  }
+  resourceSections.value = []
   emit('operation', {
     type: 'layout.set',
     value: requestFlowLayout(props.graph.document, layoutDirection.value),
@@ -406,6 +456,10 @@ function refreshIcons() {
 
 watch(() => props.graph, syncGraph, { deep: true, immediate: true })
 watch(showEdgeLabels, syncGraph)
+watch(layoutMode, mode => {
+  if (mode !== 'resource-type') resourceSections.value = []
+  syncGraph()
+})
 onMounted(refreshIcons)
 </script>
 
@@ -415,7 +469,8 @@ onMounted(refreshIcons)
 .canvas-toolbar .ctrl-input { width: min(240px, 32vw); }
 .canvas-toolbar .ctrl-select { width: 145px; }
 .canvas-layout-controls { display: flex; align-items: center; gap: 6px; }
-.canvas-layout-controls .ctrl-select { width: 166px; }
+.canvas-layout-controls .ctrl-select { width: 168px; }
+.canvas-layout-controls .direction-select { width: 166px; }
 .canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 11px; }
 .canvas-body { position: relative; height: clamp(420px, 58vh, 680px); }
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
@@ -423,6 +478,10 @@ onMounted(refreshIcons)
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
 .node-title { display: flex; align-items: center; gap: 6px; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.resource-section { width: 100%; height: 100%; padding: 12px 16px; display: flex; align-items: flex-start; justify-content: space-between; border: 1px solid color-mix(in srgb, var(--border) 82%, #58a6ff); border-radius: 6px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text-dim); pointer-events: none; }
+.resource-section span { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.resource-section span :deep(svg) { width: 14px; height: 14px; color: #58a6ff; }
+.resource-section strong { min-width: 24px; padding: 2px 6px; border-radius: 10px; background: var(--bg-panel); color: var(--text); font-size: 10px; text-align: center; }
 .node-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 30px; border: 1px solid transparent; border-radius: 5px; color: white; }
 .node-icon :deep(svg) { width: 16px; height: 16px; }
 .node-icon--compute { background: #d86613; }
@@ -463,6 +522,7 @@ onMounted(refreshIcons)
 .relationship-status.manual { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
 .relationship-evidence { color: var(--text-dim); overflow-wrap: anywhere; }
 :deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
+:deep(.vue-flow__node-resource-section) { border: 0; background: transparent; box-shadow: none; pointer-events: none; }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }
 :deep(.vue-flow__handle) { width: 9px; height: 9px; background: #2f81f7; border: 2px solid var(--bg-panel); }
 :deep(.vue-flow__edge-path) { stroke: #7d8590; stroke-width: 1.8; }

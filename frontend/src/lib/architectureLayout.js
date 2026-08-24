@@ -83,3 +83,31 @@ export function requestFlowLayout(document = {}, direction = 'horizontal') {
   }
   return layout
 }
+
+export function resourceTypeLayout(document = {}) {
+  const groups = new Map()
+  for (const node of [...(document.nodes || [])].sort(compareNodes)) {
+    const type = node.resourceType || 'service'
+    if (!groups.has(type)) groups.set(type, [])
+    groups.get(type).push(node)
+  }
+
+  const layout = {}
+  const sections = []
+  let sectionY = 50
+  for (const [type, nodes] of [...groups.entries()].sort(([left], [right]) => layoutCollator.compare(left, right))) {
+    const columns = Math.min(8, Math.max(1, nodes.length))
+    const rows = Math.ceil(nodes.length / columns)
+    const width = Math.max(260, 80 + columns * 220)
+    const height = 70 + rows * 120
+    nodes.forEach((node, index) => {
+      layout[node.id] = {
+        x: 100 + (index % columns) * 220,
+        y: sectionY + 48 + Math.floor(index / columns) * 120,
+      }
+    })
+    sections.push({ type, count: nodes.length, x: 60, y: sectionY, width, height })
+    sectionY += height + 36
+  }
+  return { layout, sections }
+}

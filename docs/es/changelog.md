@@ -32,6 +32,8 @@
 - El Canvas puede ordenar el curso de solicitudes horizontal o verticalmente mediante niveles causales persistidos y reducción de cruces; los diagramas densos parten de un zoom legible, con etiquetas opcionales e iconos AWS reconocibles.
 - Los métodos API Gateway y rutas HTTP API ahora muestran su método y path resueltos, conservan evidencia directa de ruta a Lambda y exponen referencias navegables en el inspector del Canvas.
 - Al seleccionar un componente, el Canvas ahora lo centra con zoom legible y atenúa nodos y relaciones no vinculados, manteniendo visibles las dependencias directas en topologías densas.
+- Al limpiar la selección del Canvas ahora se restaura explícitamente la visibilidad completa de todos los nodos y relaciones, incluso cuando Vue Flow haya mutado sus estilos internos.
+- Nuevo modo de orden por tipo de recurso con secciones etiquetadas y contador, rejillas deterministas, posiciones persistidas y conectores rectos tenues para diagramas grandes.
 - El discovery Architecture consume el presupuesto AWS existente por perfil; las plantillas se analizan localmente y nunca se persisten ni se devuelven al frontend.
 - Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
 

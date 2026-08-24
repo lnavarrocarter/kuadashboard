@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
-import { requestFlowLayout } from '../lib/architectureLayout'
+import { requestFlowLayout, resourceTypeLayout } from '../lib/architectureLayout'
 import { architectureResourcePresentation } from '../lib/architectureResourcePresentation'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
@@ -18,9 +18,10 @@ const graph = {
 const stubs = {
   VueFlow: {
     props: ['nodes', 'edges'],
-    emits: ['connect', 'edge-click', 'node-click', 'node-drag-stop'],
+    emits: ['connect', 'edge-click', 'node-click', 'node-drag-stop', 'pane-click'],
     template: `<div class="vue-flow-stub">
       <button class="select-node" @click="$emit('node-click', { node: nodes[0] })">Select</button>
+      <button class="clear-pane" @click="$emit('pane-click')">Clear</button>
       <button class="connect-nodes" @click="$emit('connect', { source: 'manual:node:api', target: 'manual:node:db' })">Connect</button>
       <button class="drag-node" @click="$emit('node-drag-stop', { node: { id: 'manual:node:api', position: { x: 92.4, y: 118.8 } } })">Drag</button>
       <button v-if="edges[0]" class="select-edge" @click="$emit('edge-click', { edge: edges[0] })">Select edge</button>
@@ -151,6 +152,65 @@ describe('ArchitectureCanvas', () => {
       { type: 'layout.set', value: requestFlowLayout(document) },
       'Arrange request flow left to right',
     ])
+  })
+
+  it('arranges resources in labeled type sections with straight edges', async () => {
+    const document = {
+      nodes: [
+        { id: 'worker-b', name: 'Worker B', resourceType: 'lambda' },
+        { id: 'bucket', name: 'Audit bucket', resourceType: 's3' },
+        { id: 'worker-a', name: 'Worker A', resourceType: 'lambda' },
+      ],
+      edges: [{ id: 'bucket-worker', sourceNodeId: 'bucket', targetNodeId: 'worker-a', status: 'automatic' }],
+      layout: {},
+    }
+    expect(resourceTypeLayout(document)).toEqual({
+      layout: {
+        'worker-a': { x: 100, y: 98 },
+        'worker-b': { x: 320, y: 98 },
+        bucket: { x: 100, y: 324 },
+      },
+      sections: [
+        { type: 'lambda', count: 2, x: 60, y: 50, width: 520, height: 190 },
+        { type: 's3', count: 1, x: 60, y: 276, width: 300, height: 190 },
+      ],
+    })
+
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document } },
+      global: { stubs },
+    })
+    await wrapper.get('.canvas-layout-controls select').setValue('resource-type')
+    await wrapper.get('.canvas-layout-controls button').trigger('click')
+
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      { type: 'layout.set', value: resourceTypeLayout(document).layout },
+      'Arrange resources by type',
+    ])
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section')).toHaveLength(2)
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('straight')
+  })
+
+  it('removes focus attenuation when the canvas selection is cleared', async () => {
+    const routeGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'api', name: 'API', resourceType: 'api' },
+          { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+          { id: 'bucket', name: 'Bucket', resourceType: 's3' },
+        ],
+        edges: [{ id: 'api-worker', sourceNodeId: 'api', targetNodeId: 'worker', status: 'automatic' }],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: routeGraph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes')[2].style.opacity).toBe(0.14)
+
+    await wrapper.get('.clear-pane').trigger('click')
+    expect(wrapper.find('.canvas-inspector').exists()).toBe(false)
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').every(node => node.style?.opacity == null)).toBe(true)
   })
 
   it('opens the inspector and emits a partial node update', async () => {

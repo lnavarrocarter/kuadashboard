@@ -34,6 +34,8 @@ export const CHANGELOG = [
       { type: 'better', text: 'Canvas causal — orden horizontal o vertical persistido, reducción de cruces, zoom legible, etiquetas opcionales e iconos AWS por servicio' },
       { type: 'new',    text: 'Rutas API Gateway — método y path visibles, referencia directa a la Lambda existente y navegación entre componentes desde el inspector' },
       { type: 'better', text: 'Foco del Canvas — selección centrada con zoom legible y atenuación automática de nodos y relaciones no vinculados' },
+      { type: 'fix',    text: 'Selección del Canvas — al pulsar el fondo se elimina toda atenuación residual y se restaura la visibilidad completa del diagrama' },
+      { type: 'new',    text: 'Orden por tipo — secciones con contador, rejilla determinista, posiciones persistidas y conectores rectos tenues para topologías grandes' },
       { type: 'better', text: 'Coste y privacidad — discovery Architecture integrado al presupuesto AWS por perfil, sin persistir ni exponer plantillas CloudFormation' },
     ],
   },

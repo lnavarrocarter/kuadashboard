@@ -32,6 +32,8 @@
 - The Canvas can arrange request flow horizontally or vertically using persisted causal levels and crossing reduction; dense diagrams start at a readable zoom with optional relationship labels and recognizable AWS service icons.
 - API Gateway methods and HTTP API routes now display their resolved HTTP method and path, preserve direct route-to-Lambda evidence, and expose navigable component references in the Canvas inspector.
 - Selecting a Canvas component now centers it at a readable zoom and dims unrelated nodes and edges, keeping direct dependencies visible in dense application topologies.
+- Clearing a Canvas selection now explicitly restores every node and edge to full visibility, including styles internally mutated by Vue Flow.
+- Added a resource-type arrangement mode with labeled count sections, deterministic grids, persisted resource positions, and subdued straight connectors for large diagrams.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 
