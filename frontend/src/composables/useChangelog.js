@@ -18,6 +18,9 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Operaciones e historial — cambios tipados del grafo con revisión optimista, limpieza en cascada y registro semántico por perfil' },
       { type: 'better', text: 'Comparación y restauración — diff contra snapshots y recuperación transaccional que conserva el historial en una nueva revisión inmutable' },
       { type: 'new',    text: 'Canvas interactivo — creación, conexión, movimiento, edición y eliminación manual de componentes con Vue Flow y persistencia del layout' },
+      { type: 'new',    text: 'Discovery AWS — preview read-only de CloudFormation y ECS con selección explícita e importación atómica de recursos sin relaciones automáticas' },
+      { type: 'new',    text: 'Relaciones sugeridas — análisis local de DependsOn, Ref, GetAtt y Sub con evidencia, confianza y revisión separada antes de confirmar' },
+      { type: 'better', text: 'Coste y privacidad — discovery Architecture integrado al presupuesto AWS por perfil, sin persistir ni exponer plantillas CloudFormation' },
     ],
   },
   {

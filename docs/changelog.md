@@ -14,6 +14,10 @@
 - Added workspace controls for comparing snapshots, restoring prior graph states, and browsing recent revision history.
 - Added an interactive Vue Flow canvas for manually creating, connecting, moving, editing, and deleting architecture components.
 - Canvas interactions persist through typed graph operations, including layout changes recorded only after a drag completes.
+- Added read-only AWS discovery for active CloudFormation deployments and ECS services, with profile/region scoping and request estimates.
+- Added a two-step preview and confirmation flow: KUA never preselects candidates, and confirmed resources are imported atomically without creating relationships.
+- Added evidence-backed relationship suggestions from CloudFormation `DependsOn`, `Ref`, `GetAtt`, and `Sub` references, including YAML intrinsic shorthand support.
+- Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 
 ## v1.11.3 (2026-08-11)

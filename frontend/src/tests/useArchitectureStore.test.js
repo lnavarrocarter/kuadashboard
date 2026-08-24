@@ -78,4 +78,46 @@ describe('architecture workspace', () => {
     expect(store.snapshots[0].version).toBe(2)
     expect(store.changes[0].type).toBe('snapshot.revert')
   })
+
+  it('previews AWS discovery without mutation and imports only confirmed nodes', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/discovery/aws/deployments')) {
+        return response({
+          scope: { accountId: '123456789012', region: 'us-east-1' },
+          estimate: { awsRequests: 1 },
+          deployments: [{ id: 'stack-a', name: 'orders' }],
+        })
+      }
+      if (url.endsWith('/discovery/aws/preview')) {
+        expect(options.method).toBe('POST')
+        return response({ nodes: [{ id: 'aws:node:worker', name: 'worker' }], relationshipSuggestions: [] })
+      }
+      if (url.endsWith('/discovery/aws/import')) {
+        const body = JSON.parse(options.body)
+        expect(body.expectedRevision).toBe(3)
+        expect(body.selectedNodeIds).toEqual(['aws:node:worker'])
+        return response({ revision: 4, document: { nodes: [{ id: 'aws:node:worker' }], edges: [] } })
+      }
+      if (url.includes('/changes')) return response([{ id: 'change-import', revision: 4, type: 'discovery.import' }])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 3, document: { nodes: [], edges: [] } }
+
+    await store.loadAwsDeployments('us-east-1')
+    const preview = await store.previewAwsResources({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'],
+    })
+    expect(preview.nodes).toHaveLength(1)
+    expect(store.graph.revision).toBe(3)
+
+    const graph = await store.importAwsResources({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'],
+      selectedNodeIds: ['aws:node:worker'],
+    })
+    expect(graph.revision).toBe(4)
+    expect(store.discoveryPreview).toBeNull()
+    expect(store.changes[0].type).toBe('discovery.import')
+  })
 })

@@ -14,6 +14,10 @@
 - Nuevos controles del workspace para comparar snapshots, restaurar estados anteriores y consultar el historial reciente de revisiones.
 - Nuevo canvas interactivo con Vue Flow para crear, conectar, mover, editar y eliminar componentes de arquitectura manualmente.
 - Las interacciones del canvas persisten mediante operaciones tipadas, incluyendo cambios de layout registrados sólo al terminar cada movimiento.
+- Nuevo discovery AWS de sólo lectura para deployments CloudFormation activos y servicios ECS, aislado por perfil/región y con estimación de requests.
+- Nuevo flujo de preview y confirmación en dos pasos: KUA nunca preselecciona candidatos y los recursos confirmados se importan atómicamente sin crear relaciones.
+- Nuevas sugerencias de relaciones con evidencia desde referencias CloudFormation `DependsOn`, `Ref`, `GetAtt` y `Sub`, incluyendo sintaxis YAML abreviada.
+- El discovery Architecture consume el presupuesto AWS existente por perfil; las plantillas se analizan localmente y nunca se persisten ni se devuelven al frontend.
 - Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
 
 ## v1.11.3 (2026-08-11)

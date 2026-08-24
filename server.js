@@ -72,6 +72,8 @@ const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
 const { createApmRouter } = require('./routes/apm');
 const { createArchitectureRouter } = require('./routes/architecture');
+const { createAwsDeploymentReader } = require('./lib/apm/awsDeploymentReader');
+const { createAwsTemplateRelationshipReader } = require('./lib/architecture/awsTemplateRelationshipReader');
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
@@ -222,7 +224,22 @@ for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
     provider,
   }));
 }
-app.use('/api/architecture', createArchitectureRouter({ database: architectureDatabase, auditLog }));
+function reserveArchitectureAwsRequest(input) {
+  const reservation = apmDatabase.reserveAwsRequests(input);
+  if (!reservation.allowed) {
+    throw Object.assign(new Error('AWS request budget exhausted'), {
+      statusCode: 429,
+      code: 'budget_exhausted',
+    });
+  }
+}
+
+app.use('/api/architecture', createArchitectureRouter({
+  database: architectureDatabase,
+  auditLog,
+  deploymentReader: createAwsDeploymentReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+}));
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);

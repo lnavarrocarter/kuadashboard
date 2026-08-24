@@ -1,12 +1,18 @@
 'use strict';
 
 const express = require('express');
+const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
 const { ArchitectureGraphService } = require('../lib/architecture/graphService');
 
-function createArchitectureRouter({ database, auditLog, graphService }) {
+function createArchitectureRouter({ database, auditLog, graphService, discoveryService, deploymentReader, relationshipReader }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   const service = graphService || new ArchitectureGraphService({ database });
+  const discovery = discoveryService || new ArchitectureAwsDiscoveryService({
+    deploymentReader,
+    relationshipReader,
+    graphService: service,
+  });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -26,7 +32,8 @@ function createArchitectureRouter({ database, auditLog, graphService }) {
   }
 
   function handleError(res, error) {
-    const status = error.statusCode || (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
+    const status = error.statusCode || error.$metadata?.httpStatusCode ||
+      (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
     res.status(status).json({ error: error.message || 'Internal server error' });
   }
 
@@ -99,6 +106,53 @@ function createArchitectureRouter({ database, auditLog, graphService }) {
     if (!project) return;
     try {
       res.json(database.listChanges(project.id, { limit: req.query.limit }));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.get('/projects/:projectId/discovery/aws/deployments', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json(await discovery.listDeployments({
+        profileId: project.profileId,
+        region: req.query.region || 'us-east-1',
+      }));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/aws/preview', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json(await discovery.preview({
+        profileId: project.profileId,
+        region: req.body?.region || 'us-east-1',
+        accountId: req.body?.accountId,
+        stackNames: req.body?.stackNames,
+      }));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/aws/import', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const graph = await discovery.importSelection(project.id, {
+        profileId: project.profileId,
+        region: req.body?.region || 'us-east-1',
+        accountId: req.body?.accountId,
+        stackNames: req.body?.stackNames,
+        selectedNodeIds: req.body?.selectedNodeIds,
+        expectedRevision: req.body?.expectedRevision,
+        author: project.profileId,
+        reason: req.body?.reason,
+      });
+      log('AWS resources imported', project.name, project.profileId, {
+        projectId: project.id,
+        resourceCount: req.body?.selectedNodeIds?.length || 0,
+        revision: graph.revision,
+      });
+      res.json(graph);
     } catch (error) { handleError(res, error); }
   });
 

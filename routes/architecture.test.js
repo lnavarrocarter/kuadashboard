@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture() {
+async function fixture({ deploymentReader, relationshipReader } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -15,6 +15,8 @@ async function fixture() {
   app.use('/api/architecture', createArchitectureRouter({
     database,
     auditLog: { log(event) { auditEvents.push(event); } },
+    deploymentReader,
+    relationshipReader,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -153,6 +155,75 @@ test('API requires an expected revision for typed graph mutations', async () => 
     });
     assert.equal(result.status, 400);
     assert.equal(result.body.error, 'expectedRevision must be a non-negative integer');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API previews AWS resources and imports only the confirmed selection', async () => {
+  const calls = [];
+  const deploymentReader = {
+    async listDeployments(input) {
+      calls.push(['list', input]);
+      return {
+        scope: { profileId: input.profileId, region: input.region, accountId: '123456789012' },
+        estimate: { awsRequests: 1, kubernetesRequests: 0 },
+        deployments: [{ id: 'stack-id', name: 'orders', status: 'UPDATE_COMPLETE' }],
+      };
+    },
+    async preview(input) {
+      calls.push(['preview', input]);
+      return {
+        estimate: { awsRequests: 1, kubernetesRequests: 0 },
+        resources: [
+          { type: 'lambda', key: 'AWS::Lambda::Function:worker', arn: null, name: 'worker', kind: 'AWS::Lambda::Function', stackName: 'orders', logicalId: 'Worker' },
+          { type: 'sqs', key: 'AWS::SQS::Queue:orders', arn: null, name: 'orders', kind: 'AWS::SQS::Queue', stackName: 'orders', logicalId: 'Queue' },
+        ],
+      };
+    },
+  };
+  const relationshipReader = {
+    async analyze() {
+      return {
+        requests: 1,
+        failures: [],
+        relationships: [{
+          stackName: 'orders', sourceLogicalId: 'Worker', targetLogicalId: 'Queue',
+          relationType: 'depends_on', confidence: 0.95,
+          evidence: [{ type: 'cloudformation_reference', path: 'Resources.Worker.Properties.Queue', intrinsic: 'Ref' }],
+        }],
+      };
+    },
+  };
+  const subject = await fixture({ deploymentReader, relationshipReader });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'discovered' } });
+    const projectId = created.body.id;
+    const catalog = await subject.request(`/projects/${projectId}/discovery/aws/deployments?region=us-west-2`);
+    assert.equal(catalog.status, 200);
+    assert.equal(catalog.body.deployments[0].name, 'orders');
+
+    const preview = await subject.request(`/projects/${projectId}/discovery/aws/preview`, {
+      method: 'POST',
+      body: { region: 'us-west-2', accountId: '123456789012', stackNames: ['orders'] },
+    });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.nodes.length, 2);
+    assert.equal(preview.body.relationshipSuggestions.length, 1);
+    assert.equal(preview.body.relationshipSuggestions[0].status, 'suggested');
+
+    const imported = await subject.request(`/projects/${projectId}/discovery/aws/import`, {
+      method: 'POST',
+      body: {
+        region: 'us-west-2', accountId: '123456789012', stackNames: ['orders'],
+        selectedNodeIds: [preview.body.nodes[0].id], expectedRevision: 0,
+      },
+    });
+    assert.equal(imported.status, 200);
+    assert.equal(imported.body.revision, 1);
+    assert.deepEqual(imported.body.document.nodes.map(node => node.name), ['worker']);
+    assert.equal(imported.body.document.edges.length, 0);
+    assert.equal(calls.filter(([type]) => type === 'preview').length, 2);
   } finally {
     await subject.close();
   }

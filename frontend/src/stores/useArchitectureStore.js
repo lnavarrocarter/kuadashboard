@@ -11,6 +11,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const snapshots = ref([])
   const changes = ref([])
   const snapshotDiff = ref(null)
+  const discoveryCatalog = ref(null)
+  const discoveryPreview = ref(null)
+  const discovering = ref(false)
   const loading = ref(false)
   const saving = ref(false)
   const error = ref(null)
@@ -32,6 +35,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     snapshots.value = []
     changes.value = []
     snapshotDiff.value = null
+    discoveryCatalog.value = null
+    discoveryPreview.value = null
   }
 
   function setActiveProfile(profileId) {
@@ -69,6 +74,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     snapshots.value = []
     changes.value = []
     snapshotDiff.value = null
+    discoveryCatalog.value = null
+    discoveryPreview.value = null
     if (!selectedProjectId.value) return null
     if (manageLoading) loading.value = true
     error.value = null
@@ -205,6 +212,76 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function loadAwsDeployments(region) {
+    if (!selectedProjectId.value) return null
+    discovering.value = true
+    error.value = null
+    discoveryPreview.value = null
+    try {
+      const params = new URLSearchParams({ region })
+      discoveryCatalog.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/deployments?${params}`,
+        { headers: headers() },
+      )
+      return discoveryCatalog.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+    }
+  }
+
+  async function previewAwsResources({ region, accountId, stackNames }) {
+    if (!selectedProjectId.value) return null
+    discovering.value = true
+    error.value = null
+    try {
+      discoveryPreview.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/preview`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({ region, accountId, stackNames }),
+        },
+      )
+      return discoveryPreview.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+    }
+  }
+
+  async function importAwsResources({ region, accountId, stackNames, selectedNodeIds }) {
+    if (!selectedProjectId.value || !graph.value) return null
+    saving.value = true
+    error.value = null
+    try {
+      graph.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/import`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({
+            region, accountId, stackNames, selectedNodeIds,
+            expectedRevision: graph.value.revision,
+            reason: `Import ${selectedNodeIds.length} AWS resources`,
+          }),
+        },
+      )
+      discoveryPreview.value = null
+      await loadChanges()
+      return graph.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   return {
     activeProfileId,
     applyOperation,
@@ -212,11 +289,17 @@ export const useArchitectureStore = defineStore('architecture', () => {
     compareSnapshot,
     createProject,
     createSnapshot,
+    discovering,
+    discoveryCatalog,
+    discoveryPreview,
     error,
     graph,
+    importAwsResources,
+    loadAwsDeployments,
     loadProjects,
     loading,
     projects,
+    previewAwsResources,
     saving,
     selectProject,
     selectedProject,

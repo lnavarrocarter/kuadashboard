@@ -9,6 +9,9 @@
         <button class="btn sm btn-icon" title="Refresh projects" :disabled="store.loading || !profileId" @click="store.loadProjects()">
           <i data-lucide="refresh-cw"></i>
         </button>
+        <button v-if="store.selectedProject" class="btn sm" :disabled="store.loading" @click="showDiscovery = !showDiscovery">
+          <i data-lucide="scan-search"></i> Discover AWS
+        </button>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
           <i data-lucide="plus"></i> New project
         </button>
@@ -74,6 +77,8 @@
               <div><span>Snapshots</span><strong>{{ store.snapshots.length }}</strong></div>
             </section>
 
+            <ArchitectureDiscoveryPanel v-if="showDiscovery" @close="showDiscovery = false" />
+
             <ArchitectureCanvas
               v-if="store.graph"
               :graph="store.graph"
@@ -122,14 +127,17 @@ import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
+import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 
 const props = defineProps({ profileId: { type: String, default: '' } })
 const store = useArchitectureStore()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
+const showDiscovery = ref(false)
 
 async function loadProfile(profileId) {
+  showDiscovery.value = false
   store.setActiveProfile(profileId || null)
   if (profileId) await store.loadProjects()
   nextTick(() => createIcons({ icons }))
