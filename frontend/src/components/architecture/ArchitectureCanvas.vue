@@ -75,7 +75,17 @@
         <strong>{{ nodeName(selectedEdge.sourceNodeId) }}</strong>
         <span class="relationship-direction"><i data-lucide="arrow-down"></i> depends on</span>
         <strong>{{ nodeName(selectedEdge.targetNodeId) }}</strong>
-        <button class="btn sm danger" :disabled="saving" @click="removeEdge"><i data-lucide="trash-2"></i> Delete relationship</button>
+        <span :class="['relationship-status', selectedEdge.status]">
+          {{ relationshipStatus(selectedEdge.status) }} · {{ Math.round(selectedEdge.confidence * 100) }}% confidence
+        </span>
+        <small v-if="selectedEdge.evidence?.length" class="relationship-evidence">
+          {{ selectedEdge.evidence[0].intrinsic || selectedEdge.evidence[0].type }} · {{ selectedEdge.evidence[0].path || 'Recorded evidence' }}
+        </small>
+        <div v-if="['automatic', 'suggested'].includes(selectedEdge.status)" class="inspector-actions">
+          <button class="btn sm primary" :disabled="saving" @click="reviewEdge('accept')"><i data-lucide="check"></i> Accept</button>
+          <button class="btn sm danger" :disabled="saving" @click="reviewEdge('reject')"><i data-lucide="x"></i> Reject</button>
+        </div>
+        <button v-else class="btn sm danger" :disabled="saving" @click="removeEdge"><i data-lucide="trash-2"></i> Delete relationship</button>
       </aside>
     </div>
   </section>
@@ -126,12 +136,16 @@ function syncGraph() {
     position: document.layout[node.id] || { x: 80 + (index % 4) * 220, y: 70 + Math.floor(index / 4) * 150 },
     data: { label: node.name || node.label || node.id, resourceType: node.resourceType || 'service' },
   }))
-  flowEdges.value = document.edges.map(edge => ({
+  flowEdges.value = document.edges.filter(edge => edge.status !== 'rejected').map(edge => ({
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
-    label: edge.relationType === 'depends_on' ? '' : edge.relationType,
+    label: ['automatic', 'suggested'].includes(edge.status) ? relationshipStatus(edge.status) : (edge.relationType === 'depends_on' ? '' : edge.relationType),
     markerEnd: MarkerType.ArrowClosed,
+    animated: edge.status === 'suggested',
+    style: edge.status === 'suggested'
+      ? { stroke: '#d29922', strokeDasharray: '6 4' }
+      : edge.status === 'automatic' ? { stroke: '#2f81f7' } : undefined,
   }))
   if (selectedNode.value) selectedNode.value = document.nodes.find(node => node.id === selectedNode.value.id) || null
   if (selectedEdge.value) selectedEdge.value = document.edges.find(edge => edge.id === selectedEdge.value.id) || null
@@ -205,6 +219,14 @@ function removeEdge() {
   clearSelection()
 }
 
+function reviewEdge(decision) {
+  if (!selectedEdge.value || props.saving) return
+  emit('operation', {
+    type: 'edge.review', subjectId: selectedEdge.value.id, value: { decision },
+  }, `${decision === 'accept' ? 'Accept' : 'Reject'} inferred relationship`)
+  clearSelection()
+}
+
 function clearSelection() {
   selectedNode.value = null
   selectedEdge.value = null
@@ -216,6 +238,10 @@ function nodeName(nodeId) {
 
 function typeLabel(resourceType) {
   return nodeTypes.find(option => option.value === resourceType)?.label || resourceType
+}
+
+function relationshipStatus(status) {
+  return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
 }
 
 function iconForType(resourceType) {
@@ -254,6 +280,11 @@ onMounted(refreshIcons)
 .inspector-id { color: var(--text-dim); word-break: break-all; }
 .inspector-actions { display: flex; justify-content: space-between; gap: 7px; }
 .relationship-direction { padding: 3px 0; }
+.relationship-status { width: fit-content; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.relationship-status.automatic { color: #58a6ff; background: color-mix(in srgb, #2f81f7 14%, transparent); }
+.relationship-status.suggested { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
+.relationship-status.manual { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
+.relationship-evidence { color: var(--text-dim); overflow-wrap: anywhere; }
 :deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }
 :deep(.vue-flow__handle) { width: 9px; height: 9px; background: #2f81f7; border: 2px solid var(--bg-panel); }

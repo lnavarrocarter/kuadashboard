@@ -16,11 +16,12 @@ const graph = {
 const stubs = {
   VueFlow: {
     props: ['nodes', 'edges'],
-    emits: ['connect', 'node-click', 'node-drag-stop'],
+    emits: ['connect', 'edge-click', 'node-click', 'node-drag-stop'],
     template: `<div class="vue-flow-stub">
       <button class="select-node" @click="$emit('node-click', { node: nodes[0] })">Select</button>
       <button class="connect-nodes" @click="$emit('connect', { source: 'manual:node:api', target: 'manual:node:db' })">Connect</button>
       <button class="drag-node" @click="$emit('node-drag-stop', { node: { id: 'manual:node:api', position: { x: 92.4, y: 118.8 } } })">Drag</button>
+      <button v-if="edges[0]" class="select-edge" @click="$emit('edge-click', { edge: edges[0] })">Select edge</button>
       <slot />
     </div>`,
   },
@@ -88,6 +89,33 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[1]).toEqual([
       { type: 'layout.set', value: { 'manual:node:api': { x: 92, y: 119 } } },
       'Move Orders API',
+    ])
+  })
+
+  it('reviews an automatic relationship without changing its evidence in the client', async () => {
+    const relationshipGraph = {
+      revision: 3,
+      document: {
+        nodes: [
+          { id: 'node:worker', name: 'Worker', resourceType: 'lambda' },
+          { id: 'node:queue', name: 'Queue', resourceType: 'sqs' },
+        ],
+        edges: [{
+          id: 'edge:worker-queue', sourceNodeId: 'node:worker', targetNodeId: 'node:queue',
+          relationType: 'depends_on', status: 'automatic', confidence: 0.95,
+          evidence: [{ type: 'cloudformation_reference', intrinsic: 'Ref', path: 'Resources.Worker.Properties.Queue' }],
+        }],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: relationshipGraph }, global: { stubs } })
+    await wrapper.get('.select-edge').trigger('click')
+    expect(wrapper.get('.relationship-status').text()).toContain('Automatic · 95%')
+    await wrapper.get('.canvas-inspector .danger').trigger('click')
+
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      { type: 'edge.review', subjectId: 'edge:worker-queue', value: { decision: 'reject' } },
+      'Reject inferred relationship',
     ])
   })
 })

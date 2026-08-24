@@ -89,6 +89,7 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     try {
       const graph = service.applyOperation(project.id, req.body?.operation, {
         expectedRevision: req.body?.expectedRevision,
+        automaticEdgeThreshold: project.automaticEdgeThreshold,
         author: project.profileId,
         reason: req.body?.reason,
       });

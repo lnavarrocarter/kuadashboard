@@ -216,13 +216,27 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
       method: 'POST',
       body: {
         region: 'us-west-2', accountId: '123456789012', stackNames: ['orders'],
-        selectedNodeIds: [preview.body.nodes[0].id], expectedRevision: 0,
+        selectedNodeIds: preview.body.nodes.map(node => node.id), expectedRevision: 0,
       },
     });
     assert.equal(imported.status, 200);
     assert.equal(imported.body.revision, 1);
-    assert.deepEqual(imported.body.document.nodes.map(node => node.name), ['worker']);
-    assert.equal(imported.body.document.edges.length, 0);
+    assert.deepEqual(imported.body.document.nodes.map(node => node.name), ['worker', 'orders']);
+    assert.equal(imported.body.document.edges.length, 1);
+    assert.equal(imported.body.document.edges[0].status, 'automatic');
+
+    const reviewed = await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 1,
+        operation: {
+          type: 'edge.review', subjectId: imported.body.document.edges[0].id,
+          value: { decision: 'reject' },
+        },
+      },
+    });
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.document.edges[0].status, 'rejected');
     assert.equal(calls.filter(([type]) => type === 'preview').length, 2);
   } finally {
     await subject.close();

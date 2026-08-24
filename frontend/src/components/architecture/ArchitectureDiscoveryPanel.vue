@@ -52,13 +52,16 @@
         <i data-lucide="git-branch"></i>
         <span>
           <strong>{{ store.discoveryPreview.relationshipSuggestions.length }} relationship suggestion{{ store.discoveryPreview.relationshipSuggestions.length === 1 ? '' : 's' }}</strong>
-          <small>CloudFormation references are preview-only. Import creates nodes without confirming these relationships.</small>
+          <small>Relations at or above {{ thresholdPercent }}% become automatic when both endpoints are imported; lower confidence remains suggested.</small>
         </span>
       </div>
       <div v-if="store.discoveryPreview.relationshipSuggestions.length" class="suggestion-list">
         <div v-for="suggestion in store.discoveryPreview.relationshipSuggestions" :key="suggestion.id" class="suggestion-row">
           <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>depends on</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
           <span class="confidence">{{ Math.round(suggestion.confidence * 100) }}%</span>
+          <span :class="['outcome-badge', suggestion.confidence >= threshold ? 'automatic' : 'suggested']">
+            {{ suggestion.confidence >= threshold ? 'Automatic' : 'Review' }}
+          </span>
           <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ suggestion.evidence[0]?.intrinsic }}</span>
         </div>
       </div>
@@ -67,7 +70,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 
@@ -76,6 +79,8 @@ const store = useArchitectureStore()
 const region = ref('us-east-1')
 const selectedStacks = ref([])
 const selectedNodes = ref([])
+const threshold = computed(() => store.selectedProject?.automaticEdgeThreshold ?? 0.85)
+const thresholdPercent = computed(() => Math.round(threshold.value * 100))
 
 async function loadDeployments() {
   selectedStacks.value = []
@@ -156,6 +161,9 @@ onMounted(refreshIcons)
 .suggestion-row > span:first-child { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .suggestion-row small { color: var(--text-dim); }
 .confidence { margin-left: auto; color: #d29922; font-weight: 700; }
+.outcome-badge { padding: 2px 5px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.outcome-badge.automatic { color: #58a6ff; background: color-mix(in srgb, #2f81f7 14%, transparent); }
+.outcome-badge.suggested { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .discovery-empty { padding: 18px; text-align: center; }
 @media (max-width: 760px) {
   .discovery-controls { align-items: flex-start; flex-wrap: wrap; }
