@@ -74,14 +74,12 @@
               <div><span>Snapshots</span><strong>{{ store.snapshots.length }}</strong></div>
             </section>
 
-            <section class="architecture-canvas-placeholder">
-              <div class="canvas-grid"></div>
-              <div class="canvas-message">
-                <i data-lucide="scan-search"></i>
-                <strong>Discovery workspace ready</strong>
-                <span>AWS inventory, source connections and the editable canvas arrive in the next implementation slice.</span>
-              </div>
-            </section>
+            <ArchitectureCanvas
+              v-if="store.graph"
+              :graph="store.graph"
+              :saving="store.saving"
+              @operation="applyCanvasOperation"
+            />
 
             <section v-if="store.snapshots.length" class="snapshot-list">
               <header><span>Snapshots</span><small>Immutable local history</small></header>
@@ -123,6 +121,7 @@
 import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import ArchitectureCanvas from './ArchitectureCanvas.vue'
 
 const props = defineProps({ profileId: { type: String, default: '' } })
 const store = useArchitectureStore()
@@ -162,6 +161,11 @@ async function restoreSnapshot(snapshot) {
   nextTick(() => createIcons({ icons }))
 }
 
+async function applyCanvasOperation(operation, reason) {
+  await store.applyOperation(operation, { reason })
+  nextTick(() => createIcons({ icons }))
+}
+
 function changeLabel(type) {
   return String(type || '').split('.').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
@@ -198,10 +202,7 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-stats div:last-child { border-right: 0; }
 .architecture-stats span { color: var(--text-dim); font-size: 12px; }
 .architecture-stats strong { font-size: 20px; }
-.architecture-canvas-placeholder { position: relative; min-height: 360px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-panel); }
-.canvas-grid { position: absolute; inset: 0; opacity: .35; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 24px 24px; }
 .canvas-message, .architecture-empty { position: relative; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-dim); }
-.canvas-message { min-height: 360px; }
 .canvas-message i, .architecture-empty i { width: 32px; height: 32px; color: #2f81f7; }
 .canvas-message strong, .architecture-empty strong { color: var(--text); }
 .architecture-empty.compact { min-height: 160px; }
@@ -218,6 +219,9 @@ onMounted(() => loadProfile(props.profileId))
 .change-row > span:nth-child(2) { display: flex; flex-direction: column; }
 .change-row small { color: var(--text-dim); }
 @media (max-width: 850px) {
+  .architecture-toolbar { flex-wrap: wrap; }
+  .architecture-title small { display: none; }
+  .architecture-actions { margin-left: auto; }
   .architecture-create { grid-template-columns: 1fr; }
   .architecture-layout { grid-template-columns: 1fr; }
   .architecture-projects { border-right: 0; border-bottom: 1px solid var(--border); max-height: 180px; }

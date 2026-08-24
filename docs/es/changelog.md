@@ -12,6 +12,8 @@
 - Nuevas operaciones tipadas del grafo con limpieza en cascada, control optimista de revisiones e historial semántico de cambios.
 - Comparación y restauración transaccional de snapshots, creando siempre una nueva revisión y un snapshot inmutable sin reescribir el historial.
 - Nuevos controles del workspace para comparar snapshots, restaurar estados anteriores y consultar el historial reciente de revisiones.
+- Nuevo canvas interactivo con Vue Flow para crear, conectar, mover, editar y eliminar componentes de arquitectura manualmente.
+- Las interacciones del canvas persisten mediante operaciones tipadas, incluyendo cambios de layout registrados sólo al terminar cada movimiento.
 - Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
 
 ## v1.11.3 (2026-08-11)

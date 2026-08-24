@@ -12,6 +12,8 @@
 - Added typed graph operations with cascading cleanup, optimistic revision checks, and semantic change history.
 - Added snapshot comparison and transactional restore, which always creates a new revision and immutable snapshot instead of rewriting history.
 - Added workspace controls for comparing snapshots, restoring prior graph states, and browsing recent revision history.
+- Added an interactive Vue Flow canvas for manually creating, connecting, moving, editing, and deleting architecture components.
+- Canvas interactions persist through typed graph operations, including layout changes recorded only after a drag completes.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 
 ## v1.11.3 (2026-08-11)

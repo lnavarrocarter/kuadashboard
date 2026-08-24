@@ -17,6 +17,7 @@ export const CHANGELOG = [
       { type: 'better', text: 'Workspace Architecture — creación de proyectos, resumen del grafo e historial de snapshots desde la navegación principal' },
       { type: 'new',    text: 'Operaciones e historial — cambios tipados del grafo con revisión optimista, limpieza en cascada y registro semántico por perfil' },
       { type: 'better', text: 'Comparación y restauración — diff contra snapshots y recuperación transaccional que conserva el historial en una nueva revisión inmutable' },
+      { type: 'new',    text: 'Canvas interactivo — creación, conexión, movimiento, edición y eliminación manual de componentes con Vue Flow y persistencia del layout' },
     ],
   },
   {
