@@ -22,6 +22,7 @@
 - Added AWS-specific relationship semantics for EventBridge targets, Step Functions definitions, and ECS service placement, plus direct SQS-to-Lambda relationships inferred from CloudFormation event source mappings.
 - Added direct regional inventory for Lambda, EventBridge, and Step Functions, with CloudFormation stacks as optional enrichment instead of a discovery requirement.
 - Connected AWS resources are now identified as application candidates from EventBridge target and ASL evidence, ready for explicit selection; truncated 500-resource previews are clearly reported.
+- Identified applications can now be drawn directly with one action: the validated preview is reused for five minutes, the discovery panel closes after import, and large diagrams receive a wider adaptive layout.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 

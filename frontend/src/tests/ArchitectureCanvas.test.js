@@ -54,6 +54,20 @@ describe('ArchitectureCanvas', () => {
     ])
   })
 
+  it('uses a wider fallback layout for large imported diagrams', () => {
+    const nodes = Array.from({ length: 45 }, (_, index) => ({
+      id: `node:${index}`, name: `Resource ${index}`, resourceType: 'lambda',
+    }))
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document: { nodes, edges: [], layout: {} } } },
+      global: { stubs },
+    })
+
+    const flowNodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
+    expect(flowNodes[8].position).toEqual({ x: 1840, y: 70 })
+    expect(flowNodes[9].position).toEqual({ x: 80, y: 220 })
+  })
+
   it('opens the inspector and emits a partial node update', async () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')

@@ -77,7 +77,11 @@
               <div><span>Snapshots</span><strong>{{ store.snapshots.length }}</strong></div>
             </section>
 
-            <ArchitectureDiscoveryPanel v-if="showDiscovery" @close="showDiscovery = false" />
+            <ArchitectureDiscoveryPanel
+              v-if="showDiscovery"
+              @close="showDiscovery = false"
+              @imported="showDiscovery = false"
+            />
 
             <ArchitectureCanvas
               v-if="store.graph"

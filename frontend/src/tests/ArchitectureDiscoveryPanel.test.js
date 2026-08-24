@@ -11,7 +11,7 @@ describe('ArchitectureDiscoveryPanel', () => {
     setActivePinia(createPinia())
   })
 
-  it('selects every resource in an identified application explicitly', async () => {
+  it('draws every resource in an identified application explicitly', async () => {
     const store = useArchitectureStore()
     store.discoveryPreview = {
       scope: { accountId: '123456789012', region: 'us-east-1' },
@@ -33,22 +33,15 @@ describe('ArchitectureDiscoveryPanel', () => {
     store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
 
     const wrapper = mount(ArchitectureDiscoveryPanel)
-    const importButton = wrapper.get('.discovery-section-heading .primary')
-    expect(importButton.attributes('disabled')).toBeDefined()
-
     await wrapper.get('.application-row button').trigger('click')
 
-    expect(importButton.attributes('disabled')).toBeUndefined()
-    expect(importButton.text()).toContain('Import 2')
-    expect(wrapper.findAll('.resource-row input:checked')).toHaveLength(2)
     expect(wrapper.get('.inventory-warning').text()).toContain('500-resource preview limit')
-
-    await importButton.trigger('click')
     expect(store.importAwsResources).toHaveBeenCalledWith({
       region: 'us-east-1',
       accountId: '123456789012',
       stackNames: [],
       selectedNodeIds: ['node:rule', 'node:queue'],
     })
+    expect(wrapper.emitted('imported')).toHaveLength(1)
   })
 })

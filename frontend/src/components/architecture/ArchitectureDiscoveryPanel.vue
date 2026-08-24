@@ -46,7 +46,10 @@
             <strong>{{ candidate.name }}</strong>
             <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence</small>
           </span>
-          <button class="btn sm" @click="selectApplication(candidate)">Select resources</button>
+          <button class="btn sm primary" :disabled="store.saving" @click="drawApplication(candidate)">
+            <i :data-lucide="store.saving ? 'loader-2' : 'workflow'"></i>
+            {{ store.saving ? 'Drawing…' : 'Draw application' }}
+          </button>
         </div>
       </div>
       <div v-if="store.discoveryPreview.estimate.truncated" class="inventory-warning">
@@ -55,8 +58,9 @@
       </div>
       <div class="discovery-section-heading">
         <span><strong>Confirm resources</strong><small>No resource is selected automatically</small></span>
-        <button class="btn sm primary" :disabled="!selectedNodes.length || store.saving" @click="importResources">
-          <i data-lucide="download"></i> Import {{ selectedNodes.length || '' }}
+        <button class="btn sm primary" :disabled="!selectedNodes.length || store.saving" @click="importResources()">
+          <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>
+          {{ store.saving ? 'Drawing…' : `Draw selected ${selectedNodes.length || ''}` }}
         </button>
       </div>
       <div class="resource-list">
@@ -93,7 +97,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 
-defineEmits(['close', 'imported'])
+const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
 const region = ref('us-east-1')
 const selectedStacks = ref([])
@@ -118,15 +122,16 @@ async function previewResources() {
   refreshIcons()
 }
 
-async function importResources() {
+async function importResources(nodeIds = selectedNodes.value) {
   const graph = await store.importAwsResources({
     region: region.value,
     accountId: store.discoveryPreview.scope.accountId,
     stackNames: selectedStacks.value,
-    selectedNodeIds: selectedNodes.value,
+    selectedNodeIds: nodeIds,
   })
   if (graph) {
     selectedNodes.value = []
+    emit('imported', graph)
     refreshIcons()
   }
 }
@@ -151,8 +156,9 @@ function evidenceLabel(node) {
   return node.evidence?.[0]?.type === 'cloudformation_resource' ? 'CloudFormation' : 'AWS inventory'
 }
 
-function selectApplication(candidate) {
+async function drawApplication(candidate) {
   selectedNodes.value = [...candidate.nodeIds]
+  await importResources(candidate.nodeIds)
 }
 
 function relationshipLabel(relationType) {

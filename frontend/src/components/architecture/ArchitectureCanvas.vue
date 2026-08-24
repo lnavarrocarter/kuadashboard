@@ -131,9 +131,13 @@ function manualId(prefix) {
 function syncGraph() {
   const document = props.graph?.document
   if (!document) return
+  const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(document.nodes.length * 1.6))))
   flowNodes.value = document.nodes.map((node, index) => ({
     id: node.id,
-    position: document.layout[node.id] || { x: 80 + (index % 4) * 220, y: 70 + Math.floor(index / 4) * 150 },
+    position: document.layout[node.id] || {
+      x: 80 + (index % columns) * 220,
+      y: 70 + Math.floor(index / columns) * 150,
+    },
     data: { label: node.name || node.label || node.id, resourceType: node.resourceType || 'service' },
   }))
   flowEdges.value = document.edges.filter(edge => edge.status !== 'rejected').map(edge => ({

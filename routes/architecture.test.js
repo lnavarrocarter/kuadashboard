@@ -242,7 +242,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     });
     assert.equal(reviewed.status, 200);
     assert.equal(reviewed.body.document.edges[0].status, 'rejected');
-    assert.equal(calls.filter(([type]) => type === 'preview').length, 2);
+    assert.equal(calls.filter(([type]) => type === 'preview').length, 1);
   } finally {
     await subject.close();
   }

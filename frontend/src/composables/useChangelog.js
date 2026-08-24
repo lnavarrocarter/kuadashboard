@@ -24,6 +24,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Semántica AWS — relaciones triggers, invokes y runs on para EventBridge, Step Functions, ECS y event source mappings SQS a Lambda' },
       { type: 'new',    text: 'Inventario regional AWS — discovery directo de Lambda, EventBridge y Step Functions, con CloudFormation como evidencia opcional' },
       { type: 'new',    text: 'Aplicaciones identificadas — agrupación de recursos conectados por evidencia AWS, selección explícita y aviso al alcanzar el límite de 500 recursos' },
+      { type: 'fix',    text: 'Dibujo de aplicaciones — acción directa desde discovery, reutilización segura del preview y layout adaptativo legible para grafos grandes' },
       { type: 'better', text: 'Coste y privacidad — discovery Architecture integrado al presupuesto AWS por perfil, sin persistir ni exponer plantillas CloudFormation' },
     ],
   },
