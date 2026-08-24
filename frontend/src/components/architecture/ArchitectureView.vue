@@ -10,7 +10,7 @@
           <i data-lucide="refresh-cw"></i>
         </button>
         <button v-if="store.selectedProject" class="btn sm" :disabled="store.loading" @click="showDiscovery = !showDiscovery">
-          <i data-lucide="scan-search"></i> Discover AWS
+          <i data-lucide="scan-search"></i> Add AWS resources
         </button>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
           <i data-lucide="plus"></i> New project
@@ -29,7 +29,7 @@
       <form v-if="creatingProject" class="architecture-create" @submit.prevent="submitProject">
         <input v-model.trim="projectDraft.name" class="ctrl-input" required maxlength="120" placeholder="Project name" />
         <input v-model.trim="projectDraft.description" class="ctrl-input" maxlength="500" placeholder="Description" />
-        <button class="btn sm primary" :disabled="store.saving"><i data-lucide="check"></i> Create</button>
+        <button class="btn sm primary" :disabled="store.saving"><i data-lucide="arrow-right"></i> Create and configure</button>
         <button type="button" class="btn sm" @click="creatingProject = false">Cancel</button>
       </form>
 
@@ -185,6 +185,8 @@ async function submitProject() {
   projectDraft.name = ''
   projectDraft.description = ''
   creatingProject.value = false
+  showDiscovery.value = true
+  activeView.value = 'routes'
   nextTick(() => createIcons({ icons }))
 }
 

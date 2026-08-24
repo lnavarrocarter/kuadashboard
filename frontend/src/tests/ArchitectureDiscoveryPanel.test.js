@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureDiscoveryPanel from '../components/architecture/ArchitectureDiscoveryPanel.vue'
 import { useArchitectureStore } from '../stores/useArchitectureStore'
@@ -46,5 +47,39 @@ describe('ArchitectureDiscoveryPanel', () => {
       selectedNodeIds: ['node:rule', 'node:queue'],
     })
     expect(wrapper.emitted('imported')).toHaveLength(1)
+  })
+
+  it('guides setup from CloudFormation deployments to resource confirmation', async () => {
+    const store = useArchitectureStore()
+    store.loadAwsDeployments = vi.fn(async () => {
+      store.discoveryCatalog = {
+        scope: { accountId: '123456789012', region: 'us-east-1' },
+        estimate: { awsRequests: 2 },
+        deployments: [{ id: 'stack:orders', name: 'orders-stack', status: 'CREATE_COMPLETE', updatedAt: null }],
+      }
+    })
+    store.previewAwsResources = vi.fn(async input => {
+      store.discoveryPreview = {
+        scope: { accountId: input.accountId, region: input.region },
+        estimate: { truncated: false },
+        nodes: [],
+        applicationCandidates: [],
+        relationshipSuggestions: [],
+      }
+    })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    expect(wrapper.get('.discovery-steps .active strong').text()).toBe('CloudFormation')
+    await wrapper.get('.discovery-controls button').trigger('click')
+    await flushPromises()
+    await wrapper.get('.deployment-list input').setValue(true)
+    await wrapper.get('.discovery-next-actions .primary').trigger('click')
+    await flushPromises()
+
+    expect(store.previewAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders-stack'],
+    })
+    expect(wrapper.get('.discovery-steps .active strong').text()).toBe('Resources')
+    expect(wrapper.get('.resource-step-heading').text()).toContain('1 CloudFormation deployment selected')
   })
 })

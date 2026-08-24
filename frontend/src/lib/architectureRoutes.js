@@ -40,7 +40,36 @@ function enumeratePaths(rootId, outgoing, nodesById, trail = [], depth = 0) {
     .map(next => ({ nodeIds: next.nodeIds, edgeIds: [edge.id, ...next.edgeIds] })))
 }
 
-export function architectureRouteGroups(document = {}) {
+function compareRouteGroups(left, right, order) {
+  if (order === 'name') return compareText(left.name, right.name) || compareText(left.id, right.id)
+  if (order === 'bus') {
+    const leftBus = left.config?.eventBus || '\uffff'
+    const rightBus = right.config?.eventBus || '\uffff'
+    return compareText(leftBus, rightBus) || compareText(left.name, right.name) || compareText(left.id, right.id)
+  }
+  if (order === 'depth') {
+    const leftDepth = Math.max(...left.paths.map(path => path.nodes.length))
+    const rightDepth = Math.max(...right.paths.map(path => path.nodes.length))
+    return rightDepth - leftDepth || compareText(left.name, right.name) || compareText(left.id, right.id)
+  }
+  const typeOrder = Number(left.type === 'stepfunctions') - Number(right.type === 'stepfunctions')
+  return typeOrder || compareText(left.name, right.name) || compareText(left.id, right.id)
+}
+
+function comparePaths(left, right, order) {
+  const leftName = left.nodes.slice(1).map(node => node.name).join(' / ')
+  const rightName = right.nodes.slice(1).map(node => node.name).join(' / ')
+  if (order === 'depth') return right.nodes.length - left.nodes.length || compareText(leftName, rightName)
+  if (order === 'service') {
+    const leftFlow = left.nodes.slice(1).map(node => node.resourceType).join(' > ')
+    const rightFlow = right.nodes.slice(1).map(node => node.resourceType).join(' > ')
+    return compareText(leftFlow, rightFlow) || compareText(leftName, rightName)
+  }
+  if (order === 'name') return compareText(leftName, rightName)
+  return 0
+}
+
+export function architectureRouteGroups(document = {}, { order = 'sequence' } = {}) {
   const nodes = document.nodes || []
   const edges = (document.edges || []).filter(edge => edge.status !== 'rejected')
   const nodesById = new Map(nodes.map(node => [node.id, node]))
@@ -61,10 +90,10 @@ export function architectureRouteGroups(document = {}) {
   return roots.map(root => {
     const rootEdges = outgoing.get(root.id) || []
     const paths = enumeratePaths(root.id, outgoing, nodesById).map(path => ({
-      id: path.nodeIds.join('>'),
+      id: `${path.nodeIds.join('>')}|${path.edgeIds.join('>')}`,
       nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
       relations: path.edgeIds.map(id => edgesById.get(id)).filter(Boolean),
-    }))
+    })).sort((left, right) => comparePaths(left, right, order))
     return {
       id: root.id,
       name: root.name,
@@ -72,5 +101,5 @@ export function architectureRouteGroups(document = {}) {
       config: root.resourceType === 'eventbridge' ? eventConfig(rootEdges) : null,
       paths,
     }
-  })
+  }).sort((left, right) => compareRouteGroups(left, right, order))
 }

@@ -62,6 +62,58 @@ describe('ArchitectureRoutes', () => {
     expect(groups[3].paths.map(path => path.nodes.at(-1).name)).toEqual(['AlphaWorker', 'ZetaWorker'])
   })
 
+  it('keeps routes distinct when the same nodes have different relationships', () => {
+    const groups = architectureRouteGroups({
+      nodes: [
+        { id: 'rule', name: 'Schedule', resourceType: 'eventbridge' },
+        { id: 'workflow', name: 'Workflow', resourceType: 'stepfunctions' },
+        { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+      ],
+      edges: [
+        { id: 'rule-workflow', sourceNodeId: 'rule', targetNodeId: 'workflow', relationType: 'triggers' },
+        { id: 'workflow-invokes', sourceNodeId: 'workflow', targetNodeId: 'worker', relationType: 'invokes' },
+        { id: 'workflow-starts', sourceNodeId: 'workflow', targetNodeId: 'worker', relationType: 'starts_execution' },
+      ],
+    })
+
+    expect(groups[0].paths).toHaveLength(2)
+    expect(new Set(groups[0].paths.map(path => path.id))).toHaveProperty('size', 2)
+  })
+
+  it('offers application-friendly route ordering modes', async () => {
+    const orderedGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'workflow', name: 'AWorkflow', resourceType: 'stepfunctions' },
+          { id: 'rule-short', name: 'BEvent', resourceType: 'eventbridge' },
+          { id: 'rule-long', name: 'CEvent', resourceType: 'eventbridge' },
+          { id: 'fast', name: 'FastWorker', resourceType: 'lambda' },
+          { id: 'queue', name: 'Queue', resourceType: 'sqs' },
+          { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+        ],
+        edges: [
+          { id: 'long-queue', sourceNodeId: 'rule-long', targetNodeId: 'queue', relationType: 'triggers', evidence: [{ type: 'eventbridge_target', eventBus: 'alpha' }] },
+          { id: 'long-fast', sourceNodeId: 'rule-long', targetNodeId: 'fast', relationType: 'triggers', evidence: [{ type: 'eventbridge_target', eventBus: 'alpha' }] },
+          { id: 'queue-worker', sourceNodeId: 'queue', targetNodeId: 'worker', relationType: 'triggers' },
+          { id: 'short-worker', sourceNodeId: 'rule-short', targetNodeId: 'worker', relationType: 'triggers', evidence: [{ type: 'eventbridge_target', eventBus: 'zeta' }] },
+        ],
+      },
+    }
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: orderedGraph } })
+
+    expect(wrapper.findAll('.route-group > header strong').map(item => item.text())).toEqual(['BEvent', 'CEvent', 'AWorkflow'])
+    await wrapper.get('.route-order-control select').setValue('name')
+    expect(wrapper.findAll('.route-group > header strong').map(item => item.text())).toEqual(['AWorkflow', 'BEvent', 'CEvent'])
+    await wrapper.get('.route-order-control select').setValue('bus')
+    expect(wrapper.findAll('.route-group > header strong').map(item => item.text())).toEqual(['CEvent', 'BEvent', 'AWorkflow'])
+    await wrapper.get('.route-order-control select').setValue('service')
+    expect(wrapper.findAll('.route-group').at(1).findAll('.route-path').map(path => path.findAll('.route-node strong').at(-1).text())).toEqual(['FastWorker', 'Worker'])
+    await wrapper.get('.route-order-control select').setValue('depth')
+    expect(wrapper.findAll('.route-group > header strong').map(item => item.text())).toEqual(['CEvent', 'BEvent', 'AWorkflow'])
+    expect(wrapper.findAll('.route-group').at(0).find('.route-path').findAll('.route-node')).toHaveLength(3)
+  })
+
   it('opens the internal diagram from a Step Functions route', async () => {
     const wrapper = mount(ArchitectureRoutes, { props: { graph } })
 

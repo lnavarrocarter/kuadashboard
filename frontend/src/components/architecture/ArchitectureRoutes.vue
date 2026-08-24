@@ -5,7 +5,20 @@
         <span class="routes-title-icon"><i data-lucide="route"></i></span>
         <span><strong>APL event flow</strong><small>Application-level execution paths</small></span>
       </span>
-      <span class="route-count"><strong>{{ totalPaths }}</strong> route{{ totalPaths === 1 ? '' : 's' }} · {{ groups.length }} entr{{ groups.length === 1 ? 'y' : 'ies' }}</span>
+      <span class="routes-actions">
+        <label class="route-order-control">
+          <i data-lucide="arrow-up-narrow-wide"></i>
+          <span>Order</span>
+          <select v-model="sortMode" class="ctrl-select" title="Order application routes">
+            <option value="sequence">Event sequence</option>
+            <option value="name">Name A-Z</option>
+            <option value="bus">Event bus</option>
+            <option value="service">Service flow</option>
+            <option value="depth">Longest route</option>
+          </select>
+        </label>
+        <span class="route-count"><strong>{{ totalPaths }}</strong> route{{ totalPaths === 1 ? '' : 's' }} · {{ groups.length }} entr{{ groups.length === 1 ? 'y' : 'ies' }}</span>
+      </span>
     </header>
 
     <div v-if="!groups.length" class="routes-empty">
@@ -36,7 +49,7 @@
       </div>
 
       <div class="route-paths">
-        <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path">
+        <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path" :data-route-id="path.id">
           <span class="path-order"><small>Route</small><strong>{{ sequence(pathIndex) }}</strong></span>
           <span v-for="(node, index) in path.nodes" :key="node.id" class="route-segment">
             <button
@@ -60,14 +73,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { architectureRouteGroups } from '../../lib/architectureRoutes'
 
 const props = defineProps({ graph: { type: Object, required: true } })
 defineEmits(['inspect-workflow'])
 
-const groups = computed(() => architectureRouteGroups(props.graph?.document))
+const sortMode = ref('sequence')
+const groups = computed(() => architectureRouteGroups(props.graph?.document, { order: sortMode.value }))
 const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
 
 function sequence(index) {
@@ -128,6 +142,11 @@ onMounted(refreshIcons)
 .routes-title-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
 .routes-title-icon :deep(svg) { width: 17px; height: 17px; }
 .routes-header small, .route-group header small, .route-count { color: var(--text-dim); }
+.routes-actions, .route-order-control { display: flex; align-items: center; gap: 8px; }
+.routes-actions { margin-left: auto; }
+.route-order-control { color: var(--text-dim); font-size: 11px; }
+.route-order-control :deep(svg) { width: 14px; height: 14px; }
+.route-order-control .ctrl-select { width: 140px; }
 .route-count { white-space: nowrap; }
 .route-count strong { color: var(--text); font-size: 15px; }
 .route-group { border-bottom: 1px solid var(--border); }
@@ -169,7 +188,8 @@ onMounted(refreshIcons)
 .routes-empty { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); }
 .routes-empty strong { color: var(--text); }
 @media (max-width: 760px) {
-  .routes-header { align-items: flex-start; }
+  .routes-header { align-items: flex-start; flex-wrap: wrap; }
+  .routes-actions { width: 100%; justify-content: space-between; }
   .route-count { white-space: normal; text-align: right; }
   .event-order { width: 62px; }
   .route-node { width: 184px; }

@@ -24,7 +24,8 @@
 - Connected AWS resources are now identified as application candidates from EventBridge target and ASL evidence, ready for explicit selection; truncated 500-resource previews are clearly reported.
 - Identified applications can now be drawn directly with one action: the validated preview is reused for five minutes, the discovery panel closes after import, and large diagrams receive a wider adaptive layout.
 - Added direct regional Lambda event source mapping discovery so SQS-to-Lambda triggers complete application paths without requiring CloudFormation.
-- Added an ordered APL Routes diagram that groups causal paths by EventBridge event or workflow entrypoint, displays bus, pattern, and schedule evidence, and numbers each route and application stage deterministically.
+- Added an ordered APL Routes diagram with Event sequence, Name A-Z, Event bus, Service flow, and Longest route modes; ordering applies to both entrypoints and branches while preserving distinct relationship paths.
+- New Architecture projects now open a guided CloudFormation-first setup: choose deployments, confirm inferred application resources, then review the generated diagram, with regional inventory available as an explicit fallback.
 - Step Functions resources now open their configurable internal ASL diagram from either Routes or Canvas, while candidate composition shows which applications contain workflows and other AWS resource types.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
