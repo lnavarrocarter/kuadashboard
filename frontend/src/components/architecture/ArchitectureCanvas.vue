@@ -14,6 +14,18 @@
       <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
         <i data-lucide="plus"></i> Add component
       </button>
+      <span class="canvas-layout-controls">
+        <select v-model="layoutDirection" class="ctrl-select" title="Request flow direction">
+          <option value="horizontal">Flow left to right</option>
+          <option value="vertical">Flow top to bottom</option>
+        </select>
+        <button class="btn sm" :disabled="saving || !flowNodes.length" @click="arrangeFlow">
+          <i data-lucide="layout-dashboard"></i> Arrange flow
+        </button>
+        <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="showEdgeLabels = !showEdgeLabels">
+          <i data-lucide="tags"></i> Labels
+        </button>
+      </span>
       <span class="canvas-hint">Drag between handles to connect components</span>
     </header>
 
@@ -37,7 +49,9 @@
         <Controls position="bottom-left" />
         <template #node-default="{ data }">
           <div class="architecture-node">
-            <span class="node-icon"><i :data-lucide="iconForType(data.resourceType)"></i></span>
+            <span :class="['node-icon', `node-icon--${presentationForType(data.resourceType).tone}`]">
+              <i :data-lucide="presentationForType(data.resourceType).icon"></i>
+            </span>
             <span><strong>{{ data.label }}</strong><small>{{ typeLabel(data.resourceType) }}</small></span>
           </div>
         </template>
@@ -57,7 +71,7 @@
         <label>Name<input v-model.trim="editDraft.name" class="ctrl-input" maxlength="120" /></label>
         <label>Type
           <select v-model="editDraft.resourceType" class="ctrl-select">
-            <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
+            <option v-for="option in editNodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
@@ -97,11 +111,13 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { MarkerType, VueFlow } from '@vue-flow/core'
+import { MarkerType, useVueFlow, VueFlow } from '@vue-flow/core'
+import { requestFlowLayout } from '../../lib/architectureLayout'
+import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -123,8 +139,15 @@ const nodeTypes = [
 ]
 const nodeDraft = reactive({ name: '', resourceType: 'service' })
 const editDraft = reactive({ name: '', resourceType: 'service' })
+const editNodeTypes = computed(() => nodeTypes.some(option => option.value === editDraft.resourceType)
+  ? nodeTypes
+  : [...nodeTypes, { value: editDraft.resourceType, label: typeLabel(editDraft.resourceType) }])
 const flowNodes = ref([])
 const flowEdges = ref([])
+const layoutDirection = ref('horizontal')
+const fitAfterSync = ref(false)
+const showEdgeLabels = ref(false)
+const { fitView, setViewport } = useVueFlow()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
 
@@ -149,7 +172,7 @@ function syncGraph() {
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
-    label: `${relationshipLabel(edge.relationType)} · ${relationshipStatus(edge.status)}`,
+    label: showEdgeLabels.value ? `${relationshipLabel(edge.relationType)} · ${relationshipStatus(edge.status)}` : undefined,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
     style: edge.status === 'suggested'
@@ -158,7 +181,22 @@ function syncGraph() {
   }))
   if (selectedNode.value) selectedNode.value = document.nodes.find(node => node.id === selectedNode.value.id) || null
   if (selectedEdge.value) selectedEdge.value = document.edges.find(edge => edge.id === selectedEdge.value.id) || null
+  if (fitAfterSync.value) {
+    fitAfterSync.value = false
+    nextTick(() => document.nodes.length > 40
+      ? setViewport({ x: 40, y: 40, zoom: 0.65 }, { duration: 250 })
+      : fitView({ padding: 0.16, duration: 250 }))
+  }
   refreshIcons()
+}
+
+function arrangeFlow() {
+  if (props.saving || !props.graph?.document?.nodes?.length) return
+  fitAfterSync.value = true
+  emit('operation', {
+    type: 'layout.set',
+    value: requestFlowLayout(props.graph.document, layoutDirection.value),
+  }, `Arrange request flow ${layoutDirection.value === 'vertical' ? 'top to bottom' : 'left to right'}`)
 }
 
 function addNode() {
@@ -246,7 +284,11 @@ function nodeName(nodeId) {
 }
 
 function typeLabel(resourceType) {
-  return nodeTypes.find(option => option.value === resourceType)?.label || resourceType
+  return nodeTypes.find(option => option.value === resourceType)?.label || {
+    lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
+    ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
+    sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: 'Secret',
+  }[resourceType] || String(resourceType || 'AWS resource').replaceAll('-', ' ')
 }
 
 function relationshipStatus(status) {
@@ -258,15 +300,14 @@ function relationshipLabel(relationType) {
     || String(relationType || 'depends_on').replaceAll('_', ' ')
 }
 
-function iconForType(resourceType) {
-  return { api: 'braces', database: 'database', queue: 'list-end', function: 'square-function', storage: 'hard-drive', external: 'external-link' }[resourceType] || 'box'
-}
+const presentationForType = architectureResourcePresentation
 
 function refreshIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
 watch(() => props.graph, syncGraph, { deep: true, immediate: true })
+watch(showEdgeLabels, syncGraph)
 onMounted(refreshIcons)
 </script>
 
@@ -275,14 +316,24 @@ onMounted(refreshIcons)
 .canvas-toolbar { min-height: 48px; padding: 7px 9px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
 .canvas-toolbar .ctrl-input { width: min(240px, 32vw); }
 .canvas-toolbar .ctrl-select { width: 145px; }
+.canvas-layout-controls { display: flex; align-items: center; gap: 6px; }
+.canvas-layout-controls .ctrl-select { width: 166px; }
 .canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 11px; }
 .canvas-body { position: relative; height: clamp(420px, 58vh, 680px); }
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
 .architecture-node { min-width: 155px; display: flex; align-items: center; gap: 9px; color: var(--text); text-align: left; }
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
-.node-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 5px; background: #1f6feb; color: white; }
+.node-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 30px; border: 1px solid transparent; border-radius: 5px; color: white; }
 .node-icon :deep(svg) { width: 16px; height: 16px; }
+.node-icon--compute { background: #d86613; }
+.node-icon--application { background: #c71370; }
+.node-icon--storage { background: #2f7d32; }
+.node-icon--database { background: #3569a8; }
+.node-icon--network { background: #6c4eb6; }
+.node-icon--management { background: #39788f; }
+.node-icon--neutral { background: #59636e; }
+.node-icon--security-simple { border-color: #b74856; background: transparent; color: #d75a68; }
 .canvas-empty { position: absolute; inset: 48px 0 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); text-align: center; }
 .canvas-empty i { width: 34px; height: 34px; color: #2f81f7; }
 .canvas-empty strong { color: var(--text); }
@@ -307,6 +358,8 @@ onMounted(refreshIcons)
 @media (max-width: 760px) {
   .canvas-toolbar { flex-wrap: wrap; }
   .canvas-toolbar .ctrl-input { width: calc(100% - 153px); }
+  .canvas-layout-controls { width: 100%; }
+  .canvas-layout-controls .ctrl-select { flex: 1; width: auto; }
   .canvas-hint { width: 100%; margin-left: 0; }
   .canvas-body { height: 500px; }
   .canvas-inspector { right: 8px; width: min(240px, calc(100% - 16px)); }

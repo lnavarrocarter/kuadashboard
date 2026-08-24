@@ -238,7 +238,10 @@ function reserveArchitectureAwsRequest(input) {
 app.use('/api/architecture', createArchitectureRouter({
   database: architectureDatabase,
   auditLog,
-  deploymentReader: createAwsDeploymentReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  deploymentReader: createAwsDeploymentReader({
+    beforeRequest: reserveArchitectureAwsRequest,
+    includeAllResources: true,
+  }),
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
 }));

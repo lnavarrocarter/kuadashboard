@@ -27,6 +27,9 @@
 - Added an ordered APL Routes diagram with Event sequence, Name A-Z, Event bus, Service flow, and Longest route modes; ordering applies to both entrypoints and branches while preserving distinct relationship paths.
 - New Architecture projects now open a guided CloudFormation-first setup: choose deployments, confirm inferred application resources, then review the generated diagram, with regional inventory available as an explicit fallback.
 - Step Functions resources now open their configurable internal ASL diagram from either Routes or Canvas, while candidate composition shows which applications contain workflows and other AWS resource types.
+- Architecture can now map every resource from explicitly selected CloudFormation stacks, including isolated resources and previously unsupported AWS services, without widening the APM resource contract.
+- CloudFormation evidence now identifies S3 notifications, IAM role and policy attachments, workload roles, Lambda permissions, and governed resources with dedicated relationship semantics.
+- The Canvas can arrange request flow horizontally or vertically using persisted causal levels and crossing reduction; dense diagrams start at a readable zoom with optional relationship labels and recognizable AWS service icons.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 

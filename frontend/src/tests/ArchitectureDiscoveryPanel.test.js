@@ -1,4 +1,3 @@
-import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,11 +61,18 @@ describe('ArchitectureDiscoveryPanel', () => {
       store.discoveryPreview = {
         scope: { accountId: input.accountId, region: input.region },
         estimate: { truncated: false },
-        nodes: [],
+        nodes: [
+          { id: 'node:bucket', name: 'orders-data', resourceType: 's3', stackName: 'orders-stack', evidence: [] },
+          { id: 'node:policy', name: 'orders-policy', resourceType: 'policy', stackName: 'orders-stack', evidence: [] },
+        ],
         applicationCandidates: [],
-        relationshipSuggestions: [],
+        relationshipSuggestions: [{
+          id: 'edge:policy-bucket', sourceNodeId: 'node:policy', targetNodeId: 'node:bucket',
+          relationType: 'governs', confidence: 0.95, evidence: [{ intrinsic: 'Ref' }],
+        }],
       }
     })
+    store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
     const wrapper = mount(ArchitectureDiscoveryPanel)
 
     expect(wrapper.get('.discovery-steps .active strong').text()).toBe('CloudFormation')
@@ -81,5 +87,11 @@ describe('ArchitectureDiscoveryPanel', () => {
     })
     expect(wrapper.get('.discovery-steps .active strong').text()).toBe('Resources')
     expect(wrapper.get('.resource-step-heading').text()).toContain('1 CloudFormation deployment selected')
+    expect(wrapper.get('.stack-resource-summary').text()).toContain('2 resources · 1 relationships')
+    await wrapper.get('.stack-resource-summary button').trigger('click')
+    expect(store.importAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders-stack'],
+      selectedNodeIds: ['node:bucket', 'node:policy'],
+    })
   })
 })

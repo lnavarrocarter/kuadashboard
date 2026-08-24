@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
+import { requestFlowLayout } from '../lib/architectureLayout'
+import { architectureResourcePresentation } from '../lib/architectureResourcePresentation'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
@@ -66,6 +68,55 @@ describe('ArchitectureCanvas', () => {
     const flowNodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
     expect(flowNodes[8].position).toEqual({ x: 1840, y: 70 })
     expect(flowNodes[9].position).toEqual({ x: 80, y: 220 })
+  })
+
+  it('uses recognizable AWS service icons and simpler policy treatment', () => {
+    expect(architectureResourcePresentation('lambda')).toEqual({ icon: 'square-function', tone: 'compute' })
+    expect(architectureResourcePresentation('sqs')).toEqual({ icon: 'messages-square', tone: 'application' })
+    expect(architectureResourcePresentation('s3')).toEqual({ icon: 'archive', tone: 'storage' })
+    expect(architectureResourcePresentation('stepfunctions')).toEqual({ icon: 'workflow', tone: 'application' })
+    expect(architectureResourcePresentation('sns')).toEqual({ icon: 'megaphone', tone: 'application' })
+    expect(architectureResourcePresentation('iam-policy')).toEqual({ icon: 'file-key', tone: 'security-simple' })
+    expect(architectureResourcePresentation('policy')).toEqual({ icon: 'file-text', tone: 'security-simple' })
+  })
+
+  it('arranges request flow by graph depth in either direction', async () => {
+    const document = {
+      nodes: [
+        { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+        { id: 'event', name: 'Order event', resourceType: 'eventbridge' },
+        { id: 'isolated', name: 'Audit bucket', resourceType: 's3' },
+        { id: 'queue', name: 'Order queue', resourceType: 'sqs' },
+      ],
+      edges: [
+        { id: 'queue-worker', sourceNodeId: 'queue', targetNodeId: 'worker', status: 'automatic' },
+        { id: 'event-queue', sourceNodeId: 'event', targetNodeId: 'queue', status: 'automatic' },
+      ],
+      layout: {},
+    }
+
+    expect(requestFlowLayout(document)).toEqual({
+      event: { x: 80, y: 70 },
+      isolated: { x: 80, y: 200 },
+      queue: { x: 360, y: 70 },
+      worker: { x: 640, y: 70 },
+    })
+    expect(requestFlowLayout(document, 'vertical')).toEqual({
+      event: { x: 80, y: 70 },
+      isolated: { x: 320, y: 70 },
+      queue: { x: 80, y: 220 },
+      worker: { x: 80, y: 370 },
+    })
+
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document } },
+      global: { stubs },
+    })
+    await wrapper.get('.canvas-layout-controls button').trigger('click')
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      { type: 'layout.set', value: requestFlowLayout(document) },
+      'Arrange request flow left to right',
+    ])
   })
 
   it('opens the inspector and emits a partial node update', async () => {

@@ -52,6 +52,16 @@
         <span><strong>2. Add application resources</strong><small>{{ selectedStackSummary }}</small></span>
         <button class="btn sm" @click="backToStacks"><i data-lucide="arrow-left"></i> Back to stacks</button>
       </div>
+      <div v-if="selectedStacks.length" class="stack-resource-summary">
+        <span class="resource-icon"><i data-lucide="layers-3"></i></span>
+        <span>
+          <strong>CloudFormation coverage</strong>
+          <small>{{ stackNodes.length }} resources · {{ stackRelationshipCount }} relationships from {{ selectedStacks.length }} deployment{{ selectedStacks.length === 1 ? '' : 's' }}</small>
+        </span>
+        <button class="btn sm primary" :disabled="store.saving || !stackNodes.length || stackNodes.length > 500" @click="drawStackResources">
+          <i data-lucide="layout-dashboard"></i> Draw all stack resources
+        </button>
+      </div>
       <div v-if="store.discoveryPreview.applicationCandidates?.length" class="application-candidates">
         <div class="discovery-section-heading">
           <span><strong>Identified applications</strong><small>Connected components inferred from AWS evidence</small></span>
@@ -130,6 +140,12 @@ const steps = [
 const threshold = computed(() => store.selectedProject?.automaticEdgeThreshold ?? 0.85)
 const thresholdPercent = computed(() => Math.round(threshold.value * 100))
 const currentStep = computed(() => store.discoveryPreview ? 1 : 0)
+const stackNodes = computed(() => store.discoveryPreview?.nodes?.filter(node => selectedStacks.value.includes(node.stackName)) || [])
+const stackRelationshipCount = computed(() => {
+  const nodeIds = new Set(stackNodes.value.map(node => node.id))
+  return store.discoveryPreview?.relationshipSuggestions?.filter(edge =>
+    nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId)).length || 0
+})
 const selectedStackSummary = computed(() => selectedStacks.value.length
   ? `${selectedStacks.value.length} CloudFormation deployment${selectedStacks.value.length === 1 ? '' : 's'} selected`
   : 'Regional inventory without a CloudFormation deployment')
@@ -181,11 +197,19 @@ async function importResources(nodeIds = selectedNodes.value) {
 }
 
 function resourceIcon(type) {
-  return { lambda: 'square-function', sqs: 'list-end', eventbridge: 'radio-tower', stepfunctions: 'workflow', ecs: 'container' }[type] || 'box'
+  return {
+    lambda: 'square-function', sqs: 'list-end', eventbridge: 'radio-tower', stepfunctions: 'workflow',
+    ecs: 'container', s3: 'hard-drive', iam: 'shield', 'iam-policy': 'shield-check', policy: 'scroll-text',
+    sns: 'radio', dynamodb: 'database', api: 'braces', logs: 'logs', secret: 'key-round',
+  }[type] || 'box'
 }
 
 function resourceLabel(type) {
-  return { lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions', ecs: 'ECS' }[type] || type
+  return {
+    lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
+    ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
+    sns: 'SNS', dynamodb: 'DynamoDB', api: 'API Gateway', logs: 'CloudWatch Logs', secret: 'Secret',
+  }[type] || String(type || 'AWS resource').replaceAll('-', ' ')
 }
 
 function nodeName(nodeId) {
@@ -203,6 +227,11 @@ function evidenceLabel(node) {
 async function drawApplication(candidate) {
   selectedNodes.value = [...candidate.nodeIds]
   await importResources(candidate.nodeIds)
+}
+
+async function drawStackResources() {
+  selectedNodes.value = stackNodes.value.map(node => node.id)
+  await importResources(selectedNodes.value)
 }
 
 function relationshipLabel(relationType) {
@@ -243,6 +272,10 @@ onMounted(refreshIcons)
 .selection-count { color: #e3b341; font-size: 11px; }
 .discovery-next-actions { padding: 10px 12px; display: flex; justify-content: flex-end; gap: 8px; border-bottom: 1px solid var(--border); }
 .resource-step-heading { border-top: 0; }
+.stack-resource-summary { min-height: 62px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, #3fb950 5%, transparent); }
+.stack-resource-summary > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
+.stack-resource-summary small { color: var(--text-dim); }
+.stack-resource-summary .btn { margin-left: auto; }
 .discovery-row { min-height: 48px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .discovery-row:hover { background: var(--bg-hover); }
 .discovery-row > span:not(.resource-icon, .evidence-badge) { display: flex; flex-direction: column; min-width: 0; }
@@ -281,5 +314,7 @@ onMounted(refreshIcons)
   .discovery-steps > span:not(.active, .complete) { display: none; }
   .discovery-steps > span::after { display: none; }
   .discovery-next-actions { align-items: stretch; flex-direction: column-reverse; }
+  .stack-resource-summary { align-items: flex-start; flex-wrap: wrap; }
+  .stack-resource-summary .btn { width: 100%; margin-left: 0; }
 }
 </style>
