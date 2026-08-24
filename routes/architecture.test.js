@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, relationshipReader } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -16,6 +16,11 @@ async function fixture({ deploymentReader, relationshipReader } = {}) {
     database,
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
+    inventoryReader: inventoryReader || {
+      async analyze() {
+        return { accountId: '', resources: [], relationships: [], failures: [], requests: 0, truncated: false };
+      },
+    },
     relationshipReader,
   }));
   const server = http.createServer(app);

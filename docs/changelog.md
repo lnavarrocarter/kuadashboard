@@ -20,6 +20,8 @@
 - Inferred relationships are classified as automatic or suggested using the project confidence threshold, while retaining their confidence and source evidence.
 - Added explicit accept/reject review actions; reviewed decisions are preserved across rediscovery and rejected relationships remain in canonical history while hidden from the canvas.
 - Added AWS-specific relationship semantics for EventBridge targets, Step Functions definitions, and ECS service placement, plus direct SQS-to-Lambda relationships inferred from CloudFormation event source mappings.
+- Added direct regional inventory for Lambda, EventBridge, and Step Functions, with CloudFormation stacks as optional enrichment instead of a discovery requirement.
+- Connected AWS resources are now identified as application candidates from EventBridge target and ASL evidence, ready for explicit selection; truncated 500-resource previews are clearly reported.
 - Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
 - Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
 

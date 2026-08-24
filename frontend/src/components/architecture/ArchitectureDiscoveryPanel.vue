@@ -1,7 +1,7 @@
 <template>
   <section class="discovery-panel">
     <header class="discovery-header">
-      <span><i data-lucide="scan-search"></i><strong>AWS discovery</strong><small>Read-only CloudFormation and ECS inventory</small></span>
+      <span><i data-lucide="scan-search"></i><strong>AWS discovery</strong><small>Read-only regional inventory and CloudFormation evidence</small></span>
       <button class="btn sm btn-icon" title="Close discovery" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
@@ -11,6 +11,9 @@
         <i :data-lucide="store.discovering ? 'loader-2' : 'cloud-download'"></i>
         {{ store.discoveryCatalog ? 'Refresh stacks' : 'Load stacks' }}
       </button>
+      <button class="btn sm primary" :disabled="store.discovering || !region" @click="previewResources">
+        <i data-lucide="scan-search"></i> Scan region
+      </button>
       <span v-if="store.discoveryCatalog" class="discovery-scope">
         Account {{ store.discoveryCatalog.scope.accountId }} · {{ store.discoveryCatalog.estimate.awsRequests }} read request{{ store.discoveryCatalog.estimate.awsRequests === 1 ? '' : 's' }}
       </span>
@@ -18,7 +21,7 @@
 
     <template v-if="store.discoveryCatalog">
       <div class="discovery-section-heading">
-        <span><strong>1. Select deployments</strong><small>Up to 10 active CloudFormation stacks</small></span>
+        <span><strong>Optional: select deployments</strong><small>Up to 10 CloudFormation stacks enrich regional evidence</small></span>
         <button class="btn sm" :disabled="!selectedStacks.length || store.discovering" @click="previewResources">
           Preview resources
         </button>
@@ -34,8 +37,24 @@
     </template>
 
     <template v-if="store.discoveryPreview">
+      <div v-if="store.discoveryPreview.applicationCandidates?.length" class="application-candidates">
+        <div class="discovery-section-heading">
+          <span><strong>Identified applications</strong><small>Connected components inferred from AWS evidence</small></span>
+        </div>
+        <div v-for="candidate in store.discoveryPreview.applicationCandidates" :key="candidate.id" class="application-row">
+          <span>
+            <strong>{{ candidate.name }}</strong>
+            <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence</small>
+          </span>
+          <button class="btn sm" @click="selectApplication(candidate)">Select resources</button>
+        </div>
+      </div>
+      <div v-if="store.discoveryPreview.estimate.truncated" class="inventory-warning">
+        <i data-lucide="triangle-alert"></i>
+        Inventory reached the 500-resource preview limit. Identified applications may be partial.
+      </div>
       <div class="discovery-section-heading">
-        <span><strong>2. Confirm resources</strong><small>No resource is selected automatically</small></span>
+        <span><strong>Confirm resources</strong><small>No resource is selected automatically</small></span>
         <button class="btn sm primary" :disabled="!selectedNodes.length || store.saving" @click="importResources">
           <i data-lucide="download"></i> Import {{ selectedNodes.length || '' }}
         </button>
@@ -44,8 +63,8 @@
         <label v-for="node in store.discoveryPreview.nodes" :key="node.id" class="discovery-row resource-row">
           <input v-model="selectedNodes" type="checkbox" :value="node.id" />
           <span class="resource-icon"><i :data-lucide="resourceIcon(node.resourceType)"></i></span>
-          <span><strong>{{ node.name }}</strong><small>{{ resourceLabel(node.resourceType) }} · {{ node.stackName }} / {{ node.logicalId }}</small></span>
-          <span class="evidence-badge"><i data-lucide="shield-check"></i> CloudFormation</span>
+          <span><strong>{{ node.name }}</strong><small>{{ resourceLabel(node.resourceType) }} · {{ resourceOrigin(node) }}</small></span>
+          <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
         </label>
       </div>
       <div class="relationship-readiness">
@@ -93,7 +112,7 @@ async function previewResources() {
   selectedNodes.value = []
   await store.previewAwsResources({
     region: region.value,
-    accountId: store.discoveryCatalog.scope.accountId,
+    accountId: store.discoveryCatalog?.scope.accountId || '',
     stackNames: selectedStacks.value,
   })
   refreshIcons()
@@ -102,7 +121,7 @@ async function previewResources() {
 async function importResources() {
   const graph = await store.importAwsResources({
     region: region.value,
-    accountId: store.discoveryCatalog.scope.accountId,
+    accountId: store.discoveryPreview.scope.accountId,
     stackNames: selectedStacks.value,
     selectedNodeIds: selectedNodes.value,
   })
@@ -122,6 +141,18 @@ function resourceLabel(type) {
 
 function nodeName(nodeId) {
   return store.discoveryPreview.nodes.find(node => node.id === nodeId)?.name || nodeId
+}
+
+function resourceOrigin(node) {
+  return node.stackName ? `${node.stackName} / ${node.logicalId}` : 'Regional inventory'
+}
+
+function evidenceLabel(node) {
+  return node.evidence?.[0]?.type === 'cloudformation_resource' ? 'CloudFormation' : 'AWS inventory'
+}
+
+function selectApplication(candidate) {
+  selectedNodes.value = [...candidate.nodeIds]
 }
 
 function relationshipLabel(relationType) {
@@ -170,6 +201,11 @@ onMounted(refreshIcons)
 .outcome-badge.automatic { color: #58a6ff; background: color-mix(in srgb, #2f81f7 14%, transparent); }
 .outcome-badge.suggested { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .discovery-empty { padding: 18px; text-align: center; }
+.application-row { min-height: 52px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
+.application-row > span { display: flex; flex-direction: column; min-width: 0; }
+.application-row small { color: var(--text-dim); }
+.inventory-warning { margin: 10px 12px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; color: #d29922; border-left: 3px solid #d29922; background: var(--bg-hover); }
+.inventory-warning :deep(svg) { width: 15px; height: 15px; flex: none; }
 @media (max-width: 760px) {
   .discovery-controls { align-items: flex-start; flex-wrap: wrap; }
   .discovery-scope { width: 100%; margin-left: 0; }

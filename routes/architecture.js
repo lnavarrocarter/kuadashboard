@@ -4,12 +4,13 @@ const express = require('express');
 const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
 const { ArchitectureGraphService } = require('../lib/architecture/graphService');
 
-function createArchitectureRouter({ database, auditLog, graphService, discoveryService, deploymentReader, relationshipReader }) {
+function createArchitectureRouter({ database, auditLog, graphService, discoveryService, deploymentReader, inventoryReader, relationshipReader }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   const service = graphService || new ArchitectureGraphService({ database });
   const discovery = discoveryService || new ArchitectureAwsDiscoveryService({
     deploymentReader,
+    inventoryReader,
     relationshipReader,
     graphService: service,
   });

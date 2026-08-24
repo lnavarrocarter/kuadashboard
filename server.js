@@ -73,6 +73,7 @@ const awsRoutes         = require('./routes/aws');
 const { createApmRouter } = require('./routes/apm');
 const { createArchitectureRouter } = require('./routes/architecture');
 const { createAwsDeploymentReader } = require('./lib/apm/awsDeploymentReader');
+const { createAwsRegionalInventoryReader } = require('./lib/architecture/awsRegionalInventoryReader');
 const { createAwsTemplateRelationshipReader } = require('./lib/architecture/awsTemplateRelationshipReader');
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
@@ -238,6 +239,7 @@ app.use('/api/architecture', createArchitectureRouter({
   database: architectureDatabase,
   auditLog,
   deploymentReader: createAwsDeploymentReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
 }));
 app.use('/api/cloud/vercel',  vercelRoutes);

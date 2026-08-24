@@ -20,6 +20,8 @@
 - Las relaciones inferidas se clasifican como automáticas o sugeridas según el umbral de confianza del proyecto, conservando su confianza y evidencia de origen.
 - Nuevas acciones explícitas para aceptar o rechazar relaciones; las decisiones revisadas se conservan al redescubrir y las relaciones rechazadas permanecen en el historial canónico aunque se oculten del canvas.
 - Nueva semántica AWS para targets de EventBridge, definiciones Step Functions y ubicación de servicios ECS, además de relaciones directas SQS a Lambda inferidas desde event source mappings de CloudFormation.
+- Nuevo inventario regional directo para Lambda, EventBridge y Step Functions, usando los stacks CloudFormation como enriquecimiento opcional en lugar de exigirlos para el discovery.
+- Los recursos AWS conectados ahora se identifican como aplicaciones candidatas mediante evidencia de targets EventBridge y ASL, listas para selección explícita; los previews truncados al límite de 500 recursos se informan claramente.
 - El discovery Architecture consume el presupuesto AWS existente por perfil; las plantillas se analizan localmente y nunca se persisten ni se devuelven al frontend.
 - Cobertura backend y frontend para validación del grafo, inmutabilidad de snapshots, conflictos de revisión, aislamiento por perfil y comportamiento del store.
 
