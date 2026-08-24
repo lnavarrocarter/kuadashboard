@@ -1,8 +1,11 @@
 <template>
   <section class="architecture-routes">
     <header class="routes-header">
-      <span><strong>Application routes</strong><small>Event-driven paths derived from confirmed AWS evidence</small></span>
-      <span class="route-count">{{ groups.length }} entrypoint{{ groups.length === 1 ? '' : 's' }}</span>
+      <span class="routes-title">
+        <span class="routes-title-icon"><i data-lucide="route"></i></span>
+        <span><strong>APL event flow</strong><small>Application-level execution paths</small></span>
+      </span>
+      <span class="route-count"><strong>{{ totalPaths }}</strong> route{{ totalPaths === 1 ? '' : 's' }} · {{ groups.length }} entr{{ groups.length === 1 ? 'y' : 'ies' }}</span>
     </header>
 
     <div v-if="!groups.length" class="routes-empty">
@@ -11,8 +14,9 @@
       <span>Import a candidate containing EventBridge or Step Functions evidence.</span>
     </div>
 
-    <article v-for="group in groups" :key="group.id" class="route-group">
+    <article v-for="(group, groupIndex) in groups" :key="group.id" class="route-group">
       <header>
+        <span class="event-order">{{ group.type === 'eventbridge' ? 'EVENT' : 'WORKFLOW' }} {{ groupSequence(groupIndex, group.type) }}</span>
         <span class="route-entry-icon"><i :data-lucide="iconFor(group.type)"></i></span>
         <span><strong>{{ group.name }}</strong><small>{{ labelFor(group.type) }}</small></span>
         <button v-if="group.type === 'stepfunctions'" class="btn sm" @click="$emit('inspect-workflow', group.paths[0].nodes[0])">
@@ -23,23 +27,26 @@
       <div v-if="group.config" class="event-structure">
         <span><small>Event bus</small><strong>{{ group.config.eventBus }}</strong></span>
         <span v-if="group.config.scheduleExpression"><small>Schedule</small><code>{{ group.config.scheduleExpression }}</code></span>
+        <span v-if="group.config.description"><small>Purpose</small><strong>{{ group.config.description }}</strong></span>
         <template v-if="group.config.eventPattern">
-          <span v-for="(value, key) in group.config.eventPattern" :key="key">
-            <small>{{ key }}</small><code>{{ patternValue(value) }}</code>
+          <span v-for="field in eventFields(group.config.eventPattern)" :key="field.key">
+            <small>{{ field.key }}</small><code>{{ patternValue(field.value) }}</code>
           </span>
         </template>
       </div>
 
       <div class="route-paths">
-        <div v-for="path in group.paths" :key="path.id" class="route-path">
+        <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path">
+          <span class="path-order"><small>Route</small><strong>{{ sequence(pathIndex) }}</strong></span>
           <span v-for="(node, index) in path.nodes" :key="node.id" class="route-segment">
             <button
               :class="['route-node', node.resourceType, { actionable: node.resourceType === 'stepfunctions' }]"
               :disabled="node.resourceType !== 'stepfunctions'"
               @click="node.resourceType === 'stepfunctions' && $emit('inspect-workflow', node)"
             >
+              <span class="stage-order">{{ sequence(index) }}</span>
               <i :data-lucide="iconFor(node.resourceType)"></i>
-              <span><strong>{{ node.name }}</strong><small>{{ labelFor(node.resourceType) }}</small></span>
+              <span><strong>{{ node.name }}</strong><small>{{ stageLabel(node.resourceType) }}</small></span>
             </button>
             <span v-if="path.relations[index]" class="route-relation">
               <small>{{ relationLabel(path.relations[index].relationType) }}</small>
@@ -61,6 +68,16 @@ const props = defineProps({ graph: { type: Object, required: true } })
 defineEmits(['inspect-workflow'])
 
 const groups = computed(() => architectureRouteGroups(props.graph?.document))
+const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
+
+function sequence(index) {
+  return String(index + 1).padStart(2, '0')
+}
+
+function groupSequence(index, type) {
+  const position = groups.value.slice(0, index + 1).filter(group => group.type === type).length
+  return String(position).padStart(2, '0')
+}
 
 function iconFor(type) {
   return { eventbridge: 'radio-tower', sqs: 'list-end', lambda: 'square-function', stepfunctions: 'workflow', ecs: 'container', s3: 'hard-drive' }[type] || 'box'
@@ -68,6 +85,17 @@ function iconFor(type) {
 
 function labelFor(type) {
   return { eventbridge: 'EventBridge event', sqs: 'SQS queue', lambda: 'Lambda', stepfunctions: 'Step Functions workflow', ecs: 'ECS', s3: 'S3' }[type] || type
+}
+
+function stageLabel(type) {
+  return {
+    eventbridge: 'Event source',
+    sqs: 'Message buffer',
+    lambda: 'Compute',
+    stepfunctions: 'Workflow orchestration',
+    ecs: 'Container workload',
+    s3: 'Object storage',
+  }[type] || labelFor(type)
 }
 
 function relationLabel(type) {
@@ -80,6 +108,12 @@ function patternValue(value) {
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
+function eventFields(pattern) {
+  return Object.entries(pattern || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => ({ key, value }))
+}
+
 function refreshIcons() { nextTick(() => createIcons({ icons })) }
 watch(groups, refreshIcons)
 onMounted(refreshIcons)
@@ -87,34 +121,57 @@ onMounted(refreshIcons)
 
 <style scoped>
 .architecture-routes { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-panel); }
-.routes-header, .route-group > header { min-height: 52px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+.routes-header, .route-group > header { min-height: 56px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
 .routes-header { justify-content: space-between; }
-.routes-header > span:first-child, .route-group > header > span:nth-child(2) { display: flex; flex-direction: column; }
+.routes-title { display: flex; align-items: center; gap: 9px; }
+.routes-title > span:last-child, .route-group > header > span:nth-child(3) { display: flex; flex-direction: column; }
+.routes-title-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
+.routes-title-icon :deep(svg) { width: 17px; height: 17px; }
 .routes-header small, .route-group header small, .route-count { color: var(--text-dim); }
+.route-count { white-space: nowrap; }
+.route-count strong { color: var(--text); font-size: 15px; }
 .route-group { border-bottom: 1px solid var(--border); }
 .route-group:last-child { border-bottom: 0; }
 .route-group > header { background: var(--bg-hover); }
 .route-group > header .btn { margin-left: auto; }
-.route-entry-icon { width: 32px; height: 32px; display: grid; place-items: center; color: white; background: #1f6feb; border-radius: 5px; }
+.event-order { width: 76px; color: #e3b341; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.route-entry-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
 .route-entry-icon :deep(svg) { width: 16px; height: 16px; }
 .event-structure { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 7px; border-bottom: 1px solid var(--border); }
 .event-structure > span { min-width: 130px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #d29922; background: color-mix(in srgb, #d29922 7%, transparent); }
 .event-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
 .event-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
-.route-paths { padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-x: auto; }
-.route-path { min-width: max-content; display: flex; align-items: center; }
+.route-paths { display: flex; flex-direction: column; overflow-x: auto; }
+.route-path { min-width: max-content; padding: 14px 12px; display: flex; align-items: center; border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent); }
+.route-path:first-child { border-top: 0; }
+.path-order { width: 54px; margin-right: 12px; display: flex; flex-direction: column; align-items: center; color: var(--text-dim); }
+.path-order small { font-size: 9px; text-transform: uppercase; }
+.path-order strong { color: var(--text); font-size: 15px; }
 .route-segment { display: contents; }
-.route-node { width: 190px; min-height: 54px; padding: 7px 9px; display: flex; align-items: center; gap: 8px; color: var(--text); text-align: left; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); }
+.route-node { --node-accent: #8b949e; width: 210px; min-height: 62px; padding: 7px 9px; display: grid; grid-template-columns: 22px 18px minmax(0, 1fr); align-items: center; gap: 7px; color: var(--text); text-align: left; border: 1px solid var(--border); border-left: 3px solid var(--node-accent); border-radius: 5px; background: var(--bg); }
+.route-node.eventbridge { --node-accent: #e3b341; }
+.route-node.sqs { --node-accent: #db61a2; }
+.route-node.lambda { --node-accent: #d29922; }
+.route-node.stepfunctions { --node-accent: #f85149; }
+.route-node.ecs { --node-accent: #39c5cf; }
+.route-node.s3 { --node-accent: #3fb950; }
+.stage-order { width: 22px; height: 22px; display: grid; place-items: center; color: var(--node-accent); border: 1px solid color-mix(in srgb, var(--node-accent) 65%, transparent); border-radius: 50%; font-size: 9px; font-weight: 700; }
 .route-node > span { display: flex; flex-direction: column; min-width: 0; }
+.route-node > .stage-order { display: grid; }
 .route-node strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .route-node small { color: var(--text-dim); }
-.route-node :deep(svg) { width: 17px; flex: none; color: #58a6ff; }
-.route-node.actionable { cursor: pointer; border-color: #2f81f7; }
+.route-node :deep(svg) { width: 17px; flex: none; color: var(--node-accent); }
+.route-node.actionable { cursor: pointer; border-color: #f85149; }
 .route-node:disabled { opacity: 1; }
 .route-relation { width: 84px; display: flex; flex-direction: column; align-items: center; color: #58a6ff; }
 .route-relation small { color: var(--text-dim); }
 .route-relation :deep(svg) { width: 28px; }
 .routes-empty { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); }
 .routes-empty strong { color: var(--text); }
-@media (max-width: 760px) { .route-node { width: 165px; } }
+@media (max-width: 760px) {
+  .routes-header { align-items: flex-start; }
+  .route-count { white-space: normal; text-align: right; }
+  .event-order { width: 62px; }
+  .route-node { width: 184px; }
+}
 </style>
