@@ -399,7 +399,7 @@ const hasLambdaResources = computed(() => applicationResources.value.some(resour
 const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
 const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
-  ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
+  resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
 const chartDefinitions = computed(() => [
   ...(hasLambdaResources.value ? [
     { metric: 'invocations_observed', label: t('apm.observedInvocations'), unit: '', color: '#58a6ff' },
@@ -676,8 +676,8 @@ async function analyzeCloudTopology() {
 
 async function addCloudResource(reference) {
   if (!store.selectedApplicationId || !reference?.candidate) return
-  await store.addResource(store.selectedApplicationId, reference.candidate)
-  await store.analyzeCloudTopology(store.selectedApplicationId)
+  const resource = await store.addResource(store.selectedApplicationId, { provider: 'aws', ...reference.candidate })
+  if (resource) await store.analyzeCloudTopology(store.selectedApplicationId)
   renderIcons()
 }
 

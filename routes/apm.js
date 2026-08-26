@@ -11,6 +11,8 @@ const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
+const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
+
 function createApmRouter({
   database,
   architectureDatabase,
@@ -461,7 +463,10 @@ function createApmRouter({
     try {
       const resources = database.listResources(application.id);
       const edges = database.listEdges(application.id);
-      const evidence = await topologyReader.analyze({ application, resources, edges });
+      const cloudResourceIds = new Set(resources.filter(resource => AWS_TOPOLOGY_RESOURCE_TYPES.has(resource.type)).map(resource => resource.id));
+      const cloudResources = resources.filter(resource => cloudResourceIds.has(resource.id));
+      const cloudEdges = edges.filter(edge => cloudResourceIds.has(edge.sourceResourceId) && cloudResourceIds.has(edge.targetResourceId));
+      const evidence = await topologyReader.analyze({ application, resources: cloudResources, edges: cloudEdges });
       log('Cloud topology analyzed', application.name, application.profileId, { requests: evidence.requests });
       res.json({ application, resources, edges, analysis: analyzeTopology(application, resources, edges, evidence) });
     } catch (error) { handleError(res, error); }

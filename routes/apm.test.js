@@ -292,6 +292,7 @@ test('cloud topology analysis is explicit and never confirms ASL suggestions aut
     for (const resource of [
       { id: 'flow', type: 'stepfunctions', key: 'flow', name: 'orders-flow', arn: 'arn:flow', associationSource: 'manual' },
       { id: 'worker', type: 'lambda', key: 'worker', name: 'orders-worker', arn: 'arn:worker', associationSource: 'manual' },
+      { id: 'kube', type: 'kubernetes', key: 'orders-eks/orders/Deployment/api', kubeContext: 'orders-eks', namespace: 'orders', kind: 'Deployment', name: 'api', associationSource: 'manual' },
     ]) {
       await subject.request(`/applications/${application.body.id}/resources`, { method: 'POST', body: resource });
     }
@@ -303,6 +304,8 @@ test('cloud topology analysis is explicit and never confirms ASL suggestions aut
     assert.equal(analysis.body.analysis.cloudScan.requests, 1);
     assert.equal(subject.database.listEdges(application.body.id).length, 0);
     assert.equal(calls[0].application.profileId, 'local:dev');
+    assert.deepEqual(calls[0].resources.map(resource => resource.id).sort(), ['flow', 'worker']);
+    assert.equal(analysis.body.resources.some(resource => resource.id === 'kube'), true);
   } finally {
     await subject.close();
   }
@@ -421,6 +424,7 @@ test('API reconciles linked resources and relationships into one shared registry
       nodes: [
         { id: 'node:lambda', name: 'checkout', provider: 'aws', accountId: '123', region: 'us-east-1', resourceType: 'lambda', arn: 'arn:aws:lambda:us-east-1:123:function:checkout' },
         { id: 'node:queue', name: 'checkout', provider: 'aws', accountId: '123', region: 'us-east-1', resourceType: 'sqs', arn: 'arn:aws:sqs:us-east-1:123:checkout' },
+        { id: 'node:architecture-worker', name: 'checkout-worker', provider: 'aws', accountId: '123', region: 'us-east-1', resourceType: 'lambda', arn: 'arn:aws:lambda:us-east-1:123:function:checkout-worker' },
       ],
       edges: [{ id: 'edge:checkout', sourceNodeId: 'node:lambda', targetNodeId: 'node:queue', relationType: 'depends_on', status: 'automatic' }],
     }, { expectedRevision: 0 });
@@ -428,12 +432,16 @@ test('API reconciles linked resources and relationships into one shared registry
 
     const reconciled = await subject.request(`/applications/${applicationId}/registry/reconcile`, { method: 'POST' });
     assert.equal(reconciled.status, 200);
-    assert.equal(reconciled.body.resources.length, 2);
+    assert.equal(reconciled.body.resources.length, 3);
     assert.equal(reconciled.body.relationships.length, 1);
     const graph = subject.architectureDatabase.getGraph(project.id);
     assert.ok(graph.document.nodes.every(node => node.registryResourceId));
     assert.ok(graph.document.edges[0].registryRelationshipId);
     assert.equal(subject.database.getOverview(applicationId, { from: 0, to: 2000 }).metrics[0].sum, 4);
+    assert.deepEqual(subject.database.listResources(applicationId).map(resource => resource.name).sort(), [
+      'checkout', 'checkout', 'checkout-worker',
+    ]);
+    assert.equal(subject.database.listResources(applicationId).find(resource => resource.name === 'checkout-worker').associationSource, 'architecture');
   } finally {
     await subject.close();
   }
@@ -461,6 +469,76 @@ test('API seeds Architecture with Kubernetes kinds and reconciles later APM memb
     });
     assert.equal(added.status, 201);
     assert.equal(subject.database.listRegistryResources(applicationId).length, 2);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('APM changes automatically project compatible resources into an existing Architecture view', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'serverless', region: 'us-east-1' },
+    });
+    const project = await subject.architectureRequest('/projects', {
+      method: 'POST', body: { name: 'serverless-architecture' },
+    });
+    const linked = await subject.request(`/applications/${application.body.id}/architecture-link`, {
+      method: 'PATCH', body: { projectId: project.body.id },
+    });
+    assert.equal(linked.status, 200);
+
+    const added = await subject.request(`/applications/${application.body.id}/resources`, {
+      method: 'POST',
+      body: {
+        type: 'lambda', key: 'arn:aws:lambda:us-east-1:123456789012:function:serverless',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:serverless', name: 'serverless',
+        associationSource: 'manual',
+      },
+    });
+    assert.equal(added.status, 201);
+    const graph = await subject.architectureRequest(`/projects/${project.body.id}/graph`);
+    assert.equal(graph.body.document.nodes.length, 1);
+    assert.equal(graph.body.document.nodes[0].resourceType, 'lambda');
+    assert.equal(graph.body.document.nodes[0].arn, added.body.arn);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Architecture changes automatically project observable resources into the linked APM application', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'platform', region: 'us-east-1' },
+    });
+    const project = await subject.architectureRequest('/projects', {
+      method: 'POST', body: { name: 'platform-architecture', applicationId: application.body.id },
+    });
+    assert.equal(project.status, 201);
+
+    const updated = await subject.architectureRequest(`/projects/${project.body.id}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        operation: {
+          type: 'node.upsert',
+          value: {
+            id: 'kube:platform-api', name: 'platform-api', provider: 'kubernetes',
+            resourceType: 'deployment', kind: 'Deployment', nativeId: 'eks-dev/platform/Deployment/platform-api',
+            kubeContext: 'eks-dev', namespace: 'platform',
+          },
+        },
+      },
+    });
+    assert.equal(updated.status, 200);
+
+    const resources = subject.database.listResources(application.body.id);
+    assert.equal(resources.length, 1);
+    assert.deepEqual(resources[0], {
+      ...resources[0], type: 'kubernetes', kind: 'Deployment', name: 'platform-api',
+      associationSource: 'architecture', kubeContext: 'eks-dev', namespace: 'platform',
+    });
   } finally {
     await subject.close();
   }
