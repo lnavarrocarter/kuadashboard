@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.13.0 (2026-08-26)
+
+### Workspace Architecture centrado en la aplicacion
+
+- Architecture ahora carga y muestra primero el catalogo de KUA Applications, selecciona la aplicacion activa y limita sus vistas Architecture a esa aplicacion.
+- El workspace Architecture ahora expone juntos identidad, proveedor, entorno, equipo, scopes activos y estado del enlace junto con la revision del diagrama.
+- Crear o refrescar una vista Architecture conserva el `applicationId` seleccionado; los proyectos heredados sin enlace siguen disponibles como ruta de compatibilidad.
+
 ## v1.12.0 (2026-08-26)
 
 ### Endurecimiento del shell de KUA Application

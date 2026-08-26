@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.13.0 (2026-08-26)
+
+### Application-first Architecture workspace
+
+- Architecture now loads and presents the KUA Application catalog before profile-scoped projects, selecting the active application and limiting its architecture views to that application.
+- The Architecture workspace now exposes application identity, provider, environment, team, active scopes and link status together with the diagram revision.
+- Creating or refreshing an Architecture view preserves the selected `applicationId`; legacy unlinked projects remain available as a compatibility path.
+
 ## v1.12.0 (2026-08-26)
 
 ### KUA Application shell hardening
