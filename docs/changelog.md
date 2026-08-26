@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Architecture Phase 4 Kickoff (2026-08-26)
+
+- Added the KUA Unified Management Plan, defining KUA Application as the shared product boundary between APM and Architecture and sequencing the migration toward one provider-neutral application workspace.
+- Added the phase 4 contract for authoritative CloudFormation synchronization, stale-resource lifecycle, sync metadata and relationship review.
+- Documented the first phase 4 milestone as a safe CloudFormation sync review that compares selected stack sources before applying one graph revision.
+- Added the first read-only AWS sync preview endpoint, classifying selected CloudFormation resources and relationships as new, changed, unchanged, missing, stale, manual, reinforced or rejected without mutating the graph.
+- Added an Architecture workspace sync preview panel that checks existing CloudFormation sources and summarizes resource and relationship changes before any apply flow exists.
+
+### Architecture Phase 3 Closure (2026-08-25)
+
+- Rediscovery now reconciles current and historical AWS identities without duplicating nodes, while remapping edges, groups and saved positions to the retained graph ID.
+- Manual and rejected relationship decisions continue to take precedence when the same resources and evidence are imported again.
+- Canvas arrangement mode, direction and relationship-label preference are now stored in the versioned graph, restored after reload and included in snapshot comparisons.
+- AWS discovery now shows whether CloudFormation stacks are loading or resources and evidence are being analyzed, including a visible waiting state for longer reads.
+- Architecture projects can now be deleted explicitly, including their local graph, snapshots and revision history.
+- A live rediscovery of the three AFEX stacks retained 119 nodes without duplication and recorded newly available relationship evidence.
+- Lambda layer versions are now modeled as layers with their layer name instead of as functions named after a numeric version.
+- API Gateway Lambda permissions are consolidated into route-to-Lambda evidence rather than rendered as repeated policy nodes; Lambda inspection now shows its API routes, permission declarations and CloudFormation identity.
+- Added a bilingual phase contract with explicit acceptance criteria and deferred authoritative synchronization to phase 4.
+- Closure validation passed: 118 backend tests, 374 frontend tests, the frontend production build and the VitePress documentation build.
+
 ### Architecture Workspace Foundation
 
 - Added a new profile-scoped **Architecture** workspace for application diagrams, initially targeting AWS.

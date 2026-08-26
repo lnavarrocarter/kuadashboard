@@ -57,3 +57,9 @@ kuadashboard/
 ├── docs/                   # Documentación VitePress
 └── scripts/                # Utilidades de build
 ```
+
+## Arquitectura del producto
+
+- [Plan de Gestion Unificada de KUA](./kua-unified-management-plan)
+- [Architecture Workspace Fase 3](./workspace-phase-3)
+- [Architecture Workspace Fase 4](./workspace-phase-4)

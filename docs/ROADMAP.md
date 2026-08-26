@@ -11,6 +11,14 @@
 
 > "Un solo lugar para conocer y operar toda tu infraestructura distribuida."
 
+## Dirección de Producto — KUA Application
+
+Observabilidad y Architecture convergerán alrededor de una **KUA Application**: una aplicación, entorno y perfil con recursos, relaciones, evidencia, telemetría y trazas compartidos. El proyecto no representa una cuenta cloud completa; representa el límite de una aplicación que puede extenderse por AWS, GCP, Vercel y Kubernetes.
+
+La implementación será incremental. APM seguirá siendo la fuente canónica de la aplicación operable y Architecture será inicialmente una vista versionada enlazada a ella. No se moverán métricas, cursores ni payloads de trazas al documento del grafo.
+
+El plan técnico completo está en [KUA Unified Management Plan](./architecture/kua-unified-management-plan.md).
+
 ---
 
 ## 📦 Corto Plazo — v1.10 → v2.0 (Q3 2026)
@@ -36,7 +44,7 @@ Mejoras incrementales sobre la base actual, priorizando madurez y cobertura.
 ### UX / Calidad de Vida
 | Feature | Prioridad | Esfuerzo |
 |---|---|---|
-| **Architecture workspace** — diagramas editables desde AWS, código y evidencia operacional | Alta | Incremental |
+| **KUA Application** — unir APM y Architecture con recursos, relaciones, evidencia y telemetría compartidos | Alta | v1.12 → v2.0 |
 | **Dashboard home page** — resumen cross-provider con widgets configurables | Alta | 3 sprints |
 | **Multi-ventana / tabs** — abrir vistas en ventanas separadas | Media | 2 sprints |
 | **Keyboard shortcuts** — navegación completa por teclado | Baja | 1 sprint |
@@ -63,6 +71,16 @@ Features transformacionales que agregan capacidades no existentes hoy.
 | **Webhook receiver** | Endpoint para recibir alerts de AWS/GCP/K8s y gatillar acciones |
 | **Scheduled actions** | Programar start/stop de instancias, escalado, backups |
 | **Terraform integración** | Explorar state files y lanzar applies desde KUA |
+
+### Gestión Unificada de Aplicaciones
+
+| Feature | Entrega |
+|---|---|
+| **Architecture sync apply** | Completar sincronización autoritativa CloudFormation con revisión atómica y ciclo stale |
+| **Vínculo APM ↔ Architecture** | Asociar aplicaciones APM existentes con vistas Architecture sin duplicar recursos |
+| **Registro compartido** | Unificar identidad, lineage y decisiones de relaciones; mantener telemetría en su almacenamiento especializado |
+| **Overlays operativos** | Mostrar salud, frescura, métricas, trazas, deployments y hallazgos dentro del diagrama |
+| **Adaptadores multi-cloud** | Extender el mismo contrato a Kubernetes, GCP y Vercel con capacidades declaradas |
 
 ### 💰 FinOps y Costos
 | Feature | Descripción |

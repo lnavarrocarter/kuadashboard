@@ -2,6 +2,27 @@
 
 ## Sin publicar
 
+### Inicio de Architecture Fase 4 (2026-08-26)
+
+- Nuevo plan de Gestion Unificada de KUA: define KUA Application como limite compartido entre APM y Architecture y ordena la migracion hacia un workspace de aplicaciones neutral al proveedor.
+- Nuevo contrato de fase 4 para sincronizacion autoritativa CloudFormation, ciclo de vida stale, metadata de sync y revision de relaciones.
+- Primer hito documentado como una revision segura de sync CloudFormation que compara fuentes de stacks seleccionados antes de aplicar una sola revision del grafo.
+- Primer endpoint read-only de sync preview AWS, clasificando recursos y relaciones CloudFormation seleccionados como nuevos, modificados, sin cambios, ausentes, stale, manuales, reforzados o rechazados sin mutar el grafo.
+- Nuevo panel de sync preview en el workspace Architecture para revisar fuentes CloudFormation existentes y resumir cambios de recursos y relaciones antes de implementar el flujo de apply.
+
+### Cierre de Architecture Fase 3 (2026-08-25)
+
+- El redescubrimiento ahora reconcilia identidades AWS actuales e historicas sin duplicar nodos y remapea relaciones, grupos y posiciones al ID conservado.
+- Las decisiones manuales y relaciones rechazadas siguen prevaleciendo al importar de nuevo los mismos recursos y evidencias.
+- El modo de orden del Canvas, su direccion y la preferencia de etiquetas ahora se guardan en el grafo versionado, se restauran al recargar y aparecen en comparaciones de snapshots.
+- El discovery AWS ahora indica si se cargan stacks CloudFormation o se analizan recursos y evidencias, con una espera visible durante lecturas demoradas.
+- Los proyectos Architecture ahora se pueden eliminar explícitamente, incluyendo su grafo local, snapshots e historial de revisiones.
+- Un redescubrimiento real de los tres stacks AFEX conservó 119 nodos sin duplicados y registró nueva evidencia de relaciones disponible.
+- Las versiones de capas Lambda ahora se modelan como capas con el nombre de la capa, en lugar de funciones cuyo nombre era una versión numérica.
+- Los permisos Lambda de API Gateway se consolidan como evidencia de ruta a Lambda, en vez de nodos policy repetidos; al seleccionar una Lambda se muestran sus rutas API, permisos y la identidad CloudFormation.
+- Nuevo contrato bilingue de fase con criterios de aceptacion explicitos; la sincronizacion autoritativa queda diferida a fase 4.
+- Validacion de cierre aprobada: 118 pruebas backend, 374 pruebas frontend, build de produccion y build de documentacion VitePress.
+
 ### Base del espacio Architecture
 
 - Nuevo espacio **Architecture** aislado por perfil para diagramas de aplicaciones, inicialmente orientado a AWS.
