@@ -77,6 +77,14 @@ Las pestañas APM y Architecture actuales pueden mantenerse como accesos compati
 
 ## Plan de entrega
 
+### Avance implementado: v1.14.0
+
+- El análisis cloud AWS filtra su entrada a recursos AWS y no intenta interpretar workloads Kubernetes como recursos serverless.
+- La reconciliación proyecta recursos observables en ambos sentidos entre APM y Architecture, con upsert por identidad y limpieza de proyecciones retiradas.
+- Las funciones y state machines serverless de SAM se normalizan a `lambda` y `stepfunctions`; el preview AWS puede derivar la cuenta desde ARN cuando el catálogo no la entrega.
+- Se habilitó el proveedor `kubernetes` explícito para recursos compartidos y se agregó una migración compatible del almacenamiento local.
+- La cobertura de regresión valida aplicaciones mixtas, imports Architecture, recursos APM en proyectos ya vinculados y migraciones.
+
 ### Fase 4B: terminar la sincronizacion autoritativa
 
 Completar el trabajo CloudFormation ya iniciado antes de cambiar la propiedad:

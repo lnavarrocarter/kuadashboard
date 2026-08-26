@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.14.0 (2026-08-26)
+
+### Recursos compartidos y análisis de topología AWS
+
+- El análisis de topología AWS ahora separa recursos y relaciones AWS de las membresías Kubernetes mixtas, conservando la topología completa de la aplicación en la respuesta.
+- La resolución de referencias AWS es segura ante datos incompletos y las funciones y state machines serverless de CloudFormation/SAM conservan su semántica Lambda/Step Functions.
+- El discovery Architecture deriva la cuenta AWS desde los recursos del preview cuando el scope seleccionado no la entrega.
+- Las aplicaciones enlazadas ahora reconcilian recursos observables en ambos sentidos: los recursos agregados en APM aparecen en una vista Architecture existente y los nodos compatibles AWS/Kubernetes/GCP/Vercel de Architecture se proyectan en APM sin duplicarse.
+- Los proveedores Kubernetes se persisten explícitamente cuando es necesario, y las membresías proyectadas desde Architecture se eliminan al retirar su nodo de origen.
+- Se agregó cobertura de regresión para análisis mixto AWS/Kubernetes, proyección bidireccional, normalización serverless y migración de esquema a v1.14.
+
 ## v1.13.0 (2026-08-26)
 
 ### Workspace Architecture centrado en la aplicacion

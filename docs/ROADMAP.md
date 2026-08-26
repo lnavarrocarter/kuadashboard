@@ -1,7 +1,7 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
-> **Versión actual:** v1.10.0
-> **Última actualización:** 2026-06-09
+> **Versión actual:** v1.14.0
+> **Última actualización:** 2026-08-26
 
 ---
 
@@ -18,6 +18,13 @@ Observabilidad y Architecture convergerán alrededor de una **KUA Application**:
 La implementación será incremental. APM seguirá siendo la fuente canónica de la aplicación operable y Architecture será inicialmente una vista versionada enlazada a ella. No se moverán métricas, cursores ni payloads de trazas al documento del grafo.
 
 El plan técnico completo está en [KUA Unified Management Plan](./architecture/kua-unified-management-plan.md).
+
+### Avance v1.14.0 — recursos compartidos
+
+- El análisis AWS tolera aplicaciones mixtas con Kubernetes y limita las lecturas ASL a recursos AWS.
+- La membresía de recursos observables se proyecta automáticamente entre APM y Architecture en ambos sentidos, preservando identidades y evitando duplicados.
+- SAM serverless se normaliza como Lambda/Step Functions y el alcance AWS se recupera desde los recursos del preview cuando falta en el catálogo.
+- El registro compartido sigue siendo la identidad de correlación; métricas, cursores y trazas permanecen en sus almacenes especializados.
 
 ---
 

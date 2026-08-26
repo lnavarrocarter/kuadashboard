@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.14.0 (2026-08-26)
+
+### Shared resources and AWS topology analysis
+
+- AWS topology analysis now isolates AWS resources and relationships from mixed Kubernetes memberships, while preserving the complete mixed application in the returned topology.
+- AWS resource matching is null-safe and CloudFormation/SAM serverless functions and state machines retain their Lambda/Step Functions semantics.
+- Architecture discovery derives the AWS account from preview resources when the selected scope does not provide it.
+- Linked applications now reconcile observable resources in both directions: APM additions appear in an existing Architecture view, and Architecture AWS/Kubernetes/GCP/Vercel-compatible nodes become APM resources without duplicates.
+- Kubernetes resource providers are persisted explicitly where needed, and Architecture-projected memberships are removed when their source node is removed.
+- Added regression coverage for mixed AWS/Kubernetes analysis, bidirectional projection, serverless normalization and schema migration to v1.14.
+
 ## v1.13.0 (2026-08-26)
 
 ### Application-first Architecture workspace
