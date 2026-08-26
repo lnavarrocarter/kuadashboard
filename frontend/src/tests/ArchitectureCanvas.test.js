@@ -73,6 +73,7 @@ describe('ArchitectureCanvas', () => {
 
   it('uses recognizable AWS service icons and simpler policy treatment', () => {
     expect(architectureResourcePresentation('lambda')).toEqual({ icon: 'square-function', tone: 'compute' })
+    expect(architectureResourcePresentation('layer')).toEqual({ icon: 'layers-3', tone: 'compute' })
     expect(architectureResourcePresentation('sqs')).toEqual({ icon: 'messages-square', tone: 'application' })
     expect(architectureResourcePresentation('s3')).toEqual({ icon: 'archive', tone: 'storage' })
     expect(architectureResourcePresentation('stepfunctions')).toEqual({ icon: 'workflow', tone: 'application' })
@@ -97,7 +98,7 @@ describe('ArchitectureCanvas', () => {
           evidence: [{
             type: 'cloudformation_reference', path: 'Resources.GetOrders.Properties.Integration.Uri',
             intrinsic: 'Fn::Sub', method: 'GET', routePath: '/orders', route: 'GET /orders',
-          }],
+          }, { type: 'lambda_permission', logicalId: 'GetOrdersPermission' }],
         }],
         layout: {},
       },
@@ -113,6 +114,9 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.get('.component-reference').text()).toContain('GET /orders')
     await wrapper.get('.component-reference').trigger('click')
     expect(wrapper.get('.canvas-inspector input').element.value).toBe('orders-worker')
+    expect(wrapper.get('.api-gateway-routes').text()).toContain('GET /orders')
+    expect(wrapper.get('.api-gateway-routes').text()).toContain('1 Lambda permission')
+    expect(wrapper.get('.component-metadata').text()).toContain('AWS::Lambda::Function')
   })
 
   it('arranges request flow by graph depth in either direction', async () => {
@@ -181,14 +185,61 @@ describe('ArchitectureCanvas', () => {
       global: { stubs },
     })
     await wrapper.get('.canvas-layout-controls select').setValue('resource-type')
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      {
+        type: 'view.set',
+        value: { layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false },
+      },
+      'Update canvas view',
+    ])
     await wrapper.get('.canvas-layout-controls button').trigger('click')
 
-    expect(wrapper.emitted('operation')[0]).toEqual([
+    expect(wrapper.emitted('operation')[1]).toEqual([
       { type: 'layout.set', value: resourceTypeLayout(document).layout },
       'Arrange resources by type',
     ])
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section')).toHaveLength(2)
     expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('straight')
+  })
+
+  it('restores persisted canvas view preferences on reload', () => {
+    const document = {
+      nodes: [{ id: 'worker', name: 'Worker', resourceType: 'lambda' }],
+      edges: [],
+      layout: { worker: { x: 100, y: 98 } },
+      view: { layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 4, document } },
+      global: { stubs },
+    })
+
+    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
+    expect(wrapper.get('.canvas-layout-controls button[title="Toggle relationship labels"]').classes()).toContain('primary')
+    expect(wrapper.emitted('operation')).toBeUndefined()
+  })
+
+  it('keeps the current local layout mode when a graph refresh has no persisted view yet', async () => {
+    const document = {
+      nodes: [{ id: 'worker', name: 'Worker', resourceType: 'lambda' }],
+      edges: [],
+      layout: { worker: { x: 100, y: 98 } },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 4, document } },
+      global: { stubs },
+    })
+
+    await wrapper.get('.canvas-layout-controls select').setValue('resource-type')
+    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+
+    await wrapper.setProps({
+      graph: { revision: 5, document: { nodes: document.nodes, edges: [], layout: document.layout } },
+    })
+
+    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
   })
 
   it('removes focus attenuation when the canvas selection is cleared', async () => {
@@ -211,6 +262,34 @@ describe('ArchitectureCanvas', () => {
     await wrapper.get('.clear-pane').trigger('click')
     expect(wrapper.find('.canvas-inspector').exists()).toBe(false)
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').every(node => node.style?.opacity == null)).toBe(true)
+  })
+
+  it('only keeps relationship labels on edges related to the selected node', async () => {
+    const labeledGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'api', name: 'API', resourceType: 'api' },
+          { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+          { id: 'bucket', name: 'Bucket', resourceType: 's3' },
+          { id: 'queue', name: 'Queue', resourceType: 'sqs' },
+        ],
+        edges: [
+          { id: 'api-worker', sourceNodeId: 'api', targetNodeId: 'worker', relationType: 'routes_to', status: 'automatic' },
+          { id: 'bucket-queue', sourceNodeId: 'bucket', targetNodeId: 'queue', relationType: 'triggers', status: 'automatic' },
+        ],
+        layout: {},
+        view: { layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: true },
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: labeledGraph }, global: { stubs } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges').map(edge => edge.label)).toEqual(['routes to', 'triggers'])
+
+    await wrapper.get('.select-node').trigger('click')
+    const edges = wrapper.getComponent(stubs.VueFlow).props('edges')
+    expect(edges.map(edge => edge.label)).toEqual(['routes to', undefined])
+    expect(edges[0].labelBgStyle).toMatchObject({ fill: '#1f6feb' })
+    expect(edges[1].style.opacity).toBe(0.035)
   })
 
   it('opens the inspector and emits a partial node update', async () => {

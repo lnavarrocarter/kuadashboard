@@ -55,6 +55,29 @@ describe('architecture workspace', () => {
     expect(store.snapshots[0].name).toBe('Release')
   })
 
+  it('deletes the selected project and selects the next available project', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/projects/project-a')) {
+        expect(options.method).toBe('DELETE')
+        return response(null, 204)
+      }
+      if (url.endsWith('/projects/project-b/graph')) return response({ revision: 0, document: { nodes: [], edges: [] } })
+      if (url.endsWith('/projects/project-b/snapshots')) return response([])
+      if (url.includes('/projects/project-b/changes')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.projects = [{ id: 'project-a', name: 'Orders' }, { id: 'project-b', name: 'Payments' }]
+    store.selectedProjectId = 'project-a'
+
+    const deleted = await store.deleteProject()
+
+    expect(deleted).toBe(true)
+    expect(store.projects.map(project => project.id)).toEqual(['project-b'])
+    expect(store.selectedProjectId).toBe('project-b')
+    expect(store.graph.revision).toBe(0)
+  })
+
   it('reverts from the current revision and refreshes change history', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/snapshots/snapshot-a/revert')) {
@@ -119,5 +142,38 @@ describe('architecture workspace', () => {
     expect(graph.revision).toBe(4)
     expect(store.discoveryPreview).toBeNull()
     expect(store.changes[0].type).toBe('discovery.import')
+  })
+
+  it('loads AWS sync preview without mutating the current graph', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/discovery/aws/sync-preview')) {
+        expect(options.method).toBe('POST')
+        expect(JSON.parse(options.body)).toEqual({
+          region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'],
+        })
+        return response({
+          summary: {
+            changeCount: 2,
+            resources: { new: 1, changed: 1, unchanged: 0, missing: 0, stale: 0, manual: 0 },
+            relationships: { new: 0, reinforced: 0, unchanged: 0, missingEvidence: 0, rejected: 0, manual: 0 },
+          },
+          resources: { new: [], changed: [], unchanged: [], missing: [], stale: [], manual: [] },
+          relationships: { new: [], reinforced: [], unchanged: [], missingEvidence: [], rejected: [], manual: [] },
+        })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 7, document: { nodes: [], edges: [] } }
+
+    const preview = await store.previewAwsSync({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'],
+    })
+
+    expect(preview.summary.changeCount).toBe(2)
+    expect(store.syncPreview.summary.resources.new).toBe(1)
+    expect(store.graph.revision).toBe(7)
+    expect(store.syncPreviewing).toBe(false)
   })
 })

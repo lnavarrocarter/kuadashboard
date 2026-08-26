@@ -13,6 +13,14 @@
       </span>
     </nav>
 
+    <div v-if="store.discovering" class="discovery-progress" role="status" aria-live="polite">
+      <i data-lucide="loader-2"></i>
+      <span>
+        <strong>{{ discoveryProgress.title }}</strong>
+        <small>{{ discoveryProgress.detail }}</small>
+      </span>
+    </div>
+
     <div v-if="!store.discoveryPreview" class="discovery-controls">
       <label>Region<input v-model.trim="region" class="ctrl-input" placeholder="us-east-1" /></label>
       <button class="btn sm primary" :disabled="store.discovering || !region" @click="loadDeployments">
@@ -86,38 +94,60 @@
         <i data-lucide="triangle-alert"></i>
         Inventory reached the 500-resource preview limit. Identified applications may be partial.
       </div>
-      <div class="discovery-section-heading">
-        <span><strong>Confirm resources</strong><small>No resource is selected automatically</small></span>
-        <button class="btn sm primary" :disabled="!selectedNodes.length || store.saving" @click="importResources()">
-          <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>
-          {{ store.saving ? 'Drawing…' : `Draw selected ${selectedNodes.length || ''}` }}
+      <div v-if="!confirmingRelationships" class="discovery-section-heading">
+        <span><strong>Confirm resources</strong><small>{{ resourceSelectionHint }}</small></span>
+        <button v-if="selectedStacks.length > 1" class="btn sm primary" :disabled="store.saving || !stackNodes.length || stackNodes.length > 500" @click="drawStackResources">
+          <i :data-lucide="store.saving ? 'loader-2' : 'layout-dashboard'"></i>
+          {{ store.saving ? 'Drawing…' : 'Draw complete diagram' }}
+        </button>
+        <button v-else class="btn sm primary" :disabled="!reviewNodeIds.length || store.saving" @click="continueToRelationships">
+          Review relationships <i data-lucide="arrow-right"></i>
         </button>
       </div>
-      <div class="resource-list">
-        <label v-for="node in store.discoveryPreview.nodes" :key="node.id" class="discovery-row resource-row">
-          <input v-model="selectedNodes" type="checkbox" :value="node.id" />
-          <span class="resource-icon"><i :data-lucide="resourceIcon(node.resourceType)"></i></span>
-          <span><strong>{{ node.name }}</strong><small>{{ resourceLabel(node.resourceType) }} · {{ resourceOrigin(node) }}</small></span>
-          <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
-        </label>
+      <div v-if="!confirmingRelationships && selectedStacks.length <= 1" class="resource-list">
+        <section v-for="group in resourceGroups" :key="group.type" class="resource-group">
+          <header class="resource-group-heading">
+            <span class="resource-icon"><i :data-lucide="resourceIcon(group.type)"></i></span>
+            <span><strong>{{ group.label }}</strong><small>{{ group.nodes.length }} resource{{ group.nodes.length === 1 ? '' : 's' }}</small></span>
+          </header>
+          <label v-for="node in group.nodes" :key="node.id" class="discovery-row resource-row">
+            <input v-model="selectedNodes" type="checkbox" :value="node.id" />
+            <span><strong>{{ node.name }}</strong><small>{{ resourceOrigin(node) }}</small></span>
+            <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
+          </label>
+        </section>
+        <div v-if="!resourceGroups.length" class="discovery-empty">All preview resources already participate in suggested relationships.</div>
       </div>
-      <div class="relationship-readiness">
+      <div v-if="!confirmingRelationships" class="relationship-readiness">
         <i data-lucide="git-branch"></i>
         <span>
           <strong>{{ store.discoveryPreview.relationshipSuggestions.length }} relationship suggestion{{ store.discoveryPreview.relationshipSuggestions.length === 1 ? '' : 's' }}</strong>
-          <small>Relations at or above {{ thresholdPercent }}% become automatic when both endpoints are imported; lower confidence remains suggested.</small>
+          <small>{{ relatedNodeIds.length }} related resource{{ relatedNodeIds.length === 1 ? '' : 's' }} will be included automatically; lower confidence remains suggested.</small>
         </span>
       </div>
-      <div v-if="store.discoveryPreview.relationshipSuggestions.length" class="suggestion-list">
-        <div v-for="suggestion in store.discoveryPreview.relationshipSuggestions" :key="suggestion.id" class="suggestion-row">
-          <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>{{ relationshipLabel(suggestion.relationType) }}</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
-          <span class="confidence">{{ Math.round(suggestion.confidence * 100) }}%</span>
-          <span :class="['outcome-badge', suggestion.confidence >= threshold ? 'automatic' : 'suggested']">
-            {{ suggestion.confidence >= threshold ? 'Automatic' : 'Review' }}
+      <template v-if="confirmingRelationships">
+        <div class="discovery-section-heading">
+          <span><strong>Review relationships</strong><small>{{ reviewNodeIds.length }} resources · {{ reviewRelationships.length }} relationships ready to draw</small></span>
+          <span class="review-actions">
+            <button class="btn sm" :disabled="store.saving" @click="confirmingRelationships = false"><i data-lucide="arrow-left"></i> Back</button>
+            <button class="btn sm primary" :disabled="!reviewNodeIds.length || store.saving" @click="importResources(reviewNodeIds)">
+              <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>
+              {{ store.saving ? 'Drawing…' : 'Draw diagram' }}
+            </button>
           </span>
-          <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ suggestion.evidence[0]?.intrinsic }}</span>
         </div>
-      </div>
+        <div v-if="reviewRelationships.length" class="suggestion-list">
+          <div v-for="suggestion in reviewRelationships" :key="suggestion.id" class="suggestion-row">
+            <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>{{ relationshipLabel(suggestion.relationType) }}</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
+            <span class="confidence">{{ Math.round(suggestion.confidence * 100) }}%</span>
+            <span :class="['outcome-badge', suggestion.confidence >= threshold ? 'automatic' : 'suggested']">
+              {{ suggestion.confidence >= threshold ? 'Automatic' : 'Review' }}
+            </span>
+            <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ suggestion.evidence[0]?.intrinsic }}</span>
+          </div>
+        </div>
+        <div v-else class="discovery-empty">No relationships found between the selected resources.</div>
+      </template>
     </template>
   </section>
 </template>
@@ -132,6 +162,7 @@ const store = useArchitectureStore()
 const region = ref('us-east-1')
 const selectedStacks = ref([])
 const selectedNodes = ref([])
+const confirmingRelationships = ref(false)
 const steps = [
   { label: 'CloudFormation', detail: 'Choose deployments' },
   { label: 'Resources', detail: 'Confirm components' },
@@ -139,12 +170,41 @@ const steps = [
 ]
 const threshold = computed(() => store.selectedProject?.automaticEdgeThreshold ?? 0.85)
 const thresholdPercent = computed(() => Math.round(threshold.value * 100))
-const currentStep = computed(() => store.discoveryPreview ? 1 : 0)
+const currentStep = computed(() => (store.discoveryPreview ? (confirmingRelationships.value ? 2 : 1) : 0))
+const discoveryProgress = computed(() => store.discoveryPhase === 'stacks'
+  ? { title: 'Loading CloudFormation stacks', detail: 'AWS is listing deployments in the selected region.' }
+  : { title: 'Analyzing AWS resources', detail: 'Reading selected stacks, regional inventory and relationship evidence. This can take a moment.' })
 const stackNodes = computed(() => store.discoveryPreview?.nodes?.filter(node => selectedStacks.value.includes(node.stackName)) || [])
 const stackRelationshipCount = computed(() => {
   const nodeIds = new Set(stackNodes.value.map(node => node.id))
   return store.discoveryPreview?.relationshipSuggestions?.filter(edge =>
     nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId)).length || 0
+})
+const relatedNodeIds = computed(() => [...new Set((store.discoveryPreview?.relationshipSuggestions || [])
+  .flatMap(edge => [edge.sourceNodeId, edge.targetNodeId]))])
+const relatedNodeSet = computed(() => new Set(relatedNodeIds.value))
+const selectableNodes = computed(() => (store.discoveryPreview?.nodes || [])
+  .filter(node => !relatedNodeSet.value.has(node.id)))
+const resourceGroups = computed(() => {
+  const groups = new Map()
+  for (const node of selectableNodes.value) {
+    const type = node.resourceType || 'resource'
+    const group = groups.get(type) || { type, label: resourceLabel(type), nodes: [] }
+    group.nodes.push(node)
+    groups.set(type, group)
+  }
+  return [...groups.values()]
+    .map(group => ({ ...group, nodes: group.nodes.slice().sort((left, right) => left.name.localeCompare(right.name)) }))
+    .sort((left, right) => left.label.localeCompare(right.label) || left.type.localeCompare(right.type))
+})
+const reviewNodeIds = computed(() => [...new Set([...relatedNodeIds.value, ...selectedNodes.value])])
+const reviewNodeSet = computed(() => new Set(reviewNodeIds.value))
+const reviewRelationships = computed(() => (store.discoveryPreview?.relationshipSuggestions || [])
+  .filter(edge => reviewNodeSet.value.has(edge.sourceNodeId) && reviewNodeSet.value.has(edge.targetNodeId)))
+const resourceSelectionHint = computed(() => {
+  if (selectedStacks.value.length > 1) return 'Multiple stacks draw the complete stack diagram'
+  if (!selectableNodes.value.length) return 'Suggested relationships already cover every preview resource'
+  return `${selectableNodes.value.length} unlinked resource${selectableNodes.value.length === 1 ? '' : 's'} available for manual selection`
 })
 const selectedStackSummary = computed(() => selectedStacks.value.length
   ? `${selectedStacks.value.length} CloudFormation deployment${selectedStacks.value.length === 1 ? '' : 's'} selected`
@@ -153,12 +213,14 @@ const selectedStackSummary = computed(() => selectedStacks.value.length
 async function loadDeployments() {
   selectedStacks.value = []
   selectedNodes.value = []
+  confirmingRelationships.value = false
   await store.loadAwsDeployments(region.value)
   refreshIcons()
 }
 
 async function previewResources(stackNames) {
   selectedNodes.value = []
+  confirmingRelationships.value = false
   await store.previewAwsResources({
     region: region.value,
     accountId: store.discoveryCatalog?.scope.accountId || '',
@@ -178,7 +240,13 @@ function previewRegionalInventory() {
 
 function backToStacks() {
   selectedNodes.value = []
+  confirmingRelationships.value = false
   store.discoveryPreview = null
+  refreshIcons()
+}
+
+function continueToRelationships() {
+  confirmingRelationships.value = true
   refreshIcons()
 }
 
@@ -191,6 +259,7 @@ async function importResources(nodeIds = selectedNodes.value) {
   })
   if (graph) {
     selectedNodes.value = []
+    confirmingRelationships.value = false
     emit('imported', graph)
     refreshIcons()
   }
@@ -251,6 +320,10 @@ onMounted(refreshIcons)
 .discovery-panel { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); overflow: hidden; }
 .discovery-header, .discovery-controls, .discovery-section-heading { padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
 .discovery-header { justify-content: space-between; }
+.discovery-progress { min-height: 54px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid color-mix(in srgb, #2f81f7 55%, var(--border)); background: color-mix(in srgb, #2f81f7 9%, transparent); color: var(--text); }
+.discovery-progress > i { width: 19px; height: 19px; color: #2f81f7; animation: discovery-spin 0.9s linear infinite; }
+.discovery-progress span { display: flex; flex-direction: column; gap: 2px; }
+.discovery-progress small { color: var(--text-dim); }
 .discovery-header > span, .discovery-section-heading > span { display: flex; align-items: center; gap: 8px; }
 .discovery-header small, .discovery-section-heading small { color: var(--text-dim); }
 .discovery-steps { min-height: 68px; padding: 9px 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--border); background: var(--bg); }
@@ -258,6 +331,7 @@ onMounted(refreshIcons)
 .discovery-steps > span:not(:last-child)::after { content: ''; position: absolute; top: 14px; right: 12px; width: calc(100% - 150px); min-width: 24px; height: 1px; background: var(--border); }
 .discovery-steps > span > span { grid-row: 1 / 3; width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 11px; font-weight: 700; }
 .discovery-steps strong { color: inherit; font-size: 11px; }
+@keyframes discovery-spin { to { transform: rotate(360deg); } }
 .discovery-steps small { color: var(--text-dim); font-size: 10px; }
 .discovery-steps > span.active { color: #e3b341; }
 .discovery-steps > span.active > span { color: #0d1117; border-color: #e3b341; background: #e3b341; }
@@ -276,7 +350,13 @@ onMounted(refreshIcons)
 .stack-resource-summary > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
 .stack-resource-summary small { color: var(--text-dim); }
 .stack-resource-summary .btn { margin-left: auto; }
+.resource-group { border-bottom: 1px solid var(--border); }
+.resource-group:last-child { border-bottom: 0; }
+.resource-group-heading { position: sticky; top: 0; z-index: 1; min-height: 42px; padding: 7px 12px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg-hover) 78%, var(--bg-panel)); }
+.resource-group-heading > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.resource-group-heading small { color: var(--text-dim); }
 .discovery-row { min-height: 48px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.resource-row { padding-left: 20px; }
 .discovery-row:hover { background: var(--bg-hover); }
 .discovery-row > span:not(.resource-icon, .evidence-badge) { display: flex; flex-direction: column; min-width: 0; }
 .discovery-row small { color: var(--text-dim); }

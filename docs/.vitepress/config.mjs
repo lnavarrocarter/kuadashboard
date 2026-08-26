@@ -51,6 +51,8 @@ const enSidebar = {
   ]}],
   '/architecture/': [{ text: 'Architecture', items: [
     { text: 'Overview', link: '/architecture/' },
+    { text: 'Workspace Phase 3', link: '/architecture/workspace-phase-3' },
+    { text: 'Workspace Phase 4', link: '/architecture/workspace-phase-4' },
     { text: 'Backend API', link: '/architecture/backend' },
     { text: 'Frontend (Vue 3)', link: '/architecture/frontend' },
     { text: 'Electron', link: '/architecture/electron' },
@@ -78,6 +80,8 @@ const esSidebar = {
   ]}],
   '/es/architecture/': [{ text: 'Arquitectura', items: [
     { text: 'Resumen', link: '/es/architecture/' },
+    { text: 'Workspace Fase 3', link: '/es/architecture/workspace-phase-3' },
+    { text: 'Workspace Fase 4', link: '/es/architecture/workspace-phase-4' },
     { text: 'Backend API', link: '/es/architecture/backend' },
     { text: 'Frontend (Vue 3)', link: '/es/architecture/frontend' },
     { text: 'Electron', link: '/es/architecture/electron' },

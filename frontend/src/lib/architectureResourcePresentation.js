@@ -1,5 +1,6 @@
 const RESOURCE_PRESENTATION = Object.freeze({
   lambda: { icon: 'square-function', tone: 'compute' },
+  layer: { icon: 'layers-3', tone: 'compute' },
   function: { icon: 'square-function', tone: 'compute' },
   sqs: { icon: 'messages-square', tone: 'application' },
   queue: { icon: 'messages-square', tone: 'application' },

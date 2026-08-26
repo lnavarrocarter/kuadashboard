@@ -65,8 +65,15 @@
                 <p>{{ store.selectedProject.description || 'Application architecture workspace' }}</p>
               </div>
               <form class="snapshot-form" @submit.prevent="submitSnapshot">
+                <button class="btn sm" type="button" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
+                  <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
+                  {{ store.syncPreviewing ? 'Checking…' : 'Sync preview' }}
+                </button>
                 <input v-model.trim="snapshotName" class="ctrl-input" required maxlength="120" placeholder="Snapshot name" />
                 <button class="btn sm" :disabled="store.saving"><i data-lucide="camera"></i> Snapshot</button>
+                <button class="btn sm btn-icon danger" type="button" :disabled="store.saving" title="Delete project" @click="deleteProject">
+                  <i data-lucide="trash-2"></i>
+                </button>
               </form>
             </section>
 
@@ -75,6 +82,24 @@
               <div><span>Relations</span><strong>{{ store.graph?.document.edges.length || 0 }}</strong></div>
               <div><span>Sources</span><strong>{{ store.graph?.document.sources.length || 0 }}</strong></div>
               <div><span>Snapshots</span><strong>{{ store.snapshots.length }}</strong></div>
+            </section>
+
+            <section v-if="store.syncPreview" class="sync-preview-panel">
+              <header>
+                <span><i data-lucide="refresh-cw"></i><strong>CloudFormation sync preview</strong><small>{{ syncSourceLabel }}</small></span>
+                <strong>{{ store.syncPreview.summary.changeCount }} change{{ store.syncPreview.summary.changeCount === 1 ? '' : 's' }}</strong>
+                <button class="btn sm btn-icon" title="Close sync preview" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
+              </header>
+              <div class="sync-preview-grid">
+                <div v-for="item in resourceSyncCounts" :key="`resource:${item.key}`">
+                  <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
+                </div>
+              </div>
+              <div class="sync-preview-grid relationship-grid">
+                <div v-for="item in relationshipSyncCounts" :key="`relationship:${item.key}`">
+                  <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
+                </div>
+              </div>
             </section>
 
             <ArchitectureDiscoveryPanel
@@ -151,7 +176,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useAwsStore } from '../../stores/useAwsStore'
@@ -169,6 +194,31 @@ const snapshotName = ref('')
 const showDiscovery = ref(false)
 const activeView = ref('routes')
 const selectedWorkflow = ref(null)
+const syncSource = computed(() => {
+  const sources = store.graph?.document?.sources?.filter(source => source.type === 'cloudformation') || []
+  if (!sources.length) return null
+  const first = sources[0]
+  return {
+    accountId: first.accountId || '',
+    region: first.region || 'us-east-1',
+    stackNames: sources
+      .filter(source => source.accountId === first.accountId && source.region === first.region)
+      .map(source => source.name),
+  }
+})
+const syncSourceLabel = computed(() => syncSource.value
+  ? `${syncSource.value.stackNames.length} stack${syncSource.value.stackNames.length === 1 ? '' : 's'} · ${syncSource.value.region}`
+  : 'No CloudFormation source')
+const resourceSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.resources, {
+  new: 'New', changed: 'Changed', unchanged: 'Unchanged', missing: 'Missing', stale: 'Stale', manual: 'Manual',
+}))
+const relationshipSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.relationships, {
+  new: 'New relationships', reinforced: 'Reinforced', unchanged: 'Unchanged', missingEvidence: 'Missing evidence', rejected: 'Rejected', manual: 'Manual',
+}))
+
+function syncCountItems(counts = {}, labels) {
+  return Object.entries(labels).map(([key, label]) => ({ key, label, count: counts?.[key] || 0 }))
+}
 
 async function loadProfile(profileId) {
   showDiscovery.value = false
@@ -193,6 +243,21 @@ async function submitProject() {
 async function submitSnapshot() {
   const snapshot = await store.createSnapshot({ name: snapshotName.value })
   if (snapshot) snapshotName.value = ''
+  nextTick(() => createIcons({ icons }))
+}
+
+async function deleteProject() {
+  const project = store.selectedProject
+  if (!project || !window.confirm(`Delete project "${project.name}" and all of its graph history? This cannot be undone.`)) return
+  showDiscovery.value = false
+  selectedWorkflow.value = null
+  await store.deleteProject(project.id)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function previewSync() {
+  if (!syncSource.value) return
+  await store.previewAwsSync(syncSource.value)
   nextTick(() => createIcons({ icons }))
 }
 
@@ -252,6 +317,19 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-stats div:last-child { border-right: 0; }
 .architecture-stats span { color: var(--text-dim); font-size: 12px; }
 .architecture-stats strong { font-size: 20px; }
+.sync-preview-panel { margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); overflow: hidden; }
+.sync-preview-panel header { min-height: 48px; padding: 9px 12px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--bg-hover); }
+.sync-preview-panel header > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sync-preview-panel header > span > i { display: none; }
+.sync-preview-panel header small { color: var(--text-dim); }
+.sync-preview-panel header > strong { margin-left: auto; color: #e3b341; }
+.sync-preview-grid { display: grid; grid-template-columns: repeat(6, minmax(80px, 1fr)); border-bottom: 1px solid var(--border); }
+.sync-preview-grid:last-child { border-bottom: 0; }
+.sync-preview-grid div { min-height: 54px; padding: 9px 10px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid var(--border); }
+.sync-preview-grid div:last-child { border-right: 0; }
+.sync-preview-grid span { color: var(--text-dim); font-size: 11px; }
+.sync-preview-grid strong { font-size: 18px; }
+.relationship-grid { background: color-mix(in srgb, #2f81f7 4%, transparent); }
 .architecture-view-tabs { margin-bottom: 8px; display: flex; gap: 6px; }
 .canvas-message, .architecture-empty { position: relative; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-dim); }
 .canvas-message i, .architecture-empty i { width: 32px; height: 32px; color: #2f81f7; }
@@ -278,6 +356,7 @@ onMounted(() => loadProfile(props.profileId))
   .architecture-projects { border-right: 0; border-bottom: 1px solid var(--border); max-height: 180px; }
   .architecture-project-header { align-items: flex-start; flex-direction: column; }
   .architecture-stats { grid-template-columns: repeat(2, 1fr); }
+  .sync-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .architecture-stats div:nth-child(2) { border-right: 0; }
   .architecture-stats div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
 }

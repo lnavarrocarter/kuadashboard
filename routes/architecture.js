@@ -63,6 +63,16 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     if (project) res.json(project);
   });
 
+  router.delete('/projects/:projectId', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      database.deleteProject(project.id);
+      log('Project deleted', project.name, project.profileId, { projectId: project.id });
+      res.status(204).end();
+    } catch (error) { handleError(res, error); }
+  });
+
   router.get('/projects/:projectId/graph', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
@@ -131,6 +141,20 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
         region: req.body?.region || 'us-east-1',
         accountId: req.body?.accountId,
         stackNames: req.body?.stackNames,
+      }));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/aws/sync-preview', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json(await discovery.previewSync(project.id, {
+        profileId: project.profileId,
+        region: req.body?.region || 'us-east-1',
+        accountId: req.body?.accountId,
+        stackNames: req.body?.stackNames,
+        automaticEdgeThreshold: project.automaticEdgeThreshold,
       }));
     } catch (error) { handleError(res, error); }
   });

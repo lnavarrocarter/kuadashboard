@@ -48,6 +48,21 @@ describe('ArchitectureDiscoveryPanel', () => {
     expect(wrapper.emitted('imported')).toHaveLength(1)
   })
 
+  it('shows a visible status while AWS stacks or resources are loading', async () => {
+    const store = useArchitectureStore()
+    store.discovering = true
+    store.discoveryPhase = 'stacks'
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    expect(wrapper.get('.discovery-progress').text()).toContain('Loading CloudFormation stacks')
+    expect(wrapper.get('.discovery-progress').text()).toContain('listing deployments')
+
+    store.discoveryPhase = 'resources'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.discovery-progress').text()).toContain('Analyzing AWS resources')
+    expect(wrapper.get('.discovery-progress').text()).toContain('This can take a moment')
+  })
+
   it('guides setup from CloudFormation deployments to resource confirmation', async () => {
     const store = useArchitectureStore()
     store.loadAwsDeployments = vi.fn(async () => {
@@ -64,6 +79,7 @@ describe('ArchitectureDiscoveryPanel', () => {
         nodes: [
           { id: 'node:bucket', name: 'orders-data', resourceType: 's3', stackName: 'orders-stack', evidence: [] },
           { id: 'node:policy', name: 'orders-policy', resourceType: 'policy', stackName: 'orders-stack', evidence: [] },
+          { id: 'node:worker', name: 'orders-worker', resourceType: 'lambda', stackName: 'orders-stack', evidence: [] },
         ],
         applicationCandidates: [],
         relationshipSuggestions: [{
@@ -87,11 +103,90 @@ describe('ArchitectureDiscoveryPanel', () => {
     })
     expect(wrapper.get('.discovery-steps .active strong').text()).toBe('Resources')
     expect(wrapper.get('.resource-step-heading').text()).toContain('1 CloudFormation deployment selected')
-    expect(wrapper.get('.stack-resource-summary').text()).toContain('2 resources · 1 relationships')
+    expect(wrapper.get('.stack-resource-summary').text()).toContain('3 resources · 1 relationships')
+    expect(wrapper.findAll('.resource-group-heading').map(item => item.text())).toEqual([
+      'Lambda1 resource',
+    ])
+    expect(wrapper.get('.resource-list').text()).toContain('orders-worker')
+    expect(wrapper.get('.resource-list').text()).not.toContain('orders-data')
     await wrapper.get('.stack-resource-summary button').trigger('click')
     expect(store.importAwsResources).toHaveBeenCalledWith({
       region: 'us-east-1', accountId: '123456789012', stackNames: ['orders-stack'],
-      selectedNodeIds: ['node:bucket', 'node:policy'],
+      selectedNodeIds: ['node:bucket', 'node:policy', 'node:worker'],
+    })
+  })
+
+  it('reviews suggested relationships after selecting unlinked resources', async () => {
+    const store = useArchitectureStore()
+    store.discoveryPreview = {
+      scope: { accountId: '123456789012', region: 'us-east-1' },
+      estimate: { truncated: false },
+      nodes: [
+        { id: 'node:api', name: 'OrdersApi', resourceType: 'api', evidence: [] },
+        { id: 'node:worker', name: 'OrdersWorker', resourceType: 'lambda', evidence: [] },
+        { id: 'node:bucket', name: 'AuditBucket', resourceType: 's3', evidence: [] },
+      ],
+      applicationCandidates: [],
+      relationshipSuggestions: [{
+        id: 'edge:api-worker', sourceNodeId: 'node:api', targetNodeId: 'node:worker',
+        relationType: 'routes_to', confidence: 0.96, evidence: [{ intrinsic: 'Ref' }],
+      }],
+    }
+    store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    expect(wrapper.get('.resource-list').text()).toContain('AuditBucket')
+    expect(wrapper.get('.resource-list').text()).not.toContain('OrdersApi')
+    await wrapper.get('.resource-row input').setValue(true)
+    await wrapper.get('.discovery-section-heading .primary').trigger('click')
+
+    expect(wrapper.get('.discovery-steps .active strong').text()).toBe('Diagram')
+    expect(wrapper.get('.suggestion-list').text()).toContain('OrdersApi')
+    expect(wrapper.get('.suggestion-list').text()).toContain('routes to')
+    await wrapper.get('.review-actions .primary').trigger('click')
+    expect(store.importAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: [],
+      selectedNodeIds: ['node:api', 'node:worker', 'node:bucket'],
+    })
+  })
+
+  it('draws all resources when more than one stack is selected', async () => {
+    const store = useArchitectureStore()
+    store.discoveryCatalog = {
+      scope: { accountId: '123456789012', region: 'us-east-1' },
+      estimate: { awsRequests: 2 },
+      deployments: [
+        { id: 'stack:api', name: 'api-stack', status: 'CREATE_COMPLETE', updatedAt: null },
+        { id: 'stack:data', name: 'data-stack', status: 'CREATE_COMPLETE', updatedAt: null },
+      ],
+    }
+    store.previewAwsResources = vi.fn(async input => {
+      store.discoveryPreview = {
+        scope: { accountId: input.accountId, region: input.region },
+        estimate: { truncated: false },
+        nodes: [
+          { id: 'node:api', name: 'Api', resourceType: 'api', stackName: 'api-stack', evidence: [] },
+          { id: 'node:table', name: 'Table', resourceType: 'dynamodb', stackName: 'data-stack', evidence: [] },
+        ],
+        applicationCandidates: [],
+        relationshipSuggestions: [],
+      }
+    })
+    store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    const stackInputs = wrapper.findAll('.deployment-list input')
+    await stackInputs[0].setValue(true)
+    await stackInputs[1].setValue(true)
+    await wrapper.get('.discovery-next-actions .primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Multiple stacks draw the complete stack diagram')
+    expect(wrapper.find('.resource-list').exists()).toBe(false)
+    await wrapper.findAll('.discovery-section-heading .primary').at(-1).trigger('click')
+    expect(store.importAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['api-stack', 'data-stack'],
+      selectedNodeIds: ['node:api', 'node:table'],
     })
   })
 })

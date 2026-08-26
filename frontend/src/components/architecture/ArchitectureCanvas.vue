@@ -15,11 +15,11 @@
         <i data-lucide="plus"></i> Add component
       </button>
       <span class="canvas-layout-controls">
-        <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement">
+        <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement" @change="persistView">
           <option value="request-flow">Request flow</option>
           <option value="resource-type">Resource type sections</option>
         </select>
-        <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" title="Request flow direction">
+        <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" title="Request flow direction" @change="persistView">
           <option value="horizontal">Flow left to right</option>
           <option value="vertical">Flow top to bottom</option>
         </select>
@@ -27,7 +27,7 @@
           <i :data-lucide="layoutMode === 'resource-type' ? 'rows-3' : 'layout-dashboard'"></i>
           {{ layoutMode === 'resource-type' ? 'Arrange by type' : 'Arrange flow' }}
         </button>
-        <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="showEdgeLabels = !showEdgeLabels">
+        <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="toggleEdgeLabels">
           <i data-lucide="tags"></i> Labels
         </button>
       </span>
@@ -92,6 +92,22 @@
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
+        <section v-if="selectedNode.kind || selectedNode.stackName || selectedNode.arn" class="component-metadata">
+          <span v-if="selectedNode.kind"><small>CloudFormation type</small><strong>{{ selectedNode.kind }}</strong></span>
+          <span v-if="selectedNode.stackName"><small>Stack</small><strong>{{ selectedNode.stackName }}</strong></span>
+          <span v-if="selectedNode.logicalId"><small>Logical ID</small><strong>{{ selectedNode.logicalId }}</strong></span>
+          <span v-if="selectedNode.arn"><small>ARN</small><strong>{{ selectedNode.arn }}</strong></span>
+        </section>
+        <section v-if="selectedNodeApiRoutes.length" class="api-gateway-routes">
+          <span class="inspector-section-title">API Gateway routes</span>
+          <button v-for="route in selectedNodeApiRoutes" :key="route.key" class="component-reference" @click="selectReferencedNode(route.node)">
+            <i data-lucide="route"></i>
+            <span>
+              <strong>{{ route.route }}</strong>
+              <small>{{ route.permissions }} Lambda permission{{ route.permissions === 1 ? '' : 's' }} · {{ route.node.name }}</small>
+            </span>
+          </button>
+        </section>
         <section v-if="selectedNodeReferences.length" class="component-references">
           <span class="inspector-section-title">References</span>
           <button
@@ -213,6 +229,21 @@ const selectedNodeReferences = computed(() => {
   }
   return [...unique.values()]
 })
+const selectedNodeApiRoutes = computed(() => {
+  if (!selectedNode.value || selectedNode.value.resourceType !== 'lambda') return []
+  const nodesById = new Map(props.graph.document.nodes.map(node => [node.id, node]))
+  const routes = new Map()
+  for (const edge of props.graph.document.edges) {
+    if (edge.status === 'rejected' || edge.targetNodeId !== selectedNode.value.id || edge.relationType !== 'routes_to') continue
+    const node = nodesById.get(edge.sourceNodeId)
+    const route = edge.evidence?.find(item => item.route)?.route || node?.name || 'API Gateway route'
+    const permissions = edge.evidence?.filter(item => item.type === 'lambda_permission').length || 0
+    const key = `${node?.id}:${route}`
+    const current = routes.get(key)
+    if (!current || permissions > current.permissions) routes.set(key, { key, node, route, permissions })
+  }
+  return [...routes.values()].filter(item => item.node).sort((left, right) => left.route.localeCompare(right.route))
+})
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
@@ -240,15 +271,19 @@ const displayNodes = computed(() => [...sectionNodes.value, ...flowNodes.value.m
 })])
 const displayEdges = computed(() => flowEdges.value.map(edge => {
   const visible = withoutOpacity(edge)
-  return focusedNodeIds.value
-    ? {
-        ...visible,
-        style: {
-          ...visible.style,
-          opacity: edge.source === selectedNode.value.id || edge.target === selectedNode.value.id ? 1 : 0.035,
-        },
-      }
-    : visible
+  if (!focusedNodeIds.value) return visible
+  const related = edge.source === selectedNode.value.id || edge.target === selectedNode.value.id
+  return {
+    ...visible,
+    label: related && showEdgeLabels.value ? visible.label : undefined,
+    labelStyle: related && showEdgeLabels.value ? { fill: '#f0f6fc', fontWeight: 700 } : undefined,
+    labelBgStyle: related && showEdgeLabels.value ? { fill: '#1f6feb', fillOpacity: 0.92 } : undefined,
+    style: {
+      ...visible.style,
+      opacity: related ? 1 : 0.035,
+      ...(related && showEdgeLabels.value ? { stroke: '#1f6feb', strokeWidth: 2.4 } : {}),
+    },
+  }
 }))
 
 function manualId(prefix) {
@@ -256,9 +291,19 @@ function manualId(prefix) {
   return `manual:${prefix}:${value}`
 }
 
-function syncGraph() {
+function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
+  if (hydrateView && document.view && typeof document.view === 'object') {
+    if (document.view.layoutMode === 'resource-type' || document.view.layoutMode === 'request-flow') {
+      layoutMode.value = document.view.layoutMode
+    }
+    if (document.view.layoutDirection === 'horizontal' || document.view.layoutDirection === 'vertical') {
+      layoutDirection.value = document.view.layoutDirection
+    }
+    showEdgeLabels.value = document.view.showEdgeLabels === true
+  }
+  resourceSections.value = layoutMode.value === 'resource-type' ? resourceTypeLayout(document).sections : []
   const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(document.nodes.length * 1.6))))
   flowNodes.value = document.nodes.map((node, index) => {
     const route = document.edges
@@ -282,7 +327,7 @@ function syncGraph() {
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
-    label: showEdgeLabels.value ? `${relationshipLabel(edge.relationType)} · ${relationshipStatus(edge.status)}` : undefined,
+    label: showEdgeLabels.value ? relationshipLabel(edge.relationType) : undefined,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
     type: layoutMode.value === 'resource-type' ? 'straight' : 'default',
@@ -322,6 +367,24 @@ function arrangeFlow() {
     type: 'layout.set',
     value: requestFlowLayout(props.graph.document, layoutDirection.value),
   }, `Arrange request flow ${layoutDirection.value === 'vertical' ? 'top to bottom' : 'left to right'}`)
+}
+
+function persistView() {
+  if (props.saving) return
+  if (layoutMode.value === 'resource-type') resourceSections.value = resourceTypeLayout(props.graph.document).sections
+  emit('operation', {
+    type: 'view.set',
+    value: {
+      layoutMode: layoutMode.value,
+      layoutDirection: layoutDirection.value,
+      showEdgeLabels: showEdgeLabels.value,
+    },
+  }, 'Update canvas view')
+}
+
+function toggleEdgeLabels() {
+  showEdgeLabels.value = !showEdgeLabels.value
+  persistView()
 }
 
 function addNode() {
@@ -432,7 +495,7 @@ function referenceMeta(reference) {
 
 function typeLabel(resourceType) {
   return nodeTypes.find(option => option.value === resourceType)?.label || {
-    lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
+    lambda: 'Lambda', layer: 'Lambda layer', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
     ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
     sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: 'Secret',
     'api-route': 'API Gateway route', 'api-integration': 'API Gateway integration', apigateway: 'API Gateway', apigatewayv2: 'API Gateway V2',
@@ -454,11 +517,10 @@ function refreshIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
-watch(() => props.graph, syncGraph, { deep: true, immediate: true })
-watch(showEdgeLabels, syncGraph)
+watch(() => props.graph, () => syncGraph(), { deep: true, immediate: true })
 watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
-  syncGraph()
+  syncGraph(false)
 })
 onMounted(refreshIcons)
 </script>
@@ -478,6 +540,11 @@ onMounted(refreshIcons)
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
 .node-title { display: flex; align-items: center; gap: 6px; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.component-metadata { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.component-metadata > span { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 7px; align-items: baseline; }
+.component-metadata small { color: var(--text-dim); font-size: 10px; }
+.component-metadata strong { overflow-wrap: anywhere; font-family: monospace; font-size: 10px; font-weight: 500; }
+.api-gateway-routes { display: flex; flex-direction: column; gap: 5px; }
 .resource-section { width: 100%; height: 100%; padding: 12px 16px; display: flex; align-items: flex-start; justify-content: space-between; border: 1px solid color-mix(in srgb, var(--border) 82%, #58a6ff); border-radius: 6px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text-dim); pointer-events: none; }
 .resource-section span { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .resource-section span :deep(svg) { width: 14px; height: 14px; color: #58a6ff; }
@@ -500,7 +567,9 @@ onMounted(refreshIcons)
 .canvas-empty { position: absolute; inset: 48px 0 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); text-align: center; }
 .canvas-empty i { width: 34px; height: 34px; color: #2f81f7; }
 .canvas-empty strong { color: var(--text); }
-.canvas-inspector { position: absolute; top: 12px; right: 12px; width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); box-shadow: 0 12px 30px rgba(0, 0, 0, .22); }
+.canvas-inspector { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 260px; max-height: calc(100% - 24px); padding: 12px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); box-shadow: 0 12px 30px rgba(0, 0, 0, .22); }
+.canvas-inspector::-webkit-scrollbar { width: 8px; }
+.canvas-inspector::-webkit-scrollbar-thumb { border-radius: 10px; background: color-mix(in srgb, var(--text-dim) 38%, transparent); }
 .canvas-inspector header { display: flex; align-items: center; justify-content: space-between; }
 .canvas-inspector header span, .relationship-direction { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
 .canvas-inspector label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 11px; }
@@ -535,6 +604,6 @@ onMounted(refreshIcons)
   .canvas-layout-controls .ctrl-select { flex: 1; width: auto; }
   .canvas-hint { width: 100%; margin-left: 0; }
   .canvas-body { height: 500px; }
-  .canvas-inspector { right: 8px; width: min(240px, calc(100% - 16px)); }
+  .canvas-inspector { right: 8px; bottom: 8px; width: min(260px, calc(100% - 16px)); max-height: calc(100% - 16px); }
 }
 </style>

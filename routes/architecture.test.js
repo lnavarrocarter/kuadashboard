@@ -104,6 +104,30 @@ test('API reports revision conflicts without overwriting the graph', async () =>
   }
 });
 
+test('API deletes a profile-scoped project with its graph history', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'delete-me' } });
+    const projectId = created.body.id;
+    await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        operation: { type: 'node.upsert', value: { id: 'manual:api', name: 'API', manual: true } },
+      },
+    });
+    await subject.request(`/projects/${projectId}/snapshots`, { method: 'POST', body: { name: 'Before delete' } });
+
+    const deleted = await subject.request(`/projects/${projectId}`, { method: 'DELETE' });
+    assert.equal(deleted.status, 204);
+    assert.equal(await subject.request(`/projects/${projectId}/graph`).then(result => result.status), 404);
+    assert.deepEqual(await subject.request('/projects').then(result => result.body), []);
+    assert.equal(subject.auditEvents.at(-1).action, 'Project deleted');
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API applies typed operations and exposes diff, revert and change history', async () => {
   const subject = await fixture();
   try {
@@ -242,7 +266,79 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     });
     assert.equal(reviewed.status, 200);
     assert.equal(reviewed.body.document.edges[0].status, 'rejected');
+
+    const rediscovered = await subject.request(`/projects/${projectId}/discovery/aws/import`, {
+      method: 'POST',
+      body: {
+        region: 'us-west-2', accountId: '123456789012', stackNames: ['orders'],
+        selectedNodeIds: preview.body.nodes.map(node => node.id), expectedRevision: 2,
+      },
+    });
+    assert.equal(rediscovered.status, 200);
+    assert.equal(rediscovered.body.document.nodes.length, 2);
+    assert.equal(rediscovered.body.document.edges.length, 1);
+    assert.equal(rediscovered.body.document.edges[0].status, 'rejected');
+
+    const viewUpdated = await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 3,
+        operation: {
+          type: 'view.set',
+          value: { layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true },
+        },
+      },
+    });
+    assert.equal(viewUpdated.status, 200);
+    const reloaded = await subject.request(`/projects/${projectId}/graph`);
+    assert.deepEqual(reloaded.body.document.view, {
+      layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
+    });
     assert.equal(calls.filter(([type]) => type === 'preview').length, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API returns AWS sync preview without changing graph revision', async () => {
+  const deploymentReader = {
+    async listDeployments() { return { scope: { accountId: '123456789012' }, estimate: { awsRequests: 1 }, deployments: [] }; },
+    async preview() {
+      return {
+        estimate: { awsRequests: 1, kubernetesRequests: 0 },
+        resources: [
+          { type: 'lambda', key: 'AWS::Lambda::Function:worker', arn: null, name: 'worker-v2', kind: 'AWS::Lambda::Function', stackName: 'orders', logicalId: 'Worker' },
+          { type: 'sqs', key: 'AWS::SQS::Queue:orders', arn: null, name: 'orders', kind: 'AWS::SQS::Queue', stackName: 'orders', logicalId: 'Queue' },
+        ],
+      };
+    },
+  };
+  const relationshipReader = { async analyze() { return { requests: 0, failures: [], relationships: [] }; } };
+  const subject = await fixture({ deploymentReader, relationshipReader });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'sync-http' } });
+    const projectId = created.body.id;
+    const preview = await subject.request(`/projects/${projectId}/discovery/aws/preview`, {
+      method: 'POST', body: { region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'] },
+    });
+    await subject.request(`/projects/${projectId}/discovery/aws/import`, {
+      method: 'POST',
+      body: {
+        region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'],
+        selectedNodeIds: [preview.body.nodes[0].id], expectedRevision: 0,
+      },
+    });
+
+    const sync = await subject.request(`/projects/${projectId}/discovery/aws/sync-preview`, {
+      method: 'POST', body: { region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'] },
+    });
+    const graph = await subject.request(`/projects/${projectId}/graph`);
+
+    assert.equal(sync.status, 200);
+    assert.equal(graph.body.revision, 1);
+    assert.equal(sync.body.summary.resources.changed, 0);
+    assert.equal(sync.body.summary.resources.new, 1);
+    assert.equal(sync.body.summary.resources.missing, 0);
   } finally {
     await subject.close();
   }

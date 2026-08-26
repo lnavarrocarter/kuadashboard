@@ -11,9 +11,12 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const snapshots = ref([])
   const changes = ref([])
   const snapshotDiff = ref(null)
+  const syncPreview = ref(null)
+  const syncPreviewing = ref(false)
   const discoveryCatalog = ref(null)
   const discoveryPreview = ref(null)
   const discovering = ref(false)
+  const discoveryPhase = ref(null)
   const loading = ref(false)
   const saving = ref(false)
   const error = ref(null)
@@ -35,8 +38,10 @@ export const useArchitectureStore = defineStore('architecture', () => {
     snapshots.value = []
     changes.value = []
     snapshotDiff.value = null
+    syncPreview.value = null
     discoveryCatalog.value = null
     discoveryPreview.value = null
+    discoveryPhase.value = null
   }
 
   function setActiveProfile(profileId) {
@@ -74,6 +79,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     snapshots.value = []
     changes.value = []
     snapshotDiff.value = null
+    syncPreview.value = null
     discoveryCatalog.value = null
     discoveryPreview.value = null
     if (!selectedProjectId.value) return null
@@ -117,6 +123,28 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function deleteProject(projectId = selectedProjectId.value) {
+    if (!projectId) return false
+    saving.value = true
+    error.value = null
+    try {
+      await apiFetch(`/api/architecture/projects/${projectId}`, {
+        method: 'DELETE',
+        headers: headers(),
+      })
+      projects.value = projects.value.filter(project => project.id !== projectId)
+      if (selectedProjectId.value === projectId) {
+        await selectProject(projects.value[0]?.id || null, { manageLoading: false })
+      }
+      return true
+    } catch (requestError) {
+      error.value = requestError.message
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function createSnapshot(input) {
     if (!selectedProjectId.value) return null
     saving.value = true
@@ -149,6 +177,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       })
       await loadChanges()
       snapshotDiff.value = null
+      syncPreview.value = null
       return graph.value
     } catch (requestError) {
       error.value = requestError.message
@@ -215,6 +244,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   async function loadAwsDeployments(region) {
     if (!selectedProjectId.value) return null
     discovering.value = true
+    discoveryPhase.value = 'stacks'
     error.value = null
     discoveryPreview.value = null
     try {
@@ -229,12 +259,14 @@ export const useArchitectureStore = defineStore('architecture', () => {
       return null
     } finally {
       discovering.value = false
+      discoveryPhase.value = null
     }
   }
 
   async function previewAwsResources({ region, accountId, stackNames }) {
     if (!selectedProjectId.value) return null
     discovering.value = true
+    discoveryPhase.value = 'resources'
     error.value = null
     try {
       discoveryPreview.value = await apiFetch(
@@ -251,6 +283,29 @@ export const useArchitectureStore = defineStore('architecture', () => {
       return null
     } finally {
       discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  async function previewAwsSync({ region, accountId, stackNames }) {
+    if (!selectedProjectId.value) return null
+    syncPreviewing.value = true
+    error.value = null
+    try {
+      syncPreview.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/sync-preview`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({ region, accountId, stackNames }),
+        },
+      )
+      return syncPreview.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      syncPreviewing.value = false
     }
   }
 
@@ -272,6 +327,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         },
       )
       discoveryPreview.value = null
+      syncPreview.value = null
       await loadChanges()
       return graph.value
     } catch (requestError) {
@@ -289,7 +345,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
     compareSnapshot,
     createProject,
     createSnapshot,
+    deleteProject,
     discovering,
+    discoveryPhase,
     discoveryCatalog,
     discoveryPreview,
     error,
@@ -300,6 +358,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     loading,
     projects,
     previewAwsResources,
+    previewAwsSync,
     saving,
     selectProject,
     selectedProject,
@@ -307,6 +366,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     setActiveProfile,
     snapshotDiff,
     snapshots,
+    syncPreview,
+    syncPreviewing,
     revertSnapshot,
   }
 })
