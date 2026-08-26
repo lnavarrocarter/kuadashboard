@@ -21,6 +21,26 @@ beforeEach(() => {
 })
 
 describe('architecture workspace', () => {
+  it('loads the KUA Application catalog and scopes projects to the selected application', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(options.headers['X-Profile-Id']).toBe('local:dev')
+      if (url.endsWith('/applications')) return response([{ id: 'application-a', name: 'Orders', provider: 'generic' }])
+      if (url.includes('/projects?applicationId=application-a')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+
+    await store.loadApplications()
+    await store.selectApplication('application-a')
+
+    expect(store.selectedApplication.name).toBe('Orders')
+    expect(store.projects).toEqual([])
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/architecture/projects?applicationId=application-a',
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-Profile-Id': 'local:dev' }) }),
+    )
+  })
+
   it('loads profile-scoped projects with their graph and snapshots', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(options.headers['X-Profile-Id']).toBe('local:dev')

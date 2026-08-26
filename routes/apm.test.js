@@ -474,6 +474,10 @@ test('Architecture loads and creates the linked project by KUA Application conte
     });
     const applicationId = application.body.id;
 
+    const catalog = await subject.architectureRequest('/applications');
+    assert.equal(catalog.status, 200);
+    assert.deepEqual(catalog.body.map(item => item.id), [applicationId]);
+
     const before = await subject.architectureRequest(`/projects?applicationId=${applicationId}`);
     assert.equal(before.status, 200);
     assert.deepEqual(before.body, []);

@@ -94,7 +94,7 @@
             <span><i data-lucide="gauge"></i> {{ usageLabel }}</span>
             <span :class="{ partial: store.overview?.health?.status === 'degraded' }"><i data-lucide="heart-pulse"></i> {{ healthLabel }}</span>
             <span v-if="store.kubernetesPreview?.applicationId === store.selectedApplicationId"><i data-lucide="boxes"></i> Kubernetes preview updated</span>
-            <span v-if="provider === 'aws' && store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> Architecture linked</span>
+            <span v-if="store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> Architecture linked</span>
             <span v-if="qualityPartial" class="partial"><i data-lucide="triangle-alert"></i> {{ t('apm.partialData') }}</span>
             <span v-if="kubernetesUsageUnavailable" class="partial"><i data-lucide="circle-alert"></i> {{ t('apm.kubernetesUsageUnavailable') }}</span>
             <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>

@@ -5,6 +5,8 @@ import { useApi } from '../composables/useApi'
 export const useArchitectureStore = defineStore('architecture', () => {
   const { apiFetch } = useApi()
   const activeProfileId = ref(null)
+  const applications = ref([])
+  const selectedApplicationId = ref(null)
   const projects = ref([])
   const selectedProjectId = ref(null)
   const linkedApplication = ref(null)
@@ -24,6 +26,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const saving = ref(false)
   const error = ref(null)
 
+  const selectedApplication = computed(() =>
+    applications.value.find(application => application.id === selectedApplicationId.value) || null)
   const selectedProject = computed(() =>
     projects.value.find(project => project.id === selectedProjectId.value) || null)
 
@@ -54,9 +58,30 @@ export const useArchitectureStore = defineStore('architecture', () => {
     const nextProfileId = profileId || null
     if (activeProfileId.value === nextProfileId) return
     activeProfileId.value = nextProfileId
+    applications.value = []
+    selectedApplicationId.value = null
     projects.value = []
     resetProjectData()
     error.value = null
+  }
+
+  async function loadApplications({ preserveSelection = true } = {}) {
+    if (!activeProfileId.value) return []
+    loading.value = true
+    error.value = null
+    try {
+      const previous = preserveSelection ? selectedApplicationId.value : null
+      applications.value = await apiFetch('/api/architecture/applications', { headers: headers() })
+      selectedApplicationId.value = applications.value.some(application => application.id === previous)
+        ? previous
+        : null
+      return applications.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    } finally {
+      loading.value = false
+    }
   }
 
   async function loadProjects({ preserveSelection = true, applicationId = '' } = {}) {
@@ -78,6 +103,16 @@ export const useArchitectureStore = defineStore('architecture', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function selectApplication(applicationId) {
+    selectedApplicationId.value = applicationId || null
+    const application = selectedApplication.value
+    linkedApplication.value = application
+    if (!application) return loadProjects({ preserveSelection: false })
+    const result = await loadProjects({ preserveSelection: false, applicationId: application.id })
+    linkedApplication.value = application
+    return result
   }
 
   async function selectProject(projectId, { manageLoading = true } = {}) {
@@ -107,6 +142,10 @@ export const useArchitectureStore = defineStore('architecture', () => {
       try {
         const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
         linkedApplication.value = link.application || null
+        if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
+          applications.value = [...applications.value, linkedApplication.value]
+        }
+        selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
       } catch (_) {
         linkedApplication.value = null
       }
@@ -464,6 +503,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
 
   return {
     activeProfileId,
+    applications,
+    selectedApplicationId,
+    selectedApplication,
     applyOperation,
     applyAwsSync,
     changes,
@@ -483,7 +525,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importKubernetesResources,
     loadAwsDeployments,
     loadKubernetesContexts,
+    loadApplications,
     loadProjects,
+    selectApplication,
     loading,
     linkedApplication,
     projects,

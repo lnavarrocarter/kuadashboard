@@ -6,7 +6,7 @@
         <span><strong>Architecture</strong><small>Evidence-backed application diagrams</small></span>
       </div>
       <div class="architecture-actions">
-        <button class="btn sm btn-icon" title="Refresh projects" :disabled="store.loading || !profileId" @click="store.loadProjects({ applicationId })">
+        <button class="btn sm btn-icon" title="Refresh application" :disabled="store.loading || !profileId" @click="refreshWorkspace">
           <i data-lucide="refresh-cw"></i>
         </button>
         <div v-if="store.selectedProject" class="resource-add-menu">
@@ -44,6 +44,18 @@
 
       <div class="architecture-layout">
         <aside class="architecture-projects">
+          <template v-if="store.applications.length">
+            <div class="architecture-list-heading"><span>KUA Applications</span><strong>{{ store.applications.length }}</strong></div>
+            <button
+              v-for="application in store.applications"
+              :key="application.id"
+              :class="['architecture-application-row', { active: store.selectedApplicationId === application.id }]"
+              @click="selectApplication(application.id)"
+            >
+              <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
+              <span><strong>{{ application.name }}</strong><small>{{ [application.environment, application.team].filter(Boolean).join(' / ') || application.provider.toUpperCase() }}</small></span>
+            </button>
+          </template>
           <div class="architecture-list-heading"><span>Projects</span><strong>{{ store.projects.length }}</strong></div>
           <button
             v-for="project in store.projects"
@@ -63,8 +75,9 @@
           <div v-if="store.loading" class="architecture-empty compact">Loading architecture...</div>
           <div v-else-if="!store.selectedProject" class="architecture-empty">
             <i data-lucide="waypoints"></i>
-            <strong>No architecture selected</strong>
-            <span>Create a project to start collecting scopes, sources and evidence.</span>
+            <strong>{{ store.selectedApplication ? `No architecture view for ${store.selectedApplication.name}` : 'No architecture selected' }}</strong>
+            <span>{{ store.selectedApplication ? 'Create the application view to start collecting scopes, sources and evidence.' : 'Create a project to start collecting scopes, sources and evidence.' }}</span>
+            <button v-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> Create application view</button>
           </div>
           <template v-else>
             <section class="architecture-project-header">
@@ -87,6 +100,15 @@
                   <i data-lucide="trash-2"></i>
                 </button>
               </form>
+            </section>
+
+            <section v-if="store.selectedApplication" class="architecture-application-context">
+              <span><small>Application</small><strong>{{ store.selectedApplication.name }}</strong></span>
+              <span><small>Provider</small><strong>{{ store.selectedApplication.provider.toUpperCase() }}</strong></span>
+              <span><small>Environment</small><strong>{{ store.selectedApplication.environment || '—' }}</strong></span>
+              <span><small>Team</small><strong>{{ store.selectedApplication.team || '—' }}</strong></span>
+              <span><small>Scopes</small><strong>{{ store.graph?.document?.scopes?.length || 0 }}</strong></span>
+              <span :class="store.selectedApplication.architectureProjectId ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ store.selectedApplication.architectureProjectId ? 'Linked' : 'Not linked' }}</strong></span>
             </section>
 
             <section class="architecture-stats">
@@ -293,15 +315,43 @@ async function loadProfile(profileId) {
   selectedWorkflow.value = null
   store.setActiveProfile(profileId || null)
   awsStore.setActiveProfile(profileId || null)
-  if (profileId) await store.loadProjects({ applicationId: props.applicationId })
+  if (!profileId) return nextTick(() => createIcons({ icons }))
+  const applications = await store.loadApplications()
+  if (props.applicationId && applications.some(application => application.id === props.applicationId)) {
+    await store.selectApplication(props.applicationId)
+  } else if (props.projectId) {
+    await store.loadProjects({ applicationId: '' })
+  } else if (store.selectedApplicationId && applications.some(application => application.id === store.selectedApplicationId)) {
+    await store.selectApplication(store.selectedApplicationId)
+  } else if (applications.length) {
+    await store.selectApplication(applications[0].id)
+  } else {
+    await store.loadProjects({ applicationId: '' })
+  }
   if (props.projectId && store.projects.some(project => project.id === props.projectId)) {
     await store.selectProject(props.projectId)
   }
   nextTick(() => createIcons({ icons }))
 }
 
+async function refreshWorkspace() {
+  const currentApplicationId = props.applicationId || store.selectedApplicationId || ''
+  if (currentApplicationId) {
+    await store.loadApplications()
+    await store.selectApplication(currentApplicationId)
+  } else {
+    await store.loadProjects({ applicationId: '' })
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+async function selectApplication(applicationId) {
+  await store.selectApplication(applicationId)
+  nextTick(() => createIcons({ icons }))
+}
+
 async function submitProject() {
-  const project = await store.createProject({ ...projectDraft, applicationId: props.applicationId })
+  const project = await store.createProject({ ...projectDraft, applicationId: props.applicationId || store.selectedApplicationId || '' })
   if (!project) return
   projectDraft.name = ''
   projectDraft.description = ''
@@ -426,6 +476,12 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-project-row, .architecture-project-empty { width: 100%; border: 0; background: transparent; color: inherit; padding: 9px 8px; display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer; border-radius: 5px; }
 .architecture-project-row:hover, .architecture-project-row.active { background: var(--bg-hover); }
 .architecture-project-row.active { box-shadow: inset 2px 0 #2f81f7; }
+.architecture-application-row { width: 100%; border: 0; background: transparent; color: inherit; padding: 8px; display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer; border-radius: 5px; }
+.architecture-application-row:hover, .architecture-application-row.active { background: var(--bg-hover); }
+.architecture-application-row.active { box-shadow: inset 2px 0 #3fb950; }
+.architecture-application-row > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.architecture-application-row small { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.application-mark { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; background: #238636; color: white; border-radius: 5px; font-size: 10px; font-weight: 700; }
 .project-mark { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; background: #1f6feb; color: white; border-radius: 5px; font-size: 11px; font-weight: 700; }
 .architecture-project-row small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
 .architecture-project-empty { color: var(--text-dim); justify-content: center; border: 1px dashed var(--border); }
@@ -434,6 +490,12 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-project-header h2 { margin: 3px 0; font-size: 22px; letter-spacing: 0; }
 .architecture-project-header p { margin: 0; color: var(--text-dim); }
 .architecture-kicker { color: #2f81f7; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+.architecture-application-context { margin: 12px 0; padding: 9px 12px; display: flex; flex-wrap: wrap; gap: 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
+.architecture-application-context span { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
+.architecture-application-context small { color: var(--text-dim); font-size: 10px; text-transform: uppercase; }
+.architecture-application-context strong { font-size: 12px; }
+.architecture-application-context .linked strong { color: #3fb950; }
+.architecture-application-context .unlinked strong { color: #d29922; }
 .snapshot-form .ctrl-input { width: 180px; }
 .architecture-stats { margin: 18px 0 12px; display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); border: 1px solid var(--border); border-radius: 6px; }
 .architecture-stats div { padding: 12px 14px; display: flex; justify-content: space-between; align-items: baseline; border-right: 1px solid var(--border); }

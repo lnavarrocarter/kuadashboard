@@ -67,6 +67,13 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     res.json(database.listProjects({ profileId: profile }));
   });
 
+  router.get('/applications', (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    if (!apmDatabase) return res.json([]);
+    res.json(apmDatabase.listApplications({ profileId: profile }));
+  });
+
   router.post('/projects', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;
