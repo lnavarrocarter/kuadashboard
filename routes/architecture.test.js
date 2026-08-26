@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -22,6 +22,7 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader }
       },
     },
     relationshipReader,
+    kubernetesAdapter,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -293,6 +294,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     const reloaded = await subject.request(`/projects/${projectId}/graph`);
     assert.deepEqual(reloaded.body.document.view, {
       layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
+      providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
     });
     assert.equal(calls.filter(([type]) => type === 'preview').length, 1);
   } finally {
@@ -339,6 +341,108 @@ test('API returns AWS sync preview without changing graph revision', async () =>
     assert.equal(sync.body.summary.resources.changed, 0);
     assert.equal(sync.body.summary.resources.new, 1);
     assert.equal(sync.body.summary.resources.missing, 0);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API applies an AWS sync atomically and preserves reviewed relationships', async () => {
+  const deploymentReader = {
+    async listDeployments() { return { scope: { accountId: '123456789012' }, estimate: { awsRequests: 1 }, deployments: [] }; },
+    async preview() {
+      return {
+        estimate: { awsRequests: 1, kubernetesRequests: 0 },
+        resources: [{
+          type: 'lambda', key: 'AWS::Lambda::Function:worker', arn: 'arn:aws:lambda:us-east-1:123456789012:function:worker', name: 'worker-v2',
+          kind: 'AWS::Lambda::Function', stackName: 'orders', logicalId: 'Worker',
+        }],
+      };
+    },
+  };
+  const relationshipReader = {
+    async analyze() {
+      return {
+        requests: 0,
+        failures: [],
+        relationships: [{
+          stackName: 'orders', sourceLogicalId: 'Worker', targetLogicalId: 'Queue',
+          relationType: 'depends_on', confidence: 0.95, evidence: [],
+        }],
+      };
+    },
+  };
+  const subject = await fixture({ deploymentReader, relationshipReader });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'sync-apply' } });
+    const projectId = created.body.id;
+    const imported = await subject.request(`/projects/${projectId}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        operation: {
+          type: 'discovery.import',
+          value: {
+            scopes: [],
+            sources: [{ id: 'aws:cloudformation:123456789012:us-east-1:orders', type: 'cloudformation' }],
+            nodes: [
+              { id: 'manual:previous-worker', name: 'worker', provider: 'aws', accountId: '123456789012', region: 'us-east-1', kind: 'AWS::Lambda::Function', nativeId: 'worker', arn: 'arn:aws:lambda:us-east-1:123456789012:function:worker', sourceId: 'aws:cloudformation:123456789012:us-east-1:orders' },
+              { id: 'aws:missing-queue', name: 'queue', provider: 'aws', accountId: '123456789012', region: 'us-east-1', kind: 'AWS::SQS::Queue', nativeId: 'queue', sourceId: 'aws:cloudformation:123456789012:us-east-1:orders' },
+            ],
+            edges: [{ id: 'edge:reviewed', sourceNodeId: 'manual:previous-worker', targetNodeId: 'aws:missing-queue', relationType: 'depends_on', status: 'rejected' }],
+            retiredNodeKinds: [],
+          },
+        },
+      },
+    });
+    assert.equal(imported.status, 200);
+
+    const synced = await subject.request(`/projects/${projectId}/discovery/aws/sync-apply`, {
+      method: 'POST',
+      body: { region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'], expectedRevision: 1 },
+    });
+    assert.equal(synced.status, 200);
+    assert.equal(synced.body.revision, 2);
+    assert.equal(synced.body.document.nodes.find(node => node.id === 'manual:previous-worker').name, 'worker-v2');
+    assert.equal(synced.body.document.nodes.find(node => node.id === 'aws:missing-queue').syncState, 'stale');
+    assert.equal(synced.body.document.edges.find(edge => edge.id === 'edge:reviewed').status, 'rejected');
+    assert.ok(synced.body.document.sources[0].sync.lastSuccessfulAt);
+    assert.deepEqual(synced.body.document.sources[0].sync.selectedStackNames, ['orders']);
+
+    const conflict = await subject.request(`/projects/${projectId}/discovery/aws/sync-apply`, {
+      method: 'POST',
+      body: { region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'], expectedRevision: 1 },
+    });
+    assert.equal(conflict.status, 409);
+    assert.equal((await subject.request(`/projects/${projectId}/graph`)).body.revision, 2);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API previews Kubernetes topology only for the selected project profile', async () => {
+  const calls = [];
+  const subject = await fixture({
+    kubernetesAdapter: {
+      listContexts: () => [{ id: 'eks-dev', name: 'orders-eks' }],
+      async preview(input) {
+        calls.push(input);
+        return { sources: [{ id: 'kubernetes:context:eks-dev', context: 'eks-dev' }], nodes: [], relationships: [], health: [], capabilities: [], failures: [] };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'kubernetes' } });
+    const contexts = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/contexts`);
+    assert.equal(contexts.status, 200);
+    assert.deepEqual(contexts.body.contexts, [{ id: 'eks-dev', name: 'orders-eks' }]);
+
+    const preview = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/preview`, {
+      method: 'POST', body: { contexts: ['eks-dev'], namespaces: ['orders'] },
+    });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.profileId, 'local:dev');
+    assert.equal(preview.body.sources[0].profileId, 'local:dev');
+    assert.deepEqual(calls, [{ provider: 'generic', contexts: ['eks-dev'], namespaces: ['orders'] }]);
   } finally {
     await subject.close();
   }

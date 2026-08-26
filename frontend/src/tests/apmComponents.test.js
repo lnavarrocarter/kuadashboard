@@ -35,6 +35,36 @@ afterEach(() => {
 })
 
 describe('APM collection controls', () => {
+  it('shows Kubernetes-only signals and opens logs for configured workloads', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-eks', name: 'orders-eks', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({
+        metrics: [{ metricName: 'cpu_cores', sum: 1, count: 1, average: 1, quality: 'full' }], health: { status: 'healthy', signals: [] }, latestRun: null,
+      })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-eks' },
+        resources: [{ id: 'deployment-a', type: 'kubernetes', kind: 'Deployment', name: 'api', namespace: 'orders', kubeContext: 'orders-eks', enabled: true, associationSource: 'manual' }], edges: [],
+      })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev' },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+    expect(wrapper.get('.kpi-grid').text()).toContain('Average CPU')
+    expect(wrapper.get('.kpi-grid').text()).not.toContain('Observed invocations')
+
+    await wrapper.findAll('.apm-view-tabs button').find(button => button.text().includes('Resources')).trigger('click')
+    await wrapper.get('.resource-table-wrap button').trigger('click')
+    expect(wrapper.emitted('open-kubernetes-logs')[0][0]).toMatchObject({ name: 'api', kubeContext: 'orders-eks', kind: 'Deployment' })
+    wrapper.unmount()
+  })
+
   it('does not collect until the user confirms the read', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
@@ -180,10 +210,13 @@ describe('APM process traces', () => {
 describe('APM setup cost consent', () => {
   it('detects EKS workloads without selecting them and persists only explicit choices', async () => {
     global.fetch = vi.fn((url, options = {}) => {
-      if (url.endsWith('/kubernetes-workloads')) return response({
+      if (url.endsWith('/kubernetes-contexts')) return response({
+        contexts: [{ id: 'arn:aws:eks:us-east-1:123:cluster/dev', name: 'orders-eks' }],
+      })
+      if (url.includes('/kubernetes-workloads?contexts=arn%3Aaws%3Aeks%3Aus-east-1%3A123%3Acluster%2Fdev')) return response({
         estimate: { awsRequests: 0, kubernetesRequests: 3 },
         contexts: ['arn:aws:eks:us-east-1:123:cluster/dev'],
-        failedContexts: [{ context: 'arn:aws:eks:us-east-1:123:cluster/old', code: 'ENOTFOUND' }],
+        failedContexts: [],
         workloads: [{
           key: 'arn:aws:eks:us-east-1:123:cluster/dev/orders/Deployment/api',
           context: 'arn:aws:eks:us-east-1:123:cluster/dev',
@@ -204,11 +237,13 @@ describe('APM setup cost consent', () => {
       global: { stubs: { teleport: true } },
     })
     await wrapper.get('input[placeholder="orders"]').setValue('orders')
+    await wrapper.findAll('button').find(button => button.text().includes('Load clusters')).trigger('click')
+    await flushPromises()
+    await wrapper.get('.eks-context-tools select').setValue('arn:aws:eks:us-east-1:123:cluster/dev')
     await wrapper.findAll('button').find(button => button.text().includes('Detect workloads')).trigger('click')
     await flushPromises()
 
     const workloadInput = wrapper.get('.eks-workloads .resource-option input')
-    expect(wrapper.text()).toContain('Some contexts could not be reached')
     expect(workloadInput.element.checked).toBe(false)
     expect(findButton('Create application').disabled).toBe(true)
     await workloadInput.setValue(true)

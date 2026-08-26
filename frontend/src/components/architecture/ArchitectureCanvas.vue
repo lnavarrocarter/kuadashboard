@@ -15,6 +15,18 @@
         <i data-lucide="plus"></i> Add component
       </button>
       <span class="canvas-layout-controls">
+        <select v-model="providerFilter" class="ctrl-select provider-filter" title="Filter providers" @change="persistView">
+          <option value="all">All providers</option>
+          <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ providerLabel(provider) }}</option>
+        </select>
+        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" title="Filter Kubernetes context" @change="persistView">
+          <option value="">All Kubernetes contexts</option>
+          <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
+        </select>
+        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" title="Filter Kubernetes namespace" @change="persistView">
+          <option value="">All namespaces</option>
+          <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
+        </select>
         <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement" @change="persistView">
           <option value="request-flow">Request flow</option>
           <option value="resource-type">Resource type sections</option>
@@ -197,6 +209,9 @@ const layoutDirection = ref('horizontal')
 const resourceSections = ref([])
 const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
+const providerFilter = ref('all')
+const kubeContextFilter = ref('')
+const namespaceFilter = ref('')
 const { fitView, setCenter, setViewport } = useVueFlow()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
@@ -247,6 +262,20 @@ const selectedNodeApiRoutes = computed(() => {
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
+const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
+const availableKubeContexts = computed(() => [...new Set((props.graph?.document?.nodes || [])
+  .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
+const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
+  .filter(node => node.provider === 'kubernetes' && node.namespace).map(node => node.namespace))].sort())
+const filteredGraphDocument = computed(() => {
+  const document = props.graph?.document || { nodes: [], edges: [] }
+  const nodes = (document.nodes || []).filter(node =>
+    (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
+    (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
+    (!namespaceFilter.value || node.namespace === namespaceFilter.value))
+  const ids = new Set(nodes.map(node => node.id))
+  return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
+})
 const sectionNodes = computed(() => layoutMode.value === 'resource-type' ? resourceSections.value.map(section => ({
   id: `section:${section.type}`,
   type: 'resource-section',
@@ -302,11 +331,17 @@ function syncGraph(hydrateView = true) {
       layoutDirection.value = document.view.layoutDirection
     }
     showEdgeLabels.value = document.view.showEdgeLabels === true
+    providerFilter.value = document.view.providerFilter || 'all'
+    kubeContextFilter.value = document.view.kubeContextFilter || ''
+    namespaceFilter.value = document.view.namespaceFilter || ''
   }
-  resourceSections.value = layoutMode.value === 'resource-type' ? resourceTypeLayout(document).sections : []
-  const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(document.nodes.length * 1.6))))
-  flowNodes.value = document.nodes.map((node, index) => {
-    const route = document.edges
+  const visibleDocument = filteredGraphDocument.value
+  const visibleNodes = visibleDocument.nodes
+  const visibleEdges = visibleDocument.edges
+  resourceSections.value = layoutMode.value === 'resource-type' ? resourceTypeLayout(visibleDocument).sections : []
+  const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(visibleNodes.length * 1.6))))
+  flowNodes.value = visibleNodes.map((node, index) => {
+    const route = visibleEdges
       .filter(edge => edge.sourceNodeId === node.id && edge.status !== 'rejected')
       .flatMap(edge => edge.evidence || [])
       .find(item => item.route)
@@ -323,7 +358,7 @@ function syncGraph(hydrateView = true) {
       },
     }
   })
-  flowEdges.value = document.edges.filter(edge => edge.status !== 'rejected').map(edge => ({
+  flowEdges.value = visibleEdges.filter(edge => edge.status !== 'rejected').map(edge => ({
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
@@ -353,7 +388,7 @@ function arrangeFlow() {
   if (props.saving || !props.graph?.document?.nodes?.length) return
   fitAfterSync.value = true
   if (layoutMode.value === 'resource-type') {
-    const result = resourceTypeLayout(props.graph.document)
+    const result = resourceTypeLayout(filteredGraphDocument.value)
     resourceSections.value = result.sections
     clearSelection()
     emit('operation', {
@@ -365,7 +400,7 @@ function arrangeFlow() {
   resourceSections.value = []
   emit('operation', {
     type: 'layout.set',
-    value: requestFlowLayout(props.graph.document, layoutDirection.value),
+    value: requestFlowLayout(filteredGraphDocument.value, layoutDirection.value),
   }, `Arrange request flow ${layoutDirection.value === 'vertical' ? 'top to bottom' : 'left to right'}`)
 }
 
@@ -378,6 +413,9 @@ function persistView() {
       layoutMode: layoutMode.value,
       layoutDirection: layoutDirection.value,
       showEdgeLabels: showEdgeLabels.value,
+      providerFilter: providerFilter.value,
+      kubeContextFilter: kubeContextFilter.value,
+      namespaceFilter: namespaceFilter.value,
     },
   }, 'Update canvas view')
 }
@@ -498,8 +536,15 @@ function typeLabel(resourceType) {
     lambda: 'Lambda', layer: 'Lambda layer', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
     ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
     sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: 'Secret',
+    kubernetes: 'Kubernetes cluster', deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
+    daemonset: 'Kubernetes DaemonSet', pod: 'Kubernetes Pod', service: 'Kubernetes Service', ingress: 'Kubernetes Ingress',
+    configmap: 'Kubernetes ConfigMap', pvc: 'Kubernetes PersistentVolumeClaim',
     'api-route': 'API Gateway route', 'api-integration': 'API Gateway integration', apigateway: 'API Gateway', apigatewayv2: 'API Gateway V2',
   }[resourceType] || String(resourceType || 'AWS resource').replaceAll('-', ' ')
+}
+
+function providerLabel(provider) {
+  return { aws: 'AWS', kubernetes: 'Kubernetes', gcp: 'GCP', vercel: 'Vercel', generic: 'General' }[provider] || provider
 }
 
 function relationshipStatus(status) {
@@ -522,6 +567,7 @@ watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
   syncGraph(false)
 })
+watch([providerFilter, kubeContextFilter, namespaceFilter], () => syncGraph(false))
 onMounted(refreshIcons)
 </script>
 
@@ -552,6 +598,9 @@ onMounted(refreshIcons)
 .node-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 30px; border: 1px solid transparent; border-radius: 5px; color: white; }
 .node-icon :deep(svg) { width: 16px; height: 16px; }
 .node-icon--compute { background: #d86613; }
+.node-icon--kubernetes { background: #326ce5; }
+.node-icon--kubernetes-network { background: #4b7bec; }
+.node-icon--kubernetes-config { background: #64748b; }
 .node-icon--application { background: #c71370; }
 .node-icon--storage { background: #2f7d32; }
 .node-icon--database { background: #3569a8; }

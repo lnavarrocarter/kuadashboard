@@ -19,6 +19,14 @@ function eventConfig(edges) {
   }
 }
 
+function microserviceConfig(node) {
+  return {
+    context: node.kubeContext || '',
+    namespace: node.namespace || '',
+    entryType: node.resourceType === 'ingress' ? 'ingress' : 'service',
+  }
+}
+
 function compareText(left, right) {
   return routeCollator.compare(String(left || ''), String(right || ''))
 }
@@ -82,7 +90,9 @@ export function architectureRouteGroups(document = {}, { order = 'sequence' } = 
   }
   const roots = nodes.filter(node =>
     node.resourceType === 'eventbridge' ||
-    (node.resourceType === 'stepfunctions' && incoming.get(node.id) === 0))
+    (node.resourceType === 'stepfunctions' && incoming.get(node.id) === 0) ||
+    node.resourceType === 'ingress' ||
+    (node.resourceType === 'service' && node.provider === 'kubernetes' && incoming.get(node.id) === 0))
     .sort((left, right) => {
       const typeOrder = Number(left.resourceType === 'stepfunctions') - Number(right.resourceType === 'stepfunctions')
       return typeOrder || compareText(left.name, right.name) || compareText(left.id, right.id)
@@ -98,7 +108,10 @@ export function architectureRouteGroups(document = {}, { order = 'sequence' } = 
       id: root.id,
       name: root.name,
       type: root.resourceType,
-      config: root.resourceType === 'eventbridge' ? eventConfig(rootEdges) : null,
+      category: root.resourceType === 'eventbridge' ? 'event' : root.resourceType === 'stepfunctions' ? 'workflow' : 'microservice',
+      config: root.resourceType === 'eventbridge'
+        ? eventConfig(rootEdges)
+        : ['ingress', 'service'].includes(root.resourceType) ? microserviceConfig(root) : null,
       paths,
     }
   }).sort((left, right) => compareRouteGroups(left, right, order))

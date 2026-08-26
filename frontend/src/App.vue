@@ -99,6 +99,12 @@
             <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </template>
+        <template v-else-if="activeProvider === 'architecture' && activeApplicationContext">
+          <span class="header-application-context">
+            <i data-lucide="boxes"></i>
+            <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider.toUpperCase() }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
+          </span>
+        </template>
         <template v-else-if="activeProvider === 'architecture'">
           <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
             <option value="">{{ t('aws.noProfile') }}</option>
@@ -422,31 +428,41 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
-          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
-          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
+          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" />
           <ApmObservabilityView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'generic'"
             provider="generic"
             profile-id="local"
+            :application-id="activeApplicationContext?.provider === 'generic' ? activeApplicationContext.id : ''"
+            @open-architecture="openApplicationArchitecture"
+            @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
           <AwsView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'"
             :active-service="observabilitySelections.aws"
+            :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''"
+            @open-architecture="openApplicationArchitecture"
+            @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
           <GcpView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'"
             :active-service="observabilitySelections.gcp"
+            :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''"
+            @open-architecture="openApplicationArchitecture"
           />
           <VercelView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
             :active-service="observabilitySelections.vercel"
+            :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''"
+            @open-architecture="openApplicationArchitecture"
           />
-          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="awsProfileId" />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" />
         </main>
       </div>
 
@@ -777,6 +793,53 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
   connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
+const architectureProjectId = ref('')
+const activeApplicationContext = ref(null)
+const architectureProfileId = computed(() => activeApplicationContext.value?.profileId || awsProfileId.value)
+
+function openApplicationArchitecture(input) {
+  const context = typeof input === 'object' && input ? input : { projectId: input }
+  activeApplicationContext.value = context.applicationId ? {
+    id: context.applicationId,
+    provider: context.provider || 'aws',
+    profileId: context.profileId || awsProfileId.value,
+    ...(context.application || {}),
+  } : null
+  architectureProjectId.value = context.projectId || ''
+  setProvider('architecture')
+}
+
+function setApplicationContext(application) {
+  if (application?.id) activeApplicationContext.value = application
+}
+
+function openApplicationObservability(application) {
+  if (!application?.id) return
+  activeApplicationContext.value = application
+  if (application.provider === 'aws') awsProfileId.value = application.profileId
+  if (application.provider === 'gcp') gcpProfileId.value = application.profileId
+  if (application.provider === 'vercel') vercelProfileId.value = application.profileId
+  observabilityProvider.value = application.provider || 'generic'
+  activeProvider.value = 'observability'
+  nextTick(() => createIcons({ icons }))
+}
+
+async function openObservabilityKubernetesLogs(resource) {
+  const resourceType = ({ Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods' })[resource?.kind]
+  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  activeProvider.value = 'kubernetes'
+  cloudView.value = null
+  try {
+    if (store.currentContext !== resource.kubeContext) {
+      selectedContext.value = resource.kubeContext
+      await store.switchContext(resource.kubeContext)
+    }
+    openLogs(resource.namespace, resource.name, [], resourceType)
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
 
 async function setProvider(p) {
   if (p === 'observability' && !hasCloudConnections.value) return

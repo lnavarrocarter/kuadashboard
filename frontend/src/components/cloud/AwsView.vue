@@ -25,12 +25,15 @@
         v-show="activeTab === 'apm'"
         ref="apmViewRef"
         :profile-id="selectedProfileId"
+        :application-id="applicationId"
         :lambdas="awsStore.lambdas"
         :ecs-services="awsStore.ecsServices"
         :event-bridge-rules="awsStore.eventBridgeRules"
         :step-functions="awsStore.stepFunctions"
         :load-inventory="loadApmInventory"
         @open-lambda-logs="name => openLogs('lambda', name)"
+        @open-kubernetes-logs="resource => emit('open-kubernetes-logs', resource)"
+        @open-architecture="projectId => emit('open-architecture', projectId)"
       />
 
       <div v-show="activeTab === 'ec2'" class="tab-panel">
@@ -3776,7 +3779,9 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'ec2' },
+  applicationId: { type: String, default: '' },
 })
+const emit = defineEmits(['open-architecture', 'open-kubernetes-logs'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()

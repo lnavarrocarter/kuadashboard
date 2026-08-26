@@ -3,8 +3,10 @@
 const express = require('express');
 const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
 const { ArchitectureGraphService } = require('../lib/architecture/graphService');
+const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
+const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 
-function createArchitectureRouter({ database, auditLog, graphService, discoveryService, deploymentReader, inventoryReader, relationshipReader }) {
+function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   const service = graphService || new ArchitectureGraphService({ database });
@@ -14,6 +16,7 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     relationshipReader,
     graphService: service,
   });
+  const registry = apmDatabase ? new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database }) : null;
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -42,9 +45,25 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     auditLog?.log({ category: 'architecture', action, resource, context, details });
   }
 
+  function reconcileLinkedApplication(project) {
+    const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
+    if (!registry || !application || application.profileId !== project.profileId) return null;
+    registry.reconcile(application);
+    return database.getGraph(project.id);
+  }
+
   router.get('/projects', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;
+    const applicationId = String(req.query.applicationId || '').trim();
+    if (applicationId) {
+      const application = apmDatabase?.getApplication(applicationId);
+      if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
+      const linkedProject = application.architectureProjectId
+        ? database.getProject(application.architectureProjectId)
+        : null;
+      return res.json(linkedProject ? [linkedProject] : []);
+    }
     res.json(database.listProjects({ profileId: profile }));
   });
 
@@ -52,7 +71,16 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     const profile = profileId(req, res);
     if (!profile) return;
     try {
+      const applicationId = String(req.body?.applicationId || '').trim();
+      const application = applicationId ? apmDatabase?.getApplication(applicationId) : null;
+      if (applicationId && (!application || application.profileId !== profile)) {
+        return res.status(404).json({ error: 'KUA Application not found' });
+      }
       const project = database.createProject({ ...req.body, profileId: profile });
+      if (application && registry) {
+        const updated = apmDatabase.updateArchitectureProjectLink(application.id, project.id);
+        registry.reconcile(updated);
+      }
       log('Project created', project.name, profile, { projectId: project.id });
       res.status(201).json(project);
     } catch (error) { handleError(res, error); }
@@ -63,11 +91,23 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     if (project) res.json(project);
   });
 
+  router.get('/projects/:projectId/application', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
+    res.json({ application: application?.profileId === project.profileId ? application : null });
+  });
+
   router.delete('/projects/:projectId', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
     try {
+      const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
       database.deleteProject(project.id);
+      if (application && registry) {
+        const updated = apmDatabase.updateArchitectureProjectLink(application.id, null);
+        registry.reconcile(updated);
+      }
       log('Project deleted', project.name, project.profileId, { projectId: project.id });
       res.status(204).end();
     } catch (error) { handleError(res, error); }
@@ -83,9 +123,10 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     const project = scopedProject(req, res);
     if (!project) return;
     try {
-      const graph = database.saveGraph(project.id, req.body?.document, {
+      let graph = database.saveGraph(project.id, req.body?.document, {
         expectedRevision: req.body?.expectedRevision,
       });
+      graph = reconcileLinkedApplication(project) || graph;
       log('Graph updated', project.name, project.profileId, {
         projectId: project.id,
         revision: graph.revision,
@@ -98,12 +139,13 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     const project = scopedProject(req, res);
     if (!project) return;
     try {
-      const graph = service.applyOperation(project.id, req.body?.operation, {
+      let graph = service.applyOperation(project.id, req.body?.operation, {
         expectedRevision: req.body?.expectedRevision,
         automaticEdgeThreshold: project.automaticEdgeThreshold,
         author: project.profileId,
         reason: req.body?.reason,
       });
+      graph = reconcileLinkedApplication(project) || graph;
       log('Graph operation applied', project.name, project.profileId, {
         projectId: project.id,
         operation: req.body?.operation?.type,
@@ -159,11 +201,34 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
     } catch (error) { handleError(res, error); }
   });
 
+  router.post('/projects/:projectId/discovery/aws/sync-apply', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      let graph = await discovery.applySync(project.id, {
+        profileId: project.profileId,
+        region: req.body?.region || 'us-east-1',
+        accountId: req.body?.accountId,
+        stackNames: req.body?.stackNames,
+        automaticEdgeThreshold: project.automaticEdgeThreshold,
+        expectedRevision: req.body?.expectedRevision,
+        author: project.profileId,
+        reason: req.body?.reason,
+      });
+      graph = reconcileLinkedApplication(project) || graph;
+      log('AWS synchronization applied', project.name, project.profileId, {
+        projectId: project.id,
+        revision: graph.revision,
+      });
+      res.json(graph);
+    } catch (error) { handleError(res, error); }
+  });
+
   router.post('/projects/:projectId/discovery/aws/import', async (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
     try {
-      const graph = await discovery.importSelection(project.id, {
+      let graph = await discovery.importSelection(project.id, {
         profileId: project.profileId,
         region: req.body?.region || 'us-east-1',
         accountId: req.body?.accountId,
@@ -173,12 +238,37 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
         author: project.profileId,
         reason: req.body?.reason,
       });
+      graph = reconcileLinkedApplication(project) || graph;
       log('AWS resources imported', project.name, project.profileId, {
         projectId: project.id,
         resourceCount: req.body?.selectedNodeIds?.length || 0,
         revision: graph.revision,
       });
       res.json(graph);
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.get('/projects/:projectId/discovery/kubernetes/contexts', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      res.json({ contexts: kubernetesAdapter.listContexts({ provider: 'generic' }) });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/kubernetes/preview', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const preview = await kubernetesAdapter.preview({
+        provider: 'generic', contexts: req.body?.contexts, namespaces: req.body?.namespaces,
+      });
+      res.json({
+        ...preview,
+        projectId: project.id,
+        profileId: project.profileId,
+        sources: preview.sources.map(source => ({ ...source, profileId: project.profileId })),
+      });
     } catch (error) { handleError(res, error); }
   });
 
@@ -229,6 +319,7 @@ function createArchitectureRouter({ database, auditLog, graphService, discoveryS
         reason: req.body?.reason,
         author: project.profileId,
       });
+      result.graph = reconcileLinkedApplication(project) || result.graph;
       log('Snapshot reverted', project.name, project.profileId, {
         projectId: project.id,
         sourceSnapshotId: req.params.snapshotId,

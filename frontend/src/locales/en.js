@@ -470,6 +470,7 @@ export default {
   'apm.resourcesCount':                  '{count} resources',
   'apm.awsReads':                        '{total} / {limit} AWS reads',
   'apm.partialData':                     'Partial data',
+  'apm.kubernetesUsageUnavailable':      'Pod readiness is complete; CPU and memory usage are unavailable',
   'apm.overview':                        'Overview',
   'apm.topology':                        'Topology',
   'apm.resources':                       'Resources',

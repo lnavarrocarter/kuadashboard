@@ -220,6 +220,7 @@ app.use('/api/cloud/aws',     awsRoutes);
 for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
   app.use(`/api/observability/${provider}`, createApmRouter({
     database: apmDatabase,
+    architectureDatabase,
     scheduler: apmScheduler,
     auditLog,
     provider,
@@ -237,6 +238,7 @@ function reserveArchitectureAwsRequest(input) {
 
 app.use('/api/architecture', createArchitectureRouter({
   database: architectureDatabase,
+  apmDatabase,
   auditLog,
   deploymentReader: createAwsDeploymentReader({
     beforeRequest: reserveArchitectureAwsRequest,

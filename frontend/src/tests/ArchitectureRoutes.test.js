@@ -80,6 +80,58 @@ describe('ArchitectureRoutes', () => {
     expect(new Set(groups[0].paths.map(path => path.id))).toHaveProperty('size', 2)
   })
 
+  it('groups Kubernetes Ingress and Service paths as microservice routes', () => {
+    const document = {
+      nodes: [
+        { id: 'ingress', name: 'public', resourceType: 'ingress', kubeContext: 'orders-eks', namespace: 'orders' },
+        { id: 'service', name: 'api', resourceType: 'service', kubeContext: 'orders-eks', namespace: 'orders' },
+        { id: 'pod', name: 'api-a', resourceType: 'pod', kubeContext: 'orders-eks', namespace: 'orders' },
+        { id: 'config', name: 'api-config', resourceType: 'configmap', kubeContext: 'orders-eks', namespace: 'orders' },
+      ],
+      edges: [
+        { id: 'ingress-service', sourceNodeId: 'ingress', targetNodeId: 'service', relationType: 'routes_to', evidence: [{ type: 'ingress_backend' }] },
+        { id: 'service-pod', sourceNodeId: 'service', targetNodeId: 'pod', relationType: 'routes_to', evidence: [{ type: 'service_selector' }] },
+        { id: 'pod-config', sourceNodeId: 'pod', targetNodeId: 'config', relationType: 'uses', evidence: [{ type: 'env_from_configmap' }] },
+      ],
+    }
+    const groups = architectureRouteGroups(document)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({ type: 'ingress', category: 'microservice', config: { context: 'orders-eks', namespace: 'orders', entryType: 'ingress' } })
+    expect(groups[0].paths[0].nodes.map(node => node.id)).toEqual(['ingress', 'service', 'pod', 'config'])
+
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: { revision: 1, document } } })
+    expect(wrapper.get('.routes-title').text()).toContain('Application routes')
+    expect(wrapper.get('.event-order').text()).toContain('MICROSERVICE 01')
+    expect(wrapper.get('.microservice-structure').text()).toContain('orders-eks')
+    expect(wrapper.get('.route-path').text()).toContain('Service routing')
+  })
+
+  it('applies the persisted canvas filters to routes', () => {
+    const filteredGraph = {
+      revision: 2,
+      document: {
+        view: { providerFilter: 'kubernetes', kubeContextFilter: 'orders-eks', namespaceFilter: 'orders' },
+        nodes: [
+          { id: 'orders-ingress', name: 'orders-public', provider: 'kubernetes', resourceType: 'ingress', kubeContext: 'orders-eks', namespace: 'orders' },
+          { id: 'orders-service', name: 'orders-api', provider: 'kubernetes', resourceType: 'service', kubeContext: 'orders-eks', namespace: 'orders' },
+          { id: 'payments-service', name: 'payments-api', provider: 'kubernetes', resourceType: 'service', kubeContext: 'orders-eks', namespace: 'payments' },
+          { id: 'aws-worker', name: 'worker', provider: 'aws', resourceType: 'lambda' },
+        ],
+        edges: [
+          { id: 'orders-route', sourceNodeId: 'orders-ingress', targetNodeId: 'orders-service', relationType: 'routes_to' },
+          { id: 'payments-route', sourceNodeId: 'orders-ingress', targetNodeId: 'payments-service', relationType: 'routes_to' },
+        ],
+      },
+    }
+
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: filteredGraph } })
+
+    expect(wrapper.get('.route-count').text()).toContain('1 route')
+    expect(wrapper.text()).toContain('orders-api')
+    expect(wrapper.text()).not.toContain('payments-api')
+    expect(wrapper.text()).not.toContain('worker')
+  })
+
   it('offers application-friendly route ordering modes', async () => {
     const orderedGraph = {
       revision: 1,
@@ -117,7 +169,7 @@ describe('ArchitectureRoutes', () => {
   it('opens the internal diagram from a Step Functions route', async () => {
     const wrapper = mount(ArchitectureRoutes, { props: { graph } })
 
-    expect(wrapper.get('.routes-title').text()).toContain('APL event flow')
+    expect(wrapper.get('.routes-title').text()).toContain('Application routes')
     expect(wrapper.get('.route-count').text()).toContain('2 routes · 2 entries')
     expect(wrapper.get('.event-order').text()).toBe('EVENT 01')
     expect(wrapper.findAll('.event-order').at(-1).text()).toBe('WORKFLOW 01')

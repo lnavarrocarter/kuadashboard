@@ -7,6 +7,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const activeProfileId = ref(null)
   const projects = ref([])
   const selectedProjectId = ref(null)
+  const linkedApplication = ref(null)
   const graph = ref(null)
   const snapshots = ref([])
   const changes = ref([])
@@ -15,6 +16,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const syncPreviewing = ref(false)
   const discoveryCatalog = ref(null)
   const discoveryPreview = ref(null)
+  const kubernetesContexts = ref([])
+  const kubernetesPreview = ref(null)
   const discovering = ref(false)
   const discoveryPhase = ref(null)
   const loading = ref(false)
@@ -25,7 +28,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     projects.value.find(project => project.id === selectedProjectId.value) || null)
 
   function headers(json = false) {
-    if (!activeProfileId.value) throw new Error('No AWS profile selected')
+    if (!activeProfileId.value) throw new Error('No application profile selected')
     return {
       'X-Profile-Id': activeProfileId.value,
       ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -34,6 +37,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
 
   function resetProjectData() {
     selectedProjectId.value = null
+    linkedApplication.value = null
     graph.value = null
     snapshots.value = []
     changes.value = []
@@ -41,6 +45,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     syncPreview.value = null
     discoveryCatalog.value = null
     discoveryPreview.value = null
+    kubernetesContexts.value = []
+    kubernetesPreview.value = null
     discoveryPhase.value = null
   }
 
@@ -53,13 +59,14 @@ export const useArchitectureStore = defineStore('architecture', () => {
     error.value = null
   }
 
-  async function loadProjects({ preserveSelection = true } = {}) {
+  async function loadProjects({ preserveSelection = true, applicationId = '' } = {}) {
     if (!activeProfileId.value) return []
     loading.value = true
     error.value = null
     try {
       const previous = preserveSelection ? selectedProjectId.value : null
-      projects.value = await apiFetch('/api/architecture/projects', { headers: headers() })
+      const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : ''
+      projects.value = await apiFetch(`/api/architecture/projects${params}`, { headers: headers() })
       const nextProjectId = projects.value.some(project => project.id === previous)
         ? previous
         : projects.value[0]?.id || null
@@ -75,6 +82,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
 
   async function selectProject(projectId, { manageLoading = true } = {}) {
     selectedProjectId.value = projectId || null
+    linkedApplication.value = null
     graph.value = null
     snapshots.value = []
     changes.value = []
@@ -82,6 +90,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     syncPreview.value = null
     discoveryCatalog.value = null
     discoveryPreview.value = null
+    kubernetesContexts.value = []
+    kubernetesPreview.value = null
     if (!selectedProjectId.value) return null
     if (manageLoading) loading.value = true
     error.value = null
@@ -94,6 +104,12 @@ export const useArchitectureStore = defineStore('architecture', () => {
       graph.value = nextGraph
       snapshots.value = nextSnapshots
       changes.value = nextChanges
+      try {
+        const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
+        linkedApplication.value = link.application || null
+      } catch (_) {
+        linkedApplication.value = null
+      }
       return nextGraph
     } catch (requestError) {
       error.value = requestError.message
@@ -287,6 +303,86 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function loadKubernetesContexts() {
+    if (!selectedProjectId.value) return []
+    discovering.value = true
+    discoveryPhase.value = 'kubernetes-contexts'
+    error.value = null
+    try {
+      const result = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/discovery/kubernetes/contexts`, { headers: headers() })
+      kubernetesContexts.value = result.contexts || []
+      return kubernetesContexts.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    } finally {
+      discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  async function previewKubernetesResources({ contexts, namespaces = [] }) {
+    if (!selectedProjectId.value) return null
+    discovering.value = true
+    discoveryPhase.value = 'kubernetes-resources'
+    error.value = null
+    try {
+      kubernetesPreview.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/kubernetes/preview`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({ contexts, namespaces }) },
+      )
+      return kubernetesPreview.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  async function importKubernetesResources({ selectedNodeIds }) {
+    if (!selectedProjectId.value || !graph.value || !kubernetesPreview.value) return null
+    const selected = new Set(selectedNodeIds || [])
+    const nodes = kubernetesPreview.value.nodes.filter(node => selected.has(node.id))
+    if (!nodes.length) return null
+    const nodeIds = new Set(nodes.map(node => node.id))
+    const edges = kubernetesPreview.value.relationships.filter(edge =>
+      nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId))
+    saving.value = true
+    error.value = null
+    try {
+      graph.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/operations`, {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify({
+          expectedRevision: graph.value.revision,
+          reason: `Import ${nodes.length} Kubernetes resources`,
+          operation: {
+            type: 'discovery.import',
+            value: {
+              scopes: [...new Map(kubernetesPreview.value.sources.map(source => [source.context, {
+                id: `kubernetes:${source.context}`, provider: 'kubernetes', profileId: activeProfileId.value, context: source.context,
+              }])).values()],
+              sources: kubernetesPreview.value.sources,
+              nodes,
+              edges,
+              retiredNodeKinds: [],
+            },
+          },
+        }),
+      })
+      kubernetesPreview.value = null
+      await loadChanges()
+      return graph.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function previewAwsSync({ region, accountId, stackNames }) {
     if (!selectedProjectId.value) return null
     syncPreviewing.value = true
@@ -306,6 +402,34 @@ export const useArchitectureStore = defineStore('architecture', () => {
       return null
     } finally {
       syncPreviewing.value = false
+    }
+  }
+
+  async function applyAwsSync({ region, accountId, stackNames }) {
+    if (!selectedProjectId.value || !graph.value) return null
+    saving.value = true
+    error.value = null
+    try {
+      graph.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/sync-apply`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({
+            region, accountId, stackNames,
+            expectedRevision: graph.value.revision,
+            reason: `Synchronize ${stackNames.length} CloudFormation stack${stackNames.length === 1 ? '' : 's'}`,
+          }),
+        },
+      )
+      syncPreview.value = null
+      await loadChanges()
+      return graph.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
     }
   }
 
@@ -341,6 +465,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   return {
     activeProfileId,
     applyOperation,
+    applyAwsSync,
     changes,
     compareSnapshot,
     createProject,
@@ -350,14 +475,20 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPhase,
     discoveryCatalog,
     discoveryPreview,
+    kubernetesContexts,
+    kubernetesPreview,
     error,
     graph,
     importAwsResources,
+    importKubernetesResources,
     loadAwsDeployments,
+    loadKubernetesContexts,
     loadProjects,
     loading,
+    linkedApplication,
     projects,
     previewAwsResources,
+    previewKubernetesResources,
     previewAwsSync,
     saving,
     selectProject,

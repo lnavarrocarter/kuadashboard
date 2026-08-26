@@ -8,14 +8,17 @@ const path = require('node:path');
 const test = require('node:test');
 const express = require('express');
 const { ApmDatabase } = require('../lib/apm/database');
+const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createApmRouter } = require('./apm');
+const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
   const database = new ApmDatabase({
     filePath: path.join(directory, 'apm.sqlite3'),
     now: () => Date.UTC(2026, 7, 4, 12),
   });
+  const architectureDatabase = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const scheduler = {
     async collectApplication(applicationId) {
@@ -32,16 +35,25 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
   app.use(express.json());
   app.use('/api/observability/aws', createApmRouter({
     database,
+    architectureDatabase,
     scheduler,
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
     eksWorkloadReader,
     topologyReader,
     processTracer,
+    kubernetesAdapter,
+  }));
+  app.use('/api/architecture', createArchitectureRouter({
+    database: architectureDatabase,
+    apmDatabase: database,
+    auditLog: { log(event) { auditEvents.push(event); } },
+    kubernetesAdapter,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/observability/aws`;
+  const architectureBaseUrl = `http://127.0.0.1:${server.address().port}/api/architecture`;
 
   async function request(relativePath, { profile = 'local:dev', method = 'GET', body } = {}) {
     const response = await fetch(`${baseUrl}${relativePath}`, {
@@ -56,13 +68,29 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     return { status: response.status, body: text ? JSON.parse(text) : null };
   }
 
+  async function architectureRequest(relativePath, { profile = 'local:dev', method = 'GET', body } = {}) {
+    const response = await fetch(`${architectureBaseUrl}${relativePath}`, {
+      method,
+      headers: {
+        'X-Profile-Id': profile,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  }
+
   return {
     auditEvents,
     database,
+    architectureDatabase,
+    architectureRequest,
     request,
     async close() {
       await new Promise(resolve => server.close(resolve));
       database.close();
+      architectureDatabase.close();
       fs.rmSync(directory, { recursive: true, force: true });
     },
   };
@@ -314,6 +342,198 @@ test('process trace is scoped, explicit and does not persist topology changes', 
     assert.equal(calls[0].includeData, true);
     assert.equal(subject.database.listEdges(application.body.id).length, 0);
     assert.equal(subject.database.listResources(application.body.id).length, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API links an application to a profile-scoped Architecture project without moving resources', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    await subject.request(`/applications/${application.body.id}/resources`, {
+      method: 'POST',
+      body: { type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:orders', arn: 'arn:aws:lambda:us-east-1:123:function:orders', name: 'orders', associationSource: 'manual' },
+    });
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.architectureDatabase.saveGraph(project.id, {
+      projectId: project.id,
+      nodes: [{ id: 'aws:orders', name: 'orders', provider: 'aws', arn: 'arn:aws:lambda:us-east-1:123:function:orders' }],
+    }, { expectedRevision: 0 });
+    const foreignProject = subject.architectureDatabase.createProject({ profileId: 'local:other', name: 'other-architecture' });
+
+    const rejected = await subject.request(`/applications/${application.body.id}/architecture-link`, {
+      method: 'PATCH', body: { projectId: foreignProject.id },
+    });
+    assert.equal(rejected.status, 404);
+
+    const linked = await subject.request(`/applications/${application.body.id}/architecture-link`, {
+      method: 'PATCH', body: { projectId: project.id },
+    });
+    assert.equal(linked.status, 200);
+    assert.equal(linked.body.application.architectureProjectId, project.id);
+    assert.equal(linked.body.resources.matched.length, 1);
+    assert.deepEqual(linked.body.resources.unmatched, []);
+
+    const unlinked = await subject.request(`/applications/${application.body.id}/architecture-link`, { method: 'DELETE' });
+    assert.equal(unlinked.status, 200);
+    assert.equal(unlinked.body.architectureProjectId, null);
+    assert.equal(subject.architectureDatabase.getProject(project.id).id, project.id);
+
+    const created = await subject.request(`/applications/${application.body.id}/architecture-link/project`, { method: 'POST' });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.project.profileId, 'local:dev');
+    assert.equal(created.body.application.architectureProjectId, created.body.project.id);
+    assert.equal(created.body.graph.revision, 1);
+    assert.equal(created.body.graph.document.nodes.length, 1);
+    assert.equal(created.body.graph.document.nodes[0].sourceId, `apm:application:${application.body.id}`);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API reconciles linked resources and relationships into one shared registry', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'checkout', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    const lambda = await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: { type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:checkout', arn: 'arn:aws:lambda:us-east-1:123:function:checkout', name: 'checkout', associationSource: 'manual' },
+    });
+    const queue = await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: { type: 'sqs', key: 'arn:aws:sqs:us-east-1:123:checkout', arn: 'arn:aws:sqs:us-east-1:123:checkout', name: 'checkout', associationSource: 'manual' },
+    });
+    await subject.request(`/applications/${applicationId}/edges`, {
+      method: 'POST', body: { sourceResourceId: lambda.body.id, targetResourceId: queue.body.id, relationType: 'depends_on' },
+    });
+    subject.database.upsertMetricBucket({
+      resourceId: lambda.body.id, bucketStart: 1000, metricName: 'invocations_observed', sum: 4, count: 1, source: 'test',
+    });
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'checkout-architecture' });
+    subject.architectureDatabase.saveGraph(project.id, {
+      projectId: project.id,
+      nodes: [
+        { id: 'node:lambda', name: 'checkout', provider: 'aws', accountId: '123', region: 'us-east-1', resourceType: 'lambda', arn: 'arn:aws:lambda:us-east-1:123:function:checkout' },
+        { id: 'node:queue', name: 'checkout', provider: 'aws', accountId: '123', region: 'us-east-1', resourceType: 'sqs', arn: 'arn:aws:sqs:us-east-1:123:checkout' },
+      ],
+      edges: [{ id: 'edge:checkout', sourceNodeId: 'node:lambda', targetNodeId: 'node:queue', relationType: 'depends_on', status: 'automatic' }],
+    }, { expectedRevision: 0 });
+    subject.database.updateArchitectureProjectLink(applicationId, project.id);
+
+    const reconciled = await subject.request(`/applications/${applicationId}/registry/reconcile`, { method: 'POST' });
+    assert.equal(reconciled.status, 200);
+    assert.equal(reconciled.body.resources.length, 2);
+    assert.equal(reconciled.body.relationships.length, 1);
+    const graph = subject.architectureDatabase.getGraph(project.id);
+    assert.ok(graph.document.nodes.every(node => node.registryResourceId));
+    assert.ok(graph.document.edges[0].registryRelationshipId);
+    assert.equal(subject.database.getOverview(applicationId, { from: 0, to: 2000 }).metrics[0].sum, 4);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API seeds Architecture with Kubernetes kinds and reconciles later APM membership automatically', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders-kubernetes', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: { type: 'kubernetes', key: 'orders-eks/orders/Deployment/api', kubeContext: 'orders-eks', namespace: 'orders', kind: 'Deployment', name: 'api', associationSource: 'manual' },
+    });
+    const created = await subject.request(`/applications/${applicationId}/architecture-link/project`, { method: 'POST' });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.graph.document.nodes[0].resourceType, 'deployment');
+    assert.equal(created.body.graph.document.nodes[0].kubeContext, 'orders-eks');
+
+    const added = await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: { type: 'kubernetes', key: 'orders-eks/orders/Service/api', kubeContext: 'orders-eks', namespace: 'orders', kind: 'Service', name: 'api', associationSource: 'manual' },
+    });
+    assert.equal(added.status, 201);
+    assert.equal(subject.database.listRegistryResources(applicationId).length, 2);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Architecture loads and creates the linked project by KUA Application context', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'application-first', environment: 'prod', team: 'platform', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+
+    const before = await subject.architectureRequest(`/projects?applicationId=${applicationId}`);
+    assert.equal(before.status, 200);
+    assert.deepEqual(before.body, []);
+
+    const created = await subject.architectureRequest('/projects', {
+      method: 'POST', body: { applicationId, name: 'application-first-architecture' },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(subject.database.getApplication(applicationId).architectureProjectId, created.body.id);
+
+    const after = await subject.architectureRequest(`/projects?applicationId=${applicationId}`);
+    assert.deepEqual(after.body.map(project => project.id), [created.body.id]);
+    const linked = await subject.architectureRequest(`/projects/${created.body.id}/application`);
+    assert.equal(linked.body.application.id, applicationId);
+    assert.equal(linked.body.application.team, 'platform');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API returns a read-only profile-scoped Kubernetes adapter preview', async () => {
+  const calls = [];
+  const subject = await fixture({
+    kubernetesAdapter: {
+      async preview(input) {
+        calls.push(input);
+        return {
+          sources: [{ id: 'kubernetes:context:dev', context: 'dev' }],
+          nodes: [{ id: 'kubernetes:pod', nativeId: 'pod-uid' }],
+          relationships: [], health: [{ context: 'dev', status: 'healthy' }], capabilities: [], failures: [],
+        };
+      },
+    },
+  });
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const preview = await subject.request(`/applications/${application.body.id}/discovery/kubernetes/preview`, {
+      method: 'POST', body: { contexts: ['dev'], namespaces: ['orders'] },
+    });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.profileId, 'local:dev');
+    assert.equal(preview.body.sources[0].profileId, 'local:dev');
+    assert.deepEqual(calls, [{ provider: 'aws', contexts: ['dev'], namespaces: ['orders'] }]);
+    assert.equal(subject.database.listResources(application.body.id).length, 0);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API lists Kubernetes contexts before a targeted preview', async () => {
+  const subject = await fixture({
+    kubernetesAdapter: { listContexts: ({ provider }) => [{ id: `${provider}-cluster`, name: 'orders-eks' }] },
+  });
+  try {
+    const application = await subject.request('/applications', { method: 'POST', body: { name: 'orders', region: 'us-east-1' } });
+    const contexts = await subject.request(`/applications/${application.body.id}/discovery/kubernetes/contexts`);
+    assert.equal(contexts.status, 200);
+    assert.deepEqual(contexts.body.contexts, [{ id: 'aws-cluster', name: 'orders-eks' }]);
   } finally {
     await subject.close();
   }

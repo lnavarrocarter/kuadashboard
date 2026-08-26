@@ -13,7 +13,9 @@
         ref="apmViewRef"
         provider="vercel"
         :profile-id="vercelStore.activeProfileId"
+        :application-id="applicationId"
         :platform-resources="apmPlatformResources"
+        @open-architecture="context => emit('open-architecture', context)"
       />
       <!-- Error banner -->
       <div v-if="activeService !== 'apm' && vercelStore.error" class="alert-error">{{ vercelStore.error }}</div>
@@ -609,7 +611,10 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'projects' },
+  applicationId: { type: String, default: '' },
 })
+
+const emit = defineEmits(['open-architecture'])
 
 const { t }       = useI18n()
 const vercelStore = useVercelStore()

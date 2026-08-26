@@ -29,6 +29,16 @@ export const useApmStore = defineStore('apm', () => {
   const analyzingTopology = ref(false)
   const tracingProcess = ref(false)
   const processTrace = ref(null)
+  const architectureLink = ref(null)
+  const architectureProjects = ref([])
+  const linkingArchitecture = ref(false)
+  const registry = ref(null)
+  const reconcilingRegistry = ref(false)
+  const kubernetesPreview = ref(null)
+  const previewingKubernetes = ref(false)
+  const kubernetesPreviewScopeKey = ref('')
+  const kubernetesContexts = ref([])
+  const loadingKubernetesContexts = ref(false)
   const error = ref(null)
 
   const selectedApplication = computed(() =>
@@ -61,6 +71,12 @@ export const useApmStore = defineStore('apm', () => {
     forecast.value = null
     series.value = {}
     processTrace.value = null
+    architectureLink.value = null
+    architectureProjects.value = []
+    registry.value = null
+    kubernetesPreview.value = null
+    kubernetesPreviewScopeKey.value = ''
+    kubernetesContexts.value = []
   }
 
   function setActiveProfile(profileId, provider = 'aws') {
@@ -122,6 +138,13 @@ export const useApmStore = defineStore('apm', () => {
       overview.value = nextOverview
       topology.value = nextTopology
       forecast.value = nextForecast
+      const contexts = [...new Set((nextTopology.resources || [])
+        .filter(resource => resource.type === 'kubernetes' && resource.kubeContext)
+        .map(resource => resource.kubeContext))].sort()
+      const previewScopeKey = `${applicationId}:${contexts.join('|')}`
+      if (contexts.length && kubernetesPreviewScopeKey.value !== previewScopeKey) {
+        await previewKubernetesDiscovery({ contexts })
+      }
       return nextOverview
     } catch (requestError) {
       error.value = requestError.message
@@ -184,6 +207,138 @@ export const useApmStore = defineStore('apm', () => {
     })
     applications.value = applications.value.map(application => application.id === applicationId ? updated : application)
     return updated
+  }
+
+  function replaceApplication(application) {
+    applications.value = applications.value.map(item => item.id === application.id ? application : item)
+    if (topology.value.application?.id === application.id) {
+      topology.value = { ...topology.value, application }
+    }
+  }
+
+  async function loadArchitectureLink(applicationId = selectedApplicationId.value) {
+    if (!applicationId) return null
+    linkingArchitecture.value = true
+    try {
+      architectureLink.value = await request(`/applications/${applicationId}/architecture-link`, { headers: headers() })
+      if (architectureLink.value.application) replaceApplication(architectureLink.value.application)
+      return architectureLink.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      linkingArchitecture.value = false
+    }
+  }
+
+  async function loadArchitectureProjects() {
+    try {
+      architectureProjects.value = await apiFetch('/api/architecture/projects', { headers: headers() })
+      return architectureProjects.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    }
+  }
+
+  async function linkArchitectureProject(projectId) {
+    if (!selectedApplicationId.value) return null
+    linkingArchitecture.value = true
+    try {
+      architectureLink.value = await request(`/applications/${selectedApplicationId.value}/architecture-link`, {
+        method: 'PATCH', headers: headers(true), body: JSON.stringify({ projectId }),
+      })
+      replaceApplication(architectureLink.value.application)
+      return architectureLink.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      linkingArchitecture.value = false
+    }
+  }
+
+  async function createArchitectureProjectLink() {
+    if (!selectedApplicationId.value) return null
+    linkingArchitecture.value = true
+    try {
+      architectureLink.value = await request(`/applications/${selectedApplicationId.value}/architecture-link/project`, {
+        method: 'POST', headers: headers(true), body: JSON.stringify({}),
+      })
+      replaceApplication(architectureLink.value.application)
+      return architectureLink.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      linkingArchitecture.value = false
+    }
+  }
+
+  async function unlinkArchitectureProject() {
+    if (!selectedApplicationId.value) return null
+    linkingArchitecture.value = true
+    try {
+      const application = await request(`/applications/${selectedApplicationId.value}/architecture-link`, {
+        method: 'DELETE', headers: headers(),
+      })
+      replaceApplication(application)
+      architectureLink.value = { linked: false, project: null, resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } }
+      return application
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      linkingArchitecture.value = false
+    }
+  }
+
+  async function reconcileSharedRegistry() {
+    if (!selectedApplicationId.value) return null
+    reconcilingRegistry.value = true
+    try {
+      registry.value = await request(`/applications/${selectedApplicationId.value}/registry/reconcile`, {
+        method: 'POST', headers: headers(),
+      })
+      return registry.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      reconcilingRegistry.value = false
+    }
+  }
+
+  async function previewKubernetesDiscovery({ contexts = [], namespaces = [] } = {}) {
+    if (!selectedApplicationId.value) return null
+    previewingKubernetes.value = true
+    try {
+      kubernetesPreview.value = await request(`/applications/${selectedApplicationId.value}/discovery/kubernetes/preview`, {
+        method: 'POST', headers: headers(true), body: JSON.stringify({ contexts, namespaces }),
+      })
+      kubernetesPreviewScopeKey.value = `${selectedApplicationId.value}:${[...contexts].sort().join('|')}`
+      return kubernetesPreview.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      previewingKubernetes.value = false
+    }
+  }
+
+  async function loadApplicationKubernetesContexts() {
+    if (!selectedApplicationId.value) return []
+    loadingKubernetesContexts.value = true
+    try {
+      const result = await request(`/applications/${selectedApplicationId.value}/discovery/kubernetes/contexts`, { headers: headers() })
+      kubernetesContexts.value = result.contexts || []
+      return kubernetesContexts.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    } finally {
+      loadingKubernetesContexts.value = false
+    }
   }
 
   async function deleteApplication(applicationId) {
@@ -284,8 +439,15 @@ export const useApmStore = defineStore('apm', () => {
     })
   }
 
-  async function loadKubernetesWorkloads() {
-    return request('/kubernetes-workloads', { headers: headers() })
+  async function loadKubernetesContexts() {
+    return request('/kubernetes-contexts', { headers: headers() })
+  }
+
+  async function loadKubernetesWorkloads(contexts = []) {
+    const params = new URLSearchParams()
+    if (contexts.length) params.set('contexts', contexts.join(','))
+    const suffix = params.size ? `?${params}` : ''
+    return request(`/kubernetes-workloads${suffix}`, { headers: headers() })
   }
 
   async function updateThresholds(applicationId, thresholds) {
@@ -347,6 +509,15 @@ export const useApmStore = defineStore('apm', () => {
     analyzingTopology,
     tracingProcess,
     processTrace,
+    architectureLink,
+    architectureProjects,
+    linkingArchitecture,
+    registry,
+    reconcilingRegistry,
+    kubernetesPreview,
+    previewingKubernetes,
+    kubernetesContexts,
+    loadingKubernetesContexts,
     error,
     setActiveProfile,
     loadApplications,
@@ -357,6 +528,14 @@ export const useApmStore = defineStore('apm', () => {
     loadSeries,
     createApplication,
     updateApplication,
+    loadArchitectureLink,
+    loadArchitectureProjects,
+    linkArchitectureProject,
+    createArchitectureProjectLink,
+    unlinkArchitectureProject,
+    reconcileSharedRegistry,
+    previewKubernetesDiscovery,
+    loadApplicationKubernetesContexts,
     deleteApplication,
     addResource,
     confirmDependency,
@@ -365,6 +544,7 @@ export const useApmStore = defineStore('apm', () => {
     discoverCandidates,
     loadDeployments,
     previewDeploymentResources,
+    loadKubernetesContexts,
     loadKubernetesWorkloads,
     updateThresholds,
     collectNow,

@@ -3,7 +3,7 @@
     <header class="routes-header">
       <span class="routes-title">
         <span class="routes-title-icon"><i data-lucide="route"></i></span>
-        <span><strong>APL event flow</strong><small>Application-level execution paths</small></span>
+        <span><strong>Application routes</strong><small>Event, workflow and microservice execution paths</small></span>
       </span>
       <span class="routes-actions">
         <label class="route-order-control">
@@ -23,13 +23,13 @@
 
     <div v-if="!groups.length" class="routes-empty">
       <i data-lucide="route-off"></i>
-      <strong>No event or workflow routes in this diagram</strong>
-      <span>Import a candidate containing EventBridge or Step Functions evidence.</span>
+      <strong>No application routes in this diagram</strong>
+      <span>Import EventBridge, Step Functions, Kubernetes Ingress or Services with relationship evidence.</span>
     </div>
 
     <article v-for="(group, groupIndex) in groups" :key="group.id" class="route-group">
       <header>
-        <span class="event-order">{{ group.type === 'eventbridge' ? 'EVENT' : 'WORKFLOW' }} {{ groupSequence(groupIndex, group.type) }}</span>
+        <span :class="['event-order', group.category]">{{ categoryLabel(group.category) }} {{ groupSequence(groupIndex, group.category) }}</span>
         <span class="route-entry-icon"><i :data-lucide="iconFor(group.type)"></i></span>
         <span><strong>{{ group.name }}</strong><small>{{ labelFor(group.type) }}</small></span>
         <button v-if="group.type === 'stepfunctions'" class="btn sm" @click="$emit('inspect-workflow', group.paths[0].nodes[0])">
@@ -37,7 +37,7 @@
         </button>
       </header>
 
-      <div v-if="group.config" class="event-structure">
+      <div v-if="group.config && group.category === 'event'" class="event-structure">
         <span><small>Event bus</small><strong>{{ group.config.eventBus }}</strong></span>
         <span v-if="group.config.scheduleExpression"><small>Schedule</small><code>{{ group.config.scheduleExpression }}</code></span>
         <span v-if="group.config.description"><small>Purpose</small><strong>{{ group.config.description }}</strong></span>
@@ -46,6 +46,12 @@
             <small>{{ field.key }}</small><code>{{ patternValue(field.value) }}</code>
           </span>
         </template>
+      </div>
+      <div v-if="group.config && group.category === 'microservice'" class="microservice-structure">
+        <span><small>Entry</small><strong>{{ group.config.entryType }}</strong></span>
+        <span v-if="group.config.namespace"><small>Namespace</small><strong>{{ group.config.namespace }}</strong></span>
+        <span v-if="group.config.context"><small>Context</small><code>{{ group.config.context }}</code></span>
+        <span><small>Evidence</small><strong>Declared Kubernetes selectors and backends</strong></span>
       </div>
 
       <div class="route-paths">
@@ -81,24 +87,42 @@ const props = defineProps({ graph: { type: Object, required: true } })
 defineEmits(['inspect-workflow'])
 
 const sortMode = ref('sequence')
-const groups = computed(() => architectureRouteGroups(props.graph?.document, { order: sortMode.value }))
+const filteredDocument = computed(() => {
+  const document = props.graph?.document || { nodes: [], edges: [] }
+  const view = document.view || {}
+  const nodes = (document.nodes || []).filter(node =>
+    (view.providerFilter === 'all' || !view.providerFilter || node.provider === view.providerFilter) &&
+    (!view.kubeContextFilter || node.kubeContext === view.kubeContextFilter) &&
+    (!view.namespaceFilter || node.namespace === view.namespaceFilter))
+  const ids = new Set(nodes.map(node => node.id))
+  return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
+})
+const groups = computed(() => architectureRouteGroups(filteredDocument.value, { order: sortMode.value }))
 const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
 
 function sequence(index) {
   return String(index + 1).padStart(2, '0')
 }
 
-function groupSequence(index, type) {
-  const position = groups.value.slice(0, index + 1).filter(group => group.type === type).length
+function groupSequence(index, category) {
+  const position = groups.value.slice(0, index + 1).filter(group => group.category === category).length
   return String(position).padStart(2, '0')
 }
 
 function iconFor(type) {
-  return { eventbridge: 'radio-tower', sqs: 'list-end', lambda: 'square-function', stepfunctions: 'workflow', ecs: 'container', s3: 'hard-drive' }[type] || 'box'
+  return {
+    eventbridge: 'radio-tower', sqs: 'list-end', lambda: 'square-function', stepfunctions: 'workflow', ecs: 'container', s3: 'hard-drive',
+    ingress: 'route', service: 'network', deployment: 'boxes', statefulset: 'database-zap', daemonset: 'rows-3', pod: 'container',
+    configmap: 'file-cog', secret: 'key-round', pvc: 'hard-drive',
+  }[type] || 'box'
 }
 
 function labelFor(type) {
-  return { eventbridge: 'EventBridge event', sqs: 'SQS queue', lambda: 'Lambda', stepfunctions: 'Step Functions workflow', ecs: 'ECS', s3: 'S3' }[type] || type
+  return {
+    eventbridge: 'EventBridge event', sqs: 'SQS queue', lambda: 'Lambda', stepfunctions: 'Step Functions workflow', ecs: 'ECS', s3: 'S3',
+    ingress: 'Kubernetes Ingress', service: 'Kubernetes Service', deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
+    daemonset: 'Kubernetes DaemonSet', pod: 'Kubernetes Pod', configmap: 'Kubernetes ConfigMap', secret: 'Kubernetes Secret', pvc: 'PersistentVolumeClaim',
+  }[type] || type
 }
 
 function stageLabel(type) {
@@ -109,11 +133,13 @@ function stageLabel(type) {
     stepfunctions: 'Workflow orchestration',
     ecs: 'Container workload',
     s3: 'Object storage',
+    ingress: 'HTTP entrypoint', service: 'Service routing', deployment: 'Workload', statefulset: 'Stateful workload',
+    daemonset: 'Node workload', pod: 'Runtime Pod', configmap: 'Configuration', secret: 'Secret reference', pvc: 'Persistent storage',
   }[type] || labelFor(type)
 }
 
 function relationLabel(type) {
-  return { triggers: 'triggers', invokes: 'invokes', sends_to: 'sends to', starts_execution: 'starts' }[type]
+  return { triggers: 'triggers', invokes: 'invokes', sends_to: 'sends to', starts_execution: 'starts', routes_to: 'routes to', owns: 'owns', uses: 'uses' }[type]
     || String(type || 'depends_on').replaceAll('_', ' ')
 }
 
@@ -126,6 +152,10 @@ function eventFields(pattern) {
   return Object.entries(pattern || {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => ({ key, value }))
+}
+
+function categoryLabel(category) {
+  return { event: 'EVENT', workflow: 'WORKFLOW', microservice: 'MICROSERVICE' }[category] || 'ROUTE'
 }
 
 function refreshIcons() { nextTick(() => createIcons({ icons })) }
@@ -154,10 +184,15 @@ onMounted(refreshIcons)
 .route-group > header { background: var(--bg-hover); }
 .route-group > header .btn { margin-left: auto; }
 .event-order { width: 76px; color: #e3b341; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.event-order.microservice { color: #326ce5; }
 .route-entry-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
 .route-entry-icon :deep(svg) { width: 16px; height: 16px; }
 .event-structure { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 7px; border-bottom: 1px solid var(--border); }
 .event-structure > span { min-width: 130px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #d29922; background: color-mix(in srgb, #d29922 7%, transparent); }
+.microservice-structure { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 7px; border-bottom: 1px solid var(--border); }
+.microservice-structure > span { min-width: 130px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #326ce5; background: color-mix(in srgb, #326ce5 7%, transparent); }
+.microservice-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
+.microservice-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
 .event-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
 .event-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
 .route-paths { display: flex; flex-direction: column; overflow-x: auto; }
@@ -174,6 +209,11 @@ onMounted(refreshIcons)
 .route-node.stepfunctions { --node-accent: #f85149; }
 .route-node.ecs { --node-accent: #39c5cf; }
 .route-node.s3 { --node-accent: #3fb950; }
+.route-node.ingress, .route-node.service { --node-accent: #326ce5; }
+.route-node.deployment, .route-node.statefulset, .route-node.daemonset, .route-node.pod { --node-accent: #4b7bec; }
+.route-node.configmap { --node-accent: #64748b; }
+.route-node.secret { --node-accent: #b74856; }
+.route-node.pvc { --node-accent: #3fb950; }
 .stage-order { width: 22px; height: 22px; display: grid; place-items: center; color: var(--node-accent); border: 1px solid color-mix(in srgb, var(--node-accent) 65%, transparent); border-radius: 50%; font-size: 9px; font-weight: 700; }
 .route-node > span { display: flex; flex-direction: column; min-width: 0; }
 .route-node > .stage-order { display: grid; }

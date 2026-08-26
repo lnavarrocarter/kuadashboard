@@ -85,7 +85,7 @@
 
           <div class="about-links">
             <a class="btn" @click="open('https://github.com/lnavarrocarter/kuadashboard')">
-              <i data-lucide="github"></i> GitHub
+              <svg width="14" height="14" viewBox="0 0 19 19" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg> GitHub
             </a>
             <a class="btn" @click="open('https://github.com/lnavarrocarter/kuadashboard/blob/main/CHANGELOG.md')">
               <i data-lucide="file-text"></i> CHANGELOG

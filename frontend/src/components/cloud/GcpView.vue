@@ -14,7 +14,9 @@
         ref="apmViewRef"
         provider="gcp"
         :profile-id="selectedProfileId"
+        :application-id="applicationId"
         :platform-resources="apmPlatformResources"
+        @open-architecture="context => emit('open-architecture', context)"
       />
 
       <!-- Toolbar -->
@@ -1886,9 +1888,10 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'cloudrun' },
+  applicationId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['connect-gke'])
+const emit = defineEmits(['connect-gke', 'open-architecture'])
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()

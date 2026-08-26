@@ -6,12 +6,21 @@
         <span><strong>Architecture</strong><small>Evidence-backed application diagrams</small></span>
       </div>
       <div class="architecture-actions">
-        <button class="btn sm btn-icon" title="Refresh projects" :disabled="store.loading || !profileId" @click="store.loadProjects()">
+        <button class="btn sm btn-icon" title="Refresh projects" :disabled="store.loading || !profileId" @click="store.loadProjects({ applicationId })">
           <i data-lucide="refresh-cw"></i>
         </button>
-        <button v-if="store.selectedProject" class="btn sm" :disabled="store.loading" @click="showDiscovery = !showDiscovery">
-          <i data-lucide="scan-search"></i> Add AWS resources
-        </button>
+        <div v-if="store.selectedProject" class="resource-add-menu">
+          <button class="btn sm" :disabled="store.loading" @click="resourceProvider = resourceProvider ? '' : 'aws'">
+            <i data-lucide="plus"></i> Add resources
+          </button>
+          <div v-if="resourceProvider" class="resource-provider-options">
+            <button :class="{ active: resourceProvider === 'aws' }" @click="resourceProvider = 'aws'"><i data-lucide="cloud"></i> AWS</button>
+            <button :class="{ active: resourceProvider === 'kubernetes' }" @click="resourceProvider = 'kubernetes'"><i data-lucide="boxes"></i> Kubernetes</button>
+            <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> Manual resource</button>
+            <button disabled title="GCP adapter is planned"><i data-lucide="cloud-cog"></i> GCP</button>
+            <button disabled title="Vercel adapter is planned"><i data-lucide="triangle"></i> Vercel</button>
+          </div>
+        </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
           <i data-lucide="plus"></i> New project
         </button>
@@ -20,8 +29,8 @@
 
     <div v-if="!profileId" class="architecture-empty">
       <i data-lucide="cloud-cog"></i>
-      <strong>Select an AWS profile</strong>
-      <span>Architecture projects are isolated by cloud profile.</span>
+      <strong>Select an application profile</strong>
+      <span>Architecture projects are isolated by their KUA Application profile.</span>
     </div>
 
     <template v-else>
@@ -43,7 +52,7 @@
             @click="store.selectProject(project.id)"
           >
             <span class="project-mark">{{ project.name.slice(0, 2).toUpperCase() }}</span>
-            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'AWS architecture' }}</small></span>
+            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
           </button>
           <button v-if="!store.projects.length && !store.loading" class="architecture-project-empty" @click="creatingProject = true">
             <i data-lucide="plus"></i> Create the first project
@@ -60,11 +69,14 @@
           <template v-else>
             <section class="architecture-project-header">
               <div>
-                <span class="architecture-kicker">AWS / revision {{ store.graph?.revision ?? 0 }}</span>
+                <span class="architecture-kicker">{{ applicationContextLabel }} / revision {{ store.graph?.revision ?? 0 }}</span>
                 <h2>{{ store.selectedProject.name }}</h2>
                 <p>{{ store.selectedProject.description || 'Application architecture workspace' }}</p>
               </div>
               <form class="snapshot-form" @submit.prevent="submitSnapshot">
+                <button v-if="store.linkedApplication" class="btn sm" type="button" @click="emit('open-observability', store.linkedApplication)">
+                  <i data-lucide="square-activity"></i> Open observability
+                </button>
                 <button class="btn sm" type="button" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
                   <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
                   {{ store.syncPreviewing ? 'Checking…' : 'Sync preview' }}
@@ -100,12 +112,51 @@
                   <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
                 </div>
               </div>
+              <div class="sync-review-lists">
+                <details v-for="section in syncResourceSections" :key="section.key" v-show="section.items.length">
+                  <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
+                  <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">
+                    {{ syncItemName(item) }}
+                  </span>
+                </details>
+                <details v-for="section in syncRelationshipSections" :key="section.key" v-show="section.items.length">
+                  <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
+                  <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">
+                    {{ syncRelationshipName(item) }}
+                  </span>
+                </details>
+              </div>
+              <footer>
+                <span>{{ store.syncPreview.summary.resources.missing }} resource{{ store.syncPreview.summary.resources.missing === 1 ? '' : 's' }} will become stale</span>
+                <button class="btn sm primary" :disabled="store.saving" @click="applySync">
+                  <i data-lucide="check"></i> Apply sync
+                </button>
+              </footer>
+            </section>
+
+            <section v-if="staleResources.length" class="stale-resource-list">
+              <header><span>Stale resources</span><small>{{ staleResources.length }} need a decision</small></header>
+              <div v-for="node in staleResources" :key="node.id" class="stale-resource-row">
+                <span><strong>{{ node.name }}</strong><small>{{ node.kind || node.resourceType }}</small></span>
+                <button class="btn sm" :disabled="store.saving" @click="restoreStaleResource(node)"><i data-lucide="undo-2"></i> Restore</button>
+                <button class="btn sm danger" :disabled="store.saving" @click="removeStaleResource(node)"><i data-lucide="trash-2"></i> Remove</button>
+              </div>
             </section>
 
             <ArchitectureDiscoveryPanel
-              v-if="showDiscovery"
-              @close="showDiscovery = false"
-              @imported="showDiscovery = false"
+              v-if="resourceProvider === 'aws'"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
+            <ArchitectureKubernetesDiscoveryPanel
+              v-if="resourceProvider === 'kubernetes'"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
+            <ArchitectureManualResourcePanel
+              v-if="resourceProvider === 'manual'"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
             />
 
             <div class="architecture-view-tabs">
@@ -183,17 +234,27 @@ import { useAwsStore } from '../../stores/useAwsStore'
 import StepFnDetail from '../StepFnDetail.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
+import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
+import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
 
-const props = defineProps({ profileId: { type: String, default: '' } })
+const props = defineProps({
+  profileId: { type: String, default: '' },
+  projectId: { type: String, default: '' },
+  applicationId: { type: String, default: '' },
+})
+const emit = defineEmits(['open-observability', 'application-context'])
 const store = useArchitectureStore()
 const awsStore = useAwsStore()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
-const showDiscovery = ref(false)
+const resourceProvider = ref('')
 const activeView = ref('routes')
 const selectedWorkflow = ref(null)
+const applicationContextLabel = computed(() => store.linkedApplication
+  ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
+  : 'Architecture')
 const syncSource = computed(() => {
   const sources = store.graph?.document?.sources?.filter(source => source.type === 'cloudformation') || []
   if (!sources.length) return null
@@ -215,27 +276,37 @@ const resourceSyncCounts = computed(() => syncCountItems(store.syncPreview?.summ
 const relationshipSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.relationships, {
   new: 'New relationships', reinforced: 'Reinforced', unchanged: 'Unchanged', missingEvidence: 'Missing evidence', rejected: 'Rejected', manual: 'Manual',
 }))
+const syncResourceSections = computed(() => [
+  ['new', 'New resources'], ['changed', 'Changed resources'], ['missing', 'Missing resources'], ['stale', 'Already stale'], ['manual', 'Manual resources'],
+].map(([key, label]) => ({ key, label, items: store.syncPreview?.resources?.[key] || [] })))
+const syncRelationshipSections = computed(() => [
+  ['new', 'New relationships'], ['reinforced', 'Reinforced relationships'], ['missingEvidence', 'Relationships missing evidence'], ['rejected', 'Rejected relationships'], ['manual', 'Manual relationships'],
+].map(([key, label]) => ({ key: `relationship:${key}`, label, items: store.syncPreview?.relationships?.[key] || [] })))
+const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
 
 function syncCountItems(counts = {}, labels) {
   return Object.entries(labels).map(([key, label]) => ({ key, label, count: counts?.[key] || 0 }))
 }
 
 async function loadProfile(profileId) {
-  showDiscovery.value = false
+  resourceProvider.value = ''
   selectedWorkflow.value = null
   store.setActiveProfile(profileId || null)
   awsStore.setActiveProfile(profileId || null)
-  if (profileId) await store.loadProjects()
+  if (profileId) await store.loadProjects({ applicationId: props.applicationId })
+  if (props.projectId && store.projects.some(project => project.id === props.projectId)) {
+    await store.selectProject(props.projectId)
+  }
   nextTick(() => createIcons({ icons }))
 }
 
 async function submitProject() {
-  const project = await store.createProject(projectDraft)
+  const project = await store.createProject({ ...projectDraft, applicationId: props.applicationId })
   if (!project) return
   projectDraft.name = ''
   projectDraft.description = ''
   creatingProject.value = false
-  showDiscovery.value = true
+  resourceProvider.value = 'aws'
   activeView.value = 'routes'
   nextTick(() => createIcons({ icons }))
 }
@@ -249,7 +320,7 @@ async function submitSnapshot() {
 async function deleteProject() {
   const project = store.selectedProject
   if (!project || !window.confirm(`Delete project "${project.name}" and all of its graph history? This cannot be undone.`)) return
-  showDiscovery.value = false
+  resourceProvider.value = ''
   selectedWorkflow.value = null
   await store.deleteProject(project.id)
   nextTick(() => createIcons({ icons }))
@@ -259,6 +330,42 @@ async function previewSync() {
   if (!syncSource.value) return
   await store.previewAwsSync(syncSource.value)
   nextTick(() => createIcons({ icons }))
+}
+
+async function applySync() {
+  if (!syncSource.value) return
+  await store.applyAwsSync(syncSource.value)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function restoreStaleResource(node) {
+  const { staleAt, ...restoredNode } = node
+  await store.applyOperation({
+    type: 'node.upsert',
+    value: { ...restoredNode, manual: true, syncState: 'restored' },
+  }, { reason: `Restore stale resource ${node.name}` })
+  nextTick(() => createIcons({ icons }))
+}
+
+async function removeStaleResource(node) {
+  if (!window.confirm(`Remove stale resource "${node.name}" and its relationships?`)) return
+  await store.applyOperation({ type: 'node.remove', subjectId: node.id }, { reason: `Remove stale resource ${node.name}` })
+  nextTick(() => createIcons({ icons }))
+}
+
+function syncItemName(item) {
+  const node = item.preview || item.node
+  return node?.name || item.edge?.relationType || 'Unknown resource'
+}
+
+function syncItemId(item) {
+  const node = item.preview || item.node || item.edge
+  return node?.id || JSON.stringify(item)
+}
+
+function syncRelationshipName(item) {
+  const edge = item.preview || item.edge
+  return edge ? `${edge.relationType}: ${edge.sourceNodeId} to ${edge.targetNodeId}` : 'Unknown relationship'
 }
 
 async function compareSnapshot(snapshotId) {
@@ -286,6 +393,16 @@ function changeLabel(type) {
 }
 
 watch(() => props.profileId, loadProfile)
+watch(() => props.applicationId, async () => loadProfile(props.profileId))
+watch(() => props.projectId, async projectId => {
+  if (projectId && store.projects.some(project => project.id === projectId)) {
+    await store.selectProject(projectId)
+    nextTick(() => createIcons({ icons }))
+  }
+})
+watch(() => store.linkedApplication, application => {
+  if (application) emit('application-context', application)
+})
 onMounted(() => loadProfile(props.profileId))
 </script>
 
@@ -293,6 +410,12 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-view { min-height: 100%; display: flex; flex-direction: column; color: var(--text); }
 .architecture-toolbar { min-height: 58px; padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .architecture-title, .architecture-actions, .architecture-project-header, .snapshot-form { display: flex; align-items: center; gap: 10px; }
+.resource-add-menu { position: relative; }
+.resource-provider-options { position: absolute; top: calc(100% + 5px); right: 0; z-index: 12; min-width: 170px; padding: 4px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); box-shadow: 0 8px 20px rgba(0, 0, 0, .22); }
+.resource-provider-options button { min-height: 31px; display: flex; align-items: center; gap: 7px; border: 0; border-radius: 4px; background: transparent; color: var(--text); padding: 5px 7px; cursor: pointer; text-align: left; }
+.resource-provider-options button:hover, .resource-provider-options button.active { background: var(--bg-hover); }
+.resource-provider-options button:disabled { color: var(--text-dim); cursor: not-allowed; }
+.resource-provider-options svg { width: 14px; height: 14px; }
 .architecture-title > i { width: 22px; color: #2f81f7; }
 .architecture-title span, .architecture-project-row > span:last-child, .snapshot-row > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
 .architecture-title small, .architecture-project-row small, .snapshot-row small { color: var(--text-dim); }
@@ -330,6 +453,18 @@ onMounted(() => loadProfile(props.profileId))
 .sync-preview-grid span { color: var(--text-dim); font-size: 11px; }
 .sync-preview-grid strong { font-size: 18px; }
 .relationship-grid { background: color-mix(in srgb, #2f81f7 4%, transparent); }
+.sync-review-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); border-bottom: 1px solid var(--border); }
+.sync-review-lists details { padding: 8px 10px; border-right: 1px solid var(--border); }
+.sync-review-lists summary { cursor: pointer; color: var(--text-dim); font-size: 12px; }
+.sync-review-lists summary strong { color: var(--text); margin-left: 4px; }
+.sync-review-item { display: block; padding: 5px 0 0 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.sync-preview-panel footer { min-height: 48px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-dim); font-size: 12px; }
+.stale-resource-list { margin: 12px 0; border: 1px solid #d29922; border-radius: 6px; }
+.stale-resource-list > header, .stale-resource-row { min-height: 42px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+.stale-resource-list > header { justify-content: space-between; color: var(--text-dim); }
+.stale-resource-row:last-child { border-bottom: 0; }
+.stale-resource-row > span { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.stale-resource-row small { color: var(--text-dim); }
 .architecture-view-tabs { margin-bottom: 8px; display: flex; gap: 6px; }
 .canvas-message, .architecture-empty { position: relative; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-dim); }
 .canvas-message i, .architecture-empty i { width: 32px; height: 32px; color: #2f81f7; }
@@ -357,6 +492,7 @@ onMounted(() => loadProfile(props.profileId))
   .architecture-project-header { align-items: flex-start; flex-direction: column; }
   .architecture-stats { grid-template-columns: repeat(2, 1fr); }
   .sync-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sync-preview-panel footer { align-items: flex-start; flex-direction: column; }
   .architecture-stats div:nth-child(2) { border-right: 0; }
   .architecture-stats div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
 }

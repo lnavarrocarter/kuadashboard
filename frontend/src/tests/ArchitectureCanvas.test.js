@@ -81,6 +81,12 @@ describe('ArchitectureCanvas', () => {
     expect(architectureResourcePresentation('iam-policy')).toEqual({ icon: 'file-key', tone: 'security-simple' })
     expect(architectureResourcePresentation('policy')).toEqual({ icon: 'file-text', tone: 'security-simple' })
     expect(architectureResourcePresentation('api-route')).toEqual({ icon: 'route', tone: 'network' })
+    expect(architectureResourcePresentation('ec2')).toEqual({ icon: 'server', tone: 'compute' })
+    expect(architectureResourcePresentation('deployment')).toEqual({ icon: 'boxes', tone: 'kubernetes' })
+    expect(architectureResourcePresentation('service')).toEqual({ icon: 'network', tone: 'kubernetes-network' })
+    expect(architectureResourcePresentation('ingress')).toEqual({ icon: 'route', tone: 'kubernetes-network' })
+    expect(architectureResourcePresentation('configmap')).toEqual({ icon: 'file-cog', tone: 'kubernetes-config' })
+    expect(architectureResourcePresentation('gcp-cloud-run')).toEqual({ icon: 'cloud-cog', tone: 'compute' })
   })
 
   it('shows API Gateway method details and navigates to the existing Lambda reference', async () => {
@@ -184,11 +190,14 @@ describe('ArchitectureCanvas', () => {
       props: { graph: { revision: 1, document } },
       global: { stubs },
     })
-    await wrapper.get('.canvas-layout-controls select').setValue('resource-type')
+    await wrapper.get('select[title="Canvas arrangement"]').setValue('resource-type')
     expect(wrapper.emitted('operation')[0]).toEqual([
       {
         type: 'view.set',
-        value: { layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false },
+        value: {
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false,
+          providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
+        },
       },
       'Update canvas view',
     ])
@@ -214,7 +223,7 @@ describe('ArchitectureCanvas', () => {
       global: { stubs },
     })
 
-    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+    expect(wrapper.get('select[title="Canvas arrangement"]').element.value).toBe('resource-type')
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
     expect(wrapper.get('.canvas-layout-controls button[title="Toggle relationship labels"]').classes()).toContain('primary')
     expect(wrapper.emitted('operation')).toBeUndefined()
@@ -231,14 +240,14 @@ describe('ArchitectureCanvas', () => {
       global: { stubs },
     })
 
-    await wrapper.get('.canvas-layout-controls select').setValue('resource-type')
-    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+    await wrapper.get('select[title="Canvas arrangement"]').setValue('resource-type')
+    expect(wrapper.get('select[title="Canvas arrangement"]').element.value).toBe('resource-type')
 
     await wrapper.setProps({
       graph: { revision: 5, document: { nodes: document.nodes, edges: [], layout: document.layout } },
     })
 
-    expect(wrapper.get('.canvas-layout-controls select').element.value).toBe('resource-type')
+    expect(wrapper.get('select[title="Canvas arrangement"]').element.value).toBe('resource-type')
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
   })
 
