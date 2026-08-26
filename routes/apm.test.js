@@ -544,6 +544,43 @@ test('Architecture changes automatically project observable resources into the l
   }
 });
 
+test('Architecture reconciles legacy AWS nodes without an explicit provider', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'syn agent-call', provider: 'aws', region: 'us-east-1' },
+    });
+    const project = await subject.architectureRequest('/projects', {
+      method: 'POST', body: { name: 'syn-agent-call-architecture', applicationId: application.body.id },
+    });
+    assert.equal(project.status, 201);
+
+    const updated = await subject.architectureRequest(`/projects/${project.body.id}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        operation: {
+          type: 'node.upsert',
+          value: {
+            id: 'aws:agent-call', name: 'agent-call', resourceType: 'lambda',
+            arn: 'arn:aws:lambda:us-east-1:123456789012:function:agent-call',
+          },
+        },
+      },
+    });
+    assert.equal(updated.status, 200);
+
+    const resources = subject.database.listResources(application.body.id);
+    assert.equal(resources.length, 1);
+    assert.equal(resources[0].provider, 'aws');
+    assert.equal(resources[0].type, 'lambda');
+    assert.equal(resources[0].name, 'agent-call');
+    assert.equal(subject.database.listRegistryResources(application.body.id).length, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('Architecture loads and creates the linked project by KUA Application context', async () => {
   const subject = await fixture();
   try {
