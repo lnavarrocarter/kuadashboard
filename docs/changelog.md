@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.14.1 (2026-08-26)
+
+### Reconciliación de recursos AWS heredados
+
+- La reconciliación de Architecture ya no falla cuando un nodo AWS legado no incluye `provider`; usa el provider de la KUA Application enlazada.
+- Los nodos AWS con ARN recuperan automáticamente cuenta y región para compartir una identidad única con el recurso APM, evitando duplicados en el registro.
+- Los nodos incompletos no proyectables se omiten de forma segura y se agregó una prueba de regresión para aplicaciones serverless como `syn agent-call`.
+
 ## v1.14.0 (2026-08-26)
 
 ### Shared resources and AWS topology analysis

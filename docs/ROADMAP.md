@@ -1,6 +1,6 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
-> **Versión actual:** v1.14.0
+> **Versión actual:** v1.14.1
 > **Última actualización:** 2026-08-26
 
 ---
@@ -25,6 +25,10 @@ El plan técnico completo está en [KUA Unified Management Plan](./architecture/
 - La membresía de recursos observables se proyecta automáticamente entre APM y Architecture en ambos sentidos, preservando identidades y evitando duplicados.
 - SAM serverless se normaliza como Lambda/Step Functions y el alcance AWS se recupera desde los recursos del preview cuando falta en el catálogo.
 - El registro compartido sigue siendo la identidad de correlación; métricas, cursores y trazas permanecen en sus almacenes especializados.
+
+### Avance v1.14.1 — compatibilidad serverless heredada
+
+- La reconciliación Architecture/APM tolera nodos AWS históricos sin `provider` y deriva cuenta/región desde ARN para mantener una identidad compartida sin duplicados.
 
 ---
 
