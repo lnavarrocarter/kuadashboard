@@ -1,9 +1,52 @@
 # Changelog
 
-## Sin publicar
+## v1.12.0 (2026-08-26)
+
+### Endurecimiento del shell de KUA Application
+
+- Architecture ahora acepta un contexto de aplicacion, acota la carga de proyectos a la KUA Application enlazada y vincula los proyectos nuevos con esa aplicacion.
+- Architecture y Observability exponen navegacion reversible para aplicaciones Kubernetes genericas y proveedores cloud, con un contexto compartido que muestra identidad, entorno y equipo.
+- La conciliacion del registro ahora se ejecuta despues de eliminar proyectos, desenlazar, restaurar snapshots y otras mutaciones del grafo, eliminando membresias y relaciones Architecture obsoletas.
+- Los nodos Kubernetes heredados se normalizan desde su `kind` nativo, evitando que Deployments, Services, Pods y otros recursos existentes se rendericen como clusters genericos.
+- Los filtros persistidos de proveedor, contexto y namespace ahora se aplican tanto en Canvas como en Routes, y el control GitHub usa el SVG incluido sin avisos de Lucide.
+
+### Architecture Fase 8: Base del Adaptador Kubernetes (2026-08-26)
+
+- La vista Routes ahora es neutral al proveedor: conserva los caminos APL de eventos/workflows y agrega caminos de **Microservicios** para flujos Kubernetes `Ingress -> Service -> Pod` y sus dependencias declaradas de configuracion o almacenamiento.
+- La evidencia de rutas Kubernetes sigue siendo declarada y explicable. El futuro analisis frecuente de logs producira sugerencias observadas, acotadas por privacidad y sujetas a revision, nunca relaciones automaticas desde texto de logs crudo.
+- El preview Kubernetes de Architecture ahora acepta uno o varios filtros de namespace y agrupa los recursos seleccionables por tipo, con seleccion por grupo para workloads, Pods, Services, Ingress, ConfigMaps, Secrets y persistent volumes.
+- Los diagramas Kubernetes ahora usan un tratamiento visual dedicado para el cluster e iconos distintos para workloads, Pods, Services, Ingress, ConfigMaps, Secrets y persistent volume claims.
+- El discovery Kubernetes incluye el enrutamiento de Services e Ingress, mas solo los ConfigMaps, Secrets y PVCs referenciados explicitamente por entorno o volumen del workload; estas dependencias se dibujan con relaciones `uses` basadas en evidencia.
+- Architecture ahora admite recursos manuales explicitos junto al discovery: se pueden agregar instancias EC2 o cualquier componente AWS, ademas de recursos Kubernetes, GCP o Vercel, registrando proveedor, identidad nativa estable, ambito y ubicacion en el grafo.
+- Architecture ahora usa un unico menu **Add resources** en lugar de una accion solo AWS: los previews e imports AWS y Kubernetes estan disponibles hoy, mientras GCP y Vercel aparecen como adaptadores de proveedor planificados.
+- El discovery Kubernetes de Architecture lista contextos, previsualiza un contexto seleccionado explicitamente con salud y evidencia de relaciones, e importa solo los recursos confirmados y sus relaciones internas en una revision del grafo.
+- Las aplicaciones con recursos Kubernetes confirmados ahora actualizan automaticamente su preview de topologia acotado despues de cargar, consultando solo sus contextos configurados; al abrir el preview se reutiliza ese resultado.
+- Al crear una vista Architecture desde Observability, el nuevo diagrama ahora incluye los recursos y dependencias confirmados de la aplicacion en lugar de abrir un grafo vacio.
+- Observability Kubernetes ahora usa como fallback un Service Prometheus detectado dentro del cluster para el uso agregado de CPU y memoria de Pods cuando `metrics.k8s.io` no esta disponible, conservando cursores de reinicios estables entre fuentes.
+- Las senales de disponibilidad, total y reinicios de Pods ahora permanecen completas cuando `metrics.k8s.io` no esta disponible; Observability identifica explicitamente que solo faltan los datos de uso de CPU y memoria.
+- Observability ahora deriva KPIs, graficas, analisis cloud y controles de trazas desde las capacidades de recursos confirmados, por lo que las aplicaciones solo Kubernetes no muestran senales Lambda ni analisis exclusivos de AWS.
+- Los Pods, Deployments, StatefulSets y DaemonSets Kubernetes configurados ahora exponen su streaming de logs existente directamente desde Observability, cambiando al contexto Kubernetes asociado antes de resolver los Pods del workload.
+- La configuracion de Observability ahora carga los clusters Kubernetes compatibles antes de detectar workloads y consulta solo el cluster EKS elegido explicitamente, con estados separados para carga de clusters y workloads.
+- El flujo de configuracion trata Kubernetes como un ambito explicito de la aplicacion y reutiliza una seleccion de contexto segun proveedor preparada para GKE y conexiones Kubernetes generales, sin cambiar las reglas de membresia confirmada.
+- El preview de topologia Kubernetes ahora lista primero los clusters compatibles y exige seleccionar uno antes de consultar workloads, Services, Ingress y eventos, evitando escaneos innecesarios de varios clusters.
+- Nuevo feedback visible de carga mientras KUA lista clusters y mientras lee los recursos Kubernetes del cluster elegido.
+- Nuevo adaptador Kubernetes de topologia solo lectura con identidades estables de contexto, namespace y UID para workloads, pods, Services e Ingress.
+- Los previews Kubernetes ahora aportan evidencia declarada de selectores e Ingress, senales de salud de workload/pod, resumenes de eventos Warning y capacidades por contexto que se degradan de forma segura si una API no esta disponible.
+
+### Base de Architecture Fase 6 (2026-08-26)
+
+- Nuevo registro compartido neutral al proveedor para recursos, membresias y relaciones de KUA Application, basado en identidades estables y conservando el linaje de cada fuente por separado.
+- Nueva conciliacion explicita de datos APM y Architecture enlazados, que proyecta identificadores de correlacion a nodos y relaciones sin mover buckets metricos, cursores ni trazas de sus almacenes locales actuales.
+
+### Base de Architecture Fase 5 (2026-08-26)
+
+- Nuevo enlace reversible y aislado por perfil entre una aplicacion de Observability y un proyecto Architecture existente o nuevo, sin mover recursos, metricas, trazas ni datos del grafo.
+- Observability ahora muestra la cobertura del enlace Architecture, recursos sin correspondencia y advertencias de identidad duplicada, y abre el diagrama enlazado exacto en una accion.
 
 ### Inicio de Architecture Fase 4 (2026-08-26)
 
+- Nueva aplicacion autoritativa de sync CloudFormation con una revision atomica del grafo, proteccion optimista `expectedRevision`, metadata de stacks seleccionados e identidades estables conservadas.
+- La revision de sync ahora muestra recursos concretos por categoria, conserva decisiones manuales y relaciones rechazadas, marca como stale los recursos ausentes y permite restaurarlos o eliminarlos explicitamente.
 - Nuevo plan de Gestion Unificada de KUA: define KUA Application como limite compartido entre APM y Architecture y ordena la migracion hacia un workspace de aplicaciones neutral al proveedor.
 - Nuevo contrato de fase 4 para sincronizacion autoritativa CloudFormation, ciclo de vida stale, metadata de sync y revision de relaciones.
 - Primer hito documentado como una revision segura de sync CloudFormation que compara fuentes de stacks seleccionados antes de aplicar una sola revision del grafo.
