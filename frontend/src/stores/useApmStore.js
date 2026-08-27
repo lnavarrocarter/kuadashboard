@@ -34,6 +34,7 @@ export const useApmStore = defineStore('apm', () => {
   const linkingArchitecture = ref(false)
   const registry = ref(null)
   const reconcilingRegistry = ref(false)
+  const syncStatus = ref(null)
   const kubernetesPreview = ref(null)
   const previewingKubernetes = ref(false)
   const kubernetesPreviewScopeKey = ref('')
@@ -74,6 +75,7 @@ export const useApmStore = defineStore('apm', () => {
     architectureLink.value = null
     architectureProjects.value = []
     registry.value = null
+    syncStatus.value = null
     kubernetesPreview.value = null
     kubernetesPreviewScopeKey.value = ''
     kubernetesContexts.value = []
@@ -138,6 +140,7 @@ export const useApmStore = defineStore('apm', () => {
       overview.value = nextOverview
       topology.value = nextTopology
       forecast.value = nextForecast
+      loadRegistrySyncStatus(applicationId)
       const contexts = [...new Set((nextTopology.resources || [])
         .filter(resource => resource.type === 'kubernetes' && resource.kubeContext)
         .map(resource => resource.kubeContext))].sort()
@@ -300,12 +303,26 @@ export const useApmStore = defineStore('apm', () => {
       registry.value = await request(`/applications/${selectedApplicationId.value}/registry/reconcile`, {
         method: 'POST', headers: headers(),
       })
+      syncStatus.value = registry.value?.syncStatus || syncStatus.value
       return registry.value
     } catch (requestError) {
       error.value = requestError.message
+      await loadRegistrySyncStatus(selectedApplicationId.value)
       return null
     } finally {
       reconcilingRegistry.value = false
+    }
+  }
+
+  // Non-blocking: diagnostics should never delay the main application overview.
+  async function loadRegistrySyncStatus(applicationId = selectedApplicationId.value) {
+    if (!applicationId) return null
+    try {
+      registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers() })
+      syncStatus.value = registry.value?.syncStatus || null
+      return syncStatus.value
+    } catch (_) {
+      return null
     }
   }
 
@@ -514,6 +531,7 @@ export const useApmStore = defineStore('apm', () => {
     linkingArchitecture,
     registry,
     reconcilingRegistry,
+    syncStatus,
     kubernetesPreview,
     previewingKubernetes,
     kubernetesContexts,
@@ -534,6 +552,7 @@ export const useApmStore = defineStore('apm', () => {
     createArchitectureProjectLink,
     unlinkArchitectureProject,
     reconcileSharedRegistry,
+    loadRegistrySyncStatus,
     previewKubernetesDiscovery,
     loadApplicationKubernetesContexts,
     deleteApplication,

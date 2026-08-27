@@ -68,11 +68,12 @@ describe('profile-scoped local reads', () => {
       if (url.includes('/overview')) return response({ metrics: [], resources: [] })
       if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [] })
       if (url.endsWith('/forecast')) return response({ monthlyRequestsMaximum: 2880 })
+      if (url.endsWith('/registry')) return response({ resources: [], relationships: [], syncStatus: null })
       throw new Error(`Unexpected URL: ${url}`)
     })
     store.setActiveProfile('local:dev')
     await store.refreshLocal()
-    expect(global.fetch).toHaveBeenCalledTimes(5)
+    expect(global.fetch).toHaveBeenCalledTimes(6)
     expect(global.fetch.mock.calls.every(([, options]) => (options.method || 'GET') === 'GET')).toBe(true)
     expect(store.selectedApplicationId).toBe('app-a')
   })
@@ -90,6 +91,50 @@ describe('profile-scoped local reads', () => {
       { t: 1000, v: 5, quality: 'partial' },
       { t: 2000, v: 1, quality: 'full' },
     ])
+  })
+})
+
+describe('registry sync diagnostics', () => {
+  it('loads the last sync status without blocking on failure', async () => {
+    global.fetch = vi.fn(() => response({ error: 'boom' }, 500))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const status = await store.loadRegistrySyncStatus()
+
+    expect(status).toBeNull()
+    expect(store.syncStatus).toBeNull()
+  })
+
+  it('stores the sync status returned by the registry endpoint', async () => {
+    global.fetch = vi.fn(() => response({
+      resources: [], relationships: [],
+      syncStatus: { lastSuccessAt: '2026-08-27T10:00:00.000Z', lastError: null, divergentResourceCount: 1, divergentRelationshipCount: 0 },
+    }))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const status = await store.loadRegistrySyncStatus()
+
+    expect(status.divergentResourceCount).toBe(1)
+    expect(store.syncStatus.lastSuccessAt).toBe('2026-08-27T10:00:00.000Z')
+  })
+
+  it('updates the sync status after a manual reconcile', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toContain('/registry/reconcile')
+      expect(options.method).toBe('POST')
+      return response({
+        resources: [], relationships: [],
+        syncStatus: { lastSuccessAt: '2026-08-27T11:00:00.000Z', lastError: null, divergentResourceCount: 0, divergentRelationshipCount: 0 },
+      })
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    await store.reconcileSharedRegistry()
+
+    expect(store.syncStatus.lastSuccessAt).toBe('2026-08-27T11:00:00.000Z')
   })
 })
 

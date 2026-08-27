@@ -100,6 +100,28 @@
             <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
           </section>
 
+          <section v-if="store.selectedApplication.architectureProjectId" class="registry-sync-status">
+            <span class="registry-sync-title"><i data-lucide="git-merge"></i> Shared registry sync</span>
+            <span v-if="store.syncStatus?.lastSuccessAt" class="registry-sync-item">
+              <i data-lucide="check-circle-2"></i> Last sync {{ new Date(store.syncStatus.lastSuccessAt).toLocaleString() }}
+              <template v-if="store.syncStatus.lastDurationMs != null"> ({{ store.syncStatus.lastDurationMs }} ms)</template>
+            </span>
+            <span v-else class="registry-sync-item partial"><i data-lucide="circle-alert"></i> Never synced yet</span>
+            <span v-if="store.syncStatus?.lastError" class="registry-sync-item partial" :title="store.syncStatus.lastError">
+              <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
+            </span>
+            <span v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item partial">
+              <i data-lucide="alert-triangle"></i> {{ store.syncStatus.divergentResourceCount }} divergent resource{{ store.syncStatus.divergentResourceCount === 1 ? '' : 's' }}
+            </span>
+            <span v-if="store.syncStatus?.divergentRelationshipCount" class="registry-sync-item partial">
+              <i data-lucide="alert-triangle"></i> {{ store.syncStatus.divergentRelationshipCount }} divergent relationship{{ store.syncStatus.divergentRelationshipCount === 1 ? '' : 's' }}
+            </span>
+            <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
+              <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'refresh-cw'"></i>
+              {{ store.reconcilingRegistry ? 'Reconciling…' : 'Retry sync' }}
+            </button>
+          </section>
+
           <div class="apm-view-tabs">
             <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'">{{ t('apm.overview') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
@@ -759,6 +781,12 @@ defineExpose({ refreshLocal })
 .apm-status-strip span { display: flex; align-items: center; gap: 5px; }
 .apm-status-strip svg { width: 12px; height: 12px; }
 .apm-status-strip .partial { color: #d29922; }
+.registry-sync-status { margin: -4px 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim); font-size: 10px; }
+.registry-sync-title { display: flex; align-items: center; gap: 5px; font-weight: 700; color: var(--text); }
+.registry-sync-item { display: flex; align-items: center; gap: 5px; }
+.registry-sync-item.partial { color: #d29922; }
+.registry-sync-status svg { width: 12px; height: 12px; }
+.registry-sync-status .btn { margin-left: auto; }
 .apm-view-tabs { width: fit-content; margin-bottom: 12px; }
 .apm-view-tabs button { min-width: 82px; height: 28px; font-size: 10px; }
 .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 12px; }
