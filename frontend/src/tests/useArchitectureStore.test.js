@@ -60,6 +60,38 @@ describe('architecture workspace', () => {
     expect(store.changes).toHaveLength(1)
   })
 
+  it('loads the shared registry for the linked application', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(options.headers['X-Profile-Id']).toBe('local:dev')
+      if (url.endsWith('/projects')) return response([{ id: 'project-a', name: 'Orders' }])
+      if (url.endsWith('/projects/project-a/graph')) return response({ revision: 1, document: { nodes: [], edges: [] } })
+      if (url.endsWith('/projects/project-a/snapshots')) return response([])
+      if (url.includes('/projects/project-a/changes')) return response([])
+      if (url.endsWith('/projects/project-a/application')) return response({ application: { id: 'application-a', name: 'Orders', profileId: 'local:dev' } })
+      if (url.endsWith('/apm/applications/application-a/registry')) {
+        return response({ resources: [{ id: 'resource-a', sources: ['apm_resource'] }], relationships: [] })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    await store.loadProjects()
+    expect(store.linkedApplication.id).toBe('application-a')
+
+    await store.loadRegistry()
+
+    expect(store.registry.resources).toHaveLength(1)
+  })
+
+  it('does not call the registry endpoint without a linked application', async () => {
+    global.fetch = vi.fn()
+    store.setActiveProfile('local:dev')
+
+    const result = await store.loadRegistry()
+
+    expect(result).toBeNull()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('creates a snapshot only through an explicit POST', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(url).toContain('/projects/project-a/snapshots')

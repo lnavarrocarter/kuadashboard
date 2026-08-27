@@ -6,6 +6,18 @@
         <span><strong>Application routes</strong><small>Event, workflow and microservice execution paths</small></span>
       </span>
       <span class="routes-actions">
+        <select v-model="providerFilter" class="ctrl-select provider-filter" title="Filter providers" @change="persistView">
+          <option value="all">All providers</option>
+          <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ provider }}</option>
+        </select>
+        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" title="Filter Kubernetes context" @change="persistView">
+          <option value="">All Kubernetes contexts</option>
+          <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
+        </select>
+        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" title="Filter Kubernetes namespace" @change="persistView">
+          <option value="">All namespaces</option>
+          <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
+        </select>
         <label class="route-order-control">
           <i data-lucide="arrow-up-narrow-wide"></i>
           <span>Order</span>
@@ -84,16 +96,44 @@ import { createIcons, icons } from 'lucide'
 import { architectureRouteGroups } from '../../lib/architectureRoutes'
 
 const props = defineProps({ graph: { type: Object, required: true } })
-defineEmits(['inspect-workflow'])
+const emit = defineEmits(['inspect-workflow', 'operation'])
 
 const sortMode = ref('sequence')
+const providerFilter = ref('all')
+const kubeContextFilter = ref('')
+const namespaceFilter = ref('')
+
+// Routes reads the same persisted view.providerFilter/kubeContextFilter/namespaceFilter the Canvas
+// writes, but previously had no controls of its own to change them without switching tabs.
+watch(() => props.graph?.document?.view, view => {
+  providerFilter.value = view?.providerFilter || 'all'
+  kubeContextFilter.value = view?.kubeContextFilter || ''
+  namespaceFilter.value = view?.namespaceFilter || ''
+}, { immediate: true, deep: true })
+
+const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
+const availableKubeContexts = computed(() => [...new Set((props.graph?.document?.nodes || [])
+  .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
+const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
+  .filter(node => node.provider === 'kubernetes' && node.namespace).map(node => node.namespace))].sort())
+
+function persistView() {
+  emit('operation', {
+    type: 'view.set',
+    value: {
+      providerFilter: providerFilter.value,
+      kubeContextFilter: kubeContextFilter.value,
+      namespaceFilter: namespaceFilter.value,
+    },
+  }, 'Update canvas view')
+}
+
 const filteredDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
-  const view = document.view || {}
   const nodes = (document.nodes || []).filter(node =>
-    (view.providerFilter === 'all' || !view.providerFilter || node.provider === view.providerFilter) &&
-    (!view.kubeContextFilter || node.kubeContext === view.kubeContextFilter) &&
-    (!view.namespaceFilter || node.namespace === view.namespaceFilter))
+    (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
+    (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
+    (!namespaceFilter.value || node.namespace === namespaceFilter.value))
   const ids = new Set(nodes.map(node => node.id))
   return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
 })

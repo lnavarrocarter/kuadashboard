@@ -132,6 +132,33 @@ describe('ArchitectureRoutes', () => {
     expect(wrapper.text()).not.toContain('worker')
   })
 
+  it('exposes its own provider/context/namespace filters that persist through the shared canvas view', async () => {
+    const graph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'orders-service', name: 'orders-api', provider: 'kubernetes', resourceType: 'service', kubeContext: 'orders-eks', namespace: 'orders' },
+          { id: 'aws-worker', name: 'worker', provider: 'aws', resourceType: 'lambda' },
+        ],
+        edges: [],
+      },
+    }
+    const wrapper = mount(ArchitectureRoutes, { props: { graph } })
+
+    await wrapper.get('select[title="Filter providers"]').setValue('kubernetes')
+    expect(wrapper.text()).not.toContain('worker')
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: '' } },
+      'Update canvas view',
+    ])
+
+    await wrapper.get('select[title="Filter Kubernetes namespace"]').setValue('orders')
+    expect(wrapper.emitted('operation')[1]).toEqual([
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: 'orders' } },
+      'Update canvas view',
+    ])
+  })
+
   it('offers application-friendly route ordering modes', async () => {
     const orderedGraph = {
       revision: 1,

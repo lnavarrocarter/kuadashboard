@@ -10,6 +10,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const projects = ref([])
   const selectedProjectId = ref(null)
   const linkedApplication = ref(null)
+  const registry = ref(null)
+  const registryLoading = ref(false)
   const graph = ref(null)
   const snapshots = ref([])
   const changes = ref([])
@@ -42,6 +44,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   function resetProjectData() {
     selectedProjectId.value = null
     linkedApplication.value = null
+    registry.value = null
     graph.value = null
     snapshots.value = []
     changes.value = []
@@ -118,6 +121,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   async function selectProject(projectId, { manageLoading = true } = {}) {
     selectedProjectId.value = projectId || null
     linkedApplication.value = null
+    registry.value = null
     graph.value = null
     snapshots.value = []
     changes.value = []
@@ -155,6 +159,24 @@ export const useArchitectureStore = defineStore('architecture', () => {
       return null
     } finally {
       if (manageLoading) loading.value = false
+    }
+  }
+
+  async function loadRegistry() {
+    if (!linkedApplication.value?.id) {
+      registry.value = null
+      return null
+    }
+    registryLoading.value = true
+    error.value = null
+    try {
+      registry.value = await apiFetch(`/api/apm/applications/${linkedApplication.value.id}/registry`, { headers: headers() })
+      return registry.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      registryLoading.value = false
     }
   }
 
@@ -530,6 +552,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
     selectApplication,
     loading,
     linkedApplication,
+    loadRegistry,
+    registry,
+    registryLoading,
     projects,
     previewAwsResources,
     previewKubernetesResources,
