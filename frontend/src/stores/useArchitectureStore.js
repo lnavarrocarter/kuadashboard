@@ -387,7 +387,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function previewAwsResources({ region, accountId, stackNames }) {
+  async function previewAwsResources({ region, accountId, stackNames, lambdaCodeAnalysisNames }) {
     if (!selectedProjectId.value) return null
     discovering.value = true
     discoveryPhase.value = 'resources'
@@ -398,7 +398,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         {
           method: 'POST',
           headers: headers(true),
-          body: JSON.stringify({ region, accountId, stackNames }),
+          body: JSON.stringify({ region, accountId, stackNames, lambdaCodeAnalysisNames }),
         },
       )
       return discoveryPreview.value

@@ -10,6 +10,12 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Only values that resolve to a full ARN or an SQS queue URL are turned into a resource/relationship suggestion; arbitrary strings and secrets are never copied into the graph or its evidence.
 - These new `references` relationships flow through the existing suggestion review and application-candidate detection, so an event-driven Lambda (e.g. a queue dispatcher) can now surface its related queue/table/bucket as an import suggestion even when nothing points to it from CloudFormation or EventBridge.
 
+### Architecture: IAM role capability and static code reference discovery
+
+- The regional inventory scan now also reads each Lambda's execution role policies (metadata only) and surfaces queues, tables, buckets or topics it is *authorized* to use as a weaker "can access" suggestion, even when nothing in its configuration references them yet.
+- A new, strictly opt-in static code reader can download a specific Lambda's deployment package and pattern-match its source text for literal ARNs/queue URLs and AWS SDK client usage — it never executes or evaluates the code, and only runs for functions explicitly selected for analysis.
+- Both signals reuse the same relationship-suggestion review flow as every other discovery source.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

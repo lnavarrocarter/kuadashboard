@@ -190,6 +190,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
         region: req.body?.region || 'us-east-1',
         accountId: req.body?.accountId,
         stackNames: req.body?.stackNames,
+        lambdaCodeAnalysisNames: req.body?.lambdaCodeAnalysisNames,
       }));
     } catch (error) { handleError(res, error); }
   });

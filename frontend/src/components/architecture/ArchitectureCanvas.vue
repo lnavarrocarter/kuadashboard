@@ -610,7 +610,7 @@ function relationshipStatus(status) {
 }
 
 function relationshipLabel(relationType) {
-  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on', routes_to: 'routes to', references: 'references' }[relationType]
+  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on', routes_to: 'routes to', references: 'references', accesses: 'can access' }[relationType]
     || String(relationType || 'depends_on').replaceAll('_', ' ')
 }
 

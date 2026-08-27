@@ -78,6 +78,7 @@ export const CHANGELOG = [
       { type: 'better', text: 'Filtros de Routes — proveedor, contexto y namespace ahora se controlan también desde Routes, no solo desde el Canvas' },
       { type: 'new',    text: 'Sugerencias de relaciones desde logs — extracción determinista y sanitizada de referencias DNS internas en el stream ya abierto, agregadas como relaciones sugeridas revisables' },
       { type: 'new',    text: 'Discovery de variables de entorno Lambda — colas SQS, tablas DynamoDB, buckets S3 y tópicos SNS referenciados por ARN o URL se sugieren como relaciones, sin descargar ni ejecutar el código de la función' },
+      { type: 'new',    text: 'Discovery por rol IAM y código estático — capacidades del rol de ejecución como sugerencia débil, y análisis estático opt-in del paquete de la Lambda (nunca se ejecuta) para detectar referencias literales' },
     ],
   },
   {
