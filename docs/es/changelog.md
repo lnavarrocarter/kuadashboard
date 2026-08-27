@@ -22,6 +22,11 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Los tópicos SNS y sus suscripciones SQS/Lambda ahora se descubren como parte del escaneo regular de AWS, completando patrones comunes de fan-out pub/sub.
 - Cuando un recurso CloudFormation importa un valor de otro stack (`Fn::ImportValue`) que no se puede resolver solo con los stacks seleccionados, el panel de discovery ahora muestra un aviso recomendando agregar también ese stack, en vez de descartar esa dependencia en silencio.
 
+### Corregido: "Retry sync" nunca lograba limpiar algunos recursos divergentes
+
+- Los tipos de recurso que Architecture puede descubrir pero que Observability todavía no soporta en su esquema (S3, SNS, DynamoDB y cualquier servicio AWS detectado genéricamente) se contaban como "divergentes" aunque nunca pueden observarse desde ambos lados — reintentar la sincronización nunca los podía corregir, ya que eso requeriría correlacionar con una fuente que no existe para esos tipos.
+- El diagnóstico de recursos divergentes ahora solo cuenta tipos de recurso que realmente pueden confirmarse desde Observability y Architecture a la vez. Las relaciones divergentes (pendientes de revisión) no cambian, ya que esas sí son accionables desde el Canvas.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.

@@ -22,6 +22,11 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - SNS topics and their SQS/Lambda subscriptions are now discovered as part of the regular AWS scan, completing common pub/sub fan-out patterns.
 - When a CloudFormation resource imports a value from another stack (`Fn::ImportValue`) that can't be resolved from the selected stacks alone, the discovery panel now shows a hint recommending you add the exporting stack too, instead of silently dropping that dependency.
 
+### Fix: "Retry sync" could never clear some divergent resources
+
+- Resource types Architecture can discover but Observability has no schema support for yet (S3, SNS, DynamoDB, and any generically-detected AWS service) were counted as "divergent" even though they can never be observed from both sides — retrying the sync could never fix them, since that would have required correlating with a source that doesn't exist for these types.
+- The divergent-resource diagnostic now only counts resource types that can genuinely be confirmed by both Observability and Architecture. Divergent relationships (pending review) are unaffected, since those really are actionable from the Canvas.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.
