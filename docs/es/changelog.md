@@ -16,6 +16,12 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Un nuevo lector de código estático, estrictamente opt-in, puede descargar el paquete de despliegue de una Lambda específica y buscar patrones de ARNs/URLs literales y uso de clientes SDK de AWS en su texto fuente — nunca ejecuta ni evalúa el código, y solo corre para funciones seleccionadas explícitamente para el análisis.
 - Ambas señales reutilizan el mismo flujo de revisión de sugerencias de relación que cualquier otra fuente de discovery.
 
+### Architecture: discovery de recursos generalizado (fan-out SNS, servicios desconocidos, cross-stack)
+
+- Cualquier ARN de AWS reconocible ahora se convierte en un recurso sugerido, incluso para servicios sin soporte dedicado todavía (Kinesis, destinos de API, etc.) — antes se descartaban en silencio, lo que también hacía que algunos targets de EventBridge nunca aparecieran.
+- Los tópicos SNS y sus suscripciones SQS/Lambda ahora se descubren como parte del escaneo regular de AWS, completando patrones comunes de fan-out pub/sub.
+- Cuando un recurso CloudFormation importa un valor de otro stack (`Fn::ImportValue`) que no se puede resolver solo con los stacks seleccionados, el panel de discovery ahora muestra un aviso recomendando agregar también ese stack, en vez de descartar esa dependencia en silencio.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.

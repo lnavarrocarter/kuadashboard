@@ -16,6 +16,12 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - A new, strictly opt-in static code reader can download a specific Lambda's deployment package and pattern-match its source text for literal ARNs/queue URLs and AWS SDK client usage — it never executes or evaluates the code, and only runs for functions explicitly selected for analysis.
 - Both signals reuse the same relationship-suggestion review flow as every other discovery source.
 
+### Architecture: generalized resource discovery (SNS fan-out, unknown services, cross-stack)
+
+- Any recognizable AWS ARN now becomes a suggested resource, even for services without dedicated support yet (Kinesis, API destinations, etc.) — previously these were silently dropped, which also meant some EventBridge targets never appeared at all.
+- SNS topics and their SQS/Lambda subscriptions are now discovered as part of the regular AWS scan, completing common pub/sub fan-out patterns.
+- When a CloudFormation resource imports a value from another stack (`Fn::ImportValue`) that can't be resolved from the selected stacks alone, the discovery panel now shows a hint recommending you add the exporting stack too, instead of silently dropping that dependency.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

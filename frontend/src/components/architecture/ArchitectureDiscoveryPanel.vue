@@ -94,6 +94,12 @@
         <i data-lucide="triangle-alert"></i>
         Inventory reached the 500-resource preview limit. Identified applications may be partial.
       </div>
+      <div v-if="crossStackReferences.length" class="inventory-warning">
+        <i data-lucide="link-2"></i>
+        <span>
+          {{ crossStackReferences.length }} resource{{ crossStackReferences.length === 1 ? '' : 's' }} import{{ crossStackReferences.length === 1 ? 's' : '' }} a value from another stack ({{ crossStackReferenceNames }}) — consider adding that stack too so the relationship can be resolved.
+        </span>
+      </div>
       <div v-if="!confirmingRelationships" class="discovery-section-heading">
         <span><strong>Confirm resources</strong><small>{{ resourceSelectionHint }}</small></span>
         <button v-if="selectedStacks.length > 1" class="btn sm primary" :disabled="store.saving || !stackNodes.length || stackNodes.length > 500" @click="drawStackResources">
@@ -209,6 +215,8 @@ const resourceSelectionHint = computed(() => {
 const selectedStackSummary = computed(() => selectedStacks.value.length
   ? `${selectedStacks.value.length} CloudFormation deployment${selectedStacks.value.length === 1 ? '' : 's'} selected`
   : 'Regional inventory without a CloudFormation deployment')
+const crossStackReferences = computed(() => store.discoveryPreview?.relationshipAnalysis?.crossStackReferences || [])
+const crossStackReferenceNames = computed(() => [...new Set(crossStackReferences.value.map(reference => reference.exportName))].join(', '))
 
 async function loadDeployments() {
   selectedStacks.value = []

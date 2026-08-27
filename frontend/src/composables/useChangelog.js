@@ -79,6 +79,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Sugerencias de relaciones desde logs — extracción determinista y sanitizada de referencias DNS internas en el stream ya abierto, agregadas como relaciones sugeridas revisables' },
       { type: 'new',    text: 'Discovery de variables de entorno Lambda — colas SQS, tablas DynamoDB, buckets S3 y tópicos SNS referenciados por ARN o URL se sugieren como relaciones, sin descargar ni ejecutar el código de la función' },
       { type: 'new',    text: 'Discovery por rol IAM y código estático — capacidades del rol de ejecución como sugerencia débil, y análisis estático opt-in del paquete de la Lambda (nunca se ejecuta) para detectar referencias literales' },
+      { type: 'better', text: 'Discovery generalizado — cualquier ARN reconocible se sugiere como recurso aunque el servicio no tenga soporte dedicado, se agregó descubrimiento de fan-out SNS y aviso de dependencias cross-stack no resueltas' },
     ],
   },
   {
