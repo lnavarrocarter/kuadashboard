@@ -447,6 +447,47 @@ test('API reconciles linked resources and relationships into one shared registry
   }
 });
 
+test('API resolves a Kubernetes workload to one shared registry resource whether observed via APM or discovered by Architecture', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: {
+        type: 'kubernetes', key: 'orders-eks/orders/Deployment/authv1', kubeContext: 'orders-eks',
+        namespace: 'orders', kind: 'Deployment', name: 'authv1', associationSource: 'manual',
+      },
+    });
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.architectureDatabase.saveGraph(project.id, {
+      projectId: project.id,
+      nodes: [{
+        id: 'kubernetes:deploy-authv1', name: 'authv1', provider: 'kubernetes', resourceType: 'deployment', kind: 'Deployment',
+        kubeContext: 'orders-eks', namespace: 'orders', nativeId: 'uid-1234',
+        discoveryKey: 'orders-eks/orders/Deployment/authv1',
+      }],
+      edges: [],
+    }, { expectedRevision: 0 });
+    subject.database.updateArchitectureProjectLink(applicationId, project.id);
+
+    const reconciled = await subject.request(`/applications/${applicationId}/registry/reconcile`, { method: 'POST' });
+    assert.equal(reconciled.status, 200);
+
+    const apmResources = subject.database.listResources(applicationId);
+    assert.equal(apmResources.length, 1, 'the manually observed and Architecture-discovered workload must not duplicate');
+    assert.equal(apmResources[0].associationSource, 'manual');
+
+    const registryResources = subject.database.listRegistryResources(applicationId);
+    assert.equal(registryResources.length, 1);
+    assert.deepEqual(registryResources[0].sources.sort(), ['apm_resource', 'architecture_node']);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API seeds Architecture with Kubernetes kinds and reconciles later APM membership automatically', async () => {
   const subject = await fixture();
   try {

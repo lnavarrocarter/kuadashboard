@@ -8,7 +8,7 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
-const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+const { ApplicationRegistryService, resourceOwnProvider } = require('../lib/kua/applicationRegistryService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
 const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
@@ -121,17 +121,19 @@ function createApmRouter({
     const nodes = resources.map(resource => {
       const id = `apm-resource:${resource.id}`;
       nodeIdByResourceId.set(resource.id, id);
+      const isKubernetes = resource.type === 'kubernetes';
       return {
         id,
         name: resource.name,
-        provider: resource.provider,
+        provider: resourceOwnProvider(resource),
         resourceType: architectureResourceType(resource),
         kind: resource.kind || resource.type,
         nativeId: resource.arn || resource.key,
+        discoveryKey: resource.key,
         arn: resource.arn || null,
         kubeContext: resource.kubeContext || '',
         namespace: resource.namespace || '',
-        region: application.region,
+        region: isKubernetes ? '' : application.region,
         sourceId: `apm:application:${application.id}`,
         manual: true,
         evidence: [{ type: 'apm_membership', sourceId: `apm:application:${application.id}`, values: [resource.id, resource.associationSource] }],
@@ -367,6 +369,7 @@ function createApmRouter({
         projectId: application.architectureProjectId,
         resources: database.listRegistryResources(application.id),
         relationships: database.listRegistryRelationships(application.id),
+        syncStatus: database.getRegistrySyncStatus(application.id),
       });
     } catch (error) { handleError(res, error); }
   });
