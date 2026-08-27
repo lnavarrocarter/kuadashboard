@@ -32,7 +32,12 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Observability's shared resource registry now supports S3 buckets, SNS topics and DynamoDB tables, matching what Architecture discovery can already find. These resources now correlate automatically into a single shared entry instead of only ever appearing on the Architecture side.
 - Fixed a related identity bug: S3 bucket names are globally unique and never carry an account/region in their ARN, so relying on the Architecture node's discovery-time account/region to compute identity could create a duplicate registry entry instead of matching the one Observability produces.
 
-### Fix: "Retry sync" could never clear some divergent resources
+### Fix: Kubernetes workloads could be discovered twice with a broken identity
+
+- Kubernetes discovery derived a workload's Kind (Deployment, StatefulSet, ...) from a field the Kubernetes API does not reliably return on list results, which could silently turn into an empty/generic value. When that happened, the discovered workload's identity no longer matched the one produced by a manual add or a previous sync, creating a duplicate resource in Observability and a duplicate node in Architecture.
+- The workload's Kind is now known upfront from which Kubernetes endpoint produced it, never inferred from that unreliable field, so newly discovered workloads always resolve to the same identity as their manually-added or previously-synced counterpart.
+
+### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.
 - Kubernetes discovery nodes now carry a stable `context/namespace/kind/name` key (matching the key APM already uses for manual and EKS-discovered workloads), and every place that turns an APM resource into a graph node or vice versa now normalizes the provider to `kubernetes` instead of trusting the application's hosting cloud.
