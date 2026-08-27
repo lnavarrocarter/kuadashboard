@@ -1,4 +1,57 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
+
+const configDir = path.dirname(fileURLToPath(import.meta.url))
+const docsDir = path.resolve(configDir, '..')
+const siteUrl = (process.env.SITE_URL || 'https://lnavarrocarter.github.io/kuadashboard').replace(/\/+$/, '')
+const base = process.env.VITEPRESS_BASE || (process.env.SITE_URL ? '/' : '/kuadashboard/')
+
+function pageRoute(page) {
+  const normalized = page.replace(/\\/g, '/')
+  if (normalized === 'index.md') return '/'
+  const route = normalized.replace(/\.md$/, '')
+  if (route.endsWith('/index')) return `/${route.slice(0, -'/index'.length)}/`
+  return `/${route}.html`
+}
+
+function absoluteUrl(route) {
+  return `${siteUrl}${route === '/' ? '/' : route}`
+}
+
+function translatedPage(page) {
+  return page.startsWith('es/') ? page.slice(3) : `es/${page}`
+}
+
+function hasPage(page) {
+  return fs.existsSync(path.join(docsDir, page))
+}
+
+function homepageSchema(url, language) {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        name: 'KUA — Know Unified Administration',
+        alternateName: 'KuaDashboard',
+        url,
+        inLanguage: language,
+      },
+      {
+        '@type': 'SoftwareApplication',
+        name: 'KUA',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Windows, macOS, Linux',
+        description: 'Open source Kubernetes and multi-cloud dashboard for AWS, GCP, Vercel and Helm operations.',
+        url,
+        downloadUrl: 'https://github.com/lnavarrocarter/kuadashboard/releases',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      },
+    ],
+  })
+}
 
 const enNav = [
   { text: 'Home', link: '/' },
@@ -89,14 +142,59 @@ const esSidebar = {
 }
 
 export default defineConfig({
-  title: 'KuaDashboard',
-  description: 'A lightweight Kubernetes & Cloud dashboard — Lens alternative',
-  base: '/kuadashboard/',
+  title: 'KUA — Kubernetes & Multi-Cloud Dashboard',
+  titleTemplate: ':title | KUA',
+  description: 'KUA is an open source Kubernetes and multi-cloud dashboard for AWS, GCP, Vercel, Helm, logs and infrastructure operations.',
+  base,
   ignoreDeadLinks: true,
 
   head: [
-    ['link', { rel: 'icon', href: '/kuadashboard/favicon.png' }],
+    ['meta', { name: 'author', content: 'KuaDashboard' }],
+    ['meta', { name: 'theme-color', content: '#0f172a' }],
+    ['meta', { property: 'og:site_name', content: 'KUA — Know Unified Administration' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:image', content: absoluteUrl('/logo.png') }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: absoluteUrl('/logo.png') }],
+    ['link', { rel: 'icon', href: `${base}favicon.png` }],
   ],
+
+  transformHead({ page, title, description }) {
+    if (page === '404.md') return []
+
+    const route = pageRoute(page)
+    const canonical = absoluteUrl(route)
+    const alternate = translatedPage(page)
+    const entries = [
+      ['meta', { name: 'description', content: description }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: canonical }],
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: description }],
+      ['link', { rel: 'canonical', href: canonical }],
+    ]
+
+    if (hasPage(alternate)) {
+      const englishPage = page.startsWith('es/') ? alternate : page
+      const spanishPage = page.startsWith('es/') ? page : alternate
+      entries.push(
+        ['link', { rel: 'alternate', hreflang: 'en', href: absoluteUrl(pageRoute(englishPage)) }],
+        ['link', { rel: 'alternate', hreflang: 'es', href: absoluteUrl(pageRoute(spanishPage)) }],
+        ['link', { rel: 'alternate', hreflang: 'x-default', href: absoluteUrl(pageRoute(englishPage)) }],
+      )
+    }
+
+    if (page === 'index.md' || page === 'es/index.md') {
+      entries.push([
+        'script',
+        { type: 'application/ld+json' },
+        homepageSchema(canonical, page.startsWith('es/') ? 'es' : 'en'),
+      ])
+    }
+
+    return entries
+  },
 
   locales: {
     root: {

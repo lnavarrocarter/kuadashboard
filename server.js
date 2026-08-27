@@ -72,6 +72,7 @@ const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
 const { createApmRouter } = require('./routes/apm');
 const { createArchitectureRouter } = require('./routes/architecture');
+const { createKuaAppsRouter } = require('./routes/kuaApps');
 const { createAwsDeploymentReader } = require('./lib/apm/awsDeploymentReader');
 const { createAwsRegionalInventoryReader } = require('./lib/architecture/awsRegionalInventoryReader');
 const { createAwsTemplateRelationshipReader } = require('./lib/architecture/awsTemplateRelationshipReader');
@@ -246,6 +247,11 @@ app.use('/api/architecture', createArchitectureRouter({
   }),
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+}));
+app.use('/api/kua-apps', createKuaAppsRouter({
+  database: architectureDatabase,
+  apmDatabase,
+  auditLog,
 }));
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);

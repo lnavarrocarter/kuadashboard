@@ -1,3 +1,8 @@
+---
+title: Primeros Pasos con el Dashboard Kubernetes KUA
+description: Instala y configura KUA, el dashboard open source para operar Kubernetes, AWS y GCP desde una sola plataforma.
+---
+
 # Primeros Pasos
 
 **KUA (Know Unified Administration)** es una plataforma open source para centralizar la operación de infraestructura distribuida en AWS, GCP y Kubernetes. Construida con **Node.js + Express** y **Vue 3 + Vite + Pinia**, funciona como app web o app nativa de escritorio (Electron) en **Windows**, **macOS** y **Linux**.

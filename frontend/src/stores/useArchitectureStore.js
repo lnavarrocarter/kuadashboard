@@ -180,6 +180,53 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function downloadKuaApp(applicationId = linkedApplication.value?.id || selectedApplicationId.value) {
+    if (!applicationId) return false
+    error.value = null
+    try {
+      const response = await fetch(`/api/kua-apps/${encodeURIComponent(applicationId)}/export`, { headers: headers() })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${response.status}`)
+      }
+      const blob = await response.blob()
+      const disposition = response.headers.get('content-disposition') || ''
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || 'kua-app.kuaapp.json'
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+      return true
+    } catch (requestError) {
+      error.value = requestError.message
+      return false
+    }
+  }
+
+  async function importKuaApp(file) {
+    if (!file) return null
+    saving.value = true
+    error.value = null
+    try {
+      const bundle = JSON.parse(await file.text())
+      const result = await apiFetch('/api/kua-apps/import', {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify(bundle),
+      })
+      await loadApplications({ preserveSelection: false })
+      if (result.application?.id) await selectApplication(result.application.id)
+      return result
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function createProject(input) {
     saving.value = true
     error.value = null
@@ -535,6 +582,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     createProject,
     createSnapshot,
     deleteProject,
+    downloadKuaApp,
     discovering,
     discoveryPhase,
     discoveryCatalog,
@@ -545,6 +593,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     graph,
     importAwsResources,
     importKubernetesResources,
+    importKuaApp,
     loadAwsDeployments,
     loadKubernetesContexts,
     loadApplications,

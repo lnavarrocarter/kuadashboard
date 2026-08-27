@@ -6,6 +6,13 @@
         <span><strong>Architecture</strong><small>Evidence-backed application diagrams</small></span>
       </div>
       <div class="architecture-actions">
+        <input ref="bundleInput" class="bundle-file-input" type="file" accept=".kuaapp.json,application/json" @change="handleBundleFile" />
+        <button class="btn sm" :disabled="!profileId || store.saving" title="Import a local KUA Application backup" @click="openBundlePicker">
+          <i data-lucide="upload"></i> Import backup
+        </button>
+        <button v-if="activeApplication" class="btn sm" :disabled="store.saving" title="Download a sanitized local KUA Application backup" @click="exportKuaApp">
+          <i data-lucide="download"></i> Export backup
+        </button>
         <button class="btn sm btn-icon" title="Refresh application" :disabled="store.loading || !profileId" @click="refreshWorkspace">
           <i data-lucide="refresh-cw"></i>
         </button>
@@ -297,6 +304,8 @@ const snapshotName = ref('')
 const resourceProvider = ref('')
 const activeView = ref('routes')
 const selectedWorkflow = ref(null)
+const bundleInput = ref(null)
+const activeApplication = computed(() => store.linkedApplication || store.selectedApplication)
 const applicationContextLabel = computed(() => store.linkedApplication
   ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
   : 'Architecture')
@@ -397,6 +406,25 @@ async function deleteProject() {
   selectedWorkflow.value = null
   await store.deleteProject(project.id)
   nextTick(() => createIcons({ icons }))
+}
+
+function openBundlePicker() {
+  bundleInput.value?.click()
+}
+
+async function handleBundleFile(event) {
+  const [file] = event.target.files || []
+  event.target.value = ''
+  if (!file) return
+  const result = await store.importKuaApp(file)
+  if (result) toast(`Imported ${result.application.name}`, 'success')
+  nextTick(() => createIcons({ icons }))
+}
+
+async function exportKuaApp() {
+  if (!activeApplication.value) return
+  const downloaded = await store.downloadKuaApp(activeApplication.value.id)
+  if (downloaded) toast(`Exported ${activeApplication.value.name}`, 'success')
 }
 
 async function previewSync() {
@@ -544,6 +572,7 @@ onMounted(() => loadProfile(props.profileId))
 
 <style scoped>
 .architecture-view { min-height: 100%; display: flex; flex-direction: column; color: var(--text); }
+.bundle-file-input { display: none; }
 .architecture-toolbar { min-height: 58px; padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .architecture-title, .architecture-actions, .architecture-project-header, .snapshot-form { display: flex; align-items: center; gap: 10px; }
 .resource-add-menu { position: relative; }

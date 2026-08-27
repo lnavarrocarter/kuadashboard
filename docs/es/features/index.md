@@ -1,3 +1,8 @@
+---
+title: Funcionalidades del Dashboard Kubernetes y Multi-Cloud
+description: Conoce las funcionalidades de KUA para gestionar Kubernetes, AWS, GCP, Vercel, logs, Helm, port forwarding y credenciales cifradas.
+---
+
 # Resumen de Funcionalidades
 
 KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kubernetes y recursos cloud.

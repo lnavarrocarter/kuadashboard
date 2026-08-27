@@ -1,3 +1,8 @@
+---
+title: Download KUA Kubernetes & Cloud Dashboard
+description: Download the free KUA desktop application for Windows, macOS and Linux, with Kubernetes, AWS and GCP management included.
+---
+
 # Download KuaDashboard
 
 Get the latest version of KuaDashboard for your platform. The desktop app bundles everything — no need to install Node.js or run any server manually.
