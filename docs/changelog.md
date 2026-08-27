@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased
+
+Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
+
+### Fix: Kubernetes resources duplicated between Architecture and Observability
+
+- An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.
+- Kubernetes discovery nodes now carry a stable `context/namespace/kind/name` key (matching the key APM already uses for manual and EKS-discovered workloads), and every place that turns an APM resource into a graph node or vice versa now normalizes the provider to `kubernetes` instead of trusting the application's hosting cloud.
+- Existing duplicates self-heal the next time the shared registry reconciles (automatic collection, a manual reconciliation, or any Architecture/APM resource change) — no manual data migration is required.
+- Generalized the fix into a reusable rule: a resource's provider is now always derived from what the resource actually is (`resourceOwnProvider` in applicationRegistryService.js), never inherited from its parent application's hosting cloud, for both APM→Architecture and Architecture→APM projections.
+
+### Architecture Phase 9: application context persistence
+
+- The active KUA Application context (application, project, provider and profile) now persists to local storage and is restored on reload, so a window reload no longer loses the selected Architecture application.
+- The Architecture profile no longer forces the global AWS profile selector when an application already has its own profile scope (e.g. a Kubernetes-only application), only falling back to it when no application context is active.
+
+### Architecture Phase 10: node-level navigation
+
+- Canvas node inspector now exposes contextual navigation actions: Kubernetes workloads/Pods can open their logs, YAML/metrics detail (reusing the existing Kubernetes detail panel) and owned Pods list; AWS Lambda, EC2, EventBridge and Step Functions nodes can open Lambda logs or jump straight to the matching AWS view tab filtered by name.
+- Unsupported resource types show no navigation section instead of a broken or empty action.
+
+### Architecture Phase 11: Canvas health overlay
+
+- The Canvas gained an opt-in "Health" toggle that shows a small badge on each node: degraded/healthy for Kubernetes workloads and Services using the health already captured during discovery, and a stale badge for resources missing from the last sync.
+- The overlay preference persists with the rest of the canvas view and does not change the diagram layout, keeping dense diagrams readable when disabled.
+
+### Architecture Phase 12: canonical Resources view
+
+- Architecture gained a "Resources" tab that lists the shared registry for the linked KUA Application: provider, resource type, scope/location, confirming sources (APM, Architecture, or both) and relationship count.
+- Resources confirmed from only one side (APM or Architecture) are flagged as a single-source divergence instead of being silently merged.
+- Operational status reuses the Phase 11 health/staleness signal already available on the Architecture graph node, with no new telemetry pipeline.
+- The shared registry endpoint (`GET /apm/applications/:id/registry`) now reports which sources confirmed each resource.
+
+### Architecture Phase 13: fewer surprise revisions from shared registry reconciliation
+
+- Reconciling the shared registry after an Architecture operation could previously create up to two additional graph revisions on top of the user's own save (one for projecting missing APM resources into the graph, another for stamping registry correlation ids). Both mutations are now merged into a single working document and saved at most once, so one user action now produces at most one derived reconciliation revision instead of up to two.
+
+### Architecture Phase 14: visible shared registry sync diagnostics
+
+- Every shared registry reconciliation (manual or automatic) now persists a diagnostic: last successful sync time and duration, last error, and how many resources/relationships are confirmed from only one side (APM or Architecture).
+- The Observability application view shows this diagnostic as a persistent status strip instead of a one-off toast, with a "Retry sync" action that reuses the existing reconcile endpoint.
+- A failed sync no longer erases the last known good sync time or divergence counts.
+
+### Architecture Phase 15: Routes owns its own provider/context/namespace filters
+
+- Routes already respected the Canvas's persisted provider/context/namespace filters, but only Canvas could change them. Routes now has the same filter controls in its own toolbar, writing to the same shared view state, so switching to Canvas is no longer required to narrow down routes.
+
+### Architecture Phase 16: deterministic log-based relationship suggestions
+
+- Kubernetes workload/Pod nodes gained a "Suggest relationships from logs" action that scans the already-open log stream for internal DNS references (`service.namespace.svc.cluster.local`) and proposes `calls` edges to matching Kubernetes nodes in the same diagram.
+- Extraction is fully deterministic (no ML) and sanitized before anything is kept as evidence: common secret-shaped substrings (Authorization headers, tokens, API keys, passwords) are redacted first, and only a short sample plus an occurrence count are stored, never full raw log payloads.
+- Every suggestion is added with `status: suggested` and a confidence below 1, going through the same accept/reject relationship review already used for automatic discovery — nothing is added to the graph without explicit human confirmation.
+- The underlying extraction library also groups recurring error signatures and collects distinct correlation/request/trace ids for future phases, without persisting or displaying raw log content beyond the existing terminal view.
+
 ## v1.14.1 (2026-08-26)
 
 ### Reconciliación de recursos AWS heredados

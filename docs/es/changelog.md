@@ -1,5 +1,59 @@
 # Changelog
 
+## Sin publicar
+
+Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Architecture persistente, navegación a nivel de recurso, overlays de salud en el Canvas, una vista canónica de Resources compartida, menos revisiones sorpresa del grafo, diagnóstico de sincronización visible, filtros compartidos entre Canvas y Routes, y sugerencias deterministas de relaciones basadas en logs. También corrige un bug real de duplicación encontrado al validar este trabajo.
+
+### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
+
+- Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.
+- Los nodos de discovery Kubernetes ahora llevan una clave estable `contexto/namespace/kind/nombre` (la misma que APM ya usa para workloads agregados manualmente o descubiertos por EKS), y cada lugar que convierte un recurso APM en nodo del grafo (o viceversa) ahora normaliza el proveedor a `kubernetes` en lugar de confiar en la nube donde corre la aplicación.
+- Los duplicados existentes se autocorrigen en la próxima reconciliación del registro compartido (colección automática, reconciliación manual o cualquier cambio de recurso en APM/Architecture) — no se requiere migración manual de datos.
+- Se generalizó la corrección como regla reutilizable: el proveedor de un recurso ahora siempre se deriva de lo que el recurso realmente es (`resourceOwnProvider` en applicationRegistryService.js), nunca se hereda de la nube donde corre su aplicación, tanto para la proyección APM→Architecture como Architecture→APM.
+
+### Architecture Fase 9: persistencia del contexto de aplicación
+
+- El contexto activo de la KUA Application (aplicación, proyecto, proveedor y perfil) ahora persiste en almacenamiento local y se restaura al recargar, por lo que recargar la ventana ya no pierde la aplicación Architecture seleccionada.
+- El perfil de Architecture ya no fuerza el selector global de perfil AWS cuando la aplicación ya tiene su propio perfil (por ejemplo, una aplicación solo Kubernetes); solo recurre a él cuando no hay ninguna aplicación activa.
+
+### Architecture Fase 10: navegación a nivel de recurso
+
+- El inspector de nodos del Canvas ahora expone acciones de navegación contextuales: los workloads/Pods de Kubernetes pueden abrir sus logs, el detalle YAML/métricas (reutilizando el panel de detalle Kubernetes existente) y la lista de Pods propios; los nodos Lambda, EC2, EventBridge y Step Functions de AWS pueden abrir los logs de Lambda o saltar directamente a la pestaña de AWS correspondiente filtrada por nombre.
+- Los tipos de recurso no soportados no muestran sección de navegación en lugar de una acción rota o vacía.
+
+### Architecture Fase 11: overlay de salud en el Canvas
+
+- El Canvas suma un toggle opcional "Health" que muestra una insignia en cada nodo: degradado/saludable para workloads y Services Kubernetes usando la salud ya capturada durante el discovery, y una insignia de obsoleto para recursos ausentes en la última sincronización.
+- La preferencia del overlay persiste junto con el resto de la vista del canvas y no altera el layout del diagrama, manteniendo legibles los diagramas densos cuando está desactivado.
+
+### Architecture Fase 12: vista canónica de Resources
+
+- Architecture suma una pestaña "Resources" que lista el registro compartido de la KUA Application enlazada: proveedor, tipo de recurso, scope/ubicación, fuentes que lo confirman (APM, Architecture o ambas) y cantidad de relaciones.
+- Los recursos confirmados desde un solo lado (APM o Architecture) se marcan como divergencia de fuente única en vez de fusionarse silenciosamente.
+- El estado operativo reutiliza la señal de salud/obsolescencia de la Fase 11 ya disponible en el nodo del grafo Architecture, sin una nueva canalización de telemetría.
+- El endpoint del registro compartido (`GET /apm/applications/:id/registry`) ahora informa qué fuentes confirmaron cada recurso.
+
+### Architecture Fase 13: menos revisiones sorpresa por la reconciliación del registro compartido
+
+- Reconciliar el registro compartido tras una operación de Architecture podía generar hasta dos revisiones adicionales del grafo sobre el guardado propio del usuario (una por proyectar recursos APM faltantes al grafo, otra por sellar los ids de correlación del registro). Ambas mutaciones ahora se fusionan en un solo documento de trabajo y se guardan como máximo una vez, por lo que una acción del usuario produce como máximo una revisión derivada en vez de hasta dos.
+
+### Architecture Fase 14: diagnóstico visible de sincronización del registro compartido
+
+- Cada reconciliación del registro compartido (manual o automática) ahora persiste un diagnóstico: hora y duración de la última sincronización exitosa, último error, y cuántos recursos/relaciones están confirmados desde un solo lado (APM o Architecture).
+- La vista de aplicación de Observability ahora muestra este diagnóstico como una franja de estado persistente en vez de un aviso puntual, con una acción "Retry sync" que reutiliza el endpoint de reconciliación existente.
+- Una sincronización fallida ya no borra la última sincronización exitosa conocida ni sus conteos de divergencia.
+
+### Architecture Fase 15: Routes con sus propios filtros de proveedor/contexto/namespace
+
+- Routes ya respetaba los filtros persistidos de proveedor/contexto/namespace del Canvas, pero solo el Canvas podía cambiarlos. Routes ahora tiene los mismos controles de filtro en su propia barra de herramientas, escribiendo al mismo estado de vista compartido, sin necesidad de cambiar a Canvas para acotar las rutas.
+
+### Architecture Fase 16: sugerencias de relaciones deterministas basadas en logs
+
+- Los nodos de workload/Pod Kubernetes suman una acción "Suggest relationships from logs" que analiza el stream de logs ya abierto en busca de referencias DNS internas (`servicio.namespace.svc.cluster.local`) y propone relaciones `calls` hacia los nodos Kubernetes coincidentes del mismo diagrama.
+- La extracción es completamente determinista (sin IA/ML) y se sanitiza antes de guardarse como evidencia: primero se redactan patrones comunes de secretos (encabezados Authorization, tokens, API keys, contraseñas), y solo se conserva una muestra corta más un conteo de ocurrencias, nunca el log crudo completo.
+- Cada sugerencia se agrega con `status: suggested` y confianza menor a 1, pasando por el mismo flujo de revisión de aceptar/rechazar que ya se usa para el discovery automático — nada se agrega al grafo sin confirmación humana explícita.
+- La librería de extracción también agrupa firmas de errores recurrentes y recolecta ids de correlación/request/trace distintos para fases futuras, sin persistir ni mostrar el contenido crudo del log más allá de la vista de terminal existente.
+
 ## v1.14.1 (2026-08-26)
 
 ### Reconciliación de recursos AWS heredados
