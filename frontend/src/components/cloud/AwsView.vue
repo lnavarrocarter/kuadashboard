@@ -4038,7 +4038,17 @@ async function reloadActiveTab(options = {}) {
   await loadTab(activeTab.value, options)
 }
 
-defineExpose({ reloadActiveTab })
+// Used by Architecture Canvas node actions to jump straight to a resource by name.
+function focusResourceByName(tab, name) {
+  if (activeTab.value !== tab) switchTab(tab)
+  search[tab] = name || ''
+}
+
+function openLambdaLogsByName(name) {
+  if (name) openLogs('lambda', name)
+}
+
+defineExpose({ reloadActiveTab, focusResourceByName, openLambdaLogsByName })
 
 function switchTab(id) {
   activeTab.value = id

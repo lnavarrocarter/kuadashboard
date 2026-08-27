@@ -84,12 +84,15 @@ import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
 import { createIcons, icons } from 'lucide'
 
-defineProps({ resource: String, selectedKey: String })
+const props = defineProps({ resource: String, selectedKey: String, initialFilter: { type: String, default: '' } })
 const emit  = defineEmits(['action', 'select', 'bulk-delete'])
 
 const store  = useKubeStore()
-const filter = ref('')
+const filter = ref(props.initialFilter)
 const selectedKeys = ref(new Set())
+
+// Allows external navigation (e.g. Architecture "view pods") to seed the search box.
+watch(() => props.initialFilter, v => { if (v) filter.value = v })
 
 const cfg = computed(() => RESOURCES[store.resource] || RESOURCES.pods)
 

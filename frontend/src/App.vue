@@ -407,6 +407,7 @@
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
               <ResourceTable
                 :selected-key="selectedKubeKey"
+                :initial-filter="kubeResourceFilter"
                 @action="handleAction"
                 @select="selectKubeResource"
                 @bulk-delete="openBulkDelete"
@@ -462,7 +463,7 @@
             :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''"
             @open-architecture="openApplicationArchitecture"
           />
-          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
         </main>
       </div>
 
@@ -535,6 +536,7 @@ import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { useI18n } from './composables/useI18n'
+import { useArchitectureContext } from './composables/useArchitectureContext'
 
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
@@ -656,6 +658,7 @@ const selectedContext = ref('')
 const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
+const kubeResourceFilter = ref('')
 const kubeDetailWidth = ref(Number(LS.get('kubeDetailWidth', '420')) || 420)
 const isKubeResizing = ref(false)
 const helmViewRef     = ref(null)
@@ -793,25 +796,13 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
   connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
-const architectureProjectId = ref('')
-const activeApplicationContext = ref(null)
-const architectureProfileId = computed(() => activeApplicationContext.value?.profileId || awsProfileId.value)
-
-function openApplicationArchitecture(input) {
-  const context = typeof input === 'object' && input ? input : { projectId: input }
-  activeApplicationContext.value = context.applicationId ? {
-    id: context.applicationId,
-    provider: context.provider || 'aws',
-    profileId: context.profileId || awsProfileId.value,
-    ...(context.application || {}),
-  } : null
-  architectureProjectId.value = context.projectId || ''
-  setProvider('architecture')
-}
-
-function setApplicationContext(application) {
-  if (application?.id) activeApplicationContext.value = application
-}
+const {
+  architectureProjectId,
+  activeApplicationContext,
+  architectureProfileId,
+  openApplicationArchitecture,
+  setApplicationContext,
+} = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
 function openApplicationObservability(application) {
   if (!application?.id) return
@@ -839,6 +830,72 @@ async function openObservabilityKubernetesLogs(resource) {
     toast(error.message, 'error')
   }
   nextTick(() => createIcons({ icons }))
+}
+
+// Kind -> resource table key used by the Kubernetes sidebar/ResourceTable.
+const KUBE_KIND_TO_RESOURCE = {
+  Pod: 'pods', Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets',
+  Service: 'services', Ingress: 'ingresses', ConfigMap: 'configmaps', Secret: 'secrets',
+  PersistentVolumeClaim: 'pvcs',
+}
+
+async function switchToKubernetesResourceScope(resource) {
+  activeProvider.value = 'kubernetes'
+  cloudView.value = null
+  if (resource.kubeContext && store.currentContext !== resource.kubeContext) {
+    selectedContext.value = resource.kubeContext
+    await store.switchContext(resource.kubeContext)
+  }
+  if (resource.namespace && store.namespace !== resource.namespace) store.namespace = resource.namespace
+}
+
+// Architecture Canvas node action: open the same YAML/metrics detail panel used by the Kubernetes view.
+async function openArchitectureKubernetesDetail(resource) {
+  const resourceType = KUBE_KIND_TO_RESOURCE[resource?.kind]
+  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  try {
+    await switchToKubernetesResourceScope(resource)
+    selectedKubeResource.value = null
+    store.resource = resourceType
+    await store.loadResources()
+    const row = store.rows.find(r => r.name === resource.name)
+    if (row) selectKubeResource(resourceType, row)
+    else toast(`${resource.name} not found in ${resource.namespace}`, 'error')
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+// Architecture Canvas node action: list the Pods in the workload's namespace, filtered by its name.
+async function openArchitectureKubernetesPods(resource) {
+  if (!resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  try {
+    await switchToKubernetesResourceScope(resource)
+    kubeResourceFilter.value = resource.name
+    setResource('pods')
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+// Architecture Canvas node action: focus a Lambda/EC2/EventBridge/Step Functions resource inside AwsView.
+const AWS_RESOURCE_TABS = { lambda: 'lambda', ec2: 'ec2', eventbridge: 'eventbridge', stepfunctions: 'stepfn' }
+
+function openArchitectureAwsResource(resource) {
+  const tab = AWS_RESOURCE_TABS[resource?.resourceType]
+  if (!tab || !resource?.name) return
+  activeProvider.value = 'aws'
+  awsTab.value = tab
+  nextTick(() => awsViewRef.value?.focusResourceByName?.(tab, resource.name))
+}
+
+function openArchitectureAwsLogs(resource) {
+  if (resource?.resourceType !== 'lambda' || !resource?.name) return
+  activeProvider.value = 'aws'
+  awsTab.value = 'lambda'
+  nextTick(() => awsViewRef.value?.openLambdaLogsByName?.(resource.name))
 }
 
 async function setProvider(p) {

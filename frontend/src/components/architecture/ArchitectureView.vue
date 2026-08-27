@@ -188,12 +188,16 @@
               <button :class="['btn', 'sm', { primary: activeView === 'canvas' }]" @click="activeView = 'canvas'">
                 <i data-lucide="network"></i> Canvas
               </button>
+              <button :class="['btn', 'sm', { primary: activeView === 'resources' }]" :disabled="!store.linkedApplication" @click="selectResourcesView">
+                <i data-lucide="database"></i> Resources
+              </button>
             </div>
 
             <ArchitectureRoutes
               v-if="store.graph && activeView === 'routes'"
               :graph="store.graph"
               @inspect-workflow="openWorkflow"
+              @operation="applyCanvasOperation"
             />
 
             <ArchitectureCanvas
@@ -202,6 +206,15 @@
               :saving="store.saving"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
+              @node-action="handleNodeAction"
+            />
+
+            <ArchitectureResources
+              v-if="activeView === 'resources'"
+              :graph="store.graph"
+              :registry="store.registry"
+              :loading="store.registryLoading"
+              @refresh="store.loadRegistry"
             />
 
             <StepFnDetail
@@ -253,11 +266,15 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useAwsStore } from '../../stores/useAwsStore'
+import { useTerminalStore } from '../../stores/useTerminalStore'
+import { useToast } from '../../composables/useToast'
+import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
+import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
 
 const props = defineProps({
@@ -265,9 +282,15 @@ const props = defineProps({
   projectId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
 })
-const emit = defineEmits(['open-observability', 'application-context'])
+const emit = defineEmits([
+  'open-observability', 'application-context',
+  'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
+  'open-aws-resource', 'open-aws-logs',
+])
 const store = useArchitectureStore()
 const awsStore = useAwsStore()
+const terminalStore = useTerminalStore()
+const { toast } = useToast()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
@@ -438,8 +461,70 @@ function openWorkflow(node) {
   selectedWorkflow.value = node?.arn ? { name: node.name, arn: node.arn } : null
 }
 
+const NODE_ACTION_EVENTS = {
+  'kubernetes-logs': 'open-kubernetes-logs',
+  'kubernetes-detail': 'open-kubernetes-detail',
+  'kubernetes-pods': 'open-kubernetes-pods',
+  'aws-logs': 'open-aws-logs',
+  'aws-detail': 'open-aws-resource',
+}
+
+// Kind -> the resourceType used by open Kubernetes log terminal tabs (see useTerminalStore.openLogsTab).
+const KUBE_LOG_TAB_RESOURCE_TYPE = {
+  Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods',
+}
+
+function handleNodeAction({ action, node } = {}) {
+  if (action === 'kubernetes-log-suggestions') return suggestRelationshipsFromLogs(node)
+  const eventName = NODE_ACTION_EVENTS[action]
+  if (eventName && node) emit(eventName, node)
+}
+
+// Deterministic, sanitized extraction over an already-open log stream; every candidate is added as a
+// 'suggested' edge that still requires the existing accept/reject review before it counts as confirmed.
+async function suggestRelationshipsFromLogs(node) {
+  const resourceType = KUBE_LOG_TAB_RESOURCE_TYPE[node?.kind]
+  if (!resourceType || !node?.namespace || !node?.name) return
+  const tab = terminalStore.tabs.find(item =>
+    item.type === 'log' && item.resourceType === resourceType && item.ns === node.namespace && item.pod === node.name)
+  if (!tab?.entries?.length) {
+    toast('Open logs for this resource first, then try again', 'error')
+    return
+  }
+  const suggestions = suggestGraphRelationships({
+    lines: tab.entries.map(entry => entry.text),
+    sourceNode: node,
+    nodes: store.graph?.document?.nodes || [],
+  })
+  if (!suggestions.length) {
+    toast('No relationship evidence found in the current logs', 'info')
+    return
+  }
+  for (const suggestion of suggestions) {
+    await store.applyOperation({
+      type: 'edge.upsert',
+      value: {
+        id: `log-suggestion:${node.id}:${suggestion.targetNodeId}`,
+        sourceNodeId: node.id,
+        targetNodeId: suggestion.targetNodeId,
+        relationType: 'calls',
+        status: 'suggested',
+        confidence: suggestion.confidence,
+        evidence: [{ type: 'log_reference', values: [suggestion.sample], occurrences: suggestion.occurrences }],
+      },
+    }, `Suggest relationship from logs: ${node.name} -> ${suggestion.targetName}`)
+  }
+  toast(`${suggestions.length} suggested relationship${suggestions.length === 1 ? '' : 's'} added for review`, 'success')
+  nextTick(() => createIcons({ icons }))
+}
+
 function changeLabel(type) {
   return String(type || '').split('.').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
+function selectResourcesView() {
+  activeView.value = 'resources'
+  if (store.linkedApplication) store.loadRegistry()
 }
 
 watch(() => props.profileId, loadProfile)
@@ -452,6 +537,7 @@ watch(() => props.projectId, async projectId => {
 })
 watch(() => store.linkedApplication, application => {
   if (application) emit('application-context', application)
+  if (application && activeView.value === 'resources') store.loadRegistry()
 })
 onMounted(() => loadProfile(props.profileId))
 </script>
