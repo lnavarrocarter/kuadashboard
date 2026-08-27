@@ -81,6 +81,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Discovery por rol IAM y código estático — capacidades del rol de ejecución como sugerencia débil, y análisis estático opt-in del paquete de la Lambda (nunca se ejecuta) para detectar referencias literales' },
       { type: 'better', text: 'Discovery generalizado — cualquier ARN reconocible se sugiere como recurso aunque el servicio no tenga soporte dedicado, se agregó descubrimiento de fan-out SNS y aviso de dependencias cross-stack no resueltas' },
       { type: 'fix',    text: 'Retry sync — recursos de tipos que Observability no soporta aún (S3, SNS, DynamoDB, genéricos) ya no se cuentan como divergentes, ya que nunca podrían confirmarse desde ambos lados' },
+      { type: 'new',    text: 'S3, SNS y DynamoDB compartidos — ahora correlacionan como un solo recurso entre Architecture y Observability en vez de duplicarse o quedar solo del lado de Architecture' },
     ],
   },
   {

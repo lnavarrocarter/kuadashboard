@@ -27,6 +27,11 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Los tipos de recurso que Architecture puede descubrir pero que Observability todavía no soporta en su esquema (S3, SNS, DynamoDB y cualquier servicio AWS detectado genéricamente) se contaban como "divergentes" aunque nunca pueden observarse desde ambos lados — reintentar la sincronización nunca los podía corregir, ya que eso requeriría correlacionar con una fuente que no existe para esos tipos.
 - El diagnóstico de recursos divergentes ahora solo cuenta tipos de recurso que realmente pueden confirmarse desde Observability y Architecture a la vez. Las relaciones divergentes (pendientes de revisión) no cambian, ya que esas sí son accionables desde el Canvas.
 
+### Architecture + Observability: S3, SNS y DynamoDB ahora correlacionan como recursos compartidos
+
+- El registro compartido de recursos de Observability ahora soporta buckets S3, tópicos SNS y tablas DynamoDB, igualando lo que el discovery de Architecture ya podía encontrar. Estos recursos ahora correlacionan automáticamente en una sola entrada compartida en vez de aparecer solo del lado de Architecture.
+- Se corrigió un bug de identidad relacionado: los nombres de bucket S3 son únicos globalmente y nunca llevan cuenta/región en su ARN, así que depender de la cuenta/región del momento de discovery del nodo de Architecture para calcular la identidad podía crear una entrada de registro duplicada en vez de coincidir con la que produce Observability.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.
