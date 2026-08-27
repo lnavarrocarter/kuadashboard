@@ -4,6 +4,12 @@
 
 Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Architecture persistente, navegación a nivel de recurso, overlays de salud en el Canvas, una vista canónica de Resources compartida, menos revisiones sorpresa del grafo, diagnóstico de sincronización visible, filtros compartidos entre Canvas y Routes, y sugerencias deterministas de relaciones basadas en logs. También corrige un bug real de duplicación encontrado al validar este trabajo.
 
+### Architecture: descubrimiento de referencias por variables de entorno de Lambda
+
+- El escaneo de inventario regional de AWS ahora infiere con qué habla una función Lambda (colas SQS, tablas DynamoDB, buckets S3, tópicos SNS) leyendo su configuración de variables de entorno — la misma metadata que `ListFunctions` ya devuelve — sin descargar ni ejecutar el código de la función.
+- Solo los valores que resuelven a un ARN completo o a una URL de cola SQS se convierten en sugerencia de recurso/relación; strings arbitrarios y secretos nunca se copian al grafo ni a su evidencia.
+- Estas nuevas relaciones `references` fluyen por la misma revisión de sugerencias y detección de aplicaciones candidatas ya existente, así que una Lambda de arquitectura basada en eventos (por ejemplo un dispatcher de colas) ahora puede mostrar su cola/tabla/bucket relacionado como sugerencia de importación incluso cuando nada apunta a ella desde CloudFormation o EventBridge.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.

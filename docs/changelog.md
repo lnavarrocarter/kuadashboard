@@ -4,6 +4,12 @@
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 
+### Architecture: Lambda environment-variable reference discovery
+
+- The AWS regional inventory scan now infers what a Lambda function talks to (SQS queues, DynamoDB tables, S3 buckets, SNS topics) by reading its environment-variable configuration — the same metadata `ListFunctions` already returns — without downloading or running the function's code.
+- Only values that resolve to a full ARN or an SQS queue URL are turned into a resource/relationship suggestion; arbitrary strings and secrets are never copied into the graph or its evidence.
+- These new `references` relationships flow through the existing suggestion review and application-candidate detection, so an event-driven Lambda (e.g. a queue dispatcher) can now surface its related queue/table/bucket as an import suggestion even when nothing points to it from CloudFormation or EventBridge.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

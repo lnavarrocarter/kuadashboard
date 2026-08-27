@@ -77,6 +77,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Diagnóstico de sincronización — última sincronización exitosa, último error y recursos/relaciones divergentes visibles en Observability, con reintento de un clic' },
       { type: 'better', text: 'Filtros de Routes — proveedor, contexto y namespace ahora se controlan también desde Routes, no solo desde el Canvas' },
       { type: 'new',    text: 'Sugerencias de relaciones desde logs — extracción determinista y sanitizada de referencias DNS internas en el stream ya abierto, agregadas como relaciones sugeridas revisables' },
+      { type: 'new',    text: 'Discovery de variables de entorno Lambda — colas SQS, tablas DynamoDB, buckets S3 y tópicos SNS referenciados por ARN o URL se sugieren como relaciones, sin descargar ni ejecutar el código de la función' },
     ],
   },
   {
