@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
-const { ArchitectureGraphService } = require('../lib/architecture/graphService');
+const { ArchitectureGraphService, discoveryIdentityKeys } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 
@@ -50,6 +50,23 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     if (!registry || !application || application.profileId !== project.profileId) return null;
     registry.reconcile(application);
     return database.getGraph(project.id);
+  }
+
+  // Lets discovery panels show which preview resources are already part of the project's graph,
+  // instead of silently letting the user re-select and re-import something that's already there.
+  function markExistingNodes(nodes, projectId) {
+    const graph = database.getGraph(projectId);
+    const existingIdentity = new Map();
+    for (const existingNode of graph?.document?.nodes || []) {
+      for (const key of discoveryIdentityKeys(existingNode)) {
+        if (!existingIdentity.has(key)) existingIdentity.set(key, existingNode);
+      }
+    }
+    for (const node of nodes) {
+      const existing = discoveryIdentityKeys(node).map(key => existingIdentity.get(key)).find(Boolean);
+      node.alreadyInGraph = !!existing;
+      node.existingNodeId = existing?.id || null;
+    }
   }
 
   router.get('/projects', (req, res) => {
@@ -191,6 +208,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
         accountId: req.body?.accountId,
         stackNames: req.body?.stackNames,
         lambdaCodeAnalysisNames: req.body?.lambdaCodeAnalysisNames,
+        projectId: project.id,
       }));
     } catch (error) { handleError(res, error); }
   });
@@ -271,6 +289,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
       const preview = await kubernetesAdapter.preview({
         provider: 'generic', contexts: req.body?.contexts, namespaces: req.body?.namespaces,
       });
+      markExistingNodes(preview.nodes, project.id);
       res.json({
         ...preview,
         projectId: project.id,

@@ -37,6 +37,11 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Kubernetes discovery derived a workload's Kind (Deployment, StatefulSet, ...) from a field the Kubernetes API does not reliably return on list results, which could silently turn into an empty/generic value. When that happened, the discovered workload's identity no longer matched the one produced by a manual add or a previous sync, creating a duplicate resource in Observability and a duplicate node in Architecture.
 - The workload's Kind is now known upfront from which Kubernetes endpoint produced it, never inferred from that unreliable field, so newly discovered workloads always resolve to the same identity as their manually-added or previously-synced counterpart.
 
+### Architecture: discovery panels show resources already added to the project
+
+- Both the AWS and Kubernetes discovery panels now mark preview resources that already exist in the current project's graph, instead of listing them exactly like new ones. Already-added resources show a distinct badge and can no longer be re-selected by accident.
+- Identified applications also show how many of their resources are already part of the project.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

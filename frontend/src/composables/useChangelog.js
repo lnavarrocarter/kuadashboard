@@ -83,6 +83,7 @@ export const CHANGELOG = [
       { type: 'fix',    text: 'Retry sync — recursos de tipos que Observability no soporta aún (S3, SNS, DynamoDB, genéricos) ya no se cuentan como divergentes, ya que nunca podrían confirmarse desde ambos lados' },
       { type: 'new',    text: 'S3, SNS y DynamoDB compartidos — ahora correlacionan como un solo recurso entre Architecture y Observability en vez de duplicarse o quedar solo del lado de Architecture' },
       { type: 'fix',    text: 'Identidad Kubernetes — el Kind de un workload ya no se infiere de un campo poco confiable de la API; se conoce de antemano según el endpoint consultado, evitando recursos y nodos duplicados' },
+      { type: 'new',    text: 'Recursos ya agregados — los paneles de discovery de AWS y Kubernetes ahora marcan los recursos que ya están en el proyecto, en vez de mostrarlos igual que los nuevos' },
     ],
   },
   {

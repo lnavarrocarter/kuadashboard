@@ -37,6 +37,11 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery de Kubernetes derivaba el Kind de un workload (Deployment, StatefulSet, ...) de un campo que la API de Kubernetes no siempre devuelve en resultados de listado, lo que podía convertirse en silencio en un valor vacío o genérico. Cuando eso pasaba, la identidad del workload descubierto ya no coincidía con la de un alta manual o una sincronización previa, creando un recurso duplicado en Observability y un nodo duplicado en Architecture.
 - El Kind del workload ahora se conoce de antemano según qué endpoint de Kubernetes lo produjo, nunca se infiere de ese campo poco confiable, así que los workloads recién descubiertos siempre resuelven a la misma identidad que su contraparte agregada manualmente o sincronizada antes.
 
+### Architecture: los paneles de discovery muestran los recursos ya agregados al proyecto
+
+- Tanto el panel de discovery de AWS como el de Kubernetes ahora marcan los recursos del preview que ya existen en el grafo del proyecto actual, en vez de listarlos igual que los nuevos. Los recursos ya agregados muestran una insignia distintiva y ya no se pueden volver a seleccionar por accidente.
+- Las aplicaciones identificadas también muestran cuántos de sus recursos ya forman parte del proyecto.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.

@@ -447,3 +447,41 @@ test('API previews Kubernetes topology only for the selected project profile', a
     await subject.close();
   }
 });
+
+test('API marks Kubernetes preview resources already present in the project graph', async () => {
+  const existingNode = {
+    id: 'kubernetes:existing', provider: 'kubernetes', resourceType: 'deployment', kind: 'Deployment',
+    name: 'checkout', nativeId: 'uid-checkout', discoveryKey: 'eks-dev/orders/Deployment/checkout',
+    kubeContext: 'eks-dev', namespace: 'orders',
+  };
+  const newNode = {
+    id: 'kubernetes:new', provider: 'kubernetes', resourceType: 'deployment', kind: 'Deployment',
+    name: 'billing', nativeId: 'uid-billing', discoveryKey: 'eks-dev/orders/Deployment/billing',
+    kubeContext: 'eks-dev', namespace: 'orders',
+  };
+  const subject = await fixture({
+    kubernetesAdapter: {
+      listContexts: () => [{ id: 'eks-dev', name: 'orders-eks' }],
+      async preview() {
+        return { sources: [], nodes: [existingNode, newNode], relationships: [], health: [], capabilities: [], failures: [] };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'kubernetes' } });
+    await subject.request(`/projects/${created.body.id}/graph`, {
+      method: 'PUT',
+      body: { expectedRevision: 0, document: { projectId: created.body.id, nodes: [existingNode] } },
+    });
+
+    const preview = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/preview`, {
+      method: 'POST', body: { contexts: ['eks-dev'] },
+    });
+
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.nodes.find(node => node.id === 'kubernetes:existing').alreadyInGraph, true);
+    assert.equal(preview.body.nodes.find(node => node.id === 'kubernetes:new').alreadyInGraph, false);
+  } finally {
+    await subject.close();
+  }
+});

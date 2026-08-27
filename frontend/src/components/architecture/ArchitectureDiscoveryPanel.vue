@@ -77,7 +77,7 @@
         <div v-for="candidate in store.discoveryPreview.applicationCandidates" :key="candidate.id" class="application-row">
           <span>
             <strong>{{ candidate.name }}</strong>
-            <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence</small>
+            <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence<template v-if="candidateAlreadyAddedCount(candidate)"> · {{ candidateAlreadyAddedCount(candidate) }} already in this project</template></small>
             <span class="application-types">
               <span v-for="item in candidate.resourceTypes" :key="item.type">
                 <i :data-lucide="resourceIcon(item.type)"></i>{{ item.count }} {{ resourceLabel(item.type) }}
@@ -116,10 +116,11 @@
             <span class="resource-icon"><i :data-lucide="resourceIcon(group.type)"></i></span>
             <span><strong>{{ group.label }}</strong><small>{{ group.nodes.length }} resource{{ group.nodes.length === 1 ? '' : 's' }}</small></span>
           </header>
-          <label v-for="node in group.nodes" :key="node.id" class="discovery-row resource-row">
-            <input v-model="selectedNodes" type="checkbox" :value="node.id" />
+          <label v-for="node in group.nodes" :key="node.id" class="discovery-row resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
+            <input v-model="selectedNodes" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
             <span><strong>{{ node.name }}</strong><small>{{ resourceOrigin(node) }}</small></span>
-            <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
+            <span v-if="node.alreadyInGraph" class="evidence-badge already-badge"><i data-lucide="check-circle-2"></i> Already in project</span>
+            <span v-else class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
           </label>
         </section>
         <div v-if="!resourceGroups.length" class="discovery-empty">All preview resources already participate in suggested relationships.</div>
@@ -207,10 +208,13 @@ const reviewNodeIds = computed(() => [...new Set([...relatedNodeIds.value, ...se
 const reviewNodeSet = computed(() => new Set(reviewNodeIds.value))
 const reviewRelationships = computed(() => (store.discoveryPreview?.relationshipSuggestions || [])
   .filter(edge => reviewNodeSet.value.has(edge.sourceNodeId) && reviewNodeSet.value.has(edge.targetNodeId)))
+const alreadyAddedCount = computed(() => selectableNodes.value.filter(node => node.alreadyInGraph).length)
 const resourceSelectionHint = computed(() => {
   if (selectedStacks.value.length > 1) return 'Multiple stacks draw the complete stack diagram'
   if (!selectableNodes.value.length) return 'Suggested relationships already cover every preview resource'
-  return `${selectableNodes.value.length} unlinked resource${selectableNodes.value.length === 1 ? '' : 's'} available for manual selection`
+  const pendingCount = selectableNodes.value.length - alreadyAddedCount.value
+  const suffix = alreadyAddedCount.value ? ` (${alreadyAddedCount.value} already in this project)` : ''
+  return `${pendingCount} unlinked resource${pendingCount === 1 ? '' : 's'} available for manual selection${suffix}`
 })
 const selectedStackSummary = computed(() => selectedStacks.value.length
   ? `${selectedStacks.value.length} CloudFormation deployment${selectedStacks.value.length === 1 ? '' : 's'} selected`
@@ -301,6 +305,11 @@ function evidenceLabel(node) {
   return node.evidence?.[0]?.type === 'cloudformation_resource' ? 'CloudFormation' : 'AWS inventory'
 }
 
+function candidateAlreadyAddedCount(candidate) {
+  const nodesById = new Map((store.discoveryPreview?.nodes || []).map(node => [node.id, node]))
+  return candidate.nodeIds.filter(id => nodesById.get(id)?.alreadyInGraph).length
+}
+
 async function drawApplication(candidate) {
   selectedNodes.value = [...candidate.nodeIds]
   await importResources(candidate.nodeIds)
@@ -373,6 +382,8 @@ onMounted(refreshIcons)
 .resource-icon :deep(svg) { width: 16px; height: 16px; }
 .evidence-badge { margin-left: auto; display: flex; align-items: center; gap: 5px; color: #3fb950; font-size: 11px; white-space: nowrap; }
 .evidence-badge :deep(svg) { width: 14px; height: 14px; }
+.discovery-row.already-in-project { cursor: default; opacity: 0.65; }
+.evidence-badge.already-badge { color: var(--text-dim); }
 .relationship-readiness { margin: 10px 12px; padding: 9px 10px; display: flex; align-items: center; gap: 9px; border-left: 3px solid #2f81f7; background: var(--bg-hover); }
 .relationship-readiness > span { display: flex; flex-direction: column; }
 .relationship-readiness small, .discovery-empty { color: var(--text-dim); }
