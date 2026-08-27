@@ -42,6 +42,9 @@
         <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="toggleEdgeLabels">
           <i data-lucide="tags"></i> Labels
         </button>
+        <button :class="['btn', 'sm', { primary: showHealthOverlay }]" :disabled="!flowNodes.length" title="Toggle health/freshness overlay" @click="toggleHealthOverlay">
+          <i data-lucide="heart-pulse"></i> Health
+        </button>
       </span>
       <span class="canvas-hint">Drag between handles to connect components</span>
     </header>
@@ -76,6 +79,11 @@
               </strong>
               <small>{{ typeLabel(data.resourceType) }}</small>
             </span>
+            <span
+              v-if="data.health"
+              :class="['node-health-badge', `node-health-badge--${data.health.status}`]"
+              :title="data.health.label"
+            ></span>
           </div>
         </template>
         <template #node-resource-section="{ data }">
@@ -140,6 +148,15 @@
           class="btn sm"
           @click="emit('inspect-workflow', selectedNode)"
         ><i data-lucide="workflow"></i> Workflow diagram</button>
+        <section v-if="nodeActions.length" class="component-node-actions">
+          <span class="inspector-section-title">Navigate</span>
+          <button
+            v-for="action in nodeActions"
+            :key="action.key"
+            class="btn sm"
+            @click="emit('node-action', { action: action.key, node: selectedNode })"
+          ><i :data-lucide="action.icon"></i> {{ action.label }}</button>
+        </section>
         <div class="inspector-actions">
           <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> Save</button>
           <button class="btn sm danger" :disabled="saving" @click="removeNode"><i data-lucide="trash-2"></i> Delete</button>
@@ -186,7 +203,7 @@ const props = defineProps({
   graph: { type: Object, required: true },
   saving: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action'])
 
 const nodeTypes = [
   { value: 'service', label: 'Service' },
@@ -209,6 +226,7 @@ const layoutDirection = ref('horizontal')
 const resourceSections = ref([])
 const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
+const showHealthOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -258,6 +276,27 @@ const selectedNodeApiRoutes = computed(() => {
     if (!current || permissions > current.permissions) routes.set(key, { key, node, route, permissions })
   }
   return [...routes.values()].filter(item => item.node).sort((left, right) => left.route.localeCompare(right.route))
+})
+const KUBE_LOG_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod']
+const KUBE_WORKLOAD_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet']
+const KUBE_DETAIL_KINDS = ['Pod', 'Deployment', 'StatefulSet', 'DaemonSet', 'Service', 'Ingress', 'ConfigMap', 'Secret', 'PersistentVolumeClaim']
+const AWS_DETAIL_TYPES = ['lambda', 'ec2', 'eventbridge', 'stepfunctions']
+const nodeActions = computed(() => {
+  const node = selectedNode.value
+  if (!node) return []
+  const actions = []
+  if (node.provider === 'kubernetes') {
+    if (KUBE_LOG_KINDS.includes(node.kind)) {
+      actions.push({ key: 'kubernetes-logs', label: 'View logs', icon: 'scroll-text' })
+      actions.push({ key: 'kubernetes-log-suggestions', label: 'Suggest relationships from logs', icon: 'sparkles' })
+    }
+    if (KUBE_DETAIL_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-detail', label: 'View detail', icon: 'file-code-2' })
+    if (KUBE_WORKLOAD_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-pods', label: 'View pods', icon: 'boxes' })
+  } else if (AWS_DETAIL_TYPES.includes(node.resourceType)) {
+    if (node.resourceType === 'lambda') actions.push({ key: 'aws-logs', label: 'View logs', icon: 'scroll-text' })
+    actions.push({ key: 'aws-detail', label: 'Open in AWS view', icon: 'external-link' })
+  }
+  return actions
 })
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
@@ -320,6 +359,17 @@ function manualId(prefix) {
   return `manual:${prefix}:${value}`
 }
 
+// Reuses health already captured by discovery (Kubernetes) and sync freshness state (AWS),
+// without inventing new backend telemetry; opt-in via the Health toggle to keep dense diagrams readable.
+function nodeHealthOverlay(node) {
+  if (!showHealthOverlay.value) return null
+  if (node.syncState === 'stale') return { status: 'stale', label: 'Stale — missing from the last sync' }
+  const status = node.health?.status
+  if (status === 'degraded') return { status: 'degraded', label: 'Degraded' }
+  if (status === 'healthy') return { status: 'healthy', label: 'Healthy' }
+  return null
+}
+
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
@@ -331,6 +381,7 @@ function syncGraph(hydrateView = true) {
       layoutDirection.value = document.view.layoutDirection
     }
     showEdgeLabels.value = document.view.showEdgeLabels === true
+    showHealthOverlay.value = document.view.showHealthOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -355,6 +406,7 @@ function syncGraph(hydrateView = true) {
         label: route?.routePath || node.name || node.label || node.id,
         method: route?.method || '',
         resourceType: node.resourceType || 'service',
+        health: nodeHealthOverlay(node),
       },
     }
   })
@@ -413,6 +465,7 @@ function persistView() {
       layoutMode: layoutMode.value,
       layoutDirection: layoutDirection.value,
       showEdgeLabels: showEdgeLabels.value,
+      showHealthOverlay: showHealthOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -422,6 +475,11 @@ function persistView() {
 
 function toggleEdgeLabels() {
   showEdgeLabels.value = !showEdgeLabels.value
+  persistView()
+}
+
+function toggleHealthOverlay() {
+  showHealthOverlay.value = !showHealthOverlay.value
   persistView()
 }
 
@@ -567,7 +625,7 @@ watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter], () => syncGraph(false))
+watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay], () => syncGraph(false))
 onMounted(refreshIcons)
 </script>
 
@@ -582,10 +640,14 @@ onMounted(refreshIcons)
 .canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 11px; }
 .canvas-body { position: relative; height: clamp(420px, 58vh, 680px); }
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
-.architecture-node { min-width: 155px; display: flex; align-items: center; gap: 9px; color: var(--text); text-align: left; }
+.architecture-node { min-width: 155px; display: flex; align-items: center; gap: 9px; color: var(--text); text-align: left; position: relative; }
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
 .node-title { display: flex; align-items: center; gap: 6px; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.node-health-badge { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel); }
+.node-health-badge--healthy { background: #3fb950; }
+.node-health-badge--degraded { background: #d29922; }
+.node-health-badge--stale { background: #6e7781; }
 .component-metadata { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .component-metadata > span { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 7px; align-items: baseline; }
 .component-metadata small { color: var(--text-dim); font-size: 10px; }
@@ -625,6 +687,8 @@ onMounted(refreshIcons)
 .canvas-inspector .ctrl-input, .canvas-inspector .ctrl-select { width: 100%; }
 .inspector-id { color: var(--text-dim); word-break: break-all; }
 .component-references { display: flex; flex-direction: column; gap: 5px; }
+.component-node-actions { display: flex; flex-direction: column; gap: 5px; }
+.component-node-actions .btn { justify-content: flex-start; }
 .inspector-section-title { color: var(--text-dim); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .component-reference { width: 100%; padding: 7px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
 .component-reference:hover { border-color: #2f81f7; }

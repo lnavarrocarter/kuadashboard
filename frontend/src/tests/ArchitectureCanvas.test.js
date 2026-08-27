@@ -195,7 +195,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
         },
       },
@@ -227,6 +227,36 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
     expect(wrapper.get('.canvas-layout-controls button[title="Toggle relationship labels"]').classes()).toContain('primary')
     expect(wrapper.emitted('operation')).toBeUndefined()
+  })
+
+  it('only shows the health overlay badge after the Health toggle is enabled', async () => {
+    const healthGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'deploy', name: 'orders-api', resourceType: 'deployment', provider: 'kubernetes', health: { status: 'degraded' } },
+          { id: 'svc', name: 'orders-svc', resourceType: 'service', provider: 'kubernetes', health: { status: 'healthy' } },
+          { id: 'stale-node', name: 'legacy-queue', resourceType: 'sqs', syncState: 'stale' },
+        ],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: healthGraph }, global: { stubs } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').every(node => node.data.health == null)).toBe(true)
+
+    await wrapper.get('.canvas-layout-controls button[title="Toggle health/freshness overlay"]').trigger('click')
+    expect(wrapper.emitted('operation')[0][0]).toEqual({
+      type: 'view.set',
+      value: {
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true,
+        providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
+      },
+    })
+    const nodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
+    expect(nodes.find(node => node.id === 'deploy').data.health).toEqual({ status: 'degraded', label: 'Degraded' })
+    expect(nodes.find(node => node.id === 'svc').data.health).toEqual({ status: 'healthy', label: 'Healthy' })
+    expect(nodes.find(node => node.id === 'stale-node').data.health.status).toBe('stale')
   })
 
   it('keeps the current local layout mode when a graph refresh has no persisted view yet', async () => {
@@ -330,6 +360,57 @@ describe('ArchitectureCanvas', () => {
     await wrapper.get('.canvas-inspector > button.btn').trigger('click')
 
     expect(wrapper.emitted('inspect-workflow')).toEqual([[workflow.document.nodes[0]]])
+  })
+
+  it('exposes Kubernetes node navigation actions', async () => {
+    const kubeGraph = {
+      revision: 1,
+      document: {
+        nodes: [{
+          id: 'k8s:deploy', name: 'orders-api', resourceType: 'service',
+          provider: 'kubernetes', kind: 'Deployment', kubeContext: 'orders-eks', namespace: 'orders',
+        }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: kubeGraph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    const actionButtons = wrapper.findAll('.component-node-actions button')
+    expect(actionButtons).toHaveLength(4)
+
+    await actionButtons[0].trigger('click')
+    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'kubernetes-logs', node: kubeGraph.document.nodes[0] }])
+
+    await actionButtons[1].trigger('click')
+    expect(wrapper.emitted('node-action')[1]).toEqual([{ action: 'kubernetes-log-suggestions', node: kubeGraph.document.nodes[0] }])
+
+    await actionButtons[3].trigger('click')
+    expect(wrapper.emitted('node-action')[2]).toEqual([{ action: 'kubernetes-pods', node: kubeGraph.document.nodes[0] }])
+  })
+
+  it('exposes AWS Lambda node navigation actions', async () => {
+    const lambdaGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'aws:fn', name: 'process-order', resourceType: 'lambda' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: lambdaGraph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    const actionButtons = wrapper.findAll('.component-node-actions button')
+    expect(actionButtons).toHaveLength(2)
+
+    await actionButtons[1].trigger('click')
+    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'aws-detail', node: lambdaGraph.document.nodes[0] }])
+  })
+
+  it('does not show navigation actions for unsupported resource types', async () => {
+    const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    expect(wrapper.find('.component-node-actions').exists()).toBe(false)
   })
 
   it('emits canonical relationship and rounded layout operations', async () => {
