@@ -335,7 +335,7 @@
             <dt>{{ entry.label }}</dt><dd>{{ entry.resourceCount }}</dd>
           </div>
         </dl>
-        <p v-if="hasLambdaResources" class="collect-warning">{{ t('apm.readWarning') }}</p>
+        <p v-if="hasLambdaResources || hasCloudWatchResources" class="collect-warning">{{ t('apm.readWarning') }}</p>
         <p v-else-if="hasKubernetesResources" class="collect-warning">{{ t('apm.kubernetesReadWarning') }}</p>
       </div>
       <template #footer>
@@ -515,12 +515,15 @@ const metrics = computed(() => Object.fromEntries((store.overview?.metrics || []
 const applicationResources = computed(() => store.topology.resources || [])
 const hasLambdaResources = computed(() => applicationResources.value.some(resource => resource.type === 'lambda'))
 const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
+// These are read from CloudWatch, which bills per request, so the confirmation must say so.
+const hasCloudWatchResources = computed(() => applicationResources.value.some(resource => ['ec2', 's3'].includes(resource.type)))
 const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
   resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
 const chartDefinitions = computed(() => metricSections.value.flatMap(section => section.charts))
 const collectionDescription = computed(() => [
   hasLambdaResources.value ? t('apm.collectDescriptionAws') : '',
+  hasCloudWatchResources.value ? t('apm.collectDescriptionCloudWatch') : '',
   hasKubernetesResources.value ? t('apm.collectDescriptionKubernetes') : '',
 ].filter(Boolean).join(' ') || t('apm.collectDescription'))
 const qualityPartial = computed(() => (store.overview?.metrics || []).some(metric => metric.quality === 'partial'))

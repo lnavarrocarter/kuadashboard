@@ -94,6 +94,7 @@ export const CHANGELOG = [
       { type: 'fix',    text: 'Confirmación de recolección con Kubernetes — ahora detalla qué recursos Kubernetes se van a leer y aclara que no consume el presupuesto AWS; además los Secrets y ConfigMaps ya no generan un error por recurso en cada ciclo' },
       { type: 'new',    text: 'Vista de Relaciones — revisa y acepta o rechaza las relaciones descubiertas desde Observability (AWS y Kubernetes), con auto-confirmación de las declaradas por el propio recurso; "divergentes" pasó a llamarse "por revisar"' },
       { type: 'fix',    text: 'Relaciones perdidas al importar — las relaciones con recursos ya presentes en el proyecto se descartaban en silencio (por eso Deployments y Pods no se enlazaban en el canvas); además los nodos del clúster ahora se identifican con su instancia EC2 real' },
+      { type: 'new',    text: 'Métricas de EC2 y S3 vía CloudWatch — CPU, red y chequeos de estado de las instancias, y almacenamiento y objetos de los buckets; además EKS, RDS, API Gateway, CloudFront, Auto Scaling y ElastiCache ya llegan al inventario de Observability' },
     ],
   },
   {

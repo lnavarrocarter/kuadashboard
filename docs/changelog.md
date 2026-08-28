@@ -59,6 +59,13 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: EC2 and S3 report CloudWatch metrics, and more AWS resources reach the inventory
+
+- EC2, EKS, RDS, API Gateway, CloudFront, Auto Scaling and ElastiCache resources discovered by Architecture were rejected outright by the resource type constraint, so they never appeared in Observability even as inventory. They are now stored and correlated like any other resource.
+- EC2 instances now report CPU, network in and out, and failed status checks. S3 buckets report storage used and object count, asked for at the daily rate those metrics are actually published at.
+- These readings come from CloudWatch, which bills per request, so each resource is one call carrying all of its metrics, the existing monthly AWS request budget is reserved before spending it, and a failed call still reports what it spent. The collection confirmation says explicitly that these reads are billable.
+- Resources of a type that has no measurable target - a security group is also an "EC2" resource - are reported as inventory without ever contacting CloudWatch.
+
 ### Fix: importing discovered resources silently dropped their relationships
 
 - Since resources already in a project stopped being selectable, any relationship connecting a newly selected resource to one of them was discarded on import: a relationship is only imported when both of its ends travel with it. This is why Deployments were not linked to their Pods in the canvas even though discovery found those links correctly.

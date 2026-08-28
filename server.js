@@ -84,11 +84,13 @@ const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
+const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
 const { ApmScheduler } = require('./lib/apm/scheduler');
 const apmScheduler = new ApmScheduler({
   database: apmDatabase,
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
+  awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
 apmScheduler.start();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict

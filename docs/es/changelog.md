@@ -59,6 +59,13 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: EC2 y S3 reportan métricas de CloudWatch, y más recursos AWS llegan al inventario
+
+- Los recursos EC2, EKS, RDS, API Gateway, CloudFront, Auto Scaling y ElastiCache descubiertos por Architecture eran rechazados de plano por la restricción de tipo de recurso, así que nunca aparecían en Observability ni siquiera como inventario. Ahora se almacenan y correlacionan como cualquier otro recurso.
+- Las instancias EC2 ahora reportan CPU, red entrante y saliente, y chequeos de estado fallidos. Los buckets S3 reportan almacenamiento usado y cantidad de objetos, pedidos al ritmo diario al que esas métricas realmente se publican.
+- Estas lecturas vienen de CloudWatch, que cobra por solicitud, así que cada recurso es una sola llamada que lleva todas sus métricas, el presupuesto mensual de solicitudes AWS se reserva antes de gastarlo, y una llamada fallida igual reporta lo que gastó. La confirmación de recolección indica explícitamente que estas lecturas son facturables.
+- Los recursos de un tipo sin objetivo medible — un security group también es un recurso "EC2" — se reportan como inventario sin contactar nunca a CloudWatch.
+
 ### Corregido: importar recursos descubiertos descartaba silenciosamente sus relaciones
 
 - Desde que los recursos ya presentes en un proyecto dejaron de ser seleccionables, cualquier relación que conectara un recurso recién seleccionado con uno de ellos se descartaba al importar: una relación solo se importa cuando ambos extremos viajan con ella. Por eso los Deployments no aparecían enlazados a sus Pods en el canvas aunque el discovery sí encontraba esos vínculos.

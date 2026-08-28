@@ -160,16 +160,48 @@ const KUBERNETES_INGRESS_CATALOG = {
 // silently omitting them.
 const TOPOLOGY_ONLY = { kpis: [], charts: [] }
 
+const EC2_CATALOG = {
+  kpis: [
+    { id: 'cpu', labelKey: 'apm.averageCpu', metric: 'cpu_percent', aggregate: 'average', format: METRIC_FORMATS.percent, detailKey: 'apm.cloudWatchSource' },
+    { id: 'networkIn', labelKey: 'apm.networkIn', metric: 'network_in_bytes', aggregate: 'sum', format: METRIC_FORMATS.bytes, detailKey: 'apm.cloudWatchSource' },
+    { id: 'networkOut', labelKey: 'apm.networkOut', metric: 'network_out_bytes', aggregate: 'sum', format: METRIC_FORMATS.bytes, detailKey: 'apm.cloudWatchSource' },
+    { id: 'statusCheck', labelKey: 'apm.failedStatusChecks', metric: 'status_check_failed', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.cloudWatchSource' },
+  ],
+  charts: [
+    { metric: 'cpu_percent', labelKey: 'apm.averageCpu', unit: '%', color: '#3fb950' },
+    { metric: 'network_in_bytes', labelKey: 'apm.networkIn', unit: 'bytes', color: '#58a6ff' },
+    { metric: 'network_out_bytes', labelKey: 'apm.networkOut', unit: 'bytes', color: '#a371f7' },
+  ],
+}
+
+// S3 storage metrics are published once a day, so they read as a level rather than a rate.
+const S3_CATALOG = {
+  kpis: [
+    { id: 'storage', labelKey: 'apm.storageUsed', metric: 'storage_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.cloudWatchDaily' },
+    { id: 'objects', labelKey: 'apm.objectCount', metric: 'object_count', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.cloudWatchDaily' },
+  ],
+  charts: [
+    { metric: 'storage_bytes', labelKey: 'apm.storageUsed', unit: 'bytes', color: '#d29922' },
+  ],
+}
+
 export const RESOURCE_METRIC_CATALOG = Object.freeze({
   lambda: LAMBDA_CATALOG,
   kubernetes: KUBERNETES_WORKLOAD_CATALOG,
+  ec2: EC2_CATALOG,
+  s3: S3_CATALOG,
   sqs: TOPOLOGY_ONLY,
   eventbridge: TOPOLOGY_ONLY,
   stepfunctions: TOPOLOGY_ONLY,
   ecs: TOPOLOGY_ONLY,
-  s3: TOPOLOGY_ONLY,
   sns: TOPOLOGY_ONLY,
   dynamodb: TOPOLOGY_ONLY,
+  eks: TOPOLOGY_ONLY,
+  rds: TOPOLOGY_ONLY,
+  apigateway: TOPOLOGY_ONLY,
+  cloudfront: TOPOLOGY_ONLY,
+  autoscaling: TOPOLOGY_ONLY,
+  elasticache: TOPOLOGY_ONLY,
   'gcp-cloud-run': TOPOLOGY_ONLY,
   'gcp-function': TOPOLOGY_ONLY,
   'vercel-project': TOPOLOGY_ONLY,

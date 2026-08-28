@@ -7,7 +7,7 @@ describe('metricCatalog', () => {
       resources: [
         { type: 'lambda' },
         { type: 'lambda' },
-        { type: 's3' },
+        { type: 'sqs' },
       ],
       metricsByResourceType: [
         { resourceType: 'lambda', kind: '', metricName: 'invocations_observed', sum: 200, count: 4 },
@@ -21,12 +21,12 @@ describe('metricCatalog', () => {
     expect(lambda.kpis.find(kpi => kpi.id === 'invocations').value).toBe('200')
     expect(lambda.kpis.find(kpi => kpi.id === 'errorRate').value).toBe('5.0%')
 
-    // S3 is discoverable and correlated, but no collector reports metrics for it yet:
+    // SQS is discoverable and correlated, but no collector reports metrics for it yet:
     // it must still be listed so the gap is visible instead of silently omitted.
-    const s3 = sections.find(section => section.resourceType === 's3')
-    expect(s3.resourceCount).toBe(1)
-    expect(s3.collectsMetrics).toBe(false)
-    expect(s3.charts).toEqual([])
+    const sqs = sections.find(section => section.resourceType === 'sqs')
+    expect(sqs.resourceCount).toBe(1)
+    expect(sqs.collectsMetrics).toBe(false)
+    expect(sqs.charts).toEqual([])
   })
 
   it('splits Kubernetes sections per kind and only gives metric charts to pod-owning kinds', () => {
@@ -62,7 +62,7 @@ describe('metricCatalog', () => {
         { type: 'kubernetes', kind: 'Service' },
         { type: 'kubernetes', kind: 'Service' },
         { type: 'kubernetes', kind: 'Ingress' },
-        { type: 's3' },
+        { type: 'sqs' },
       ],
       metricsByResourceType: [],
     })
@@ -71,8 +71,8 @@ describe('metricCatalog', () => {
     expect(count('kubernetes:Service').labelKey).toBe('apm.resourceCountKpi')
     expect(count('kubernetes:Service').value).toBe('3')
     expect(count('kubernetes:Ingress').value).toBe('1')
-    expect(count('s3').value).toBe('1')
-    expect(count('s3').detailKey).toBe('apm.topologyOnly')
+    expect(count('sqs').value).toBe('1')
+    expect(count('sqs').detailKey).toBe('apm.topologyOnly')
     expect(count('kubernetes:Ingress').detailKey).toBe(null)
   })
 
@@ -112,10 +112,27 @@ describe('metricCatalog', () => {
 
   it('sorts sections that report metrics before topology-only ones', () => {
     const sections = buildResourceMetricSections({
-      resources: [{ type: 's3' }, { type: 'lambda' }],
+      resources: [{ type: 'sqs' }, { type: 'lambda' }],
       metricsByResourceType: [],
     })
-    expect(sections.map(section => section.resourceType)).toEqual(['lambda', 's3'])
+    expect(sections.map(section => section.resourceType)).toEqual(['lambda', 'sqs'])
+  })
+
+  it('reports EC2 and S3 metrics now that CloudWatch is collected for them', () => {
+    const sections = buildResourceMetricSections({
+      resources: [{ type: 'ec2' }, { type: 's3' }],
+      metricsByResourceType: [
+        { resourceType: 'ec2', kind: '', metricName: 'cpu_percent', sum: 84, count: 2 },
+        { resourceType: 's3', kind: '', metricName: 'storage_bytes', sum: 2 * 1024 ** 3, count: 1 },
+      ],
+    })
+
+    const ec2 = sections.find(section => section.resourceType === 'ec2')
+    expect(ec2.collectsMetrics).toBe(true)
+    expect(ec2.kpis.find(kpi => kpi.id === 'cpu').value).toBe('42.0%')
+
+    const s3 = sections.find(section => section.resourceType === 's3')
+    expect(s3.kpis.find(kpi => kpi.id === 'storage').value).toBe('2.00 GiB')
   })
 
   it('never reports a value when the metric is missing, instead of showing a misleading zero', () => {
