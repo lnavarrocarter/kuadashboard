@@ -1,3 +1,8 @@
+---
+title: Google Cloud GCP Management Dashboard
+description: Manage Google Cloud services such as Cloud Run, GKE, Cloud SQL, Storage, BigQuery, Pub/Sub and more with KUA.
+---
+
 # GCP Integration
 
 KuaDashboard provides comprehensive Google Cloud Platform management accessed from the sidebar under **Cloud > Google Cloud**. Services are grouped by category in the left sidebar.

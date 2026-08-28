@@ -1,3 +1,8 @@
+---
+title: Dashboard y Gestión de Clústeres Kubernetes
+description: Gestiona workloads, servicios, networking, almacenamiento, YAML, métricas, eventos, logs y port forwarding de Kubernetes con KUA.
+---
+
 # Funcionalidades de Kubernetes
 
 ![KuaDashboard — Panel de Kubernetes](/screenshots/dashboard-main.png)

@@ -1,0 +1,22 @@
+{
+  "name": "kua-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KUA cloud identity, billing and entitlement control plane",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google-cloud/datastore": "^10.1.1",
+    "@google-cloud/firestore": "^7.11.0",
+    "express": "^4.21.2",
+    "google-auth-library": "^9.15.1",
+    "stripe": "^18.5.0"
+  }
+}

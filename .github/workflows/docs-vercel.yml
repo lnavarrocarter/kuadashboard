@@ -1,0 +1,53 @@
+name: Deploy SEO site to Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-vercel.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-seo-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: vercel-production
+    defaults:
+      run:
+        working-directory: docs
+    env:
+      SITE_URL: https://kuadashboard.navarrocarter.com
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+
+      - name: Pull Vercel project settings
+        run: npx --yes vercel@50.1.5 pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel deployment
+        run: npx --yes vercel@50.1.5 build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel
+        run: npx --yes vercel@50.1.5 deploy --prebuilt --prod --token="$VERCEL_TOKEN"

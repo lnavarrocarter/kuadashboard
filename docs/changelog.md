@@ -4,6 +4,128 @@
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 
+### Architecture: Lambda environment-variable reference discovery
+
+- The AWS regional inventory scan now infers what a Lambda function talks to (SQS queues, DynamoDB tables, S3 buckets, SNS topics) by reading its environment-variable configuration — the same metadata `ListFunctions` already returns — without downloading or running the function's code.
+- Only values that resolve to a full ARN or an SQS queue URL are turned into a resource/relationship suggestion; arbitrary strings and secrets are never copied into the graph or its evidence.
+- These new `references` relationships flow through the existing suggestion review and application-candidate detection, so an event-driven Lambda (e.g. a queue dispatcher) can now surface its related queue/table/bucket as an import suggestion even when nothing points to it from CloudFormation or EventBridge.
+
+### Architecture: IAM role capability and static code reference discovery
+
+- The regional inventory scan now also reads each Lambda's execution role policies (metadata only) and surfaces queues, tables, buckets or topics it is *authorized* to use as a weaker "can access" suggestion, even when nothing in its configuration references them yet.
+- A new, strictly opt-in static code reader can download a specific Lambda's deployment package and pattern-match its source text for literal ARNs/queue URLs and AWS SDK client usage — it never executes or evaluates the code, and only runs for functions explicitly selected for analysis.
+- Both signals reuse the same relationship-suggestion review flow as every other discovery source.
+
+### Architecture: generalized resource discovery (SNS fan-out, unknown services, cross-stack)
+
+- Any recognizable AWS ARN now becomes a suggested resource, even for services without dedicated support yet (Kinesis, API destinations, etc.) — previously these were silently dropped, which also meant some EventBridge targets never appeared at all.
+- SNS topics and their SQS/Lambda subscriptions are now discovered as part of the regular AWS scan, completing common pub/sub fan-out patterns.
+- When a CloudFormation resource imports a value from another stack (`Fn::ImportValue`) that can't be resolved from the selected stacks alone, the discovery panel now shows a hint recommending you add the exporting stack too, instead of silently dropping that dependency.
+
+### Fix: "Retry sync" could never clear some divergent resources
+
+- Resource types Architecture can discover but Observability has no schema support for yet (S3, SNS, DynamoDB, and any generically-detected AWS service) were counted as "divergent" even though they can never be observed from both sides — retrying the sync could never fix them, since that would have required correlating with a source that doesn't exist for these types.
+- The divergent-resource diagnostic now only counts resource types that can genuinely be confirmed by both Observability and Architecture. Divergent relationships (pending review) are unaffected, since those really are actionable from the Canvas.
+
+### Architecture + Observability: S3, SNS and DynamoDB now correlate as shared resources
+
+- Observability's shared resource registry now supports S3 buckets, SNS topics and DynamoDB tables, matching what Architecture discovery can already find. These resources now correlate automatically into a single shared entry instead of only ever appearing on the Architecture side.
+- Fixed a related identity bug: S3 bucket names are globally unique and never carry an account/region in their ARN, so relying on the Architecture node's discovery-time account/region to compute identity could create a duplicate registry entry instead of matching the one Observability produces.
+
+### Fix: Kubernetes workloads could be discovered twice with a broken identity
+
+- Kubernetes discovery derived a workload's Kind (Deployment, StatefulSet, ...) from a field the Kubernetes API does not reliably return on list results, which could silently turn into an empty/generic value. When that happened, the discovered workload's identity no longer matched the one produced by a manual add or a previous sync, creating a duplicate resource in Observability and a duplicate node in Architecture.
+- The workload's Kind is now known upfront from which Kubernetes endpoint produced it, never inferred from that unreliable field, so newly discovered workloads always resolve to the same identity as their manually-added or previously-synced counterpart.
+
+### Architecture: discovery panels show resources already added to the project
+
+- Both the AWS and Kubernetes discovery panels now mark preview resources that already exist in the current project's graph, instead of listing them exactly like new ones. Already-added resources show a distinct badge and can no longer be re-selected by accident.
+- Identified applications also show how many of their resources are already part of the project.
+
+### Observability: Kubernetes resources show their specific kind, and divergence is marked per item
+
+- Kubernetes resources in the Observability Resources table and Topology view previously all showed as generic "Kubernetes" with the same icon. They now show their actual kind (Deployment, Pod, Service, ConfigMap...) with a matching icon, so you can tell them apart at a glance.
+- Divergent resources and divergent (pending review) relationships are now marked individually, not just as an aggregate count, using the same rule that already excludes resource types Observability can never correlate — ready to extend to future GCP/Vercel resource types without any UI changes.
+
+### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
+
+- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
+- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
+- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
+
+### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
+
+- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
+- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
+- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
+
+### Observability: EC2 and S3 report CloudWatch metrics, and more AWS resources reach the inventory
+
+- EC2, EKS, RDS, API Gateway, CloudFront, Auto Scaling and ElastiCache resources discovered by Architecture were rejected outright by the resource type constraint, so they never appeared in Observability even as inventory. They are now stored and correlated like any other resource.
+- EC2 instances now report CPU, network in and out, and failed status checks. S3 buckets report storage used and object count, asked for at the daily rate those metrics are actually published at.
+- These readings come from CloudWatch, which bills per request, so each resource is one call carrying all of its metrics, the existing monthly AWS request budget is reserved before spending it, and a failed call still reports what it spent. The collection confirmation says explicitly that these reads are billable.
+- Resources of a type that has no measurable target - a security group is also an "EC2" resource - are reported as inventory without ever contacting CloudWatch.
+
+### Fix: importing discovered resources silently dropped their relationships
+
+- Since resources already in a project stopped being selectable, any relationship connecting a newly selected resource to one of them was discarded on import: a relationship is only imported when both of its ends travel with it. This is why Deployments were not linked to their Pods in the canvas even though discovery found those links correctly.
+- Resources already in the project are now sent along as context, so those relationships survive. Re-sending them is idempotent: the server merges them onto the existing nodes by identity instead of duplicating them.
+- The same applied to AWS imports, and is fixed the same way. AWS now also recomputes which resources are already present at import time, instead of trusting a preview that may have been cached before they were added.
+
+### Architecture: cluster nodes are now identified as the cloud instances they run on
+
+- The EC2 resources discovered from CloudFormation for an EKS cluster are security groups, rules and launch templates - never the running instances, because a node group's instances are created by its Auto Scaling group at runtime. The actual instances are the cluster nodes.
+- Discovered nodes now carry their instance id, availability zone, instance type and, when the context names the account explicitly (an EKS context ARN), their EC2 ARN. That ARN is what lets a running node correlate with the same instance seen from AWS.
+- When the account cannot be determined, the instance identity is still recorded but no ARN is invented.
+
+### Observability: a Relationships view to review discovered connections
+
+- Discovered relationships waiting for a decision were only counted, never shown: they did not appear in Topology and the only way to act on them was to open the Architecture canvas. Observability now has a Relationships tab listing each one with both ends, its type, the evidence behind it and its status, with Accept and Reject actions. It works the same for AWS and Kubernetes, because it reads the shared registry.
+- Accepting or rejecting from Observability records exactly the same decision the Architecture canvas does, so the two views can never disagree.
+- Relationships whose evidence is declared by the resource itself - an Ingress naming its Service, a selector match, the node a Pod is scheduled on - are now confirmed automatically instead of asking for a decision that has only one sensible answer. Anything inferred from naming still waits for review, and a decision already made by a person is never overridden.
+- Existing relationships are re-evaluated on the next reconciliation, so enabling this does not require re-importing everything.
+- "Divergent relationships" is now "relationships to review", which is what it always meant: unlike divergent resources, these are not a problem to fix but a decision to make. The counter is now a shortcut into the new view.
+
+### Observability: the collection confirmation now describes Kubernetes too
+
+- Confirming a collection only ever described Lambda: an application made entirely of Kubernetes resources was asked to confirm "Lambda functions: 0" and an AWS read budget that the collection does not even consume.
+- The confirmation now lists what will actually be read, broken down by resource type (Deployments, Pods, Services, Ingresses, Nodes), and explains that a Kubernetes collection only reads from the cluster and never touches the AWS read budget. Lambda details are shown only when the application actually has Lambda functions.
+- Its description was also out of date: Kubernetes usage may now come from Prometheus, and Ingress inventory from the Kubernetes API.
+
+### Fix: Secrets and ConfigMaps raised a collection error on every run
+
+- The collector is called for every Kubernetes resource of an application, but only workloads, Pods, Services, Ingresses and Nodes have something to measure. A Secret or ConfigMap raised an "unsupported kind" error on each one, on every collection cycle.
+- Those kinds are now reported as topology-only, exactly like resource types from other providers that no collector supports.
+
+### Observability: log volume per workload, and less space wasted on resources without metrics
+
+- Deployments, StatefulSets, DaemonSets and Pods now report how much log they are writing to disk, read from Prometheus. This answers a question the Kubernetes Metrics API never could, and is collected even when usage came from a Metrics Server.
+- If the cluster has no Prometheus, log volume is simply skipped: a collection never fails because of it, and the cluster is probed once rather than once per resource on every run.
+- Resource types with no metric collector (Secrets, ConfigMaps, and any future type) no longer take a whole section each. They are now summarized in a single compact line, leaving the space to resources that actually report something.
+- Ingress request metrics were evaluated and deliberately not added: this cluster has no instrumented ingress controller in Prometheus, and load balancer request counts live in CloudWatch, which is billable. Ingresses keep reporting their routing inventory instead of numbers that would have to be invented.
+
+### Observability: cluster Nodes, Ingresses and Pods now report their own metrics
+
+- Cluster Nodes are now discovered as resources and report CPU used, memory used, hosted Pods and their CPU/memory capacity, read from the Prometheus already running in the cluster. Pods are linked to the Node that runs them in the diagram.
+- Ingresses now report their routing inventory (rules, paths, hosts and TLS hosts) read from the Kubernetes API. Ingress controller traffic is deliberately not reported, because no controller is guaranteed to be scraped by Prometheus and inventing those numbers would be misleading.
+- Pods are now collected directly instead of failing: previously every Pod in an application raised an unsupported-kind error on each collection.
+- Listing cluster Nodes needs a cluster-scoped permission that many roles do not have. When it is denied, discovery now degrades that capability and keeps everything else, instead of failing the whole Kubernetes scan.
+- Each resource section now leads with how many resources of that type the application has, and no longer repeats counters that do not belong to it: Pods show usage and restarts instead of a ready/total pair that just restated the section, and Services show the Pods they route to instead of duplicating their workload's CPU and memory.
+
+### Observability: KPIs and charts are now organized per resource type
+
+- The Overview used to show a single flat KPI row and one chart grid, hardcoded to Lambda and Kubernetes. Metrics are now grouped into a section per resource type — and per Kubernetes kind (Deployments, Pods, Services, Ingresses...) — each with its own KPIs, charts and resource count.
+- Metric series can now be requested filtered by resource type and Kubernetes kind, so a chart shows only the resources it belongs to instead of one cluster-wide total.
+- Resource types that Architecture already discovers but no collector reports metrics for yet (S3, SQS, SNS, DynamoDB, Ingresses, ConfigMaps, GCP and Vercel resources) are now listed explicitly with a note explaining they are correlated for topology only, instead of being silently omitted.
+- Which metrics belong to which resource type now lives in a single provider-agnostic catalog, so adding EC2, Cloud SQL or any future provider's metrics is one entry in that catalog rather than changes spread across the Observability views.
+- The Kubernetes usage KPIs no longer claim their source is always `metrics.k8s.io`, since usage may now come from Prometheus.
+
+### Fix: Kubernetes CPU/memory usage never actually reached Prometheus
+
+- When a cluster has no Metrics Server, Observability's Kubernetes CPU/memory usage falls back to querying a discovered Prometheus Service — but that fallback always failed on a real cluster (silently reported as "Metrics not available"), even though the same Prometheus was already reachable from the resource detail panel.
+- The collector was building the Prometheus proxy request through a Kubernetes client helper that encodes the whole PromQL query path as a single URL segment, corrupting it before it ever reached the cluster. It now builds the proxied request directly, the same proven way the resource detail panel already does.
+- Kubernetes CPU and memory charts and the "Average CPU"/"Average memory" summary now populate correctly for clusters relying on Prometheus instead of Metrics Server.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

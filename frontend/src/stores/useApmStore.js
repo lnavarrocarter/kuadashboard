@@ -34,6 +34,7 @@ export const useApmStore = defineStore('apm', () => {
   const linkingArchitecture = ref(false)
   const registry = ref(null)
   const reconcilingRegistry = ref(false)
+  const reviewingRelationshipId = ref('')
   const syncStatus = ref(null)
   const kubernetesPreview = ref(null)
   const previewingKubernetes = ref(false)
@@ -168,11 +169,16 @@ export const useApmStore = defineStore('apm', () => {
     await loadSelectedApplication()
   }
 
-  async function loadSeries(metricName, resourceId = '') {
+  async function loadSeries(metricName, options = {}) {
     if (!selectedApplicationId.value) return []
+    const { resourceId = '', resourceType = '', kind = '', key = '' } = typeof options === 'string'
+      ? { resourceId: options }
+      : options
     const { from, to } = rangeBounds.value
     const params = new URLSearchParams({ metric: metricName, from: String(from), to: String(to) })
     if (resourceId) params.set('resourceId', resourceId)
+    if (resourceType) params.set('resourceType', resourceType)
+    if (kind) params.set('kind', kind)
     try {
       const rows = await request(`/applications/${selectedApplicationId.value}/series?${params}`, { headers: headers() })
       const grouped = new Map()
@@ -183,7 +189,7 @@ export const useApmStore = defineStore('apm', () => {
         grouped.set(row.bucketStart, point)
       }
       const points = [...grouped.values()].sort((left, right) => left.t - right.t)
-      series.value = { ...series.value, [metricName]: points }
+      series.value = { ...series.value, [key || metricName]: points }
       return points
     } catch (requestError) {
       error.value = requestError.message
@@ -323,6 +329,26 @@ export const useApmStore = defineStore('apm', () => {
       return syncStatus.value
     } catch (_) {
       return null
+    }
+  }
+
+  async function reviewRegistryRelationship(relationshipId, decision) {
+    if (!selectedApplicationId.value || !relationshipId) return null
+    reviewingRelationshipId.value = relationshipId
+    error.value = null
+    try {
+      const result = await request(`/applications/${selectedApplicationId.value}/registry/relationships/${relationshipId}/review`, {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      })
+      await loadRegistrySyncStatus(selectedApplicationId.value)
+      return result
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      reviewingRelationshipId.value = ''
     }
   }
 
@@ -531,6 +557,7 @@ export const useApmStore = defineStore('apm', () => {
     linkingArchitecture,
     registry,
     reconcilingRegistry,
+    reviewingRelationshipId,
     syncStatus,
     kubernetesPreview,
     previewingKubernetes,
@@ -553,6 +580,7 @@ export const useApmStore = defineStore('apm', () => {
     unlinkArchitectureProject,
     reconcileSharedRegistry,
     loadRegistrySyncStatus,
+    reviewRegistryRelationship,
     previewKubernetesDiscovery,
     loadApplicationKubernetesContexts,
     deleteApplication,

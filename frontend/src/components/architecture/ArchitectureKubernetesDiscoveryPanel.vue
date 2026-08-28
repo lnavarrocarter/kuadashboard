@@ -43,11 +43,12 @@
             <span><i :data-lucide="resourceIcon(group.type)"></i><strong>{{ resourceLabel(group.type) }}</strong><small>{{ group.nodes.length }}</small></span>
             <label><input type="checkbox" :checked="isGroupSelected(group)" @change="toggleGroup(group, $event.target.checked)" /> Select all</label>
           </header>
-          <label v-for="node in group.nodes" :key="node.id" class="kubernetes-resource-row">
-            <input v-model="selectedNodeIds" type="checkbox" :value="node.id" />
+          <label v-for="node in group.nodes" :key="node.id" class="kubernetes-resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
+            <input v-model="selectedNodeIds" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
             <i :data-lucide="resourceIcon(node.resourceType)"></i>
             <span><strong>{{ node.name }}</strong><small>{{ node.kind }} · {{ node.namespace || 'cluster scope' }}</small></span>
-            <span :class="['health', node.health?.status]">{{ node.health?.status || 'unknown' }}</span>
+            <span v-if="node.alreadyInGraph" class="health already-badge">already in project</span>
+            <span v-else :class="['health', node.health?.status]">{{ node.health?.status || 'unknown' }}</span>
           </label>
         </section>
       </div>
@@ -96,17 +97,19 @@ async function previewResources() {
   selectedNodeIds.value = []
   const namespaces = namespaceFilter.value.split(',').map(value => value.trim()).filter(Boolean)
   const preview = await store.previewKubernetesResources({ contexts: [contextId.value], namespaces })
-  if (preview) selectedNodeIds.value = preview.nodes.map(node => node.id)
+  if (preview) selectedNodeIds.value = preview.nodes.filter(node => !node.alreadyInGraph).map(node => node.id)
   refreshIcons()
 }
 
 function isGroupSelected(group) {
-  return group.nodes.length > 0 && group.nodes.every(node => selectedNodeIds.value.includes(node.id))
+  const selectableGroupNodes = group.nodes.filter(node => !node.alreadyInGraph)
+  return selectableGroupNodes.length > 0 && selectableGroupNodes.every(node => selectedNodeIds.value.includes(node.id))
 }
 
 function toggleGroup(group, checked) {
   const ids = new Set(selectedNodeIds.value)
   for (const node of group.nodes) {
+    if (node.alreadyInGraph) continue
     if (checked) ids.add(node.id)
     else ids.delete(node.id)
   }
@@ -174,6 +177,8 @@ onMounted(async () => { await loadContexts(); refreshIcons() })
 .kubernetes-resource-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .health { font-size: 10px; text-transform: capitalize; }
 .health.healthy { color: #3fb950; }.health.degraded { color: #d29922; }
+.health.already-badge { color: var(--text-dim); text-transform: none; }
+.kubernetes-resource-row.already-in-project { cursor: default; opacity: 0.65; }
 .kubernetes-discovery-panel footer { justify-content: space-between; border-bottom: 0; color: var(--text-dim); font-size: 11px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 650px) { .kubernetes-controls { align-items: stretch; flex-direction: column; } }

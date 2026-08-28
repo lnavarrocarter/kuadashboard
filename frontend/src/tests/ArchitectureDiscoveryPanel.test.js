@@ -189,4 +189,29 @@ describe('ArchitectureDiscoveryPanel', () => {
       selectedNodeIds: ['node:api', 'node:table'],
     })
   })
+
+  it('shows resources already present in the project graph as unselectable, instead of hiding them', async () => {
+    const store = useArchitectureStore()
+    store.discoveryPreview = {
+      scope: { accountId: '123456789012', region: 'us-east-1' },
+      estimate: { truncated: false },
+      nodes: [
+        { id: 'node:worker', name: 'orders-worker', resourceType: 'lambda', evidence: [], alreadyInGraph: true, existingNodeId: 'node:worker' },
+        { id: 'node:queue', name: 'orders-queue', resourceType: 'sqs', evidence: [], alreadyInGraph: false, existingNodeId: null },
+      ],
+      applicationCandidates: [],
+      relationshipSuggestions: [],
+    }
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    const rows = wrapper.findAll('.resource-row')
+    const workerRow = rows.find(row => row.text().includes('orders-worker'))
+    const queueRow = rows.find(row => row.text().includes('orders-queue'))
+
+    expect(workerRow.classes()).toContain('already-in-project')
+    expect(workerRow.get('input').element.disabled).toBe(true)
+    expect(workerRow.text()).toContain('Already in project')
+    expect(queueRow.classes()).not.toContain('already-in-project')
+    expect(queueRow.get('input').element.disabled).toBe(false)
+  })
 })

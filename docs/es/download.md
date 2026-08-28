@@ -1,3 +1,8 @@
+---
+title: Descargar KUA — Dashboard Kubernetes y Cloud
+description: Descarga gratis la aplicación de escritorio KUA para Windows, macOS y Linux, con gestión de Kubernetes, AWS y GCP.
+---
+
 # Descargar KuaDashboard
 
 Obtén la última versión de KuaDashboard para tu plataforma. La app de escritorio incluye todo — no es necesario instalar Node.js ni ejecutar ningún servidor manualmente.

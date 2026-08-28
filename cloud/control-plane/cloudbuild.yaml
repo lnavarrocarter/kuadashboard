@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/kua-control-plane/kua-control-plane:$_TAG
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/kua-control-plane/kua-control-plane:$_TAG
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/kua-control-plane/kua-control-plane:$_TAG
+options:
+  logging: CLOUD_LOGGING_ONLY

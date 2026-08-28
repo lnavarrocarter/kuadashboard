@@ -1,3 +1,8 @@
+---
+title: Kubernetes & Multi-Cloud Dashboard Features
+description: Explore KUA features for Kubernetes management, AWS, GCP, Vercel, logs, Helm, port forwarding and encrypted credential profiles.
+---
+
 # Features Overview
 
 KuaDashboard provides a unified interface for managing Kubernetes clusters and cloud resources.

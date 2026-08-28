@@ -1,3 +1,8 @@
+---
+title: Vercel Projects and Deployments Dashboard
+description: Manage Vercel projects, deployments, domains, environment variables, functions and logs from KUA.
+---
+
 # Vercel Integration
 
 KuaDashboard provides a full Vercel management panel accessible from the **Vercel** provider tab. Manage your projects, deployments, domains, environment variables, and serverless functions without leaving the dashboard.

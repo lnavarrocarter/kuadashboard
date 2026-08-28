@@ -180,6 +180,53 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function downloadKuaApp(applicationId = linkedApplication.value?.id || selectedApplicationId.value) {
+    if (!applicationId) return false
+    error.value = null
+    try {
+      const response = await fetch(`/api/kua-apps/${encodeURIComponent(applicationId)}/export`, { headers: headers() })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${response.status}`)
+      }
+      const blob = await response.blob()
+      const disposition = response.headers.get('content-disposition') || ''
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || 'kua-app.kuaapp.json'
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+      return true
+    } catch (requestError) {
+      error.value = requestError.message
+      return false
+    }
+  }
+
+  async function importKuaApp(file) {
+    if (!file) return null
+    saving.value = true
+    error.value = null
+    try {
+      const bundle = JSON.parse(await file.text())
+      const result = await apiFetch('/api/kua-apps/import', {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify(bundle),
+      })
+      await loadApplications({ preserveSelection: false })
+      if (result.application?.id) await selectApplication(result.application.id)
+      return result
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function createProject(input) {
     saving.value = true
     error.value = null
@@ -340,7 +387,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function previewAwsResources({ region, accountId, stackNames }) {
+  async function previewAwsResources({ region, accountId, stackNames, lambdaCodeAnalysisNames }) {
     if (!selectedProjectId.value) return null
     discovering.value = true
     discoveryPhase.value = 'resources'
@@ -351,7 +398,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         {
           method: 'POST',
           headers: headers(true),
-          body: JSON.stringify({ region, accountId, stackNames }),
+          body: JSON.stringify({ region, accountId, stackNames, lambdaCodeAnalysisNames }),
         },
       )
       return discoveryPreview.value
@@ -405,11 +452,15 @@ export const useArchitectureStore = defineStore('architecture', () => {
   async function importKubernetesResources({ selectedNodeIds }) {
     if (!selectedProjectId.value || !graph.value || !kubernetesPreview.value) return null
     const selected = new Set(selectedNodeIds || [])
-    const nodes = kubernetesPreview.value.nodes.filter(node => selected.has(node.id))
-    if (!nodes.length) return null
+    if (!kubernetesPreview.value.nodes.some(node => selected.has(node.id))) return null
+    // Resources already in the project are not selectable, but an edge is only imported when both
+    // of its ends travel with it, so they are sent along as context. Re-sending them is idempotent:
+    // the server merges them onto the existing nodes by identity.
+    const nodes = kubernetesPreview.value.nodes.filter(node => selected.has(node.id) || node.alreadyInGraph)
     const nodeIds = new Set(nodes.map(node => node.id))
     const edges = kubernetesPreview.value.relationships.filter(edge =>
       nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId))
+    const importedCount = nodes.filter(node => selected.has(node.id)).length
     saving.value = true
     error.value = null
     try {
@@ -418,7 +469,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         headers: headers(true),
         body: JSON.stringify({
           expectedRevision: graph.value.revision,
-          reason: `Import ${nodes.length} Kubernetes resources`,
+          reason: `Import ${importedCount} Kubernetes resources`,
           operation: {
             type: 'discovery.import',
             value: {
@@ -535,6 +586,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     createProject,
     createSnapshot,
     deleteProject,
+    downloadKuaApp,
     discovering,
     discoveryPhase,
     discoveryCatalog,
@@ -545,6 +597,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     graph,
     importAwsResources,
     importKubernetesResources,
+    importKuaApp,
     loadAwsDeployments,
     loadKubernetesContexts,
     loadApplications,

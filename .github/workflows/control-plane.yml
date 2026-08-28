@@ -1,0 +1,62 @@
+name: KUA Control Plane
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloud/control-plane/**'
+      - '.github/workflows/control-plane.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: kua-control-plane-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ncaicloud
+  GCP_REGION: us-central1
+  SERVICE: kua-control-plane
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run control-plane tests
+        working-directory: cloud/control-plane
+        run: npm ci && npm test
+
+      - name: Build and push image with Cloud Build
+        working-directory: cloud/control-plane
+        run: |
+          gcloud builds submit . \
+            --project="$GCP_PROJECT_ID" \
+            --config=cloudbuild.yaml \
+            --substitutions="_TAG=${GITHUB_SHA}"
+
+      - name: Deploy Cloud Run service
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/kua-control-plane/$SERVICE:$GITHUB_SHA" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --min=0 \
+            --max=3 \
+            --memory=256Mi \
+            --cpu=1 \
+            --set-env-vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID" \
+            --set-secrets="GOOGLE_CLIENT_ID=KUA_GOOGLE_CLIENT_ID:1,GOOGLE_CLIENT_SECRET=KUA_GOOGLE_CLIENT_SECRET:1,KUA_SESSION_SECRET=KUA_SESSION_SECRET:1,STRIPE_SECRET_KEY=KUA_STRIPE_SECRET_KEY:1,STRIPE_WEBHOOK_SECRET=KUA_STRIPE_WEBHOOK_SECRET:1,STRIPE_PRICE_PRO=KUA_STRIPE_PRICE_PRO:1,STRIPE_PRICE_TEAM=KUA_STRIPE_PRICE_TEAM:1"
