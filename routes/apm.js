@@ -9,6 +9,7 @@ const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
+const { applyGraphOperation } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
 const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
@@ -365,9 +366,11 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     try {
+      const resources = database.listRegistryResources(application.id);
+      const resourcesById = new Map(resources.map(resource => [resource.id, resource]));
       res.json({
         projectId: application.architectureProjectId,
-        resources: database.listRegistryResources(application.id).map(resource => ({
+        resources: resources.map(resource => ({
           ...resource,
           correlatable: isCorrelatableResourceType(resource.resourceType),
           divergent: isCorrelatableResourceType(resource.resourceType) && (resource.sources || []).length < 2,
@@ -375,9 +378,41 @@ function createApmRouter({
         relationships: database.listRegistryRelationships(application.id).map(relationship => ({
           ...relationship,
           divergent: relationship.status === 'suggested',
+          // The review UI needs to name both ends; the registry rows only carry ids.
+          sourceName: resourcesById.get(relationship.sourceResourceId)?.displayName || '',
+          sourceType: resourcesById.get(relationship.sourceResourceId)?.resourceType || '',
+          targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
+          targetType: resourcesById.get(relationship.targetResourceId)?.resourceType || '',
         })),
         syncStatus: database.getRegistrySyncStatus(application.id),
       });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/applications/:applicationId/registry/relationships/:relationshipId/review', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const decision = String(req.body?.decision || '');
+      if (!['accept', 'reject'].includes(decision)) {
+        throw Object.assign(new Error('decision must be accept or reject'), { statusCode: 400 });
+      }
+      if (!architectureDatabase) throw Object.assign(new Error('Architecture integration is unavailable'), { statusCode: 503 });
+      const project = application.architectureProjectId ? architectureDatabase.getProject(application.architectureProjectId) : null;
+      if (!project) throw Object.assign(new Error('Application has no linked Architecture project'), { statusCode: 404 });
+      const graph = architectureDatabase.getGraph(project.id);
+      // The relationship lives in the graph; the registry row is only its correlated projection.
+      const edge = (graph.document.edges || []).find(item => item.registryRelationshipId === req.params.relationshipId);
+      if (!edge) throw Object.assign(new Error('Relationship not found in the linked Architecture project'), { statusCode: 404 });
+      const document = applyGraphOperation(graph.document, {
+        type: 'edge.review', subjectId: edge.id, value: { decision },
+      });
+      architectureDatabase.saveGraph(project.id, document, {
+        expectedRevision: graph.revision, type: 'edge.review', summary: `Relationship ${decision}ed from Observability`,
+      });
+      const result = reconcileRegistry(database.getApplication(application.id));
+      log(`Relationship ${decision}ed`, edge.id, application.profileId);
+      res.json({ decision, relationshipId: req.params.relationshipId, syncStatus: result?.syncStatus || null });
     } catch (error) { handleError(res, error); }
   });
 

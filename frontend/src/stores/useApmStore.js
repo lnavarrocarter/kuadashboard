@@ -34,6 +34,7 @@ export const useApmStore = defineStore('apm', () => {
   const linkingArchitecture = ref(false)
   const registry = ref(null)
   const reconcilingRegistry = ref(false)
+  const reviewingRelationshipId = ref('')
   const syncStatus = ref(null)
   const kubernetesPreview = ref(null)
   const previewingKubernetes = ref(false)
@@ -331,6 +332,26 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
+  async function reviewRegistryRelationship(relationshipId, decision) {
+    if (!selectedApplicationId.value || !relationshipId) return null
+    reviewingRelationshipId.value = relationshipId
+    error.value = null
+    try {
+      const result = await request(`/applications/${selectedApplicationId.value}/registry/relationships/${relationshipId}/review`, {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      })
+      await loadRegistrySyncStatus(selectedApplicationId.value)
+      return result
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      reviewingRelationshipId.value = ''
+    }
+  }
+
   async function previewKubernetesDiscovery({ contexts = [], namespaces = [] } = {}) {
     if (!selectedApplicationId.value) return null
     previewingKubernetes.value = true
@@ -536,6 +557,7 @@ export const useApmStore = defineStore('apm', () => {
     linkingArchitecture,
     registry,
     reconcilingRegistry,
+    reviewingRelationshipId,
     syncStatus,
     kubernetesPreview,
     previewingKubernetes,
@@ -558,6 +580,7 @@ export const useApmStore = defineStore('apm', () => {
     unlinkArchitectureProject,
     reconcileSharedRegistry,
     loadRegistrySyncStatus,
+    reviewRegistryRelationship,
     previewKubernetesDiscovery,
     loadApplicationKubernetesContexts,
     deleteApplication,

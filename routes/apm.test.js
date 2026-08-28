@@ -488,6 +488,84 @@ test('API resolves a Kubernetes workload to one shared registry resource whether
   }
 });
 
+test('API lets Observability accept a discovered relationship without opening Architecture', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.architectureDatabase.saveGraph(project.id, {
+      projectId: project.id,
+      nodes: [
+        { id: 'k8s:svc', name: 'api', provider: 'kubernetes', resourceType: 'service', kind: 'Service', kubeContext: 'eks', namespace: 'orders', nativeId: 'uid-svc' },
+        { id: 'k8s:pod', name: 'api-1', provider: 'kubernetes', resourceType: 'pod', kind: 'Pod', kubeContext: 'eks', namespace: 'orders', nativeId: 'uid-pod' },
+      ],
+      // Inferred from naming, so it stays pending review rather than being auto-confirmed.
+      edges: [{ id: 'edge-1', sourceNodeId: 'k8s:svc', targetNodeId: 'k8s:pod', relationType: 'calls', status: 'suggested', confidence: 0.75 }],
+    }, { expectedRevision: 0 });
+    subject.database.updateArchitectureProjectLink(applicationId, project.id);
+    await subject.request(`/applications/${applicationId}/registry/reconcile`, { method: 'POST' });
+
+    const registry = await subject.request(`/applications/${applicationId}/registry`);
+    const pending = registry.body.relationships.find(item => item.divergent);
+    assert.ok(pending, 'the suggested relationship must be listed as pending review');
+    // The review table needs to name both ends; the registry rows only store ids.
+    assert.equal(pending.sourceName, 'api');
+    assert.equal(pending.targetName, 'api-1');
+
+    const reviewed = await subject.request(`/applications/${applicationId}/registry/relationships/${pending.id}/review`, {
+      method: 'POST', body: { decision: 'accept' },
+    });
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.syncStatus.divergentRelationshipCount, 0);
+
+    // Accepting from Observability must be the same decision the Architecture canvas records.
+    const edge = subject.architectureDatabase.getGraph(project.id).document.edges[0];
+    assert.equal(edge.status, 'manual');
+    assert.equal(edge.decision, 'accepted');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('reconciling auto-confirms declared relationships already in the graph, without re-importing', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.architectureDatabase.saveGraph(project.id, {
+      projectId: project.id,
+      nodes: [
+        { id: 'k8s:ing', name: 'public', provider: 'kubernetes', resourceType: 'ingress', kind: 'Ingress', kubeContext: 'eks', namespace: 'orders', nativeId: 'uid-ing' },
+        { id: 'k8s:svc', name: 'api', provider: 'kubernetes', resourceType: 'service', kind: 'Service', kubeContext: 'eks', namespace: 'orders', nativeId: 'uid-svc' },
+        { id: 'k8s:pod', name: 'api-1', provider: 'kubernetes', resourceType: 'pod', kind: 'Pod', kubeContext: 'eks', namespace: 'orders', nativeId: 'uid-pod' },
+      ],
+      edges: [
+        // The Ingress declares this Service in its own spec: a fact, not a guess.
+        { id: 'edge-declared', sourceNodeId: 'k8s:ing', targetNodeId: 'k8s:svc', relationType: 'routes_to', status: 'suggested', confidence: 1 },
+        // Inferred from a name found in an environment variable.
+        { id: 'edge-inferred', sourceNodeId: 'k8s:svc', targetNodeId: 'k8s:pod', relationType: 'calls', status: 'suggested', confidence: 0.75 },
+      ],
+    }, { expectedRevision: 0 });
+    subject.database.updateArchitectureProjectLink(applicationId, project.id);
+
+    const reconciled = await subject.request(`/applications/${applicationId}/registry/reconcile`, { method: 'POST' });
+    assert.equal(reconciled.status, 200);
+    assert.equal(reconciled.body.syncStatus.divergentRelationshipCount, 1, 'only the inferred relationship still needs review');
+
+    const edges = subject.architectureDatabase.getGraph(project.id).document.edges;
+    assert.equal(edges.find(edge => edge.id === 'edge-declared').status, 'automatic');
+    assert.equal(edges.find(edge => edge.id === 'edge-inferred').status, 'suggested');
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API annotates registry resources and relationships with correlatable/divergent flags', async () => {
   const subject = await fixture();
   try {

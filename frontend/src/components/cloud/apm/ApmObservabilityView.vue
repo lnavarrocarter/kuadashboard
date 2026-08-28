@@ -111,11 +111,16 @@
               <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
             </span>
             <span v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item partial">
-              <i data-lucide="alert-triangle"></i> {{ store.syncStatus.divergentResourceCount }} divergent resource{{ store.syncStatus.divergentResourceCount === 1 ? '' : 's' }}
+              <i data-lucide="alert-triangle"></i> {{ t('apm.divergentResources', { count: store.syncStatus.divergentResourceCount }) }}
             </span>
-            <span v-if="store.syncStatus?.divergentRelationshipCount" class="registry-sync-item partial">
-              <i data-lucide="alert-triangle"></i> {{ store.syncStatus.divergentRelationshipCount }} divergent relationship{{ store.syncStatus.divergentRelationshipCount === 1 ? '' : 's' }}
-            </span>
+            <button
+              v-if="store.syncStatus?.divergentRelationshipCount"
+              class="registry-sync-item pending-review"
+              @click="activeView = 'relationships'"
+            >
+              <i data-lucide="git-pull-request-arrow"></i>
+              {{ t('apm.relationshipsToReview', { count: store.syncStatus.divergentRelationshipCount }) }}
+            </button>
             <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
               <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'refresh-cw'"></i>
               {{ store.reconcilingRegistry ? 'Reconciling…' : 'Retry sync' }}
@@ -127,6 +132,10 @@
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
             <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
             <button :class="{ active: activeView === 'resources' }" @click="activeView = 'resources'">{{ t('apm.resources') }}</button>
+            <button :class="{ active: activeView === 'relationships' }" @click="activeView = 'relationships'">
+              {{ t('apm.relationships') }}
+              <span v-if="pendingRelationships.length" class="tab-badge">{{ pendingRelationships.length }}</span>
+            </button>
           </div>
 
           <template v-if="activeView === 'overview'">
@@ -194,6 +203,55 @@
             :loading="store.tracingProcess"
             @trace="traceProcess"
           />
+
+          <section v-else-if="activeView === 'relationships'" class="relationship-review">
+            <p class="relationship-intro">{{ t('apm.relationshipsIntro') }}</p>
+            <div v-if="!store.registry" class="apm-empty compact">
+              <i data-lucide="git-merge"></i>
+              <span>{{ t('apm.relationshipsUnavailable') }}</span>
+            </div>
+            <template v-else>
+              <div v-if="!pendingRelationships.length" class="apm-empty compact">
+                <i data-lucide="check-circle-2"></i>
+                <span>{{ t('apm.relationshipsAllReviewed') }}</span>
+              </div>
+              <div class="resource-table-wrap">
+                <table class="cloud-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('apm.relationship') }}</th>
+                      <th>{{ t('apm.relationType') }}</th>
+                      <th>{{ t('apm.evidence') }}</th>
+                      <th>{{ t('apm.status') }}</th>
+                      <th>{{ t('apm.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in reviewableRelationships" :key="item.id" :class="{ pending: item.divergent }">
+                      <td>
+                        {{ item.sourceName || item.sourceResourceId }}
+                        <small>&rarr; {{ item.targetName || item.targetResourceId }}</small>
+                      </td>
+                      <td>{{ item.relationType }}</td>
+                      <td><small>{{ relationshipEvidence(item) }}</small></td>
+                      <td><span :class="['relationship-status', item.status]">{{ relationshipStatusLabel(item.status) }}</span></td>
+                      <td class="relationship-actions">
+                        <template v-if="item.divergent">
+                          <button class="btn sm primary" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'accept')">
+                            <i data-lucide="check"></i> {{ t('apm.accept') }}
+                          </button>
+                          <button class="btn sm" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'reject')">
+                            <i data-lucide="x"></i> {{ t('apm.reject') }}
+                          </button>
+                        </template>
+                        <span v-else class="relationship-reviewed">&mdash;</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+          </section>
 
           <section v-else class="resource-table-wrap">
             <table class="cloud-table">
@@ -504,6 +562,30 @@ const metricSections = computed(() => buildResourceMetricSections({
 }))
 const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
+
+const registryRelationships = computed(() => store.registry?.relationships || [])
+const pendingRelationships = computed(() => registryRelationships.value.filter(item => item.divergent))
+// Pending ones first: this view exists to clear them, not to browse the confirmed ones.
+const reviewableRelationships = computed(() => [
+  ...pendingRelationships.value,
+  ...registryRelationships.value.filter(item => !item.divergent),
+])
+
+function relationshipEvidence(item) {
+  const types = [...new Set((item.evidence || []).map(entry => entry.type || entry.kind).filter(Boolean))]
+  return types.join(', ') || '-'
+}
+
+// A status the UI does not know yet must read as itself, never as a raw translation key.
+function relationshipStatusLabel(status) {
+  const key = `apm.relationshipStatus.${status}`
+  const label = t(key)
+  return label === key ? status : label
+}
+
+async function reviewRelationship(item, decision) {
+  await store.reviewRegistryRelationship(item.id, decision)
+}
 // What a collection will actually read, so the confirmation is not just about Lambda.
 const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({
   resources: applicationResources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false),
@@ -839,6 +921,18 @@ defineExpose({ refreshLocal })
 .apm-empty span { max-width: 430px; font-size: 10px; line-height: 1.5; }
 .apm-empty.compact { min-height: 230px; border: 1px dashed var(--border); border-radius: 7px; }
 .resource-table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 7px; }
+.relationship-review { display: flex; flex-direction: column; gap: 10px; }
+.relationship-intro { color: var(--text-dim); font-size: 10px; margin: 0; }
+.relationship-review tr.pending td { background: color-mix(in srgb, var(--warning, #d29922) 7%, transparent); }
+.relationship-status { font-size: 9px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
+.relationship-status.suggested { color: #d29922; border-color: #d29922; }
+.relationship-status.manual { color: #3fb950; border-color: #3fb950; }
+.relationship-status.rejected { color: var(--text-dim); }
+.relationship-actions { display: flex; gap: 5px; }
+.relationship-reviewed { color: var(--text-dim); }
+.registry-sync-item.pending-review { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; cursor: pointer; color: #d29922; font: inherit; padding: 0; }
+.registry-sync-item.pending-review:hover { text-decoration: underline; }
+.tab-badge { margin-left: 5px; padding: 1px 5px; border-radius: 999px; background: #d29922; color: #10141a; font-size: 9px; font-weight: 650; }
 .resource-table-wrap td > small { display: block; margin-top: 2px; color: var(--text-dim); font-size: 9px; }
 .collect-confirm { display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.5; }
 .collect-confirm dl { margin: 0; border: 1px solid var(--border); border-radius: 6px; }

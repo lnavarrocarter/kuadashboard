@@ -92,6 +92,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Métricas de nodos e Ingress — los nodos del clúster reportan CPU, memoria y Pods alojados vía Prometheus, los Ingress su inventario de ruteo, y cada sección muestra su cantidad de recursos sin repetir contadores ajenos' },
       { type: 'new',    text: 'Volumen de logs por workload — Deployments y Pods reportan cuánto log escriben en disco, y los tipos sin colector (Secrets, ConfigMaps) se resumen en una línea compacta en vez de ocupar una sección cada uno' },
       { type: 'fix',    text: 'Confirmación de recolección con Kubernetes — ahora detalla qué recursos Kubernetes se van a leer y aclara que no consume el presupuesto AWS; además los Secrets y ConfigMaps ya no generan un error por recurso en cada ciclo' },
+      { type: 'new',    text: 'Vista de Relaciones — revisa y acepta o rechaza las relaciones descubiertas desde Observability (AWS y Kubernetes), con auto-confirmación de las declaradas por el propio recurso; "divergentes" pasó a llamarse "por revisar"' },
     ],
   },
   {

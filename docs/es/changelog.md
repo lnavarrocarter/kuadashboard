@@ -59,6 +59,14 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: una vista de Relaciones para revisar las conexiones descubiertas
+
+- Las relaciones descubiertas que esperaban una decisión solo se contaban, nunca se mostraban: no aparecían en Topology y la única forma de actuar sobre ellas era abrir el canvas de Architecture. Observability ahora tiene una pestaña Relaciones que lista cada una con sus dos extremos, su tipo, la evidencia que la respalda y su estado, con acciones Aceptar y Rechazar. Funciona igual para AWS y Kubernetes, porque lee del registro compartido.
+- Aceptar o rechazar desde Observability registra exactamente la misma decisión que el canvas de Architecture, así que las dos vistas nunca pueden contradecirse.
+- Las relaciones cuya evidencia declara el propio recurso — un Ingress que nombra su Service, una coincidencia de selector, el nodo donde está agendado un Pod — ahora se confirman automáticamente en vez de pedir una decisión que solo tiene una respuesta sensata. Todo lo inferido por nombres sigue esperando revisión, y una decisión ya tomada por una persona nunca se sobrescribe.
+- Las relaciones existentes se reevalúan en la siguiente reconciliación, así que activar esto no obliga a reimportar todo.
+- "Relaciones divergentes" ahora es "relaciones por revisar", que es lo que siempre significó: a diferencia de los recursos divergentes, no son un problema a corregir sino una decisión a tomar. El contador ahora es un acceso directo a la nueva vista.
+
 ### Observability: la confirmación de recolección ahora también describe Kubernetes
 
 - Confirmar una recolección solo describía Lambda: a una aplicación compuesta íntegramente por recursos Kubernetes se le pedía confirmar "Funciones Lambda: 0" y un presupuesto de lecturas AWS que esa recolección ni siquiera consume.

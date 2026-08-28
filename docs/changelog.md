@@ -59,6 +59,14 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: a Relationships view to review discovered connections
+
+- Discovered relationships waiting for a decision were only counted, never shown: they did not appear in Topology and the only way to act on them was to open the Architecture canvas. Observability now has a Relationships tab listing each one with both ends, its type, the evidence behind it and its status, with Accept and Reject actions. It works the same for AWS and Kubernetes, because it reads the shared registry.
+- Accepting or rejecting from Observability records exactly the same decision the Architecture canvas does, so the two views can never disagree.
+- Relationships whose evidence is declared by the resource itself - an Ingress naming its Service, a selector match, the node a Pod is scheduled on - are now confirmed automatically instead of asking for a decision that has only one sensible answer. Anything inferred from naming still waits for review, and a decision already made by a person is never overridden.
+- Existing relationships are re-evaluated on the next reconciliation, so enabling this does not require re-importing everything.
+- "Divergent relationships" is now "relationships to review", which is what it always meant: unlike divergent resources, these are not a problem to fix but a decision to make. The counter is now a shortcut into the new view.
+
 ### Observability: the collection confirmation now describes Kubernetes too
 
 - Confirming a collection only ever described Lambda: an application made entirely of Kubernetes resources was asked to confirm "Lambda functions: 0" and an AWS read budget that the collection does not even consume.
