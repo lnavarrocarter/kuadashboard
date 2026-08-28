@@ -59,6 +59,13 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: volumen de logs por workload, y menos espacio desperdiciado en recursos sin métricas
+
+- Los Deployments, StatefulSets, DaemonSets y Pods ahora reportan cuánto log están escribiendo en disco, leído desde Prometheus. Esto responde una pregunta que la API de métricas de Kubernetes nunca pudo, y se recolecta incluso cuando el uso vino de un Metrics Server.
+- Si el clúster no tiene Prometheus, el volumen de logs simplemente se omite: una recolección nunca falla por eso, y el clúster se sondea una sola vez en lugar de una vez por recurso en cada ejecución.
+- Los tipos de recurso sin colector de métricas (Secrets, ConfigMaps y cualquier tipo futuro) ya no ocupan una sección completa cada uno. Ahora se resumen en una sola línea compacta, dejando el espacio a los recursos que sí reportan algo.
+- Se evaluó agregar métricas de requests de los Ingress y deliberadamente no se hizo: este clúster no tiene ningún ingress controller instrumentado en Prometheus, y los conteos de requests de los balanceadores viven en CloudWatch, que es facturable. Los Ingress siguen reportando su inventario de ruteo en vez de números que habría que inventar.
+
 ### Observability: los nodos del clúster, los Ingress y los Pods ahora reportan sus propias métricas
 
 - Los nodos del clúster ahora se descubren como recursos y reportan CPU en uso, memoria en uso, Pods alojados y su capacidad de CPU/memoria, leídos del Prometheus que ya corre en el clúster. Los Pods quedan enlazados en el diagrama al nodo que los ejecuta.

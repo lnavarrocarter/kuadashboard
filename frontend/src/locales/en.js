@@ -494,6 +494,8 @@ export default {
   'apm.noCollectorForType':              'No metric collector reports this resource type yet; it is correlated for topology only.',
   'apm.resourceCountKpi':                'Resources',
   'apm.topologyOnly':                    'topology only',
+  'apm.topologyOnlyTitle':               'Correlated for topology only',
+  'apm.logVolume':                       'Log volume',
   'apm.podRestarts':                     'Restarts',
   'apm.routedPods':                      'Routed pods',
   'apm.hostedPods':                      'Hosted pods',

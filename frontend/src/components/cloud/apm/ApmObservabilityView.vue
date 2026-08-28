@@ -130,7 +130,7 @@
           </div>
 
           <template v-if="activeView === 'overview'">
-            <section v-for="section in metricSections" :key="section.key" class="resource-metric-section">
+            <section v-for="section in collectedSections" :key="section.key" class="resource-metric-section">
               <header class="resource-metric-header">
                 <i :data-lucide="section.icon"></i>
                 <h3>{{ section.label }}</h3>
@@ -156,10 +156,17 @@
                   :x-tick-limit="4"
                 />
               </div>
-              <div v-else-if="!section.collectsMetrics" class="apm-empty compact">
-                <i data-lucide="chart-no-axes-combined"></i>
-                <span>{{ t('apm.noCollectorForType') }}</span>
-              </div>
+            </section>
+
+            <!-- Types with no collector are kept visible as inventory, but must not take a full
+                 section each: that space belongs to resources that actually report something. -->
+            <section v-if="topologyOnlySections.length" class="topology-only-strip">
+              <i data-lucide="shapes"></i>
+              <span class="topology-only-title">{{ t('apm.topologyOnlyTitle') }}</span>
+              <span v-for="section in topologyOnlySections" :key="section.key" class="topology-only-item">
+                <i :data-lucide="section.icon"></i>{{ section.label }}
+                <strong>{{ section.resourceCount }}</strong>
+              </span>
             </section>
 
             <div v-if="!metricSections.length" class="apm-empty compact">
@@ -488,6 +495,8 @@ const metricSections = computed(() => buildResourceMetricSections({
   resources: applicationResources.value,
   metricsByResourceType: store.overview?.metricsByResourceType || [],
 }))
+const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
+const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
 
 function kpiDetail(item) {
   if (!item.detailKey) return ''
@@ -802,6 +811,12 @@ defineExpose({ refreshLocal })
 .resource-metric-header h3 { font-size: 12px; font-weight: 650; margin: 0; }
 .resource-metric-header i { width: 14px; height: 14px; color: var(--text-dim); }
 .resource-metric-count { color: var(--text-dim); font-size: 9px; margin-left: auto; }
+.topology-only-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 8px 11px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.topology-only-strip > i { width: 13px; height: 13px; color: var(--text-dim); }
+.topology-only-title { color: var(--text-dim); font-size: 9px; }
+.topology-only-item { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-dim); }
+.topology-only-item i { width: 12px; height: 12px; }
+.topology-only-item strong { font-size: 11px; color: var(--text); }
 .kpi-item { min-width: 0; min-height: 74px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid var(--border); padding: 9px 11px; background: var(--surface); }
 .kpi-item:last-child { border-right: 0; }
 .kpi-item span, .kpi-item small { color: var(--text-dim); font-size: 9px; }

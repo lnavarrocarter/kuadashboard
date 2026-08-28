@@ -59,6 +59,13 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: log volume per workload, and less space wasted on resources without metrics
+
+- Deployments, StatefulSets, DaemonSets and Pods now report how much log they are writing to disk, read from Prometheus. This answers a question the Kubernetes Metrics API never could, and is collected even when usage came from a Metrics Server.
+- If the cluster has no Prometheus, log volume is simply skipped: a collection never fails because of it, and the cluster is probed once rather than once per resource on every run.
+- Resource types with no metric collector (Secrets, ConfigMaps, and any future type) no longer take a whole section each. They are now summarized in a single compact line, leaving the space to resources that actually report something.
+- Ingress request metrics were evaluated and deliberately not added: this cluster has no instrumented ingress controller in Prometheus, and load balancer request counts live in CloudWatch, which is billable. Ingresses keep reporting their routing inventory instead of numbers that would have to be invented.
+
 ### Observability: cluster Nodes, Ingresses and Pods now report their own metrics
 
 - Cluster Nodes are now discovered as resources and report CPU used, memory used, hosted Pods and their CPU/memory capacity, read from the Prometheus already running in the cluster. Pods are linked to the Node that runs them in the diagram.

@@ -77,10 +77,19 @@ const KUBERNETES_WORKLOAD_CATALOG = {
       format: METRIC_FORMATS.bytes,
       detailKey: 'apm.metricsApi',
     },
+    {
+      id: 'logs',
+      labelKey: 'apm.logVolume',
+      metric: 'log_bytes',
+      aggregate: 'average',
+      format: METRIC_FORMATS.bytes,
+      detailKey: 'apm.prometheusSource',
+    },
   ],
   charts: [
     { metric: 'cpu_cores', labelKey: 'apm.kubernetesCpu', unit: '', color: '#3fb950' },
     { metric: 'memory_bytes', labelKey: 'apm.kubernetesMemory', unit: 'bytes', color: '#a371f7' },
+    { metric: 'log_bytes', labelKey: 'apm.logVolume', unit: 'bytes', color: '#d29922' },
     { metric: 'pods_ready', labelKey: 'apm.readyPods', unit: '', color: '#39c5cf' },
   ],
 }
@@ -91,11 +100,13 @@ const KUBERNETES_POD_CATALOG = {
   kpis: [
     { id: 'cpu', labelKey: 'apm.averageCpu', metric: 'cpu_cores', aggregate: 'average', format: METRIC_FORMATS.cores, detailKey: 'apm.metricsApi' },
     { id: 'memory', labelKey: 'apm.averageMemory', metric: 'memory_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.metricsApi' },
+    { id: 'logs', labelKey: 'apm.logVolume', metric: 'log_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.prometheusSource' },
     { id: 'restarts', labelKey: 'apm.podRestarts', metric: 'restarts_delta', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.metricsApi' },
   ],
   charts: [
     { metric: 'cpu_cores', labelKey: 'apm.kubernetesCpu', unit: '', color: '#3fb950' },
     { metric: 'memory_bytes', labelKey: 'apm.kubernetesMemory', unit: 'bytes', color: '#a371f7' },
+    { metric: 'log_bytes', labelKey: 'apm.logVolume', unit: 'bytes', color: '#d29922' },
   ],
 }
 

@@ -90,6 +90,7 @@ export const CHANGELOG = [
       { type: 'fix',    text: 'CPU/memoria de Kubernetes vía Prometheus — el respaldo a Prometheus cuando no hay Metrics Server ahora funciona en clústeres reales; antes la ruta de la consulta se corrompía y nunca llegaba' },
       { type: 'new',    text: 'KPI y gráficos por tipo de recurso — el Overview ahora agrupa métricas por recurso (y por kind de Kubernetes: Deployments, Pods, Services, Ingresses...) desde un catálogo único multicloud, listo para EC2, S3 y futuros proveedores' },
       { type: 'new',    text: 'Métricas de nodos e Ingress — los nodos del clúster reportan CPU, memoria y Pods alojados vía Prometheus, los Ingress su inventario de ruteo, y cada sección muestra su cantidad de recursos sin repetir contadores ajenos' },
+      { type: 'new',    text: 'Volumen de logs por workload — Deployments y Pods reportan cuánto log escriben en disco, y los tipos sin colector (Secrets, ConfigMaps) se resumen en una línea compacta en vez de ocupar una sección cada uno' },
     ],
   },
   {

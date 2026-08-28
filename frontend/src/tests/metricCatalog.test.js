@@ -88,7 +88,7 @@ describe('metricCatalog', () => {
     const ids = key => sections.find(section => section.key === key).kpis.map(kpi => kpi.id)
 
     // A Pod is one Pod: a ready/total pair here would just restate the resource count.
-    expect(ids('kubernetes:Pod')).toEqual(['resourceCount', 'cpu', 'memory', 'restarts'])
+    expect(ids('kubernetes:Pod')).toEqual(['resourceCount', 'cpu', 'memory', 'logs', 'restarts'])
     // A Service adds routing, not usage of its own, so CPU/memory are not duplicated from workloads.
     expect(ids('kubernetes:Service')).toEqual(['resourceCount', 'routedPods'])
     expect(ids('kubernetes:Node')).toEqual(['resourceCount', 'cpu', 'memory', 'hostedPods', 'cpuCapacity', 'memoryCapacity'])
@@ -133,6 +133,18 @@ describe('metricCatalog', () => {
     expect(catalogFor('some-future-cloud-service').charts).toEqual([])
     expect(catalogFor('kubernetes', 'ConfigMap').charts).toEqual([])
     expect(catalogFor('kubernetes', 'Deployment').charts.length).toBeGreaterThan(0)
+  })
+
+  it('reports log volume, which the Kubernetes Metrics API never provides', () => {
+    const [deployment] = buildResourceMetricSections({
+      resources: [{ type: 'kubernetes', kind: 'Deployment' }],
+      metricsByResourceType: [
+        { resourceType: 'kubernetes', kind: 'Deployment', metricName: 'log_bytes', sum: 8 * 1024 ** 2, count: 2 },
+      ],
+    })
+
+    expect(deployment.kpis.find(kpi => kpi.id === 'logs').value).toBe('4.0 MiB')
+    expect(deployment.charts.some(chart => chart.metric === 'log_bytes')).toBe(true)
   })
 
   it('formats each metric unit consistently', () => {
