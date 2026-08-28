@@ -8,7 +8,7 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
-const { ApplicationRegistryService, resourceOwnProvider } = require('../lib/kua/applicationRegistryService');
+const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
 const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
@@ -367,8 +367,15 @@ function createApmRouter({
     try {
       res.json({
         projectId: application.architectureProjectId,
-        resources: database.listRegistryResources(application.id),
-        relationships: database.listRegistryRelationships(application.id),
+        resources: database.listRegistryResources(application.id).map(resource => ({
+          ...resource,
+          correlatable: isCorrelatableResourceType(resource.resourceType),
+          divergent: isCorrelatableResourceType(resource.resourceType) && (resource.sources || []).length < 2,
+        })),
+        relationships: database.listRegistryRelationships(application.id).map(relationship => ({
+          ...relationship,
+          divergent: relationship.status === 'suggested',
+        })),
         syncStatus: database.getRegistrySyncStatus(application.id),
       });
     } catch (error) { handleError(res, error); }

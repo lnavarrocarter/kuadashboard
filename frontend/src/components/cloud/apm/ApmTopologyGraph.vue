@@ -46,7 +46,7 @@
         type="button"
         @click="$emit('select', resource)"
       >
-        <i :data-lucide="apmResourceIcon(resource.type)"></i>
+        <i :data-lucide="apmResourceIcon(resource)"></i>
         <span>
           <small>{{ apmResourceLabel(resource) }}</small>
           <strong>{{ resource.name }}</strong>

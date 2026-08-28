@@ -42,6 +42,11 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Tanto el panel de discovery de AWS como el de Kubernetes ahora marcan los recursos del preview que ya existen en el grafo del proyecto actual, en vez de listarlos igual que los nuevos. Los recursos ya agregados muestran una insignia distintiva y ya no se pueden volver a seleccionar por accidente.
 - Las aplicaciones identificadas también muestran cuántos de sus recursos ya forman parte del proyecto.
 
+### Observability: los recursos Kubernetes muestran su tipo específico, y la divergencia se marca por elemento
+
+- Los recursos Kubernetes en la tabla de Resources y la vista de Topology de Observability antes se mostraban todos como "Kubernetes" genérico con el mismo ícono. Ahora muestran su tipo real (Deployment, Pod, Service, ConfigMap...) con un ícono acorde, para distinguirlos de un vistazo.
+- Los recursos divergentes y las relaciones divergentes (pendientes de revisión) ahora se marcan individualmente, no solo como conteo agregado, usando la misma regla que ya excluye tipos de recurso que Observability nunca puede correlacionar — lista para extenderse a futuros tipos de recurso de GCP/Vercel sin cambios de UI.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.

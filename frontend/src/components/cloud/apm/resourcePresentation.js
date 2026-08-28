@@ -28,11 +28,31 @@ const RESOURCE_LABELS = Object.freeze({
   'vercel-project': 'Vercel Project',
 })
 
-export function apmResourceIcon(type) {
+// apm_resources stores every Kubernetes object under the single generic type "kubernetes" (Deployment,
+// Pod, Service, ...); the specific kind lives in resource.kind. Without this map every k8s resource
+// (workload or not) looked identical in Observability's Resources table and Topology view.
+const KUBERNETES_KIND_ICONS = Object.freeze({
+  deployment: 'boxes', statefulset: 'database-zap', daemonset: 'rows-3', pod: 'container',
+  service: 'network', ingress: 'route', configmap: 'file-cog', secret: 'key-round',
+  persistentvolumeclaim: 'hard-drive', pvc: 'hard-drive',
+})
+
+function kubernetesKindLabel(resource) {
+  const kind = String(resource?.kind || '').trim()
+  return kind && kind.toLowerCase() !== 'kubernetes' ? `Kubernetes ${kind}` : 'Kubernetes'
+}
+
+export function apmResourceIcon(resource) {
+  const type = typeof resource === 'string' ? resource : resource?.type
+  if (type === 'kubernetes') {
+    const kind = String((typeof resource === 'object' && resource?.kind) || '').toLowerCase()
+    return KUBERNETES_KIND_ICONS[kind] || RESOURCE_ICONS.kubernetes
+  }
   return RESOURCE_ICONS[type] || 'box'
 }
 
 export function apmResourceLabel(resource) {
+  if (resource?.type === 'kubernetes') return kubernetesKindLabel(resource)
   return RESOURCE_LABELS[resource?.type] || resource?.kind || resource?.type || 'AWS resource'
 }
 

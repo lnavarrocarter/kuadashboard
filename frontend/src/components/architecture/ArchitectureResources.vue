@@ -36,12 +36,17 @@
           <td>{{ scopeLabel(resource) }}</td>
           <td class="resource-sources-cell">
             <span v-for="source in resource.sources" :key="source" :class="['resource-source-badge', source]">{{ sourceLabel(source) }}</span>
-            <span v-if="resource.sources.length < 2" class="resource-divergence" title="Confirmed from only one side (APM or Architecture)">
+            <span v-if="resource.divergent" class="resource-divergence" title="Confirmed from only one side (APM or Architecture)">
               <i data-lucide="alert-triangle"></i> Single source
             </span>
           </td>
           <td><span :class="['resource-status', statusFor(resource).status]">{{ statusFor(resource).label }}</span></td>
-          <td>{{ relationshipCount(resource.id) }}</td>
+          <td class="resource-relations-cell">
+            {{ relationshipCount(resource.id) }}
+            <span v-if="divergentRelationshipCount(resource.id)" class="relationship-divergence" title="Suggested relationships still pending review">
+              <i data-lucide="alert-triangle"></i> {{ divergentRelationshipCount(resource.id) }} pending review
+            </span>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -85,6 +90,11 @@ function relationshipCount(resourceId) {
     relationship.sourceResourceId === resourceId || relationship.targetResourceId === resourceId).length
 }
 
+function divergentRelationshipCount(resourceId) {
+  return relationships.value.filter(relationship => relationship.divergent &&
+    (relationship.sourceResourceId === resourceId || relationship.targetResourceId === resourceId)).length
+}
+
 function sourceLabel(source) {
   return source === 'apm_resource' ? 'APM' : source === 'architecture_node' ? 'Architecture' : source
 }
@@ -107,10 +117,13 @@ function scopeLabel(resource) {
 .resources-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .resource-name-cell small { display: block; color: var(--text-dim); font-size: 10px; }
 .resource-sources-cell { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.resource-relations-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .resource-source-badge { padding: 2px 6px; border-radius: 10px; font-size: 10px; background: color-mix(in srgb, #58a6ff 18%, transparent); color: #58a6ff; }
 .resource-source-badge.architecture_node { background: color-mix(in srgb, #3fb950 18%, transparent); color: #3fb950; }
 .resource-divergence { display: inline-flex; align-items: center; gap: 3px; color: #d29922; font-size: 10px; }
 .resource-divergence :deep(svg) { width: 12px; height: 12px; }
+.relationship-divergence { display: inline-flex; align-items: center; gap: 3px; color: #d29922; font-size: 10px; }
+.relationship-divergence :deep(svg) { width: 12px; height: 12px; }
 .resource-status { padding: 2px 6px; border-radius: 10px; font-size: 10px; text-transform: capitalize; background: var(--bg-panel); color: var(--text-dim); }
 .resource-status.healthy { color: #3fb950; }
 .resource-status.degraded { color: #d29922; }

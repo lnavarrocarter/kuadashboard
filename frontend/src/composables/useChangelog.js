@@ -84,6 +84,8 @@ export const CHANGELOG = [
       { type: 'new',    text: 'S3, SNS y DynamoDB compartidos — ahora correlacionan como un solo recurso entre Architecture y Observability en vez de duplicarse o quedar solo del lado de Architecture' },
       { type: 'fix',    text: 'Identidad Kubernetes — el Kind de un workload ya no se infiere de un campo poco confiable de la API; se conoce de antemano según el endpoint consultado, evitando recursos y nodos duplicados' },
       { type: 'new',    text: 'Recursos ya agregados — los paneles de discovery de AWS y Kubernetes ahora marcan los recursos que ya están en el proyecto, en vez de mostrarlos igual que los nuevos' },
+      { type: 'better', text: 'Tipo Kubernetes — los recursos Kubernetes en Observability ahora muestran su tipo específico (Deployment, Pod, Service...) en vez de "Kubernetes" genérico, tanto en Resources como en Topology' },
+      { type: 'new',    text: 'Divergencia por elemento — recursos y relaciones divergentes ahora se marcan individualmente además del conteo agregado, con la misma regla lista para futuros recursos de GCP/Vercel' },
     ],
   },
   {

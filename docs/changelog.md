@@ -42,6 +42,11 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Both the AWS and Kubernetes discovery panels now mark preview resources that already exist in the current project's graph, instead of listing them exactly like new ones. Already-added resources show a distinct badge and can no longer be re-selected by accident.
 - Identified applications also show how many of their resources are already part of the project.
 
+### Observability: Kubernetes resources show their specific kind, and divergence is marked per item
+
+- Kubernetes resources in the Observability Resources table and Topology view previously all showed as generic "Kubernetes" with the same icon. They now show their actual kind (Deployment, Pod, Service, ConfigMap...) with a matching icon, so you can tell them apart at a glance.
+- Divergent resources and divergent (pending review) relationships are now marked individually, not just as an aggregate count, using the same rule that already excludes resource types Observability can never correlate — ready to extend to future GCP/Vercel resource types without any UI changes.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

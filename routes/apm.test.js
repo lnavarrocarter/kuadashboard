@@ -488,6 +488,30 @@ test('API resolves a Kubernetes workload to one shared registry resource whether
   }
 });
 
+test('API annotates registry resources and relationships with correlatable/divergent flags', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const applicationId = application.body.id;
+    // No linked Architecture project: a correlatable type (lambda) observed only by APM has nothing
+    // to correlate against, so it must show up as genuinely divergent.
+    await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST',
+      body: { type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:worker', arn: 'arn:aws:lambda:us-east-1:123:function:worker', name: 'worker', associationSource: 'manual' },
+    });
+
+    const registry = await subject.request(`/applications/${applicationId}/registry`);
+    assert.equal(registry.status, 200);
+    const lambdaResource = registry.body.resources.find(resource => resource.resourceType === 'lambda');
+    assert.equal(lambdaResource.correlatable, true);
+    assert.equal(lambdaResource.divergent, true);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API seeds Architecture with Kubernetes kinds and reconciles later APM membership automatically', async () => {
   const subject = await fixture();
   try {

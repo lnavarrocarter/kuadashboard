@@ -19,15 +19,15 @@ const registry = {
   resources: [
     {
       id: 'resource-a', provider: 'kubernetes', resourceType: 'deployment', displayName: 'orders-api',
-      scopeId: 'orders-eks', location: '', sources: ['apm_resource', 'architecture_node'],
+      scopeId: 'orders-eks', location: '', sources: ['apm_resource', 'architecture_node'], correlatable: true, divergent: false,
     },
     {
       id: 'resource-b', provider: 'aws', resourceType: 'sqs', displayName: 'legacy-queue',
-      scopeId: '123456789012', location: 'us-east-1', sources: ['architecture_node'],
+      scopeId: '123456789012', location: 'us-east-1', sources: ['architecture_node'], correlatable: true, divergent: true,
     },
   ],
   relationships: [
-    { id: 'rel-1', sourceResourceId: 'resource-a', targetResourceId: 'resource-b', relationType: 'depends_on' },
+    { id: 'rel-1', sourceResourceId: 'resource-a', targetResourceId: 'resource-b', relationType: 'depends_on', status: 'confirmed', divergent: false },
   ],
 }
 
@@ -63,5 +63,32 @@ describe('ArchitectureResources', () => {
     const wrapper = mount(ArchitectureResources, { props: { graph, registry, loading: false } })
     await wrapper.get('button[title="Refresh resources"]').trigger('click')
     expect(wrapper.emitted('refresh')).toHaveLength(1)
+  })
+
+  it('never flags a structurally single-source resource type as divergent, and surfaces divergent relationships per resource', () => {
+    const singleSourceRegistry = {
+      resources: [
+        {
+          id: 'resource-c', provider: 'aws', resourceType: 'kinesis', displayName: 'orders-stream',
+          scopeId: '123456789012', location: 'us-east-1', sources: ['architecture_node'], correlatable: false, divergent: false,
+        },
+        {
+          id: 'resource-a', provider: 'kubernetes', resourceType: 'deployment', displayName: 'orders-api',
+          scopeId: 'orders-eks', location: '', sources: ['apm_resource', 'architecture_node'], correlatable: true, divergent: false,
+        },
+      ],
+      relationships: [
+        { id: 'rel-2', sourceResourceId: 'resource-c', targetResourceId: 'resource-a', relationType: 'depends_on', status: 'suggested', divergent: true },
+      ],
+    }
+    const wrapper = mount(ArchitectureResources, { props: { graph, registry: singleSourceRegistry, loading: false } })
+    const rows = wrapper.findAll('.resources-table tbody tr')
+
+    const streamRow = rows.find(row => row.text().includes('orders-stream'))
+    expect(streamRow.find('.resource-divergence').exists()).toBe(false)
+    expect(streamRow.text()).toContain('1 pending review')
+
+    const apiRow = rows.find(row => row.text().includes('orders-api'))
+    expect(apiRow.text()).toContain('1 pending review')
   })
 })
