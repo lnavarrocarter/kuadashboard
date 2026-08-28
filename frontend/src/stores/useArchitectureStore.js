@@ -452,11 +452,15 @@ export const useArchitectureStore = defineStore('architecture', () => {
   async function importKubernetesResources({ selectedNodeIds }) {
     if (!selectedProjectId.value || !graph.value || !kubernetesPreview.value) return null
     const selected = new Set(selectedNodeIds || [])
-    const nodes = kubernetesPreview.value.nodes.filter(node => selected.has(node.id))
-    if (!nodes.length) return null
+    if (!kubernetesPreview.value.nodes.some(node => selected.has(node.id))) return null
+    // Resources already in the project are not selectable, but an edge is only imported when both
+    // of its ends travel with it, so they are sent along as context. Re-sending them is idempotent:
+    // the server merges them onto the existing nodes by identity.
+    const nodes = kubernetesPreview.value.nodes.filter(node => selected.has(node.id) || node.alreadyInGraph)
     const nodeIds = new Set(nodes.map(node => node.id))
     const edges = kubernetesPreview.value.relationships.filter(edge =>
       nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId))
+    const importedCount = nodes.filter(node => selected.has(node.id)).length
     saving.value = true
     error.value = null
     try {
@@ -465,7 +469,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         headers: headers(true),
         body: JSON.stringify({
           expectedRevision: graph.value.revision,
-          reason: `Import ${nodes.length} Kubernetes resources`,
+          reason: `Import ${importedCount} Kubernetes resources`,
           operation: {
             type: 'discovery.import',
             value: {

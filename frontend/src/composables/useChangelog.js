@@ -93,6 +93,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Volumen de logs por workload — Deployments y Pods reportan cuánto log escriben en disco, y los tipos sin colector (Secrets, ConfigMaps) se resumen en una línea compacta en vez de ocupar una sección cada uno' },
       { type: 'fix',    text: 'Confirmación de recolección con Kubernetes — ahora detalla qué recursos Kubernetes se van a leer y aclara que no consume el presupuesto AWS; además los Secrets y ConfigMaps ya no generan un error por recurso en cada ciclo' },
       { type: 'new',    text: 'Vista de Relaciones — revisa y acepta o rechaza las relaciones descubiertas desde Observability (AWS y Kubernetes), con auto-confirmación de las declaradas por el propio recurso; "divergentes" pasó a llamarse "por revisar"' },
+      { type: 'fix',    text: 'Relaciones perdidas al importar — las relaciones con recursos ya presentes en el proyecto se descartaban en silencio (por eso Deployments y Pods no se enlazaban en el canvas); además los nodos del clúster ahora se identifican con su instancia EC2 real' },
     ],
   },
   {

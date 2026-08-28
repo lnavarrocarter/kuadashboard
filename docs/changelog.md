@@ -59,6 +59,18 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Fix: importing discovered resources silently dropped their relationships
+
+- Since resources already in a project stopped being selectable, any relationship connecting a newly selected resource to one of them was discarded on import: a relationship is only imported when both of its ends travel with it. This is why Deployments were not linked to their Pods in the canvas even though discovery found those links correctly.
+- Resources already in the project are now sent along as context, so those relationships survive. Re-sending them is idempotent: the server merges them onto the existing nodes by identity instead of duplicating them.
+- The same applied to AWS imports, and is fixed the same way. AWS now also recomputes which resources are already present at import time, instead of trusting a preview that may have been cached before they were added.
+
+### Architecture: cluster nodes are now identified as the cloud instances they run on
+
+- The EC2 resources discovered from CloudFormation for an EKS cluster are security groups, rules and launch templates - never the running instances, because a node group's instances are created by its Auto Scaling group at runtime. The actual instances are the cluster nodes.
+- Discovered nodes now carry their instance id, availability zone, instance type and, when the context names the account explicitly (an EKS context ARN), their EC2 ARN. That ARN is what lets a running node correlate with the same instance seen from AWS.
+- When the account cannot be determined, the instance identity is still recorded but no ARN is invented.
+
 ### Observability: a Relationships view to review discovered connections
 
 - Discovered relationships waiting for a decision were only counted, never shown: they did not appear in Topology and the only way to act on them was to open the Architecture canvas. Observability now has a Relationships tab listing each one with both ends, its type, the evidence behind it and its status, with Accept and Reject actions. It works the same for AWS and Kubernetes, because it reads the shared registry.

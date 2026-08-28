@@ -59,6 +59,18 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Corregido: importar recursos descubiertos descartaba silenciosamente sus relaciones
+
+- Desde que los recursos ya presentes en un proyecto dejaron de ser seleccionables, cualquier relación que conectara un recurso recién seleccionado con uno de ellos se descartaba al importar: una relación solo se importa cuando ambos extremos viajan con ella. Por eso los Deployments no aparecían enlazados a sus Pods en el canvas aunque el discovery sí encontraba esos vínculos.
+- Los recursos que ya están en el proyecto ahora se envían como contexto, de modo que esas relaciones sobreviven. Reenviarlos es idempotente: el servidor los fusiona con los nodos existentes por identidad en vez de duplicarlos.
+- Lo mismo ocurría con las importaciones de AWS y se corrige igual. AWS ahora además recalcula qué recursos ya están presentes en el momento de importar, en lugar de confiar en un preview que pudo cachearse antes de que se agregaran.
+
+### Architecture: los nodos del clúster ahora se identifican como las instancias en la nube donde corren
+
+- Los recursos EC2 que CloudFormation descubre para un clúster EKS son security groups, reglas y launch templates — nunca las instancias en ejecución, porque las instancias de un node group las crea su Auto Scaling group en tiempo de ejecución. Las instancias reales son los nodos del clúster.
+- Los nodos descubiertos ahora llevan su id de instancia, zona de disponibilidad, tipo de instancia y, cuando el contexto nombra la cuenta explícitamente (un ARN de contexto EKS), su ARN de EC2. Ese ARN es lo que permite que un nodo en ejecución se correlacione con la misma instancia vista desde AWS.
+- Cuando la cuenta no se puede determinar, la identidad de la instancia igual se registra pero no se inventa ningún ARN.
+
 ### Observability: una vista de Relaciones para revisar las conexiones descubiertas
 
 - Las relaciones descubiertas que esperaban una decisión solo se contaban, nunca se mostraban: no aparecían en Topology y la única forma de actuar sobre ellas era abrir el canvas de Architecture. Observability ahora tiene una pestaña Relaciones que lista cada una con sus dos extremos, su tipo, la evidencia que la respalda y su estado, con acciones Aceptar y Rechazar. Funciona igual para AWS y Kubernetes, porque lee del registro compartido.

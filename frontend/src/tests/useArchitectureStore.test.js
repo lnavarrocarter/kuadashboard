@@ -228,4 +228,34 @@ describe('architecture workspace', () => {
     expect(store.graph.revision).toBe(7)
     expect(store.syncPreviewing).toBe(false)
   })
+
+  it('imports relationships that connect a new Kubernetes resource to one already in the project', async () => {
+    let imported = null
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/operations')) {
+        imported = JSON.parse(options.body).operation.value
+        return response({ revision: 8, document: { nodes: [], edges: [] } })
+      }
+      if (url.includes('/changes')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 7, document: { nodes: [], edges: [] } }
+    store.kubernetesPreview = {
+      sources: [{ id: 'kubernetes:context:eks', context: 'eks' }],
+      nodes: [
+        { id: 'deploy-1', alreadyInGraph: true },
+        { id: 'pod-1', alreadyInGraph: false },
+      ],
+      relationships: [{ id: 'edge-1', sourceNodeId: 'deploy-1', targetNodeId: 'pod-1', relationType: 'owns' }],
+    }
+
+    // The Deployment is already in the project, so the panel does not offer it for selection.
+    await store.importKubernetesResources({ selectedNodeIds: ['pod-1'] })
+
+    expect(imported.edges).toHaveLength(1)
+    // The already-present node travels as context so the edge has both ends; the server merges it.
+    expect(imported.nodes.map(node => node.id).sort()).toEqual(['deploy-1', 'pod-1'])
+  })
 })
