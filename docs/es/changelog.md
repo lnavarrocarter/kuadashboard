@@ -59,6 +59,14 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: los KPI y gráficos ahora se organizan por tipo de recurso
+
+- El Overview mostraba una única fila plana de KPI y una sola grilla de gráficos, fijada a Lambda y Kubernetes. Ahora las métricas se agrupan en una sección por tipo de recurso — y por kind de Kubernetes (Deployments, Pods, Services, Ingresses...) — cada una con sus propios KPI, gráficos y conteo de recursos.
+- Las series de métricas ahora se pueden pedir filtradas por tipo de recurso y kind de Kubernetes, para que un gráfico muestre solo los recursos a los que corresponde en vez de un único total del clúster.
+- Los tipos de recurso que Architecture ya descubre pero para los que aún ningún colector reporta métricas (S3, SQS, SNS, DynamoDB, Ingresses, ConfigMaps, recursos de GCP y Vercel) ahora se listan explícitamente con una nota que aclara que solo se correlacionan para la topología, en vez de omitirse en silencio.
+- Qué métricas corresponden a cada tipo de recurso ahora vive en un único catálogo independiente del proveedor, así que agregar métricas de EC2, Cloud SQL o cualquier proveedor futuro es una entrada en ese catálogo en vez de cambios repartidos por las vistas de Observability.
+- Los KPI de uso de Kubernetes ya no afirman que su fuente siempre es `metrics.k8s.io`, dado que el uso ahora puede provenir de Prometheus.
+
 ### Corregido: el uso de CPU/memoria de Kubernetes nunca llegaba realmente a Prometheus
 
 - Cuando un clúster no tiene Metrics Server, el uso de CPU/memoria de Kubernetes en Observability recurre a consultar un Service de Prometheus descubierto — pero ese respaldo siempre fallaba en un clúster real (reportado silenciosamente como "Métricas no disponibles"), aunque ese mismo Prometheus ya era alcanzable desde el panel de detalle del recurso.

@@ -168,11 +168,16 @@ export const useApmStore = defineStore('apm', () => {
     await loadSelectedApplication()
   }
 
-  async function loadSeries(metricName, resourceId = '') {
+  async function loadSeries(metricName, options = {}) {
     if (!selectedApplicationId.value) return []
+    const { resourceId = '', resourceType = '', kind = '', key = '' } = typeof options === 'string'
+      ? { resourceId: options }
+      : options
     const { from, to } = rangeBounds.value
     const params = new URLSearchParams({ metric: metricName, from: String(from), to: String(to) })
     if (resourceId) params.set('resourceId', resourceId)
+    if (resourceType) params.set('resourceType', resourceType)
+    if (kind) params.set('kind', kind)
     try {
       const rows = await request(`/applications/${selectedApplicationId.value}/series?${params}`, { headers: headers() })
       const grouped = new Map()
@@ -183,7 +188,7 @@ export const useApmStore = defineStore('apm', () => {
         grouped.set(row.bucketStart, point)
       }
       const points = [...grouped.values()].sort((left, right) => left.t - right.t)
-      series.value = { ...series.value, [metricName]: points }
+      series.value = { ...series.value, [key || metricName]: points }
       return points
     } catch (requestError) {
       error.value = requestError.message

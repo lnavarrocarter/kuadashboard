@@ -88,6 +88,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Divergencia por elemento — recursos y relaciones divergentes ahora se marcan individualmente además del conteo agregado, con la misma regla lista para futuros recursos de GCP/Vercel' },
       { type: 'new',    text: 'Relaciones Kubernetes por metadata — los Deployments ahora se relacionan con otros recursos según referencias en sus variables de entorno (DNS interno o nombre de servicio), igual que ya pasa con Lambda en AWS' },
       { type: 'fix',    text: 'CPU/memoria de Kubernetes vía Prometheus — el respaldo a Prometheus cuando no hay Metrics Server ahora funciona en clústeres reales; antes la ruta de la consulta se corrompía y nunca llegaba' },
+      { type: 'new',    text: 'KPI y gráficos por tipo de recurso — el Overview ahora agrupa métricas por recurso (y por kind de Kubernetes: Deployments, Pods, Services, Ingresses...) desde un catálogo único multicloud, listo para EC2, S3 y futuros proveedores' },
     ],
   },
   {

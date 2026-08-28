@@ -545,6 +545,8 @@ function createApmRouter({
     res.json(database.getMetricSeries({
       applicationId: application.id,
       resourceId: req.query.resourceId || undefined,
+      resourceType: req.query.resourceType || undefined,
+      kind: req.query.kind || undefined,
       metricName: req.query.metric,
       from: start,
       to: end,

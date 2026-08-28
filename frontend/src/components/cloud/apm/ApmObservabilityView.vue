@@ -130,15 +130,39 @@
           </div>
 
           <template v-if="activeView === 'overview'">
-            <section class="kpi-grid">
-              <div v-for="item in kpis" :key="item.label" class="kpi-item">
-                <span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.detail }}</small>
+            <section v-for="section in metricSections" :key="section.key" class="resource-metric-section">
+              <header class="resource-metric-header">
+                <i :data-lucide="section.icon"></i>
+                <h3>{{ section.label }}</h3>
+                <span class="resource-metric-count">{{ t('apm.resourcesCount', { count: section.resourceCount }) }}</span>
+              </header>
+
+              <div v-if="section.kpis.length" class="kpi-grid compact">
+                <div v-for="item in section.kpis" :key="item.id" class="kpi-item">
+                  <span>{{ t(item.labelKey) }}</span>
+                  <strong>{{ item.value }}</strong>
+                  <small>{{ kpiDetail(item) }}</small>
+                </div>
+              </div>
+
+              <div v-if="section.charts.length" class="chart-grid">
+                <CloudMetricChart
+                  v-for="chart in section.charts"
+                  :key="seriesKey(chart)"
+                  :label="t(chart.labelKey)"
+                  :unit="chart.unit"
+                  :points="store.series[seriesKey(chart)] || []"
+                  :color="chart.color"
+                  :x-tick-limit="4"
+                />
+              </div>
+              <div v-else class="apm-empty compact">
+                <i data-lucide="chart-no-axes-combined"></i>
+                <span>{{ t('apm.noCollectorForType') }}</span>
               </div>
             </section>
-            <section v-if="hasMetrics" class="chart-grid">
-              <CloudMetricChart v-for="chart in chartDefinitions" :key="chart.metric" :label="chart.label" :unit="chart.unit" :points="store.series[chart.metric] || []" :color="chart.color" :x-tick-limit="4" />
-            </section>
-            <div v-else class="apm-empty compact">
+
+            <div v-if="!metricSections.length" class="apm-empty compact">
               <i data-lucide="chart-no-axes-combined"></i>
               <strong>{{ t('apm.noMetricsTitle') }}</strong>
               <span>{{ t('apm.noMetricsDescription') }}</span>
@@ -372,6 +396,7 @@ import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
+import { buildResourceMetricSections, seriesKey } from './metricCatalog'
 
 const props = defineProps({
   provider: { type: String, default: 'aws' },
@@ -422,19 +447,7 @@ const hasKubernetesResources = computed(() => applicationResources.value.some(re
 const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
   resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
-const chartDefinitions = computed(() => [
-  ...(hasLambdaResources.value ? [
-    { metric: 'invocations_observed', label: t('apm.observedInvocations'), unit: '', color: '#58a6ff' },
-    { metric: 'errors_observed', label: t('apm.observedErrors'), unit: '', color: '#f85149' },
-    { metric: 'duration_ms', label: t('apm.lambdaDuration'), unit: 'ms', color: '#d29922' },
-  ] : []),
-  ...(hasKubernetesResources.value ? [
-    { metric: 'cpu_cores', label: t('apm.kubernetesCpu'), unit: '', color: '#3fb950' },
-    { metric: 'memory_bytes', label: t('apm.kubernetesMemory'), unit: 'bytes', color: '#a371f7' },
-    { metric: 'pods_ready', label: t('apm.readyPods'), unit: '', color: '#39c5cf' },
-  ] : []),
-])
-const hasMetrics = computed(() => chartDefinitions.value.some(chart => metrics.value[chart.metric]))
+const chartDefinitions = computed(() => metricSections.value.flatMap(section => section.charts))
 const collectionDescription = computed(() => hasKubernetesResources.value && !hasLambdaResources.value
   ? 'This reads metrics.k8s.io for enabled Kubernetes workloads.'
   : t('apm.collectDescription'))
@@ -471,37 +484,25 @@ const healthLabel = computed(() => {
   return t('apm.healthUnknown')
 })
 
-function metricSum(name) { return Number(metrics.value[name]?.sum || 0) }
-function metricAverage(name) { return Number(metrics.value[name]?.average || 0) }
-function formatNumber(value, digits = 0) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits }) }
-function formatBytes(value) {
-  if (!value) return '-'
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GiB`
-  return `${(value / 1024 ** 2).toFixed(1)} MiB`
-}
+const metricSections = computed(() => buildResourceMetricSections({
+  resources: applicationResources.value,
+  metricsByResourceType: store.overview?.metricsByResourceType || [],
+}))
 
-const kpis = computed(() => {
-  const invocations = metricSum('invocations_observed')
-  const errors = metricSum('errors_observed')
-  const ready = metricSum('pods_ready')
-  const total = metricSum('pods_total')
-  return [
-    ...(hasLambdaResources.value ? [
-      { label: t('apm.observedInvocations'), value: formatNumber(invocations), detail: t('apm.reportLines') },
-      { label: t('apm.observedErrorRate'), value: invocations ? `${((errors / invocations) * 100).toFixed(1)}%` : '-', detail: t('apm.signals', { count: formatNumber(errors) }) },
-      { label: t('apm.averageDuration'), value: metrics.value.duration_ms ? `${formatNumber(metricAverage('duration_ms'), 1)} ms` : '-', detail: t('apm.lambdaExecution') },
-    ] : []),
-    ...(hasKubernetesResources.value ? [
-      { label: t('apm.readyPods'), value: total ? `${formatNumber(ready)} / ${formatNumber(total)}` : '-', detail: t('apm.restarts', { count: formatNumber(metricSum('restarts_delta')) }) },
-      { label: t('apm.averageCpu'), value: metrics.value.cpu_cores ? `${formatNumber(metricAverage('cpu_cores'), 3)} cores` : '-', detail: t('apm.metricsApi') },
-      { label: t('apm.averageMemory'), value: formatBytes(metricAverage('memory_bytes')), detail: t('apm.metricsApi') },
-    ] : []),
-  ]
-})
+function kpiDetail(item) {
+  if (!item.detailKey) return ''
+  return item.detailValue == null
+    ? t(item.detailKey)
+    : t(item.detailKey, { count: item.detailValue.toLocaleString() })
+}
 
 async function loadCharts() {
   if (!store.selectedApplicationId) return
-  await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric)))
+  await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
+    resourceType: chart.resourceType,
+    kind: chart.kind,
+    key: seriesKey(chart),
+  })))
 }
 
 function kubernetesLogResource(resource) {
@@ -727,6 +728,11 @@ watch(() => props.provider, async provider => {
   if (props.profileId) await refreshLocal()
 })
 watch(activeView, () => mainEl.value?.scrollTo?.({ top: 0 }))
+// Chart definitions now depend on which resource types the application actually has,
+// so they can resolve after loadCharts() already ran; reload whenever the set changes.
+watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) => {
+  if (keys && keys !== previous) loadCharts()
+})
 watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen, architectureLinkOpen, kubernetesPreviewOpen], renderIcons)
 onMounted(renderIcons)
 defineExpose({ refreshLocal })
@@ -790,6 +796,12 @@ defineExpose({ refreshLocal })
 .apm-view-tabs { width: fit-content; margin-bottom: 12px; }
 .apm-view-tabs button { min-width: 82px; height: 28px; font-size: 10px; }
 .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 12px; }
+.kpi-grid.compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.resource-metric-section { margin-bottom: 18px; }
+.resource-metric-header { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.resource-metric-header h3 { font-size: 12px; font-weight: 650; margin: 0; }
+.resource-metric-header i { width: 14px; height: 14px; color: var(--text-dim); }
+.resource-metric-count { color: var(--text-dim); font-size: 9px; margin-left: auto; }
 .kpi-item { min-width: 0; min-height: 74px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid var(--border); padding: 9px 11px; background: var(--surface); }
 .kpi-item:last-child { border-right: 0; }
 .kpi-item span, .kpi-item small { color: var(--text-dim); font-size: 9px; }

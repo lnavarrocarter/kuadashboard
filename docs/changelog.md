@@ -59,6 +59,14 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: KPIs and charts are now organized per resource type
+
+- The Overview used to show a single flat KPI row and one chart grid, hardcoded to Lambda and Kubernetes. Metrics are now grouped into a section per resource type — and per Kubernetes kind (Deployments, Pods, Services, Ingresses...) — each with its own KPIs, charts and resource count.
+- Metric series can now be requested filtered by resource type and Kubernetes kind, so a chart shows only the resources it belongs to instead of one cluster-wide total.
+- Resource types that Architecture already discovers but no collector reports metrics for yet (S3, SQS, SNS, DynamoDB, Ingresses, ConfigMaps, GCP and Vercel resources) are now listed explicitly with a note explaining they are correlated for topology only, instead of being silently omitted.
+- Which metrics belong to which resource type now lives in a single provider-agnostic catalog, so adding EC2, Cloud SQL or any future provider's metrics is one entry in that catalog rather than changes spread across the Observability views.
+- The Kubernetes usage KPIs no longer claim their source is always `metrics.k8s.io`, since usage may now come from Prometheus.
+
 ### Fix: Kubernetes CPU/memory usage never actually reached Prometheus
 
 - When a cluster has no Metrics Server, Observability's Kubernetes CPU/memory usage falls back to querying a discovered Prometheus Service — but that fallback always failed on a real cluster (silently reported as "Metrics not available"), even though the same Prometheus was already reachable from the resource detail panel.
