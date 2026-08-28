@@ -87,6 +87,7 @@ export const CHANGELOG = [
       { type: 'better', text: 'Tipo Kubernetes — los recursos Kubernetes en Observability ahora muestran su tipo específico (Deployment, Pod, Service...) en vez de "Kubernetes" genérico, tanto en Resources como en Topology' },
       { type: 'new',    text: 'Divergencia por elemento — recursos y relaciones divergentes ahora se marcan individualmente además del conteo agregado, con la misma regla lista para futuros recursos de GCP/Vercel' },
       { type: 'new',    text: 'Relaciones Kubernetes por metadata — los Deployments ahora se relacionan con otros recursos según referencias en sus variables de entorno (DNS interno o nombre de servicio), igual que ya pasa con Lambda en AWS' },
+      { type: 'fix',    text: 'CPU/memoria de Kubernetes vía Prometheus — el respaldo a Prometheus cuando no hay Metrics Server ahora funciona en clústeres reales; antes la ruta de la consulta se corrompía y nunca llegaba' },
     ],
   },
   {

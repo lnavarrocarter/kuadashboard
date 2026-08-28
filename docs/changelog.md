@@ -53,6 +53,18 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
+
+- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
+- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
+- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
+
+### Fix: Kubernetes CPU/memory usage never actually reached Prometheus
+
+- When a cluster has no Metrics Server, Observability's Kubernetes CPU/memory usage falls back to querying a discovered Prometheus Service — but that fallback always failed on a real cluster (silently reported as "Metrics not available"), even though the same Prometheus was already reachable from the resource detail panel.
+- The collector was building the Prometheus proxy request through a Kubernetes client helper that encodes the whole PromQL query path as a single URL segment, corrupting it before it ever reached the cluster. It now builds the proxied request directly, the same proven way the resource detail panel already does.
+- Kubernetes CPU and memory charts and the "Average CPU"/"Average memory" summary now populate correctly for clusters relying on Prometheus instead of Metrics Server.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

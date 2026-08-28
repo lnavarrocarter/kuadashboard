@@ -53,6 +53,18 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Architecture: los Deployments de Kubernetes ahora se relacionan entre sí desde metadata, igual que ya pasa con AWS
+
+- El discovery de Kubernetes solo relacionaba recursos por selectores de labels y referencias a ConfigMap/Secret/PVC; un Deployment cuyas variables de entorno apuntaban a otro Service por nombre (la forma más común en que las apps Kubernetes realmente se llaman entre sí) no generaba ninguna relación.
+- El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
+- Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
+
+### Corregido: el uso de CPU/memoria de Kubernetes nunca llegaba realmente a Prometheus
+
+- Cuando un clúster no tiene Metrics Server, el uso de CPU/memoria de Kubernetes en Observability recurre a consultar un Service de Prometheus descubierto — pero ese respaldo siempre fallaba en un clúster real (reportado silenciosamente como "Métricas no disponibles"), aunque ese mismo Prometheus ya era alcanzable desde el panel de detalle del recurso.
+- El colector armaba la solicitud proxy a Prometheus a través de un helper del cliente de Kubernetes que codifica toda la ruta de la consulta PromQL como un único segmento de URL, corrompiéndola antes de que llegara al clúster. Ahora arma la solicitud proxy directamente, de la misma forma comprobada que ya usa el panel de detalle del recurso.
+- Las gráficas de CPU y memoria de Kubernetes y el resumen "CPU promedio"/"Memoria promedio" ahora se completan correctamente para clústeres que dependen de Prometheus en lugar de Metrics Server.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.
