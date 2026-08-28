@@ -86,6 +86,7 @@ export const CHANGELOG = [
       { type: 'new',    text: 'Recursos ya agregados — los paneles de discovery de AWS y Kubernetes ahora marcan los recursos que ya están en el proyecto, en vez de mostrarlos igual que los nuevos' },
       { type: 'better', text: 'Tipo Kubernetes — los recursos Kubernetes en Observability ahora muestran su tipo específico (Deployment, Pod, Service...) en vez de "Kubernetes" genérico, tanto en Resources como en Topology' },
       { type: 'new',    text: 'Divergencia por elemento — recursos y relaciones divergentes ahora se marcan individualmente además del conteo agregado, con la misma regla lista para futuros recursos de GCP/Vercel' },
+      { type: 'new',    text: 'Relaciones Kubernetes por metadata — los Deployments ahora se relacionan con otros recursos según referencias en sus variables de entorno (DNS interno o nombre de servicio), igual que ya pasa con Lambda en AWS' },
     ],
   },
   {

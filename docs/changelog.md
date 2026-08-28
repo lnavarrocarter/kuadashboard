@@ -47,6 +47,12 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Kubernetes resources in the Observability Resources table and Topology view previously all showed as generic "Kubernetes" with the same icon. They now show their actual kind (Deployment, Pod, Service, ConfigMap...) with a matching icon, so you can tell them apart at a glance.
 - Divergent resources and divergent (pending review) relationships are now marked individually, not just as an aggregate count, using the same rule that already excludes resource types Observability can never correlate — ready to extend to future GCP/Vercel resource types without any UI changes.
 
+### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
+
+- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
+- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
+- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
+
 ### Fix: Kubernetes resources duplicated between Architecture and Observability
 
 - An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.

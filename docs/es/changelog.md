@@ -47,6 +47,12 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Los recursos Kubernetes en la tabla de Resources y la vista de Topology de Observability antes se mostraban todos como "Kubernetes" genérico con el mismo ícono. Ahora muestran su tipo real (Deployment, Pod, Service, ConfigMap...) con un ícono acorde, para distinguirlos de un vistazo.
 - Los recursos divergentes y las relaciones divergentes (pendientes de revisión) ahora se marcan individualmente, no solo como conteo agregado, usando la misma regla que ya excluye tipos de recurso que Observability nunca puede correlacionar — lista para extenderse a futuros tipos de recurso de GCP/Vercel sin cambios de UI.
 
+### Architecture: los Deployments de Kubernetes ahora se relacionan entre sí desde metadata, igual que ya pasa con AWS
+
+- El discovery de Kubernetes solo relacionaba recursos por selectores de labels y referencias a ConfigMap/Secret/PVC; un Deployment cuyas variables de entorno apuntaban a otro Service por nombre (la forma más común en que las apps Kubernetes realmente se llaman entre sí) no generaba ninguna relación.
+- El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
+- Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
+
 ### Corregido: recursos Kubernetes duplicados entre Architecture y Observabilidad
 
 - Una aplicación Kubernetes alojada en AWS (por ejemplo EKS) guarda `aws` como proveedor del recurso para sus workloads, mientras que el adaptador Kubernetes de Architecture siempre usaba `kubernetes`. El registro compartido trataba esto como dos recursos distintos, por lo que el mismo Deployment podía aparecer dos veces — una vez desde APM y otra desde Architecture — en la tabla de recursos de Observabilidad y en el registro.
