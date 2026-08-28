@@ -268,11 +268,17 @@
       <div class="collect-confirm">
         <p>{{ collectionDescription }}</p>
         <dl>
-          <div><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ store.forecast?.lambdaCount || 0 }}</dd></div>
-          <div><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ (store.forecast?.lambdaCount || 0) * 2 }}</dd></div>
-          <div><dt>{{ t('apm.monthlyUsage') }}</dt><dd>{{ usageLabel }}</dd></div>
+          <template v-if="hasLambdaResources">
+            <div><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ store.forecast?.lambdaCount || 0 }}</dd></div>
+            <div><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ (store.forecast?.lambdaCount || 0) * 2 }}</dd></div>
+            <div><dt>{{ t('apm.monthlyUsage') }}</dt><dd>{{ usageLabel }}</dd></div>
+          </template>
+          <div v-for="entry in collectedKubernetesBreakdown" :key="entry.key">
+            <dt>{{ entry.label }}</dt><dd>{{ entry.resourceCount }}</dd>
+          </div>
         </dl>
-        <p class="collect-warning">{{ t('apm.readWarning') }}</p>
+        <p v-if="hasLambdaResources" class="collect-warning">{{ t('apm.readWarning') }}</p>
+        <p v-else-if="hasKubernetesResources" class="collect-warning">{{ t('apm.kubernetesReadWarning') }}</p>
       </div>
       <template #footer>
         <button class="btn" @click="confirmCollect = false">{{ t('action.cancel') }}</button>
@@ -455,9 +461,10 @@ const hasTraceResources = computed(() => props.provider === 'aws' && application
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
   resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
 const chartDefinitions = computed(() => metricSections.value.flatMap(section => section.charts))
-const collectionDescription = computed(() => hasKubernetesResources.value && !hasLambdaResources.value
-  ? 'This reads metrics.k8s.io for enabled Kubernetes workloads.'
-  : t('apm.collectDescription'))
+const collectionDescription = computed(() => [
+  hasLambdaResources.value ? t('apm.collectDescriptionAws') : '',
+  hasKubernetesResources.value ? t('apm.collectDescriptionKubernetes') : '',
+].filter(Boolean).join(' ') || t('apm.collectDescription'))
 const qualityPartial = computed(() => (store.overview?.metrics || []).some(metric => metric.quality === 'partial'))
 const latestRunLabel = computed(() => {
   const run = store.overview?.latestRun
@@ -497,6 +504,10 @@ const metricSections = computed(() => buildResourceMetricSections({
 }))
 const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
+// What a collection will actually read, so the confirmation is not just about Lambda.
+const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({
+  resources: applicationResources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false),
+}).filter(section => section.collectsMetrics))
 
 function kpiDetail(item) {
   if (!item.detailKey) return ''

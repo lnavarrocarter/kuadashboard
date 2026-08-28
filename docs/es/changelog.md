@@ -59,6 +59,17 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: la confirmación de recolección ahora también describe Kubernetes
+
+- Confirmar una recolección solo describía Lambda: a una aplicación compuesta íntegramente por recursos Kubernetes se le pedía confirmar "Funciones Lambda: 0" y un presupuesto de lecturas AWS que esa recolección ni siquiera consume.
+- La confirmación ahora lista lo que realmente se va a leer, desglosado por tipo de recurso (Deployments, Pods, Services, Ingresses, nodos), y aclara que una recolección de Kubernetes solo lee del clúster y nunca toca el presupuesto de lecturas de AWS. Los detalles de Lambda se muestran solo cuando la aplicación realmente tiene funciones Lambda.
+- Su descripción también estaba desactualizada: el uso de Kubernetes ahora puede venir de Prometheus, y el inventario de los Ingress de la API de Kubernetes.
+
+### Corregido: los Secrets y ConfigMaps generaban un error de recolección en cada ejecución
+
+- El colector se invoca para cada recurso Kubernetes de una aplicación, pero solo los workloads, Pods, Services, Ingresses y nodos tienen algo que medir. Un Secret o ConfigMap generaba un error de "kind no soportado" por cada uno, en cada ciclo de recolección.
+- Esos kinds ahora se reportan como solo topología, igual que los tipos de recurso de otros proveedores que ningún colector soporta.
+
 ### Observability: volumen de logs por workload, y menos espacio desperdiciado en recursos sin métricas
 
 - Los Deployments, StatefulSets, DaemonSets y Pods ahora reportan cuánto log están escribiendo en disco, leído desde Prometheus. Esto responde una pregunta que la API de métricas de Kubernetes nunca pudo, y se recolecta incluso cuando el uso vino de un Metrics Server.

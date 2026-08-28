@@ -59,6 +59,17 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: the collection confirmation now describes Kubernetes too
+
+- Confirming a collection only ever described Lambda: an application made entirely of Kubernetes resources was asked to confirm "Lambda functions: 0" and an AWS read budget that the collection does not even consume.
+- The confirmation now lists what will actually be read, broken down by resource type (Deployments, Pods, Services, Ingresses, Nodes), and explains that a Kubernetes collection only reads from the cluster and never touches the AWS read budget. Lambda details are shown only when the application actually has Lambda functions.
+- Its description was also out of date: Kubernetes usage may now come from Prometheus, and Ingress inventory from the Kubernetes API.
+
+### Fix: Secrets and ConfigMaps raised a collection error on every run
+
+- The collector is called for every Kubernetes resource of an application, but only workloads, Pods, Services, Ingresses and Nodes have something to measure. A Secret or ConfigMap raised an "unsupported kind" error on each one, on every collection cycle.
+- Those kinds are now reported as topology-only, exactly like resource types from other providers that no collector supports.
+
 ### Observability: log volume per workload, and less space wasted on resources without metrics
 
 - Deployments, StatefulSets, DaemonSets and Pods now report how much log they are writing to disk, read from Prometheus. This answers a question the Kubernetes Metrics API never could, and is collected even when usage came from a Metrics Server.
