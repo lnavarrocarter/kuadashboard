@@ -85,6 +85,65 @@ const KUBERNETES_WORKLOAD_CATALOG = {
   ],
 }
 
+// A Pod is a single Pod: repeating the workload's ready/total pair here would just restate the
+// section's own resource count, so only its actual usage is reported.
+const KUBERNETES_POD_CATALOG = {
+  kpis: [
+    { id: 'cpu', labelKey: 'apm.averageCpu', metric: 'cpu_cores', aggregate: 'average', format: METRIC_FORMATS.cores, detailKey: 'apm.metricsApi' },
+    { id: 'memory', labelKey: 'apm.averageMemory', metric: 'memory_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.metricsApi' },
+    { id: 'restarts', labelKey: 'apm.podRestarts', metric: 'restarts_delta', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.metricsApi' },
+  ],
+  charts: [
+    { metric: 'cpu_cores', labelKey: 'apm.kubernetesCpu', unit: '', color: '#3fb950' },
+    { metric: 'memory_bytes', labelKey: 'apm.kubernetesMemory', unit: 'bytes', color: '#a371f7' },
+  ],
+}
+
+// A Service has no usage of its own; what it adds over its workload is how many Pods it routes to.
+const KUBERNETES_SERVICE_CATALOG = {
+  kpis: [
+    {
+      id: 'routedPods',
+      labelKey: 'apm.routedPods',
+      metric: 'pods_ready',
+      overMetric: 'pods_total',
+      aggregate: 'pair',
+      format: METRIC_FORMATS.pair,
+      detailKey: 'apm.metricsApi',
+    },
+  ],
+  charts: [
+    { metric: 'pods_ready', labelKey: 'apm.routedPods', unit: '', color: '#39c5cf' },
+  ],
+}
+
+const KUBERNETES_NODE_CATALOG = {
+  kpis: [
+    { id: 'cpu', labelKey: 'apm.nodeCpuUsed', metric: 'cpu_cores', aggregate: 'average', format: METRIC_FORMATS.cores, detailKey: 'apm.prometheusSource' },
+    { id: 'memory', labelKey: 'apm.nodeMemoryUsed', metric: 'memory_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.prometheusSource' },
+    { id: 'hostedPods', labelKey: 'apm.hostedPods', metric: 'pods_total', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.prometheusSource' },
+    { id: 'cpuCapacity', labelKey: 'apm.cpuCapacity', metric: 'node_cpu_capacity_cores', aggregate: 'average', format: METRIC_FORMATS.cores, detailKey: 'apm.prometheusSource' },
+    { id: 'memoryCapacity', labelKey: 'apm.memoryCapacity', metric: 'node_memory_capacity_bytes', aggregate: 'average', format: METRIC_FORMATS.bytes, detailKey: 'apm.prometheusSource' },
+  ],
+  charts: [
+    { metric: 'cpu_cores', labelKey: 'apm.nodeCpuUsed', unit: '', color: '#3fb950' },
+    { metric: 'memory_bytes', labelKey: 'apm.nodeMemoryUsed', unit: 'bytes', color: '#a371f7' },
+    { metric: 'pods_total', labelKey: 'apm.hostedPods', unit: '', color: '#39c5cf' },
+  ],
+}
+
+// No ingress controller is guaranteed to be scraped by Prometheus, so this reports the routing
+// inventory read from the Kubernetes API rather than traffic that may not exist.
+const KUBERNETES_INGRESS_CATALOG = {
+  kpis: [
+    { id: 'rules', labelKey: 'apm.ingressRules', metric: 'ingress_rules', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.kubernetesApiSource' },
+    { id: 'paths', labelKey: 'apm.ingressPaths', metric: 'ingress_paths', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.kubernetesApiSource' },
+    { id: 'hosts', labelKey: 'apm.ingressHosts', metric: 'ingress_hosts', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.kubernetesApiSource' },
+    { id: 'tls', labelKey: 'apm.ingressTlsHosts', metric: 'ingress_tls_hosts', aggregate: 'average', format: METRIC_FORMATS.number, detailKey: 'apm.kubernetesApiSource' },
+  ],
+  charts: [],
+}
+
 // Types Architecture already discovers and correlates, but no collector reports metrics for yet.
 // They are listed on purpose so the UI can show the inventory and explain the gap instead of
 // silently omitting them.
@@ -105,13 +164,20 @@ export const RESOURCE_METRIC_CATALOG = Object.freeze({
   'vercel-project': TOPOLOGY_ONLY,
 })
 
-// Only Kubernetes kinds that own Pods report usage; an Ingress or ConfigMap never will.
-const KUBERNETES_METRIC_KINDS = Object.freeze(['Deployment', 'StatefulSet', 'DaemonSet', 'Service', 'Pod'])
+// Which catalog applies to each Kubernetes kind. Anything absent is topology-only, which is the
+// honest default: no collector reports it.
+const KUBERNETES_KIND_CATALOGS = Object.freeze({
+  Deployment: KUBERNETES_WORKLOAD_CATALOG,
+  StatefulSet: KUBERNETES_WORKLOAD_CATALOG,
+  DaemonSet: KUBERNETES_WORKLOAD_CATALOG,
+  Pod: KUBERNETES_POD_CATALOG,
+  Service: KUBERNETES_SERVICE_CATALOG,
+  Node: KUBERNETES_NODE_CATALOG,
+  Ingress: KUBERNETES_INGRESS_CATALOG,
+})
 
 export function catalogFor(resourceType, kind = '') {
-  if (resourceType === 'kubernetes') {
-    return KUBERNETES_METRIC_KINDS.includes(kind) ? KUBERNETES_WORKLOAD_CATALOG : TOPOLOGY_ONLY
-  }
+  if (resourceType === 'kubernetes') return KUBERNETES_KIND_CATALOGS[kind] || TOPOLOGY_ONLY
   return RESOURCE_METRIC_CATALOG[resourceType] || TOPOLOGY_ONLY
 }
 
@@ -190,16 +256,28 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
       const key = sectionKey(group.resourceType, group.kind)
       const catalog = catalogFor(group.resourceType, group.kind)
       const metricsByName = metricsByKey.get(key) || {}
-      const kpis = catalog.kpis.map(kpi => {
-        const value = kpiValue(kpi, metricsByName)
-        return {
-          id: kpi.id,
-          labelKey: kpi.labelKey,
-          detailKey: kpi.detailKey,
-          detailValue: kpi.detailMetric ? metricValue(metricsByName, kpi.detailMetric, 'sum') || 0 : null,
-          value: kpi.aggregate === 'pair' ? (value ?? '-') : formatMetricValue(value, kpi.format),
-        }
-      })
+      const collectsMetrics = catalog.kpis.length > 0 || catalog.charts.length > 0
+      // Every section leads with how many resources of this type the application has: that count
+      // comes from the inventory, so it is answerable even when no collector reports the type.
+      const kpis = [
+        {
+          id: 'resourceCount',
+          labelKey: 'apm.resourceCountKpi',
+          detailKey: collectsMetrics ? null : 'apm.topologyOnly',
+          detailValue: null,
+          value: group.resourceCount.toLocaleString(),
+        },
+        ...catalog.kpis.map(kpi => {
+          const value = kpiValue(kpi, metricsByName)
+          return {
+            id: kpi.id,
+            labelKey: kpi.labelKey,
+            detailKey: kpi.detailKey,
+            detailValue: kpi.detailMetric ? metricValue(metricsByName, kpi.detailMetric, 'sum') || 0 : null,
+            value: kpi.aggregate === 'pair' ? (value ?? '-') : formatMetricValue(value, kpi.format),
+          }
+        }),
+      ]
       return {
         key,
         resourceType: group.resourceType,
@@ -207,7 +285,7 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
         label: apmResourceLabel({ type: group.resourceType, kind: group.kind }),
         icon: apmResourceIcon({ type: group.resourceType, kind: group.kind }),
         resourceCount: group.resourceCount,
-        collectsMetrics: catalog.charts.length > 0,
+        collectsMetrics,
         hasData: Object.keys(metricsByName).length > 0,
         kpis,
         charts: catalog.charts.map(chart => ({ ...chart, resourceType: group.resourceType, kind: group.kind })),

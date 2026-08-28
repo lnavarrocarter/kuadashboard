@@ -34,7 +34,7 @@ describe('metricCatalog', () => {
       resources: [
         { type: 'kubernetes', kind: 'Deployment' },
         { type: 'kubernetes', kind: 'Deployment' },
-        { type: 'kubernetes', kind: 'Ingress' },
+        { type: 'kubernetes', kind: 'ConfigMap' },
       ],
       metricsByResourceType: [
         { resourceType: 'kubernetes', kind: 'Deployment', metricName: 'pods_ready', sum: 5, count: 5 },
@@ -50,9 +50,64 @@ describe('metricCatalog', () => {
     expect(deployments.kpis.find(kpi => kpi.id === 'memory').value).toBe('2.00 GiB')
     expect(deployments.charts.every(chart => chart.kind === 'Deployment')).toBe(true)
 
-    const ingress = sections.find(section => section.kind === 'Ingress')
-    expect(ingress.collectsMetrics).toBe(false)
-    expect(ingress.kpis).toEqual([])
+    const configMaps = sections.find(section => section.kind === 'ConfigMap')
+    expect(configMaps.collectsMetrics).toBe(false)
+    expect(configMaps.charts).toEqual([])
+  })
+
+  it('every section leads with its own resource count, including topology-only types', () => {
+    const sections = buildResourceMetricSections({
+      resources: [
+        { type: 'kubernetes', kind: 'Service' },
+        { type: 'kubernetes', kind: 'Service' },
+        { type: 'kubernetes', kind: 'Service' },
+        { type: 'kubernetes', kind: 'Ingress' },
+        { type: 's3' },
+      ],
+      metricsByResourceType: [],
+    })
+
+    const count = key => sections.find(section => section.key === key).kpis[0]
+    expect(count('kubernetes:Service').labelKey).toBe('apm.resourceCountKpi')
+    expect(count('kubernetes:Service').value).toBe('3')
+    expect(count('kubernetes:Ingress').value).toBe('1')
+    expect(count('s3').value).toBe('1')
+    expect(count('s3').detailKey).toBe('apm.topologyOnly')
+    expect(count('kubernetes:Ingress').detailKey).toBe(null)
+  })
+
+  it('does not repeat pod counters on kinds where they would restate the section itself', () => {
+    const sections = buildResourceMetricSections({
+      resources: [
+        { type: 'kubernetes', kind: 'Pod' },
+        { type: 'kubernetes', kind: 'Service' },
+        { type: 'kubernetes', kind: 'Node' },
+      ],
+      metricsByResourceType: [],
+    })
+    const ids = key => sections.find(section => section.key === key).kpis.map(kpi => kpi.id)
+
+    // A Pod is one Pod: a ready/total pair here would just restate the resource count.
+    expect(ids('kubernetes:Pod')).toEqual(['resourceCount', 'cpu', 'memory', 'restarts'])
+    // A Service adds routing, not usage of its own, so CPU/memory are not duplicated from workloads.
+    expect(ids('kubernetes:Service')).toEqual(['resourceCount', 'routedPods'])
+    expect(ids('kubernetes:Node')).toEqual(['resourceCount', 'cpu', 'memory', 'hostedPods', 'cpuCapacity', 'memoryCapacity'])
+  })
+
+  it('reports ingress routing inventory, since no ingress controller traffic is guaranteed', () => {
+    const [ingress] = buildResourceMetricSections({
+      resources: [{ type: 'kubernetes', kind: 'Ingress' }],
+      metricsByResourceType: [
+        { resourceType: 'kubernetes', kind: 'Ingress', metricName: 'ingress_rules', sum: 2, count: 1 },
+        { resourceType: 'kubernetes', kind: 'Ingress', metricName: 'ingress_tls_hosts', sum: 1, count: 1 },
+      ],
+    })
+
+    expect(ingress.collectsMetrics).toBe(true)
+    expect(ingress.kpis.find(kpi => kpi.id === 'rules').value).toBe('2')
+    expect(ingress.kpis.find(kpi => kpi.id === 'tls').value).toBe('1')
+    // Inventory has no meaningful time series, so it must not render empty charts.
+    expect(ingress.charts).toEqual([])
   })
 
   it('sorts sections that report metrics before topology-only ones', () => {
@@ -68,7 +123,9 @@ describe('metricCatalog', () => {
       resources: [{ type: 'lambda' }],
       metricsByResourceType: [],
     })
-    expect(sections[0].kpis.every(kpi => kpi.value === '-')).toBe(true)
+    // The inventory count is always answerable; the collected metrics are not.
+    const collected = sections[0].kpis.filter(kpi => kpi.id !== 'resourceCount')
+    expect(collected.every(kpi => kpi.value === '-')).toBe(true)
     expect(sections[0].hasData).toBe(false)
   })
 

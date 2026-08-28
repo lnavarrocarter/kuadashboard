@@ -59,6 +59,14 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
 - Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
+### Observability: los nodos del clúster, los Ingress y los Pods ahora reportan sus propias métricas
+
+- Los nodos del clúster ahora se descubren como recursos y reportan CPU en uso, memoria en uso, Pods alojados y su capacidad de CPU/memoria, leídos del Prometheus que ya corre en el clúster. Los Pods quedan enlazados en el diagrama al nodo que los ejecuta.
+- Los Ingress ahora reportan su inventario de ruteo (reglas, rutas, hosts y hosts con TLS) leído desde la API de Kubernetes. El tráfico del ingress controller deliberadamente no se reporta, porque no hay garantía de que algún controller esté siendo recolectado por Prometheus e inventar esos números sería engañoso.
+- Los Pods ahora se recolectan directamente en vez de fallar: antes cada Pod de una aplicación generaba un error de tipo no soportado en cada recolección.
+- Listar los nodos del clúster requiere un permiso a nivel de clúster que muchos roles no tienen. Cuando se deniega, el discovery ahora degrada esa capacidad y conserva todo lo demás, en vez de hacer fallar todo el escaneo de Kubernetes.
+- Cada sección de recursos ahora comienza con cuántos recursos de ese tipo tiene la aplicación, y ya no repite contadores que no le corresponden: los Pods muestran uso y reinicios en vez de un par listos/total que solo repetía la propia sección, y los Services muestran los Pods a los que enrutan en vez de duplicar la CPU y memoria de su workload.
+
 ### Observability: los KPI y gráficos ahora se organizan por tipo de recurso
 
 - El Overview mostraba una única fila plana de KPI y una sola grilla de gráficos, fijada a Lambda y Kubernetes. Ahora las métricas se agrupan en una sección por tipo de recurso — y por kind de Kubernetes (Deployments, Pods, Services, Ingresses...) — cada una con sus propios KPI, gráficos y conteo de recursos.

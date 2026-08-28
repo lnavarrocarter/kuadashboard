@@ -59,6 +59,14 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
 - These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
+### Observability: cluster Nodes, Ingresses and Pods now report their own metrics
+
+- Cluster Nodes are now discovered as resources and report CPU used, memory used, hosted Pods and their CPU/memory capacity, read from the Prometheus already running in the cluster. Pods are linked to the Node that runs them in the diagram.
+- Ingresses now report their routing inventory (rules, paths, hosts and TLS hosts) read from the Kubernetes API. Ingress controller traffic is deliberately not reported, because no controller is guaranteed to be scraped by Prometheus and inventing those numbers would be misleading.
+- Pods are now collected directly instead of failing: previously every Pod in an application raised an unsupported-kind error on each collection.
+- Listing cluster Nodes needs a cluster-scoped permission that many roles do not have. When it is denied, discovery now degrades that capability and keeps everything else, instead of failing the whole Kubernetes scan.
+- Each resource section now leads with how many resources of that type the application has, and no longer repeats counters that do not belong to it: Pods show usage and restarts instead of a ready/total pair that just restated the section, and Services show the Pods they route to instead of duplicating their workload's CPU and memory.
+
 ### Observability: KPIs and charts are now organized per resource type
 
 - The Overview used to show a single flat KPI row and one chart grid, hardcoded to Lambda and Kubernetes. Metrics are now grouped into a section per resource type — and per Kubernetes kind (Deployments, Pods, Services, Ingresses...) — each with its own KPIs, charts and resource count.

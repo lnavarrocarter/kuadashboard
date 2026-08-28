@@ -156,7 +156,7 @@
                   :x-tick-limit="4"
                 />
               </div>
-              <div v-else class="apm-empty compact">
+              <div v-else-if="!section.collectsMetrics" class="apm-empty compact">
                 <i data-lucide="chart-no-axes-combined"></i>
                 <span>{{ t('apm.noCollectorForType') }}</span>
               </div>
