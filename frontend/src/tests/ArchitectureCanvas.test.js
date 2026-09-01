@@ -463,4 +463,43 @@ describe('ArchitectureCanvas', () => {
       'Reject inferred relationship',
     ])
   })
+
+  it('downloads a Mermaid file describing the visible nodes and relationships', async () => {
+    const relationshipGraph = {
+      revision: 3,
+      document: {
+        nodes: [
+          { id: 'node:worker', name: 'Worker', resourceType: 'lambda' },
+          { id: 'node:queue', name: 'Queue', resourceType: 'sqs' },
+        ],
+        edges: [{
+          id: 'edge:queue-worker', sourceNodeId: 'node:queue', targetNodeId: 'node:worker',
+          relationType: 'triggers', status: 'automatic', confidence: 0.99, evidence: [],
+        }],
+        layout: {},
+      },
+    }
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    const clickSpy = vi.fn()
+    const originalCreateElement = document.createElement.bind(document)
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(tag => {
+      if (tag !== 'a') return originalCreateElement(tag)
+      return { click: clickSpy, set href(_value) {}, set download(_value) {} }
+    })
+
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: relationshipGraph }, global: { stubs } })
+    await wrapper.get('button[title="Download the diagram as a Mermaid file"]').trigger('click')
+
+    expect(clickSpy).toHaveBeenCalled()
+    const blob = createObjectURL.mock.calls[0][0]
+    const text = await blob.text()
+    expect(text).toContain('flowchart LR')
+    expect(text).toContain('["Worker [Lambda]"]')
+    expect(text).toContain('["Queue [SQS queue]"]')
+    expect(text).toContain('-->|triggers|')
+
+    createElementSpy.mockRestore()
+  })
 })

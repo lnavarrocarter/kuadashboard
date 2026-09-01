@@ -45,11 +45,17 @@
         <button :class="['btn', 'sm', { primary: showHealthOverlay }]" :disabled="!flowNodes.length" title="Toggle health/freshness overlay" @click="toggleHealthOverlay">
           <i data-lucide="heart-pulse"></i> Health
         </button>
+        <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
+          <i data-lucide="printer"></i> Export PDF
+        </button>
+        <button class="btn sm" :disabled="!flowNodes.length" title="Download the diagram as a Mermaid file" @click="exportMermaid">
+          <i data-lucide="file-code"></i> Export Mermaid
+        </button>
       </span>
       <span class="canvas-hint">Drag between handles to connect components</span>
     </header>
 
-    <div class="canvas-body">
+    <div ref="canvasBodyRef" class="canvas-body">
       <VueFlow
         :nodes="displayNodes"
         :edges="displayEdges"
@@ -192,7 +198,10 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { MarkerType, useVueFlow, VueFlow } from '@vue-flow/core'
+import { getRectOfNodes, getTransformForBounds, MarkerType, useVueFlow, VueFlow } from '@vue-flow/core'
+import { toPng } from 'html-to-image'
+import { jsPDF } from 'jspdf'
+import { useToast } from '../../composables/useToast'
 import { requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
@@ -230,7 +239,10 @@ const showHealthOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
-const { fitView, setCenter, setViewport } = useVueFlow()
+const exporting = ref(false)
+const canvasBodyRef = ref(null)
+const { fitView, setCenter, setViewport, getNodes } = useVueFlow()
+const { toast } = useToast()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
 const selectedNodeReferences = computed(() => {
@@ -618,6 +630,99 @@ const presentationForType = architectureResourcePresentation
 
 function refreshIcons() {
   nextTick(() => createIcons({ icons }))
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+// Renders the entire graph (unclipped, ignoring the current scroll/zoom) into one large
+// raster image, then embeds it in a PDF page sized to the diagram so nothing gets cut off.
+const MAX_EXPORT_DIMENSION = 6000 // px; keeps very large diagrams fast to render instead of timing out
+const EXPORT_TIMEOUT_MS = 90000
+
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_resolve, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ])
+}
+
+async function exportPdf() {
+  if (exporting.value || !flowNodes.value.length) return
+  const viewportEl = canvasBodyRef.value?.querySelector('.vue-flow__viewport')
+  const nodes = getNodes.value
+  if (!viewportEl || !nodes.length) return
+  exporting.value = true
+  try {
+    const padding = 60
+    const nodesBounds = getRectOfNodes(nodes)
+    const rawWidth = Math.max(900, Math.round(nodesBounds.width + padding * 2))
+    const rawHeight = Math.max(600, Math.round(nodesBounds.height + padding * 2))
+    const scale = Math.min(1, MAX_EXPORT_DIMENSION / Math.max(rawWidth, rawHeight))
+    const imageWidth = Math.round(rawWidth * scale)
+    const imageHeight = Math.round(rawHeight * scale)
+    // The image already reserves `padding` px of margin around the bounds above, so no
+    // extra fractional padding is needed here (vue-flow treats this arg as a ratio, not px).
+    const { x, y, zoom } = getTransformForBounds(nodesBounds, imageWidth, imageHeight, 0.02, 2, 0)
+    const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel').trim() || '#ffffff'
+    const dataUrl = await withTimeout(toPng(viewportEl, {
+      backgroundColor,
+      width: imageWidth,
+      height: imageHeight,
+      pixelRatio: scale < 1 ? 1 : 2,
+      skipFonts: true,
+      style: {
+        width: `${imageWidth}px`,
+        height: `${imageHeight}px`,
+        transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+      },
+    }), EXPORT_TIMEOUT_MS, 'PDF export timed out')
+    const pdf = new jsPDF({
+      orientation: imageWidth >= imageHeight ? 'landscape' : 'portrait',
+      unit: 'px',
+      format: [imageWidth, imageHeight],
+    })
+    pdf.addImage(dataUrl, 'PNG', 0, 0, imageWidth, imageHeight)
+    pdf.save(`${graphFileName()}.pdf`)
+  } catch {
+    toast('Could not export the PDF. Try again with fewer visible nodes (use filters).', 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function graphFileName() {
+  return (props.graph?.name || props.graph?.title || 'architecture-diagram').toString().trim().toLowerCase().replaceAll(/[^a-z0-9-]+/g, '-') || 'architecture-diagram'
+}
+
+function mermaidId(nodeId) {
+  return `n${String(nodeId).replaceAll(/[^a-zA-Z0-9]/g, '_')}`
+}
+
+function mermaidLabel(text) {
+  return String(text || '').replaceAll('"', "'")
+}
+
+function exportMermaid() {
+  const document_ = filteredGraphDocument.value
+  if (!document_.nodes.length) return
+  const direction = layoutMode.value === 'request-flow' && layoutDirection.value === 'vertical' ? 'TD' : 'LR'
+  const lines = [`flowchart ${direction}`]
+  for (const node of document_.nodes) {
+    const label = mermaidLabel(`${node.name || node.label || node.id} [${typeLabel(node.resourceType)}]`)
+    lines.push(`  ${mermaidId(node.id)}["${label}"]`)
+  }
+  for (const edge of document_.edges) {
+    if (edge.status === 'rejected') continue
+    lines.push(`  ${mermaidId(edge.sourceNodeId)} -->|${mermaidLabel(relationshipLabel(edge.relationType))}| ${mermaidId(edge.targetNodeId)}`)
+  }
+  downloadBlob(`${graphFileName()}.mmd`, new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }))
 }
 
 watch(() => props.graph, () => syncGraph(), { deep: true, immediate: true })
