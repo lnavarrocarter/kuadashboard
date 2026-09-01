@@ -10,6 +10,7 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Se agregó un botón "Export Mermaid" que descarga el diagrama actualmente visible (respetando los filtros activos de proveedor/contexto/namespace) como un archivo `.mmd` de Mermaid.
 - Se corrigió que "Export PDF" generaba una página en blanco: el zoom del diagrama se calculaba con la unidad de margen incorrecta, lo que encogía todo el diagrama hasta casi desaparecer dentro de la imagen exportada. También se agregó un límite de tamaño y un timeout con aviso de error para que exportar un diagrama muy grande falle de forma controlada en vez de quedarse colgado indefinidamente.
 
+
 ### Architecture: descubrimiento de referencias por variables de entorno de Lambda
 
 - El escaneo de inventario regional de AWS ahora infiere con qué habla una función Lambda (colas SQS, tablas DynamoDB, buckets S3, tópicos SNS) leyendo su configuración de variables de entorno — la misma metadata que `ListFunctions` ya devuelve — sin descargar ni ejecutar el código de la función.
