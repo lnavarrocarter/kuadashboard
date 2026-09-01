@@ -4,6 +4,12 @@
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 
+### Architecture Canvas: PDF and Mermaid export
+
+- Added an "Export PDF" button that renders the entire diagram (all nodes and relationships, not just what's currently visible on screen) into a print-ready PDF sized to the full graph, so large diagrams can be printed or shared without anything being cut off.
+- Added an "Export Mermaid" button that downloads the currently visible diagram (respecting active provider/context/namespace filters) as a `.mmd` Mermaid flowchart file.
+- Fixed "Export PDF" producing a blank page: the diagram's zoom was being computed with the wrong padding units, effectively shrinking the whole diagram down to almost nothing inside the exported image. Also added a size cap and a timeout with an error notice so exporting a very large diagram degrades gracefully instead of hanging indefinitely.
+
 ### Architecture: Lambda environment-variable reference discovery
 
 - The AWS regional inventory scan now infers what a Lambda function talks to (SQS queues, DynamoDB tables, S3 buckets, SNS topics) by reading its environment-variable configuration — the same metadata `ListFunctions` already returns — without downloading or running the function's code.
