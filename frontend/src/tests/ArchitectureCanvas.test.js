@@ -407,6 +407,42 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'aws-detail', node: lambdaGraph.document.nodes[0] }])
   })
 
+  it('exposes resource-level observability metrics navigation when linked', async () => {
+    const lambdaGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'aws:fn', name: 'process-order', resourceType: 'lambda' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: lambdaGraph, observabilityEnabled: true }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    const actionButtons = wrapper.findAll('.component-node-actions button')
+    expect(actionButtons).toHaveLength(3)
+
+    await actionButtons[2].trigger('click')
+    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'observability-metrics', node: lambdaGraph.document.nodes[0] }])
+  })
+
+  it('exposes resource-level observability traces for Step Functions when linked', async () => {
+    const workflowGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'aws:workflow', name: 'ProcessOrder', resourceType: 'stepfunctions', arn: 'arn:aws:states:us-east-1:123:stateMachine:orders' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: workflowGraph, observabilityEnabled: true }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    const actionButtons = wrapper.findAll('.component-node-actions button')
+    expect(actionButtons).toHaveLength(2)
+
+    await actionButtons[1].trigger('click')
+    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'observability-traces', node: workflowGraph.document.nodes[0] }])
+  })
+
   it('does not show navigation actions for unsupported resource types', async () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')

@@ -65,6 +65,38 @@ describe('APM collection controls', () => {
     wrapper.unmount()
   })
 
+  it('filters metric series to a resource opened from Architecture', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-orders', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], metricsByResourceType: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-orders' },
+        resources: [{ id: 'lambda-a', type: 'lambda', name: 'orders-handler', arn: 'arn:aws:lambda:us-east-1:123:function:orders-handler', enabled: true }],
+        edges: [],
+      })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 1, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: {
+        profileId: 'local:dev',
+        focusResource: {
+          view: 'metrics',
+          node: { provider: 'aws', resourceType: 'lambda', name: 'orders-handler', arn: 'arn:aws:lambda:us-east-1:123:function:orders-handler' },
+        },
+      },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.apm-resource-focus').text()).toContain('orders-handler')
+    expect(global.fetch.mock.calls.some(([url]) => url.includes('/series?') && url.includes('resourceId=lambda-a'))).toBe(true)
+    wrapper.unmount()
+  })
+
   it('does not collect until the user confirms the read', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])

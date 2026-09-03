@@ -230,6 +230,7 @@
               v-if="store.graph && activeView === 'canvas'"
               :graph="store.graph"
               :saving="store.saving"
+              :observability-enabled="Boolean(store.linkedApplication)"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
@@ -536,6 +537,14 @@ const KUBE_LOG_TAB_RESOURCE_TYPE = {
 
 function handleNodeAction({ action, node } = {}) {
   if (action === 'kubernetes-log-suggestions') return suggestRelationshipsFromLogs(node)
+  if (['observability-metrics', 'observability-traces'].includes(action)) {
+    if (!store.linkedApplication || !node) return
+    emit('open-observability', store.linkedApplication, {
+      view: action === 'observability-traces' ? 'traces' : 'metrics',
+      node,
+    })
+    return
+  }
   const eventName = NODE_ACTION_EVENTS[action]
   if (eventName && node) emit(eventName, node)
 }

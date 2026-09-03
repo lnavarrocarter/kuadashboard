@@ -441,6 +441,7 @@
             provider="generic"
             profile-id="local"
             :application-id="activeApplicationContext?.provider === 'generic' ? activeApplicationContext.id : ''"
+            :focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
@@ -449,6 +450,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'"
             :active-service="observabilitySelections.aws"
             :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
@@ -457,6 +459,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'"
             :active-service="observabilitySelections.gcp"
             :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
           <VercelView
@@ -464,6 +467,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
             :active-service="observabilitySelections.vercel"
             :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
           <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
@@ -719,6 +723,7 @@ const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
 const observabilityProvider = ref(LS.get('observabilityProvider', 'generic'))
+const observabilityFocus = ref(null)
 const observabilitySelections = reactive({
   generic: 'apm',
   aws: LS.get('observabilityAwsView', 'apm'),
@@ -807,13 +812,17 @@ const {
   setApplicationContext,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
-function openApplicationObservability(application) {
+function openApplicationObservability(application, focus = null) {
   if (!application?.id) return
   activeApplicationContext.value = application
   if (application.provider === 'aws') awsProfileId.value = application.profileId
   if (application.provider === 'gcp') gcpProfileId.value = application.profileId
   if (application.provider === 'vercel') vercelProfileId.value = application.profileId
   observabilityProvider.value = application.provider || 'generic'
+  if (focus?.view && Object.prototype.hasOwnProperty.call(observabilitySelections, observabilityProvider.value)) {
+    observabilitySelections[observabilityProvider.value] = 'apm'
+  }
+  observabilityFocus.value = focus
   activeProvider.value = 'observability'
   nextTick(() => createIcons({ icons }))
 }
@@ -903,6 +912,7 @@ function openArchitectureAwsLogs(resource) {
 
 async function setProvider(p) {
   if (p === 'observability' && !hasCloudConnections.value) return
+  if (p !== 'observability') observabilityFocus.value = null
   activeProvider.value = p
   if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }

@@ -211,6 +211,7 @@ import '@vue-flow/controls/dist/style.css'
 const props = defineProps({
   graph: { type: Object, required: true },
   saving: { type: Boolean, default: false },
+  observabilityEnabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action'])
 
@@ -293,6 +294,7 @@ const KUBE_LOG_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod']
 const KUBE_WORKLOAD_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet']
 const KUBE_DETAIL_KINDS = ['Pod', 'Deployment', 'StatefulSet', 'DaemonSet', 'Service', 'Ingress', 'ConfigMap', 'Secret', 'PersistentVolumeClaim']
 const AWS_DETAIL_TYPES = ['lambda', 'ec2', 'eventbridge', 'stepfunctions']
+const OBSERVABILITY_KUBE_KINDS = ['Pod', 'Deployment', 'StatefulSet', 'DaemonSet']
 const nodeActions = computed(() => {
   const node = selectedNode.value
   if (!node) return []
@@ -304,9 +306,18 @@ const nodeActions = computed(() => {
     }
     if (KUBE_DETAIL_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-detail', label: 'View detail', icon: 'file-code-2' })
     if (KUBE_WORKLOAD_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-pods', label: 'View pods', icon: 'boxes' })
+    if (props.observabilityEnabled && OBSERVABILITY_KUBE_KINDS.includes(node.kind)) {
+      actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
+    }
   } else if (AWS_DETAIL_TYPES.includes(node.resourceType)) {
     if (node.resourceType === 'lambda') actions.push({ key: 'aws-logs', label: 'View logs', icon: 'scroll-text' })
     actions.push({ key: 'aws-detail', label: 'Open in AWS view', icon: 'external-link' })
+    if (props.observabilityEnabled && ['lambda', 'ec2'].includes(node.resourceType)) {
+      actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
+    }
+    if (props.observabilityEnabled && node.resourceType === 'stepfunctions') {
+      actions.push({ key: 'observability-traces', label: 'View traces', icon: 'route' })
+    }
   }
   return actions
 })

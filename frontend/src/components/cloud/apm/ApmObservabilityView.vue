@@ -88,6 +88,11 @@
             </div>
           </section>
 
+          <section v-if="focusedResource" class="apm-resource-focus">
+            <i data-lucide="focus"></i>
+            <span><strong>Resource focus</strong><small>Metrics filtered to {{ focusedResource.name }}</small></span>
+          </section>
+
           <section class="apm-status-strip">
             <span><i data-lucide="database"></i> {{ t('apm.localStorage', { range: store.range }) }}</span>
             <span><i data-lucide="layers-3"></i> {{ t('apm.resourcesCount', { count: store.topology.resources.length }) }}</span>
@@ -472,6 +477,7 @@ const props = defineProps({
   provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
+  focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
@@ -513,6 +519,21 @@ const thresholdDefinitions = computed(() => [
 
 const metrics = computed(() => Object.fromEntries((store.overview?.metrics || []).map(metric => [metric.metricName, metric])))
 const applicationResources = computed(() => store.topology.resources || [])
+const focusNode = computed(() => props.focusResource?.node || null)
+const focusedResource = computed(() => {
+  const node = focusNode.value
+  if (!node) return null
+  const canonical = store.registry?.resources?.find(resource => resource.id === node.registryResourceId)
+  const identifiers = [node.arn, node.nativeId, node.discoveryKey, canonical?.nativeIdentifier].filter(Boolean)
+  const matchesIdentifier = resource => identifiers.some(identifier => [resource.id, resource.arn, resource.key].includes(identifier))
+  const matchesType = resource => node.provider === 'kubernetes'
+    ? resource.type === 'kubernetes' && (!node.kind || resource.kind === node.kind)
+    : resource.type === node.resourceType
+  return applicationResources.value.find(resource => matchesIdentifier(resource) && matchesType(resource))
+    || applicationResources.value.find(resource => resource.name === node.name && matchesType(resource))
+    || null
+})
+const visibleResources = computed(() => focusedResource.value ? [focusedResource.value] : applicationResources.value)
 const hasLambdaResources = computed(() => applicationResources.value.some(resource => resource.type === 'lambda'))
 const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
 // These are read from CloudWatch, which bills per request, so the confirmation must say so.
@@ -560,7 +581,7 @@ const healthLabel = computed(() => {
 })
 
 const metricSections = computed(() => buildResourceMetricSections({
-  resources: applicationResources.value,
+  resources: visibleResources.value,
   metricsByResourceType: store.overview?.metricsByResourceType || [],
 }))
 const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
@@ -613,7 +634,9 @@ function kpiDetail(item) {
 
 async function loadCharts() {
   if (!store.selectedApplicationId) return
+  const resourceId = focusedResource.value?.id || ''
   await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
+    resourceId,
     resourceType: chart.resourceType,
     kind: chart.kind,
     key: seriesKey(chart),
@@ -841,6 +864,19 @@ function renderIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
+async function applyResourceFocus() {
+  const focus = props.focusResource
+  selectedResourceId.value = focusedResource.value?.id || ''
+  activeView.value = focus?.view === 'traces' && hasTraceResources.value ? 'traces' : 'overview'
+  store.series = {}
+  if (activeView.value === 'traces' && focusNode.value?.arn) {
+    await traceProcess(focusNode.value.arn, false)
+  } else if (focusedResource.value) {
+    await loadCharts()
+  }
+  renderIcons()
+}
+
 watch(() => props.profileId, async profileId => {
   store.setActiveProfile(profileId, props.provider)
   if (profileId) {
@@ -855,6 +891,10 @@ watch(() => props.provider, async provider => {
   if (props.profileId) await refreshLocal()
 })
 watch(activeView, () => mainEl.value?.scrollTo?.({ top: 0 }))
+watch([
+  () => props.focusResource,
+  () => applicationResources.value.map(resource => resource.id).join('|'),
+], applyResourceFocus, { immediate: true, deep: true })
 // Chart definitions now depend on which resource types the application actually has,
 // so they can resolve after loadCharts() already ran; reload whenever the set changes.
 watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) => {
@@ -867,6 +907,9 @@ defineExpose({ refreshLocal })
 
 <style scoped>
 .apm-view { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.apm-resource-focus { display: flex; align-items: center; gap: 8px; margin: 10px 12px 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, #58a6ff 45%, var(--border)); background: color-mix(in srgb, #58a6ff 10%, var(--surface)); color: #58a6ff; }
+.apm-resource-focus span { display: flex; flex-direction: column; gap: 2px; }
+.apm-resource-focus small { color: var(--text-dim); font-size: 10px; }
 .apm-toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border); padding: 8px 12px; }
 .apm-title, .apm-title span { min-width: 0; display: flex; align-items: center; gap: 9px; }
 .apm-title > svg { width: 21px; height: 21px; color: #3fb950; }
