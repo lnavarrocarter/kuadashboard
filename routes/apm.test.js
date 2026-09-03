@@ -302,6 +302,7 @@ test('cloud topology analysis is explicit and never confirms ASL suggestions aut
     assert.equal(analysis.status, 200);
     assert.equal(analysis.body.analysis.suggestions[0].confirmed, false);
     assert.equal(analysis.body.analysis.cloudScan.requests, 1);
+    assert.equal(analysis.body.analysis.cloudScan.suggestions[0].relationType, 'invokes');
     assert.equal(subject.database.listEdges(application.body.id).length, 0);
     assert.equal(calls[0].application.profileId, 'local:dev');
     assert.deepEqual(calls[0].resources.map(resource => resource.id).sort(), ['flow', 'worker']);

@@ -110,9 +110,9 @@
             <span v-if="store.syncStatus?.lastError" class="registry-sync-item partial" :title="store.syncStatus.lastError">
               <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
             </span>
-            <span v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item partial">
+            <button v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item pending-review" @click="openRegistryResources">
               <i data-lucide="alert-triangle"></i> {{ t('apm.divergentResources', { count: store.syncStatus.divergentResourceCount }) }}
-            </span>
+            </button>
             <button
               v-if="store.syncStatus?.divergentRelationshipCount"
               class="registry-sync-item pending-review"
@@ -131,7 +131,7 @@
             <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'">{{ t('apm.overview') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
             <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
-            <button :class="{ active: activeView === 'resources' }" @click="activeView = 'resources'">{{ t('apm.resources') }}</button>
+            <button :class="{ active: activeView === 'resources' }" @click="openRegistryResources">{{ t('apm.resources') }}</button>
             <button :class="{ active: activeView === 'relationships' }" @click="activeView = 'relationships'">
               {{ t('apm.relationships') }}
               <span v-if="pendingRelationships.length" class="tab-badge">{{ pendingRelationships.length }}</span>
@@ -191,8 +191,10 @@
             :selected-resource-id="selectedResourceId"
             :can-analyze-cloud="canAnalyzeCloudTopology"
             :analyzing-cloud="store.analyzingTopology"
+            :confirming-suggestions="confirmingSuggestions"
             @select="selectResource"
             @confirm-dependency="confirmDependency"
+            @confirm-all-dependencies="confirmAllDependencies"
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
           />
@@ -253,15 +255,28 @@
             </template>
           </section>
 
-          <section v-else class="resource-table-wrap">
+          <section v-else-if="activeView === 'resources'" class="resource-table-wrap">
             <table class="cloud-table">
-              <thead><tr><th>{{ t('apm.resource') }}</th><th>{{ t('apm.source') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('apm.status') }}</th><th>{{ t('apm.actions') }}</th></tr></thead>
-              <tbody>
+              <thead><tr><th>{{ t('apm.resource') }}</th><th>{{ t('apm.source') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('apm.status') }}</th><th>{{ t('apm.divergenceReason') }}</th><th>{{ t('apm.actions') }}</th></tr></thead>
+              <tbody v-if="store.registry">
+                <tr v-for="resource in registryResources" :key="resource.id" :class="{ pending: resource.divergent }">
+                  <td><strong>{{ resource.displayName }}</strong><small>{{ resource.provider }} / {{ resource.resourceType }}</small></td>
+                  <td><small>{{ resource.sources.map(registrySourceLabel).join(', ') }}</small></td>
+                  <td class="text-dim">{{ [resource.scopeId, resource.location].filter(Boolean).join(' / ') || '—' }}</td>
+                  <td><span :class="resource.divergent ? 'status-warn' : resource.correlatable ? 'status-ok' : 'text-dim'">{{ resource.divergent ? t('apm.divergent') : resource.correlatable ? t('apm.correlated') : t('apm.topologyOnly') }}</span></td>
+                  <td><small>{{ divergenceReason(resource) }}</small></td>
+                  <td>
+                    <button v-if="resource.divergent" class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry"><i data-lucide="refresh-cw"></i> {{ t('apm.retrySync') }}</button>
+                  </td>
+                </tr>
+              </tbody>
+              <tbody v-else>
                 <tr v-for="resource in store.topology.resources" :key="resource.id">
                   <td><strong>{{ resource.name }}</strong><small>{{ apmResourceLabel(resource) }}</small></td>
                   <td>{{ resource.associationSource }}</td>
                   <td class="text-dim">{{ apmResourceLocation(resource) }}</td>
                   <td><span :class="resource.enabled ? 'status-ok' : 'text-dim'">{{ resource.enabled ? t('apm.enabled') : t('apm.paused') }}</span></td>
+                  <td><small>{{ t('apm.divergenceNotAvailable') }}</small></td>
                   <td>
                     <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
                     <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
@@ -503,6 +518,7 @@ const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyP
 const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true })
 const activeView = ref('overview')
 const selectedResourceId = ref('')
+const confirmingSuggestions = ref(false)
 const mainEl = ref(null)
 const thresholdDefinitions = computed(() => [
   { key: 'errorRatePercent', label: t('apm.threshold.errorRate'), description: t('apm.threshold.errorRateHint'), min: 0, max: 100, step: 0.1 },
@@ -567,6 +583,11 @@ const collectedSections = computed(() => metricSections.value.filter(section => 
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
 
 const registryRelationships = computed(() => store.registry?.relationships || [])
+const registryResources = computed(() => {
+  const resources = store.registry?.resources || []
+  return [...resources].sort((left, right) => Number(right.divergent) - Number(left.divergent) ||
+    left.displayName.localeCompare(right.displayName))
+})
 const pendingRelationships = computed(() => registryRelationships.value.filter(item => item.divergent))
 // Pending ones first: this view exists to clear them, not to browse the confirmed ones.
 const reviewableRelationships = computed(() => [
@@ -579,6 +600,19 @@ function relationshipEvidence(item) {
   return types.join(', ') || '-'
 }
 
+function registrySourceLabel(source) {
+  return source === 'apm_resource' ? 'APM' : source === 'architecture_node' ? 'Architecture' : source
+}
+
+function divergenceReason(resource) {
+  if (!resource.correlatable) return t('apm.divergenceNotApplicable')
+  if (!resource.divergent) return t('apm.divergenceNone')
+  const sources = new Set(resource.sources || [])
+  if (!sources.has('apm_resource')) return t('apm.divergenceMissingApm')
+  if (!sources.has('architecture_node')) return t('apm.divergenceMissingArchitecture')
+  return t('apm.divergenceIncomplete')
+}
+
 // A status the UI does not know yet must read as itself, never as a raw translation key.
 function relationshipStatusLabel(status) {
   const key = `apm.relationshipStatus.${status}`
@@ -588,6 +622,12 @@ function relationshipStatusLabel(status) {
 
 async function reviewRelationship(item, decision) {
   await store.reviewRegistryRelationship(item.id, decision)
+}
+
+async function openRegistryResources() {
+  activeView.value = 'resources'
+  await store.loadRegistry()
+  renderIcons()
 }
 // What a collection will actually read, so the confirmation is not just about Lambda.
 const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({
@@ -794,6 +834,18 @@ async function confirmDependency(dependency) {
   await store.confirmDependency(store.selectedApplicationId, dependency)
   if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
   renderIcons()
+}
+
+async function confirmAllDependencies(dependencies) {
+  if (!store.selectedApplicationId || !dependencies.length) return
+  confirmingSuggestions.value = true
+  try {
+    await store.confirmDependencies(store.selectedApplicationId, dependencies)
+    if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
+    renderIcons()
+  } finally {
+    confirmingSuggestions.value = false
+  }
 }
 
 async function analyzeCloudTopology() {

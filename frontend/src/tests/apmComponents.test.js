@@ -512,9 +512,44 @@ describe('APM topology intelligence', () => {
     expect(wrapper.text()).toContain('shared name: gasco, orders')
     await wrapper.find('.suggestion-row button').trigger('click')
     expect(wrapper.emitted('confirm-dependency')[0][0].confirmed).toBe(false)
+    await wrapper.find('.suggestion-heading button').trigger('click')
+    expect(wrapper.emitted('confirm-all-dependencies')[0][0]).toHaveLength(1)
     await wrapper.find('.analysis-heading button').trigger('click')
     expect(wrapper.emitted('analyze-cloud')).toHaveLength(1)
     await wrapper.find('.unresolved-row button').trigger('click')
     expect(wrapper.emitted('add-cloud-resource')[0][0].candidate.name).toBe('shared-worker')
+  })
+})
+
+describe('APM registry resources', () => {
+  it('marks Architecture-only resources and explains that Observability is missing them', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', architectureProjectId: 'project-a' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'healthy', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [], analysis: {} })
+      if (url.includes('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/registry')) return response({
+        resources: [{
+          id: 'resource-a', provider: 'aws', resourceType: 'lambda', displayName: 'orders-worker',
+          scopeId: '123456789012', location: 'us-east-1', sources: ['architecture_node'], correlatable: true, divergent: true,
+        }], relationships: [], syncStatus: null,
+      })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev' },
+      global: { stubs: { teleport: true } },
+    })
+    await flushPromises()
+
+    await [...wrapper.findAll('.apm-view-tabs button')].find(button => button.text().includes('Resources')).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('orders-worker')
+    expect(wrapper.text()).toContain('Divergent')
+    expect(wrapper.text()).toContain('Architecture only: this resource is not present in Observability.')
+    wrapper.unmount()
   })
 })
