@@ -21,6 +21,18 @@ beforeEach(() => {
 })
 
 describe('architecture workspace', () => {
+  it('loads the cross-provider application catalog without a profile header', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toBe('/api/architecture/applications/catalog')
+      expect(options.headers).toEqual({})
+      return response([{ id: 'application-a', name: 'Orders', provider: 'kubernetes', profileId: 'local:dev' }])
+    })
+
+    await expect(store.loadApplicationCatalog()).resolves.toHaveLength(1)
+    expect(store.applications[0].provider).toBe('kubernetes')
+    expect(store.selectedApplicationId).toBeNull()
+  })
+
   it('loads the KUA Application catalog and scopes projects to the selected application', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(options.headers['X-Profile-Id']).toBe('local:dev')

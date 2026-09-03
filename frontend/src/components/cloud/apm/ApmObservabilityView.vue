@@ -626,7 +626,7 @@ async function reviewRelationship(item, decision) {
 
 async function openRegistryResources() {
   activeView.value = 'resources'
-  await store.loadRegistry()
+  await store.loadRegistrySyncStatus()
   renderIcons()
 }
 // What a collection will actually read, so the confirmation is not just about Lambda.

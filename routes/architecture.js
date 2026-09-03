@@ -91,6 +91,13 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     res.json(apmDatabase.listApplications({ profileId: profile }));
   });
 
+  // Used only by the first Architecture screen, before a KUA Application has
+  // supplied the profile scope needed by the rest of the workspace.
+  router.get('/applications/catalog', (req, res) => {
+    if (!apmDatabase) return res.json([]);
+    res.json(apmDatabase.listApplications());
+  });
+
   router.post('/projects', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;

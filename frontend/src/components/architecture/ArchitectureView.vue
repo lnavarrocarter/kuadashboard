@@ -34,10 +34,29 @@
       </div>
     </header>
 
-    <div v-if="!profileId" class="architecture-empty">
-      <i data-lucide="cloud-cog"></i>
-      <strong>Select an application profile</strong>
-      <span>Architecture projects are isolated by their KUA Application profile.</span>
+    <div v-if="!profileId" class="architecture-empty architecture-application-picker">
+      <i data-lucide="boxes"></i>
+      <strong>Select a KUA application</strong>
+      <span>Choose an application to open its Architecture workspace.</span>
+      <div v-if="store.loading" class="architecture-empty compact">Loading applications...</div>
+      <div v-else-if="store.applications.length" class="architecture-first-access-list">
+        <button
+          v-for="application in store.applications"
+          :key="application.id"
+          class="architecture-first-access-row"
+          @click="selectApplication(application.id)"
+        >
+          <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
+          <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template><template v-if="application.team"> · {{ application.team }}</template></small></span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
+      <template v-else-if="!store.error">
+        <span>No KUA applications are configured yet.</span>
+        <button class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Refresh</button>
+      </template>
+      <button v-if="store.error" class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Retry</button>
+      <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
     </div>
 
     <template v-else>
@@ -347,7 +366,10 @@ async function loadProfile(profileId) {
   selectedWorkflow.value = null
   store.setActiveProfile(profileId || null)
   awsStore.setActiveProfile(profileId || null)
-  if (!profileId) return nextTick(() => createIcons({ icons }))
+  if (!profileId) {
+    await store.loadApplicationCatalog()
+    return nextTick(() => createIcons({ icons }))
+  }
   const applications = await store.loadApplications()
   if (props.applicationId && applications.some(application => application.id === props.applicationId)) {
     await store.selectApplication(props.applicationId)
@@ -378,7 +400,17 @@ async function refreshWorkspace() {
 }
 
 async function selectApplication(applicationId) {
+  if (!profileId) {
+    const application = store.applications.find(item => item.id === applicationId)
+    if (application) emit('application-context', application)
+    return
+  }
   await store.selectApplication(applicationId)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function refreshApplicationCatalog() {
+  await store.loadApplicationCatalog()
   nextTick(() => createIcons({ icons }))
 }
 
@@ -572,6 +604,13 @@ onMounted(() => loadProfile(props.profileId))
 
 <style scoped>
 .architecture-view { min-height: 100%; display: flex; flex-direction: column; color: var(--text); }
+.architecture-application-picker { flex: 1; min-height: 260px; }
+.architecture-first-access-list { width: min(520px, 100%); display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.architecture-first-access-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: inherit; text-align: left; cursor: pointer; }
+.architecture-first-access-row:hover { border-color: #3fb950; background: var(--bg-hover); }
+.architecture-first-access-row > span:nth-child(2) { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.architecture-first-access-row small { color: var(--text-dim); }
+.architecture-first-access-row > svg { color: var(--text-dim); width: 15px; }
 .bundle-file-input { display: none; }
 .architecture-toolbar { min-height: 58px; padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .architecture-title, .architecture-actions, .architecture-project-header, .snapshot-form { display: flex; align-items: center; gap: 10px; }

@@ -105,7 +105,7 @@
             <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider.toUpperCase() }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
           </span>
         </template>
-        <template v-else-if="activeProvider === 'architecture'">
+        <template v-else-if="activeProvider === 'architecture' && architectureProjectId">
           <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
             <option value="">{{ t('aws.noProfile') }}</option>
             <optgroup v-if="envStore.awsProfiles.length" :label="t('nav.storedProfiles')">
@@ -115,6 +115,9 @@
               <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
             </optgroup>
           </select>
+        </template>
+        <template v-else-if="activeProvider === 'architecture'">
+          <span class="header-architecture-hint">Select a KUA application below</span>
         </template>
       </div>
       <div class="header-right">

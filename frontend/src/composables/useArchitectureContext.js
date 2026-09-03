@@ -15,7 +15,10 @@ export function useArchitectureContext({ storage, awsProfileId, setProvider }) {
 
   const architectureProjectId = ref(storage.get('architectureProject', ''))
   const activeApplicationContext = ref(loadStoredApplicationContext())
-  const architectureProfileId = computed(() => activeApplicationContext.value?.profileId ?? awsProfileId.value)
+  // A fresh Architecture entry should be application-first. Keep the AWS fallback
+  // only for legacy, unlinked projects that still need the old profile-scoped path.
+  const architectureProfileId = computed(() => activeApplicationContext.value?.profileId
+    ?? (architectureProjectId.value ? awsProfileId.value : ''))
 
   watch(architectureProjectId, v => storage.set('architectureProject', v))
   watch(activeApplicationContext, v => storage.set('architectureApplication', v?.id ? JSON.stringify(v) : ''), { deep: true })

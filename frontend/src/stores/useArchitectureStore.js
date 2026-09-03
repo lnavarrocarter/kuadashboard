@@ -87,6 +87,21 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function loadApplicationCatalog() {
+    loading.value = true
+    error.value = null
+    try {
+      applications.value = await apiFetch('/api/architecture/applications/catalog')
+      selectedApplicationId.value = null
+      return applications.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function loadProjects({ preserveSelection = true, applicationId = '' } = {}) {
     if (!activeProfileId.value) return []
     loading.value = true
@@ -598,6 +613,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importAwsResources,
     importKubernetesResources,
     importKuaApp,
+    loadApplicationCatalog,
     loadAwsDeployments,
     loadKubernetesContexts,
     loadApplications,
