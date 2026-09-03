@@ -27,6 +27,7 @@
           <th>Sources</th>
           <th>Status</th>
           <th>Relations</th>
+          <th v-if="$slots.actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -47,6 +48,7 @@
               <i data-lucide="alert-triangle"></i> {{ divergentRelationshipCount(resource.id) }} pending review
             </span>
           </td>
+          <td v-if="$slots.actions"><slot name="actions" :resource="resource.sourceResource || resource"></slot></td>
         </tr>
       </tbody>
     </table>
@@ -59,11 +61,25 @@ import { computed } from 'vue'
 const props = defineProps({
   graph: { type: Object, default: null },
   registry: { type: Object, default: null },
+  fallbackResources: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
 })
 defineEmits(['refresh'])
 
-const resources = computed(() => props.registry?.resources || [])
+const resources = computed(() => props.registry
+  ? props.registry.resources || []
+  : props.fallbackResources.map(resource => ({
+    id: resource.id,
+    provider: resource.provider || resource.type || 'unknown',
+    resourceType: resource.kind || resource.type || 'resource',
+    displayName: resource.name || resource.id,
+    scopeId: resource.kubeContext || resource.namespace || '',
+    location: resource.region || '',
+    sources: [resource.associationSource || 'apm_resource'],
+    correlatable: false,
+    divergent: false,
+    sourceResource: resource,
+  })))
 const relationships = computed(() => props.registry?.relationships || [])
 
 // Cross-reference registry resources with their live Architecture node for an operational status,

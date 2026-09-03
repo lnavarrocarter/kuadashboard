@@ -34,6 +34,7 @@ export const useApmStore = defineStore('apm', () => {
   const architectureProjects = ref([])
   const linkingArchitecture = ref(false)
   const registry = ref(null)
+  const registryLoading = ref(false)
   const reconcilingRegistry = ref(false)
   const reviewingRelationshipId = ref('')
   const syncStatus = ref(null)
@@ -78,6 +79,7 @@ export const useApmStore = defineStore('apm', () => {
     architectureLink.value = null
     architectureProjects.value = []
     registry.value = null
+    registryLoading.value = false
     syncStatus.value = null
     kubernetesPreview.value = null
     kubernetesPreviewScopeKey.value = ''
@@ -325,12 +327,15 @@ export const useApmStore = defineStore('apm', () => {
   // Non-blocking: diagnostics should never delay the main application overview.
   async function loadRegistrySyncStatus(applicationId = selectedApplicationId.value) {
     if (!applicationId) return null
+    registryLoading.value = true
     try {
       registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers() })
       syncStatus.value = registry.value?.syncStatus || null
       return syncStatus.value
     } catch (_) {
       return null
+    } finally {
+      registryLoading.value = false
     }
   }
 
@@ -620,6 +625,7 @@ export const useApmStore = defineStore('apm', () => {
     createArchitectureProjectLink,
     unlinkArchitectureProject,
     reconcileSharedRegistry,
+    registryLoading,
     loadRegistrySyncStatus,
     reviewRegistryRelationship,
     previewKubernetesDiscovery,

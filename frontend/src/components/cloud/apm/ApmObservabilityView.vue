@@ -255,36 +255,19 @@
             </template>
           </section>
 
-          <section v-else-if="activeView === 'resources'" class="resource-table-wrap">
-            <table class="cloud-table">
-              <thead><tr><th>{{ t('apm.resource') }}</th><th>{{ t('apm.source') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('apm.status') }}</th><th>{{ t('apm.divergenceReason') }}</th><th>{{ t('apm.actions') }}</th></tr></thead>
-              <tbody v-if="store.registry">
-                <tr v-for="resource in registryResources" :key="resource.id" :class="{ pending: resource.divergent }">
-                  <td><strong>{{ resource.displayName }}</strong><small>{{ resource.provider }} / {{ resource.resourceType }}</small></td>
-                  <td><small>{{ resource.sources.map(registrySourceLabel).join(', ') }}</small></td>
-                  <td class="text-dim">{{ [resource.scopeId, resource.location].filter(Boolean).join(' / ') || '—' }}</td>
-                  <td><span :class="resource.divergent ? 'status-warn' : resource.correlatable ? 'status-ok' : 'text-dim'">{{ resource.divergent ? t('apm.divergent') : resource.correlatable ? t('apm.correlated') : t('apm.topologyOnly') }}</span></td>
-                  <td><small>{{ divergenceReason(resource) }}</small></td>
-                  <td>
-                    <button v-if="resource.divergent" class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry"><i data-lucide="refresh-cw"></i> {{ t('apm.retrySync') }}</button>
-                  </td>
-                </tr>
-              </tbody>
-              <tbody v-else>
-                <tr v-for="resource in store.topology.resources" :key="resource.id">
-                  <td><strong>{{ resource.name }}</strong><small>{{ apmResourceLabel(resource) }}</small></td>
-                  <td>{{ resource.associationSource }}</td>
-                  <td class="text-dim">{{ apmResourceLocation(resource) }}</td>
-                  <td><span :class="resource.enabled ? 'status-ok' : 'text-dim'">{{ resource.enabled ? t('apm.enabled') : t('apm.paused') }}</span></td>
-                  <td><small>{{ t('apm.divergenceNotAvailable') }}</small></td>
-                  <td>
-                    <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
-                    <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          <ArchitectureResources
+            v-else-if="activeView === 'resources'"
+            :graph="null"
+            :registry="store.registry"
+            :fallback-resources="store.topology.resources"
+            :loading="store.registryLoading"
+            @refresh="refreshRegistry"
+          >
+            <template #actions="{ resource }">
+              <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
+              <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
+            </template>
+          </ArchitectureResources>
         </template>
       </main>
     </div>
@@ -481,6 +464,7 @@ import { useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
+import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
 import { buildResourceMetricSections, seriesKey } from './metricCatalog'
 
@@ -583,11 +567,6 @@ const collectedSections = computed(() => metricSections.value.filter(section => 
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
 
 const registryRelationships = computed(() => store.registry?.relationships || [])
-const registryResources = computed(() => {
-  const resources = store.registry?.resources || []
-  return [...resources].sort((left, right) => Number(right.divergent) - Number(left.divergent) ||
-    left.displayName.localeCompare(right.displayName))
-})
 const pendingRelationships = computed(() => registryRelationships.value.filter(item => item.divergent))
 // Pending ones first: this view exists to clear them, not to browse the confirmed ones.
 const reviewableRelationships = computed(() => [
@@ -598,19 +577,6 @@ const reviewableRelationships = computed(() => [
 function relationshipEvidence(item) {
   const types = [...new Set((item.evidence || []).map(entry => entry.type || entry.kind).filter(Boolean))]
   return types.join(', ') || '-'
-}
-
-function registrySourceLabel(source) {
-  return source === 'apm_resource' ? 'APM' : source === 'architecture_node' ? 'Architecture' : source
-}
-
-function divergenceReason(resource) {
-  if (!resource.correlatable) return t('apm.divergenceNotApplicable')
-  if (!resource.divergent) return t('apm.divergenceNone')
-  const sources = new Set(resource.sources || [])
-  if (!sources.has('apm_resource')) return t('apm.divergenceMissingApm')
-  if (!sources.has('architecture_node')) return t('apm.divergenceMissingArchitecture')
-  return t('apm.divergenceIncomplete')
 }
 
 // A status the UI does not know yet must read as itself, never as a raw translation key.
@@ -628,6 +594,10 @@ async function openRegistryResources() {
   activeView.value = 'resources'
   await store.loadRegistrySyncStatus()
   renderIcons()
+}
+
+async function refreshRegistry() {
+  await store.loadRegistrySyncStatus()
 }
 // What a collection will actually read, so the confirmation is not just about Lambda.
 const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({

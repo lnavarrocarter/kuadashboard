@@ -60,7 +60,7 @@ describe('APM collection controls', () => {
     expect(wrapper.get('.kpi-grid').text()).not.toContain('Observed invocations')
 
     await wrapper.findAll('.apm-view-tabs button').find(button => button.text().includes('Resources')).trigger('click')
-    await wrapper.get('.resource-table-wrap button').trigger('click')
+    await wrapper.get('.architecture-resources tbody button').trigger('click')
     expect(wrapper.emitted('open-kubernetes-logs')[0][0]).toMatchObject({ name: 'api', kubeContext: 'orders-eks', kind: 'Deployment' })
     wrapper.unmount()
   })
@@ -548,8 +548,8 @@ describe('APM registry resources', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('orders-worker')
-    expect(wrapper.text()).toContain('Divergent')
-    expect(wrapper.text()).toContain('Architecture only: this resource is not present in Observability.')
+    expect(wrapper.text()).toContain('Architecture')
+    expect(wrapper.text()).toContain('Single source')
     wrapper.unmount()
   })
 })
