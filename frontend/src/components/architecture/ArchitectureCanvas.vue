@@ -45,6 +45,9 @@
         <button :class="['btn', 'sm', { primary: showHealthOverlay }]" :disabled="!flowNodes.length" title="Toggle health/freshness overlay" @click="toggleHealthOverlay">
           <i data-lucide="heart-pulse"></i> Health
         </button>
+        <button :class="['btn', 'sm', { primary: showMetricsOverlay }]" :disabled="metricsLoading || !flowNodes.length" title="Toggle resource metrics overlay" @click="toggleMetricsOverlay">
+          <i :data-lucide="metricsLoading ? 'loader-2' : 'chart-no-axes-combined'"></i> Metrics
+        </button>
         <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
           <i data-lucide="printer"></i> Export PDF
         </button>
@@ -90,6 +93,13 @@
               :class="['node-health-badge', `node-health-badge--${data.health.status}`]"
               :title="data.health.label"
             ></span>
+            <span v-if="data.metrics" class="node-metrics">
+              <small v-if="data.metrics.loading">Loading metrics…</small>
+              <small v-else-if="!data.metrics.items.length">No metric data</small>
+              <span v-else v-for="metric in data.metrics.items" :key="metric.key" class="node-metric">
+                <small>{{ metric.label }}</small><strong>{{ metric.value }}</strong>
+              </span>
+            </span>
           </div>
         </template>
         <template #node-resource-section="{ data }">
@@ -212,8 +222,10 @@ const props = defineProps({
   graph: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   observabilityEnabled: { type: Boolean, default: false },
+  metrics: { type: Object, default: () => ({}) },
+  metricsLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow', 'node-action'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics'])
 
 const nodeTypes = [
   { value: 'service', label: 'Service' },
@@ -237,6 +249,7 @@ const resourceSections = ref([])
 const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
 const showHealthOverlay = ref(false)
+const showMetricsOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -393,6 +406,11 @@ function nodeHealthOverlay(node) {
   return null
 }
 
+function nodeMetricsOverlay(node) {
+  if (!showMetricsOverlay.value) return null
+  return props.metrics[node.id] || { loading: props.metricsLoading, items: [] }
+}
+
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
@@ -405,6 +423,7 @@ function syncGraph(hydrateView = true) {
     }
     showEdgeLabels.value = document.view.showEdgeLabels === true
     showHealthOverlay.value = document.view.showHealthOverlay === true
+    showMetricsOverlay.value = document.view.showMetricsOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -430,6 +449,7 @@ function syncGraph(hydrateView = true) {
         method: route?.method || '',
         resourceType: node.resourceType || 'service',
         health: nodeHealthOverlay(node),
+        metrics: nodeMetricsOverlay(node),
       },
     }
   })
@@ -489,6 +509,7 @@ function persistView() {
       layoutDirection: layoutDirection.value,
       showEdgeLabels: showEdgeLabels.value,
       showHealthOverlay: showHealthOverlay.value,
+      showMetricsOverlay: showMetricsOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -503,6 +524,12 @@ function toggleEdgeLabels() {
 
 function toggleHealthOverlay() {
   showHealthOverlay.value = !showHealthOverlay.value
+  persistView()
+}
+
+function toggleMetricsOverlay() {
+  showMetricsOverlay.value = !showMetricsOverlay.value
+  if (showMetricsOverlay.value && !Object.keys(props.metrics).length) emit('request-metrics')
   persistView()
 }
 
@@ -741,7 +768,7 @@ watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay], () => syncGraph(false))
+watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, () => props.metrics, () => props.metricsLoading], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -764,6 +791,10 @@ onMounted(refreshIcons)
 .node-health-badge--healthy { background: #3fb950; }
 .node-health-badge--degraded { background: #d29922; }
 .node-health-badge--stale { background: #6e7781; }
+.node-metrics { display: flex; flex-wrap: wrap; gap: 4px 7px; margin-left: 4px; padding-left: 6px; border-left: 1px solid var(--border); color: var(--text-dim); font-size: 9px; }
+.node-metric { display: inline-flex; align-items: baseline; gap: 3px; }
+.node-metric small { margin: 0; font-size: 8px; }
+.node-metric strong { color: var(--text); font-size: 9px; }
 .component-metadata { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .component-metadata > span { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 7px; align-items: baseline; }
 .component-metadata small { color: var(--text-dim); font-size: 10px; }

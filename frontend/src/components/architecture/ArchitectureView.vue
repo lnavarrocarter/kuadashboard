@@ -231,9 +231,12 @@
               :graph="store.graph"
               :saving="store.saving"
               :observability-enabled="Boolean(store.linkedApplication)"
+              :metrics="metricsByNode"
+              :metrics-loading="metricsLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
+              @request-metrics="loadOperationalMetrics"
             />
 
             <ArchitectureResources
@@ -292,6 +295,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useApmStore } from '../../stores/useApmStore'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useToast } from '../../composables/useToast'
@@ -303,6 +307,7 @@ import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscov
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
+import { catalogFor } from '../cloud/apm/metricCatalog'
 
 const props = defineProps({
   profileId: { type: String, default: '' },
@@ -315,6 +320,7 @@ const emit = defineEmits([
   'open-aws-resource', 'open-aws-logs',
 ])
 const store = useArchitectureStore()
+const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
 const { toast } = useToast()
@@ -357,6 +363,18 @@ const syncRelationshipSections = computed(() => [
   ['new', 'New relationships'], ['reinforced', 'Reinforced relationships'], ['missingEvidence', 'Relationships missing evidence'], ['rejected', 'Rejected relationships'], ['manual', 'Manual relationships'],
 ].map(([key, label]) => ({ key: `relationship:${key}`, label, items: store.syncPreview?.relationships?.[key] || [] })))
 const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
+const metricsByNode = ref({})
+const metricsLoading = ref(false)
+
+const METRIC_LABELS = {
+  invocations_observed: 'Invocations',
+  errors_observed: 'Errors',
+  duration_ms: 'Duration',
+  cpu_cores: 'CPU',
+  memory_bytes: 'Memory',
+  log_bytes: 'Logs',
+  pods_ready: 'Ready pods',
+}
 
 function syncCountItems(counts = {}, labels) {
   return Object.entries(labels).map(([key, label]) => ({ key, label, count: counts?.[key] || 0 }))
@@ -398,6 +416,55 @@ async function refreshWorkspace() {
     await store.loadProjects({ applicationId: '' })
   }
   nextTick(() => createIcons({ icons }))
+}
+
+function sameApmResource(resource, node) {
+  const typeMatches = node.provider === 'kubernetes'
+    ? resource.type === 'kubernetes' && (!node.kind || resource.kind === node.kind)
+    : resource.type === node.resourceType
+  if (!typeMatches) return false
+  const identities = [node.arn, node.nativeId, node.discoveryKey].filter(Boolean)
+  if (identities.some(identity => [resource.id, resource.arn, resource.key].includes(identity))) return true
+  return resource.name === node.name
+}
+
+function formatMetricValue(value, unit) {
+  if (value == null) return null
+  if (unit === 'bytes') {
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GiB`
+    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} KiB`
+    return `${Math.round(value)} B`
+  }
+  return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ''}`
+}
+
+async function loadOperationalMetrics() {
+  const application = store.linkedApplication
+  if (!application?.id || !application.profileId) return
+  metricsLoading.value = true
+  metricsByNode.value = {}
+  try {
+    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    await apmStore.selectApplication(application.id)
+    const resources = apmStore.topology.resources || []
+    const nextMetrics = {}
+    for (const node of store.graph?.document?.nodes || []) {
+      const resource = resources.find(candidate => sameApmResource(candidate, node))
+      if (!resource) continue
+      const charts = catalogFor(resource.type, resource.kind).charts || []
+      const items = []
+      for (const chart of charts) {
+        const points = await apmStore.loadSeries(chart.metric, { resourceId: resource.id })
+        const value = formatMetricValue(points.at(-1)?.v, chart.unit)
+        if (value != null) items.push({ key: chart.metric, label: METRIC_LABELS[chart.metric] || chart.metric, value })
+      }
+      nextMetrics[node.id] = { loading: false, items }
+    }
+    metricsByNode.value = nextMetrics
+  } finally {
+    metricsLoading.value = false
+  }
 }
 
 async function selectApplication(applicationId) {

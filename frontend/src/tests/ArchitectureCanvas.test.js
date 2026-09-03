@@ -195,7 +195,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
         },
       },
@@ -249,7 +249,7 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
-        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true,
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false,
         providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       },
     })
@@ -257,6 +257,26 @@ describe('ArchitectureCanvas', () => {
     expect(nodes.find(node => node.id === 'deploy').data.health).toEqual({ status: 'degraded', label: 'Degraded' })
     expect(nodes.find(node => node.id === 'svc').data.health).toEqual({ status: 'healthy', label: 'Healthy' })
     expect(nodes.find(node => node.id === 'stale-node').data.health.status).toBe('stale')
+  })
+
+  it('shows opt-in metric summaries on canvas nodes', async () => {
+    const metricsGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'worker', name: 'Worker', resourceType: 'lambda' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: metricsGraph, metrics: { worker: { loading: false, items: [{ key: 'duration_ms', label: 'Duration', value: '42 ms' }] } } },
+      global: { stubs },
+    })
+
+    await wrapper.get('button[title="Toggle resource metrics overlay"]').trigger('click')
+    const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'worker')
+    expect(node.data.metrics.items[0]).toEqual({ key: 'duration_ms', label: 'Duration', value: '42 ms' })
+    expect(wrapper.emitted('operation')[0][0].value.showMetricsOverlay).toBe(true)
   })
 
   it('keeps the current local layout mode when a graph refresh has no persisted view yet', async () => {
