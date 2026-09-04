@@ -1,20 +1,23 @@
 <template>
   <section class="architecture-canvas-shell">
     <header class="canvas-toolbar">
-      <input
-        v-model.trim="nodeDraft.name"
-        class="ctrl-input"
-        maxlength="120"
-        placeholder="Component name"
-        @keyup.enter="addNode"
-      />
-      <select v-model="nodeDraft.resourceType" class="ctrl-select" title="Component type">
-        <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
-      </select>
-      <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
-        <i data-lucide="plus"></i> Add component
-      </button>
-      <span class="canvas-layout-controls">
+      <div class="canvas-toolbar-row canvas-create-controls">
+        <input
+          v-model.trim="nodeDraft.name"
+          class="ctrl-input"
+          maxlength="120"
+          placeholder="Component name"
+          @keyup.enter="addNode"
+        />
+        <select v-model="nodeDraft.resourceType" class="ctrl-select" title="Component type">
+          <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+        <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
+          <i data-lucide="plus"></i> Add component
+        </button>
+        <span class="canvas-hint">Drag between handles to connect components</span>
+      </div>
+      <div class="canvas-toolbar-row canvas-layout-controls">
         <select v-model="providerFilter" class="ctrl-select provider-filter" title="Filter providers" @change="persistView">
           <option value="all">All providers</option>
           <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ providerLabel(provider) }}</option>
@@ -27,18 +30,30 @@
           <option value="">All namespaces</option>
           <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
         </select>
+        <select v-model="relationTypeFilter" class="ctrl-select" title="Filter relationship type" @change="persistView">
+          <option value="all">All relationship types</option>
+          <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationshipLabel(type) }}</option>
+        </select>
+        <select v-model="relationStatusFilter" class="ctrl-select" title="Filter relationship status" @change="persistView">
+          <option value="all">All relationship statuses</option>
+          <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
+        </select>
         <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement" @change="persistView">
           <option value="request-flow">Request flow</option>
           <option value="resource-type">Resource type sections</option>
+          <option value="provider-lanes">Provider lanes</option>
+          <option value="provider-resource">Provider + resource sections</option>
         </select>
         <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" title="Request flow direction" @change="persistView">
           <option value="horizontal">Flow left to right</option>
           <option value="vertical">Flow top to bottom</option>
         </select>
         <button class="btn sm" :disabled="saving || !flowNodes.length" @click="arrangeFlow">
-          <i :data-lucide="layoutMode === 'resource-type' ? 'rows-3' : 'layout-dashboard'"></i>
-          {{ layoutMode === 'resource-type' ? 'Arrange by type' : 'Arrange flow' }}
+          <i :data-lucide="layoutMode === 'resource-type' || layoutMode === 'provider-resource' ? 'rows-3' : layoutMode === 'provider-lanes' ? 'columns-3' : 'layout-dashboard'"></i>
+          {{ layoutMode === 'resource-type' ? 'Arrange by type' : layoutMode === 'provider-resource' ? 'Arrange sections' : layoutMode === 'provider-lanes' ? 'Arrange lanes' : 'Arrange flow' }}
         </button>
+      </div>
+      <div class="canvas-toolbar-row canvas-action-controls">
         <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="toggleEdgeLabels">
           <i data-lucide="tags"></i> Labels
         </button>
@@ -60,12 +75,11 @@
         <button class="btn sm" :disabled="!flowNodes.length" title="Download the diagram as a Mermaid file" @click="exportMermaid">
           <i data-lucide="file-code"></i> Export Mermaid
         </button>
-      </span>
-      <span class="canvas-hint">Drag between handles to connect components</span>
-      <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
-        <i data-lucide="route"></i> {{ trace.executionName || 'Latest trace' }} · {{ trace.nodeIds.length }} nodes
-        <button class="btn sm" type="button" @click="clearTraceOverlay">Clear</button>
-      </span>
+        <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
+          <i data-lucide="route"></i> {{ trace.executionName || 'Latest trace' }} · {{ trace.nodeIds.length }} nodes
+          <button class="btn sm" type="button" @click="clearTraceOverlay">Clear</button>
+        </span>
+      </div>
     </header>
 
     <div ref="canvasBodyRef" class="canvas-body">
@@ -120,7 +134,7 @@
         </template>
         <template #node-resource-section="{ data }">
           <div class="resource-section">
-            <span><i :data-lucide="presentationForType(data.resourceType).icon"></i> {{ typeLabel(data.resourceType) }}</span>
+            <span><i :data-lucide="presentationForType(data.resourceType).icon"></i> {{ data.label || typeLabel(data.resourceType) }}</span>
             <strong>{{ data.count }}</strong>
           </div>
         </template>
@@ -228,7 +242,7 @@ import { getRectOfNodes, getTransformForBounds, MarkerType, useVueFlow, VueFlow 
 import { toPng } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { useToast } from '../../composables/useToast'
-import { requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
+import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -276,6 +290,8 @@ const showTraceOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
+const relationTypeFilter = ref('all')
+const relationStatusFilter = ref('all')
 const exporting = ref(false)
 const canvasBodyRef = ref(null)
 const { fitView, setCenter, setViewport, getNodes } = useVueFlow()
@@ -365,6 +381,10 @@ const availableKubeContexts = computed(() => [...new Set((props.graph?.document?
   .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
 const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
   .filter(node => node.provider === 'kubernetes' && node.namespace).map(node => node.namespace))].sort())
+const availableRelationTypes = computed(() => [...new Set((props.graph?.document?.edges || [])
+  .map(edge => edge.relationType || 'depends_on'))].sort((left, right) => relationshipLabel(left).localeCompare(relationshipLabel(right))))
+const availableRelationStatuses = computed(() => [...new Set((props.graph?.document?.edges || [])
+  .map(edge => edge.status || 'automatic'))].sort())
 const filteredGraphDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
   const nodes = (document.nodes || []).filter(node =>
@@ -372,21 +392,43 @@ const filteredGraphDocument = computed(() => {
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
     (!namespaceFilter.value || node.namespace === namespaceFilter.value))
   const ids = new Set(nodes.map(node => node.id))
-  return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
+  return { ...document, nodes, edges: (document.edges || []).filter(edge =>
+    ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId) &&
+    (relationTypeFilter.value === 'all' || (edge.relationType || 'depends_on') === relationTypeFilter.value) &&
+    (relationStatusFilter.value === 'all' || (edge.status || 'automatic') === relationStatusFilter.value)) }
 })
 const traceNodeIds = computed(() => new Set(props.trace?.nodeIds || []))
 const traceEdgeIds = computed(() => new Set(props.trace?.edgeIds || []))
-const sectionNodes = computed(() => layoutMode.value === 'resource-type' ? resourceSections.value.map(section => ({
+const smartSpacing = computed(() => {
+  const expanded = showMetricsOverlay.value || showCollectionOverlay.value || showTraceOverlay.value
+  const denseLabels = showEdgeLabels.value && flowEdges.value.length > 20
+  const extraY = (showMetricsOverlay.value ? 54 : 0) + (showCollectionOverlay.value ? 28 : 0) + (showTraceOverlay.value ? 24 : 0) + (denseLabels ? 18 : 0)
+  const extraX = (showMetricsOverlay.value ? 58 : 0) + (showCollectionOverlay.value ? 34 : 0) + (denseLabels ? 24 : 0)
+  return {
+    requestXGap: 280 + extraX,
+    requestYGap: 130 + extraY,
+    requestVerticalXGap: 240 + Math.floor(extraX * 0.8),
+    requestVerticalYGap: 150 + extraY,
+    gridXGap: 220 + extraX,
+    gridYGap: 120 + extraY,
+    laneXGap: 240 + extraX,
+    laneYGap: 122 + extraY,
+    providerResourceXGap: 220 + extraX,
+    providerResourceYGap: 120 + extraY,
+    expanded,
+  }
+})
+const sectionNodes = computed(() => ['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value) ? resourceSections.value.map(section => ({
   id: `section:${section.type}`,
   type: 'resource-section',
   position: { x: section.x, y: section.y },
-  data: { resourceType: section.type, count: section.count },
+  data: { resourceType: section.resourceType || section.type, label: sectionLabel(section), count: section.count },
   style: { width: `${section.width}px`, height: `${section.height}px` },
   selectable: false,
   draggable: false,
   connectable: false,
   focusable: false,
-  zIndex: -1,
+  zIndex: section.zIndex ?? -1,
 })) : [])
 function withoutOpacity(item) {
   const { opacity: _opacity, ...style } = item.style || {}
@@ -454,11 +496,25 @@ function nodeTraceOverlay(node) {
   return sequence ? { sequence, detail: `${props.trace.executionName || 'Latest trace'} · step ${sequence}` } : null
 }
 
+function fallbackPosition(index, columns) {
+  return {
+    x: 80 + (index % columns) * smartSpacing.value.gridXGap,
+    y: 70 + Math.floor(index / columns) * (smartSpacing.value.gridYGap + 30),
+  }
+}
+
+function computedLayout(document, visibleDocument) {
+  if (layoutMode.value === 'resource-type') return resourceTypeLayout(visibleDocument, smartSpacing.value).layout
+  if (layoutMode.value === 'provider-lanes') return providerLaneLayout(visibleDocument, smartSpacing.value).layout
+  if (layoutMode.value === 'provider-resource') return providerResourceLayout(visibleDocument, smartSpacing.value).layout
+  return smartSpacing.value.expanded ? requestFlowLayout(visibleDocument, layoutDirection.value, smartSpacing.value) : document.layout || {}
+}
+
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
   if (hydrateView && document.view && typeof document.view === 'object') {
-    if (document.view.layoutMode === 'resource-type' || document.view.layoutMode === 'request-flow') {
+    if (['resource-type', 'request-flow', 'provider-lanes', 'provider-resource'].includes(document.view.layoutMode)) {
       layoutMode.value = document.view.layoutMode
     }
     if (document.view.layoutDirection === 'horizontal' || document.view.layoutDirection === 'vertical') {
@@ -472,12 +528,18 @@ function syncGraph(hydrateView = true) {
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
+    relationTypeFilter.value = document.view.relationTypeFilter || 'all'
+    relationStatusFilter.value = document.view.relationStatusFilter || 'all'
   }
   const visibleDocument = filteredGraphDocument.value
   const visibleNodes = visibleDocument.nodes
   const visibleEdges = visibleDocument.edges
-  resourceSections.value = layoutMode.value === 'resource-type' ? resourceTypeLayout(visibleDocument).sections : []
+  resourceSections.value = layoutMode.value === 'resource-type'
+    ? resourceTypeLayout(visibleDocument, smartSpacing.value).sections
+    : layoutMode.value === 'provider-lanes' ? providerLaneLayout(visibleDocument, smartSpacing.value).sections
+      : layoutMode.value === 'provider-resource' ? providerResourceLayout(visibleDocument, smartSpacing.value).sections : []
   const columns = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(visibleNodes.length * 1.6))))
+  const autoLayout = computedLayout(document, visibleDocument)
   flowNodes.value = visibleNodes.map((node, index) => {
     const route = visibleEdges
       .filter(edge => edge.sourceNodeId === node.id && edge.status !== 'rejected')
@@ -485,10 +547,7 @@ function syncGraph(hydrateView = true) {
       .find(item => item.route)
     return {
     id: node.id,
-    position: document.layout[node.id] || {
-      x: 80 + (index % columns) * 220,
-      y: 70 + Math.floor(index / columns) * 150,
-    },
+    position: autoLayout[node.id] || document.layout[node.id] || fallbackPosition(index, columns),
       data: {
         label: route?.routePath || node.name || node.label || node.id,
         method: route?.method || '',
@@ -507,12 +566,12 @@ function syncGraph(hydrateView = true) {
     label: showEdgeLabels.value ? relationshipLabel(edge.relationType) : undefined,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
-    type: layoutMode.value === 'resource-type' ? 'straight' : 'default',
+    type: ['provider-lanes', 'provider-resource'].includes(layoutMode.value) ? 'step' : layoutMode.value === 'resource-type' ? 'straight' : 'default',
     style: {
       ...(edge.status === 'suggested'
         ? { stroke: '#d29922', strokeDasharray: '6 4' }
         : edge.status === 'automatic' ? { stroke: '#2f81f7' } : {}),
-      ...(layoutMode.value === 'resource-type' ? { strokeOpacity: 0.28, strokeWidth: 1.2 } : {}),
+      ...(['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value) ? { strokeOpacity: 0.28, strokeWidth: 1.2 } : {}),
     },
   }))
   if (selectedNode.value) selectedNode.value = document.nodes.find(node => node.id === selectedNode.value.id) || null
@@ -529,26 +588,30 @@ function syncGraph(hydrateView = true) {
 function arrangeFlow() {
   if (props.saving || !props.graph?.document?.nodes?.length) return
   fitAfterSync.value = true
-  if (layoutMode.value === 'resource-type') {
-    const result = resourceTypeLayout(filteredGraphDocument.value)
+  if (['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value)) {
+    const result = layoutMode.value === 'provider-lanes'
+      ? providerLaneLayout(filteredGraphDocument.value, smartSpacing.value)
+      : layoutMode.value === 'provider-resource' ? providerResourceLayout(filteredGraphDocument.value, smartSpacing.value) : resourceTypeLayout(filteredGraphDocument.value, smartSpacing.value)
     resourceSections.value = result.sections
     clearSelection()
     emit('operation', {
       type: 'layout.set',
       value: result.layout,
-    }, 'Arrange resources by type')
+    }, layoutMode.value === 'provider-lanes' ? 'Arrange provider lanes' : layoutMode.value === 'provider-resource' ? 'Arrange provider resource sections' : 'Arrange resources by type')
     return
   }
   resourceSections.value = []
   emit('operation', {
     type: 'layout.set',
-    value: requestFlowLayout(filteredGraphDocument.value, layoutDirection.value),
+    value: requestFlowLayout(filteredGraphDocument.value, layoutDirection.value, smartSpacing.value),
   }, `Arrange request flow ${layoutDirection.value === 'vertical' ? 'top to bottom' : 'left to right'}`)
 }
 
 function persistView() {
   if (props.saving) return
-  if (layoutMode.value === 'resource-type') resourceSections.value = resourceTypeLayout(props.graph.document).sections
+  if (layoutMode.value === 'resource-type') resourceSections.value = resourceTypeLayout(props.graph.document, smartSpacing.value).sections
+  if (layoutMode.value === 'provider-lanes') resourceSections.value = providerLaneLayout(props.graph.document, smartSpacing.value).sections
+  if (layoutMode.value === 'provider-resource') resourceSections.value = providerResourceLayout(props.graph.document, smartSpacing.value).sections
   emit('operation', {
     type: 'view.set',
     value: {
@@ -562,6 +625,8 @@ function persistView() {
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
+      relationTypeFilter: relationTypeFilter.value,
+      relationStatusFilter: relationStatusFilter.value,
     },
   }, 'Update canvas view')
 }
@@ -721,6 +786,23 @@ function providerLabel(provider) {
   return { aws: 'AWS', kubernetes: 'Kubernetes', gcp: 'GCP', vercel: 'Vercel', generic: 'General' }[provider] || provider
 }
 
+function sectionLabel(section) {
+  return section.provider && section.resourceType
+    ? `${providerLabel(section.provider)} / ${sectionResourceLabel(section.provider, section.resourceType)}`
+    : section.label || typeLabel(section.type)
+}
+
+function sectionResourceLabel(provider, resourceType) {
+  if (provider === 'kubernetes') {
+    return {
+      deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet', daemonset: 'Kubernetes DaemonSet',
+      pod: 'Kubernetes Pod', service: 'Kubernetes Service', ingress: 'Kubernetes Ingress', node: 'Kubernetes Node',
+      configmap: 'Kubernetes ConfigMap', secret: 'Kubernetes Secret', pvc: 'Kubernetes PersistentVolumeClaim',
+    }[resourceType] || typeLabel(resourceType)
+  }
+  return typeLabel(resourceType)
+}
+
 function relationshipStatus(status) {
   return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
 }
@@ -831,21 +913,25 @@ function exportMermaid() {
 
 watch(() => props.graph, () => syncGraph(), { deep: true, immediate: true })
 watch(layoutMode, mode => {
-  if (mode !== 'resource-type') resourceSections.value = []
+  if (!['resource-type', 'provider-lanes', 'provider-resource'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace], () => syncGraph(false), { deep: true })
+watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
 <style scoped>
 .architecture-canvas-shell { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-panel); }
-.canvas-toolbar { min-height: 48px; padding: 7px 9px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
-.canvas-toolbar .ctrl-input { width: min(240px, 32vw); }
-.canvas-toolbar .ctrl-select { width: 145px; }
-.canvas-layout-controls { display: flex; align-items: center; gap: 6px; }
-.canvas-layout-controls .ctrl-select { width: 168px; }
+.canvas-toolbar { min-height: 48px; padding: 8px 9px; display: flex; flex-direction: column; align-items: stretch; gap: 7px; border-bottom: 1px solid var(--border); }
+.canvas-toolbar-row { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.canvas-toolbar .ctrl-input { flex: 1 1 210px; min-width: 150px; max-width: 280px; }
+.canvas-toolbar .ctrl-select { flex: 0 1 150px; min-width: 118px; }
+.canvas-create-controls { min-height: 30px; }
+.canvas-layout-controls { flex-wrap: wrap; }
+.canvas-action-controls { flex-wrap: wrap; }
+.canvas-layout-controls .ctrl-select { flex-basis: 168px; }
 .canvas-layout-controls .direction-select { width: 166px; }
+.canvas-toolbar-row .btn { flex: 0 0 auto; white-space: nowrap; }
 .canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 11px; }
 .canvas-body { position: relative; height: clamp(420px, 58vh, 680px); }
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
@@ -934,12 +1020,20 @@ onMounted(refreshIcons)
 :deep(.vue-flow__edge.selected .vue-flow__edge-path) { stroke: #2f81f7; }
 :deep(.vue-flow__node), :deep(.vue-flow__edge) { transition: opacity .16s ease; }
 @media (max-width: 760px) {
-  .canvas-toolbar { flex-wrap: wrap; }
-  .canvas-toolbar .ctrl-input { width: calc(100% - 153px); }
-  .canvas-layout-controls { width: 100%; }
-  .canvas-layout-controls .ctrl-select { flex: 1; width: auto; }
+  .canvas-toolbar-row { flex-wrap: wrap; }
+  .canvas-toolbar .ctrl-input { max-width: none; }
+  .canvas-layout-controls .ctrl-select { flex: 1 1 172px; width: auto; }
+  .canvas-layout-controls .direction-select { flex-basis: 166px; }
   .canvas-hint { width: 100%; margin-left: 0; }
   .canvas-body { height: 500px; }
   .canvas-inspector { right: 8px; bottom: 8px; width: min(260px, calc(100% - 16px)); max-height: calc(100% - 16px); }
+}
+
+@media (max-width: 520px) {
+  .canvas-create-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(112px, 132px); }
+  .canvas-create-controls .btn { grid-column: 1 / -1; justify-content: center; }
+  .canvas-layout-controls, .canvas-action-controls { flex-wrap: nowrap; padding-bottom: 3px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .canvas-layout-controls .ctrl-select { flex: 0 0 166px; }
+  .canvas-hint { display: none; }
 }
 </style>

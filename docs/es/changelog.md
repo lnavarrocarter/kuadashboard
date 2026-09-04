@@ -4,12 +4,29 @@
 
 Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Architecture persistente, navegación a nivel de recurso, overlays de salud en el Canvas, una vista canónica de Resources compartida, menos revisiones sorpresa del grafo, diagnóstico de sincronización visible, filtros compartidos entre Canvas y Routes, y sugerencias deterministas de relaciones basadas en logs. También corrige un bug real de duplicación encontrado al validar este trabajo.
 
+### Observability: inteligencia de logs Kubernetes en Intelligent
+
+- El panel de topología Intelligent ahora mide las líneas retenidas actualmente por las pestañas de logs Kubernetes abiertas explícitamente para workloads/Pods: cantidad de líneas, tasa de error, advertencias, firmas de error recurrentes normalizadas y conteos de palabras habituales de fallo.
+- La medición es determinista y está acotada a la sesión. No ejecuta otra lectura a Kubernetes, no persiste logs crudos ni participa en el scheduler de 30 minutos. Las tasas históricas y alertas quedan para una futura fase de agregación persistida.
+- La evidencia de relaciones derivada de logs redacta credenciales comunes, tokens bearer, credenciales en URLs, query strings de URLs y valores con forma de correo antes de mostrar una muestra corta. El flujo explícito de revisión sigue siendo obligatorio antes de confirmar una dependencia `calls`.
+
+### Architecture Canvas y Routes: filtros de relaciones y carriles por proveedor
+
+- Canvas y Routes ahora comparten filtros persistidos por tipo y estado de relación, para enfocar diagramas grandes en `routes_to`, `uses`, relaciones sugeridas/manuales u otros cortes de dependencias sin cambiar el grafo.
+- Canvas agrega una organización por carriles de proveedor que agrupa recursos por nube/plataforma y los ordena por etapa lógica: entradas, routing/buffers, compute, runtime, datos/configuración y gobierno.
+- Canvas también agrega una organización por proveedor + secciones de recurso para diagramas que deben mantener cada proveedor separado primero y luego dividir sus recursos por tipo dentro de ese proveedor.
+- Los carriles por proveedor usan conectores escalonados y encabezados de sección para que los diagramas multiproveedor queden más estructurados y fáciles de recorrer.
+- Los layouts por secciones ahora amplían el espacio entre nodos cuando hay overlays activos como labels, métricas, estado de collection o trazas, y ordenan recursos del mismo tipo usando primero el contexto de relaciones antes que el nombre.
+- Se mejoró el toolbar del Canvas en pantallas estrechas para que los filtros y botones de overlays sigan disponibles dentro de una franja desplazable horizontal.
+- Refrescar un proyecto Architecture ahora recarga el grafo en la vista actual en vez de limpiar y remontar Canvas/Routes/Resources mientras la petición está en curso.
+- Cuando Architecture se abre dentro de KUApps, los proyectos ahora aparecen como subnivel de la Application seleccionada en vez de consumir una segunda barra lateral junto al canvas.
+- KUApps ahora usa su barra lateral global como único cambio entre Architecture y Observability, y Observability ya no renderiza una segunda lista interna de aplicaciones cuando está embebido allí.
+
 ### Architecture Canvas: exportación a PDF y Mermaid
 
 - Se agregó un botón "Export PDF" que renderiza el diagrama completo (todos los nodos y relaciones, no solo lo visible en pantalla) en un PDF listo para imprimir, dimensionado al tamaño total del grafo, para que diagramas grandes puedan imprimirse o compartirse sin que nada quede recortado.
 - Se agregó un botón "Export Mermaid" que descarga el diagrama actualmente visible (respetando los filtros activos de proveedor/contexto/namespace) como un archivo `.mmd` de Mermaid.
 - Se corrigió que "Export PDF" generaba una página en blanco: el zoom del diagrama se calculaba con la unidad de margen incorrecta, lo que encogía todo el diagrama hasta casi desaparecer dentro de la imagen exportada. También se agregó un límite de tamaño y un timeout con aviso de error para que exportar un diagrama muy grande falle de forma controlada en vez de quedarse colgado indefinidamente.
-
 
 ### Architecture: descubrimiento de referencias por variables de entorno de Lambda
 
@@ -53,12 +70,6 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 
 - Los recursos Kubernetes en la tabla de Resources y la vista de Topology de Observability antes se mostraban todos como "Kubernetes" genérico con el mismo ícono. Ahora muestran su tipo real (Deployment, Pod, Service, ConfigMap...) con un ícono acorde, para distinguirlos de un vistazo.
 - Los recursos divergentes y las relaciones divergentes (pendientes de revisión) ahora se marcan individualmente, no solo como conteo agregado, usando la misma regla que ya excluye tipos de recurso que Observability nunca puede correlacionar — lista para extenderse a futuros tipos de recurso de GCP/Vercel sin cambios de UI.
-
-### Architecture: los Deployments de Kubernetes ahora se relacionan entre sí desde metadata, igual que ya pasa con AWS
-
-- El discovery de Kubernetes solo relacionaba recursos por selectores de labels y referencias a ConfigMap/Secret/PVC; un Deployment cuyas variables de entorno apuntaban a otro Service por nombre (la forma más común en que las apps Kubernetes realmente se llaman entre sí) no generaba ninguna relación.
-- El discovery ahora lee los valores planos de variables de entorno — sin descargar ni ejecutar nada — y reconoce tanto una referencia DNS interna completa (`service.namespace.svc.cluster.local`) como un nombre de servicio simple cuando la propia clave de la variable lo sugiere (`..._HOST`, `..._URL`, `..._SERVICE`, ...), sugiriendo una relación `calls` hacia el Service o Deployment coincidente.
-- Estas sugerencias pasan por el mismo flujo de revisión que cualquier otra relación descubierta, y ahora aparecen de forma consistente tanto en Architecture como en Observability.
 
 ### Architecture: los Deployments de Kubernetes ahora se relacionan entre sí desde metadata, igual que ya pasa con AWS
 

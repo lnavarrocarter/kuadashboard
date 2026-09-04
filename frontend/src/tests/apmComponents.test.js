@@ -36,6 +36,29 @@ afterEach(() => {
 })
 
 describe('APM collection controls', () => {
+  it('can render embedded without its internal application sidebar', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.application-list').exists()).toBe(false)
+    expect(wrapper.get('.apm-layout').classes()).toContain('apm-layout--embedded')
+    expect(wrapper.text()).toContain('orders')
+    wrapper.unmount()
+  })
+
   it('shows Kubernetes-only signals and opens logs for configured workloads', async () => {
     global.fetch = vi.fn((url) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-eks', name: 'orders-eks', region: 'us-east-1' }])

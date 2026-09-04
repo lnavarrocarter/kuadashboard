@@ -148,15 +148,42 @@ describe('ArchitectureRoutes', () => {
     await wrapper.get('select[title="Filter providers"]').setValue('kubernetes')
     expect(wrapper.text()).not.toContain('worker')
     expect(wrapper.emitted('operation')[0]).toEqual([
-      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: '' } },
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
       'Update canvas view',
     ])
 
     await wrapper.get('select[title="Filter Kubernetes namespace"]').setValue('orders')
     expect(wrapper.emitted('operation')[1]).toEqual([
-      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: 'orders' } },
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: 'orders', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
       'Update canvas view',
     ])
+  })
+
+  it('filters routes by relationship type and status from the shared view', async () => {
+    const document = {
+      nodes: [
+        { id: 'ingress', name: 'public', provider: 'kubernetes', resourceType: 'ingress' },
+        { id: 'service', name: 'api', provider: 'kubernetes', resourceType: 'service' },
+        { id: 'pod', name: 'api-a', provider: 'kubernetes', resourceType: 'pod' },
+        { id: 'config', name: 'api-config', provider: 'kubernetes', resourceType: 'configmap' },
+      ],
+      edges: [
+        { id: 'ingress-service', sourceNodeId: 'ingress', targetNodeId: 'service', relationType: 'routes_to', status: 'automatic' },
+        { id: 'service-pod', sourceNodeId: 'service', targetNodeId: 'pod', relationType: 'routes_to', status: 'suggested' },
+        { id: 'pod-config', sourceNodeId: 'pod', targetNodeId: 'config', relationType: 'uses', status: 'automatic' },
+      ],
+    }
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: { revision: 1, document } } })
+
+    await wrapper.get('select[title="Filter relationship type"]').setValue('routes_to')
+    expect(wrapper.text()).not.toContain('api-config')
+    expect(wrapper.text()).toContain('api-a')
+    expect(wrapper.emitted('operation')[0][0].value).toMatchObject({ relationTypeFilter: 'routes_to', relationStatusFilter: 'all' })
+
+    await wrapper.get('select[title="Filter relationship status"]').setValue('automatic')
+    expect(wrapper.text()).toContain('api')
+    expect(wrapper.text()).not.toContain('api-a')
+    expect(wrapper.emitted('operation')[1][0].value).toMatchObject({ relationTypeFilter: 'routes_to', relationStatusFilter: 'automatic' })
   })
 
   it('offers application-friendly route ordering modes', async () => {

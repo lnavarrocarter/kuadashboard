@@ -394,6 +394,7 @@
             :observability-provider="kuappsObservabilityProvider"
             :observability-profile-id="kuappsObservabilityProfileId"
             :focus-resource="observabilityFocus"
+            compact-navigation
             @update-view="kuappsView = $event"
             @open-observability="openApplicationObservability"
             @open-architecture="openApplicationArchitecture"

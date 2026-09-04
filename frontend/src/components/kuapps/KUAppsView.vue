@@ -1,6 +1,6 @@
 <template>
   <div class="kuapps-view">
-    <div class="kuapps-tabs" role="tablist" aria-label="KUApps views">
+    <div v-if="!compactNavigation" class="kuapps-tabs" role="tablist" aria-label="KUApps views">
       <button
         :class="['kuapps-tab', { active: activeView === 'architecture' }]"
         role="tab"
@@ -25,31 +25,49 @@
       <aside class="kuapps-applications">
         <div class="kuapps-list-heading">
           <span>Applications</span><strong>{{ applications.length }}</strong>
+          <button class="btn btn-icon" title="Create application" @click="openObservabilitySetup"><i data-lucide="plus"></i></button>
           <button class="btn btn-icon" title="Refresh applications" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
         </div>
-        <button
-          v-for="application in applications"
-          :key="application.id"
-          :class="['kuapps-application-row', { active: selectedApplicationId === application.id }]"
-          @click="selectApplication(application)"
-        >
-          <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
-          <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template></small></span>
-          <b>{{ application.architectureProjectIds?.length || (application.architectureProjectId ? 1 : 0) }}</b>
-        </button>
+        <div v-for="application in applications" :key="application.id" class="kuapps-application-item">
+          <button
+            :class="['kuapps-application-row', { active: selectedApplicationId === application.id }]"
+            @click="selectApplication(application)"
+          >
+            <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
+            <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template></small></span>
+            <b>{{ application.architectureProjectIds?.length || (application.architectureProjectId ? 1 : 0) }}</b>
+          </button>
+          <div v-if="activeView === 'architecture' && selectedApplicationId === application.id" class="kuapps-project-sublist">
+            <span class="kuapps-sublevel-heading">Projects</span>
+            <button
+              v-for="project in applicationProjects"
+              :key="project.id"
+              :class="['kuapps-project-row', { active: architectureStore.selectedProjectId === project.id }]"
+              @click="selectProject(project)"
+            >
+              <span class="project-mark">{{ project.name.slice(0, 2).toUpperCase() }}</span>
+              <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+            </button>
+            <span v-if="!applicationProjects.length && !architectureStore.loading" class="kuapps-empty-projects">No architecture projects yet</span>
+          </div>
+        </div>
         <div v-if="catalogLoading" class="kuapps-empty-list">Loading applications…</div>
-        <div v-else-if="!applications.length" class="kuapps-empty-list">No Applications configured.</div>
+        <template v-else-if="!applications.length">
+          <div class="kuapps-empty-list">No Applications configured.</div>
+          <button class="btn sm kuapps-create-btn" @click="openObservabilitySetup"><i data-lucide="plus"></i> Create application</button>
+        </template>
       </aside>
 
       <main class="kuapps-workspace">
-        <div v-if="!selectedApplication" class="kuapps-empty-state">
+        <div v-if="!selectedApplication && activeView !== 'observability'" class="kuapps-empty-state">
           <i data-lucide="boxes"></i>
           <strong>Select an Application</strong>
           <span>Architecture, observability, metrics and provider logs will open in this context.</span>
+          <button class="btn sm primary" @click="openObservabilitySetup"><i data-lucide="plus"></i> Create application</button>
         </div>
 
         <template v-else>
-          <div class="kuapps-application-header">
+          <div v-if="selectedApplication" class="kuapps-application-header">
             <div>
               <span class="kuapps-kicker">KUApps / Application</span>
               <h2>{{ selectedApplication.name }}</h2>
@@ -84,6 +102,7 @@
             :provider="apmProvider"
             :profile-id="apmProfileId"
             :application-id="applicationId"
+            :hide-application-list="true"
             :focus-resource="focusResource"
             @open-architecture="openArchitecture"
             @application-context="forwardApplicationContext"
@@ -110,6 +129,7 @@ const props = defineProps({
   observabilityProvider: { type: String, default: 'generic' },
   observabilityProfileId: { type: String, default: 'local' },
   focusResource: { type: Object, default: null },
+  compactNavigation: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'update-view', 'open-observability', 'open-architecture', 'application-context',
@@ -126,6 +146,7 @@ const activeView = computed(() => props.activeView === 'observability' ? 'observ
 const applications = computed(() => architectureStore.applications || [])
 const selectedApplicationId = computed(() => props.applicationId || localApplicationId.value)
 const selectedApplication = computed(() => applications.value.find(application => application.id === selectedApplicationId.value) || null)
+const applicationProjects = computed(() => architectureStore.projects || [])
 const architectureCount = computed(() => selectedApplication.value?.architectureProjectIds?.length
   || (selectedApplication.value?.architectureProjectId ? 1 : 0))
 const apmProvider = computed(() => ['aws', 'gcp', 'vercel', 'generic'].includes(props.observabilityProvider)
@@ -150,6 +171,11 @@ function selectApplication(application) {
   nextTick(() => createIcons({ icons }))
 }
 
+function selectProject(project) {
+  architectureStore.selectProject(project.id)
+  nextTick(() => createIcons({ icons }))
+}
+
 function openObservability(application, focus = null) {
   emit('open-observability', application, focus)
   selectView('observability')
@@ -167,6 +193,7 @@ function openArchitecture(payload) {
 
 function forwardApplicationContext(application) {
   emit('application-context', application)
+  if (application?.id && !applications.value.some(a => a.id === application.id)) loadCatalog()
 }
 
 async function reloadActiveTab(options = {}) {
@@ -202,7 +229,19 @@ defineExpose({ reloadActiveTab, openObservabilitySetup })
 .kuapps-application-row > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .kuapps-application-row strong, .kuapps-application-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kuapps-application-row small, .kuapps-application-row b { color: var(--text-dim); font-size: 9px; }
-.kuapps-empty-list { padding: 24px 8px; color: var(--text-dim); font-size: 10px; text-align: center; }
+.kuapps-application-item { display: flex; flex-direction: column; gap: 3px; }
+.kuapps-project-sublist { margin: 0 0 7px 16px; padding: 6px 0 0 8px; display: flex; flex-direction: column; gap: 3px; border-left: 1px solid var(--border); }
+.kuapps-sublevel-heading { padding: 0 6px 2px; color: var(--text-dim); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.kuapps-project-row { width: 100%; min-height: 31px; padding: 5px 6px; display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 6px; border: 0; border-radius: 5px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.kuapps-project-row:hover, .kuapps-project-row.active { background: var(--bg-hover); }
+.kuapps-project-row.active { box-shadow: inset 2px 0 #2f81f7; }
+.kuapps-project-row .project-mark { width: 22px; height: 22px; font-size: 8px; border-radius: 4px; }
+.kuapps-project-row > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.kuapps-project-row strong, .kuapps-project-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kuapps-project-row small, .kuapps-empty-projects { color: var(--text-dim); font-size: 9px; }
+.kuapps-empty-projects { padding: 4px 6px 6px; }
+.kuapps-empty-list { padding: 24px 8px 8px; color: var(--text-dim); font-size: 10px; text-align: center; }
+.kuapps-create-btn { display: flex; margin: 0 auto 16px; }
 .kuapps-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .kuapps-application-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .kuapps-application-header h2 { margin: 2px 0; font-size: 18px; }

@@ -220,6 +220,50 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function refreshSelectedProjectData() {
+    if (!selectedProjectId.value) return null
+    error.value = null
+    try {
+      const projectId = selectedProjectId.value
+      const [nextGraph, nextSnapshots, nextChanges] = await Promise.all([
+        apiFetch(`/api/architecture/projects/${projectId}/graph`, { headers: headers() }),
+        apiFetch(`/api/architecture/projects/${projectId}/snapshots`, { headers: headers() }),
+        apiFetch(`/api/architecture/projects/${projectId}/changes?limit=50`, { headers: headers() }),
+      ])
+      graph.value = nextGraph
+      snapshots.value = nextSnapshots
+      changes.value = nextChanges
+      try {
+        const link = await apiFetch(`/api/architecture/projects/${projectId}/applications`, { headers: headers() })
+        linkedApplications.value = Array.isArray(link) ? link : (link.applications || [])
+        linkedApplication.value = linkedApplications.value[0] || null
+        for (const application of linkedApplications.value) {
+          if (application?.id && !applications.value.some(item => item.id === application.id)) {
+            applications.value = [...applications.value, application]
+          }
+        }
+        selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+      } catch (_) {
+        try {
+          const link = await apiFetch(`/api/architecture/projects/${projectId}/application`, { headers: headers() })
+          linkedApplications.value = link.application ? [link.application] : []
+          linkedApplication.value = link.application || null
+          if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
+            applications.value = [...applications.value, linkedApplication.value]
+          }
+          selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+        } catch (_) {
+          linkedApplications.value = []
+          linkedApplication.value = null
+        }
+      }
+      return nextGraph
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    }
+  }
+
   async function downloadKuaApp(applicationId = linkedApplication.value?.id || selectedApplicationId.value) {
     if (!applicationId) return false
     error.value = null
@@ -709,6 +753,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     previewCloudResources,
     importCloudResources,
     previewAwsSync,
+    refreshSelectedProjectData,
     saving,
     selectProject,
     selectedProject,

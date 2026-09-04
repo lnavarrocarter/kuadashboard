@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
-import { requestFlowLayout, resourceTypeLayout } from '../lib/architectureLayout'
+import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout } from '../lib/architectureLayout'
 import { architectureResourcePresentation } from '../lib/architectureResourcePresentation'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
@@ -69,6 +69,17 @@ describe('ArchitectureCanvas', () => {
     const flowNodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
     expect(flowNodes[8].position).toEqual({ x: 1840, y: 70 })
     expect(flowNodes[9].position).toEqual({ x: 80, y: 220 })
+  })
+
+  it('groups canvas controls into creation, filter/layout and action rows', () => {
+    const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
+
+    expect(wrapper.find('.canvas-create-controls').exists()).toBe(true)
+    expect(wrapper.find('.canvas-layout-controls').exists()).toBe(true)
+    expect(wrapper.find('.canvas-action-controls').exists()).toBe(true)
+    expect(wrapper.get('.canvas-create-controls').text()).toContain('Add component')
+    expect(wrapper.get('.canvas-layout-controls').text()).toContain('All providers')
+    expect(wrapper.get('.canvas-action-controls').text()).toContain('Export Mermaid')
   })
 
   it('uses recognizable AWS service icons and simpler policy treatment', () => {
@@ -196,7 +207,7 @@ describe('ArchitectureCanvas', () => {
         type: 'view.set',
         value: {
           layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
-          providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
+          providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
         },
       },
       'Update canvas view',
@@ -209,6 +220,81 @@ describe('ArchitectureCanvas', () => {
     ])
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section')).toHaveLength(2)
     expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('straight')
+  })
+
+  it('arranges resources in provider lanes with dependency-stage columns', async () => {
+    const document = {
+      nodes: [
+        { id: 'pod', name: 'orders-pod', provider: 'kubernetes', resourceType: 'pod' },
+        { id: 'ingress', name: 'orders-public', provider: 'kubernetes', resourceType: 'ingress' },
+        { id: 'service', name: 'orders-api', provider: 'kubernetes', resourceType: 'service' },
+        { id: 'lambda', name: 'worker', provider: 'aws', resourceType: 'lambda' },
+        { id: 'event', name: 'order-event', provider: 'aws', resourceType: 'eventbridge' },
+      ],
+      edges: [{ id: 'ingress-service', sourceNodeId: 'ingress', targetNodeId: 'service', relationType: 'routes_to', status: 'automatic' }],
+      layout: {},
+    }
+    const expected = providerLaneLayout(document)
+    expect(expected.layout).toMatchObject({
+      event: { x: 100, y: 106 },
+      lambda: { x: 340, y: 106 },
+      ingress: { x: 100, y: 352 },
+      service: { x: 340, y: 352 },
+      pod: { x: 580, y: 352 },
+    })
+    expect(expected.sections.map(section => [section.label, section.count])).toEqual([['AWS', 2], ['Kubernetes', 3]])
+
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document } },
+      global: { stubs },
+    })
+    await wrapper.get('select[title="Canvas arrangement"]').setValue('provider-lanes')
+    await wrapper.get('.canvas-layout-controls button').trigger('click')
+
+    expect(wrapper.emitted('operation').at(-1)).toEqual([
+      { type: 'layout.set', value: expected.layout },
+      'Arrange provider lanes',
+    ])
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section').map(node => node.data.label)).toEqual(['AWS', 'Kubernetes'])
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('step')
+  })
+
+  it('arranges resources by provider first and resource type second', async () => {
+    const document = {
+      nodes: [
+        { id: 'lambda', name: 'worker', provider: 'aws', resourceType: 'lambda' },
+        { id: 'bucket', name: 'assets', provider: 'aws', resourceType: 's3' },
+        { id: 'service', name: 'api', provider: 'kubernetes', resourceType: 'service' },
+        { id: 'pod', name: 'api-a', provider: 'kubernetes', resourceType: 'pod' },
+        { id: 'pod-b', name: 'billing-a', provider: 'kubernetes', resourceType: 'pod' },
+      ],
+      edges: [
+        { id: 'service-pod', sourceNodeId: 'service', targetNodeId: 'pod', relationType: 'routes_to', status: 'automatic' },
+        { id: 'lambda-pod-b', sourceNodeId: 'lambda', targetNodeId: 'pod-b', relationType: 'calls', status: 'automatic' },
+      ],
+      layout: {},
+    }
+    const expected = providerResourceLayout(document)
+    expect(expected.sections.map(section => section.type)).toEqual([
+      'provider:aws', 'provider-resource:aws:lambda', 'provider-resource:aws:s3',
+      'provider:kubernetes', 'provider-resource:kubernetes:service', 'provider-resource:kubernetes:pod',
+    ])
+    expect(expected.sections.find(section => section.type === 'provider:aws').zIndex).toBe(-2)
+    expect(expected.layout.pod.x).toBeLessThan(expected.layout['pod-b'].x)
+
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document } },
+      global: { stubs },
+    })
+    await wrapper.get('select[title="Canvas arrangement"]').setValue('provider-resource')
+    await wrapper.get('.canvas-layout-controls button').trigger('click')
+
+    expect(wrapper.emitted('operation').at(-1)).toEqual([
+      { type: 'layout.set', value: expected.layout },
+      'Arrange provider resource sections',
+    ])
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section').map(node => node.zIndex)).toContain(-2)
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('step')
   })
 
   it('restores persisted canvas view preferences on reload', () => {
@@ -225,7 +311,7 @@ describe('ArchitectureCanvas', () => {
 
     expect(wrapper.get('select[title="Canvas arrangement"]').element.value).toBe('resource-type')
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').some(node => node.type === 'resource-section')).toBe(true)
-    expect(wrapper.get('.canvas-layout-controls button[title="Toggle relationship labels"]').classes()).toContain('primary')
+    expect(wrapper.get('button[title="Toggle relationship labels"]').classes()).toContain('primary')
     expect(wrapper.emitted('operation')).toBeUndefined()
   })
 
@@ -245,12 +331,12 @@ describe('ArchitectureCanvas', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph: healthGraph }, global: { stubs } })
     expect(wrapper.getComponent(stubs.VueFlow).props('nodes').every(node => node.data.health == null)).toBe(true)
 
-    await wrapper.get('.canvas-layout-controls button[title="Toggle health/freshness overlay"]').trigger('click')
+    await wrapper.get('button[title="Toggle health/freshness overlay"]').trigger('click')
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
         layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
-        providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
+        providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
       },
     })
     const nodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
@@ -297,6 +383,44 @@ describe('ArchitectureCanvas', () => {
     const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'worker')
     expect(node.data.collection).toMatchObject({ status: 'partial', label: 'Partial' })
     expect(wrapper.emitted('operation')[0][0].value.showCollectionOverlay).toBe(true)
+  })
+
+  it('expands canvas spacing when operational overlays make nodes larger', async () => {
+    const overlayGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'api', name: 'API', resourceType: 'service', provider: 'kubernetes' },
+          { id: 'worker', name: 'Worker', resourceType: 'deployment', provider: 'kubernetes' },
+          { id: 'pod', name: 'Pod', resourceType: 'pod', provider: 'kubernetes' },
+        ],
+        edges: [
+          { id: 'api-worker', sourceNodeId: 'api', targetNodeId: 'worker', relationType: 'routes_to', status: 'automatic' },
+          { id: 'worker-pod', sourceNodeId: 'worker', targetNodeId: 'pod', relationType: 'owns', status: 'automatic' },
+        ],
+        layout: {},
+        view: { layoutMode: 'provider-resource' },
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: {
+        graph: overlayGraph,
+        metrics: { api: { loading: false, items: [{ key: 'cpu_cores', label: 'CPU', value: '1' }] } },
+        collection: { api: { status: 'completed', label: 'Completed', icon: 'check-circle-2', detail: 'ok' } },
+      },
+      global: { stubs },
+    })
+    const initialNodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
+    const initialPodY = initialNodes.find(node => node.id === 'pod').position.y
+
+    await wrapper.get('button[title="Toggle resource metrics overlay"]').trigger('click')
+    await wrapper.get('button[title="Toggle collection status overlay"]').trigger('click')
+
+    const expandedNodes = wrapper.getComponent(stubs.VueFlow).props('nodes')
+    expect(expandedNodes.find(node => node.id === 'pod').position.y).toBeGreaterThan(initialPodY)
+    expect(expandedNodes.filter(node => node.type === 'resource-section').find(node => node.data.label === 'Kubernetes / Kubernetes Pod').position.y).toBeGreaterThan(
+      initialNodes.filter(node => node.type === 'resource-section').find(node => node.data.label === 'Kubernetes / Kubernetes Pod').position.y,
+    )
   })
 
   it('keeps the current local layout mode when a graph refresh has no persisted view yet', async () => {
@@ -369,6 +493,33 @@ describe('ArchitectureCanvas', () => {
     expect(edges.map(edge => edge.label)).toEqual(['routes to', undefined])
     expect(edges[0].labelBgStyle).toMatchObject({ fill: '#1f6feb' })
     expect(edges[1].style.opacity).toBe(0.035)
+  })
+
+  it('filters visible canvas relationships by type and status', async () => {
+    const filteredGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'api', name: 'API', resourceType: 'api' },
+          { id: 'worker', name: 'Worker', resourceType: 'lambda' },
+          { id: 'bucket', name: 'Bucket', resourceType: 's3' },
+        ],
+        edges: [
+          { id: 'api-worker', sourceNodeId: 'api', targetNodeId: 'worker', relationType: 'routes_to', status: 'automatic' },
+          { id: 'worker-bucket', sourceNodeId: 'worker', targetNodeId: 'bucket', relationType: 'uses', status: 'suggested' },
+        ],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: filteredGraph }, global: { stubs } })
+
+    await wrapper.get('select[title="Filter relationship type"]').setValue('uses')
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges').map(edge => edge.id)).toEqual(['worker-bucket'])
+    expect(wrapper.emitted('operation')[0][0].value).toMatchObject({ relationTypeFilter: 'uses', relationStatusFilter: 'all' })
+
+    await wrapper.get('select[title="Filter relationship status"]').setValue('automatic')
+    expect(wrapper.getComponent(stubs.VueFlow).props('edges')).toHaveLength(0)
+    expect(wrapper.emitted('operation')[1][0].value).toMatchObject({ relationTypeFilter: 'uses', relationStatusFilter: 'automatic' })
   })
 
   it('opens the inspector and emits a partial node update', async () => {
@@ -514,7 +665,7 @@ describe('ArchitectureCanvas', () => {
       global: { stubs },
     })
 
-    await wrapper.get('.canvas-layout-controls button[title="Highlight the latest process trace"]').trigger('click')
+    await wrapper.get('button[title="Highlight the latest process trace"]').trigger('click')
     const flow = wrapper.getComponent(stubs.VueFlow)
     expect(flow.props('nodes').find(node => node.id === 'worker').data.trace).toEqual({ sequence: 2, detail: 'run-42 · step 2' })
     expect(flow.props('edges').find(edge => edge.id === 'workflow-worker').style).toMatchObject({ stroke: '#f778ba', strokeWidth: 3, opacity: 1 })

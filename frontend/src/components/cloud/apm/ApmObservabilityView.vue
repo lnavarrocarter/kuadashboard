@@ -26,8 +26,8 @@
 
     <div v-if="store.error" class="alert-error apm-error">{{ store.error }}</div>
 
-    <div class="apm-layout">
-      <aside class="application-list">
+    <div :class="['apm-layout', { 'apm-layout--embedded': props.hideApplicationList }]">
+      <aside v-if="!props.hideApplicationList" class="application-list">
         <div class="list-heading"><span>{{ t('apm.applications') }}</span><strong>{{ store.filteredApplications.length }}</strong></div>
         <button
           v-for="application in store.filteredApplications"
@@ -503,6 +503,7 @@ const props = defineProps({
   provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
+  hideApplicationList: { type: Boolean, default: false },
   focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
@@ -987,6 +988,7 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
 .range-control button.active, .apm-view-tabs button.active { background: var(--accent); color: white; }
 .apm-error { margin: 8px 12px 0; }
 .apm-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: 214px minmax(0, 1fr); }
+.apm-layout--embedded { grid-template-columns: minmax(0, 1fr); }
 .application-list { min-height: 0; overflow: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 8px; }
 .list-heading { display: flex; justify-content: space-between; padding: 5px 4px 9px; color: var(--text-dim); font-size: 9px; text-transform: uppercase; }
 .application-row, .application-empty { width: 100%; min-width: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }

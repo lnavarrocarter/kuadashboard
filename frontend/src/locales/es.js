@@ -190,6 +190,9 @@ export default {
 
   'help.releasesTitle':      'Historial de versiones',
   'help.current':            'actual',
+  'help.releaseSummary':     'Resumen del release',
+  'help.releaseShowAll':     'Mostrar {count} cambios más',
+  'help.releaseShowLess':    'Mostrar menos cambios',
   'help.allReleases':        'Ver todos los releases en GitHub',
 
   'help.optionsTitle':       'Opciones de la plataforma',

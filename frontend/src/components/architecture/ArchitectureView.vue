@@ -69,8 +69,8 @@
         <button type="button" class="btn sm" @click="creatingProject = false">Cancel</button>
       </form>
 
-      <div class="architecture-layout">
-        <aside class="architecture-projects">
+      <div :class="['architecture-layout', { 'architecture-layout--embedded': props.hideApplicationList }]">
+        <aside v-if="!props.hideApplicationList" class="architecture-projects">
           <template v-if="!props.hideApplicationList && store.applications.length">
             <div class="architecture-list-heading"><span>KUA Applications</span><strong>{{ store.applications.length }}</strong></div>
             <button
@@ -443,13 +443,18 @@ async function loadProfile(profileId) {
 }
 
 async function refreshWorkspace() {
+  const currentView = activeView.value
   const currentApplicationId = props.applicationId || store.selectedApplicationId || ''
-  if (currentApplicationId) {
+  if (store.selectedProjectId) {
+    await store.refreshSelectedProjectData()
+    if (currentView === 'resources' && store.linkedApplication) await store.loadRegistry()
+  } else if (currentApplicationId) {
     await store.loadApplications()
     await store.selectApplication(currentApplicationId)
   } else {
     await store.loadProjects({ applicationId: '' })
   }
+  if (['routes', 'canvas', 'resources'].includes(currentView)) activeView.value = currentView
   nextTick(() => createIcons({ icons }))
 }
 
@@ -811,6 +816,7 @@ defineExpose({ refreshWorkspace })
 .architecture-title small, .architecture-project-row small, .snapshot-row small { color: var(--text-dim); }
 .architecture-create { padding: 10px 18px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1.5fr) auto auto; gap: 8px; }
 .architecture-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+.architecture-layout--embedded { grid-template-columns: minmax(0, 1fr); }
 .architecture-projects { border-right: 1px solid var(--border); padding: 10px; overflow: auto; }
 .architecture-list-heading { padding: 5px 7px 10px; display: flex; justify-content: space-between; color: var(--text-dim); font-size: 12px; text-transform: uppercase; }
 .architecture-project-row, .architecture-project-empty { width: 100%; border: 0; background: transparent; color: inherit; padding: 9px 8px; display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer; border-radius: 5px; }
