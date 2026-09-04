@@ -97,6 +97,44 @@ describe('APM collection controls', () => {
     wrapper.unmount()
   })
 
+  it('keeps the selected tab when a linked focus is refreshed but the user is browsing topology', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [{ id: 'lambda-a', type: 'lambda', name: 'orders' }], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: {
+        profileId: 'local:dev',
+        focusResource: {
+          view: 'metrics',
+          node: { provider: 'aws', resourceType: 'lambda', name: 'orders', arn: 'arn:aws:lambda:us-east-1:123:function:orders' },
+        },
+      },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.apm-view-tabs button')
+    const topologyTab = tabs.find(button => button.text().includes('Topology'))
+    expect(topologyTab).toBeTruthy()
+
+    await topologyTab.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.apm-view-tabs button.active').text()).toContain('Topology')
+
+    await wrapper.setProps({ focusResource: { view: 'metrics', node: { provider: 'aws', resourceType: 'lambda', name: 'orders', arn: 'arn:aws:lambda:us-east-1:123:function:orders' } } })
+    await flushPromises()
+    expect(wrapper.find('.apm-view-tabs button.active').text()).toContain('Topology')
+    wrapper.unmount()
+  })
+
   it('does not collect until the user confirms the read', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])

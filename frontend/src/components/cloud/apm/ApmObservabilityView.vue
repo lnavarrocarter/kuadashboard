@@ -866,8 +866,17 @@ function renderIcons() {
 
 async function applyResourceFocus() {
   const focus = props.focusResource
+  if (!focus) {
+    selectedResourceId.value = ''
+    return
+  }
+
   selectedResourceId.value = focusedResource.value?.id || ''
-  activeView.value = focus?.view === 'traces' && hasTraceResources.value ? 'traces' : 'overview'
+
+  if (focus.view === 'traces' && hasTraceResources.value) {
+    activeView.value = 'traces'
+  }
+
   store.series = {}
   if (activeView.value === 'traces' && focusNode.value?.arn) {
     await traceProcess(focusNode.value.arn, false)
@@ -890,7 +899,9 @@ watch(() => props.provider, async provider => {
   store.setActiveProfile(props.profileId, provider)
   if (props.profileId) await refreshLocal()
 })
-watch(activeView, () => mainEl.value?.scrollTo?.({ top: 0 }))
+watch(activeView, (next, previous) => {
+  if (next !== previous) mainEl.value?.scrollTo?.({ top: 0 })
+})
 watch([
   () => props.focusResource,
   () => applicationResources.value.map(resource => resource.id).join('|'),
