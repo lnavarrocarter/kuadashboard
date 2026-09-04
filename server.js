@@ -782,7 +782,7 @@ app.use('/api', (req, res, next) => {
   const key = kubeListCacheKey(req);
   if (!key) return next();
   const revalidating = req.get('X-KUA-Cache-Revalidate') === '1';
-  const forceRefresh = req.query.refresh === '1';
+  const forceRefresh = req.query.refresh === '100';
   const cached = !revalidating && !forceRefresh ? kubeResponseCache.read(key) : null;
   if (cached) {
     res.setHeader('X-KUA-Cache', cached.state);
