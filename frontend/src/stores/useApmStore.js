@@ -271,12 +271,12 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function createArchitectureProjectLink() {
+  async function createArchitectureProjectLink(name = '') {
     if (!selectedApplicationId.value) return null
     linkingArchitecture.value = true
     try {
       architectureLink.value = await request(`/applications/${selectedApplicationId.value}/architecture-link/project`, {
-        method: 'POST', headers: headers(true), body: JSON.stringify({}),
+        method: 'POST', headers: headers(true), body: JSON.stringify(name ? { name } : {}),
       })
       replaceApplication(architectureLink.value.application)
       return architectureLink.value
@@ -288,15 +288,19 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function unlinkArchitectureProject() {
+  async function unlinkArchitectureProject(projectId = '') {
     if (!selectedApplicationId.value) return null
     linkingArchitecture.value = true
     try {
-      const application = await request(`/applications/${selectedApplicationId.value}/architecture-link`, {
+      const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+      const result = await request(`/applications/${selectedApplicationId.value}/architecture-link${query}`, {
         method: 'DELETE', headers: headers(),
       })
+      const application = result.application || result
       replaceApplication(application)
-      architectureLink.value = { linked: false, project: null, resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } }
+      architectureLink.value = result.linked === undefined
+        ? { linked: false, project: null, projects: [], resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } }
+        : result
       return application
     } catch (requestError) {
       error.value = requestError.message

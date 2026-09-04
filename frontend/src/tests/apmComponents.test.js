@@ -8,6 +8,7 @@ import ApmObservabilityView from '../components/cloud/apm/ApmObservabilityView.v
 import ApmSetupModal from '../components/cloud/apm/ApmSetupModal.vue'
 import ApmTopologyGraph from '../components/cloud/apm/ApmTopologyGraph.vue'
 import ApmProcessTrace from '../components/cloud/apm/ApmProcessTrace.vue'
+import ApmApplicationLogs from '../components/cloud/apm/ApmApplicationLogs.vue'
 import { settings } from '../composables/useSettings'
 
 function response(body, status = 200) {
@@ -248,6 +249,33 @@ describe('APM collection controls', () => {
     expect(global.fetch.mock.calls.some(([url, options = {}]) =>
       url.endsWith('/applications/app-a') && options.method === 'DELETE')).toBe(true)
     expect(wrapper.text()).toContain('Build an application view')
+    wrapper.unmount()
+  })
+})
+
+describe('Application provider logs', () => {
+  it('loads AWS resource logs from CloudWatch in the selected Application context', async () => {
+    global.fetch = vi.fn((url) => {
+      expect(url).toContain('/api/cloud/aws/logs/lambda/orders-worker')
+      return response({ events: [{ timestamp: '2026-08-04T12:00:00Z', message: 'ok', logStreamName: 'stream' }] })
+    })
+
+    const wrapper = mount(ApmApplicationLogs, {
+      props: {
+        provider: 'aws',
+        profileId: 'aws:dev',
+        application: { id: 'app-orders', region: 'us-east-1' },
+        resources: [{ id: 'lambda-1', type: 'lambda', provider: 'aws', name: 'orders-worker' }],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('CloudWatch Logs')
+    expect(wrapper.text()).toContain('ok')
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/cloud/aws/logs/lambda/orders-worker'),
+      expect.objectContaining({ headers: { 'X-Profile-Id': 'aws:dev' } }),
+    )
     wrapper.unmount()
   })
 })

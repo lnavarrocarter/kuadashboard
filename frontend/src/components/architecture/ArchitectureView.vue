@@ -71,7 +71,7 @@
 
       <div class="architecture-layout">
         <aside class="architecture-projects">
-          <template v-if="store.applications.length">
+          <template v-if="!props.hideApplicationList && store.applications.length">
             <div class="architecture-list-heading"><span>KUA Applications</span><strong>{{ store.applications.length }}</strong></div>
             <button
               v-for="application in store.applications"
@@ -129,13 +129,13 @@
               </form>
             </section>
 
-            <section v-if="store.selectedApplication" class="architecture-application-context">
-              <span><small>Application</small><strong>{{ store.selectedApplication.name }}</strong></span>
-              <span><small>Provider</small><strong>{{ store.selectedApplication.provider.toUpperCase() }}</strong></span>
-              <span><small>Environment</small><strong>{{ store.selectedApplication.environment || '—' }}</strong></span>
-              <span><small>Team</small><strong>{{ store.selectedApplication.team || '—' }}</strong></span>
+            <section v-if="store.selectedApplication || store.linkedApplications.length" class="architecture-application-context">
+              <span class="architecture-application-context-wide"><small>Applications</small><strong>{{ linkedApplicationLabel }}</strong></span>
+              <span><small>Provider</small><strong>{{ activeApplication?.provider?.toUpperCase() || '—' }}</strong></span>
+              <span><small>Environment</small><strong>{{ activeApplication?.environment || '—' }}</strong></span>
+              <span><small>Team</small><strong>{{ activeApplication?.team || '—' }}</strong></span>
               <span><small>Scopes</small><strong>{{ store.graph?.document?.scopes?.length || 0 }}</strong></span>
-              <span :class="store.selectedApplication.architectureProjectId ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ store.selectedApplication.architectureProjectId ? 'Linked' : 'Not linked' }}</strong></span>
+              <span :class="(store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ (store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'Linked' : 'Not linked' }}</strong></span>
             </section>
 
             <section class="architecture-stats">
@@ -333,6 +333,7 @@ const props = defineProps({
   profileId: { type: String, default: '' },
   projectId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
+  hideApplicationList: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'open-observability', 'application-context',
@@ -353,6 +354,10 @@ const activeView = ref('routes')
 const selectedWorkflow = ref(null)
 const bundleInput = ref(null)
 const activeApplication = computed(() => store.linkedApplication || store.selectedApplication)
+const linkedApplicationLabel = computed(() => {
+  const items = store.linkedApplications.length ? store.linkedApplications : (store.selectedApplication ? [store.selectedApplication] : [])
+  return items.map(application => application.name).join(', ') || '—'
+})
 const applicationContextLabel = computed(() => store.linkedApplication
   ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
   : 'Architecture')

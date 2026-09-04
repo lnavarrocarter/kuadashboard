@@ -21,33 +21,77 @@
       </button>
     </div>
 
-    <ArchitectureView
-      v-if="activeView === 'architecture'"
-      ref="architectureRef"
-      :profile-id="profileId"
-      :application-id="applicationId"
-      :project-id="projectId"
-      @open-observability="openObservability"
-      @open-observability-setup="openObservabilitySetup"
-      @application-context="forwardApplicationContext"
-      @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
-      @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
-      @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
-      @open-aws-resource="$emit('open-aws-resource', $event)"
-      @open-aws-logs="$emit('open-aws-logs', $event)"
-    />
+    <div class="kuapps-application-shell">
+      <aside class="kuapps-applications">
+        <div class="kuapps-list-heading">
+          <span>Applications</span><strong>{{ applications.length }}</strong>
+          <button class="btn btn-icon" title="Refresh applications" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
+        </div>
+        <button
+          v-for="application in applications"
+          :key="application.id"
+          :class="['kuapps-application-row', { active: selectedApplicationId === application.id }]"
+          @click="selectApplication(application)"
+        >
+          <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
+          <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template></small></span>
+          <b>{{ application.architectureProjectIds?.length || (application.architectureProjectId ? 1 : 0) }}</b>
+        </button>
+        <div v-if="catalogLoading" class="kuapps-empty-list">Loading applications…</div>
+        <div v-else-if="!applications.length" class="kuapps-empty-list">No Applications configured.</div>
+      </aside>
 
-    <ApmObservabilityView
-      v-else
-      ref="observabilityRef"
-      :provider="apmProvider"
-      :profile-id="apmProfileId"
-      :application-id="applicationId"
-      :focus-resource="focusResource"
-      @open-architecture="openArchitecture"
-      @application-context="forwardApplicationContext"
-      @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
-    />
+      <main class="kuapps-workspace">
+        <div v-if="!selectedApplication" class="kuapps-empty-state">
+          <i data-lucide="boxes"></i>
+          <strong>Select an Application</strong>
+          <span>Architecture, observability, metrics and provider logs will open in this context.</span>
+        </div>
+
+        <template v-else>
+          <div class="kuapps-application-header">
+            <div>
+              <span class="kuapps-kicker">KUApps / Application</span>
+              <h2>{{ selectedApplication.name }}</h2>
+              <small>{{ selectedApplication.provider.toUpperCase() }}<template v-if="selectedApplication.environment"> · {{ selectedApplication.environment }}</template><template v-if="selectedApplication.team"> · {{ selectedApplication.team }}</template></small>
+            </div>
+            <div class="kuapps-associations">
+              <span><strong>{{ architectureCount }}</strong><small>{{ architectureCount === 1 ? 'Architecture' : 'Architectures' }}</small></span>
+              <span><strong>{{ selectedApplication.provider === 'aws' ? 'CloudWatch' : selectedApplication.provider === 'gcp' ? 'Cloud Monitoring / Logging' : selectedApplication.provider === 'kubernetes' ? 'metrics.k8s.io / Logs' : 'Provider metrics / Logs' }}</strong><small>Operational sources</small></span>
+            </div>
+          </div>
+
+          <ArchitectureView
+            v-if="activeView === 'architecture'"
+            ref="architectureRef"
+            :profile-id="profileId"
+            :application-id="applicationId"
+            :project-id="projectId"
+            :hide-application-list="true"
+            @open-observability="openObservability"
+            @open-observability-setup="openObservabilitySetup"
+            @application-context="forwardApplicationContext"
+            @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+            @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
+            @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
+            @open-aws-resource="$emit('open-aws-resource', $event)"
+            @open-aws-logs="$emit('open-aws-logs', $event)"
+          />
+
+          <ApmObservabilityView
+            v-else
+            ref="observabilityRef"
+            :provider="apmProvider"
+            :profile-id="apmProfileId"
+            :application-id="applicationId"
+            :focus-resource="focusResource"
+            @open-architecture="openArchitecture"
+            @application-context="forwardApplicationContext"
+            @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+          />
+        </template>
+      </main>
+    </div>
   </div>
 </template>
 
@@ -56,6 +100,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import ArchitectureView from '../architecture/ArchitectureView.vue'
 import ApmObservabilityView from '../cloud/apm/ApmObservabilityView.vue'
+import { useArchitectureStore } from '../../stores/useArchitectureStore'
 
 const props = defineProps({
   activeView: { type: String, default: 'architecture' },
@@ -74,7 +119,15 @@ const emit = defineEmits([
 
 const architectureRef = ref(null)
 const observabilityRef = ref(null)
+const architectureStore = useArchitectureStore()
+const catalogLoading = ref(false)
+const localApplicationId = ref(props.applicationId)
 const activeView = computed(() => props.activeView === 'observability' ? 'observability' : 'architecture')
+const applications = computed(() => architectureStore.applications || [])
+const selectedApplicationId = computed(() => props.applicationId || localApplicationId.value)
+const selectedApplication = computed(() => applications.value.find(application => application.id === selectedApplicationId.value) || null)
+const architectureCount = computed(() => selectedApplication.value?.architectureProjectIds?.length
+  || (selectedApplication.value?.architectureProjectId ? 1 : 0))
 const apmProvider = computed(() => ['aws', 'gcp', 'vercel', 'generic'].includes(props.observabilityProvider)
   ? props.observabilityProvider
   : 'generic')
@@ -82,6 +135,18 @@ const apmProfileId = computed(() => props.observabilityProfileId || (apmProvider
 
 function selectView(view) {
   emit('update-view', view)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function loadCatalog() {
+  catalogLoading.value = true
+  try { await architectureStore.loadApplicationCatalog() } finally { catalogLoading.value = false }
+  nextTick(() => createIcons({ icons }))
+}
+
+function selectApplication(application) {
+  localApplicationId.value = application.id
+  emit('application-context', application)
   nextTick(() => createIcons({ icons }))
 }
 
@@ -109,8 +174,9 @@ async function reloadActiveTab(options = {}) {
   return architectureRef.value?.refreshWorkspace?.(options)
 }
 
+watch(() => props.applicationId, value => { localApplicationId.value = value || '' })
 watch(() => [props.activeView, props.observabilityProvider], () => nextTick(() => createIcons({ icons })))
-onMounted(() => createIcons({ icons }))
+onMounted(async () => { await loadCatalog(); createIcons({ icons }) })
 
 defineExpose({ reloadActiveTab, openObservabilitySetup })
 </script>
@@ -124,6 +190,31 @@ defineExpose({ reloadActiveTab, openObservabilitySetup })
 .kuapps-tab > svg { width: 17px; color: var(--accent); }
 .kuapps-tab span { display: flex; flex-direction: column; gap: 2px; }
 .kuapps-tab small { color: var(--text-dim); font-size: 9px; }
-.kuapps-view > :deep(.architecture-view), .kuapps-view > :deep(.apm-view) { flex: 1; min-height: 0; }
+.kuapps-application-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 225px minmax(0, 1fr); }
+.kuapps-applications { min-height: 0; overflow: auto; padding: 9px; border-right: 1px solid var(--border); background: var(--surface); }
+.kuapps-list-heading { display: flex; align-items: center; gap: 7px; padding: 5px 7px 10px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+.kuapps-list-heading strong { color: var(--text); }
+.kuapps-list-heading button { margin-left: auto; }
+.kuapps-list-heading svg { width: 13px; }
+.kuapps-application-row { width: 100%; display: grid; grid-template-columns: 29px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.kuapps-application-row:hover, .kuapps-application-row.active { background: var(--bg-hover); }
+.kuapps-application-row.active { box-shadow: inset 2px 0 var(--accent); }
+.kuapps-application-row > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.kuapps-application-row strong, .kuapps-application-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kuapps-application-row small, .kuapps-application-row b { color: var(--text-dim); font-size: 9px; }
+.kuapps-empty-list { padding: 24px 8px; color: var(--text-dim); font-size: 10px; text-align: center; }
+.kuapps-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.kuapps-application-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.kuapps-application-header h2 { margin: 2px 0; font-size: 18px; }
+.kuapps-application-header small { color: var(--text-dim); }
+.kuapps-kicker { color: var(--accent); font-size: 9px; text-transform: uppercase; }
+.kuapps-associations { display: flex; gap: 18px; }
+.kuapps-associations span { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.kuapps-associations small { font-size: 9px; }
+.kuapps-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-dim); text-align: center; }
+.kuapps-empty-state svg { width: 34px; color: var(--accent); }
+.kuapps-empty-state strong { color: var(--text); }
+.kuapps-workspace > :deep(.architecture-view), .kuapps-workspace > :deep(.apm-view) { flex: 1; min-height: 0; }
 @media (max-width: 700px) { .kuapps-tabs { overflow-x: auto; }.kuapps-tab { min-width: 165px; } }
+@media (max-width: 760px) { .kuapps-application-shell { grid-template-columns: 175px minmax(0, 1fr); }.kuapps-application-header { align-items: flex-start; flex-direction: column; }.kuapps-associations { width: 100%; justify-content: space-between; }.kuapps-associations span { align-items: flex-start; } }
 </style>

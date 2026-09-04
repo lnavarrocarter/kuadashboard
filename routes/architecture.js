@@ -55,10 +55,13 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
   }
 
   function reconcileLinkedApplication(project) {
-    const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
-    if (!registry || !application || application.profileId !== project.profileId) return null;
-    registry.reconcile(application);
-    return database.getGraph(project.id);
+    const applications = apmDatabase?.listApplicationsByArchitectureProjectId
+      ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+      : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
+    if (!registry) return null;
+    applications.filter(application => application.profileId === project.profileId)
+      .forEach(application => registry.reconcile(application));
+    return applications.length ? database.getGraph(project.id) : null;
   }
 
   // Lets discovery panels show which preview resources are already part of the project's graph,
@@ -85,10 +88,11 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     if (applicationId) {
       const application = apmDatabase?.getApplication(applicationId);
       if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
-      const linkedProject = application.architectureProjectId
-        ? database.getProject(application.architectureProjectId)
-        : null;
-      return res.json(linkedProject ? [linkedProject] : []);
+      const projectIds = apmDatabase?.listArchitectureProjectsByApplicationId
+        ? apmDatabase.listArchitectureProjectsByApplicationId(application.id)
+        : [application.architectureProjectId].filter(Boolean);
+      return res.json(projectIds.map(projectId => database.getProject(projectId))
+        .filter(project => project && project.profileId === profile));
     }
     res.json(database.listProjects({ profileId: profile }));
   });
@@ -117,9 +121,9 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
         return res.status(404).json({ error: 'KUA Application not found' });
       }
       const project = database.createProject({ ...req.body, profileId: profile });
-      if (application && registry) {
+      if (application && apmDatabase) {
         const updated = apmDatabase.updateArchitectureProjectLink(application.id, project.id);
-        registry.reconcile(updated);
+        registry?.reconcile(updated);
       }
       log('Project created', project.name, profile, { projectId: project.id });
       res.status(201).json(project);
@@ -134,20 +138,63 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
   router.get('/projects/:projectId/application', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
-    const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
-    res.json({ application: application?.profileId === project.profileId ? application : null });
+    const applications = apmDatabase?.listApplicationsByArchitectureProjectId
+      ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+      : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
+    const scopedApplications = applications.filter(application => application.profileId === project.profileId);
+    res.json({ application: scopedApplications[0] || null, applications: scopedApplications });
+  });
+
+  router.get('/projects/:projectId/applications', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    const applications = apmDatabase?.listApplicationsByArchitectureProjectId
+      ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+      : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
+    res.json(applications.filter(application => application.profileId === project.profileId));
+  });
+
+  router.post('/projects/:projectId/applications', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const applicationId = String(req.body?.applicationId || '').trim();
+      const application = apmDatabase?.getApplication(applicationId);
+      if (!application || application.profileId !== project.profileId) {
+        return res.status(404).json({ error: 'KUA Application not found' });
+      }
+      const updated = apmDatabase.updateArchitectureProjectLink(application.id, project.id);
+      registry?.reconcile(updated);
+      res.status(201).json({ application: updated, applications: apmDatabase.listApplicationsByArchitectureProjectId(project.id) });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.delete('/projects/:projectId/applications/:applicationId', (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const application = apmDatabase?.getApplication(req.params.applicationId);
+      if (!application || application.profileId !== project.profileId) return res.status(404).json({ error: 'KUA Application not found' });
+      const updated = apmDatabase.unlinkArchitectureProject(application.id, project.id);
+      registry?.reconcile(updated);
+      res.status(200).json({ application: updated });
+    } catch (error) { handleError(res, error); }
   });
 
   router.delete('/projects/:projectId', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
     try {
-      const application = apmDatabase?.getApplicationByArchitectureProjectId(project.id);
+      const applications = apmDatabase?.listApplicationsByArchitectureProjectId
+        ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+        : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
       database.deleteProject(project.id);
-      if (application && registry) {
-        const updated = apmDatabase.updateArchitectureProjectLink(application.id, null);
-        registry.reconcile(updated);
-      }
+      applications.forEach(application => {
+        const updated = apmDatabase?.unlinkArchitectureProject
+          ? apmDatabase.unlinkArchitectureProject(application.id, project.id)
+          : apmDatabase?.updateArchitectureProjectLink(application.id, null);
+        registry?.reconcile(updated);
+      });
       log('Project deleted', project.name, project.profileId, { projectId: project.id });
       res.status(204).end();
     } catch (error) { handleError(res, error); }

@@ -61,17 +61,18 @@ function createApmRouter({
   }
 
   function architectureLinkStatus(application) {
-    if (!application.architectureProjectId) {
-      return { linked: false, project: null, resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } };
-    }
+    const projectIds = application.architectureProjectIds?.length
+      ? application.architectureProjectIds
+      : [application.architectureProjectId].filter(Boolean);
+    const emptyResources = { matched: [], unmatched: [], unmatchedNodeIds: [], duplicateIdentityWarnings: [] };
+    if (!projectIds.length) return { linked: false, project: null, projects: [], resources: emptyResources };
     if (!architectureDatabase) {
       throw Object.assign(new Error('Architecture integration is unavailable'), { statusCode: 503 });
     }
-    const project = architectureDatabase.getProject(application.architectureProjectId);
-    if (!project || project.profileId !== application.profileId) {
-      return { linked: false, status: 'missing', project: null, resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } };
-    }
-    const graph = architectureDatabase.getGraph(project.id);
+    const projects = projectIds.map(projectId => architectureDatabase.getProject(projectId))
+      .filter(project => project && project.profileId === application.profileId);
+    if (!projects.length) return { linked: false, status: 'missing', project: null, projects: [], resources: emptyResources };
+    const graphs = projects.map(project => ({ project, graph: architectureDatabase.getGraph(project.id) }));
     const resources = database.listResources(application.id);
     const matchedNodeIds = new Set();
     const matched = [];
@@ -79,28 +80,31 @@ function createApmRouter({
     const duplicateIdentityWarnings = [];
     for (const resource of resources) {
       const identities = [resource.arn, resource.key].filter(Boolean).map(value => String(value).toLowerCase());
-      const nodes = (graph?.document.nodes || []).filter(node => {
+      const nodes = graphs.flatMap(({ project, graph }) => (graph?.document.nodes || []).filter(node => {
         if (node.provider && node.provider !== resource.provider) return false;
         const nodeIdentities = [node.arn, node.nativeId, node.discoveryKey].filter(Boolean)
           .map(value => String(value).toLowerCase());
         return identities.some(identity => nodeIdentities.includes(identity));
-      });
+      }).map(node => ({ ...node, projectId: project.id })));
       if (!nodes.length) {
         unmatched.push(resource);
         continue;
       }
-      nodes.forEach(node => matchedNodeIds.add(node.id));
-      matched.push({ resource, nodeIds: nodes.map(node => node.id) });
-      if (nodes.length > 1) duplicateIdentityWarnings.push({ resourceId: resource.id, nodeIds: nodes.map(node => node.id) });
+      nodes.forEach(node => matchedNodeIds.add(`${node.projectId}:${node.id}`));
+      matched.push({ resource, nodeIds: nodes.map(node => node.id), projectIds: nodes.map(node => node.projectId) });
+      if (nodes.length > 1) duplicateIdentityWarnings.push({ resourceId: resource.id, nodeIds: nodes.map(node => `${node.projectId}:${node.id}`) });
     }
     return {
       linked: true,
       status: 'linked',
-      project,
+      project: projects[0],
+      projects,
       resources: {
         matched,
         unmatched,
-        unmatchedNodeIds: (graph?.document.nodes || []).filter(node => !matchedNodeIds.has(node.id)).map(node => node.id),
+        unmatchedNodeIds: graphs.flatMap(({ project, graph }) => (graph?.document.nodes || [])
+          .filter(node => !matchedNodeIds.has(`${project.id}:${node.id}`))
+          .map(node => `${project.id}:${node.id}`)),
         duplicateIdentityWarnings,
       },
     };
@@ -353,10 +357,13 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     try {
-      const updated = database.updateArchitectureProjectLink(application.id, null);
+      const projectId = String(req.query.projectId || req.body?.projectId || '').trim();
+      const updated = projectId
+        ? database.unlinkArchitectureProject(application.id, projectId)
+        : database.updateArchitectureProjectLink(application.id, null);
       reconcileRegistry(updated);
       log('Architecture project unlinked', application.name, application.profileId, {
-        projectId: application.architectureProjectId,
+        projectId: projectId || 'all',
       });
       res.json(updated);
     } catch (error) { handleError(res, error); }
@@ -369,7 +376,7 @@ function createApmRouter({
       const resources = database.listRegistryResources(application.id);
       const resourcesById = new Map(resources.map(resource => [resource.id, resource]));
       res.json({
-        projectId: application.architectureProjectId,
+        projectId: application.architectureProjectIds || [application.architectureProjectId].filter(Boolean),
         resources: resources.map(resource => ({
           ...resource,
           correlatable: isCorrelatableResourceType(resource.resourceType),
@@ -398,12 +405,25 @@ function createApmRouter({
         throw Object.assign(new Error('decision must be accept or reject'), { statusCode: 400 });
       }
       if (!architectureDatabase) throw Object.assign(new Error('Architecture integration is unavailable'), { statusCode: 503 });
-      const project = application.architectureProjectId ? architectureDatabase.getProject(application.architectureProjectId) : null;
-      if (!project) throw Object.assign(new Error('Application has no linked Architecture project'), { statusCode: 404 });
-      const graph = architectureDatabase.getGraph(project.id);
-      // The relationship lives in the graph; the registry row is only its correlated projection.
-      const edge = (graph.document.edges || []).find(item => item.registryRelationshipId === req.params.relationshipId);
-      if (!edge) throw Object.assign(new Error('Relationship not found in the linked Architecture project'), { statusCode: 404 });
+      const projectIds = application.architectureProjectIds?.length
+        ? application.architectureProjectIds
+        : [application.architectureProjectId].filter(Boolean);
+      let project = null;
+      let graph = null;
+      let edge = null;
+      for (const projectId of projectIds) {
+        const candidate = architectureDatabase.getProject(projectId);
+        if (!candidate || candidate.profileId !== application.profileId) continue;
+        const candidateGraph = architectureDatabase.getGraph(candidate.id);
+        const candidateEdge = (candidateGraph?.document?.edges || []).find(item => item.registryRelationshipId === req.params.relationshipId);
+        if (candidateEdge) {
+          project = candidate;
+          graph = candidateGraph;
+          edge = candidateEdge;
+          break;
+        }
+      }
+      if (!project || !graph || !edge) throw Object.assign(new Error('Relationship not found in the linked Architecture projects'), { statusCode: 404 });
       const document = applyGraphOperation(graph.document, {
         type: 'edge.review', subjectId: edge.id, value: { decision },
       });

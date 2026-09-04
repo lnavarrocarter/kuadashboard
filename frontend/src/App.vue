@@ -640,6 +640,16 @@ const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
 let autoRefreshPending = false
+let lastUserInteractionAt = 0
+const AUTO_REFRESH_PAUSE_MS = 15000
+
+function markUserInteraction() {
+  lastUserInteractionAt = Date.now()
+}
+
+function shouldPauseAutoRefresh() {
+  return Date.now() - lastUserInteractionAt < AUTO_REFRESH_PAUSE_MS
+}
 
 watch(() => settings.autoRefresh, (secs) => {
   clearInterval(autoRefreshTimer)
@@ -647,7 +657,7 @@ watch(() => settings.autoRefresh, (secs) => {
 }, { immediate: true })
 
 async function reloadActiveProvider() {
-  if (autoRefreshPending || document.hidden) return
+  if (autoRefreshPending || document.hidden || shouldPauseAutoRefresh()) return
   autoRefreshPending = true
   try {
     if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
@@ -1232,7 +1242,12 @@ onMounted(async () => {
   // Cargar profiles locales si el proveedor activo lo necesita
   if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
+  lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
+  document.addEventListener('pointerdown', markUserInteraction, { passive: true })
+  document.addEventListener('wheel', markUserInteraction, { passive: true, capture: true })
+  document.addEventListener('touchstart', markUserInteraction, { passive: true })
+  document.addEventListener('scroll', markUserInteraction, { passive: true, capture: true })
   updateStore.initListeners()
   nextTick(() => createIcons({ icons }))
 })
@@ -1240,6 +1255,10 @@ onUnmounted(() => {
   clearInterval(clockTimer)
   clearInterval(autoRefreshTimer)
   document.removeEventListener('keydown', onKey)
+  document.removeEventListener('pointerdown', markUserInteraction)
+  document.removeEventListener('wheel', markUserInteraction, true)
+  document.removeEventListener('touchstart', markUserInteraction)
+  document.removeEventListener('scroll', markUserInteraction, true)
   stopKubeResize()
 })
 </script>

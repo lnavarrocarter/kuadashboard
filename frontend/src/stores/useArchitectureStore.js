@@ -10,6 +10,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const projects = ref([])
   const selectedProjectId = ref(null)
   const linkedApplication = ref(null)
+  const linkedApplications = ref([])
   const registry = ref(null)
   const registryLoading = ref(false)
   const graph = ref(null)
@@ -46,6 +47,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   function resetProjectData() {
     selectedProjectId.value = null
     linkedApplication.value = null
+    linkedApplications.value = []
     registry.value = null
     graph.value = null
     snapshots.value = []
@@ -131,15 +133,18 @@ export const useArchitectureStore = defineStore('architecture', () => {
     selectedApplicationId.value = applicationId || null
     const application = selectedApplication.value
     linkedApplication.value = application
+    linkedApplications.value = application ? [application] : []
     if (!application) return loadProjects({ preserveSelection: false })
     const result = await loadProjects({ preserveSelection: false, applicationId: application.id })
     linkedApplication.value = application
+    linkedApplications.value = [application]
     return result
   }
 
   async function selectProject(projectId, { manageLoading = true } = {}) {
     selectedProjectId.value = projectId || null
     linkedApplication.value = null
+    linkedApplications.value = []
     registry.value = null
     graph.value = null
     snapshots.value = []
@@ -165,14 +170,28 @@ export const useArchitectureStore = defineStore('architecture', () => {
       snapshots.value = nextSnapshots
       changes.value = nextChanges
       try {
-        const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
-        linkedApplication.value = link.application || null
-        if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
-          applications.value = [...applications.value, linkedApplication.value]
+        const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/applications`, { headers: headers() })
+        linkedApplications.value = Array.isArray(link) ? link : (link.applications || [])
+        linkedApplication.value = linkedApplications.value[0] || null
+        for (const application of linkedApplications.value) {
+          if (application?.id && !applications.value.some(item => item.id === application.id)) {
+            applications.value = [...applications.value, application]
+          }
         }
         selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
       } catch (_) {
-        linkedApplication.value = null
+        try {
+          const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
+          linkedApplications.value = link.application ? [link.application] : []
+          linkedApplication.value = link.application || null
+          if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
+            applications.value = [...applications.value, linkedApplication.value]
+          }
+          selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+        } catch (_) {
+          linkedApplications.value = []
+          linkedApplication.value = null
+        }
       }
       return nextGraph
     } catch (requestError) {
@@ -680,6 +699,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     selectApplication,
     loading,
     linkedApplication,
+    linkedApplications,
     loadRegistry,
     registry,
     registryLoading,
