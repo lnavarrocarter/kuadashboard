@@ -2705,3 +2705,5 @@ router.get('/kms/keyrings/:location/:keyring/keys', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.resolveGcpAuth = resolveGcpAuth;
+module.exports.gcpFetch = gcpFetch;

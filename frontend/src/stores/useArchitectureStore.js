@@ -22,6 +22,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const discoveryPreview = ref(null)
   const kubernetesContexts = ref([])
   const kubernetesPreview = ref(null)
+  const gcpPreview = ref(null)
+  const vercelPreview = ref(null)
   const discovering = ref(false)
   const discoveryPhase = ref(null)
   const loading = ref(false)
@@ -54,6 +56,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview.value = null
     kubernetesContexts.value = []
     kubernetesPreview.value = null
+    gcpPreview.value = null
+    vercelPreview.value = null
     discoveryPhase.value = null
   }
 
@@ -146,6 +150,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview.value = null
     kubernetesContexts.value = []
     kubernetesPreview.value = null
+    gcpPreview.value = null
+    vercelPreview.value = null
     if (!selectedProjectId.value) return null
     if (manageLoading) loading.value = true
     error.value = null
@@ -464,6 +470,57 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function previewCloudResources(provider) {
+    if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
+    discovering.value = true
+    discoveryPhase.value = `${provider}-resources`
+    error.value = null
+    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    try {
+      target.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/preview`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({}) },
+      )
+      return target.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  async function importCloudResources({ provider, selectedNodeIds }) {
+    if (!selectedProjectId.value || !graph.value || !['gcp', 'vercel'].includes(provider)) return null
+    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    if (!target.value || !(selectedNodeIds || []).length) return null
+    saving.value = true
+    error.value = null
+    try {
+      graph.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/import`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({
+            selectedNodeIds,
+            expectedRevision: graph.value.revision,
+            reason: `Import ${selectedNodeIds.length} ${provider} resources`,
+          }),
+        },
+      )
+      target.value = null
+      await loadChanges()
+      return graph.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function importKubernetesResources({ selectedNodeIds }) {
     if (!selectedProjectId.value || !graph.value || !kubernetesPreview.value) return null
     const selected = new Set(selectedNodeIds || [])
@@ -608,6 +665,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview,
     kubernetesContexts,
     kubernetesPreview,
+    gcpPreview,
+    vercelPreview,
     error,
     graph,
     importAwsResources,
@@ -627,6 +686,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     projects,
     previewAwsResources,
     previewKubernetesResources,
+    previewCloudResources,
+    importCloudResources,
     previewAwsSync,
     saving,
     selectProject,

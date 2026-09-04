@@ -24,8 +24,8 @@
             <button :class="{ active: resourceProvider === 'aws' }" @click="resourceProvider = 'aws'"><i data-lucide="cloud"></i> AWS</button>
             <button :class="{ active: resourceProvider === 'kubernetes' }" @click="resourceProvider = 'kubernetes'"><i data-lucide="boxes"></i> Kubernetes</button>
             <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> Manual resource</button>
-            <button disabled title="GCP adapter is planned"><i data-lucide="cloud-cog"></i> GCP</button>
-            <button disabled title="Vercel adapter is planned"><i data-lucide="triangle"></i> Vercel</button>
+            <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
+            <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
@@ -206,6 +206,18 @@
               @close="resourceProvider = ''"
               @imported="resourceProvider = ''"
             />
+            <ArchitectureCloudDiscoveryPanel
+              v-if="resourceProvider === 'gcp'"
+              provider="gcp"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
+            <ArchitectureCloudDiscoveryPanel
+              v-if="resourceProvider === 'vercel'"
+              provider="vercel"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
 
             <div class="architecture-view-tabs">
               <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
@@ -306,6 +318,7 @@ import StepFnDetail from '../StepFnDetail.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
+import ArchitectureCloudDiscoveryPanel from './ArchitectureCloudDiscoveryPanel.vue'
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'

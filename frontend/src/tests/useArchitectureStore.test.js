@@ -270,4 +270,30 @@ describe('architecture workspace', () => {
     // The already-present node travels as context so the edge has both ends; the server merges it.
     expect(imported.nodes.map(node => node.id).sort()).toEqual(['deploy-1', 'pod-1'])
   })
+
+  it('previews and imports a selected GCP resource with the current graph revision', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/discovery/gcp/preview')) {
+        expect(options.method).toBe('POST')
+        return response({ nodes: [{ id: 'gcp:run', name: 'orders' }], relationships: [], sources: [], scope: {} })
+      }
+      if (url.endsWith('/discovery/gcp/import')) {
+        const body = JSON.parse(options.body)
+        expect(body.expectedRevision).toBe(2)
+        expect(body.selectedNodeIds).toEqual(['gcp:run'])
+        return response({ revision: 3, document: { nodes: [{ id: 'gcp:run' }], edges: [] } })
+      }
+      if (url.includes('/changes')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 2, document: { nodes: [], edges: [] } }
+
+    await store.previewCloudResources('gcp')
+    const graph = await store.importCloudResources({ provider: 'gcp', selectedNodeIds: ['gcp:run'] })
+
+    expect(graph.revision).toBe(3)
+    expect(store.gcpPreview).toBeNull()
+  })
 })

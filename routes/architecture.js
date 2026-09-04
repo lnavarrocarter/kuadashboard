@@ -5,8 +5,11 @@ const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDisc
 const { ArchitectureGraphService, discoveryIdentityKeys } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+const { ArchitectureCloudDiscoveryService } = require('../lib/architecture/cloudDiscoveryService');
+const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryReader');
+const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
 
-function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader }) {
+function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   const service = graphService || new ArchitectureGraphService({ database });
@@ -15,6 +18,12 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     inventoryReader,
     relationshipReader,
     graphService: service,
+  });
+  const gcpDiscovery = gcpDiscoveryService || new ArchitectureCloudDiscoveryService({
+    provider: 'gcp', reader: createGcpDiscoveryReader(), graphService: service,
+  });
+  const vercelDiscovery = vercelDiscoveryService || new ArchitectureCloudDiscoveryService({
+    provider: 'vercel', reader: createVercelDiscoveryReader(), graphService: service,
   });
   const registry = apmDatabase ? new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database }) : null;
 
@@ -305,6 +314,37 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
       });
     } catch (error) { handleError(res, error); }
   });
+
+  for (const [provider, cloudDiscovery] of [['gcp', gcpDiscovery], ['vercel', vercelDiscovery]]) {
+    router.post(`/projects/:projectId/discovery/${provider}/preview`, async (req, res) => {
+      const project = scopedProject(req, res);
+      if (!project) return;
+      try {
+        res.json(await cloudDiscovery.preview({ profileId: project.profileId, projectId: project.id }));
+      } catch (error) { handleError(res, error); }
+    });
+
+    router.post(`/projects/:projectId/discovery/${provider}/import`, async (req, res) => {
+      const project = scopedProject(req, res);
+      if (!project) return;
+      try {
+        let graph = await cloudDiscovery.importSelection(project.id, {
+          profileId: project.profileId,
+          selectedNodeIds: req.body?.selectedNodeIds,
+          expectedRevision: req.body?.expectedRevision,
+          author: project.profileId,
+          reason: req.body?.reason,
+        });
+        graph = reconcileLinkedApplication(project) || graph;
+        log(`${provider.toUpperCase()} resources imported`, project.name, project.profileId, {
+          projectId: project.id,
+          resourceCount: req.body?.selectedNodeIds?.length || 0,
+          revision: graph.revision,
+        });
+        res.json(graph);
+      } catch (error) { handleError(res, error); }
+    });
+  }
 
   router.get('/projects/:projectId/snapshots', (req, res) => {
     const project = scopedProject(req, res);
