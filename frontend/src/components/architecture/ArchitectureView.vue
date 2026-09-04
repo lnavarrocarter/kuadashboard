@@ -247,10 +247,14 @@
               :metrics-loading="metricsLoading"
               :collection="collectionByNode"
               :collection-loading="metricsLoading"
+              :trace-enabled="traceEnabled"
+              :trace="traceOverlay"
+              :trace-loading="traceLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
               @request-metrics="loadOperationalMetrics"
+              @request-trace="loadOperationalTrace"
             />
 
             <ArchitectureResources
@@ -381,6 +385,13 @@ const staleResources = computed(() => store.graph?.document?.nodes?.filter(node 
 const metricsByNode = ref({})
 const metricsLoading = ref(false)
 const collectionByNode = ref({})
+const traceOverlay = ref(null)
+const traceLoading = ref(false)
+const traceEnabled = computed(() => Boolean(
+  store.linkedApplication?.id && store.linkedApplication?.profileId &&
+  store.linkedApplication?.provider === 'aws' &&
+  store.graph?.document?.nodes?.some(node => node.resourceType === 'stepfunctions' && node.arn),
+))
 
 const METRIC_LABELS = {
   invocations_observed: 'Invocations',
@@ -399,6 +410,7 @@ function syncCountItems(counts = {}, labels) {
 async function loadProfile(profileId) {
   resourceProvider.value = ''
   selectedWorkflow.value = null
+  traceOverlay.value = null
   store.setActiveProfile(profileId || null)
   awsStore.setActiveProfile(profileId || null)
   if (!profileId) {
@@ -498,6 +510,62 @@ async function loadOperationalMetrics() {
     collectionByNode.value = nextCollection
   } finally {
     metricsLoading.value = false
+  }
+}
+
+function traceNodeForResource(resource, nodes) {
+  if (!resource) return null
+  return nodes.find(node => {
+    const identities = [node.arn, node.nativeId, node.discoveryKey].filter(Boolean).map(String)
+    return node.resourceType === resource.type &&
+      (identities.includes(String(resource.resource || '')) || node.name === resource.name)
+  }) || null
+}
+
+async function loadOperationalTrace() {
+  const application = store.linkedApplication
+  const workflowNode = store.graph?.document?.nodes?.find(node => node.resourceType === 'stepfunctions' && node.arn)
+  if (!application?.id || !application.profileId || !workflowNode) return
+  traceLoading.value = true
+  traceOverlay.value = null
+  try {
+    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    await apmStore.selectApplication(application.id)
+    const result = await apmStore.traceProcess(application.id, workflowNode.arn)
+    const trace = result?.traces?.[0]
+    if (!trace) {
+      toast('No recent execution trace found for this workflow', 'info')
+      return
+    }
+    const graphNodes = store.graph?.document?.nodes || []
+    const resources = apmStore.topology.resources || []
+    const path = [workflowNode.id]
+    for (const event of trace.timeline || []) {
+      const resource = event.resource
+      const apmResource = resources.find(candidate =>
+        candidate.type === resource?.type &&
+        [candidate.id, candidate.arn, candidate.key].filter(Boolean).map(String).includes(String(resource?.resource || '')))
+      const node = apmResource
+        ? graphNodes.find(candidate => sameApmResource(apmResource, candidate))
+        : traceNodeForResource(resource, graphNodes)
+      if (node && path[path.length - 1] !== node.id) path.push(node.id)
+    }
+    const edgeIds = []
+    for (let index = 1; index < path.length; index += 1) {
+      const edge = (store.graph?.document?.edges || []).find(candidate =>
+        candidate.status !== 'rejected' &&
+        ((candidate.sourceNodeId === path[index - 1] && candidate.targetNodeId === path[index]) ||
+          (candidate.sourceNodeId === path[index] && candidate.targetNodeId === path[index - 1])))
+      if (edge) edgeIds.push(edge.id)
+    }
+    traceOverlay.value = {
+      executionName: trace.name || trace.executionArn || 'Latest trace',
+      eventCount: (trace.timeline || []).length,
+      nodeIds: [...new Set(path)],
+      edgeIds: [...new Set(edgeIds)],
+    }
+  } finally {
+    traceLoading.value = false
   }
 }
 

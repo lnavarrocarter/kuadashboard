@@ -195,7 +195,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
         },
       },
@@ -249,7 +249,7 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
-        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false,
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
         providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       },
     })
@@ -487,6 +487,39 @@ describe('ArchitectureCanvas', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')
     expect(wrapper.find('.component-node-actions').exists()).toBe(false)
+  })
+
+  it('highlights the nodes and relationships contained in a process trace', async () => {
+    const traceGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'workflow', name: 'Orders workflow', resourceType: 'stepfunctions' },
+          { id: 'worker', name: 'Orders worker', resourceType: 'lambda' },
+          { id: 'audit', name: 'Audit bucket', resourceType: 's3' },
+        ],
+        edges: [
+          { id: 'workflow-worker', sourceNodeId: 'workflow', targetNodeId: 'worker', relationType: 'invokes', status: 'automatic' },
+          { id: 'worker-audit', sourceNodeId: 'worker', targetNodeId: 'audit', relationType: 'accesses', status: 'automatic' },
+        ],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: {
+        graph: traceGraph,
+        traceEnabled: true,
+        trace: { executionName: 'run-42', nodeIds: ['workflow', 'worker'], edgeIds: ['workflow-worker'] },
+      },
+      global: { stubs },
+    })
+
+    await wrapper.get('.canvas-layout-controls button[title="Highlight the latest process trace"]').trigger('click')
+    const flow = wrapper.getComponent(stubs.VueFlow)
+    expect(flow.props('nodes').find(node => node.id === 'worker').data.trace).toEqual({ sequence: 2, detail: 'run-42 · step 2' })
+    expect(flow.props('edges').find(edge => edge.id === 'workflow-worker').style).toMatchObject({ stroke: '#f778ba', strokeWidth: 3, opacity: 1 })
+    expect(flow.props('edges').find(edge => edge.id === 'worker-audit').style.opacity).toBe(0.1)
+    expect(wrapper.emitted('request-trace')).toBeUndefined()
   })
 
   it('emits canonical relationship and rounded layout operations', async () => {

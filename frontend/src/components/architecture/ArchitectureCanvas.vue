@@ -51,6 +51,9 @@
         <button :class="['btn', 'sm', { primary: showCollectionOverlay }]" :disabled="collectionLoading || !flowNodes.length" title="Toggle collection status overlay" @click="toggleCollectionOverlay">
           <i :data-lucide="collectionLoading ? 'loader-2' : 'radio-tower'"></i> Collection
         </button>
+        <button :class="['btn', 'sm', { primary: showTraceOverlay }]" :disabled="traceLoading || !traceEnabled || !flowNodes.length" title="Highlight the latest process trace" @click="toggleTraceOverlay">
+          <i :data-lucide="traceLoading ? 'loader-2' : 'route'"></i> Trace
+        </button>
         <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
           <i data-lucide="printer"></i> Export PDF
         </button>
@@ -59,6 +62,10 @@
         </button>
       </span>
       <span class="canvas-hint">Drag between handles to connect components</span>
+      <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
+        <i data-lucide="route"></i> {{ trace.executionName || 'Latest trace' }} · {{ trace.nodeIds.length }} nodes
+        <button class="btn sm" type="button" @click="clearTraceOverlay">Clear</button>
+      </span>
     </header>
 
     <div ref="canvasBodyRef" class="canvas-body">
@@ -105,6 +112,9 @@
             </span>
             <span v-if="data.collection" :class="['node-collection', `node-collection--${data.collection.status}`]" :title="data.collection.detail">
               <i :data-lucide="data.collection.icon"></i>{{ data.collection.label }}
+            </span>
+            <span v-if="data.trace" class="node-trace-badge" :title="data.trace.detail">
+              <i data-lucide="route"></i>{{ data.trace.sequence }}
             </span>
           </div>
         </template>
@@ -232,8 +242,11 @@ const props = defineProps({
   metricsLoading: { type: Boolean, default: false },
   collection: { type: Object, default: () => ({}) },
   collectionLoading: { type: Boolean, default: false },
+  traceEnabled: { type: Boolean, default: false },
+  trace: { type: Object, default: null },
+  traceLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace'])
 
 const nodeTypes = [
   { value: 'service', label: 'Service' },
@@ -259,6 +272,7 @@ const showEdgeLabels = ref(false)
 const showHealthOverlay = ref(false)
 const showMetricsOverlay = ref(false)
 const showCollectionOverlay = ref(false)
+const showTraceOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -360,6 +374,8 @@ const filteredGraphDocument = computed(() => {
   const ids = new Set(nodes.map(node => node.id))
   return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
 })
+const traceNodeIds = computed(() => new Set(props.trace?.nodeIds || []))
+const traceEdgeIds = computed(() => new Set(props.trace?.edgeIds || []))
 const sectionNodes = computed(() => layoutMode.value === 'resource-type' ? resourceSections.value.map(section => ({
   id: `section:${section.type}`,
   type: 'resource-section',
@@ -378,14 +394,20 @@ function withoutOpacity(item) {
 }
 const displayNodes = computed(() => [...sectionNodes.value, ...flowNodes.value.map(node => {
   const visible = withoutOpacity(node)
-  return focusedNodeIds.value
-    ? { ...visible, style: { ...visible.style, opacity: focusedNodeIds.value.has(node.id) ? 1 : 0.14 } }
-    : visible
+  let opacity = 1
+  if (focusedNodeIds.value) opacity = focusedNodeIds.value.has(node.id) ? 1 : 0.14
+  if (showTraceOverlay.value && props.trace) opacity = traceNodeIds.value.has(node.id) ? opacity : Math.min(opacity, 0.18)
+  return opacity === 1 ? visible : { ...visible, style: { ...visible.style, opacity } }
 })])
 const displayEdges = computed(() => flowEdges.value.map(edge => {
   const visible = withoutOpacity(edge)
-  if (!focusedNodeIds.value) return visible
-  const related = edge.source === selectedNode.value.id || edge.target === selectedNode.value.id
+  const traceActive = showTraceOverlay.value && props.trace
+  if (!focusedNodeIds.value && !traceActive) return visible
+  const related = focusedNodeIds.value && (edge.source === selectedNode.value.id || edge.target === selectedNode.value.id)
+  const traceRelated = traceActive && traceEdgeIds.value.has(edge.id)
+  let opacity = 1
+  if (focusedNodeIds.value) opacity = related ? 1 : 0.035
+  if (traceActive) opacity = traceRelated ? opacity : Math.min(opacity, 0.1)
   return {
     ...visible,
     label: related && showEdgeLabels.value ? visible.label : undefined,
@@ -393,8 +415,9 @@ const displayEdges = computed(() => flowEdges.value.map(edge => {
     labelBgStyle: related && showEdgeLabels.value ? { fill: '#1f6feb', fillOpacity: 0.92 } : undefined,
     style: {
       ...visible.style,
-      opacity: related ? 1 : 0.035,
+      opacity,
       ...(related && showEdgeLabels.value ? { stroke: '#1f6feb', strokeWidth: 2.4 } : {}),
+      ...(traceRelated ? { stroke: '#f778ba', strokeWidth: 3, opacity: 1 } : {}),
     },
   }
 }))
@@ -425,6 +448,12 @@ function nodeCollectionOverlay(node) {
   return props.collection[node.id] || { loading: props.collectionLoading, status: 'unknown', label: props.collectionLoading ? 'Loading' : 'No data', icon: props.collectionLoading ? 'loader-2' : 'circle-help', detail: 'No collection status available' }
 }
 
+function nodeTraceOverlay(node) {
+  if (!showTraceOverlay.value || !props.trace) return null
+  const sequence = traceNodeIds.value.has(node.id) ? props.trace.nodeIds.indexOf(node.id) + 1 : 0
+  return sequence ? { sequence, detail: `${props.trace.executionName || 'Latest trace'} · step ${sequence}` } : null
+}
+
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
@@ -439,6 +468,7 @@ function syncGraph(hydrateView = true) {
     showHealthOverlay.value = document.view.showHealthOverlay === true
     showMetricsOverlay.value = document.view.showMetricsOverlay === true
     showCollectionOverlay.value = document.view.showCollectionOverlay === true
+    showTraceOverlay.value = document.view.showTraceOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -466,6 +496,7 @@ function syncGraph(hydrateView = true) {
         health: nodeHealthOverlay(node),
         metrics: nodeMetricsOverlay(node),
         collection: nodeCollectionOverlay(node),
+        trace: nodeTraceOverlay(node),
       },
     }
   })
@@ -527,6 +558,7 @@ function persistView() {
       showHealthOverlay: showHealthOverlay.value,
       showMetricsOverlay: showMetricsOverlay.value,
       showCollectionOverlay: showCollectionOverlay.value,
+      showTraceOverlay: showTraceOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -553,6 +585,17 @@ function toggleMetricsOverlay() {
 function toggleCollectionOverlay() {
   showCollectionOverlay.value = !showCollectionOverlay.value
   if (showCollectionOverlay.value && !Object.keys(props.collection).length) emit('request-metrics')
+  persistView()
+}
+
+function toggleTraceOverlay() {
+  showTraceOverlay.value = !showTraceOverlay.value
+  if (showTraceOverlay.value && !props.trace) emit('request-trace')
+  persistView()
+}
+
+function clearTraceOverlay() {
+  showTraceOverlay.value = false
   persistView()
 }
 
@@ -791,7 +834,7 @@ watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading], () => syncGraph(false), { deep: true })
+watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -878,6 +921,11 @@ onMounted(refreshIcons)
 .relationship-status.suggested { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .relationship-status.manual { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
 .relationship-evidence { color: var(--text-dim); overflow-wrap: anywhere; }
+.trace-overlay-status { display: inline-flex; align-items: center; gap: 5px; color: #f778ba; font-size: 10px; }
+.trace-overlay-status > svg { width: 13px; height: 13px; }
+.trace-overlay-status .btn { min-height: 22px; padding: 2px 6px; color: var(--text-dim); }
+.node-trace-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #f778ba; background: color-mix(in srgb, #f778ba 14%, transparent); font-size: 9px; font-weight: 700; }
+.node-trace-badge > svg { width: 11px; height: 11px; }
 :deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
 :deep(.vue-flow__node-resource-section) { border: 0; background: transparent; box-shadow: none; pointer-events: none; }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }
