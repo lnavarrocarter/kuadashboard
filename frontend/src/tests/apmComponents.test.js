@@ -571,6 +571,36 @@ describe('APM setup cost consent', () => {
 })
 
 describe('APM topology intelligence', () => {
+  it('shows measured Kubernetes log signals and routes relationship review', async () => {
+    const wrapper = mount(ApmTopologyGraph, {
+      props: {
+        topology: {
+          application: { id: 'orders', name: 'orders' },
+          resources: [{ id: 'api', type: 'kubernetes', kind: 'Deployment', name: 'orders-api', namespace: 'orders', enabled: true }],
+          edges: [],
+        },
+        logInsights: [{
+          node: { id: 'api', name: 'orders-api', kind: 'Deployment' },
+          lineCount: 5,
+          errorCount: 3,
+          errorRatePercent: 60,
+          warningCount: 1,
+          repeatedErrorCount: 2,
+          keywordCounts: [{ keyword: 'timeout', count: 2 }],
+          recurringErrors: [{ signature: 'ERROR timeout calling payments', occurrences: 2 }],
+        }],
+      },
+    })
+
+    expect(wrapper.text()).toContain('Log intelligence')
+    expect(wrapper.text()).toContain('3 errors (60%)')
+    expect(wrapper.text()).toContain('timeout ×2')
+    expect(wrapper.text()).toContain('2×ERROR timeout calling payments')
+    await wrapper.find('.log-insight-title button').trigger('click')
+    expect(wrapper.emitted('suggest-log-relationships')[0][0]).toMatchObject({ id: 'api', name: 'orders-api' })
+    wrapper.unmount()
+  })
+
   it('shows explainable suggestions and emits confirmation explicitly', async () => {
     const wrapper = mount(ApmTopologyGraph, {
       props: {

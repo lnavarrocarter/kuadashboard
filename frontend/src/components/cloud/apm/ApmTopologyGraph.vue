@@ -38,6 +38,33 @@
       </div>
     </section>
 
+    <section v-if="logInsights.length" class="log-intelligence">
+      <div class="log-intelligence-heading">
+        <span><i data-lucide="file-warning"></i> {{ t('apm.logIntelligence') }}</span>
+        <small>{{ t('apm.logIntelligenceHint') }}</small>
+      </div>
+      <article v-for="insight in logInsights" :key="insight.node.id" class="log-insight">
+        <div class="log-insight-title">
+          <span><strong>{{ insight.node.name }}</strong><small>{{ insight.node.kind }} · {{ t('apm.logLines', { count: insight.lineCount }) }}</small></span>
+          <button class="btn sm" type="button" @click="$emit('suggest-log-relationships', insight.node)">
+            <i data-lucide="git-branch-plus"></i> {{ t('apm.logReviewRelations') }}
+          </button>
+        </div>
+        <div class="log-insight-stats">
+          <span :class="{ danger: insight.errorCount }">{{ t('apm.logErrors', { count: insight.errorCount, rate: insight.errorRatePercent }) }}</span>
+          <span :class="{ warning: insight.warningCount }">{{ t('apm.logWarnings', { count: insight.warningCount }) }}</span>
+          <span>{{ t('apm.logRepeatedMatches', { count: insight.repeatedErrorCount }) }}</span>
+          <span v-for="keyword in insight.keywordCounts.slice(0, 4)" :key="keyword.keyword" class="log-keyword">{{ keyword.keyword }} ×{{ keyword.count }}</span>
+        </div>
+        <ul v-if="insight.recurringErrors.length" class="recurring-error-list">
+          <li v-for="pattern in insight.recurringErrors.slice(0, 3)" :key="pattern.signature">
+            <strong>{{ t('apm.logPatternCount', { count: pattern.occurrences }) }}</strong><span>{{ pattern.signature }}</span>
+          </li>
+        </ul>
+        <small v-else class="log-insight-empty">{{ t('apm.logNoRepeatedPattern') }}</small>
+      </article>
+    </section>
+
     <div v-if="topology.resources?.length" class="apm-resource-grid">
       <button
         v-for="resource in topology.resources"
@@ -119,9 +146,10 @@ const props = defineProps({
   canAnalyzeCloud: { type: Boolean, default: false },
   analyzingCloud: { type: Boolean, default: false },
   confirmingSuggestions: { type: Boolean, default: false },
+  logInsights: { type: Array, default: () => [] },
 })
 
-defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource'])
+defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'suggest-log-relationships'])
 const { t } = useI18n()
 
 const resolvedEdges = computed(() => {
@@ -196,6 +224,24 @@ onMounted(renderIcons)
 .analysis-heading svg { width: 14px; height: 14px; color: #58a6ff; }
 .analysis-heading button { text-transform: none; }
 .cloud-scan-summary { color: #58a6ff !important; }
+.log-intelligence { display: flex; flex-direction: column; gap: 8px; margin: 0 0 15px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #d29922 45%, var(--border)); border-radius: 7px; background: color-mix(in srgb, #d29922 5%, var(--surface)); }
+.log-intelligence-heading { display: flex; align-items: baseline; gap: 8px; color: #d29922; font-size: 10px; text-transform: uppercase; }
+.log-intelligence-heading span { display: flex; align-items: center; gap: 6px; }
+.log-intelligence-heading svg { width: 13px; height: 13px; }
+.log-intelligence-heading small { color: var(--text-dim); font-size: 9px; text-transform: none; }
+.log-insight { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+.log-insight-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.log-insight-title > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.log-insight-title small, .log-insight-empty { color: var(--text-dim); font-size: 9px; }
+.log-insight-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text-dim); font-size: 9px; }
+.log-insight-stats span { padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; }
+.log-insight-stats .danger { color: #f85149; border-color: color-mix(in srgb, #f85149 45%, var(--border)); }
+.log-insight-stats .warning { color: #d29922; border-color: color-mix(in srgb, #d29922 45%, var(--border)); }
+.log-keyword { color: #58a6ff; }
+.recurring-error-list { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 6px 0 0; border-top: 1px solid var(--border); list-style: none; }
+.recurring-error-list li { display: flex; align-items: baseline; gap: 6px; color: var(--text-dim); font-size: 9px; }
+.recurring-error-list li strong { min-width: 23px; color: #f85149; }
+.recurring-error-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .analysis-copy p, .analysis-disclaimer { margin: 0; color: var(--text-dim); font-size: 10px; }
 .finding-list { display: flex; flex-wrap: wrap; gap: 5px; }
 .finding { padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 9px; }

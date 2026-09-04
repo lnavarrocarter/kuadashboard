@@ -209,6 +209,8 @@
             @confirm-all-dependencies="confirmAllDependencies"
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
+            :log-insights="logInsights"
+            @suggest-log-relationships="suggestRelationshipsFromLogs"
           />
 
           <ApmApplicationLogs
@@ -489,6 +491,7 @@ import { createIcons, icons } from 'lucide'
 import BaseModal from '../../BaseModal.vue'
 import CloudMetricChart from '../CloudMetricChart.vue'
 import { useApmStore } from '../../../stores/useApmStore'
+import { useTerminalStore } from '../../../stores/useTerminalStore'
 import { useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
@@ -496,6 +499,7 @@ import ApmProcessTrace from './ApmProcessTrace.vue'
 import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
 import ApmApplicationLogs from './ApmApplicationLogs.vue'
 import ApmProviderMetrics from './ApmProviderMetrics.vue'
+import { extractLogSignals, suggestGraphRelationships } from '../../../lib/logRelationshipEvidence'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
 import { buildResourceMetricSections, seriesKey } from './metricCatalog'
 
@@ -513,6 +517,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context'])
 const store = useApmStore()
+const terminalStore = useTerminalStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
 const setupOpen = ref(false)
@@ -617,6 +622,36 @@ const linkedArchitectureProjects = computed(() => store.architectureLink?.projec
 const hasArchitectureLink = computed(() => Boolean(
   store.selectedApplication?.architectureProjectIds?.length || store.selectedApplication?.architectureProjectId,
 ))
+const KUBE_LOG_TAB_RESOURCE_TYPE = {
+  Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods',
+}
+const logInsights = computed(() => {
+  const nodes = applicationResources.value
+    .filter(resource => resource.type === 'kubernetes')
+    .map(resource => ({
+      id: resource.id,
+      name: resource.name,
+      kind: resource.kind,
+      namespace: resource.namespace,
+      provider: 'kubernetes',
+      resourceType: resource.kind ? String(resource.kind).toLowerCase() : 'kubernetes',
+    }))
+  const linesByResource = new Map()
+  for (const tab of terminalStore.tabs) {
+    if (tab.type !== 'log' || !tab.entries?.length) continue
+    const resource = nodes.find(candidate =>
+      KUBE_LOG_TAB_RESOURCE_TYPE[candidate.kind] === tab.resourceType &&
+      candidate.namespace === tab.ns && candidate.name === tab.pod)
+    if (!resource) continue
+    const lines = linesByResource.get(resource.id) || []
+    lines.push(...tab.entries.map(entry => entry.text).filter(Boolean))
+    linesByResource.set(resource.id, lines)
+  }
+  return [...linesByResource.entries()].map(([resourceId, lines]) => {
+    const resource = nodes.find(candidate => candidate.id === resourceId)
+    return resource ? { node: resource, ...extractLogSignals(lines) } : null
+  }).filter(Boolean).filter(signal => signal.lineCount)
+})
 const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
 
@@ -638,6 +673,32 @@ function relationshipStatusLabel(status) {
   const key = `apm.relationshipStatus.${status}`
   const label = t(key)
   return label === key ? status : label
+}
+
+async function suggestRelationshipsFromLogs(node) {
+  if (!node?.namespace || !node?.name) return
+  const resourceType = KUBE_LOG_TAB_RESOURCE_TYPE[node.kind]
+  const tab = terminalStore.tabs.find(item =>
+    item.type === 'log' && item.resourceType === resourceType && item.ns === node.namespace && item.pod === node.name)
+  if (!tab?.entries?.length) return
+  const suggestions = suggestGraphRelationships({
+    lines: tab.entries.map(entry => entry.text),
+    sourceNode: node,
+    nodes: store.topology.resources.map(resource => ({
+      ...resource,
+      provider: resource.type === 'kubernetes' ? 'kubernetes' : resource.provider,
+      resourceType: resource.kind ? String(resource.kind).toLowerCase() : resource.type,
+    })),
+  })
+  if (!suggestions.length) return
+  emit('open-architecture', {
+    applicationId: store.selectedApplication.id,
+    projectId: store.selectedApplication.architectureProjectIds?.[0] || store.selectedApplication.architectureProjectId,
+    provider: props.provider,
+    profileId: props.profileId,
+    application: store.selectedApplication,
+    focus: { view: 'topology', node },
+  })
 }
 
 async function reviewRelationship(item, decision) {

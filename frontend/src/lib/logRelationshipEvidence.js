@@ -9,7 +9,9 @@ const SECRET_PATTERNS = [
 
 const K8S_DNS_RE = /\b([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.svc(?:\.cluster\.local)?\b/gi
 const BARE_HOST_RE = /https?:\/\/([a-z0-9]([a-z0-9-]*[a-z0-9])?)(?::\d+)?\//gi
-const ERROR_LINE_RE = /error|exception|fatal|panic/i
+const ERROR_LINE_RE = /\berror\b|\bexception\b|\bfatal\b|\bpanic\b|\bfail(?:ed|ure)?\b|\btimeout\b|\boomkilled\b|\bcrash(?:ed)?\b|\brefused\b|\bunavailable\b|\bdenied\b/i
+const ERROR_KEYWORD_RE = /\b(error|exception|fatal|panic|fail(?:ed|ure)?|timeout|oomkilled|crash(?:ed)?|refused|unavailable|denied)\b/gi
+const WARNING_KEYWORD_RE = /\bwarn(?:ing)?\b|\bdegraded\b|\bback[- ]?off\b/gi
 const CORRELATION_ID_RE = /\b(?:x-request-id|x-correlation-id|correlation[_-]?id|trace[_-]?id|request[_-]?id)\b\s*[:=]\s*([a-zA-Z0-9-]{8,64})/gi
 
 /** Redacts common secret-shaped substrings from a log line before it is ever kept as evidence. */
@@ -81,6 +83,39 @@ function extractCorrelationIds(lines = []) {
   return [...ids]
 }
 
+/**
+ * Produces aggregate signals for the Intelligent topology panel.
+ * Raw log payloads stay in the terminal tab; only counts and redacted signatures leave this helper.
+ */
+function extractLogSignals(lines = [], { minOccurrences = 2 } = {}) {
+  const normalizedLines = lines.map(line => sanitizeLogLine(line)).filter(Boolean)
+  const keywordCounts = new Map()
+  let errorCount = 0
+  let warningCount = 0
+  for (const line of normalizedLines) {
+    const errors = line.match(ERROR_KEYWORD_RE) || []
+    const warnings = line.match(WARNING_KEYWORD_RE) || []
+    if (errors.length) errorCount += 1
+    else if (warnings.length) warningCount += 1
+    for (const keyword of errors) {
+      const key = keyword.toLowerCase().replace('failed', 'fail').replace('failure', 'fail')
+      keywordCounts.set(key, (keywordCounts.get(key) || 0) + 1)
+    }
+  }
+  const recurringErrors = extractRecurringErrors(normalizedLines, { minOccurrences })
+  return {
+    lineCount: normalizedLines.length,
+    errorCount,
+    warningCount,
+    errorRatePercent: normalizedLines.length ? Number(((errorCount / normalizedLines.length) * 100).toFixed(1)) : 0,
+    keywordCounts: [...keywordCounts.entries()]
+      .map(([keyword, count]) => ({ keyword, count }))
+      .sort((left, right) => right.count - left.count),
+    recurringErrors,
+    repeatedErrorCount: recurringErrors.reduce((sum, item) => sum + item.occurrences, 0),
+  }
+}
+
 function confidenceFromOccurrences(occurrences) {
   return Math.min(0.35 + occurrences * 0.1, 0.85)
 }
@@ -119,5 +154,6 @@ export {
   extractServiceReferences,
   extractRecurringErrors,
   extractCorrelationIds,
+  extractLogSignals,
   suggestGraphRelationships,
 }

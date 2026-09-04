@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extractCorrelationIds,
+  extractLogSignals,
   extractRecurringErrors,
   extractServiceReferences,
   sanitizeLogLine,
@@ -55,6 +56,25 @@ describe('extractCorrelationIds', () => {
       'trace_id=trace-22222222',
     ]
     expect(extractCorrelationIds(lines).sort()).toEqual(['req-11111111', 'trace-22222222'])
+  })
+})
+
+describe('extractLogSignals', () => {
+  it('measures error rate, keywords and recurring patterns without returning raw log lines', () => {
+    const result = extractLogSignals([
+      'ERROR timeout calling payments',
+      'ERROR timeout calling payments',
+      'request failed with code 503',
+      'WARN retrying request',
+      'INFO ready',
+    ])
+    expect(result).toMatchObject({ lineCount: 5, errorCount: 3, warningCount: 1, repeatedErrorCount: 2 })
+    expect(result.keywordCounts).toEqual(expect.arrayContaining([
+      { keyword: 'timeout', count: 2 },
+      { keyword: 'fail', count: 1 },
+    ]))
+    expect(result.recurringErrors[0].occurrences).toBe(2)
+    expect(JSON.stringify(result)).not.toContain('token=')
   })
 })
 
