@@ -4,6 +4,12 @@
 
 Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Architecture persistente, navegación a nivel de recurso, overlays de salud en el Canvas, una vista canónica de Resources compartida, menos revisiones sorpresa del grafo, diagnóstico de sincronización visible, filtros compartidos entre Canvas y Routes, y sugerencias deterministas de relaciones basadas en logs. También corrige un bug real de duplicación encontrado al validar este trabajo.
 
+### Observability: inteligencia de logs Kubernetes en Intelligent
+
+- El panel de topología Intelligent ahora mide las líneas retenidas actualmente por las pestañas de logs Kubernetes abiertas explícitamente para workloads/Pods: cantidad de líneas, tasa de error, advertencias, firmas de error recurrentes normalizadas y conteos de palabras habituales de fallo.
+- La medición es determinista y está acotada a la sesión. No ejecuta otra lectura a Kubernetes, no persiste logs crudos ni participa en el scheduler de 30 minutos. Las tasas históricas y alertas quedan para una futura fase de agregación persistida.
+- La evidencia de relaciones derivada de logs redacta credenciales comunes, tokens bearer, credenciales en URLs, query strings de URLs y valores con forma de correo antes de mostrar una muestra corta. El flujo explícito de revisión sigue siendo obligatorio antes de confirmar una dependencia `calls`.
+
 ### Architecture Canvas: exportación a PDF y Mermaid
 
 - Se agregó un botón "Export PDF" que renderiza el diagrama completo (todos los nodos y relaciones, no solo lo visible en pantalla) en un PDF listo para imprimir, dimensionado al tamaño total del grafo, para que diagramas grandes puedan imprimirse o compartirse sin que nada quede recortado.
@@ -181,7 +187,7 @@ Continúa el plan de convergencia de KUA Application (Fases 9-16): contexto Arch
 - Los nodos de workload/Pod Kubernetes suman una acción "Suggest relationships from logs" que analiza el stream de logs ya abierto en busca de referencias DNS internas (`servicio.namespace.svc.cluster.local`) y propone relaciones `calls` hacia los nodos Kubernetes coincidentes del mismo diagrama.
 - La extracción es completamente determinista (sin IA/ML) y se sanitiza antes de guardarse como evidencia: primero se redactan patrones comunes de secretos (encabezados Authorization, tokens, API keys, contraseñas), y solo se conserva una muestra corta más un conteo de ocurrencias, nunca el log crudo completo.
 - Cada sugerencia se agrega con `status: suggested` y confianza menor a 1, pasando por el mismo flujo de revisión de aceptar/rechazar que ya se usa para el discovery automático — nada se agrega al grafo sin confirmación humana explícita.
-- La librería de extracción también agrupa firmas de errores recurrentes y recolecta ids de correlación/request/trace distintos para fases futuras, sin persistir ni mostrar el contenido crudo del log más allá de la vista de terminal existente.
+- La librería compartida de extracción también agrupa firmas de errores recurrentes y recolecta ids de correlación/request/trace distintos. Las señales de errores recurrentes ahora alimentan el panel Intelligent; los ids de correlación quedan disponibles para futuras fases de correlación entre logs, sin persistir ni mostrar el contenido crudo más allá de la vista de terminal existente.
 
 ## v1.14.1 (2026-08-26)
 

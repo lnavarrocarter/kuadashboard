@@ -29,6 +29,8 @@ The optional application observability feature stores its data in a local SQLite
 
 It does not persist raw CloudWatch log lines, request or response payloads, credentials, secrets, environment variables, or arbitrary resource tags. Candidate analysis uses inventory already loaded in the interface, returns only application-identity fields and scores, and does not create associations automatically.
 
+For Kubernetes log intelligence, KuaDashboard analyzes only the lines retained in an explicitly opened in-memory terminal tab. It may display aggregate counts and short normalized error signatures, and may create a reviewable relationship suggestion when an internal Kubernetes service reference matches the current topology. It does not add a separate log query or historical log store. Common credentials, bearer tokens, URL credentials, URL query strings, and email-shaped values are redacted before evidence is shown, but log-derived text must still be treated as sensitive operational data.
+
 APM metric buckets, cursors, and collection runs are deleted after 90 days. AWS request-budget records are retained for 15 months. Deleting an application cascades to its local APM data. Users can erase all APM history by closing KUA and deleting the local `apm-observability.sqlite3` database and its WAL companion files.
 
 ## Credential Storage

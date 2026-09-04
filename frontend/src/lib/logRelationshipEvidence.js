@@ -6,6 +6,10 @@ const SECRET_PATTERNS = [
   [/\bauthorization\b\s*:?\s*.*/gi, 'Authorization: [redacted]'],
   [/\b(api[_-]?key|apikey|x-api-key|token|password|secret)\b\s*[:=]\s*\S+/gi, (_, key) => `${key}: [redacted]`],
 ]
+const BEARER_TOKEN_RE = /\bBearer\s+[A-Za-z0-9._~-]+/gi
+const URL_CREDENTIALS_RE = /\b(https?|postgres(?:ql)?|mysql|redis):\/\/[^/\s@]+@/gi
+const URL_QUERY_RE = /(\bhttps?:\/\/[^\s/?#]+(?:\/[^\s?#]*)?)\?[^\s#]*/gi
+const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi
 
 const K8S_DNS_RE = /\b([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.svc(?:\.cluster\.local)?\b/gi
 const BARE_HOST_RE = /https?:\/\/([a-z0-9]([a-z0-9-]*[a-z0-9])?)(?::\d+)?\//gi
@@ -18,6 +22,11 @@ const CORRELATION_ID_RE = /\b(?:x-request-id|x-correlation-id|correlation[_-]?id
 function sanitizeLogLine(line) {
   let sanitized = String(line || '')
   for (const [pattern, replacement] of SECRET_PATTERNS) sanitized = sanitized.replace(pattern, replacement)
+  sanitized = sanitized
+    .replace(BEARER_TOKEN_RE, 'Bearer [redacted]')
+    .replace(URL_CREDENTIALS_RE, '$1://[redacted]@')
+    .replace(URL_QUERY_RE, '$1?[redacted]')
+    .replace(EMAIL_RE, '[redacted-email]')
   return sanitized.trim()
 }
 

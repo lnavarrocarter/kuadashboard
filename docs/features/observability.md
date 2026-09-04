@@ -6,6 +6,16 @@ KuaDashboard includes a provider-scoped local APM view under **Observability > A
 
 The **Topology** tab evaluates each application locally. It reports structural score, connected coverage, isolated resources, generic relationships, and explainable dependency suggestions. Suggestions use resource names, compatible types, and Kubernetes scope as evidence; they are never persisted as causal dependencies until you confirm them. For Step Functions and Lambda, inspect ASL definitions, traces, or correlated logs before confirming execution links.
 
+### Kubernetes log intelligence
+
+When a Kubernetes workload or Pod has an open log stream, the **Intelligent** topology panel can measure the lines currently retained by that terminal tab. It reports line count, error rate, warning count, recurring error signatures, and counts for common failure keywords such as `error`, `failed`, `timeout`, `panic`, `OOMKilled`, `refused`, and `unavailable`. Error signatures normalize timestamps, UUIDs, and numeric values so repeated failures can be reviewed as one pattern.
+
+The **Review relations** action scans the same open stream for internal Kubernetes service references such as `service.namespace.svc.cluster.local`. If a referenced service or workload exists in the application topology, KUA creates a reviewable `calls` suggestion. It never confirms a dependency automatically; the existing accept/reject flow remains required.
+
+This first version is session-scoped: it analyzes the in-memory terminal window (up to the terminal retention limit), does not issue an additional Kubernetes log query, and does not feed the 30-minute scheduler. Closing the log tab removes the source data. The counters are deterministic heuristics, not an ML anomaly score, and count matching lines rather than standardized provider severity events. Historical rates and alerting require a future persisted aggregation pipeline.
+
+Before displaying relationship evidence, KUA redacts common credentials, bearer tokens, URL credentials, URL query strings, and email-shaped values. This reduces exposure but is not guaranteed anonymization; operators should still treat logs and displayed error signatures as sensitive operational data.
+
 For AWS applications, **Analyze AWS definitions** reads the ASL definition of associated Step Functions on demand. Direct Lambda calls, nested workflows, SQS sends, and ECS tasks become 100%-confidence suggestions when the referenced resource already belongs to the application. References outside APM are grouped so you can explicitly add the resource, run the analysis again, and confirm the resulting dependency. Definitions and runtime parameters are never persisted.
 
 The **Traces** tab performs an explicit, read-only process lookup. Enter a request/correlation ID to inspect up to 10 recent executions from each associated Step Function, enter a known execution ARN, or enter an associated Step Function ARN to trace its latest execution. Step Functions history provides the ordered process spine and highlights Lambda, ECS, S3, and nested workflow events. By default, KUA returns matching JSON paths and the input structure while hiding input/output values and requesting execution history without event payloads. Trace data is not persisted. Each Step Functions API call consumes the local AWS request budget.

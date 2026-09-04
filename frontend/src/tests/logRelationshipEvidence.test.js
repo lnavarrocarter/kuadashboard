@@ -12,6 +12,9 @@ describe('sanitizeLogLine', () => {
   it('redacts common secret-shaped substrings before they are ever kept as evidence', () => {
     expect(sanitizeLogLine('Authorization: Bearer abc.def.ghi')).toBe('Authorization: [redacted]')
     expect(sanitizeLogLine('calling api with token=xyz123')).toContain('token: [redacted]')
+    expect(sanitizeLogLine('connect postgres://app:secret@db.internal:5432/orders')).toContain('postgres://[redacted]@db.internal')
+    expect(sanitizeLogLine('GET https://payments.internal/charge?customer=alice&debug=true')).toBe('GET https://payments.internal/charge?[redacted]')
+    expect(sanitizeLogLine('notify alice@example.com')).toBe('notify [redacted-email]')
     expect(sanitizeLogLine('GET /orders 200')).toBe('GET /orders 200')
   })
 })

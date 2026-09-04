@@ -72,7 +72,7 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 
 ## Observability
 
-- **[Local Application APM](./observability.md)** — Confirmed Lambda and Kubernetes membership, 30-minute UTC aggregates, local thresholds, manual dependencies, and cost guardrails without cloud provisioning.
+- **[Local Application APM](./observability.md)** — Confirmed Lambda and Kubernetes membership, 30-minute UTC aggregates, Kubernetes log intelligence, local thresholds, manual dependencies, and cost guardrails without cloud provisioning.
 
 ## Tools
 

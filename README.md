@@ -28,6 +28,7 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - Tablas con selección múltiple, eliminación masiva y ordenamiento correcto por `Age` usando duración real
 - Auto-refresh por vista activa sin perder contexto
 - Live log streaming (WebSocket, multi-container) para Pods y workloads (Deployments, StatefulSets, DaemonSets)
+- Inteligencia de logs Kubernetes en la topología de aplicaciones: tasa de errores, patrones repetidos y sugerencias de relaciones desde streams abiertos
 - Búsqueda, filtro por fecha y descarga de logs
 - Interactive shell (exec) en pods
 - Scale, restart, cordon/uncordon, drain con un clic

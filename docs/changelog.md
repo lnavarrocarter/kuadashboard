@@ -4,6 +4,12 @@
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 
+### Observability: Kubernetes log intelligence in Intelligent topology
+
+- The Intelligent topology panel now measures the currently retained lines from explicitly opened Kubernetes workload/Pod log tabs: line count, error rate, warning count, recurring normalized error signatures, and common failure-keyword counts.
+- The measurement is deterministic and session-scoped. It does not issue another Kubernetes read, does not persist raw logs, and does not participate in the 30-minute scheduler. Historical rates and alerting remain a future persisted aggregation phase.
+- Log-derived relationship evidence redacts common credentials, bearer tokens, URL credentials, URL query strings, and email-shaped values before displaying a short sample. The existing explicit review flow is still required before a `calls` dependency becomes confirmed.
+
 ### Architecture Canvas: PDF and Mermaid export
 
 - Added an "Export PDF" button that renders the entire diagram (all nodes and relationships, not just what's currently visible on screen) into a print-ready PDF sized to the full graph, so large diagrams can be printed or shared without anything being cut off.
@@ -181,7 +187,7 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 - Kubernetes workload/Pod nodes gained a "Suggest relationships from logs" action that scans the already-open log stream for internal DNS references (`service.namespace.svc.cluster.local`) and proposes `calls` edges to matching Kubernetes nodes in the same diagram.
 - Extraction is fully deterministic (no ML) and sanitized before anything is kept as evidence: common secret-shaped substrings (Authorization headers, tokens, API keys, passwords) are redacted first, and only a short sample plus an occurrence count are stored, never full raw log payloads.
 - Every suggestion is added with `status: suggested` and a confidence below 1, going through the same accept/reject relationship review already used for automatic discovery — nothing is added to the graph without explicit human confirmation.
-- The underlying extraction library also groups recurring error signatures and collects distinct correlation/request/trace ids for future phases, without persisting or displaying raw log content beyond the existing terminal view.
+- The shared extraction library also groups recurring error signatures and collects distinct correlation/request/trace ids. Recurring error signals now feed the Intelligent panel; correlation ids remain available for future cross-log phases, without persisting or displaying raw log content beyond the existing terminal view.
 
 ## v1.14.1 (2026-08-26)
 

@@ -72,7 +72,7 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 
 ## Observabilidad
 
-- **[APM local de aplicaciones](./observability.md)** — Pertenencia confirmada de Lambda y Kubernetes, agregados UTC de 30 minutos, umbrales locales, dependencias manuales y controles de coste sin provisionar recursos cloud.
+- **[APM local de aplicaciones](./observability.md)** — Pertenencia confirmada de Lambda y Kubernetes, agregados UTC de 30 minutos, inteligencia de logs Kubernetes, umbrales locales, dependencias manuales y controles de coste sin provisionar recursos cloud.
 
 ## Herramientas
 
