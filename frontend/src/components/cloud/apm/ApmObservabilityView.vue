@@ -485,7 +485,7 @@ const props = defineProps({
   stepFunctions: { type: Array, default: () => [] },
   loadInventory: { type: Function, default: null },
 })
-const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture'])
+const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context'])
 const store = useApmStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
@@ -647,14 +647,32 @@ function kubernetesLogResource(resource) {
   return resource.type === 'kubernetes' && ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod'].includes(resource.kind)
 }
 
+function emitApplicationContext() {
+  if (!store.selectedApplication) return
+  if (props.applicationId && store.selectedApplication.id !== props.applicationId) return
+  emit('application-context', {
+    ...store.selectedApplication,
+    provider: props.provider,
+    profileId: props.profileId,
+  })
+}
+
 async function refreshLocal() {
   await store.refreshLocal()
+  emitApplicationContext()
   await loadCharts()
   renderIcons()
 }
 
 async function chooseApplication(applicationId) {
   await store.selectApplication(applicationId)
+  if (store.selectedApplication) {
+    emit('application-context', {
+      ...store.selectedApplication,
+      provider: props.provider,
+      profileId: props.profileId,
+    })
+  }
   await loadCharts()
   selectedResourceId.value = ''
   mainEl.value?.scrollTo({ top: 0 })
@@ -913,7 +931,7 @@ watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) =>
 })
 watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen, architectureLinkOpen, kubernetesPreviewOpen], renderIcons)
 onMounted(renderIcons)
-defineExpose({ refreshLocal })
+defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
 </script>
 
 <style scoped>

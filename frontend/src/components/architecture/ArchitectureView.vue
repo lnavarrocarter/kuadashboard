@@ -26,6 +26,7 @@
             <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> Manual resource</button>
             <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
             <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
+            <button @click="emit('open-observability-setup')"><i data-lucide="square-activity"></i> Observability</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
@@ -335,6 +336,7 @@ const props = defineProps({
 })
 const emit = defineEmits([
   'open-observability', 'application-context',
+  'open-observability-setup',
   'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
   'open-aws-resource', 'open-aws-logs',
 ])
@@ -778,6 +780,7 @@ watch(() => store.linkedApplication, application => {
   if (application && activeView.value === 'resources') store.loadRegistry()
 })
 onMounted(() => loadProfile(props.profileId))
+defineExpose({ refreshWorkspace })
 </script>
 
 <style scoped>
