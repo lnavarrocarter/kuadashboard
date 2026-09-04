@@ -48,6 +48,9 @@
         <button :class="['btn', 'sm', { primary: showMetricsOverlay }]" :disabled="metricsLoading || !flowNodes.length" title="Toggle resource metrics overlay" @click="toggleMetricsOverlay">
           <i :data-lucide="metricsLoading ? 'loader-2' : 'chart-no-axes-combined'"></i> Metrics
         </button>
+        <button :class="['btn', 'sm', { primary: showCollectionOverlay }]" :disabled="collectionLoading || !flowNodes.length" title="Toggle collection status overlay" @click="toggleCollectionOverlay">
+          <i :data-lucide="collectionLoading ? 'loader-2' : 'radio-tower'"></i> Collection
+        </button>
         <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
           <i data-lucide="printer"></i> Export PDF
         </button>
@@ -99,6 +102,9 @@
               <span v-else v-for="metric in data.metrics.items" :key="metric.key" class="node-metric">
                 <small>{{ metric.label }}</small><strong>{{ metric.value }}</strong>
               </span>
+            </span>
+            <span v-if="data.collection" :class="['node-collection', `node-collection--${data.collection.status}`]" :title="data.collection.detail">
+              <i :data-lucide="data.collection.icon"></i>{{ data.collection.label }}
             </span>
           </div>
         </template>
@@ -224,6 +230,8 @@ const props = defineProps({
   observabilityEnabled: { type: Boolean, default: false },
   metrics: { type: Object, default: () => ({}) },
   metricsLoading: { type: Boolean, default: false },
+  collection: { type: Object, default: () => ({}) },
+  collectionLoading: { type: Boolean, default: false },
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics'])
 
@@ -250,6 +258,7 @@ const fitAfterSync = ref(false)
 const showEdgeLabels = ref(false)
 const showHealthOverlay = ref(false)
 const showMetricsOverlay = ref(false)
+const showCollectionOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -411,6 +420,11 @@ function nodeMetricsOverlay(node) {
   return props.metrics[node.id] || { loading: props.metricsLoading, items: [] }
 }
 
+function nodeCollectionOverlay(node) {
+  if (!showCollectionOverlay.value) return null
+  return props.collection[node.id] || { loading: props.collectionLoading, status: 'unknown', label: props.collectionLoading ? 'Loading' : 'No data', icon: props.collectionLoading ? 'loader-2' : 'circle-help', detail: 'No collection status available' }
+}
+
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
@@ -424,6 +438,7 @@ function syncGraph(hydrateView = true) {
     showEdgeLabels.value = document.view.showEdgeLabels === true
     showHealthOverlay.value = document.view.showHealthOverlay === true
     showMetricsOverlay.value = document.view.showMetricsOverlay === true
+    showCollectionOverlay.value = document.view.showCollectionOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -450,6 +465,7 @@ function syncGraph(hydrateView = true) {
         resourceType: node.resourceType || 'service',
         health: nodeHealthOverlay(node),
         metrics: nodeMetricsOverlay(node),
+        collection: nodeCollectionOverlay(node),
       },
     }
   })
@@ -510,6 +526,7 @@ function persistView() {
       showEdgeLabels: showEdgeLabels.value,
       showHealthOverlay: showHealthOverlay.value,
       showMetricsOverlay: showMetricsOverlay.value,
+      showCollectionOverlay: showCollectionOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -530,6 +547,12 @@ function toggleHealthOverlay() {
 function toggleMetricsOverlay() {
   showMetricsOverlay.value = !showMetricsOverlay.value
   if (showMetricsOverlay.value && !Object.keys(props.metrics).length) emit('request-metrics')
+  persistView()
+}
+
+function toggleCollectionOverlay() {
+  showCollectionOverlay.value = !showCollectionOverlay.value
+  if (showCollectionOverlay.value && !Object.keys(props.collection).length) emit('request-metrics')
   persistView()
 }
 
@@ -768,7 +791,7 @@ watch(layoutMode, mode => {
   if (mode !== 'resource-type') resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, () => props.metrics, () => props.metricsLoading], () => syncGraph(false), { deep: true })
+watch([providerFilter, kubeContextFilter, namespaceFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -795,6 +818,11 @@ onMounted(refreshIcons)
 .node-metric { display: inline-flex; align-items: baseline; gap: 3px; }
 .node-metric small { margin: 0; font-size: 8px; }
 .node-metric strong { color: var(--text); font-size: 9px; }
+.node-collection { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; padding: 2px 5px; border-radius: 8px; background: var(--bg-panel); color: var(--text-dim); font-size: 8px; }
+.node-collection--completed { color: #3fb950; }
+.node-collection--partial { color: #d29922; }
+.node-collection--failed, .node-collection--budget_exhausted { color: #f85149; }
+.node-collection :deep(svg) { width: 10px; height: 10px; }
 .component-metadata { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .component-metadata > span { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 7px; align-items: baseline; }
 .component-metadata small { color: var(--text-dim); font-size: 10px; }

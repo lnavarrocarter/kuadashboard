@@ -233,6 +233,8 @@
               :observability-enabled="Boolean(store.linkedApplication)"
               :metrics="metricsByNode"
               :metrics-loading="metricsLoading"
+              :collection="collectionByNode"
+              :collection-loading="metricsLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
@@ -365,6 +367,7 @@ const syncRelationshipSections = computed(() => [
 const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
 const metricsByNode = ref({})
 const metricsLoading = ref(false)
+const collectionByNode = ref({})
 
 const METRIC_LABELS = {
   invocations_observed: 'Invocations',
@@ -439,19 +442,36 @@ function formatMetricValue(value, unit) {
   return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ''}`
 }
 
+function collectionOverlay(run) {
+  if (!run) return { status: 'unknown', label: 'Not collected', icon: 'circle-help', detail: 'No collection has completed for this application' }
+  const status = run.status || 'unknown'
+  const label = status === 'budget_exhausted' ? 'Budget' : status.charAt(0).toUpperCase() + status.slice(1)
+  const timestamp = run.finishedAt || run.startedAt
+  return {
+    status,
+    label,
+    icon: status === 'completed' ? 'check-circle-2' : status === 'partial' ? 'triangle-alert' : 'circle-alert',
+    detail: timestamp ? `${label} · ${new Date(timestamp).toLocaleString()}` : label,
+  }
+}
+
 async function loadOperationalMetrics() {
   const application = store.linkedApplication
   if (!application?.id || !application.profileId) return
   metricsLoading.value = true
   metricsByNode.value = {}
+  collectionByNode.value = {}
   try {
     apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
     await apmStore.selectApplication(application.id)
     const resources = apmStore.topology.resources || []
+    const collectionStatus = collectionOverlay(apmStore.overview?.latestRun)
     const nextMetrics = {}
+    const nextCollection = {}
     for (const node of store.graph?.document?.nodes || []) {
       const resource = resources.find(candidate => sameApmResource(candidate, node))
       if (!resource) continue
+      nextCollection[node.id] = collectionStatus
       const charts = catalogFor(resource.type, resource.kind).charts || []
       const items = []
       for (const chart of charts) {
@@ -462,6 +482,7 @@ async function loadOperationalMetrics() {
       nextMetrics[node.id] = { loading: false, items }
     }
     metricsByNode.value = nextMetrics
+    collectionByNode.value = nextCollection
   } finally {
     metricsLoading.value = false
   }

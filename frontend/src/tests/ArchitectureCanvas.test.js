@@ -195,7 +195,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
         },
       },
@@ -249,7 +249,7 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
-        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false,
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false,
         providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       },
     })
@@ -277,6 +277,26 @@ describe('ArchitectureCanvas', () => {
     const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'worker')
     expect(node.data.metrics.items[0]).toEqual({ key: 'duration_ms', label: 'Duration', value: '42 ms' })
     expect(wrapper.emitted('operation')[0][0].value.showMetricsOverlay).toBe(true)
+  })
+
+  it('shows opt-in collection status on observable nodes', async () => {
+    const collectionGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'worker', name: 'Worker', resourceType: 'lambda' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: collectionGraph, collection: { worker: { status: 'partial', label: 'Partial', icon: 'triangle-alert', detail: 'Partial collection' } } },
+      global: { stubs },
+    })
+
+    await wrapper.get('button[title="Toggle collection status overlay"]').trigger('click')
+    const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'worker')
+    expect(node.data.collection).toMatchObject({ status: 'partial', label: 'Partial' })
+    expect(wrapper.emitted('operation')[0][0].value.showCollectionOverlay).toBe(true)
   })
 
   it('keeps the current local layout mode when a graph refresh has no persisted view yet', async () => {
