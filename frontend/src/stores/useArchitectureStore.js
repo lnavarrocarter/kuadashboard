@@ -10,6 +10,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const projects = ref([])
   const selectedProjectId = ref(null)
   const linkedApplication = ref(null)
+  const linkedApplications = ref([])
   const registry = ref(null)
   const registryLoading = ref(false)
   const graph = ref(null)
@@ -22,6 +23,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const discoveryPreview = ref(null)
   const kubernetesContexts = ref([])
   const kubernetesPreview = ref(null)
+  const gcpPreview = ref(null)
+  const vercelPreview = ref(null)
   const discovering = ref(false)
   const discoveryPhase = ref(null)
   const loading = ref(false)
@@ -44,6 +47,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   function resetProjectData() {
     selectedProjectId.value = null
     linkedApplication.value = null
+    linkedApplications.value = []
     registry.value = null
     graph.value = null
     snapshots.value = []
@@ -54,6 +58,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview.value = null
     kubernetesContexts.value = []
     kubernetesPreview.value = null
+    gcpPreview.value = null
+    vercelPreview.value = null
     discoveryPhase.value = null
   }
 
@@ -78,6 +84,21 @@ export const useArchitectureStore = defineStore('architecture', () => {
       selectedApplicationId.value = applications.value.some(application => application.id === previous)
         ? previous
         : null
+      return applications.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadApplicationCatalog() {
+    loading.value = true
+    error.value = null
+    try {
+      applications.value = await apiFetch('/api/architecture/applications/catalog')
+      selectedApplicationId.value = null
       return applications.value
     } catch (requestError) {
       error.value = requestError.message
@@ -112,15 +133,18 @@ export const useArchitectureStore = defineStore('architecture', () => {
     selectedApplicationId.value = applicationId || null
     const application = selectedApplication.value
     linkedApplication.value = application
+    linkedApplications.value = application ? [application] : []
     if (!application) return loadProjects({ preserveSelection: false })
     const result = await loadProjects({ preserveSelection: false, applicationId: application.id })
     linkedApplication.value = application
+    linkedApplications.value = [application]
     return result
   }
 
   async function selectProject(projectId, { manageLoading = true } = {}) {
     selectedProjectId.value = projectId || null
     linkedApplication.value = null
+    linkedApplications.value = []
     registry.value = null
     graph.value = null
     snapshots.value = []
@@ -131,6 +155,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview.value = null
     kubernetesContexts.value = []
     kubernetesPreview.value = null
+    gcpPreview.value = null
+    vercelPreview.value = null
     if (!selectedProjectId.value) return null
     if (manageLoading) loading.value = true
     error.value = null
@@ -144,14 +170,28 @@ export const useArchitectureStore = defineStore('architecture', () => {
       snapshots.value = nextSnapshots
       changes.value = nextChanges
       try {
-        const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
-        linkedApplication.value = link.application || null
-        if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
-          applications.value = [...applications.value, linkedApplication.value]
+        const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/applications`, { headers: headers() })
+        linkedApplications.value = Array.isArray(link) ? link : (link.applications || [])
+        linkedApplication.value = linkedApplications.value[0] || null
+        for (const application of linkedApplications.value) {
+          if (application?.id && !applications.value.some(item => item.id === application.id)) {
+            applications.value = [...applications.value, application]
+          }
         }
         selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
       } catch (_) {
-        linkedApplication.value = null
+        try {
+          const link = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/application`, { headers: headers() })
+          linkedApplications.value = link.application ? [link.application] : []
+          linkedApplication.value = link.application || null
+          if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
+            applications.value = [...applications.value, linkedApplication.value]
+          }
+          selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+        } catch (_) {
+          linkedApplications.value = []
+          linkedApplication.value = null
+        }
       }
       return nextGraph
     } catch (requestError) {
@@ -177,6 +217,50 @@ export const useArchitectureStore = defineStore('architecture', () => {
       return null
     } finally {
       registryLoading.value = false
+    }
+  }
+
+  async function refreshSelectedProjectData() {
+    if (!selectedProjectId.value) return null
+    error.value = null
+    try {
+      const projectId = selectedProjectId.value
+      const [nextGraph, nextSnapshots, nextChanges] = await Promise.all([
+        apiFetch(`/api/architecture/projects/${projectId}/graph`, { headers: headers() }),
+        apiFetch(`/api/architecture/projects/${projectId}/snapshots`, { headers: headers() }),
+        apiFetch(`/api/architecture/projects/${projectId}/changes?limit=50`, { headers: headers() }),
+      ])
+      graph.value = nextGraph
+      snapshots.value = nextSnapshots
+      changes.value = nextChanges
+      try {
+        const link = await apiFetch(`/api/architecture/projects/${projectId}/applications`, { headers: headers() })
+        linkedApplications.value = Array.isArray(link) ? link : (link.applications || [])
+        linkedApplication.value = linkedApplications.value[0] || null
+        for (const application of linkedApplications.value) {
+          if (application?.id && !applications.value.some(item => item.id === application.id)) {
+            applications.value = [...applications.value, application]
+          }
+        }
+        selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+      } catch (_) {
+        try {
+          const link = await apiFetch(`/api/architecture/projects/${projectId}/application`, { headers: headers() })
+          linkedApplications.value = link.application ? [link.application] : []
+          linkedApplication.value = link.application || null
+          if (linkedApplication.value?.id && !applications.value.some(application => application.id === linkedApplication.value.id)) {
+            applications.value = [...applications.value, linkedApplication.value]
+          }
+          selectedApplicationId.value = linkedApplication.value?.id || selectedApplicationId.value
+        } catch (_) {
+          linkedApplications.value = []
+          linkedApplication.value = null
+        }
+      }
+      return nextGraph
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
     }
   }
 
@@ -449,6 +533,57 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function previewCloudResources(provider) {
+    if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
+    discovering.value = true
+    discoveryPhase.value = `${provider}-resources`
+    error.value = null
+    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    try {
+      target.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/preview`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({}) },
+      )
+      return target.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  async function importCloudResources({ provider, selectedNodeIds }) {
+    if (!selectedProjectId.value || !graph.value || !['gcp', 'vercel'].includes(provider)) return null
+    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    if (!target.value || !(selectedNodeIds || []).length) return null
+    saving.value = true
+    error.value = null
+    try {
+      graph.value = await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/import`,
+        {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({
+            selectedNodeIds,
+            expectedRevision: graph.value.revision,
+            reason: `Import ${selectedNodeIds.length} ${provider} resources`,
+          }),
+        },
+      )
+      target.value = null
+      await loadChanges()
+      return graph.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function importKubernetesResources({ selectedNodeIds }) {
     if (!selectedProjectId.value || !graph.value || !kubernetesPreview.value) return null
     const selected = new Set(selectedNodeIds || [])
@@ -593,11 +728,14 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryPreview,
     kubernetesContexts,
     kubernetesPreview,
+    gcpPreview,
+    vercelPreview,
     error,
     graph,
     importAwsResources,
     importKubernetesResources,
     importKuaApp,
+    loadApplicationCatalog,
     loadAwsDeployments,
     loadKubernetesContexts,
     loadApplications,
@@ -605,13 +743,17 @@ export const useArchitectureStore = defineStore('architecture', () => {
     selectApplication,
     loading,
     linkedApplication,
+    linkedApplications,
     loadRegistry,
     registry,
     registryLoading,
     projects,
     previewAwsResources,
     previewKubernetesResources,
+    previewCloudResources,
+    importCloudResources,
     previewAwsSync,
+    refreshSelectedProjectData,
     saving,
     selectProject,
     selectedProject,

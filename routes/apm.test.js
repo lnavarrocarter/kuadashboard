@@ -81,11 +81,18 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     return { status: response.status, body: text ? JSON.parse(text) : null };
   }
 
+  async function architectureCatalogRequest(relativePath) {
+    const response = await fetch(`${architectureBaseUrl}${relativePath}`);
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  }
+
   return {
     auditEvents,
     database,
     architectureDatabase,
     architectureRequest,
+    architectureCatalogRequest,
     request,
     async close() {
       await new Promise(resolve => server.close(resolve));
@@ -302,6 +309,7 @@ test('cloud topology analysis is explicit and never confirms ASL suggestions aut
     assert.equal(analysis.status, 200);
     assert.equal(analysis.body.analysis.suggestions[0].confirmed, false);
     assert.equal(analysis.body.analysis.cloudScan.requests, 1);
+    assert.equal(analysis.body.analysis.cloudScan.suggestions[0].relationType, 'invokes');
     assert.equal(subject.database.listEdges(application.body.id).length, 0);
     assert.equal(calls[0].application.profileId, 'local:dev');
     assert.deepEqual(calls[0].resources.map(resource => resource.id).sort(), ['flow', 'worker']);
@@ -751,6 +759,25 @@ test('Architecture loads and creates the linked project by KUA Application conte
     const linked = await subject.architectureRequest(`/projects/${created.body.id}/application`);
     assert.equal(linked.body.application.id, applicationId);
     assert.equal(linked.body.application.team, 'platform');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Architecture exposes a cross-provider application catalog before profile selection', async () => {
+  const subject = await fixture();
+  try {
+    const awsApplication = await subject.request('/applications', {
+      method: 'POST', body: { name: 'aws-app', region: 'us-east-1' },
+    });
+    const kubeApplication = subject.database.createApplication({
+      provider: 'kubernetes', profileId: 'local:kube', name: 'kube-app', region: 'cluster',
+    });
+
+    const catalog = await subject.architectureCatalogRequest('/applications/catalog');
+    assert.equal(catalog.status, 200);
+    assert.deepEqual(catalog.body.map(item => item.id), [awsApplication.body.id, kubeApplication.id]);
+    assert.deepEqual(catalog.body.map(item => item.provider), ['aws', 'kubernetes']);
   } finally {
     await subject.close();
   }

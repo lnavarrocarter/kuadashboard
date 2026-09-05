@@ -21,6 +21,18 @@ beforeEach(() => {
 })
 
 describe('architecture workspace', () => {
+  it('loads the cross-provider application catalog without a profile header', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toBe('/api/architecture/applications/catalog')
+      expect(options.headers).toEqual({})
+      return response([{ id: 'application-a', name: 'Orders', provider: 'kubernetes', profileId: 'local:dev' }])
+    })
+
+    await expect(store.loadApplicationCatalog()).resolves.toHaveLength(1)
+    expect(store.applications[0].provider).toBe('kubernetes')
+    expect(store.selectedApplicationId).toBeNull()
+  })
+
   it('loads the KUA Application catalog and scopes projects to the selected application', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(options.headers['X-Profile-Id']).toBe('local:dev')
@@ -58,6 +70,48 @@ describe('architecture workspace', () => {
     expect(store.graph.revision).toBe(2)
     expect(store.snapshots).toHaveLength(1)
     expect(store.changes).toHaveLength(1)
+  })
+
+  it('refreshes the selected project without clearing the current graph or global loading state', async () => {
+    const originalGraph = { revision: 2, document: { nodes: [{ id: 'old' }], edges: [] } }
+    store.setActiveProfile('local:dev')
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(options.headers['X-Profile-Id']).toBe('local:dev')
+      if (url.endsWith('/projects')) return response([{ id: 'project-a', name: 'Orders' }])
+      if (url.endsWith('/projects/project-a/graph')) return response(originalGraph)
+      if (url.endsWith('/projects/project-a/snapshots')) return response([{ id: 'snapshot-a', version: 1 }])
+      if (url.includes('/projects/project-a/changes')) return response([{ id: 'change-a', revision: 2 }])
+      if (url.endsWith('/projects/project-a/application')) return response({ application: { id: 'application-a', name: 'Orders', profileId: 'local:dev' } })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    await store.loadProjects()
+
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(options.headers['X-Profile-Id']).toBe('local:dev')
+      expect(store.loading).toBe(false)
+      if (url.endsWith('/projects/project-a/graph')) {
+        expect(store.graph).toEqual(originalGraph)
+        return response({ revision: 3, document: { nodes: [{ id: 'new' }], edges: [] } })
+      }
+      if (url.endsWith('/projects/project-a/snapshots')) {
+        expect(store.graph).toEqual(originalGraph)
+        return response([{ id: 'snapshot-b', version: 2 }])
+      }
+      if (url.includes('/projects/project-a/changes')) {
+        expect(store.graph).toEqual(originalGraph)
+        return response([{ id: 'change-b', revision: 3 }])
+      }
+      if (url.endsWith('/projects/project-a/applications')) return response({ applications: [{ id: 'application-a', name: 'Orders', profileId: 'local:dev' }] })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    const graph = await store.refreshSelectedProjectData()
+
+    expect(graph.revision).toBe(3)
+    expect(store.graph.document.nodes[0].id).toBe('new')
+    expect(store.snapshots[0].version).toBe(2)
+    expect(store.changes[0].revision).toBe(3)
+    expect(store.linkedApplication.id).toBe('application-a')
   })
 
   it('loads the shared registry for the linked application', async () => {
@@ -257,5 +311,31 @@ describe('architecture workspace', () => {
     expect(imported.edges).toHaveLength(1)
     // The already-present node travels as context so the edge has both ends; the server merges it.
     expect(imported.nodes.map(node => node.id).sort()).toEqual(['deploy-1', 'pod-1'])
+  })
+
+  it('previews and imports a selected GCP resource with the current graph revision', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/discovery/gcp/preview')) {
+        expect(options.method).toBe('POST')
+        return response({ nodes: [{ id: 'gcp:run', name: 'orders' }], relationships: [], sources: [], scope: {} })
+      }
+      if (url.endsWith('/discovery/gcp/import')) {
+        const body = JSON.parse(options.body)
+        expect(body.expectedRevision).toBe(2)
+        expect(body.selectedNodeIds).toEqual(['gcp:run'])
+        return response({ revision: 3, document: { nodes: [{ id: 'gcp:run' }], edges: [] } })
+      }
+      if (url.includes('/changes')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 2, document: { nodes: [], edges: [] } }
+
+    await store.previewCloudResources('gcp')
+    const graph = await store.importCloudResources({ provider: 'gcp', selectedNodeIds: ['gcp:run'] })
+
+    expect(graph.revision).toBe(3)
+    expect(store.gcpPreview).toBeNull()
   })
 })

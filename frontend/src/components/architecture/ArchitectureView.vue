@@ -24,8 +24,9 @@
             <button :class="{ active: resourceProvider === 'aws' }" @click="resourceProvider = 'aws'"><i data-lucide="cloud"></i> AWS</button>
             <button :class="{ active: resourceProvider === 'kubernetes' }" @click="resourceProvider = 'kubernetes'"><i data-lucide="boxes"></i> Kubernetes</button>
             <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> Manual resource</button>
-            <button disabled title="GCP adapter is planned"><i data-lucide="cloud-cog"></i> GCP</button>
-            <button disabled title="Vercel adapter is planned"><i data-lucide="triangle"></i> Vercel</button>
+            <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
+            <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
+            <button @click="emit('open-observability-setup')"><i data-lucide="square-activity"></i> Observability</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
@@ -34,10 +35,29 @@
       </div>
     </header>
 
-    <div v-if="!profileId" class="architecture-empty">
-      <i data-lucide="cloud-cog"></i>
-      <strong>Select an application profile</strong>
-      <span>Architecture projects are isolated by their KUA Application profile.</span>
+    <div v-if="!profileId" class="architecture-empty architecture-application-picker">
+      <i data-lucide="boxes"></i>
+      <strong>Select a KUA application</strong>
+      <span>Choose an application to open its Architecture workspace.</span>
+      <div v-if="store.loading" class="architecture-empty compact">Loading applications...</div>
+      <div v-else-if="store.applications.length" class="architecture-first-access-list">
+        <button
+          v-for="application in store.applications"
+          :key="application.id"
+          class="architecture-first-access-row"
+          @click="selectApplication(application.id)"
+        >
+          <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
+          <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template><template v-if="application.team"> · {{ application.team }}</template></small></span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
+      <template v-else-if="!store.error">
+        <span>No KUA applications are configured yet.</span>
+        <button class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Refresh</button>
+      </template>
+      <button v-if="store.error" class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Retry</button>
+      <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
     </div>
 
     <template v-else>
@@ -49,9 +69,9 @@
         <button type="button" class="btn sm" @click="creatingProject = false">Cancel</button>
       </form>
 
-      <div class="architecture-layout">
-        <aside class="architecture-projects">
-          <template v-if="store.applications.length">
+      <div :class="['architecture-layout', { 'architecture-layout--embedded': props.hideApplicationList }]">
+        <aside v-if="!props.hideApplicationList" class="architecture-projects">
+          <template v-if="!props.hideApplicationList && store.applications.length">
             <div class="architecture-list-heading"><span>KUA Applications</span><strong>{{ store.applications.length }}</strong></div>
             <button
               v-for="application in store.applications"
@@ -109,13 +129,13 @@
               </form>
             </section>
 
-            <section v-if="store.selectedApplication" class="architecture-application-context">
-              <span><small>Application</small><strong>{{ store.selectedApplication.name }}</strong></span>
-              <span><small>Provider</small><strong>{{ store.selectedApplication.provider.toUpperCase() }}</strong></span>
-              <span><small>Environment</small><strong>{{ store.selectedApplication.environment || '—' }}</strong></span>
-              <span><small>Team</small><strong>{{ store.selectedApplication.team || '—' }}</strong></span>
+            <section v-if="store.selectedApplication || store.linkedApplications.length" class="architecture-application-context">
+              <span class="architecture-application-context-wide"><small>Applications</small><strong>{{ linkedApplicationLabel }}</strong></span>
+              <span><small>Provider</small><strong>{{ activeApplication?.provider?.toUpperCase() || '—' }}</strong></span>
+              <span><small>Environment</small><strong>{{ activeApplication?.environment || '—' }}</strong></span>
+              <span><small>Team</small><strong>{{ activeApplication?.team || '—' }}</strong></span>
               <span><small>Scopes</small><strong>{{ store.graph?.document?.scopes?.length || 0 }}</strong></span>
-              <span :class="store.selectedApplication.architectureProjectId ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ store.selectedApplication.architectureProjectId ? 'Linked' : 'Not linked' }}</strong></span>
+              <span :class="(store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ (store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'Linked' : 'Not linked' }}</strong></span>
             </section>
 
             <section class="architecture-stats">
@@ -187,6 +207,18 @@
               @close="resourceProvider = ''"
               @imported="resourceProvider = ''"
             />
+            <ArchitectureCloudDiscoveryPanel
+              v-if="resourceProvider === 'gcp'"
+              provider="gcp"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
+            <ArchitectureCloudDiscoveryPanel
+              v-if="resourceProvider === 'vercel'"
+              provider="vercel"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
 
             <div class="architecture-view-tabs">
               <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
@@ -211,9 +243,19 @@
               v-if="store.graph && activeView === 'canvas'"
               :graph="store.graph"
               :saving="store.saving"
+              :observability-enabled="Boolean(store.linkedApplication)"
+              :metrics="metricsByNode"
+              :metrics-loading="metricsLoading"
+              :collection="collectionByNode"
+              :collection-loading="metricsLoading"
+              :trace-enabled="traceEnabled"
+              :trace="traceOverlay"
+              :trace-loading="traceLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
+              @request-metrics="loadOperationalMetrics"
+              @request-trace="loadOperationalTrace"
             />
 
             <ArchitectureResources
@@ -272,6 +314,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useApmStore } from '../../stores/useApmStore'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useToast } from '../../composables/useToast'
@@ -280,21 +323,26 @@ import StepFnDetail from '../StepFnDetail.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
+import ArchitectureCloudDiscoveryPanel from './ArchitectureCloudDiscoveryPanel.vue'
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
+import { catalogFor } from '../cloud/apm/metricCatalog'
 
 const props = defineProps({
   profileId: { type: String, default: '' },
   projectId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
+  hideApplicationList: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'open-observability', 'application-context',
+  'open-observability-setup',
   'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
   'open-aws-resource', 'open-aws-logs',
 ])
 const store = useArchitectureStore()
+const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
 const { toast } = useToast()
@@ -306,6 +354,10 @@ const activeView = ref('routes')
 const selectedWorkflow = ref(null)
 const bundleInput = ref(null)
 const activeApplication = computed(() => store.linkedApplication || store.selectedApplication)
+const linkedApplicationLabel = computed(() => {
+  const items = store.linkedApplications.length ? store.linkedApplications : (store.selectedApplication ? [store.selectedApplication] : [])
+  return items.map(application => application.name).join(', ') || '—'
+})
 const applicationContextLabel = computed(() => store.linkedApplication
   ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
   : 'Architecture')
@@ -337,6 +389,26 @@ const syncRelationshipSections = computed(() => [
   ['new', 'New relationships'], ['reinforced', 'Reinforced relationships'], ['missingEvidence', 'Relationships missing evidence'], ['rejected', 'Rejected relationships'], ['manual', 'Manual relationships'],
 ].map(([key, label]) => ({ key: `relationship:${key}`, label, items: store.syncPreview?.relationships?.[key] || [] })))
 const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
+const metricsByNode = ref({})
+const metricsLoading = ref(false)
+const collectionByNode = ref({})
+const traceOverlay = ref(null)
+const traceLoading = ref(false)
+const traceEnabled = computed(() => Boolean(
+  store.linkedApplication?.id && store.linkedApplication?.profileId &&
+  store.linkedApplication?.provider === 'aws' &&
+  store.graph?.document?.nodes?.some(node => node.resourceType === 'stepfunctions' && node.arn),
+))
+
+const METRIC_LABELS = {
+  invocations_observed: 'Invocations',
+  errors_observed: 'Errors',
+  duration_ms: 'Duration',
+  cpu_cores: 'CPU',
+  memory_bytes: 'Memory',
+  log_bytes: 'Logs',
+  pods_ready: 'Ready pods',
+}
 
 function syncCountItems(counts = {}, labels) {
   return Object.entries(labels).map(([key, label]) => ({ key, label, count: counts?.[key] || 0 }))
@@ -345,9 +417,13 @@ function syncCountItems(counts = {}, labels) {
 async function loadProfile(profileId) {
   resourceProvider.value = ''
   selectedWorkflow.value = null
+  traceOverlay.value = null
   store.setActiveProfile(profileId || null)
   awsStore.setActiveProfile(profileId || null)
-  if (!profileId) return nextTick(() => createIcons({ icons }))
+  if (!profileId) {
+    await store.loadApplicationCatalog()
+    return nextTick(() => createIcons({ icons }))
+  }
   const applications = await store.loadApplications()
   if (props.applicationId && applications.some(application => application.id === props.applicationId)) {
     await store.selectApplication(props.applicationId)
@@ -367,18 +443,156 @@ async function loadProfile(profileId) {
 }
 
 async function refreshWorkspace() {
+  const currentView = activeView.value
   const currentApplicationId = props.applicationId || store.selectedApplicationId || ''
-  if (currentApplicationId) {
+  if (store.selectedProjectId) {
+    await store.refreshSelectedProjectData()
+    if (currentView === 'resources' && store.linkedApplication) await store.loadRegistry()
+  } else if (currentApplicationId) {
     await store.loadApplications()
     await store.selectApplication(currentApplicationId)
   } else {
     await store.loadProjects({ applicationId: '' })
   }
+  if (['routes', 'canvas', 'resources'].includes(currentView)) activeView.value = currentView
   nextTick(() => createIcons({ icons }))
 }
 
+function sameApmResource(resource, node) {
+  const typeMatches = node.provider === 'kubernetes'
+    ? resource.type === 'kubernetes' && (!node.kind || resource.kind === node.kind)
+    : resource.type === node.resourceType
+  if (!typeMatches) return false
+  const identities = [node.arn, node.nativeId, node.discoveryKey].filter(Boolean)
+  if (identities.some(identity => [resource.id, resource.arn, resource.key].includes(identity))) return true
+  return resource.name === node.name
+}
+
+function formatMetricValue(value, unit) {
+  if (value == null) return null
+  if (unit === 'bytes') {
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GiB`
+    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} KiB`
+    return `${Math.round(value)} B`
+  }
+  return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ''}`
+}
+
+function collectionOverlay(run) {
+  if (!run) return { status: 'unknown', label: 'Not collected', icon: 'circle-help', detail: 'No collection has completed for this application' }
+  const status = run.status || 'unknown'
+  const label = status === 'budget_exhausted' ? 'Budget' : status.charAt(0).toUpperCase() + status.slice(1)
+  const timestamp = run.finishedAt || run.startedAt
+  return {
+    status,
+    label,
+    icon: status === 'completed' ? 'check-circle-2' : status === 'partial' ? 'triangle-alert' : 'circle-alert',
+    detail: timestamp ? `${label} · ${new Date(timestamp).toLocaleString()}` : label,
+  }
+}
+
+async function loadOperationalMetrics() {
+  const application = store.linkedApplication
+  if (!application?.id || !application.profileId) return
+  metricsLoading.value = true
+  metricsByNode.value = {}
+  collectionByNode.value = {}
+  try {
+    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    await apmStore.selectApplication(application.id)
+    const resources = apmStore.topology.resources || []
+    const collectionStatus = collectionOverlay(apmStore.overview?.latestRun)
+    const nextMetrics = {}
+    const nextCollection = {}
+    for (const node of store.graph?.document?.nodes || []) {
+      const resource = resources.find(candidate => sameApmResource(candidate, node))
+      if (!resource) continue
+      nextCollection[node.id] = collectionStatus
+      const charts = catalogFor(resource.type, resource.kind).charts || []
+      const items = []
+      for (const chart of charts) {
+        const points = await apmStore.loadSeries(chart.metric, { resourceId: resource.id })
+        const value = formatMetricValue(points.at(-1)?.v, chart.unit)
+        if (value != null) items.push({ key: chart.metric, label: METRIC_LABELS[chart.metric] || chart.metric, value })
+      }
+      nextMetrics[node.id] = { loading: false, items }
+    }
+    metricsByNode.value = nextMetrics
+    collectionByNode.value = nextCollection
+  } finally {
+    metricsLoading.value = false
+  }
+}
+
+function traceNodeForResource(resource, nodes) {
+  if (!resource) return null
+  return nodes.find(node => {
+    const identities = [node.arn, node.nativeId, node.discoveryKey].filter(Boolean).map(String)
+    return node.resourceType === resource.type &&
+      (identities.includes(String(resource.resource || '')) || node.name === resource.name)
+  }) || null
+}
+
+async function loadOperationalTrace() {
+  const application = store.linkedApplication
+  const workflowNode = store.graph?.document?.nodes?.find(node => node.resourceType === 'stepfunctions' && node.arn)
+  if (!application?.id || !application.profileId || !workflowNode) return
+  traceLoading.value = true
+  traceOverlay.value = null
+  try {
+    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    await apmStore.selectApplication(application.id)
+    const result = await apmStore.traceProcess(application.id, workflowNode.arn)
+    const trace = result?.traces?.[0]
+    if (!trace) {
+      toast('No recent execution trace found for this workflow', 'info')
+      return
+    }
+    const graphNodes = store.graph?.document?.nodes || []
+    const resources = apmStore.topology.resources || []
+    const path = [workflowNode.id]
+    for (const event of trace.timeline || []) {
+      const resource = event.resource
+      const apmResource = resources.find(candidate =>
+        candidate.type === resource?.type &&
+        [candidate.id, candidate.arn, candidate.key].filter(Boolean).map(String).includes(String(resource?.resource || '')))
+      const node = apmResource
+        ? graphNodes.find(candidate => sameApmResource(apmResource, candidate))
+        : traceNodeForResource(resource, graphNodes)
+      if (node && path[path.length - 1] !== node.id) path.push(node.id)
+    }
+    const edgeIds = []
+    for (let index = 1; index < path.length; index += 1) {
+      const edge = (store.graph?.document?.edges || []).find(candidate =>
+        candidate.status !== 'rejected' &&
+        ((candidate.sourceNodeId === path[index - 1] && candidate.targetNodeId === path[index]) ||
+          (candidate.sourceNodeId === path[index] && candidate.targetNodeId === path[index - 1])))
+      if (edge) edgeIds.push(edge.id)
+    }
+    traceOverlay.value = {
+      executionName: trace.name || trace.executionArn || 'Latest trace',
+      eventCount: (trace.timeline || []).length,
+      nodeIds: [...new Set(path)],
+      edgeIds: [...new Set(edgeIds)],
+    }
+  } finally {
+    traceLoading.value = false
+  }
+}
+
 async function selectApplication(applicationId) {
+  if (!profileId) {
+    const application = store.applications.find(item => item.id === applicationId)
+    if (application) emit('application-context', application)
+    return
+  }
   await store.selectApplication(applicationId)
+  nextTick(() => createIcons({ icons }))
+}
+
+async function refreshApplicationCatalog() {
+  await store.loadApplicationCatalog()
   nextTick(() => createIcons({ icons }))
 }
 
@@ -504,6 +718,14 @@ const KUBE_LOG_TAB_RESOURCE_TYPE = {
 
 function handleNodeAction({ action, node } = {}) {
   if (action === 'kubernetes-log-suggestions') return suggestRelationshipsFromLogs(node)
+  if (['observability-metrics', 'observability-traces'].includes(action)) {
+    if (!store.linkedApplication || !node) return
+    emit('open-observability', store.linkedApplication, {
+      view: action === 'observability-traces' ? 'traces' : 'metrics',
+      node,
+    })
+    return
+  }
   const eventName = NODE_ACTION_EVENTS[action]
   if (eventName && node) emit(eventName, node)
 }
@@ -568,10 +790,18 @@ watch(() => store.linkedApplication, application => {
   if (application && activeView.value === 'resources') store.loadRegistry()
 })
 onMounted(() => loadProfile(props.profileId))
+defineExpose({ refreshWorkspace })
 </script>
 
 <style scoped>
 .architecture-view { min-height: 100%; display: flex; flex-direction: column; color: var(--text); }
+.architecture-application-picker { flex: 1; min-height: 260px; }
+.architecture-first-access-list { width: min(520px, 100%); display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.architecture-first-access-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: inherit; text-align: left; cursor: pointer; }
+.architecture-first-access-row:hover { border-color: #3fb950; background: var(--bg-hover); }
+.architecture-first-access-row > span:nth-child(2) { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.architecture-first-access-row small { color: var(--text-dim); }
+.architecture-first-access-row > svg { color: var(--text-dim); width: 15px; }
 .bundle-file-input { display: none; }
 .architecture-toolbar { min-height: 58px; padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .architecture-title, .architecture-actions, .architecture-project-header, .snapshot-form { display: flex; align-items: center; gap: 10px; }
@@ -586,6 +816,7 @@ onMounted(() => loadProfile(props.profileId))
 .architecture-title small, .architecture-project-row small, .snapshot-row small { color: var(--text-dim); }
 .architecture-create { padding: 10px 18px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1.5fr) auto auto; gap: 8px; }
 .architecture-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+.architecture-layout--embedded { grid-template-columns: minmax(0, 1fr); }
 .architecture-projects { border-right: 1px solid var(--border); padding: 10px; overflow: auto; }
 .architecture-list-heading { padding: 5px 7px 10px; display: flex; justify-content: space-between; color: var(--text-dim); font-size: 12px; text-transform: uppercase; }
 .architecture-project-row, .architecture-project-empty { width: 100%; border: 0; background: transparent; color: inherit; padding: 9px 8px; display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer; border-radius: 5px; }

@@ -26,8 +26,8 @@
 
     <div v-if="store.error" class="alert-error apm-error">{{ store.error }}</div>
 
-    <div class="apm-layout">
-      <aside class="application-list">
+    <div :class="['apm-layout', { 'apm-layout--embedded': props.hideApplicationList }]">
+      <aside v-if="!props.hideApplicationList" class="application-list">
         <div class="list-heading"><span>{{ t('apm.applications') }}</span><strong>{{ store.filteredApplications.length }}</strong></div>
         <button
           v-for="application in store.filteredApplications"
@@ -75,7 +75,7 @@
                 <i data-lucide="sliders-horizontal"></i>
               </button>
               <button class="btn sm" @click="openArchitectureLink">
-                <i data-lucide="network"></i> {{ store.selectedApplication.architectureProjectId ? 'Open architecture' : 'Link architecture' }}
+                <i data-lucide="network"></i> {{ hasArchitectureLink ? 'Open architecture' : 'Link architecture' }}
               </button>
               <button class="btn sm" :disabled="store.loadingKubernetesContexts" @click="openKubernetesPreview">
                 <i :data-lucide="store.loadingKubernetesContexts ? 'loader-2' : 'boxes'"></i>
@@ -88,19 +88,24 @@
             </div>
           </section>
 
+          <section v-if="focusedResource" class="apm-resource-focus">
+            <i data-lucide="focus"></i>
+            <span><strong>Resource focus</strong><small>Metrics filtered to {{ focusedResource.name }}</small></span>
+          </section>
+
           <section class="apm-status-strip">
             <span><i data-lucide="database"></i> {{ t('apm.localStorage', { range: store.range }) }}</span>
             <span><i data-lucide="layers-3"></i> {{ t('apm.resourcesCount', { count: store.topology.resources.length }) }}</span>
             <span><i data-lucide="gauge"></i> {{ usageLabel }}</span>
             <span :class="{ partial: store.overview?.health?.status === 'degraded' }"><i data-lucide="heart-pulse"></i> {{ healthLabel }}</span>
             <span v-if="store.kubernetesPreview?.applicationId === store.selectedApplicationId"><i data-lucide="boxes"></i> Kubernetes preview updated</span>
-            <span v-if="store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> Architecture linked</span>
+            <span v-if="store.selectedApplication.architectureProjectIds?.length || store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> {{ store.selectedApplication.architectureProjectIds?.length || 1 }} Architecture{{ (store.selectedApplication.architectureProjectIds?.length || 1) === 1 ? '' : 's' }} linked</span>
             <span v-if="qualityPartial" class="partial"><i data-lucide="triangle-alert"></i> {{ t('apm.partialData') }}</span>
             <span v-if="kubernetesUsageUnavailable" class="partial"><i data-lucide="circle-alert"></i> {{ t('apm.kubernetesUsageUnavailable') }}</span>
             <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
           </section>
 
-          <section v-if="store.selectedApplication.architectureProjectId" class="registry-sync-status">
+          <section v-if="hasArchitectureLink" class="registry-sync-status">
             <span class="registry-sync-title"><i data-lucide="git-merge"></i> Shared registry sync</span>
             <span v-if="store.syncStatus?.lastSuccessAt" class="registry-sync-item">
               <i data-lucide="check-circle-2"></i> Last sync {{ new Date(store.syncStatus.lastSuccessAt).toLocaleString() }}
@@ -110,9 +115,9 @@
             <span v-if="store.syncStatus?.lastError" class="registry-sync-item partial" :title="store.syncStatus.lastError">
               <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
             </span>
-            <span v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item partial">
+            <button v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item pending-review" @click="openRegistryResources">
               <i data-lucide="alert-triangle"></i> {{ t('apm.divergentResources', { count: store.syncStatus.divergentResourceCount }) }}
-            </span>
+            </button>
             <button
               v-if="store.syncStatus?.divergentRelationshipCount"
               class="registry-sync-item pending-review"
@@ -128,10 +133,11 @@
           </section>
 
           <div class="apm-view-tabs">
-            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'">{{ t('apm.overview') }}</button>
+            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> Metrics</button>
+            <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> Logs</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
             <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
-            <button :class="{ active: activeView === 'resources' }" @click="activeView = 'resources'">{{ t('apm.resources') }}</button>
+            <button :class="{ active: activeView === 'resources' }" @click="openRegistryResources">{{ t('apm.resources') }}</button>
             <button :class="{ active: activeView === 'relationships' }" @click="activeView = 'relationships'">
               {{ t('apm.relationships') }}
               <span v-if="pendingRelationships.length" class="tab-badge">{{ pendingRelationships.length }}</span>
@@ -139,6 +145,12 @@
           </div>
 
           <template v-if="activeView === 'overview'">
+            <ApmProviderMetrics
+              :provider="provider"
+              :profile-id="profileId"
+              :application="store.selectedApplication"
+              :resources="visibleResources"
+            />
             <section v-for="section in collectedSections" :key="section.key" class="resource-metric-section">
               <header class="resource-metric-header">
                 <i :data-lucide="section.icon"></i>
@@ -191,10 +203,21 @@
             :selected-resource-id="selectedResourceId"
             :can-analyze-cloud="canAnalyzeCloudTopology"
             :analyzing-cloud="store.analyzingTopology"
+            :confirming-suggestions="confirmingSuggestions"
             @select="selectResource"
             @confirm-dependency="confirmDependency"
+            @confirm-all-dependencies="confirmAllDependencies"
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
+          />
+
+          <ApmApplicationLogs
+            v-else-if="activeView === 'logs'"
+            :provider="provider"
+            :profile-id="profileId"
+            :application="store.selectedApplication"
+            :resources="visibleResources"
+            @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
           />
 
           <ApmProcessTrace
@@ -253,23 +276,19 @@
             </template>
           </section>
 
-          <section v-else class="resource-table-wrap">
-            <table class="cloud-table">
-              <thead><tr><th>{{ t('apm.resource') }}</th><th>{{ t('apm.source') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('apm.status') }}</th><th>{{ t('apm.actions') }}</th></tr></thead>
-              <tbody>
-                <tr v-for="resource in store.topology.resources" :key="resource.id">
-                  <td><strong>{{ resource.name }}</strong><small>{{ apmResourceLabel(resource) }}</small></td>
-                  <td>{{ resource.associationSource }}</td>
-                  <td class="text-dim">{{ apmResourceLocation(resource) }}</td>
-                  <td><span :class="resource.enabled ? 'status-ok' : 'text-dim'">{{ resource.enabled ? t('apm.enabled') : t('apm.paused') }}</span></td>
-                  <td>
-                    <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
-                    <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          <ArchitectureResources
+            v-else-if="activeView === 'resources'"
+            :graph="null"
+            :registry="store.registry"
+            :fallback-resources="store.topology.resources"
+            :loading="store.registryLoading"
+            @refresh="refreshRegistry"
+          >
+            <template #actions="{ resource }">
+              <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
+              <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
+            </template>
+          </ArchitectureResources>
         </template>
       </main>
     </div>
@@ -379,9 +398,14 @@
     <BaseModal :show="architectureLinkOpen" @close="architectureLinkOpen = false">
       <template #title><i data-lucide="network"></i> Architecture</template>
       <div class="architecture-link-editor">
-        <template v-if="store.architectureLink?.linked">
-          <strong>{{ store.architectureLink.project.name }}</strong>
-          <small>{{ store.architectureLink.resources.matched.length }} matched resources · {{ store.architectureLink.resources.unmatched.length }} unmatched</small>
+      <template v-if="store.architectureLink?.linked">
+          <div v-for="project in linkedArchitectureProjects" :key="project.id" class="architecture-linked-project">
+            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+            <button class="btn sm danger" :disabled="store.linkingArchitecture" @click="unlinkArchitectureProject(project.id)">
+              <i data-lucide="unlink"></i> Unlink
+            </button>
+          </div>
+          <small>{{ store.architectureLink.resources.matched.length }} matched resources · {{ store.architectureLink.resources.unmatched.length }} unmatched across linked architectures</small>
           <small v-if="store.architectureLink.resources.duplicateIdentityWarnings.length" class="architecture-link-warning">
             {{ store.architectureLink.resources.duplicateIdentityWarnings.length }} duplicate identity warnings
           </small>
@@ -392,6 +416,12 @@
           <small v-if="store.registry">
             {{ store.registry.resources.length }} shared resources · {{ store.registry.relationships.length }} shared relationships
           </small>
+          <label>New architecture
+            <input v-model.trim="newArchitectureName" class="ctrl-input" placeholder="e.g. Production topology" />
+          </label>
+          <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
+            <i data-lucide="plus"></i> Create another architecture
+          </button>
         </template>
         <template v-else>
           <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
@@ -407,10 +437,7 @@
       </div>
       <template #footer>
         <button class="btn" @click="architectureLinkOpen = false">{{ t('action.cancel') }}</button>
-        <button v-if="store.architectureLink?.linked" class="btn danger" :disabled="store.linkingArchitecture" @click="unlinkArchitectureProject">
-          <i data-lucide="unlink"></i> Unlink
-        </button>
-        <button v-else class="btn primary" :disabled="store.linkingArchitecture || !architectureProjectId" @click="linkArchitectureProject">
+        <button v-if="!store.architectureLink?.linked" class="btn primary" :disabled="store.linkingArchitecture || !architectureProjectId" @click="linkArchitectureProject">
           <i data-lucide="link"></i> Link project
         </button>
       </template>
@@ -466,6 +493,9 @@ import { useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
+import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
+import ApmApplicationLogs from './ApmApplicationLogs.vue'
+import ApmProviderMetrics from './ApmProviderMetrics.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
 import { buildResourceMetricSections, seriesKey } from './metricCatalog'
 
@@ -473,6 +503,8 @@ const props = defineProps({
   provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
+  hideApplicationList: { type: Boolean, default: false },
+  focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
@@ -480,7 +512,7 @@ const props = defineProps({
   stepFunctions: { type: Array, default: () => [] },
   loadInventory: { type: Function, default: null },
 })
-const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture'])
+const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context'])
 const store = useApmStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
@@ -495,6 +527,7 @@ const confirmCollect = ref(false)
 const thresholdsOpen = ref(false)
 const architectureLinkOpen = ref(false)
 const architectureProjectId = ref('')
+const newArchitectureName = ref('')
 const kubernetesPreviewOpen = ref(false)
 const kubernetesContextId = ref('')
 const savingThresholds = ref(false)
@@ -503,6 +536,7 @@ const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyP
 const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true })
 const activeView = ref('overview')
 const selectedResourceId = ref('')
+const confirmingSuggestions = ref(false)
 const mainEl = ref(null)
 const thresholdDefinitions = computed(() => [
   { key: 'errorRatePercent', label: t('apm.threshold.errorRate'), description: t('apm.threshold.errorRateHint'), min: 0, max: 100, step: 0.1 },
@@ -513,6 +547,21 @@ const thresholdDefinitions = computed(() => [
 
 const metrics = computed(() => Object.fromEntries((store.overview?.metrics || []).map(metric => [metric.metricName, metric])))
 const applicationResources = computed(() => store.topology.resources || [])
+const focusNode = computed(() => props.focusResource?.node || null)
+const focusedResource = computed(() => {
+  const node = focusNode.value
+  if (!node) return null
+  const canonical = store.registry?.resources?.find(resource => resource.id === node.registryResourceId)
+  const identifiers = [node.arn, node.nativeId, node.discoveryKey, canonical?.nativeIdentifier].filter(Boolean)
+  const matchesIdentifier = resource => identifiers.some(identifier => [resource.id, resource.arn, resource.key].includes(identifier))
+  const matchesType = resource => node.provider === 'kubernetes'
+    ? resource.type === 'kubernetes' && (!node.kind || resource.kind === node.kind)
+    : resource.type === node.resourceType
+  return applicationResources.value.find(resource => matchesIdentifier(resource) && matchesType(resource))
+    || applicationResources.value.find(resource => resource.name === node.name && matchesType(resource))
+    || null
+})
+const visibleResources = computed(() => focusedResource.value ? [focusedResource.value] : applicationResources.value)
 const hasLambdaResources = computed(() => applicationResources.value.some(resource => resource.type === 'lambda'))
 const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
 // These are read from CloudWatch, which bills per request, so the confirmation must say so.
@@ -560,9 +609,15 @@ const healthLabel = computed(() => {
 })
 
 const metricSections = computed(() => buildResourceMetricSections({
-  resources: applicationResources.value,
+  resources: visibleResources.value,
   metricsByResourceType: store.overview?.metricsByResourceType || [],
 }))
+const linkedArchitectureProjects = computed(() => store.architectureLink?.projects?.length
+  ? store.architectureLink.projects
+  : store.architectureLink?.project ? [store.architectureLink.project] : [])
+const hasArchitectureLink = computed(() => Boolean(
+  store.selectedApplication?.architectureProjectIds?.length || store.selectedApplication?.architectureProjectId,
+))
 const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
 const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
 
@@ -589,6 +644,16 @@ function relationshipStatusLabel(status) {
 async function reviewRelationship(item, decision) {
   await store.reviewRegistryRelationship(item.id, decision)
 }
+
+async function openRegistryResources() {
+  activeView.value = 'resources'
+  await store.loadRegistrySyncStatus()
+  renderIcons()
+}
+
+async function refreshRegistry() {
+  await store.loadRegistrySyncStatus()
+}
 // What a collection will actually read, so the confirmation is not just about Lambda.
 const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({
   resources: applicationResources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false),
@@ -603,7 +668,9 @@ function kpiDetail(item) {
 
 async function loadCharts() {
   if (!store.selectedApplicationId) return
+  const resourceId = focusedResource.value?.id || ''
   await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
+    resourceId,
     resourceType: chart.resourceType,
     kind: chart.kind,
     key: seriesKey(chart),
@@ -614,14 +681,32 @@ function kubernetesLogResource(resource) {
   return resource.type === 'kubernetes' && ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod'].includes(resource.kind)
 }
 
+function emitApplicationContext() {
+  if (!store.selectedApplication) return
+  if (props.applicationId && store.selectedApplication.id !== props.applicationId) return
+  emit('application-context', {
+    ...store.selectedApplication,
+    provider: props.provider,
+    profileId: props.profileId,
+  })
+}
+
 async function refreshLocal() {
   await store.refreshLocal()
+  emitApplicationContext()
   await loadCharts()
   renderIcons()
 }
 
 async function chooseApplication(applicationId) {
   await store.selectApplication(applicationId)
+  if (store.selectedApplication) {
+    emit('application-context', {
+      ...store.selectedApplication,
+      provider: props.provider,
+      profileId: props.profileId,
+    })
+  }
   await loadCharts()
   selectedResourceId.value = ''
   mainEl.value?.scrollTo({ top: 0 })
@@ -694,10 +779,10 @@ function openThresholds() {
 }
 
 async function openArchitectureLink() {
-  if (store.selectedApplication?.architectureProjectId) {
+  if (hasArchitectureLink.value) {
     emit('open-architecture', {
       applicationId: store.selectedApplication.id,
-      projectId: store.selectedApplication.architectureProjectId,
+      projectId: store.selectedApplication.architectureProjectIds?.[0] || store.selectedApplication.architectureProjectId,
       provider: props.provider,
       profileId: props.profileId,
       application: store.selectedApplication,
@@ -717,13 +802,13 @@ async function linkArchitectureProject() {
 }
 
 async function createArchitectureProjectLink() {
-  await store.createArchitectureProjectLink()
+  await store.createArchitectureProjectLink(newArchitectureName.value)
+  newArchitectureName.value = ''
   renderIcons()
 }
 
-async function unlinkArchitectureProject() {
-  const application = await store.unlinkArchitectureProject()
-  if (application) architectureProjectId.value = ''
+async function unlinkArchitectureProject(projectId) {
+  await store.unlinkArchitectureProject(projectId)
   renderIcons()
 }
 
@@ -796,6 +881,18 @@ async function confirmDependency(dependency) {
   renderIcons()
 }
 
+async function confirmAllDependencies(dependencies) {
+  if (!store.selectedApplicationId || !dependencies.length) return
+  confirmingSuggestions.value = true
+  try {
+    await store.confirmDependencies(store.selectedApplicationId, dependencies)
+    if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
+    renderIcons()
+  } finally {
+    confirmingSuggestions.value = false
+  }
+}
+
 async function analyzeCloudTopology() {
   if (!store.selectedApplicationId) return
   await store.analyzeCloudTopology(store.selectedApplicationId)
@@ -819,6 +916,28 @@ function renderIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
+async function applyResourceFocus() {
+  const focus = props.focusResource
+  if (!focus) {
+    selectedResourceId.value = ''
+    return
+  }
+
+  selectedResourceId.value = focusedResource.value?.id || ''
+
+  if (focus.view === 'traces' && hasTraceResources.value) {
+    activeView.value = 'traces'
+  }
+
+  store.series = {}
+  if (activeView.value === 'traces' && focusNode.value?.arn) {
+    await traceProcess(focusNode.value.arn, false)
+  } else if (focusedResource.value) {
+    await loadCharts()
+  }
+  renderIcons()
+}
+
 watch(() => props.profileId, async profileId => {
   store.setActiveProfile(profileId, props.provider)
   if (profileId) {
@@ -832,7 +951,13 @@ watch(() => props.provider, async provider => {
   store.setActiveProfile(props.profileId, provider)
   if (props.profileId) await refreshLocal()
 })
-watch(activeView, () => mainEl.value?.scrollTo?.({ top: 0 }))
+watch(activeView, (next, previous) => {
+  if (next !== previous) mainEl.value?.scrollTo?.({ top: 0 })
+})
+watch([
+  () => props.focusResource,
+  () => applicationResources.value.map(resource => resource.id).join('|'),
+], applyResourceFocus, { immediate: true, deep: true })
 // Chart definitions now depend on which resource types the application actually has,
 // so they can resolve after loadCharts() already ran; reload whenever the set changes.
 watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) => {
@@ -840,11 +965,14 @@ watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) =>
 })
 watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen, architectureLinkOpen, kubernetesPreviewOpen], renderIcons)
 onMounted(renderIcons)
-defineExpose({ refreshLocal })
+defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
 </script>
 
 <style scoped>
 .apm-view { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.apm-resource-focus { display: flex; align-items: center; gap: 8px; margin: 10px 12px 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, #58a6ff 45%, var(--border)); background: color-mix(in srgb, #58a6ff 10%, var(--surface)); color: #58a6ff; }
+.apm-resource-focus span { display: flex; flex-direction: column; gap: 2px; }
+.apm-resource-focus small { color: var(--text-dim); font-size: 10px; }
 .apm-toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border); padding: 8px 12px; }
 .apm-title, .apm-title span { min-width: 0; display: flex; align-items: center; gap: 9px; }
 .apm-title > svg { width: 21px; height: 21px; color: #3fb950; }
@@ -860,6 +988,7 @@ defineExpose({ refreshLocal })
 .range-control button.active, .apm-view-tabs button.active { background: var(--accent); color: white; }
 .apm-error { margin: 8px 12px 0; }
 .apm-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: 214px minmax(0, 1fr); }
+.apm-layout--embedded { grid-template-columns: minmax(0, 1fr); }
 .application-list { min-height: 0; overflow: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 8px; }
 .list-heading { display: flex; justify-content: space-between; padding: 5px 4px 9px; color: var(--text-dim); font-size: 9px; text-transform: uppercase; }
 .application-row, .application-empty { width: 100%; min-width: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
@@ -882,6 +1011,9 @@ defineExpose({ refreshLocal })
 .application-empty svg { width: 17px; }
 .apm-main { min-width: 0; min-height: 0; overflow: auto; padding: 14px; }
 .application-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.architecture-linked-project { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+.architecture-linked-project > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.architecture-linked-project small { color: var(--text-dim); }
 .application-header h2 { margin: 2px 0; font-size: 20px; letter-spacing: 0; }
 .application-header > div > span { color: var(--text-dim); font-size: 10px; }
 .application-kicker { color: #3fb950; font-size: 9px; text-transform: uppercase; }

@@ -4,12 +4,29 @@
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 
+### Observability: Kubernetes log intelligence in Intelligent topology
+
+- The Intelligent topology panel now measures the currently retained lines from explicitly opened Kubernetes workload/Pod log tabs: line count, error rate, warning count, recurring normalized error signatures, and common failure-keyword counts.
+- The measurement is deterministic and session-scoped. It does not issue another Kubernetes read, does not persist raw logs, and does not participate in the 30-minute scheduler. Historical rates and alerting remain a future persisted aggregation phase.
+- Log-derived relationship evidence redacts common credentials, bearer tokens, URL credentials, URL query strings, and email-shaped values before displaying a short sample. The existing explicit review flow is still required before a `calls` dependency becomes confirmed.
+
+### Architecture Canvas and Routes: relationship filters and provider lanes
+
+- Canvas and Routes now share persisted filters for relationship type and relationship status, so large diagrams can focus on `routes_to`, `uses`, suggested/manual relationships, or other dependency slices without changing the graph.
+- Canvas adds a Provider lanes arrangement that groups resources by cloud/platform and orders them by logical dependency stage: entrypoints, routing/buffers, compute, runtime, data/configuration and governance.
+- Canvas also adds a Provider + resource sections arrangement for diagrams that should keep each provider separated first, then split resources into ordered type sections inside that provider.
+- Provider lanes use stepped connectors and provider section headers to keep multi-provider diagrams more structured and easier to scan.
+- Sectioned layouts now expand their node spacing when operational overlays such as labels, metrics, collection status or trace highlights are active, and order same-type resources using relationship context before falling back to names.
+- Improved the Canvas toolbar on narrow screens so the growing set of filters and overlay buttons remains reachable through a horizontal control strip.
+- Refreshing an Architecture project now reloads the graph in place instead of clearing and remounting the current Canvas/Routes/Resources view while the request is in flight.
+- When Architecture is opened inside KUApps, projects now appear as a sublevel under the selected Application instead of consuming a second sidebar beside the canvas.
+- KUApps now uses its global sidebar as the single Architecture/Observability switch, and Observability no longer renders a second internal application list when embedded there.
+
 ### Architecture Canvas: PDF and Mermaid export
 
 - Added an "Export PDF" button that renders the entire diagram (all nodes and relationships, not just what's currently visible on screen) into a print-ready PDF sized to the full graph, so large diagrams can be printed or shared without anything being cut off.
 - Added an "Export Mermaid" button that downloads the currently visible diagram (respecting active provider/context/namespace filters) as a `.mmd` Mermaid flowchart file.
 - Fixed "Export PDF" producing a blank page: the diagram's zoom was being computed with the wrong padding units, effectively shrinking the whole diagram down to almost nothing inside the exported image. Also added a size cap and a timeout with an error notice so exporting a very large diagram degrades gracefully instead of hanging indefinitely.
-
 
 ### Architecture: Lambda environment-variable reference discovery
 
@@ -53,12 +70,6 @@ Continues the KUA Application convergence plan (Phases 9-16): persistent Archite
 
 - Kubernetes resources in the Observability Resources table and Topology view previously all showed as generic "Kubernetes" with the same icon. They now show their actual kind (Deployment, Pod, Service, ConfigMap...) with a matching icon, so you can tell them apart at a glance.
 - Divergent resources and divergent (pending review) relationships are now marked individually, not just as an aggregate count, using the same rule that already excludes resource types Observability can never correlate — ready to extend to future GCP/Vercel resource types without any UI changes.
-
-### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
-
-- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
-- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
-- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
 
 ### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
 

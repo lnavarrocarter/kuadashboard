@@ -18,6 +18,14 @@
           <option value="">All namespaces</option>
           <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
         </select>
+        <select v-model="relationTypeFilter" class="ctrl-select" title="Filter relationship type" @change="persistView">
+          <option value="all">All relationship types</option>
+          <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationLabel(type) }}</option>
+        </select>
+        <select v-model="relationStatusFilter" class="ctrl-select" title="Filter relationship status" @change="persistView">
+          <option value="all">All relationship statuses</option>
+          <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
+        </select>
         <label class="route-order-control">
           <i data-lucide="arrow-up-narrow-wide"></i>
           <span>Order</span>
@@ -102,6 +110,8 @@ const sortMode = ref('sequence')
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
+const relationTypeFilter = ref('all')
+const relationStatusFilter = ref('all')
 
 // Routes reads the same persisted view.providerFilter/kubeContextFilter/namespaceFilter the Canvas
 // writes, but previously had no controls of its own to change them without switching tabs.
@@ -109,6 +119,8 @@ watch(() => props.graph?.document?.view, view => {
   providerFilter.value = view?.providerFilter || 'all'
   kubeContextFilter.value = view?.kubeContextFilter || ''
   namespaceFilter.value = view?.namespaceFilter || ''
+  relationTypeFilter.value = view?.relationTypeFilter || 'all'
+  relationStatusFilter.value = view?.relationStatusFilter || 'all'
 }, { immediate: true, deep: true })
 
 const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
@@ -116,6 +128,10 @@ const availableKubeContexts = computed(() => [...new Set((props.graph?.document?
   .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
 const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
   .filter(node => node.provider === 'kubernetes' && node.namespace).map(node => node.namespace))].sort())
+const availableRelationTypes = computed(() => [...new Set((props.graph?.document?.edges || [])
+  .map(edge => edge.relationType || 'depends_on'))].sort((left, right) => relationLabel(left).localeCompare(relationLabel(right))))
+const availableRelationStatuses = computed(() => [...new Set((props.graph?.document?.edges || [])
+  .map(edge => edge.status || 'automatic'))].sort())
 
 function persistView() {
   emit('operation', {
@@ -124,6 +140,8 @@ function persistView() {
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
+      relationTypeFilter: relationTypeFilter.value,
+      relationStatusFilter: relationStatusFilter.value,
     },
   }, 'Update canvas view')
 }
@@ -135,7 +153,10 @@ const filteredDocument = computed(() => {
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
     (!namespaceFilter.value || node.namespace === namespaceFilter.value))
   const ids = new Set(nodes.map(node => node.id))
-  return { ...document, nodes, edges: (document.edges || []).filter(edge => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId)) }
+  return { ...document, nodes, edges: (document.edges || []).filter(edge =>
+    ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId) &&
+    (relationTypeFilter.value === 'all' || (edge.relationType || 'depends_on') === relationTypeFilter.value) &&
+    (relationStatusFilter.value === 'all' || (edge.status || 'automatic') === relationStatusFilter.value)) }
 })
 const groups = computed(() => architectureRouteGroups(filteredDocument.value, { order: sortMode.value }))
 const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
@@ -181,6 +202,10 @@ function stageLabel(type) {
 function relationLabel(type) {
   return { triggers: 'triggers', invokes: 'invokes', sends_to: 'sends to', starts_execution: 'starts', routes_to: 'routes to', owns: 'owns', uses: 'uses' }[type]
     || String(type || 'depends_on').replaceAll('_', ' ')
+}
+
+function relationshipStatus(status) {
+  return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
 }
 
 function patternValue(value) {

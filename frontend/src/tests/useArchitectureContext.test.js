@@ -12,10 +12,18 @@ function memoryStorage(initial = {}) {
 }
 
 describe('useArchitectureContext', () => {
-  it('falls back to the global AWS profile when there is no active application', () => {
+  it('does not choose AWS implicitly when entering Architecture without an application', () => {
     const awsProfileId = ref('aws-profile-1')
     const { architectureProfileId } = useArchitectureContext({
       storage: memoryStorage(), awsProfileId, setProvider: vi.fn(),
+    })
+    expect(architectureProfileId.value).toBe('')
+  })
+
+  it('keeps the AWS fallback for legacy unlinked projects', () => {
+    const awsProfileId = ref('aws-profile-1')
+    const { architectureProfileId } = useArchitectureContext({
+      storage: memoryStorage({ architectureProject: 'legacy-project' }), awsProfileId, setProvider: vi.fn(),
     })
     expect(architectureProfileId.value).toBe('aws-profile-1')
   })

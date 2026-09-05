@@ -14,6 +14,7 @@
         provider="vercel"
         :profile-id="vercelStore.activeProfileId"
         :application-id="applicationId"
+        :focus-resource="apmFocusResource"
         :platform-resources="apmPlatformResources"
         @open-architecture="context => emit('open-architecture', context)"
       />
@@ -612,6 +613,7 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 const props = defineProps({
   activeService: { type: String, default: 'projects' },
   applicationId: { type: String, default: '' },
+  apmFocusResource: { type: Object, default: null },
 })
 
 const emit = defineEmits(['open-architecture'])

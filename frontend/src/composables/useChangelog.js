@@ -11,6 +11,7 @@ export const CHANGELOG = [
     version: '1.12.0-dev',
     date: 'Agosto 2026 · En desarrollo',
     items: [
+      { type: 'better', text: 'Canvas — layouts inteligentes con más espacio al activar overlays y orden por relaciones dentro de secciones de proveedor/recurso' },
       { type: 'new',    text: 'Canvas Architecture — exportación a PDF del diagrama completo (sin recortes) y descarga del grafo visible como archivo Mermaid' },
       { type: 'new',    text: 'Architecture — nuevo espacio por perfil para crear proyectos de arquitectura de aplicaciones orientados inicialmente a AWS' },
       { type: 'new',    text: 'Modelo de grafo — ámbitos, fuentes, nodos, relaciones, grupos, evidencia y layout con contrato independiente del proveedor' },

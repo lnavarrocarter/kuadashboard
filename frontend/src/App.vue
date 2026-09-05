@@ -24,16 +24,8 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
-          <button
-            :class="['provider-tab', { active: activeProvider === 'observability' }]"
-            :disabled="!hasCloudConnections"
-            :title="hasCloudConnections ? t('nav.observability') : t('nav.observabilityRequiresProvider')"
-            @click="setProvider('observability')"
-          >
-            <i data-lucide="chart-no-axes-combined"></i> {{ t('nav.observability') }}
-          </button>
-          <button :class="['provider-tab', { active: activeProvider === 'architecture' }]" @click="setProvider('architecture')">
-            <i data-lucide="network"></i> Architecture
+          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" @click="setProvider('kuapps')">
+            <i data-lucide="boxes"></i> KUApps
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
@@ -79,42 +71,14 @@
             </optgroup>
           </select>
         </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'">
-          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
-            <option value="">{{ t('aws.noProfile') }}</option>
-            <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
-          </select>
-        </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'">
-          <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
-            <option value="">{{ t('gcp.noProfile') }}</option>
-            <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            <option v-for="c in gcpLocalConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">{{ c.name }}</option>
-          </select>
-        </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'">
-          <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
-            <option value="">{{ t('vercel.noProfile') }}</option>
-            <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </template>
-        <template v-else-if="activeProvider === 'architecture' && activeApplicationContext">
+        <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
           <span class="header-application-context">
             <i data-lucide="boxes"></i>
             <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider.toUpperCase() }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
           </span>
         </template>
-        <template v-else-if="activeProvider === 'architecture'">
-          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
-            <option value="">{{ t('aws.noProfile') }}</option>
-            <optgroup v-if="envStore.awsProfiles.length" :label="t('nav.storedProfiles')">
-              <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </optgroup>
-            <optgroup v-if="awsLocalProfiles.length" label="~/.aws/credentials">
-              <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
-            </optgroup>
-          </select>
+        <template v-else-if="activeProvider === 'kuapps'">
+          <span class="header-architecture-hint">Select a KUA application below</span>
         </template>
       </div>
       <div class="header-right">
@@ -375,27 +339,15 @@
           </div>
         </nav>
 
-        <nav class="sidebar observability-sidebar" v-if="activeProvider === 'observability'">
+        <nav class="sidebar kuapps-sidebar" v-if="activeProvider === 'kuapps'">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('observability.platform') }}</div>
-            <button
-              v-for="provider in availableObservabilityProviders"
-              :key="provider.id"
-              :class="['observability-provider-tab', { active: observabilityProvider === provider.id }]"
-              @click="selectObservabilityProvider(provider.id)"
-            >
-              <i :data-lucide="provider.icon"></i>
-              <span><strong>{{ provider.label }}</strong><small>{{ provider.description }}</small></span>
-            </button>
-          </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('observability.view') }}</div>
-            <a
-              v-for="option in currentObservabilityOptions"
-              :key="option.id"
-              :class="['sidebar-item', { active: observabilitySelections[observabilityProvider] === option.id }]"
-              @click.prevent="observabilitySelections[observabilityProvider] = option.id"
-            >{{ option.labelKey ? t(option.labelKey) : option.label }}</a>
+            <div class="sidebar-section-title">KUApps</div>
+            <a :class="['sidebar-item', { active: kuappsView === 'architecture' }]" @click.prevent="setProvider('architecture')">
+              <i data-lucide="network"></i> Architecture
+            </a>
+            <a :class="['sidebar-item', { active: kuappsView === 'observability' }]" @click.prevent="setProvider('observability')">
+              <i data-lucide="square-activity"></i> Observability
+            </a>
           </div>
         </nav>
 
@@ -432,20 +384,33 @@
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" />
-          <ApmObservabilityView
-            ref="observabilityViewRef"
-            v-else-if="activeProvider === 'observability' && observabilityProvider === 'generic'"
-            provider="generic"
-            profile-id="local"
-            :application-id="activeApplicationContext?.provider === 'generic' ? activeApplicationContext.id : ''"
+          <KUAppsView
+            v-else-if="activeProvider === 'kuapps'"
+            ref="kuappsViewRef"
+            :active-view="kuappsView"
+            :profile-id="architectureProfileId"
+            :application-id="activeApplicationContext?.id || ''"
+            :project-id="architectureProjectId"
+            :observability-provider="kuappsObservabilityProvider"
+            :observability-profile-id="kuappsObservabilityProfileId"
+            :focus-resource="observabilityFocus"
+            compact-navigation
+            @update-view="kuappsView = $event"
+            @open-observability="openApplicationObservability"
             @open-architecture="openApplicationArchitecture"
+            @application-context="handleKuAppsApplicationContext"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
+            @open-kubernetes-detail="openArchitectureKubernetesDetail"
+            @open-kubernetes-pods="openArchitectureKubernetesPods"
+            @open-aws-resource="openArchitectureAwsResource"
+            @open-aws-logs="openArchitectureAwsLogs"
           />
           <AwsView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'"
             :active-service="observabilitySelections.aws"
             :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
@@ -454,6 +419,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'"
             :active-service="observabilitySelections.gcp"
             :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
           <VercelView
@@ -461,6 +427,7 @@
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
             :active-service="observabilitySelections.vercel"
             :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
           <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
@@ -485,8 +452,7 @@
           activeProvider === 'aws' ? 'Amazon Web Services'
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
-          : activeProvider === 'observability' ? `${t('nav.observability')} / ${currentObservabilityProviderLabel.toUpperCase()}`
-          : activeProvider === 'architecture' ? 'Architecture / AWS'
+          : activeProvider === 'kuapps' ? `KUApps / ${kuappsView === 'architecture' ? 'Architecture' : 'Observability'}`
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>
@@ -548,6 +514,7 @@ import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
 import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
 import ArchitectureView from './components/architecture/ArchitectureView.vue'
+import KUAppsView       from './components/kuapps/KUAppsView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -652,7 +619,9 @@ const LS = {
 }
 
 const pfPanelVisible  = ref(false)
-const activeProvider  = ref(LS.get('provider', 'kubernetes'))
+const storedProvider = LS.get('provider', 'kubernetes')
+const activeProvider  = ref(['architecture', 'observability'].includes(storedProvider) ? 'kuapps' : storedProvider)
+const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
@@ -666,11 +635,22 @@ const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
 const vercelViewRef   = ref(null)
 const observabilityViewRef = ref(null)
+const kuappsViewRef = ref(null)
 const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
 let autoRefreshPending = false
+let lastUserInteractionAt = 0
+const AUTO_REFRESH_PAUSE_MS = 15000
+
+function markUserInteraction() {
+  lastUserInteractionAt = Date.now()
+}
+
+function shouldPauseAutoRefresh() {
+  return Date.now() - lastUserInteractionAt < AUTO_REFRESH_PAUSE_MS
+}
 
 watch(() => settings.autoRefresh, (secs) => {
   clearInterval(autoRefreshTimer)
@@ -678,7 +658,7 @@ watch(() => settings.autoRefresh, (secs) => {
 }, { immediate: true })
 
 async function reloadActiveProvider() {
-  if (autoRefreshPending || document.hidden) return
+  if (autoRefreshPending || document.hidden || shouldPauseAutoRefresh()) return
   autoRefreshPending = true
   try {
     if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
@@ -702,6 +682,10 @@ async function reloadActiveProvider() {
       await vercelViewRef.value?.reloadActiveTab?.({ background: true })
       return
     }
+    if (activeProvider.value === 'kuapps') {
+      await kuappsViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
+      return
+    }
     if (activeProvider.value === 'observability') {
       await observabilityViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
     }
@@ -716,6 +700,7 @@ const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
 const observabilityProvider = ref(LS.get('observabilityProvider', 'generic'))
+const observabilityFocus = ref(null)
 const observabilitySelections = reactive({
   generic: 'apm',
   aws: LS.get('observabilityAwsView', 'apm'),
@@ -751,6 +736,7 @@ const selectedKubeKey = computed(() => {
 
 // Persistir cambios en localStorage automáticamente
 watch(activeProvider,   v  => LS.set('provider',       v))
+watch(kuappsView,       v  => LS.set('kuappsView',     v))
 watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
@@ -804,14 +790,40 @@ const {
   setApplicationContext,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
-function openApplicationObservability(application) {
+const kuappsObservabilityProvider = computed(() => {
+  const provider = activeApplicationContext.value?.provider || observabilityProvider.value
+  return ['aws', 'gcp', 'vercel', 'generic'].includes(provider) ? provider : 'generic'
+})
+const kuappsObservabilityProfileId = computed(() => {
+  const application = activeApplicationContext.value
+  if (application?.profileId) return application.profileId
+  if (kuappsObservabilityProvider.value === 'aws') return awsProfileId.value
+  if (kuappsObservabilityProvider.value === 'gcp') return gcpProfileId.value
+  if (kuappsObservabilityProvider.value === 'vercel') return vercelProfileId.value
+  return 'local'
+})
+
+function handleKuAppsApplicationContext(application) {
+  if (!application?.id) return
+  setApplicationContext(application)
+  if (application.provider === 'aws' && application.profileId) awsProfileId.value = application.profileId
+  if (application.provider === 'gcp' && application.profileId) gcpProfileId.value = application.profileId
+  if (application.provider === 'vercel' && application.profileId) vercelProfileId.value = application.profileId
+}
+
+function openApplicationObservability(application, focus = null) {
   if (!application?.id) return
   activeApplicationContext.value = application
   if (application.provider === 'aws') awsProfileId.value = application.profileId
   if (application.provider === 'gcp') gcpProfileId.value = application.profileId
   if (application.provider === 'vercel') vercelProfileId.value = application.profileId
   observabilityProvider.value = application.provider || 'generic'
-  activeProvider.value = 'observability'
+  if (focus?.view && Object.prototype.hasOwnProperty.call(observabilitySelections, observabilityProvider.value)) {
+    observabilitySelections[observabilityProvider.value] = 'apm'
+  }
+  observabilityFocus.value = focus
+  activeProvider.value = 'kuapps'
+  kuappsView.value = 'observability'
   nextTick(() => createIcons({ icons }))
 }
 
@@ -899,8 +911,11 @@ function openArchitectureAwsLogs(resource) {
 }
 
 async function setProvider(p) {
-  if (p === 'observability' && !hasCloudConnections.value) return
-  activeProvider.value = p
+  const view = p === 'observability' ? 'observability' : p === 'architecture' ? 'architecture' : kuappsView.value
+  const target = ['observability', 'architecture'].includes(p) ? 'kuapps' : p
+  if (p !== 'observability') observabilityFocus.value = null
+  if (target === 'kuapps') kuappsView.value = view
+  activeProvider.value = target
   if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
@@ -1228,7 +1243,12 @@ onMounted(async () => {
   // Cargar profiles locales si el proveedor activo lo necesita
   if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
+  lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
+  document.addEventListener('pointerdown', markUserInteraction, { passive: true })
+  document.addEventListener('wheel', markUserInteraction, { passive: true, capture: true })
+  document.addEventListener('touchstart', markUserInteraction, { passive: true })
+  document.addEventListener('scroll', markUserInteraction, { passive: true, capture: true })
   updateStore.initListeners()
   nextTick(() => createIcons({ icons }))
 })
@@ -1236,6 +1256,10 @@ onUnmounted(() => {
   clearInterval(clockTimer)
   clearInterval(autoRefreshTimer)
   document.removeEventListener('keydown', onKey)
+  document.removeEventListener('pointerdown', markUserInteraction)
+  document.removeEventListener('wheel', markUserInteraction, true)
+  document.removeEventListener('touchstart', markUserInteraction)
+  document.removeEventListener('scroll', markUserInteraction, true)
   stopKubeResize()
 })
 </script>

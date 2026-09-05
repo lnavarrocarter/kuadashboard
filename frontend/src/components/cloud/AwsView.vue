@@ -26,6 +26,7 @@
         ref="apmViewRef"
         :profile-id="selectedProfileId"
         :application-id="applicationId"
+        :focus-resource="apmFocusResource"
         :lambdas="awsStore.lambdas"
         :ecs-services="awsStore.ecsServices"
         :event-bridge-rules="awsStore.eventBridgeRules"
@@ -3780,6 +3781,7 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 const props = defineProps({
   activeService: { type: String, default: 'ec2' },
   applicationId: { type: String, default: '' },
+  apmFocusResource: { type: Object, default: null },
 })
 const emit = defineEmits(['open-architecture', 'open-kubernetes-logs'])
 

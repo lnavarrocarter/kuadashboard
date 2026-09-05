@@ -154,6 +154,7 @@ input, select, textarea { font: inherit; color: var(--text); }
 .header-application-context strong, .header-application-context small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-application-context strong { font-size: 11px; }
 .header-application-context small { color: var(--text-dim); font-size: 9px; }
+.header-architecture-hint { color: var(--text-dim); font-size: 11px; }
 
 .header-controls { display: flex; align-items: center; gap: 12px; margin-left: 24px; }
 .control-group { display: flex; align-items: center; gap: 6px; }

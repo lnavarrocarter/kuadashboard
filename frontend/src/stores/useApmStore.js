@@ -18,6 +18,7 @@ export const useApmStore = defineStore('apm', () => {
   const selectedApplicationId = ref(null)
   const overview = ref(null)
   const topology = ref({ application: null, resources: [], edges: [] })
+  const cloudSuggestionsByApplication = ref({})
   const usage = ref(null)
   const forecast = ref(null)
   const series = ref({})
@@ -33,6 +34,7 @@ export const useApmStore = defineStore('apm', () => {
   const architectureProjects = ref([])
   const linkingArchitecture = ref(false)
   const registry = ref(null)
+  const registryLoading = ref(false)
   const reconcilingRegistry = ref(false)
   const reviewingRelationshipId = ref('')
   const syncStatus = ref(null)
@@ -70,12 +72,14 @@ export const useApmStore = defineStore('apm', () => {
   function resetApplicationData() {
     overview.value = null
     topology.value = { application: null, resources: [], edges: [] }
+    cloudSuggestionsByApplication.value = {}
     forecast.value = null
     series.value = {}
     processTrace.value = null
     architectureLink.value = null
     architectureProjects.value = []
     registry.value = null
+    registryLoading.value = false
     syncStatus.value = null
     kubernetesPreview.value = null
     kubernetesPreviewScopeKey.value = ''
@@ -139,7 +143,7 @@ export const useApmStore = defineStore('apm', () => {
         request(`/applications/${applicationId}/forecast`, { headers: headers() }),
       ])
       overview.value = nextOverview
-      topology.value = nextTopology
+      topology.value = mergeCloudSuggestions(nextTopology, cloudSuggestionsByApplication.value[applicationId])
       forecast.value = nextForecast
       loadRegistrySyncStatus(applicationId)
       const contexts = [...new Set((nextTopology.resources || [])
@@ -267,12 +271,12 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function createArchitectureProjectLink() {
+  async function createArchitectureProjectLink(name = '') {
     if (!selectedApplicationId.value) return null
     linkingArchitecture.value = true
     try {
       architectureLink.value = await request(`/applications/${selectedApplicationId.value}/architecture-link/project`, {
-        method: 'POST', headers: headers(true), body: JSON.stringify({}),
+        method: 'POST', headers: headers(true), body: JSON.stringify(name ? { name } : {}),
       })
       replaceApplication(architectureLink.value.application)
       return architectureLink.value
@@ -284,15 +288,19 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function unlinkArchitectureProject() {
+  async function unlinkArchitectureProject(projectId = '') {
     if (!selectedApplicationId.value) return null
     linkingArchitecture.value = true
     try {
-      const application = await request(`/applications/${selectedApplicationId.value}/architecture-link`, {
+      const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+      const result = await request(`/applications/${selectedApplicationId.value}/architecture-link${query}`, {
         method: 'DELETE', headers: headers(),
       })
+      const application = result.application || result
       replaceApplication(application)
-      architectureLink.value = { linked: false, project: null, resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } }
+      architectureLink.value = result.linked === undefined
+        ? { linked: false, project: null, projects: [], resources: { matched: [], unmatched: [], duplicateIdentityWarnings: [] } }
+        : result
       return application
     } catch (requestError) {
       error.value = requestError.message
@@ -323,12 +331,15 @@ export const useApmStore = defineStore('apm', () => {
   // Non-blocking: diagnostics should never delay the main application overview.
   async function loadRegistrySyncStatus(applicationId = selectedApplicationId.value) {
     if (!applicationId) return null
+    registryLoading.value = true
     try {
       registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers() })
       syncStatus.value = registry.value?.syncStatus || null
       return syncStatus.value
     } catch (_) {
       return null
+    } finally {
+      registryLoading.value = false
     }
   }
 
@@ -402,7 +413,16 @@ export const useApmStore = defineStore('apm', () => {
   }
 
   async function confirmDependency(applicationId, dependency) {
-    await request(`/applications/${applicationId}/edges`, {
+    await confirmDependencies(applicationId, [dependency])
+  }
+
+  async function confirmDependencies(applicationId, dependencies) {
+    const uniqueDependencies = [...new Map((dependencies || []).map(dependency => [
+      `${dependency.sourceResourceId}:${dependency.targetResourceId}:${dependency.relationType}`,
+      dependency,
+    ])).values()]
+    if (!uniqueDependencies.length) return
+    await Promise.all(uniqueDependencies.map(dependency => request(`/applications/${applicationId}/edges`, {
       method: 'POST',
       headers: headers(true),
       body: JSON.stringify({
@@ -410,7 +430,7 @@ export const useApmStore = defineStore('apm', () => {
         targetResourceId: dependency.targetResourceId,
         relationType: dependency.relationType,
       }),
-    })
+    })))
     await loadSelectedApplication()
   }
 
@@ -422,12 +442,42 @@ export const useApmStore = defineStore('apm', () => {
         method: 'POST',
         headers: headers(),
       })
+      cloudSuggestionsByApplication.value = {
+        ...cloudSuggestionsByApplication.value,
+        [applicationId]: topology.value.analysis?.cloudScan?.suggestions || [],
+      }
       return topology.value.analysis
     } catch (requestError) {
       error.value = requestError.message
       return null
     } finally {
       analyzingTopology.value = false
+    }
+  }
+
+  function mergeCloudSuggestions(nextTopology, cloudSuggestions = []) {
+    if (!cloudSuggestions.length) return nextTopology
+    const resourceIds = new Set((nextTopology.resources || []).map(resource => resource.id))
+    const visibleCloudSuggestions = cloudSuggestions.filter(suggestion =>
+      resourceIds.has(suggestion.sourceResourceId) && resourceIds.has(suggestion.targetResourceId))
+    if (!visibleCloudSuggestions.length) return nextTopology
+    const localSuggestions = nextTopology.analysis?.suggestions || []
+    const suggestions = [...new Map([...localSuggestions, ...visibleCloudSuggestions].map(suggestion => [
+      `${suggestion.sourceResourceId}:${suggestion.targetResourceId}:${suggestion.relationType}`,
+      suggestion,
+    ])).values()]
+    const findings = nextTopology.analysis?.findings || []
+    const hasSuggestionFinding = findings.some(finding => finding.code === 'dependency_suggestions')
+    return {
+      ...nextTopology,
+      analysis: {
+        ...nextTopology.analysis,
+        suggestions,
+        counts: { ...nextTopology.analysis?.counts, suggestions: suggestions.length },
+        findings: hasSuggestionFinding
+          ? findings
+          : [...findings, { code: 'dependency_suggestions', severity: 'info', resourceIds: [] }],
+      },
     }
   }
 
@@ -579,6 +629,7 @@ export const useApmStore = defineStore('apm', () => {
     createArchitectureProjectLink,
     unlinkArchitectureProject,
     reconcileSharedRegistry,
+    registryLoading,
     loadRegistrySyncStatus,
     reviewRegistryRelationship,
     previewKubernetesDiscovery,
@@ -586,6 +637,7 @@ export const useApmStore = defineStore('apm', () => {
     deleteApplication,
     addResource,
     confirmDependency,
+    confirmDependencies,
     analyzeCloudTopology,
     traceProcess,
     discoverCandidates,

@@ -72,13 +72,19 @@
     </div>
 
     <div v-if="resolvedSuggestions.length" class="suggestion-list">
-      <div class="dependency-title"><i data-lucide="sparkles"></i> {{ t('apm.suggestedDependencies') }}</div>
+      <div class="suggestion-heading">
+        <div class="dependency-title"><i data-lucide="sparkles"></i> {{ t('apm.suggestedDependencies') }}</div>
+        <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-all-dependencies', resolvedSuggestions)">
+          <i :data-lucide="confirmingSuggestions ? 'loader-2' : 'check-check'"></i>
+          {{ confirmingSuggestions ? t('apm.confirmingDependencies') : t('apm.confirmAllDependencies') }}
+        </button>
+      </div>
       <div v-for="edge in resolvedSuggestions" :key="`${edge.sourceResourceId}:${edge.targetResourceId}`" class="suggestion-row">
         <div class="suggestion-path">
           <strong>{{ edge.source }}</strong><i data-lucide="arrow-right"></i><strong>{{ edge.target }}</strong>
           <small>{{ t('apm.confidence', { confidence: Math.round(edge.confidence * 100) }) }} · {{ evidenceLabel(edge) }}</small>
         </div>
-        <button class="btn sm" type="button" @click="$emit('confirm-dependency', edge)">
+        <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-dependency', edge)">
           <i data-lucide="check"></i> {{ t('apm.confirmDependency') }}
         </button>
       </div>
@@ -112,9 +118,10 @@ const props = defineProps({
   selectedResourceId: { type: String, default: '' },
   canAnalyzeCloud: { type: Boolean, default: false },
   analyzingCloud: { type: Boolean, default: false },
+  confirmingSuggestions: { type: Boolean, default: false },
 })
 
-defineEmits(['select', 'confirm-dependency', 'analyze-cloud', 'add-cloud-resource'])
+defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource'])
 const { t } = useI18n()
 
 const resolvedEdges = computed(() => {
@@ -206,6 +213,7 @@ onMounted(renderIcons)
 .dependency-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dependency-row svg { color: #d29922; }
 .suggestion-list { margin-top: 14px; padding: 12px; border: 1px dashed color-mix(in srgb, #58a6ff 45%, var(--border)); display: flex; flex-direction: column; gap: 8px; }
+.suggestion-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .suggestion-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .suggestion-path { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); align-items: center; gap: 5px; font-size: 10px; }
 .suggestion-path strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

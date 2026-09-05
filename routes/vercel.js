@@ -731,3 +731,5 @@ module.exports = router;
 module.exports.VERCEL_ENDPOINTS = VERCEL_ENDPOINTS;
 module.exports.vercelFetch = vercelFetch;
 module.exports.cronDefinitions = cronDefinitions;
+module.exports.resolveVercelAuth = resolveVercelAuth;
+module.exports.withTeam = withTeam;

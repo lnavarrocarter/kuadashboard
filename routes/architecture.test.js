@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -23,6 +23,8 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader, 
     },
     relationshipReader,
     kubernetesAdapter,
+    gcpDiscoveryService,
+    vercelDiscoveryService,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -294,6 +296,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     const reloaded = await subject.request(`/projects/${projectId}/graph`);
     assert.deepEqual(reloaded.body.document.view, {
       layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
+      showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
       providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
     });
     assert.equal(calls.filter(([type]) => type === 'preview').length, 1);
@@ -481,6 +484,48 @@ test('API marks Kubernetes preview resources already present in the project grap
     assert.equal(preview.status, 200);
     assert.equal(preview.body.nodes.find(node => node.id === 'kubernetes:existing').alreadyInGraph, true);
     assert.equal(preview.body.nodes.find(node => node.id === 'kubernetes:new').alreadyInGraph, false);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API exposes scoped GCP and Vercel discovery preview/import endpoints', async () => {
+  const calls = [];
+  const cloudService = provider => ({
+    async preview(input) {
+      calls.push([provider, 'preview', input]);
+      return {
+        provider,
+        profileId: input.profileId,
+        projectId: input.projectId,
+        scope: { id: `${provider}:scope`, provider },
+        sources: [{ id: `${provider}:source`, provider }],
+        nodes: [{ id: `${provider}:node`, name: provider, provider, resourceType: provider === 'gcp' ? 'gcp-cloud-run' : 'vercel-project' }],
+        relationships: [],
+        failures: [],
+      };
+    },
+    async importSelection(projectId, input) {
+      calls.push([provider, 'import', projectId, input]);
+      return { revision: 1, document: { nodes: [], edges: [] } };
+    },
+  });
+  const subject = await fixture({ gcpDiscoveryService: cloudService('gcp'), vercelDiscoveryService: cloudService('vercel') });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'multi-cloud' } });
+    const projectId = created.body.id;
+    for (const provider of ['gcp', 'vercel']) {
+      const preview = await subject.request(`/projects/${projectId}/discovery/${provider}/preview`, { method: 'POST' });
+      assert.equal(preview.status, 200);
+      assert.equal(preview.body.profileId, 'local:dev');
+      const imported = await subject.request(`/projects/${projectId}/discovery/${provider}/import`, {
+        method: 'POST', body: { selectedNodeIds: [`${provider}:node`], expectedRevision: 0 },
+      });
+      assert.equal(imported.status, 200);
+    }
+    assert.deepEqual(calls.map(call => call[0] + ':' + call[1]), ['gcp:preview', 'gcp:import', 'vercel:preview', 'vercel:import']);
+    assert.equal(calls[1][3].profileId, 'local:dev');
+    assert.equal(calls[1][3].expectedRevision, 0);
   } finally {
     await subject.close();
   }
