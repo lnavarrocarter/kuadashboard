@@ -1,5 +1,7 @@
 ---
 layout: home
+title: KUA — Dashboard de Kubernetes y Multi-Cloud
+description: Dashboard open source para gestionar Kubernetes, AWS, GCP, Vercel, Helm, logs y operaciones de infraestructura desde una sola interfaz.
 
 hero:
   name: KUA

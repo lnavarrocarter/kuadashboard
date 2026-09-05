@@ -25,12 +25,16 @@
         v-show="activeTab === 'apm'"
         ref="apmViewRef"
         :profile-id="selectedProfileId"
+        :application-id="applicationId"
+        :focus-resource="apmFocusResource"
         :lambdas="awsStore.lambdas"
         :ecs-services="awsStore.ecsServices"
         :event-bridge-rules="awsStore.eventBridgeRules"
         :step-functions="awsStore.stepFunctions"
         :load-inventory="loadApmInventory"
         @open-lambda-logs="name => openLogs('lambda', name)"
+        @open-kubernetes-logs="resource => emit('open-kubernetes-logs', resource)"
+        @open-architecture="projectId => emit('open-architecture', projectId)"
       />
 
       <div v-show="activeTab === 'ec2'" class="tab-panel">
@@ -3776,7 +3780,10 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 
 const props = defineProps({
   activeService: { type: String, default: 'ec2' },
+  applicationId: { type: String, default: '' },
+  apmFocusResource: { type: Object, default: null },
 })
+const emit = defineEmits(['open-architecture', 'open-kubernetes-logs'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
@@ -4033,7 +4040,17 @@ async function reloadActiveTab(options = {}) {
   await loadTab(activeTab.value, options)
 }
 
-defineExpose({ reloadActiveTab })
+// Used by Architecture Canvas node actions to jump straight to a resource by name.
+function focusResourceByName(tab, name) {
+  if (activeTab.value !== tab) switchTab(tab)
+  search[tab] = name || ''
+}
+
+function openLambdaLogsByName(name) {
+  if (name) openLogs('lambda', name)
+}
+
+defineExpose({ reloadActiveTab, focusResourceByName, openLambdaLogsByName })
 
 function switchTab(id) {
   activeTab.value = id

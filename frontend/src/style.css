@@ -149,6 +149,12 @@ input, select, textarea { font: inherit; color: var(--text); }
   letter-spacing: .3px; white-space: nowrap;
   border-left: 1px solid var(--border); padding-left: 8px; margin-left: 2px;
 }
+.header-application-context { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 260px; color: var(--text); }
+.header-application-context > span { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.header-application-context strong, .header-application-context small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-application-context strong { font-size: 11px; }
+.header-application-context small { color: var(--text-dim); font-size: 9px; }
+.header-architecture-hint { color: var(--text-dim); font-size: 11px; }
 
 .header-controls { display: flex; align-items: center; gap: 12px; margin-left: 24px; }
 .control-group { display: flex; align-items: center; gap: 6px; }

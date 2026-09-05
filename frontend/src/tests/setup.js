@@ -1,6 +1,9 @@
 // Global test setup for jsdom environment
 import { vi } from 'vitest'
 
+// jsdom does not implement element scrolling.
+HTMLElement.prototype.scrollTo = vi.fn()
+
 // Set a consistent location that matches the production Electron port
 // so WebSocket URL assertions in tests are predictable.
 Object.defineProperty(window, 'location', {

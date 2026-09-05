@@ -1,7 +1,7 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
-> **Versión actual:** v1.10.0
-> **Última actualización:** 2026-06-09
+> **Versión actual:** v1.15.0
+> **Última actualización:** 2026-09-05
 
 ---
 
@@ -10,6 +10,25 @@
 **KUA (Know Unified Administration)** aspira a ser el panel de control universal open source para la administración de infraestructura cloud-native. No una consola más, sino el **único punto de entrada** donde confluyen todos los entornos — Kubernetes, AWS, GCP, Vercel y los que vengan — con capacidades de observación, operación y automatización.
 
 > "Un solo lugar para conocer y operar toda tu infraestructura distribuida."
+
+## Dirección de Producto — KUA Application
+
+Observabilidad y Architecture convergerán alrededor de una **KUA Application**: una aplicación, entorno y perfil con recursos, relaciones, evidencia, telemetría y trazas compartidos. El proyecto no representa una cuenta cloud completa; representa el límite de una aplicación que puede extenderse por AWS, GCP, Vercel y Kubernetes.
+
+La implementación será incremental. APM seguirá siendo la fuente canónica de la aplicación operable y Architecture será inicialmente una vista versionada enlazada a ella. No se moverán métricas, cursores ni payloads de trazas al documento del grafo.
+
+El plan técnico completo está en [KUA Unified Management Plan](./architecture/kua-unified-management-plan.md).
+
+### Avance v1.14.0 — recursos compartidos
+
+- El análisis AWS tolera aplicaciones mixtas con Kubernetes y limita las lecturas ASL a recursos AWS.
+- La membresía de recursos observables se proyecta automáticamente entre APM y Architecture en ambos sentidos, preservando identidades y evitando duplicados.
+- SAM serverless se normaliza como Lambda/Step Functions y el alcance AWS se recupera desde los recursos del preview cuando falta en el catálogo.
+- El registro compartido sigue siendo la identidad de correlación; métricas, cursores y trazas permanecen en sus almacenes especializados.
+
+### Avance v1.14.1 — compatibilidad serverless heredada
+
+- La reconciliación Architecture/APM tolera nodos AWS históricos sin `provider` y deriva cuenta/región desde ARN para mantener una identidad compartida sin duplicados.
 
 ---
 
@@ -36,6 +55,7 @@ Mejoras incrementales sobre la base actual, priorizando madurez y cobertura.
 ### UX / Calidad de Vida
 | Feature | Prioridad | Esfuerzo |
 |---|---|---|
+| **KUA Application** — unir APM y Architecture con recursos, relaciones, evidencia y telemetría compartidos | Alta | v1.12 → v2.0 |
 | **Dashboard home page** — resumen cross-provider con widgets configurables | Alta | 3 sprints |
 | **Multi-ventana / tabs** — abrir vistas en ventanas separadas | Media | 2 sprints |
 | **Keyboard shortcuts** — navegación completa por teclado | Baja | 1 sprint |
@@ -62,6 +82,16 @@ Features transformacionales que agregan capacidades no existentes hoy.
 | **Webhook receiver** | Endpoint para recibir alerts de AWS/GCP/K8s y gatillar acciones |
 | **Scheduled actions** | Programar start/stop de instancias, escalado, backups |
 | **Terraform integración** | Explorar state files y lanzar applies desde KUA |
+
+### Gestión Unificada de Aplicaciones
+
+| Feature | Entrega |
+|---|---|
+| **Architecture sync apply** | Completar sincronización autoritativa CloudFormation con revisión atómica y ciclo stale |
+| **Vínculo APM ↔ Architecture** | Asociar aplicaciones APM existentes con vistas Architecture sin duplicar recursos |
+| **Registro compartido** | Unificar identidad, lineage y decisiones de relaciones; mantener telemetría en su almacenamiento especializado |
+| **Overlays operativos** | Mostrar salud, frescura, métricas, trazas, deployments y hallazgos dentro del diagrama |
+| **Adaptadores multi-cloud** | Extender el mismo contrato a Kubernetes, GCP y Vercel con capacidades declaradas |
 
 ### 💰 FinOps y Costos
 | Feature | Descripción |

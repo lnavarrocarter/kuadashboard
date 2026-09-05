@@ -1,5 +1,329 @@
 # Changelog
 
+## v1.15.0 (2026-09-05)
+
+Architecture Foundation brings application-centered architecture and observability together in KUApps.
+
+Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
+
+### Observability: Kubernetes log intelligence in Intelligent topology
+
+- The Intelligent topology panel now measures the currently retained lines from explicitly opened Kubernetes workload/Pod log tabs: line count, error rate, warning count, recurring normalized error signatures, and common failure-keyword counts.
+- The measurement is deterministic and session-scoped. It does not issue another Kubernetes read, does not persist raw logs, and does not participate in the 30-minute scheduler. Historical rates and alerting remain a future persisted aggregation phase.
+- Log-derived relationship evidence redacts common credentials, bearer tokens, URL credentials, URL query strings, and email-shaped values before displaying a short sample. The existing explicit review flow is still required before a `calls` dependency becomes confirmed.
+
+### Architecture Canvas and Routes: relationship filters and provider lanes
+
+- Canvas and Routes now share persisted filters for relationship type and relationship status, so large diagrams can focus on `routes_to`, `uses`, suggested/manual relationships, or other dependency slices without changing the graph.
+- Canvas adds a Provider lanes arrangement that groups resources by cloud/platform and orders them by logical dependency stage: entrypoints, routing/buffers, compute, runtime, data/configuration and governance.
+- Canvas also adds a Provider + resource sections arrangement for diagrams that should keep each provider separated first, then split resources into ordered type sections inside that provider.
+- Provider lanes use stepped connectors and provider section headers to keep multi-provider diagrams more structured and easier to scan.
+- Sectioned layouts now expand their node spacing when operational overlays such as labels, metrics, collection status or trace highlights are active, and order same-type resources using relationship context before falling back to names.
+- Improved the Canvas toolbar on narrow screens so the growing set of filters and overlay buttons remains reachable through a horizontal control strip.
+- Refreshing an Architecture project now reloads the graph in place instead of clearing and remounting the current Canvas/Routes/Resources view while the request is in flight.
+- When Architecture is opened inside KUApps, projects now appear as a sublevel under the selected Application instead of consuming a second sidebar beside the canvas.
+- KUApps now uses its global sidebar as the single Architecture/Observability switch, and Observability no longer renders a second internal application list when embedded there.
+
+### Architecture Canvas: PDF and Mermaid export
+
+- Added an "Export PDF" button that renders the entire diagram (all nodes and relationships, not just what's currently visible on screen) into a print-ready PDF sized to the full graph, so large diagrams can be printed or shared without anything being cut off.
+- Added an "Export Mermaid" button that downloads the currently visible diagram (respecting active provider/context/namespace filters) as a `.mmd` Mermaid flowchart file.
+- Fixed "Export PDF" producing a blank page: the diagram's zoom was being computed with the wrong padding units, effectively shrinking the whole diagram down to almost nothing inside the exported image. Also added a size cap and a timeout with an error notice so exporting a very large diagram degrades gracefully instead of hanging indefinitely.
+
+### Architecture: Lambda environment-variable reference discovery
+
+- The AWS regional inventory scan now infers what a Lambda function talks to (SQS queues, DynamoDB tables, S3 buckets, SNS topics) by reading its environment-variable configuration — the same metadata `ListFunctions` already returns — without downloading or running the function's code.
+- Only values that resolve to a full ARN or an SQS queue URL are turned into a resource/relationship suggestion; arbitrary strings and secrets are never copied into the graph or its evidence.
+- These new `references` relationships flow through the existing suggestion review and application-candidate detection, so an event-driven Lambda (e.g. a queue dispatcher) can now surface its related queue/table/bucket as an import suggestion even when nothing points to it from CloudFormation or EventBridge.
+
+### Architecture: IAM role capability and static code reference discovery
+
+- The regional inventory scan now also reads each Lambda's execution role policies (metadata only) and surfaces queues, tables, buckets or topics it is *authorized* to use as a weaker "can access" suggestion, even when nothing in its configuration references them yet.
+- A new, strictly opt-in static code reader can download a specific Lambda's deployment package and pattern-match its source text for literal ARNs/queue URLs and AWS SDK client usage — it never executes or evaluates the code, and only runs for functions explicitly selected for analysis.
+- Both signals reuse the same relationship-suggestion review flow as every other discovery source.
+
+### Architecture: generalized resource discovery (SNS fan-out, unknown services, cross-stack)
+
+- Any recognizable AWS ARN now becomes a suggested resource, even for services without dedicated support yet (Kinesis, API destinations, etc.) — previously these were silently dropped, which also meant some EventBridge targets never appeared at all.
+- SNS topics and their SQS/Lambda subscriptions are now discovered as part of the regular AWS scan, completing common pub/sub fan-out patterns.
+- When a CloudFormation resource imports a value from another stack (`Fn::ImportValue`) that can't be resolved from the selected stacks alone, the discovery panel now shows a hint recommending you add the exporting stack too, instead of silently dropping that dependency.
+
+### Fix: "Retry sync" could never clear some divergent resources
+
+- Resource types Architecture can discover but Observability has no schema support for yet (S3, SNS, DynamoDB, and any generically-detected AWS service) were counted as "divergent" even though they can never be observed from both sides — retrying the sync could never fix them, since that would have required correlating with a source that doesn't exist for these types.
+- The divergent-resource diagnostic now only counts resource types that can genuinely be confirmed by both Observability and Architecture. Divergent relationships (pending review) are unaffected, since those really are actionable from the Canvas.
+
+### Architecture + Observability: S3, SNS and DynamoDB now correlate as shared resources
+
+- Observability's shared resource registry now supports S3 buckets, SNS topics and DynamoDB tables, matching what Architecture discovery can already find. These resources now correlate automatically into a single shared entry instead of only ever appearing on the Architecture side.
+- Fixed a related identity bug: S3 bucket names are globally unique and never carry an account/region in their ARN, so relying on the Architecture node's discovery-time account/region to compute identity could create a duplicate registry entry instead of matching the one Observability produces.
+
+### Fix: Kubernetes workloads could be discovered twice with a broken identity
+
+- Kubernetes discovery derived a workload's Kind (Deployment, StatefulSet, ...) from a field the Kubernetes API does not reliably return on list results, which could silently turn into an empty/generic value. When that happened, the discovered workload's identity no longer matched the one produced by a manual add or a previous sync, creating a duplicate resource in Observability and a duplicate node in Architecture.
+- The workload's Kind is now known upfront from which Kubernetes endpoint produced it, never inferred from that unreliable field, so newly discovered workloads always resolve to the same identity as their manually-added or previously-synced counterpart.
+
+### Architecture: discovery panels show resources already added to the project
+
+- Both the AWS and Kubernetes discovery panels now mark preview resources that already exist in the current project's graph, instead of listing them exactly like new ones. Already-added resources show a distinct badge and can no longer be re-selected by accident.
+- Identified applications also show how many of their resources are already part of the project.
+
+### Observability: Kubernetes resources show their specific kind, and divergence is marked per item
+
+- Kubernetes resources in the Observability Resources table and Topology view previously all showed as generic "Kubernetes" with the same icon. They now show their actual kind (Deployment, Pod, Service, ConfigMap...) with a matching icon, so you can tell them apart at a glance.
+- Divergent resources and divergent (pending review) relationships are now marked individually, not just as an aggregate count, using the same rule that already excludes resource types Observability can never correlate — ready to extend to future GCP/Vercel resource types without any UI changes.
+
+### Architecture: Kubernetes Deployments now relate to each other from metadata, like AWS already does
+
+- Kubernetes discovery only related resources through label selectors and ConfigMap/Secret/PVC references; a Deployment whose environment variables pointed at another Service by name (the most common way Kubernetes apps actually call each other) produced no relationship at all.
+- Discovery now reads plain environment variable values — never downloading or running anything — and recognizes both a full internal DNS reference (`service.namespace.svc.cluster.local`) and a bare service name when the variable's own key hints at it (`..._HOST`, `..._URL`, `..._SERVICE`, ...), suggesting a `calls` relationship to the matching Service or Deployment.
+- These suggestions go through the same review flow as every other discovered relationship, and now show up consistently in both Architecture and Observability.
+
+### Observability: EC2 and S3 report CloudWatch metrics, and more AWS resources reach the inventory
+
+- EC2, EKS, RDS, API Gateway, CloudFront, Auto Scaling and ElastiCache resources discovered by Architecture were rejected outright by the resource type constraint, so they never appeared in Observability even as inventory. They are now stored and correlated like any other resource.
+- EC2 instances now report CPU, network in and out, and failed status checks. S3 buckets report storage used and object count, asked for at the daily rate those metrics are actually published at.
+- These readings come from CloudWatch, which bills per request, so each resource is one call carrying all of its metrics, the existing monthly AWS request budget is reserved before spending it, and a failed call still reports what it spent. The collection confirmation says explicitly that these reads are billable.
+- Resources of a type that has no measurable target - a security group is also an "EC2" resource - are reported as inventory without ever contacting CloudWatch.
+
+### Fix: importing discovered resources silently dropped their relationships
+
+- Since resources already in a project stopped being selectable, any relationship connecting a newly selected resource to one of them was discarded on import: a relationship is only imported when both of its ends travel with it. This is why Deployments were not linked to their Pods in the canvas even though discovery found those links correctly.
+- Resources already in the project are now sent along as context, so those relationships survive. Re-sending them is idempotent: the server merges them onto the existing nodes by identity instead of duplicating them.
+- The same applied to AWS imports, and is fixed the same way. AWS now also recomputes which resources are already present at import time, instead of trusting a preview that may have been cached before they were added.
+
+### Architecture: cluster nodes are now identified as the cloud instances they run on
+
+- The EC2 resources discovered from CloudFormation for an EKS cluster are security groups, rules and launch templates - never the running instances, because a node group's instances are created by its Auto Scaling group at runtime. The actual instances are the cluster nodes.
+- Discovered nodes now carry their instance id, availability zone, instance type and, when the context names the account explicitly (an EKS context ARN), their EC2 ARN. That ARN is what lets a running node correlate with the same instance seen from AWS.
+- When the account cannot be determined, the instance identity is still recorded but no ARN is invented.
+
+### Observability: a Relationships view to review discovered connections
+
+- Discovered relationships waiting for a decision were only counted, never shown: they did not appear in Topology and the only way to act on them was to open the Architecture canvas. Observability now has a Relationships tab listing each one with both ends, its type, the evidence behind it and its status, with Accept and Reject actions. It works the same for AWS and Kubernetes, because it reads the shared registry.
+- Accepting or rejecting from Observability records exactly the same decision the Architecture canvas does, so the two views can never disagree.
+- Relationships whose evidence is declared by the resource itself - an Ingress naming its Service, a selector match, the node a Pod is scheduled on - are now confirmed automatically instead of asking for a decision that has only one sensible answer. Anything inferred from naming still waits for review, and a decision already made by a person is never overridden.
+- Existing relationships are re-evaluated on the next reconciliation, so enabling this does not require re-importing everything.
+- "Divergent relationships" is now "relationships to review", which is what it always meant: unlike divergent resources, these are not a problem to fix but a decision to make. The counter is now a shortcut into the new view.
+
+### Observability: the collection confirmation now describes Kubernetes too
+
+- Confirming a collection only ever described Lambda: an application made entirely of Kubernetes resources was asked to confirm "Lambda functions: 0" and an AWS read budget that the collection does not even consume.
+- The confirmation now lists what will actually be read, broken down by resource type (Deployments, Pods, Services, Ingresses, Nodes), and explains that a Kubernetes collection only reads from the cluster and never touches the AWS read budget. Lambda details are shown only when the application actually has Lambda functions.
+- Its description was also out of date: Kubernetes usage may now come from Prometheus, and Ingress inventory from the Kubernetes API.
+
+### Fix: Secrets and ConfigMaps raised a collection error on every run
+
+- The collector is called for every Kubernetes resource of an application, but only workloads, Pods, Services, Ingresses and Nodes have something to measure. A Secret or ConfigMap raised an "unsupported kind" error on each one, on every collection cycle.
+- Those kinds are now reported as topology-only, exactly like resource types from other providers that no collector supports.
+
+### Observability: log volume per workload, and less space wasted on resources without metrics
+
+- Deployments, StatefulSets, DaemonSets and Pods now report how much log they are writing to disk, read from Prometheus. This answers a question the Kubernetes Metrics API never could, and is collected even when usage came from a Metrics Server.
+- If the cluster has no Prometheus, log volume is simply skipped: a collection never fails because of it, and the cluster is probed once rather than once per resource on every run.
+- Resource types with no metric collector (Secrets, ConfigMaps, and any future type) no longer take a whole section each. They are now summarized in a single compact line, leaving the space to resources that actually report something.
+- Ingress request metrics were evaluated and deliberately not added: this cluster has no instrumented ingress controller in Prometheus, and load balancer request counts live in CloudWatch, which is billable. Ingresses keep reporting their routing inventory instead of numbers that would have to be invented.
+
+### Observability: cluster Nodes, Ingresses and Pods now report their own metrics
+
+- Cluster Nodes are now discovered as resources and report CPU used, memory used, hosted Pods and their CPU/memory capacity, read from the Prometheus already running in the cluster. Pods are linked to the Node that runs them in the diagram.
+- Ingresses now report their routing inventory (rules, paths, hosts and TLS hosts) read from the Kubernetes API. Ingress controller traffic is deliberately not reported, because no controller is guaranteed to be scraped by Prometheus and inventing those numbers would be misleading.
+- Pods are now collected directly instead of failing: previously every Pod in an application raised an unsupported-kind error on each collection.
+- Listing cluster Nodes needs a cluster-scoped permission that many roles do not have. When it is denied, discovery now degrades that capability and keeps everything else, instead of failing the whole Kubernetes scan.
+- Each resource section now leads with how many resources of that type the application has, and no longer repeats counters that do not belong to it: Pods show usage and restarts instead of a ready/total pair that just restated the section, and Services show the Pods they route to instead of duplicating their workload's CPU and memory.
+
+### Observability: KPIs and charts are now organized per resource type
+
+- The Overview used to show a single flat KPI row and one chart grid, hardcoded to Lambda and Kubernetes. Metrics are now grouped into a section per resource type — and per Kubernetes kind (Deployments, Pods, Services, Ingresses...) — each with its own KPIs, charts and resource count.
+- Metric series can now be requested filtered by resource type and Kubernetes kind, so a chart shows only the resources it belongs to instead of one cluster-wide total.
+- Resource types that Architecture already discovers but no collector reports metrics for yet (S3, SQS, SNS, DynamoDB, Ingresses, ConfigMaps, GCP and Vercel resources) are now listed explicitly with a note explaining they are correlated for topology only, instead of being silently omitted.
+- Which metrics belong to which resource type now lives in a single provider-agnostic catalog, so adding EC2, Cloud SQL or any future provider's metrics is one entry in that catalog rather than changes spread across the Observability views.
+- The Kubernetes usage KPIs no longer claim their source is always `metrics.k8s.io`, since usage may now come from Prometheus.
+
+### Fix: Kubernetes CPU/memory usage never actually reached Prometheus
+
+- When a cluster has no Metrics Server, Observability's Kubernetes CPU/memory usage falls back to querying a discovered Prometheus Service — but that fallback always failed on a real cluster (silently reported as "Metrics not available"), even though the same Prometheus was already reachable from the resource detail panel.
+- The collector was building the Prometheus proxy request through a Kubernetes client helper that encodes the whole PromQL query path as a single URL segment, corrupting it before it ever reached the cluster. It now builds the proxied request directly, the same proven way the resource detail panel already does.
+- Kubernetes CPU and memory charts and the "Average CPU"/"Average memory" summary now populate correctly for clusters relying on Prometheus instead of Metrics Server.
+
+### Fix: Kubernetes resources duplicated between Architecture and Observability
+
+- An AWS-hosted Kubernetes application (e.g. EKS) stores `aws` as the resource provider for its workloads, while Architecture's Kubernetes adapter always used `kubernetes`. The shared registry treated those as two different resources, so the same Deployment could appear twice — once from APM, once from Architecture — in the Observability resources table and the registry.
+- Kubernetes discovery nodes now carry a stable `context/namespace/kind/name` key (matching the key APM already uses for manual and EKS-discovered workloads), and every place that turns an APM resource into a graph node or vice versa now normalizes the provider to `kubernetes` instead of trusting the application's hosting cloud.
+- Existing duplicates self-heal the next time the shared registry reconciles (automatic collection, a manual reconciliation, or any Architecture/APM resource change) — no manual data migration is required.
+- Generalized the fix into a reusable rule: a resource's provider is now always derived from what the resource actually is (`resourceOwnProvider` in applicationRegistryService.js), never inherited from its parent application's hosting cloud, for both APM→Architecture and Architecture→APM projections.
+
+### Architecture Phase 9: application context persistence
+
+- The active KUA Application context (application, project, provider and profile) now persists to local storage and is restored on reload, so a window reload no longer loses the selected Architecture application.
+- The Architecture profile no longer forces the global AWS profile selector when an application already has its own profile scope (e.g. a Kubernetes-only application), only falling back to it when no application context is active.
+
+### Architecture Phase 10: node-level navigation
+
+- Canvas node inspector now exposes contextual navigation actions: Kubernetes workloads/Pods can open their logs, YAML/metrics detail (reusing the existing Kubernetes detail panel) and owned Pods list; AWS Lambda, EC2, EventBridge and Step Functions nodes can open Lambda logs or jump straight to the matching AWS view tab filtered by name.
+- Unsupported resource types show no navigation section instead of a broken or empty action.
+
+### Architecture Phase 11: Canvas health overlay
+
+- The Canvas gained an opt-in "Health" toggle that shows a small badge on each node: degraded/healthy for Kubernetes workloads and Services using the health already captured during discovery, and a stale badge for resources missing from the last sync.
+- The overlay preference persists with the rest of the canvas view and does not change the diagram layout, keeping dense diagrams readable when disabled.
+
+### Architecture Phase 12: canonical Resources view
+
+- Architecture gained a "Resources" tab that lists the shared registry for the linked KUA Application: provider, resource type, scope/location, confirming sources (APM, Architecture, or both) and relationship count.
+- Resources confirmed from only one side (APM or Architecture) are flagged as a single-source divergence instead of being silently merged.
+- Operational status reuses the Phase 11 health/staleness signal already available on the Architecture graph node, with no new telemetry pipeline.
+- The shared registry endpoint (`GET /apm/applications/:id/registry`) now reports which sources confirmed each resource.
+
+### Architecture Phase 13: fewer surprise revisions from shared registry reconciliation
+
+- Reconciling the shared registry after an Architecture operation could previously create up to two additional graph revisions on top of the user's own save (one for projecting missing APM resources into the graph, another for stamping registry correlation ids). Both mutations are now merged into a single working document and saved at most once, so one user action now produces at most one derived reconciliation revision instead of up to two.
+
+### Architecture Phase 14: visible shared registry sync diagnostics
+
+- Every shared registry reconciliation (manual or automatic) now persists a diagnostic: last successful sync time and duration, last error, and how many resources/relationships are confirmed from only one side (APM or Architecture).
+- The Observability application view shows this diagnostic as a persistent status strip instead of a one-off toast, with a "Retry sync" action that reuses the existing reconcile endpoint.
+- A failed sync no longer erases the last known good sync time or divergence counts.
+
+### Architecture Phase 15: Routes owns its own provider/context/namespace filters
+
+- Routes already respected the Canvas's persisted provider/context/namespace filters, but only Canvas could change them. Routes now has the same filter controls in its own toolbar, writing to the same shared view state, so switching to Canvas is no longer required to narrow down routes.
+
+### Architecture Phase 16: deterministic log-based relationship suggestions
+
+- Kubernetes workload/Pod nodes gained a "Suggest relationships from logs" action that scans the already-open log stream for internal DNS references (`service.namespace.svc.cluster.local`) and proposes `calls` edges to matching Kubernetes nodes in the same diagram.
+- Extraction is fully deterministic (no ML) and sanitized before anything is kept as evidence: common secret-shaped substrings (Authorization headers, tokens, API keys, passwords) are redacted first, and only a short sample plus an occurrence count are stored, never full raw log payloads.
+- Every suggestion is added with `status: suggested` and a confidence below 1, going through the same accept/reject relationship review already used for automatic discovery — nothing is added to the graph without explicit human confirmation.
+- The underlying extraction library also groups recurring error signatures and collects distinct correlation/request/trace ids for future phases, without persisting or displaying raw log content beyond the existing terminal view.
+
+## v1.14.1 (2026-08-26)
+
+### Reconciliación de recursos AWS heredados
+
+- La reconciliación de Architecture ya no falla cuando un nodo AWS legado no incluye `provider`; usa el provider de la KUA Application enlazada.
+- Los nodos AWS con ARN recuperan automáticamente cuenta y región para compartir una identidad única con el recurso APM, evitando duplicados en el registro.
+- Los nodos incompletos no proyectables se omiten de forma segura y se agregó una prueba de regresión para aplicaciones serverless como `syn agent-call`.
+
+## v1.14.0 (2026-08-26)
+
+### Shared resources and AWS topology analysis
+
+- AWS topology analysis now isolates AWS resources and relationships from mixed Kubernetes memberships, while preserving the complete mixed application in the returned topology.
+- AWS resource matching is null-safe and CloudFormation/SAM serverless functions and state machines retain their Lambda/Step Functions semantics.
+- Architecture discovery derives the AWS account from preview resources when the selected scope does not provide it.
+- Linked applications now reconcile observable resources in both directions: APM additions appear in an existing Architecture view, and Architecture AWS/Kubernetes/GCP/Vercel-compatible nodes become APM resources without duplicates.
+- Kubernetes resource providers are persisted explicitly where needed, and Architecture-projected memberships are removed when their source node is removed.
+- Added regression coverage for mixed AWS/Kubernetes analysis, bidirectional projection, serverless normalization and schema migration to v1.14.
+
+## v1.13.0 (2026-08-26)
+
+### Application-first Architecture workspace
+
+- Architecture now loads and presents the KUA Application catalog before profile-scoped projects, selecting the active application and limiting its architecture views to that application.
+- The Architecture workspace now exposes application identity, provider, environment, team, active scopes and link status together with the diagram revision.
+- Creating or refreshing an Architecture view preserves the selected `applicationId`; legacy unlinked projects remain available as a compatibility path.
+
+## v1.12.0 (2026-08-26)
+
+### KUA Application shell hardening
+
+- Architecture now accepts an application context, scopes project loading to the linked KUA Application and binds new projects to that application.
+- Architecture and Observability expose reversible navigation for generic Kubernetes applications as well as cloud providers, with a shared shell context showing application identity, environment and team.
+- Registry reconciliation now runs after project deletion, unlinking, snapshot restores and other graph mutations, pruning stale architecture memberships and relationships.
+- Legacy Kubernetes graph nodes are normalized from their native `kind`, so existing `Deployment`, `Service`, `Pod` and related nodes no longer render as generic clusters.
+- Persisted provider, context and namespace filters now apply to both Canvas and Routes, and the GitHub control uses the bundled SVG icon without Lucide warnings.
+
+### Architecture Phase 8: Kubernetes Adapter Foundation (2026-08-26)
+
+- The Routes view is now provider-neutral: it retains APL event/workflow paths and adds **Microservice** paths for Kubernetes `Ingress -> Service -> Pod` flows and their declared configuration or storage dependencies.
+- Kubernetes route evidence remains declared and explainable. Future high-frequency log analysis will produce privacy-bounded observed suggestions for review, never automatic relationships from raw log text.
+- Kubernetes Architecture preview now accepts one or more namespace filters and groups selectable resources by type, with per-group selection for workloads, Pods, Services, Ingress, ConfigMaps, Secrets and persistent volumes.
+- Kubernetes diagrams now use a dedicated cluster visual treatment and distinct icons for workloads, Pods, Services, Ingress, ConfigMaps, Secrets and persistent volume claims.
+- Kubernetes discovery includes Services and Ingress routing, plus only the ConfigMaps, Secrets and PVCs explicitly referenced by workload environment or volume declarations; these dependencies are drawn with evidence-backed `uses` relationships.
+- Architecture now supports explicit manual resources alongside discovery: add EC2 instances or any AWS component, plus Kubernetes, GCP or Vercel resources, with provider, stable native identity, scope and location recorded in the graph.
+- Architecture now uses one **Add resources** menu instead of an AWS-only action: AWS and Kubernetes previews/imports are available today, while GCP and Vercel are visible as planned provider adapters.
+- Kubernetes Architecture discovery lists contexts, previews one explicitly selected context with health and relationship evidence, then imports only confirmed resources and their internal relationships in one graph revision.
+- Applications with confirmed Kubernetes resources now refresh their scoped topology preview automatically after loading, querying only their configured contexts; opening the preview reuses that result.
+- Creating an Architecture view from Observability now seeds the new diagram with the application's confirmed resources and dependencies instead of opening an empty graph.
+- Kubernetes Observability now falls back to a discovered in-cluster Prometheus Service for aggregated Pod CPU and memory usage when `metrics.k8s.io` is unavailable, while retaining stable restart cursors across sources.
+- Pod readiness, totals and restart signals now remain complete when `metrics.k8s.io` is unavailable; Observability explicitly identifies only CPU and memory usage as unavailable.
+- Observability now derives KPIs, charts, cloud analysis and trace controls from confirmed application resource capabilities, so Kubernetes-only applications do not show Lambda signals or AWS-only analysis.
+- Configured Kubernetes Pods, Deployments, StatefulSets and DaemonSets now expose their existing live log stream directly from Observability, switching to the associated Kubernetes context before resolving workload Pods.
+- Observability setup now loads compatible Kubernetes clusters before workload discovery and queries only the explicitly selected EKS cluster, with separate cluster and workload loading states.
+- The setup flow treats Kubernetes as an explicit application scope, reusing provider-aware context selection that can support GKE and general Kubernetes connections without changing confirmed membership rules.
+- Kubernetes topology preview now lists compatible clusters first and requires selecting one before querying workloads, Services, Ingress and events, avoiding unnecessary multi-cluster scans.
+- Added visible loading feedback while KUA lists clusters and while it reads the selected cluster's Kubernetes resources.
+- Added a read-only Kubernetes topology adapter with stable context/namespace/UID identities for workloads, pods, Services and Ingress resources.
+- Kubernetes previews now provide declared selector and Ingress evidence, workload/pod health signals, warning-event summaries and per-context capability metadata that degrades safely when APIs are unavailable.
+
+### Architecture Phase 6 Foundation (2026-08-26)
+
+- Added a provider-neutral shared registry for KUA Application resources, memberships and relationships, keyed by stable provider identities with source lineage retained separately.
+- Added explicit registry reconciliation from linked APM and Architecture data, projecting correlation IDs to graph nodes and relationships while leaving metric buckets, cursors and traces in their current local stores.
+
+### Architecture Phase 5 Foundation (2026-08-26)
+
+- Added a reversible, profile-scoped link from an Observability application to an existing or newly created Architecture project, without moving resources, metrics, traces or graph data.
+- Observability now shows Architecture link coverage, unmatched resources and duplicate identity warnings, and opens the exact linked diagram in one action.
+
+### Architecture Phase 4 Kickoff (2026-08-26)
+
+- Added authoritative CloudFormation sync apply with one atomic graph revision, optimistic `expectedRevision` conflict protection, selected-stack sync metadata and retained stable resource identities.
+- Sync review now shows concrete resource categories, preserves manual and rejected relationship decisions, marks absent discovered resources stale, and provides explicit restore or removal actions.
+- Added the KUA Unified Management Plan, defining KUA Application as the shared product boundary between APM and Architecture and sequencing the migration toward one provider-neutral application workspace.
+- Added the phase 4 contract for authoritative CloudFormation synchronization, stale-resource lifecycle, sync metadata and relationship review.
+- Documented the first phase 4 milestone as a safe CloudFormation sync review that compares selected stack sources before applying one graph revision.
+- Added the first read-only AWS sync preview endpoint, classifying selected CloudFormation resources and relationships as new, changed, unchanged, missing, stale, manual, reinforced or rejected without mutating the graph.
+- Added an Architecture workspace sync preview panel that checks existing CloudFormation sources and summarizes resource and relationship changes before any apply flow exists.
+
+### Architecture Phase 3 Closure (2026-08-25)
+
+- Rediscovery now reconciles current and historical AWS identities without duplicating nodes, while remapping edges, groups and saved positions to the retained graph ID.
+- Manual and rejected relationship decisions continue to take precedence when the same resources and evidence are imported again.
+- Canvas arrangement mode, direction and relationship-label preference are now stored in the versioned graph, restored after reload and included in snapshot comparisons.
+- AWS discovery now shows whether CloudFormation stacks are loading or resources and evidence are being analyzed, including a visible waiting state for longer reads.
+- Architecture projects can now be deleted explicitly, including their local graph, snapshots and revision history.
+- A live rediscovery of the three AFEX stacks retained 119 nodes without duplication and recorded newly available relationship evidence.
+- Lambda layer versions are now modeled as layers with their layer name instead of as functions named after a numeric version.
+- API Gateway Lambda permissions are consolidated into route-to-Lambda evidence rather than rendered as repeated policy nodes; Lambda inspection now shows its API routes, permission declarations and CloudFormation identity.
+- Added a bilingual phase contract with explicit acceptance criteria and deferred authoritative synchronization to phase 4.
+- Closure validation passed: 118 backend tests, 374 frontend tests, the frontend production build and the VitePress documentation build.
+
+### Architecture Workspace Foundation
+
+- Added a new profile-scoped **Architecture** workspace for application diagrams, initially targeting AWS.
+- Added a provider-neutral graph model for scopes, sources, nodes, relationships, groups, evidence, and persistent layout.
+- Added a private `architecture.sqlite3` store with WAL, optimistic graph revisions, immutable snapshots, and safe server shutdown.
+- Added profile-isolated APIs for creating projects, reading and updating graph drafts, and creating or browsing snapshots.
+- Added the first Vue workspace for project creation, graph summaries, and local snapshot history.
+- Added typed graph operations with cascading cleanup, optimistic revision checks, and semantic change history.
+- Added snapshot comparison and transactional restore, which always creates a new revision and immutable snapshot instead of rewriting history.
+- Added workspace controls for comparing snapshots, restoring prior graph states, and browsing recent revision history.
+- Added an interactive Vue Flow canvas for manually creating, connecting, moving, editing, and deleting architecture components.
+- Canvas interactions persist through typed graph operations, including layout changes recorded only after a drag completes.
+- Added read-only AWS discovery for active CloudFormation deployments and ECS services, with profile/region scoping and request estimates.
+- Added a two-step preview and confirmation flow: KUA never preselects resources, and confirmed resources are imported atomically with their inferred relationships.
+- Added evidence-backed relationship suggestions from CloudFormation `DependsOn`, `Ref`, `GetAtt`, and `Sub` references, including YAML intrinsic shorthand support.
+- Inferred relationships are classified as automatic or suggested using the project confidence threshold, while retaining their confidence and source evidence.
+- Added explicit accept/reject review actions; reviewed decisions are preserved across rediscovery and rejected relationships remain in canonical history while hidden from the canvas.
+- Added AWS-specific relationship semantics for EventBridge targets, Step Functions definitions, and ECS service placement, plus direct SQS-to-Lambda relationships inferred from CloudFormation event source mappings.
+- Added direct regional inventory for Lambda, EventBridge, and Step Functions, with CloudFormation stacks as optional enrichment instead of a discovery requirement.
+- Connected AWS resources are now identified as application candidates from EventBridge target and ASL evidence, ready for explicit selection; truncated 500-resource previews are clearly reported.
+- Identified applications can now be drawn directly with one action: the validated preview is reused for five minutes, the discovery panel closes after import, and large diagrams receive a wider adaptive layout.
+- Added direct regional Lambda event source mapping discovery so SQS-to-Lambda triggers complete application paths without requiring CloudFormation.
+- Added an ordered APL Routes diagram with Event sequence, Name A-Z, Event bus, Service flow, and Longest route modes; ordering applies to both entrypoints and branches while preserving distinct relationship paths.
+- New Architecture projects now open a guided CloudFormation-first setup: choose deployments, confirm inferred application resources, then review the generated diagram, with regional inventory available as an explicit fallback.
+- Step Functions resources now open their configurable internal ASL diagram from either Routes or Canvas, while candidate composition shows which applications contain workflows and other AWS resource types.
+- Architecture can now map every resource from explicitly selected CloudFormation stacks, including isolated resources and previously unsupported AWS services, without widening the APM resource contract.
+- CloudFormation evidence now identifies S3 notifications, IAM role and policy attachments, workload roles, Lambda permissions, and governed resources with dedicated relationship semantics.
+- The Canvas can arrange request flow horizontally or vertically using persisted causal levels and crossing reduction; dense diagrams start at a readable zoom with optional relationship labels and recognizable AWS service icons.
+- API Gateway methods and HTTP API routes now display their resolved HTTP method and path, preserve direct route-to-Lambda evidence, and expose navigable component references in the Canvas inspector.
+- Selecting a Canvas component now centers it at a readable zoom and dims unrelated nodes and edges, keeping direct dependencies visible in dense application topologies.
+- Clearing a Canvas selection now explicitly restores every node and edge to full visibility, including styles internally mutated by Vue Flow.
+- Added a resource-type arrangement mode with labeled count sections, deterministic grids, persisted resource positions, and subdued straight connectors for large diagrams.
+- Architecture discovery consumes the existing per-profile AWS request budget; templates are parsed locally and never persisted or returned to the frontend.
+- Added focused backend and frontend coverage for graph validation, snapshot immutability, revision conflicts, profile isolation, and store behavior.
+
 ## v1.11.3 (2026-08-11)
 
 ### macOS Packaging Hotfix

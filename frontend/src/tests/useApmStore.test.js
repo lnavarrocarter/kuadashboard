@@ -68,11 +68,12 @@ describe('profile-scoped local reads', () => {
       if (url.includes('/overview')) return response({ metrics: [], resources: [] })
       if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [] })
       if (url.endsWith('/forecast')) return response({ monthlyRequestsMaximum: 2880 })
+      if (url.endsWith('/registry')) return response({ resources: [], relationships: [], syncStatus: null })
       throw new Error(`Unexpected URL: ${url}`)
     })
     store.setActiveProfile('local:dev')
     await store.refreshLocal()
-    expect(global.fetch).toHaveBeenCalledTimes(5)
+    expect(global.fetch).toHaveBeenCalledTimes(6)
     expect(global.fetch.mock.calls.every(([, options]) => (options.method || 'GET') === 'GET')).toBe(true)
     expect(store.selectedApplicationId).toBe('app-a')
   })
@@ -90,6 +91,50 @@ describe('profile-scoped local reads', () => {
       { t: 1000, v: 5, quality: 'partial' },
       { t: 2000, v: 1, quality: 'full' },
     ])
+  })
+})
+
+describe('registry sync diagnostics', () => {
+  it('loads the last sync status without blocking on failure', async () => {
+    global.fetch = vi.fn(() => response({ error: 'boom' }, 500))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const status = await store.loadRegistrySyncStatus()
+
+    expect(status).toBeNull()
+    expect(store.syncStatus).toBeNull()
+  })
+
+  it('stores the sync status returned by the registry endpoint', async () => {
+    global.fetch = vi.fn(() => response({
+      resources: [], relationships: [],
+      syncStatus: { lastSuccessAt: '2026-08-27T10:00:00.000Z', lastError: null, divergentResourceCount: 1, divergentRelationshipCount: 0 },
+    }))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const status = await store.loadRegistrySyncStatus()
+
+    expect(status.divergentResourceCount).toBe(1)
+    expect(store.syncStatus.lastSuccessAt).toBe('2026-08-27T10:00:00.000Z')
+  })
+
+  it('updates the sync status after a manual reconcile', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      expect(url).toContain('/registry/reconcile')
+      expect(options.method).toBe('POST')
+      return response({
+        resources: [], relationships: [],
+        syncStatus: { lastSuccessAt: '2026-08-27T11:00:00.000Z', lastError: null, divergentResourceCount: 0, divergentRelationshipCount: 0 },
+      })
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    await store.reconcileSharedRegistry()
+
+    expect(store.syncStatus.lastSuccessAt).toBe('2026-08-27T11:00:00.000Z')
   })
 })
 
@@ -141,7 +186,10 @@ describe('explicit writes', () => {
       expect(options.method).toBe('POST')
       return response({
         application: { id: 'app-a' }, resources: [], edges: [],
-        analysis: { suggestions: [{ confirmed: false, relationType: 'invokes' }] },
+        analysis: {
+          suggestions: [{ confirmed: false, relationType: 'invokes' }],
+          cloudScan: { suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes' }] },
+        },
       })
     })
     store.setActiveProfile('local:prod')
@@ -151,6 +199,62 @@ describe('explicit writes', () => {
 
     expect(analysis.suggestions[0].confirmed).toBe(false)
     expect(store.topology.edges).toEqual([])
+  })
+
+  it('confirms every distinct suggested dependency before one topology refresh', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/edges')) {
+        expect(options.method).toBe('POST')
+        return response({ id: 'edge' }, 201)
+      }
+      if (url.includes('/overview')) return response({ metrics: [], resources: [] })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [], analysis: {} })
+      if (url.includes('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/registry')) return response({ resources: [], relationships: [], syncStatus: null })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:prod')
+    store.selectedApplicationId = 'app-a'
+
+    await store.confirmDependencies('app-a', [
+      { sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes' },
+      { sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes' },
+      { sourceResourceId: 'queue', targetResourceId: 'worker', relationType: 'consumed_by' },
+    ])
+
+    expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/edges'))).toHaveLength(2)
+    expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/topology'))).toHaveLength(1)
+  })
+
+  it('keeps AWS definition suggestions after a normal topology refresh', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/topology/analyze-cloud')) return response({
+        application: { id: 'app-a' },
+        resources: [{ id: 'flow' }, { id: 'worker' }],
+        edges: [],
+        analysis: {
+          suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes', confidence: 1 }],
+          cloudScan: { suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes', confidence: 1 }] },
+        },
+      })
+      if (url.includes('/overview')) return response({ metrics: [], resources: [] })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-a' }, resources: [{ id: 'flow' }, { id: 'worker' }], edges: [],
+        analysis: { suggestions: [], counts: { suggestions: 0 }, findings: [] },
+      })
+      if (url.includes('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/registry')) return response({ resources: [], relationships: [], syncStatus: null })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:prod')
+    store.selectedApplicationId = 'app-a'
+
+    await store.analyzeCloudTopology('app-a')
+    await store.loadSelectedApplication()
+
+    expect(store.topology.analysis.suggestions).toHaveLength(1)
+    expect(store.topology.analysis.suggestions[0].relationType).toBe('invokes')
+    expect(store.topology.analysis.counts.suggestions).toBe(1)
   })
 
   it('classifies Step Function and execution ARNs before tracing', async () => {

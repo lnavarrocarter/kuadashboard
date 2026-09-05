@@ -13,6 +13,7 @@ const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
 const { KubeResponseCache } = require('./lib/kubeResponseCache');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
+const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
 const {
   buildKubeConfig,
@@ -47,6 +48,7 @@ loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
 const app    = express();
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
+const architectureDatabase = getArchitectureDatabase();
 const apmCleanupInterval = setInterval(() => {
   try {
     const removed = apmDatabase.cleanup();
@@ -69,6 +71,11 @@ const envManagerRoutes  = require('./routes/envManager');
 const gcpRoutes         = require('./routes/gcp');
 const awsRoutes         = require('./routes/aws');
 const { createApmRouter } = require('./routes/apm');
+const { createArchitectureRouter } = require('./routes/architecture');
+const { createKuaAppsRouter } = require('./routes/kuaApps');
+const { createAwsDeploymentReader } = require('./lib/apm/awsDeploymentReader');
+const { createAwsRegionalInventoryReader } = require('./lib/architecture/awsRegionalInventoryReader');
+const { createAwsTemplateRelationshipReader } = require('./lib/architecture/awsTemplateRelationshipReader');
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
@@ -77,11 +84,13 @@ const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
+const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
 const { ApmScheduler } = require('./lib/apm/scheduler');
 const apmScheduler = new ApmScheduler({
   database: apmDatabase,
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
+  awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
 apmScheduler.start();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
@@ -214,11 +223,38 @@ app.use('/api/cloud/aws',     awsRoutes);
 for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
   app.use(`/api/observability/${provider}`, createApmRouter({
     database: apmDatabase,
+    architectureDatabase,
     scheduler: apmScheduler,
     auditLog,
     provider,
   }));
 }
+function reserveArchitectureAwsRequest(input) {
+  const reservation = apmDatabase.reserveAwsRequests(input);
+  if (!reservation.allowed) {
+    throw Object.assign(new Error('AWS request budget exhausted'), {
+      statusCode: 429,
+      code: 'budget_exhausted',
+    });
+  }
+}
+
+app.use('/api/architecture', createArchitectureRouter({
+  database: architectureDatabase,
+  apmDatabase,
+  auditLog,
+  deploymentReader: createAwsDeploymentReader({
+    beforeRequest: reserveArchitectureAwsRequest,
+    includeAllResources: true,
+  }),
+  inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+}));
+app.use('/api/kua-apps', createKuaAppsRouter({
+  database: architectureDatabase,
+  apmDatabase,
+  auditLog,
+}));
 app.use('/api/cloud/vercel',  vercelRoutes);
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
@@ -2877,6 +2913,7 @@ function shutdown(signal) {
 
   const forceExit = setTimeout(() => {
     closeApmDatabase();
+    closeArchitectureDatabase();
     process.exit(1);
   }, 5000);
   forceExit.unref();
@@ -2884,6 +2921,7 @@ function shutdown(signal) {
   server.close(() => {
     clearTimeout(forceExit);
     closeApmDatabase();
+    closeArchitectureDatabase();
     process.exit(0);
   });
 }

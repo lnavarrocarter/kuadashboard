@@ -65,3 +65,9 @@ kuadashboard/
 3. **Express routes** handle API requests by calling the appropriate SDK (K8s client, AWS SDK, GCP SDK)
 4. **WebSocket servers** handle real-time streams (logs, exec, shell)
 5. **Electron** (when used) wraps everything in a native window with an IPC bridge
+
+## Product Architecture
+
+- [KUA Unified Management Plan](./kua-unified-management-plan)
+- [Architecture Workspace Phase 3](./workspace-phase-3)
+- [Architecture Workspace Phase 4](./workspace-phase-4)

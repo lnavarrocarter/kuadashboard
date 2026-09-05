@@ -26,8 +26,8 @@
 
     <div v-if="store.error" class="alert-error apm-error">{{ store.error }}</div>
 
-    <div class="apm-layout">
-      <aside class="application-list">
+    <div :class="['apm-layout', { 'apm-layout--embedded': props.hideApplicationList }]">
+      <aside v-if="!props.hideApplicationList" class="application-list">
         <div class="list-heading"><span>{{ t('apm.applications') }}</span><strong>{{ store.filteredApplications.length }}</strong></div>
         <button
           v-for="application in store.filteredApplications"
@@ -74,6 +74,13 @@
               <button class="btn sm btn-icon" :title="t('apm.configureThresholds')" @click="openThresholds">
                 <i data-lucide="sliders-horizontal"></i>
               </button>
+              <button class="btn sm" @click="openArchitectureLink">
+                <i data-lucide="network"></i> {{ hasArchitectureLink ? 'Open architecture' : 'Link architecture' }}
+              </button>
+              <button class="btn sm" :disabled="store.loadingKubernetesContexts" @click="openKubernetesPreview">
+                <i :data-lucide="store.loadingKubernetesContexts ? 'loader-2' : 'boxes'"></i>
+                {{ store.loadingKubernetesContexts ? 'Loading clusters…' : 'Kubernetes preview' }}
+              </button>
               <button class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
                 <i :data-lucide="store.collecting ? 'loader-2' : 'cloud-download'"></i>
                 {{ store.collecting ? t('apm.collecting') : t('apm.collectNow') }}
@@ -81,37 +88,109 @@
             </div>
           </section>
 
+          <section v-if="focusedResource" class="apm-resource-focus">
+            <i data-lucide="focus"></i>
+            <span><strong>Resource focus</strong><small>Metrics filtered to {{ focusedResource.name }}</small></span>
+          </section>
+
           <section class="apm-status-strip">
             <span><i data-lucide="database"></i> {{ t('apm.localStorage', { range: store.range }) }}</span>
             <span><i data-lucide="layers-3"></i> {{ t('apm.resourcesCount', { count: store.topology.resources.length }) }}</span>
             <span><i data-lucide="gauge"></i> {{ usageLabel }}</span>
             <span :class="{ partial: store.overview?.health?.status === 'degraded' }"><i data-lucide="heart-pulse"></i> {{ healthLabel }}</span>
+            <span v-if="store.kubernetesPreview?.applicationId === store.selectedApplicationId"><i data-lucide="boxes"></i> Kubernetes preview updated</span>
+            <span v-if="store.selectedApplication.architectureProjectIds?.length || store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> {{ store.selectedApplication.architectureProjectIds?.length || 1 }} Architecture{{ (store.selectedApplication.architectureProjectIds?.length || 1) === 1 ? '' : 's' }} linked</span>
             <span v-if="qualityPartial" class="partial"><i data-lucide="triangle-alert"></i> {{ t('apm.partialData') }}</span>
-            <span v-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
+            <span v-if="kubernetesUsageUnavailable" class="partial"><i data-lucide="circle-alert"></i> {{ t('apm.kubernetesUsageUnavailable') }}</span>
+            <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
+          </section>
+
+          <section v-if="hasArchitectureLink" class="registry-sync-status">
+            <span class="registry-sync-title"><i data-lucide="git-merge"></i> Shared registry sync</span>
+            <span v-if="store.syncStatus?.lastSuccessAt" class="registry-sync-item">
+              <i data-lucide="check-circle-2"></i> Last sync {{ new Date(store.syncStatus.lastSuccessAt).toLocaleString() }}
+              <template v-if="store.syncStatus.lastDurationMs != null"> ({{ store.syncStatus.lastDurationMs }} ms)</template>
+            </span>
+            <span v-else class="registry-sync-item partial"><i data-lucide="circle-alert"></i> Never synced yet</span>
+            <span v-if="store.syncStatus?.lastError" class="registry-sync-item partial" :title="store.syncStatus.lastError">
+              <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
+            </span>
+            <button v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item pending-review" @click="openRegistryResources">
+              <i data-lucide="alert-triangle"></i> {{ t('apm.divergentResources', { count: store.syncStatus.divergentResourceCount }) }}
+            </button>
+            <button
+              v-if="store.syncStatus?.divergentRelationshipCount"
+              class="registry-sync-item pending-review"
+              @click="activeView = 'relationships'"
+            >
+              <i data-lucide="git-pull-request-arrow"></i>
+              {{ t('apm.relationshipsToReview', { count: store.syncStatus.divergentRelationshipCount }) }}
+            </button>
+            <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
+              <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'refresh-cw'"></i>
+              {{ store.reconcilingRegistry ? 'Reconciling…' : 'Retry sync' }}
+            </button>
           </section>
 
           <div class="apm-view-tabs">
-            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'">{{ t('apm.overview') }}</button>
+            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> Metrics</button>
+            <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> Logs</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
-            <button v-if="provider === 'aws'" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
-            <button :class="{ active: activeView === 'resources' }" @click="activeView = 'resources'">{{ t('apm.resources') }}</button>
+            <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
+            <button :class="{ active: activeView === 'resources' }" @click="openRegistryResources">{{ t('apm.resources') }}</button>
+            <button :class="{ active: activeView === 'relationships' }" @click="activeView = 'relationships'">
+              {{ t('apm.relationships') }}
+              <span v-if="pendingRelationships.length" class="tab-badge">{{ pendingRelationships.length }}</span>
+            </button>
           </div>
 
           <template v-if="activeView === 'overview'">
-            <section class="kpi-grid">
-              <div v-for="item in kpis" :key="item.label" class="kpi-item">
-                <span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.detail }}</small>
+            <ApmProviderMetrics
+              :provider="provider"
+              :profile-id="profileId"
+              :application="store.selectedApplication"
+              :resources="visibleResources"
+            />
+            <section v-for="section in collectedSections" :key="section.key" class="resource-metric-section">
+              <header class="resource-metric-header">
+                <i :data-lucide="section.icon"></i>
+                <h3>{{ section.label }}</h3>
+                <span class="resource-metric-count">{{ t('apm.resourcesCount', { count: section.resourceCount }) }}</span>
+              </header>
+
+              <div v-if="section.kpis.length" class="kpi-grid compact">
+                <div v-for="item in section.kpis" :key="item.id" class="kpi-item">
+                  <span>{{ t(item.labelKey) }}</span>
+                  <strong>{{ item.value }}</strong>
+                  <small>{{ kpiDetail(item) }}</small>
+                </div>
+              </div>
+
+              <div v-if="section.charts.length" class="chart-grid">
+                <CloudMetricChart
+                  v-for="chart in section.charts"
+                  :key="seriesKey(chart)"
+                  :label="t(chart.labelKey)"
+                  :unit="chart.unit"
+                  :points="store.series[seriesKey(chart)] || []"
+                  :color="chart.color"
+                  :x-tick-limit="4"
+                />
               </div>
             </section>
-            <section v-if="hasMetrics" class="chart-grid">
-              <CloudMetricChart :label="t('apm.observedInvocations')" unit="" :points="store.series.invocations_observed || []" color="#58a6ff" :x-tick-limit="4" />
-              <CloudMetricChart :label="t('apm.observedErrors')" unit="" :points="store.series.errors_observed || []" color="#f85149" :x-tick-limit="4" />
-              <CloudMetricChart :label="t('apm.lambdaDuration')" unit="ms" :points="store.series.duration_ms || []" color="#d29922" :x-tick-limit="4" />
-              <CloudMetricChart :label="t('apm.kubernetesCpu')" unit="" :points="store.series.cpu_cores || []" color="#3fb950" :x-tick-limit="4" />
-              <CloudMetricChart :label="t('apm.kubernetesMemory')" unit="bytes" :points="store.series.memory_bytes || []" color="#a371f7" :x-tick-limit="4" />
-              <CloudMetricChart :label="t('apm.readyPods')" unit="" :points="store.series.pods_ready || []" color="#39c5cf" :x-tick-limit="4" />
+
+            <!-- Types with no collector are kept visible as inventory, but must not take a full
+                 section each: that space belongs to resources that actually report something. -->
+            <section v-if="topologyOnlySections.length" class="topology-only-strip">
+              <i data-lucide="shapes"></i>
+              <span class="topology-only-title">{{ t('apm.topologyOnlyTitle') }}</span>
+              <span v-for="section in topologyOnlySections" :key="section.key" class="topology-only-item">
+                <i :data-lucide="section.icon"></i>{{ section.label }}
+                <strong>{{ section.resourceCount }}</strong>
+              </span>
             </section>
-            <div v-else class="apm-empty compact">
+
+            <div v-if="!metricSections.length" class="apm-empty compact">
               <i data-lucide="chart-no-axes-combined"></i>
               <strong>{{ t('apm.noMetricsTitle') }}</strong>
               <span>{{ t('apm.noMetricsDescription') }}</span>
@@ -122,12 +201,23 @@
             v-else-if="activeView === 'topology'"
             :topology="store.topology"
             :selected-resource-id="selectedResourceId"
-            :can-analyze-cloud="provider === 'aws'"
+            :can-analyze-cloud="canAnalyzeCloudTopology"
             :analyzing-cloud="store.analyzingTopology"
+            :confirming-suggestions="confirmingSuggestions"
             @select="selectResource"
             @confirm-dependency="confirmDependency"
+            @confirm-all-dependencies="confirmAllDependencies"
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
+          />
+
+          <ApmApplicationLogs
+            v-else-if="activeView === 'logs'"
+            :provider="provider"
+            :profile-id="profileId"
+            :application="store.selectedApplication"
+            :resources="visibleResources"
+            @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
           />
 
           <ApmProcessTrace
@@ -137,20 +227,68 @@
             @trace="traceProcess"
           />
 
-          <section v-else class="resource-table-wrap">
-            <table class="cloud-table">
-              <thead><tr><th>{{ t('apm.resource') }}</th><th>{{ t('apm.source') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('apm.status') }}</th><th>{{ t('apm.actions') }}</th></tr></thead>
-              <tbody>
-                <tr v-for="resource in store.topology.resources" :key="resource.id">
-                  <td><strong>{{ resource.name }}</strong><small>{{ apmResourceLabel(resource) }}</small></td>
-                  <td>{{ resource.associationSource }}</td>
-                  <td class="text-dim">{{ apmResourceLocation(resource) }}</td>
-                  <td><span :class="resource.enabled ? 'status-ok' : 'text-dim'">{{ resource.enabled ? t('apm.enabled') : t('apm.paused') }}</span></td>
-                  <td><button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button></td>
-                </tr>
-              </tbody>
-            </table>
+          <section v-else-if="activeView === 'relationships'" class="relationship-review">
+            <p class="relationship-intro">{{ t('apm.relationshipsIntro') }}</p>
+            <div v-if="!store.registry" class="apm-empty compact">
+              <i data-lucide="git-merge"></i>
+              <span>{{ t('apm.relationshipsUnavailable') }}</span>
+            </div>
+            <template v-else>
+              <div v-if="!pendingRelationships.length" class="apm-empty compact">
+                <i data-lucide="check-circle-2"></i>
+                <span>{{ t('apm.relationshipsAllReviewed') }}</span>
+              </div>
+              <div class="resource-table-wrap">
+                <table class="cloud-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('apm.relationship') }}</th>
+                      <th>{{ t('apm.relationType') }}</th>
+                      <th>{{ t('apm.evidence') }}</th>
+                      <th>{{ t('apm.status') }}</th>
+                      <th>{{ t('apm.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in reviewableRelationships" :key="item.id" :class="{ pending: item.divergent }">
+                      <td>
+                        {{ item.sourceName || item.sourceResourceId }}
+                        <small>&rarr; {{ item.targetName || item.targetResourceId }}</small>
+                      </td>
+                      <td>{{ item.relationType }}</td>
+                      <td><small>{{ relationshipEvidence(item) }}</small></td>
+                      <td><span :class="['relationship-status', item.status]">{{ relationshipStatusLabel(item.status) }}</span></td>
+                      <td class="relationship-actions">
+                        <template v-if="item.divergent">
+                          <button class="btn sm primary" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'accept')">
+                            <i data-lucide="check"></i> {{ t('apm.accept') }}
+                          </button>
+                          <button class="btn sm" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'reject')">
+                            <i data-lucide="x"></i> {{ t('apm.reject') }}
+                          </button>
+                        </template>
+                        <span v-else class="relationship-reviewed">&mdash;</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
           </section>
+
+          <ArchitectureResources
+            v-else-if="activeView === 'resources'"
+            :graph="null"
+            :registry="store.registry"
+            :fallback-resources="store.topology.resources"
+            :loading="store.registryLoading"
+            @refresh="refreshRegistry"
+          >
+            <template #actions="{ resource }">
+              <button v-if="resource.type === 'lambda'" class="btn sm" @click="$emit('open-lambda-logs', resource.name)"><i data-lucide="file-search"></i> {{ t('apm.openLogs') }}</button>
+              <button v-else-if="kubernetesLogResource(resource)" class="btn sm" @click="$emit('open-kubernetes-logs', resource)"><i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}</button>
+            </template>
+          </ArchitectureResources>
         </template>
       </main>
     </div>
@@ -205,13 +343,19 @@
     <BaseModal :show="confirmCollect" @close="confirmCollect = false">
       <template #title><i data-lucide="cloud-download"></i> {{ t('apm.collectTitle') }}</template>
       <div class="collect-confirm">
-        <p>{{ t('apm.collectDescription') }}</p>
+        <p>{{ collectionDescription }}</p>
         <dl>
-          <div><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ store.forecast?.lambdaCount || 0 }}</dd></div>
-          <div><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ (store.forecast?.lambdaCount || 0) * 2 }}</dd></div>
-          <div><dt>{{ t('apm.monthlyUsage') }}</dt><dd>{{ usageLabel }}</dd></div>
+          <template v-if="hasLambdaResources">
+            <div><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ store.forecast?.lambdaCount || 0 }}</dd></div>
+            <div><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ (store.forecast?.lambdaCount || 0) * 2 }}</dd></div>
+            <div><dt>{{ t('apm.monthlyUsage') }}</dt><dd>{{ usageLabel }}</dd></div>
+          </template>
+          <div v-for="entry in collectedKubernetesBreakdown" :key="entry.key">
+            <dt>{{ entry.label }}</dt><dd>{{ entry.resourceCount }}</dd>
+          </div>
         </dl>
-        <p class="collect-warning">{{ t('apm.readWarning') }}</p>
+        <p v-if="hasLambdaResources || hasCloudWatchResources" class="collect-warning">{{ t('apm.readWarning') }}</p>
+        <p v-else-if="hasKubernetesResources" class="collect-warning">{{ t('apm.kubernetesReadWarning') }}</p>
       </div>
       <template #footer>
         <button class="btn" @click="confirmCollect = false">{{ t('action.cancel') }}</button>
@@ -250,6 +394,92 @@
         </button>
       </template>
     </BaseModal>
+
+    <BaseModal :show="architectureLinkOpen" @close="architectureLinkOpen = false">
+      <template #title><i data-lucide="network"></i> Architecture</template>
+      <div class="architecture-link-editor">
+      <template v-if="store.architectureLink?.linked">
+          <div v-for="project in linkedArchitectureProjects" :key="project.id" class="architecture-linked-project">
+            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+            <button class="btn sm danger" :disabled="store.linkingArchitecture" @click="unlinkArchitectureProject(project.id)">
+              <i data-lucide="unlink"></i> Unlink
+            </button>
+          </div>
+          <small>{{ store.architectureLink.resources.matched.length }} matched resources · {{ store.architectureLink.resources.unmatched.length }} unmatched across linked architectures</small>
+          <small v-if="store.architectureLink.resources.duplicateIdentityWarnings.length" class="architecture-link-warning">
+            {{ store.architectureLink.resources.duplicateIdentityWarnings.length }} duplicate identity warnings
+          </small>
+          <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
+            <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'git-merge'"></i>
+            {{ store.reconcilingRegistry ? 'Reconciling registry' : 'Reconcile shared registry' }}
+          </button>
+          <small v-if="store.registry">
+            {{ store.registry.resources.length }} shared resources · {{ store.registry.relationships.length }} shared relationships
+          </small>
+          <label>New architecture
+            <input v-model.trim="newArchitectureName" class="ctrl-input" placeholder="e.g. Production topology" />
+          </label>
+          <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
+            <i data-lucide="plus"></i> Create another architecture
+          </button>
+        </template>
+        <template v-else>
+          <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
+            <i data-lucide="plus"></i> Create architecture view
+          </button>
+          <label>Existing project
+            <select v-model="architectureProjectId" class="ctrl-input">
+              <option value="">Select a project</option>
+              <option v-for="project in store.architectureProjects" :key="project.id" :value="project.id">{{ project.name }}</option>
+            </select>
+          </label>
+        </template>
+      </div>
+      <template #footer>
+        <button class="btn" @click="architectureLinkOpen = false">{{ t('action.cancel') }}</button>
+        <button v-if="!store.architectureLink?.linked" class="btn primary" :disabled="store.linkingArchitecture || !architectureProjectId" @click="linkArchitectureProject">
+          <i data-lucide="link"></i> Link project
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal :show="kubernetesPreviewOpen" @close="kubernetesPreviewOpen = false">
+      <template #title><i data-lucide="boxes"></i> Kubernetes topology preview</template>
+      <div class="kubernetes-preview">
+        <template v-if="!store.kubernetesPreview">
+          <label>Cluster
+            <select v-model="kubernetesContextId" class="ctrl-input" :disabled="store.loadingKubernetesContexts || store.previewingKubernetes">
+              <option value="">Select an EKS cluster</option>
+              <option v-for="context in store.kubernetesContexts" :key="context.id" :value="context.id">{{ context.name }}</option>
+            </select>
+          </label>
+          <small v-if="store.loadingKubernetesContexts">Loading available clusters…</small>
+          <small v-else-if="!store.kubernetesContexts.length">No compatible Kubernetes clusters were found.</small>
+          <small v-else>Select one cluster before loading workloads, Services, Ingress and events.</small>
+        </template>
+        <template v-else>
+        <div class="kubernetes-preview-stats">
+          <span><strong>{{ store.kubernetesPreview?.nodes.length || 0 }}</strong> resources</span>
+          <span><strong>{{ store.kubernetesPreview?.relationships.length || 0 }}</strong> relationships</span>
+          <span><strong>{{ store.kubernetesPreview?.health.filter(item => item.status === 'degraded').length || 0 }}</strong> degraded contexts</span>
+        </div>
+        <div v-for="capability in store.kubernetesPreview?.capabilities || []" :key="capability.context" class="kubernetes-preview-context">
+          <strong>{{ capability.context }}</strong>
+          <small>{{ capability.stableIdentity ? 'UID identity' : 'No stable identity' }} · {{ capability.relationshipEvidence ? 'relationship evidence' : 'limited relationships' }} · {{ capability.events ? 'events' : 'events unavailable' }}</small>
+        </div>
+        <div v-if="store.kubernetesPreview?.failures.length" class="architecture-link-warning">
+          {{ store.kubernetesPreview.failures.map(item => item.context).join(', ') }} could not be reached.
+        </div>
+        </template>
+      </div>
+      <template #footer>
+        <button class="btn" @click="kubernetesPreviewOpen = false">{{ t('action.cancel') }}</button>
+        <button v-if="!store.kubernetesPreview" class="btn primary" :disabled="!kubernetesContextId || store.previewingKubernetes" @click="previewKubernetesTopology">
+          <i :data-lucide="store.previewingKubernetes ? 'loader-2' : 'scan-search'"></i>
+          {{ store.previewingKubernetes ? 'Loading workloads…' : 'Load preview' }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -263,11 +493,18 @@ import { useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
+import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
+import ApmApplicationLogs from './ApmApplicationLogs.vue'
+import ApmProviderMetrics from './ApmProviderMetrics.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
+import { buildResourceMetricSections, seriesKey } from './metricCatalog'
 
 const props = defineProps({
   provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
+  applicationId: { type: String, default: '' },
+  hideApplicationList: { type: Boolean, default: false },
+  focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
@@ -275,7 +512,7 @@ const props = defineProps({
   stepFunctions: { type: Array, default: () => [] },
   loadInventory: { type: Function, default: null },
 })
-defineEmits(['open-lambda-logs'])
+const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context'])
 const store = useApmStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
@@ -288,14 +525,19 @@ const applicationError = ref('')
 const applicationForm = reactive({ name: '', environment: '', team: '', pollingEnabled: false })
 const confirmCollect = ref(false)
 const thresholdsOpen = ref(false)
+const architectureLinkOpen = ref(false)
+const architectureProjectId = ref('')
+const newArchitectureName = ref('')
+const kubernetesPreviewOpen = ref(false)
+const kubernetesContextId = ref('')
 const savingThresholds = ref(false)
 const thresholdError = ref('')
 const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyPodsPercent: 100, restartDelta: 1 })
 const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true })
 const activeView = ref('overview')
 const selectedResourceId = ref('')
+const confirmingSuggestions = ref(false)
 const mainEl = ref(null)
-const metricNames = ['invocations_observed', 'errors_observed', 'duration_ms', 'cpu_cores', 'memory_bytes', 'pods_ready']
 const thresholdDefinitions = computed(() => [
   { key: 'errorRatePercent', label: t('apm.threshold.errorRate'), description: t('apm.threshold.errorRateHint'), min: 0, max: 100, step: 0.1 },
   { key: 'durationMs', label: t('apm.threshold.duration'), description: t('apm.threshold.durationHint'), min: 0, step: 1 },
@@ -304,7 +546,35 @@ const thresholdDefinitions = computed(() => [
 ])
 
 const metrics = computed(() => Object.fromEntries((store.overview?.metrics || []).map(metric => [metric.metricName, metric])))
-const hasMetrics = computed(() => (store.overview?.metrics || []).length > 0)
+const applicationResources = computed(() => store.topology.resources || [])
+const focusNode = computed(() => props.focusResource?.node || null)
+const focusedResource = computed(() => {
+  const node = focusNode.value
+  if (!node) return null
+  const canonical = store.registry?.resources?.find(resource => resource.id === node.registryResourceId)
+  const identifiers = [node.arn, node.nativeId, node.discoveryKey, canonical?.nativeIdentifier].filter(Boolean)
+  const matchesIdentifier = resource => identifiers.some(identifier => [resource.id, resource.arn, resource.key].includes(identifier))
+  const matchesType = resource => node.provider === 'kubernetes'
+    ? resource.type === 'kubernetes' && (!node.kind || resource.kind === node.kind)
+    : resource.type === node.resourceType
+  return applicationResources.value.find(resource => matchesIdentifier(resource) && matchesType(resource))
+    || applicationResources.value.find(resource => resource.name === node.name && matchesType(resource))
+    || null
+})
+const visibleResources = computed(() => focusedResource.value ? [focusedResource.value] : applicationResources.value)
+const hasLambdaResources = computed(() => applicationResources.value.some(resource => resource.type === 'lambda'))
+const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
+// These are read from CloudWatch, which bills per request, so the confirmation must say so.
+const hasCloudWatchResources = computed(() => applicationResources.value.some(resource => ['ec2', 's3'].includes(resource.type)))
+const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
+const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
+  resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
+const chartDefinitions = computed(() => metricSections.value.flatMap(section => section.charts))
+const collectionDescription = computed(() => [
+  hasLambdaResources.value ? t('apm.collectDescriptionAws') : '',
+  hasCloudWatchResources.value ? t('apm.collectDescriptionCloudWatch') : '',
+  hasKubernetesResources.value ? t('apm.collectDescriptionKubernetes') : '',
+].filter(Boolean).join(' ') || t('apm.collectDescription'))
 const qualityPartial = computed(() => (store.overview?.metrics || []).some(metric => metric.quality === 'partial'))
 const latestRunLabel = computed(() => {
   const run = store.overview?.latestRun
@@ -324,6 +594,8 @@ const latestRunIssue = computed(() => {
   if (run?.errorCode) return t('apm.error.collection_failed')
   return ''
 })
+const kubernetesUsageUnavailable = computed(() => hasKubernetesResources.value && !hasLambdaResources.value &&
+  store.overview?.latestRun?.errorCode === 'metrics_api_unavailable')
 const usageLabel = computed(() => {
   const total = store.usage?.total || 0
   const limit = store.usage?.limit || 100000
@@ -336,43 +608,105 @@ const healthLabel = computed(() => {
   return t('apm.healthUnknown')
 })
 
-function metricSum(name) { return Number(metrics.value[name]?.sum || 0) }
-function metricAverage(name) { return Number(metrics.value[name]?.average || 0) }
-function formatNumber(value, digits = 0) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: digits }) }
-function formatBytes(value) {
-  if (!value) return '-'
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GiB`
-  return `${(value / 1024 ** 2).toFixed(1)} MiB`
+const metricSections = computed(() => buildResourceMetricSections({
+  resources: visibleResources.value,
+  metricsByResourceType: store.overview?.metricsByResourceType || [],
+}))
+const linkedArchitectureProjects = computed(() => store.architectureLink?.projects?.length
+  ? store.architectureLink.projects
+  : store.architectureLink?.project ? [store.architectureLink.project] : [])
+const hasArchitectureLink = computed(() => Boolean(
+  store.selectedApplication?.architectureProjectIds?.length || store.selectedApplication?.architectureProjectId,
+))
+const collectedSections = computed(() => metricSections.value.filter(section => section.collectsMetrics))
+const topologyOnlySections = computed(() => metricSections.value.filter(section => !section.collectsMetrics))
+
+const registryRelationships = computed(() => store.registry?.relationships || [])
+const pendingRelationships = computed(() => registryRelationships.value.filter(item => item.divergent))
+// Pending ones first: this view exists to clear them, not to browse the confirmed ones.
+const reviewableRelationships = computed(() => [
+  ...pendingRelationships.value,
+  ...registryRelationships.value.filter(item => !item.divergent),
+])
+
+function relationshipEvidence(item) {
+  const types = [...new Set((item.evidence || []).map(entry => entry.type || entry.kind).filter(Boolean))]
+  return types.join(', ') || '-'
 }
 
-const kpis = computed(() => {
-  const invocations = metricSum('invocations_observed')
-  const errors = metricSum('errors_observed')
-  const ready = metricSum('pods_ready')
-  const total = metricSum('pods_total')
-  return [
-    { label: t('apm.observedInvocations'), value: formatNumber(invocations), detail: t('apm.reportLines') },
-    { label: t('apm.observedErrorRate'), value: invocations ? `${((errors / invocations) * 100).toFixed(1)}%` : '-', detail: t('apm.signals', { count: formatNumber(errors) }) },
-    { label: t('apm.averageDuration'), value: metrics.value.duration_ms ? `${formatNumber(metricAverage('duration_ms'), 1)} ms` : '-', detail: t('apm.lambdaExecution') },
-    { label: t('apm.readyPods'), value: total ? `${formatNumber(ready)} / ${formatNumber(total)}` : '-', detail: t('apm.restarts', { count: formatNumber(metricSum('restarts_delta')) }) },
-    { label: t('apm.averageCpu'), value: metrics.value.cpu_cores ? `${formatNumber(metricAverage('cpu_cores'), 3)} cores` : '-', detail: t('apm.metricsApi') },
-    { label: t('apm.averageMemory'), value: formatBytes(metricAverage('memory_bytes')), detail: t('apm.metricsApi') },
-  ]
-})
+// A status the UI does not know yet must read as itself, never as a raw translation key.
+function relationshipStatusLabel(status) {
+  const key = `apm.relationshipStatus.${status}`
+  const label = t(key)
+  return label === key ? status : label
+}
+
+async function reviewRelationship(item, decision) {
+  await store.reviewRegistryRelationship(item.id, decision)
+}
+
+async function openRegistryResources() {
+  activeView.value = 'resources'
+  await store.loadRegistrySyncStatus()
+  renderIcons()
+}
+
+async function refreshRegistry() {
+  await store.loadRegistrySyncStatus()
+}
+// What a collection will actually read, so the confirmation is not just about Lambda.
+const collectedKubernetesBreakdown = computed(() => buildResourceMetricSections({
+  resources: applicationResources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false),
+}).filter(section => section.collectsMetrics))
+
+function kpiDetail(item) {
+  if (!item.detailKey) return ''
+  return item.detailValue == null
+    ? t(item.detailKey)
+    : t(item.detailKey, { count: item.detailValue.toLocaleString() })
+}
 
 async function loadCharts() {
   if (!store.selectedApplicationId) return
-  await Promise.all(metricNames.map(metricName => store.loadSeries(metricName)))
+  const resourceId = focusedResource.value?.id || ''
+  await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
+    resourceId,
+    resourceType: chart.resourceType,
+    kind: chart.kind,
+    key: seriesKey(chart),
+  })))
+}
+
+function kubernetesLogResource(resource) {
+  return resource.type === 'kubernetes' && ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod'].includes(resource.kind)
+}
+
+function emitApplicationContext() {
+  if (!store.selectedApplication) return
+  if (props.applicationId && store.selectedApplication.id !== props.applicationId) return
+  emit('application-context', {
+    ...store.selectedApplication,
+    provider: props.provider,
+    profileId: props.profileId,
+  })
 }
 
 async function refreshLocal() {
   await store.refreshLocal()
+  emitApplicationContext()
   await loadCharts()
   renderIcons()
 }
 
 async function chooseApplication(applicationId) {
   await store.selectApplication(applicationId)
+  if (store.selectedApplication) {
+    emit('application-context', {
+      ...store.selectedApplication,
+      provider: props.provider,
+      profileId: props.profileId,
+    })
+  }
   await loadCharts()
   selectedResourceId.value = ''
   mainEl.value?.scrollTo({ top: 0 })
@@ -444,6 +778,65 @@ function openThresholds() {
   thresholdsOpen.value = true
 }
 
+async function openArchitectureLink() {
+  if (hasArchitectureLink.value) {
+    emit('open-architecture', {
+      applicationId: store.selectedApplication.id,
+      projectId: store.selectedApplication.architectureProjectIds?.[0] || store.selectedApplication.architectureProjectId,
+      provider: props.provider,
+      profileId: props.profileId,
+      application: store.selectedApplication,
+    })
+    return
+  }
+  architectureProjectId.value = ''
+  await Promise.all([store.loadArchitectureLink(), store.loadArchitectureProjects()])
+  architectureLinkOpen.value = true
+  renderIcons()
+}
+
+async function linkArchitectureProject() {
+  const link = await store.linkArchitectureProject(architectureProjectId.value)
+  if (link) architectureProjectId.value = ''
+  renderIcons()
+}
+
+async function createArchitectureProjectLink() {
+  await store.createArchitectureProjectLink(newArchitectureName.value)
+  newArchitectureName.value = ''
+  renderIcons()
+}
+
+async function unlinkArchitectureProject(projectId) {
+  await store.unlinkArchitectureProject(projectId)
+  renderIcons()
+}
+
+async function reconcileSharedRegistry() {
+  await store.reconcileSharedRegistry()
+  renderIcons()
+}
+
+async function openKubernetesPreview() {
+  if (store.kubernetesPreview?.applicationId === store.selectedApplicationId) {
+    kubernetesContextId.value = store.kubernetesPreview.sources[0]?.context || ''
+    kubernetesPreviewOpen.value = true
+    renderIcons()
+    return
+  }
+  kubernetesContextId.value = ''
+  store.kubernetesPreview = null
+  kubernetesPreviewOpen.value = true
+  await store.loadApplicationKubernetesContexts()
+  renderIcons()
+}
+
+async function previewKubernetesTopology() {
+  const preview = await store.previewKubernetesDiscovery({ contexts: [kubernetesContextId.value] })
+  if (preview) kubernetesContextId.value = preview.sources[0]?.context || kubernetesContextId.value
+  renderIcons()
+}
+
 async function saveThresholds() {
   if (!store.selectedApplicationId || savingThresholds.value) return
   const payload = {}
@@ -488,6 +881,18 @@ async function confirmDependency(dependency) {
   renderIcons()
 }
 
+async function confirmAllDependencies(dependencies) {
+  if (!store.selectedApplicationId || !dependencies.length) return
+  confirmingSuggestions.value = true
+  try {
+    await store.confirmDependencies(store.selectedApplicationId, dependencies)
+    if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
+    renderIcons()
+  } finally {
+    confirmingSuggestions.value = false
+  }
+}
+
 async function analyzeCloudTopology() {
   if (!store.selectedApplicationId) return
   await store.analyzeCloudTopology(store.selectedApplicationId)
@@ -496,8 +901,8 @@ async function analyzeCloudTopology() {
 
 async function addCloudResource(reference) {
   if (!store.selectedApplicationId || !reference?.candidate) return
-  await store.addResource(store.selectedApplicationId, reference.candidate)
-  await store.analyzeCloudTopology(store.selectedApplicationId)
+  const resource = await store.addResource(store.selectedApplicationId, { provider: 'aws', ...reference.candidate })
+  if (resource) await store.analyzeCloudTopology(store.selectedApplicationId)
   renderIcons()
 }
 
@@ -511,22 +916,63 @@ function renderIcons() {
   nextTick(() => createIcons({ icons }))
 }
 
+async function applyResourceFocus() {
+  const focus = props.focusResource
+  if (!focus) {
+    selectedResourceId.value = ''
+    return
+  }
+
+  selectedResourceId.value = focusedResource.value?.id || ''
+
+  if (focus.view === 'traces' && hasTraceResources.value) {
+    activeView.value = 'traces'
+  }
+
+  store.series = {}
+  if (activeView.value === 'traces' && focusNode.value?.arn) {
+    await traceProcess(focusNode.value.arn, false)
+  } else if (focusedResource.value) {
+    await loadCharts()
+  }
+  renderIcons()
+}
+
 watch(() => props.profileId, async profileId => {
   store.setActiveProfile(profileId, props.provider)
-  if (profileId) await refreshLocal()
+  if (profileId) {
+    await refreshLocal()
+    if (props.applicationId && store.applications.some(application => application.id === props.applicationId)) {
+      await chooseApplication(props.applicationId)
+    }
+  }
 }, { immediate: true })
 watch(() => props.provider, async provider => {
   store.setActiveProfile(props.profileId, provider)
   if (props.profileId) await refreshLocal()
 })
-watch(activeView, () => mainEl.value?.scrollTo({ top: 0 }))
-watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen], renderIcons)
+watch(activeView, (next, previous) => {
+  if (next !== previous) mainEl.value?.scrollTo?.({ top: 0 })
+})
+watch([
+  () => props.focusResource,
+  () => applicationResources.value.map(resource => resource.id).join('|'),
+], applyResourceFocus, { immediate: true, deep: true })
+// Chart definitions now depend on which resource types the application actually has,
+// so they can resolve after loadCharts() already ran; reload whenever the set changes.
+watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) => {
+  if (keys && keys !== previous) loadCharts()
+})
+watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen, architectureLinkOpen, kubernetesPreviewOpen], renderIcons)
 onMounted(renderIcons)
-defineExpose({ refreshLocal })
+defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
 </script>
 
 <style scoped>
 .apm-view { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+.apm-resource-focus { display: flex; align-items: center; gap: 8px; margin: 10px 12px 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, #58a6ff 45%, var(--border)); background: color-mix(in srgb, #58a6ff 10%, var(--surface)); color: #58a6ff; }
+.apm-resource-focus span { display: flex; flex-direction: column; gap: 2px; }
+.apm-resource-focus small { color: var(--text-dim); font-size: 10px; }
 .apm-toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border); padding: 8px 12px; }
 .apm-title, .apm-title span { min-width: 0; display: flex; align-items: center; gap: 9px; }
 .apm-title > svg { width: 21px; height: 21px; color: #3fb950; }
@@ -542,6 +988,7 @@ defineExpose({ refreshLocal })
 .range-control button.active, .apm-view-tabs button.active { background: var(--accent); color: white; }
 .apm-error { margin: 8px 12px 0; }
 .apm-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: 214px minmax(0, 1fr); }
+.apm-layout--embedded { grid-template-columns: minmax(0, 1fr); }
 .application-list { min-height: 0; overflow: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 8px; }
 .list-heading { display: flex; justify-content: space-between; padding: 5px 4px 9px; color: var(--text-dim); font-size: 9px; text-transform: uppercase; }
 .application-row, .application-empty { width: 100%; min-width: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
@@ -564,6 +1011,9 @@ defineExpose({ refreshLocal })
 .application-empty svg { width: 17px; }
 .apm-main { min-width: 0; min-height: 0; overflow: auto; padding: 14px; }
 .application-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.architecture-linked-project { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+.architecture-linked-project > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.architecture-linked-project small { color: var(--text-dim); }
 .application-header h2 { margin: 2px 0; font-size: 20px; letter-spacing: 0; }
 .application-header > div > span { color: var(--text-dim); font-size: 10px; }
 .application-kicker { color: #3fb950; font-size: 9px; text-transform: uppercase; }
@@ -574,9 +1024,27 @@ defineExpose({ refreshLocal })
 .apm-status-strip span { display: flex; align-items: center; gap: 5px; }
 .apm-status-strip svg { width: 12px; height: 12px; }
 .apm-status-strip .partial { color: #d29922; }
+.registry-sync-status { margin: -4px 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim); font-size: 10px; }
+.registry-sync-title { display: flex; align-items: center; gap: 5px; font-weight: 700; color: var(--text); }
+.registry-sync-item { display: flex; align-items: center; gap: 5px; }
+.registry-sync-item.partial { color: #d29922; }
+.registry-sync-status svg { width: 12px; height: 12px; }
+.registry-sync-status .btn { margin-left: auto; }
 .apm-view-tabs { width: fit-content; margin-bottom: 12px; }
 .apm-view-tabs button { min-width: 82px; height: 28px; font-size: 10px; }
 .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 12px; }
+.kpi-grid.compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.resource-metric-section { margin-bottom: 18px; }
+.resource-metric-header { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.resource-metric-header h3 { font-size: 12px; font-weight: 650; margin: 0; }
+.resource-metric-header i { width: 14px; height: 14px; color: var(--text-dim); }
+.resource-metric-count { color: var(--text-dim); font-size: 9px; margin-left: auto; }
+.topology-only-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 8px 11px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.topology-only-strip > i { width: 13px; height: 13px; color: var(--text-dim); }
+.topology-only-title { color: var(--text-dim); font-size: 9px; }
+.topology-only-item { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-dim); }
+.topology-only-item i { width: 12px; height: 12px; }
+.topology-only-item strong { font-size: 11px; color: var(--text); }
 .kpi-item { min-width: 0; min-height: 74px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid var(--border); padding: 9px 11px; background: var(--surface); }
 .kpi-item:last-child { border-right: 0; }
 .kpi-item span, .kpi-item small { color: var(--text-dim); font-size: 9px; }
@@ -588,6 +1056,18 @@ defineExpose({ refreshLocal })
 .apm-empty span { max-width: 430px; font-size: 10px; line-height: 1.5; }
 .apm-empty.compact { min-height: 230px; border: 1px dashed var(--border); border-radius: 7px; }
 .resource-table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 7px; }
+.relationship-review { display: flex; flex-direction: column; gap: 10px; }
+.relationship-intro { color: var(--text-dim); font-size: 10px; margin: 0; }
+.relationship-review tr.pending td { background: color-mix(in srgb, var(--warning, #d29922) 7%, transparent); }
+.relationship-status { font-size: 9px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
+.relationship-status.suggested { color: #d29922; border-color: #d29922; }
+.relationship-status.manual { color: #3fb950; border-color: #3fb950; }
+.relationship-status.rejected { color: var(--text-dim); }
+.relationship-actions { display: flex; gap: 5px; }
+.relationship-reviewed { color: var(--text-dim); }
+.registry-sync-item.pending-review { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; cursor: pointer; color: #d29922; font: inherit; padding: 0; }
+.registry-sync-item.pending-review:hover { text-decoration: underline; }
+.tab-badge { margin-left: 5px; padding: 1px 5px; border-radius: 999px; background: #d29922; color: #10141a; font-size: 9px; font-weight: 650; }
 .resource-table-wrap td > small { display: block; margin-top: 2px; color: var(--text-dim); font-size: 9px; }
 .collect-confirm { display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.5; }
 .collect-confirm dl { margin: 0; border: 1px solid var(--border); border-radius: 6px; }
@@ -602,6 +1082,16 @@ defineExpose({ refreshLocal })
 .threshold-toggle strong { font-size: 10px; }
 .threshold-field small { grid-column: 1 / -1; color: var(--text-dim); font-size: 9px; line-height: 1.4; }
 .threshold-field .ctrl-input { width: 92px; }
+.architecture-link-editor { display: flex; flex-direction: column; gap: 10px; }
+.architecture-link-editor label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 10px; }
+.architecture-link-editor small { color: var(--text-dim); }
+.architecture-link-warning { color: #d29922 !important; }
+.kubernetes-preview { display: flex; flex-direction: column; gap: 10px; }
+.kubernetes-preview label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 10px; }
+.kubernetes-preview-stats { display: flex; gap: 8px; }
+.kubernetes-preview-stats span, .kubernetes-preview-context { border: 1px solid var(--border); border-radius: 5px; padding: 8px; color: var(--text-dim); font-size: 10px; }
+.kubernetes-preview-stats strong, .kubernetes-preview-context strong { color: var(--text); }
+.kubernetes-preview-context { display: flex; flex-direction: column; gap: 3px; }
 @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); }.kpi-item:nth-child(3) { border-right: 0; }.chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 820px) { .apm-toolbar { align-items: flex-start; flex-direction: column; }.apm-toolbar-controls { width: 100%; flex-wrap: wrap; }.apm-layout { grid-template-columns: 170px minmax(0, 1fr); }.application-actions { align-items: flex-end; flex-direction: column; }.collection-state { max-width: 160px; }.chart-grid { grid-template-columns: 1fr; } }
 @media (max-width: 620px) {

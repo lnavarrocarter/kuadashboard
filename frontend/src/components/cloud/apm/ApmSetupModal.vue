@@ -132,11 +132,27 @@
             <div class="setup-section-title">{{ t('apm.kubernetesWorkloads') }}</div>
             <div class="setup-hint">{{ t(provider === 'vercel' ? 'apm.vercelKubernetesWorkloadsHint' : 'apm.kubernetesWorkloadsHint', { provider: providerLabel }) }}</div>
           </div>
-          <button class="btn sm" type="button" :disabled="!profileId || loadingEksWorkloads" @click="loadEksWorkloads">
-            <i :data-lucide="loadingEksWorkloads ? 'loader-2' : 'scan-search'"></i>
-            {{ loadingEksWorkloads ? t('apm.detectingKubernetesWorkloads') : t('apm.detectKubernetesWorkloads') }}
+          <button class="btn sm" type="button" :disabled="!profileId || loadingEksContexts" @click="loadEksContexts">
+            <i :data-lucide="loadingEksContexts ? 'loader-2' : 'server-cog'"></i>
+            {{ loadingEksContexts ? 'Loading clusters…' : 'Load clusters' }}
           </button>
         </div>
+        <template v-if="eksContexts.length">
+          <div class="setup-tools deployment-tools eks-context-tools">
+            <label>Cluster
+              <select v-model="selectedEksContext" class="ctrl-input" :disabled="loadingEksWorkloads">
+                <option value="">Select a cluster</option>
+                <option v-for="context in eksContexts" :key="context.id" :value="context.id">{{ context.name }}</option>
+              </select>
+            </label>
+            <button class="btn sm primary" type="button" :disabled="!selectedEksContext || loadingEksWorkloads" @click="loadEksWorkloads">
+              <i :data-lucide="loadingEksWorkloads ? 'loader-2' : 'scan-search'"></i>
+              {{ loadingEksWorkloads ? 'Loading workloads…' : 'Detect workloads' }}
+            </button>
+          </div>
+          <div class="setup-hint">Only the selected cluster is queried. This scope can later represent EKS, GKE or a general Kubernetes connection.</div>
+        </template>
+        <div v-else-if="eksContextsLoaded && !loadingEksContexts" class="setup-empty">No compatible Kubernetes clusters were found.</div>
         <template v-if="eksCatalog">
           <div v-if="eksCatalog.failedContexts?.length" class="setup-warning">
             <i data-lucide="triangle-alert"></i>
@@ -239,6 +255,7 @@ const discovering = ref(false)
 const loadingDeployments = ref(false)
 const previewingDeployments = ref(false)
 const loadingInventory = ref(false)
+const loadingEksContexts = ref(false)
 const loadingEksWorkloads = ref(false)
 const inventoryLoaded = ref(false)
 const error = ref('')
@@ -258,6 +275,9 @@ const selectedDeploymentKeys = ref([])
 const selectedInventoryKeys = ref([])
 const eksCatalog = ref(null)
 const selectedEksKeys = ref([])
+const eksContexts = ref([])
+const selectedEksContext = ref('')
+const eksContextsLoaded = ref(false)
 const form = reactive({
   name: '', region: defaultRegion(), environment: '', team: '', pollingEnabled: false,
   costAcknowledged: false, lambdaNames: [], includeKubernetes: false,
@@ -466,13 +486,32 @@ async function refreshInventory() {
   }
 }
 
+async function loadEksContexts() {
+  if (!props.profileId || loadingEksContexts.value) return
+  loadingEksContexts.value = true
+  error.value = ''
+  try {
+    store.setActiveProfile(props.profileId, props.provider)
+    const result = await store.loadKubernetesContexts()
+    eksContexts.value = result.contexts || []
+    selectedEksContext.value = ''
+    eksCatalog.value = null
+    selectedEksKeys.value = []
+    eksContextsLoaded.value = true
+  } catch (requestError) {
+    error.value = requestError.message
+  } finally {
+    loadingEksContexts.value = false
+  }
+}
+
 async function loadEksWorkloads() {
   if (!props.profileId || loadingEksWorkloads.value) return
   loadingEksWorkloads.value = true
   error.value = ''
   try {
     store.setActiveProfile(props.profileId, props.provider)
-    eksCatalog.value = await store.loadKubernetesWorkloads()
+    eksCatalog.value = await store.loadKubernetesWorkloads([selectedEksContext.value])
     selectedEksKeys.value = []
   } catch (requestError) {
     error.value = requestError.message
@@ -503,6 +542,9 @@ function reset() {
   selectedInventoryKeys.value = []
   eksCatalog.value = null
   selectedEksKeys.value = []
+  eksContexts.value = []
+  selectedEksContext.value = ''
+  eksContextsLoaded.value = false
   inventoryLoaded.value = false
   error.value = ''
 }
@@ -618,6 +660,8 @@ watch(() => props.show, visible => {
 .setup-search { width: 190px; }
 .deployment-tools { justify-content: flex-end; }
 .deployment-tools .setup-hint { margin-right: auto; }
+.eks-context-tools label { display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); font-size: 9px; }
+.eks-context-tools .ctrl-input { min-width: 220px; }
 .deployment-picker { max-height: 150px; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--border); }
 .deployment-option { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 4px; cursor: pointer; }
 .deployment-option span { min-width: 0; display: flex; flex-direction: column; }

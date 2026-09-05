@@ -1,3 +1,8 @@
+---
+title: Kubernetes Dashboard & Cluster Management
+description: Manage Kubernetes workloads, services, networking, storage, YAML, metrics, events, logs and port forwarding with KUA.
+---
+
 # Kubernetes Features
 
 ![KuaDashboard — Kubernetes dashboard](/screenshots/dashboard-main.png)

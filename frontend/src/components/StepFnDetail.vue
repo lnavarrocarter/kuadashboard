@@ -222,6 +222,7 @@ const props = defineProps({
   open:      { type: Boolean, default: false },
   sm:        { type: Object,  default: null },
   profileId: { type: String,  default: '' },
+  initialTab: { type: String, default: 'details' },
 })
 
 defineEmits(['close'])
@@ -388,12 +389,15 @@ function copyField(text, key) {
 
 // Auto-load when opened
 watch(() => props.open, (val) => {
-  if (val && !loaded.value) load()
+  if (val && !loaded.value) {
+    activeTab.value = TABS.some(tab => tab.id === props.initialTab) ? props.initialTab : 'details'
+    load()
+  }
   if (!val) {
     loaded.value = false; data.value = null; error.value = null
     selectedExecution.value = null; events.value = []; eventsError.value = null
     versions.value = []; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
-    activeTab.value = 'details'
+    activeTab.value = props.initialTab
   }
 })
 

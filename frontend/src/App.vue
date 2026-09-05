@@ -24,13 +24,8 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
-          <button
-            :class="['provider-tab', { active: activeProvider === 'observability' }]"
-            :disabled="!hasCloudConnections"
-            :title="hasCloudConnections ? t('nav.observability') : t('nav.observabilityRequiresProvider')"
-            @click="setProvider('observability')"
-          >
-            <i data-lucide="chart-no-axes-combined"></i> {{ t('nav.observability') }}
+          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" @click="setProvider('kuapps')">
+            <i data-lucide="boxes"></i> KUApps
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
@@ -76,25 +71,14 @@
             </optgroup>
           </select>
         </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'">
-          <select class="ctrl-select" v-model="awsProfileId" @change="onAwsProfileChange">
-            <option value="">{{ t('aws.noProfile') }}</option>
-            <option v-for="p in envStore.awsProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            <option v-for="p in awsLocalProfiles" :key="`local:${p.name}`" :value="`local:${p.name}`">{{ p.name }}</option>
-          </select>
+        <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
+          <span class="header-application-context">
+            <i data-lucide="boxes"></i>
+            <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider.toUpperCase() }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
+          </span>
         </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'">
-          <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
-            <option value="">{{ t('gcp.noProfile') }}</option>
-            <option v-for="p in envStore.gcpProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            <option v-for="c in gcpLocalConfigs" :key="`local:${c.name}`" :value="`local:${c.name}`">{{ c.name }}</option>
-          </select>
-        </template>
-        <template v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'">
-          <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
-            <option value="">{{ t('vercel.noProfile') }}</option>
-            <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
+        <template v-else-if="activeProvider === 'kuapps'">
+          <span class="header-architecture-hint">Select a KUA application below</span>
         </template>
       </div>
       <div class="header-right">
@@ -355,27 +339,15 @@
           </div>
         </nav>
 
-        <nav class="sidebar observability-sidebar" v-if="activeProvider === 'observability'">
+        <nav class="sidebar kuapps-sidebar" v-if="activeProvider === 'kuapps'">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('observability.platform') }}</div>
-            <button
-              v-for="provider in availableObservabilityProviders"
-              :key="provider.id"
-              :class="['observability-provider-tab', { active: observabilityProvider === provider.id }]"
-              @click="selectObservabilityProvider(provider.id)"
-            >
-              <i :data-lucide="provider.icon"></i>
-              <span><strong>{{ provider.label }}</strong><small>{{ provider.description }}</small></span>
-            </button>
-          </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">{{ t('observability.view') }}</div>
-            <a
-              v-for="option in currentObservabilityOptions"
-              :key="option.id"
-              :class="['sidebar-item', { active: observabilitySelections[observabilityProvider] === option.id }]"
-              @click.prevent="observabilitySelections[observabilityProvider] = option.id"
-            >{{ option.labelKey ? t(option.labelKey) : option.label }}</a>
+            <div class="sidebar-section-title">KUApps</div>
+            <a :class="['sidebar-item', { active: kuappsView === 'architecture' }]" @click.prevent="setProvider('architecture')">
+              <i data-lucide="network"></i> Architecture
+            </a>
+            <a :class="['sidebar-item', { active: kuappsView === 'observability' }]" @click.prevent="setProvider('observability')">
+              <i data-lucide="square-activity"></i> Observability
+            </a>
           </div>
         </nav>
 
@@ -387,6 +359,7 @@
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
               <ResourceTable
                 :selected-key="selectedKubeKey"
+                :initial-filter="kubeResourceFilter"
                 @action="handleAction"
                 @select="selectKubeResource"
                 @bulk-delete="openBulkDelete"
@@ -408,30 +381,56 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" />
-          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" @connect-gke="handleGkeConnect" />
-          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" />
-          <ApmObservabilityView
-            ref="observabilityViewRef"
-            v-else-if="activeProvider === 'observability' && observabilityProvider === 'generic'"
-            provider="generic"
-            profile-id="local"
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
+          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" />
+          <KUAppsView
+            v-else-if="activeProvider === 'kuapps'"
+            ref="kuappsViewRef"
+            :active-view="kuappsView"
+            :profile-id="architectureProfileId"
+            :application-id="activeApplicationContext?.id || ''"
+            :project-id="architectureProjectId"
+            :observability-provider="kuappsObservabilityProvider"
+            :observability-profile-id="kuappsObservabilityProfileId"
+            :focus-resource="observabilityFocus"
+            compact-navigation
+            @update-view="kuappsView = $event"
+            @open-observability="openApplicationObservability"
+            @open-architecture="openApplicationArchitecture"
+            @application-context="handleKuAppsApplicationContext"
+            @open-kubernetes-logs="openObservabilityKubernetesLogs"
+            @open-kubernetes-detail="openArchitectureKubernetesDetail"
+            @open-kubernetes-pods="openArchitectureKubernetesPods"
+            @open-aws-resource="openArchitectureAwsResource"
+            @open-aws-logs="openArchitectureAwsLogs"
           />
           <AwsView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'aws'"
             :active-service="observabilitySelections.aws"
+            :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
+            @open-architecture="openApplicationArchitecture"
+            @open-kubernetes-logs="openObservabilityKubernetesLogs"
           />
           <GcpView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'gcp'"
             :active-service="observabilitySelections.gcp"
+            :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
+            @open-architecture="openApplicationArchitecture"
           />
           <VercelView
             ref="observabilityViewRef"
             v-else-if="activeProvider === 'observability' && observabilityProvider === 'vercel'"
             :active-service="observabilitySelections.vercel"
+            :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''"
+            :apm-focus-resource="observabilityFocus"
+            @open-architecture="openApplicationArchitecture"
           />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
         </main>
       </div>
 
@@ -453,7 +452,7 @@
           activeProvider === 'aws' ? 'Amazon Web Services'
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
-          : activeProvider === 'observability' ? `${t('nav.observability')} / ${currentObservabilityProviderLabel.toUpperCase()}`
+          : activeProvider === 'kuapps' ? `KUApps / ${kuappsView === 'architecture' ? 'Architecture' : 'Observability'}`
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>
@@ -503,6 +502,7 @@ import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { useI18n } from './composables/useI18n'
+import { useArchitectureContext } from './composables/useArchitectureContext'
 
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
@@ -513,6 +513,8 @@ import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
 import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
+import ArchitectureView from './components/architecture/ArchitectureView.vue'
+import KUAppsView       from './components/kuapps/KUAppsView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -617,12 +619,15 @@ const LS = {
 }
 
 const pfPanelVisible  = ref(false)
-const activeProvider  = ref(LS.get('provider', 'kubernetes'))
+const storedProvider = LS.get('provider', 'kubernetes')
+const activeProvider  = ref(['architecture', 'observability'].includes(storedProvider) ? 'kuapps' : storedProvider)
+const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
 const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
+const kubeResourceFilter = ref('')
 const kubeDetailWidth = ref(Number(LS.get('kubeDetailWidth', '420')) || 420)
 const isKubeResizing = ref(false)
 const helmViewRef     = ref(null)
@@ -630,11 +635,22 @@ const awsViewRef      = ref(null)
 const gcpViewRef      = ref(null)
 const vercelViewRef   = ref(null)
 const observabilityViewRef = ref(null)
+const kuappsViewRef = ref(null)
 const vercelTab       = ref('projects')
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
 let autoRefreshPending = false
+let lastUserInteractionAt = 0
+const AUTO_REFRESH_PAUSE_MS = 15000
+
+function markUserInteraction() {
+  lastUserInteractionAt = Date.now()
+}
+
+function shouldPauseAutoRefresh() {
+  return Date.now() - lastUserInteractionAt < AUTO_REFRESH_PAUSE_MS
+}
 
 watch(() => settings.autoRefresh, (secs) => {
   clearInterval(autoRefreshTimer)
@@ -642,7 +658,7 @@ watch(() => settings.autoRefresh, (secs) => {
 }, { immediate: true })
 
 async function reloadActiveProvider() {
-  if (autoRefreshPending || document.hidden) return
+  if (autoRefreshPending || document.hidden || shouldPauseAutoRefresh()) return
   autoRefreshPending = true
   try {
     if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
@@ -666,6 +682,10 @@ async function reloadActiveProvider() {
       await vercelViewRef.value?.reloadActiveTab?.({ background: true })
       return
     }
+    if (activeProvider.value === 'kuapps') {
+      await kuappsViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
+      return
+    }
     if (activeProvider.value === 'observability') {
       await observabilityViewRef.value?.reloadActiveTab?.({ background: true, preserveSearch: true })
     }
@@ -680,6 +700,7 @@ const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
 const observabilityProvider = ref(LS.get('observabilityProvider', 'generic'))
+const observabilityFocus = ref(null)
 const observabilitySelections = reactive({
   generic: 'apm',
   aws: LS.get('observabilityAwsView', 'apm'),
@@ -715,6 +736,7 @@ const selectedKubeKey = computed(() => {
 
 // Persistir cambios en localStorage automáticamente
 watch(activeProvider,   v  => LS.set('provider',       v))
+watch(kuappsView,       v  => LS.set('kuappsView',     v))
 watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
@@ -760,14 +782,145 @@ const modalData = reactive({
   drainMsg: '', drainPending: null,
   connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
 })
+const {
+  architectureProjectId,
+  activeApplicationContext,
+  architectureProfileId,
+  openApplicationArchitecture,
+  setApplicationContext,
+} = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
+
+const kuappsObservabilityProvider = computed(() => {
+  const provider = activeApplicationContext.value?.provider || observabilityProvider.value
+  return ['aws', 'gcp', 'vercel', 'generic'].includes(provider) ? provider : 'generic'
+})
+const kuappsObservabilityProfileId = computed(() => {
+  const application = activeApplicationContext.value
+  if (application?.profileId) return application.profileId
+  if (kuappsObservabilityProvider.value === 'aws') return awsProfileId.value
+  if (kuappsObservabilityProvider.value === 'gcp') return gcpProfileId.value
+  if (kuappsObservabilityProvider.value === 'vercel') return vercelProfileId.value
+  return 'local'
+})
+
+function handleKuAppsApplicationContext(application) {
+  if (!application?.id) return
+  setApplicationContext(application)
+  if (application.provider === 'aws' && application.profileId) awsProfileId.value = application.profileId
+  if (application.provider === 'gcp' && application.profileId) gcpProfileId.value = application.profileId
+  if (application.provider === 'vercel' && application.profileId) vercelProfileId.value = application.profileId
+}
+
+function openApplicationObservability(application, focus = null) {
+  if (!application?.id) return
+  activeApplicationContext.value = application
+  if (application.provider === 'aws') awsProfileId.value = application.profileId
+  if (application.provider === 'gcp') gcpProfileId.value = application.profileId
+  if (application.provider === 'vercel') vercelProfileId.value = application.profileId
+  observabilityProvider.value = application.provider || 'generic'
+  if (focus?.view && Object.prototype.hasOwnProperty.call(observabilitySelections, observabilityProvider.value)) {
+    observabilitySelections[observabilityProvider.value] = 'apm'
+  }
+  observabilityFocus.value = focus
+  activeProvider.value = 'kuapps'
+  kuappsView.value = 'observability'
+  nextTick(() => createIcons({ icons }))
+}
+
+async function openObservabilityKubernetesLogs(resource) {
+  const resourceType = ({ Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods' })[resource?.kind]
+  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  activeProvider.value = 'kubernetes'
+  cloudView.value = null
+  try {
+    if (store.currentContext !== resource.kubeContext) {
+      selectedContext.value = resource.kubeContext
+      await store.switchContext(resource.kubeContext)
+    }
+    openLogs(resource.namespace, resource.name, [], resourceType)
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+// Kind -> resource table key used by the Kubernetes sidebar/ResourceTable.
+const KUBE_KIND_TO_RESOURCE = {
+  Pod: 'pods', Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets',
+  Service: 'services', Ingress: 'ingresses', ConfigMap: 'configmaps', Secret: 'secrets',
+  PersistentVolumeClaim: 'pvcs',
+}
+
+async function switchToKubernetesResourceScope(resource) {
+  activeProvider.value = 'kubernetes'
+  cloudView.value = null
+  if (resource.kubeContext && store.currentContext !== resource.kubeContext) {
+    selectedContext.value = resource.kubeContext
+    await store.switchContext(resource.kubeContext)
+  }
+  if (resource.namespace && store.namespace !== resource.namespace) store.namespace = resource.namespace
+}
+
+// Architecture Canvas node action: open the same YAML/metrics detail panel used by the Kubernetes view.
+async function openArchitectureKubernetesDetail(resource) {
+  const resourceType = KUBE_KIND_TO_RESOURCE[resource?.kind]
+  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  try {
+    await switchToKubernetesResourceScope(resource)
+    selectedKubeResource.value = null
+    store.resource = resourceType
+    await store.loadResources()
+    const row = store.rows.find(r => r.name === resource.name)
+    if (row) selectKubeResource(resourceType, row)
+    else toast(`${resource.name} not found in ${resource.namespace}`, 'error')
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+// Architecture Canvas node action: list the Pods in the workload's namespace, filtered by its name.
+async function openArchitectureKubernetesPods(resource) {
+  if (!resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  try {
+    await switchToKubernetesResourceScope(resource)
+    kubeResourceFilter.value = resource.name
+    setResource('pods')
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+  nextTick(() => createIcons({ icons }))
+}
+
+// Architecture Canvas node action: focus a Lambda/EC2/EventBridge/Step Functions resource inside AwsView.
+const AWS_RESOURCE_TABS = { lambda: 'lambda', ec2: 'ec2', eventbridge: 'eventbridge', stepfunctions: 'stepfn' }
+
+function openArchitectureAwsResource(resource) {
+  const tab = AWS_RESOURCE_TABS[resource?.resourceType]
+  if (!tab || !resource?.name) return
+  activeProvider.value = 'aws'
+  awsTab.value = tab
+  nextTick(() => awsViewRef.value?.focusResourceByName?.(tab, resource.name))
+}
+
+function openArchitectureAwsLogs(resource) {
+  if (resource?.resourceType !== 'lambda' || !resource?.name) return
+  activeProvider.value = 'aws'
+  awsTab.value = 'lambda'
+  nextTick(() => awsViewRef.value?.openLambdaLogsByName?.(resource.name))
+}
 
 async function setProvider(p) {
-  if (p === 'observability' && !hasCloudConnections.value) return
-  activeProvider.value = p
+  const view = p === 'observability' ? 'observability' : p === 'architecture' ? 'architecture' : kuappsView.value
+  const target = ['observability', 'architecture'].includes(p) ? 'kuapps' : p
+  if (p !== 'observability') observabilityFocus.value = null
+  if (target === 'kuapps') kuappsView.value = view
+  activeProvider.value = target
   if (p === 'kubernetes' && cloudView.value !== 'envs') cloudView.value = null
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
   if (p === 'vercel') { envStore.fetchProfiles() }
+  if (p === 'architecture' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (p === 'observability') selectObservabilityProvider(observabilityProvider.value)
   nextTick(() => createIcons({ icons }))
 }
@@ -1090,7 +1243,12 @@ onMounted(async () => {
   // Cargar profiles locales si el proveedor activo lo necesita
   if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
+  lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
+  document.addEventListener('pointerdown', markUserInteraction, { passive: true })
+  document.addEventListener('wheel', markUserInteraction, { passive: true, capture: true })
+  document.addEventListener('touchstart', markUserInteraction, { passive: true })
+  document.addEventListener('scroll', markUserInteraction, { passive: true, capture: true })
   updateStore.initListeners()
   nextTick(() => createIcons({ icons }))
 })
@@ -1098,6 +1256,10 @@ onUnmounted(() => {
   clearInterval(clockTimer)
   clearInterval(autoRefreshTimer)
   document.removeEventListener('keydown', onKey)
+  document.removeEventListener('pointerdown', markUserInteraction)
+  document.removeEventListener('wheel', markUserInteraction, true)
+  document.removeEventListener('touchstart', markUserInteraction)
+  document.removeEventListener('scroll', markUserInteraction, true)
   stopKubeResize()
 })
 </script>

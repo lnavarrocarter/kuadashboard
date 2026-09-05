@@ -1,3 +1,8 @@
+---
+title: Dashboard de Gestión AWS para EC2, EKS, ECS y Lambda
+description: Gestiona EC2, EKS, ECS, Lambda, S3, DynamoDB, CloudFront y más servicios AWS desde el dashboard open source KUA.
+---
+
 # Integración AWS
 
 KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **22 servicios de AWS** sin salir del dashboard.

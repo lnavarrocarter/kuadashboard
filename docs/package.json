@@ -2,6 +2,7 @@
   "name": "kuadashboard-docs",
   "private": true,
   "scripts": {
+    "prebuild": "node scripts/generate-seo.mjs",
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview"

@@ -85,7 +85,7 @@
 
           <div class="about-links">
             <a class="btn" @click="open('https://github.com/lnavarrocarter/kuadashboard')">
-              <i data-lucide="github"></i> GitHub
+              <svg width="14" height="14" viewBox="0 0 19 19" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg> GitHub
             </a>
             <a class="btn" @click="open('https://github.com/lnavarrocarter/kuadashboard/blob/main/CHANGELOG.md')">
               <i data-lucide="file-text"></i> CHANGELOG
@@ -116,16 +116,27 @@
           <div class="release-list">
             <div v-for="rel in CHANGELOG" :key="rel.version" class="release-block">
               <div class="release-head">
-                <span class="release-ver">v{{ rel.version }}</span>
-                <span v-if="rel.version === VERSION" class="release-current">{{ t('help.current') }}</span>
-                <span class="release-date text-dim">{{ rel.date }}</span>
+                <div class="release-title">
+                  <span class="release-ver">v{{ rel.version }}</span>
+                  <span v-if="rel.version === VERSION" class="release-current">{{ t('help.current') }}</span>
+                  <span class="release-date text-dim">{{ rel.date }}</span>
+                </div>
+                <div class="release-summary" :aria-label="t('help.releaseSummary')">
+                  <span v-for="summary in releaseSummary(rel)" :key="summary.type" :class="['release-summary-pill', `tag-${summary.type}`]">
+                    {{ summary.count }} {{ tagLabel(summary.type) }}
+                  </span>
+                </div>
               </div>
               <ul class="change-list">
-                <li v-for="(item, i) in rel.items" :key="i" class="change-item">
+                <li v-for="(item, i) in visibleReleaseItems(rel)" :key="i" class="change-item">
                   <span :class="['change-tag', `tag-${item.type}`]">{{ tagLabel(item.type) }}</span>
                   <span>{{ item.text }}</span>
                 </li>
               </ul>
+              <button v-if="hiddenReleaseCount(rel)" class="release-toggle" @click="toggleRelease(rel.version)">
+                <i :data-lucide="expandedReleases.has(rel.version) ? 'chevron-up' : 'chevron-down'"></i>
+                {{ expandedReleases.has(rel.version) ? t('help.releaseShowLess') : t('help.releaseShowAll', { count: hiddenReleaseCount(rel) }) }}
+              </button>
             </div>
           </div>
           <div class="help-footer-link">
@@ -312,6 +323,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
 import { settings, applySettings } from '../../composables/useSettings.js'
 import { useI18n } from '../../composables/useI18n.js'
@@ -345,11 +357,13 @@ function installUpdate() {
 
 const VERSION = window.kuaElectron?.getVersion?.() || CHANGELOG_VERSION
 const latestReleaseHighlights = computed(() => (CHANGELOG[0]?.items || []).slice(0, 4).map(i => i.text))
+const RELEASE_ITEM_LIMIT = 8
 
 defineProps({ show: Boolean })
 defineEmits(['close'])
 
 const activeTab = ref('about')
+const expandedReleases = ref(new Set())
 
 const TABS = computed(() => [
   { id: 'about',    label: t('help.tabAbout'),    icon: 'info' },
@@ -362,6 +376,32 @@ const TABS = computed(() => [
 
 function tagLabel(t_) {
   return { new: t('welcome.tagNew'), better: t('welcome.tagBetter'), fix: 'Fix' }[t_] ?? t_
+}
+
+function releaseSummary(release) {
+  const counts = (release.items || []).reduce((result, item) => {
+    result[item.type] = (result[item.type] || 0) + 1
+    return result
+  }, {})
+  return ['new', 'better', 'fix'].filter(type => counts[type]).map(type => ({ type, count: counts[type] }))
+}
+
+function visibleReleaseItems(release) {
+  return expandedReleases.value.has(release.version)
+    ? release.items
+    : (release.items || []).slice(0, RELEASE_ITEM_LIMIT)
+}
+
+function hiddenReleaseCount(release) {
+  return Math.max(0, (release.items || []).length - RELEASE_ITEM_LIMIT)
+}
+
+function toggleRelease(version) {
+  const next = new Set(expandedReleases.value)
+  if (next.has(version)) next.delete(version)
+  else next.add(version)
+  expandedReleases.value = next
+  nextTick(() => createIcons({ icons }))
 }
 
 function open(url) {
@@ -495,11 +535,13 @@ function open(url) {
 .update-card .btn i, .update-card .btn svg { width: 11px; height: 11px; }
 
 /* Releases */
-.release-list { display: flex; flex-direction: column; gap: 16px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.release-list { display: flex; flex-direction: column; gap: 12px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.release-block { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: color-mix(in srgb, var(--bg-row) 72%, transparent); }
 .release-head {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
   margin-bottom: 8px;
 }
+.release-title { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; min-width: 0; }
 .release-ver { font-size: 13px; font-weight: 700; color: var(--accent); }
 .release-current {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -507,15 +549,20 @@ function open(url) {
   padding: 1px 6px; border-radius: 3px;
 }
 .release-date { font-size: 11px; }
+.release-summary { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+.release-summary-pill { padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .change-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
-.change-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.5; }
+.change-item { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.45; }
 .change-tag {
   display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .4px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0;
+  letter-spacing: .4px; padding: 1px 5px; border-radius: 3px; text-align: center;
 }
 .tag-new    { background: rgba(78,201,176,.18); color: #4ec9b0; }
 .tag-better { background: rgba(14,157,232,.18); color: #0e9de8; }
 .tag-fix    { background: rgba(255,152,0,.18);  color: #ff9800; }
+.release-toggle { width: fit-content; margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
+.release-toggle:hover { text-decoration: underline; }
+.release-toggle i, .release-toggle svg { width: 12px; height: 12px; }
 
 .help-footer-link { display: flex; justify-content: flex-end; }
 .help-footer-link .btn { display: flex; align-items: center; gap: 6px; cursor: pointer; }

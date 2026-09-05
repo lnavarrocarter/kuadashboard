@@ -8,6 +8,7 @@ import ApmObservabilityView from '../components/cloud/apm/ApmObservabilityView.v
 import ApmSetupModal from '../components/cloud/apm/ApmSetupModal.vue'
 import ApmTopologyGraph from '../components/cloud/apm/ApmTopologyGraph.vue'
 import ApmProcessTrace from '../components/cloud/apm/ApmProcessTrace.vue'
+import ApmApplicationLogs from '../components/cloud/apm/ApmApplicationLogs.vue'
 import { settings } from '../composables/useSettings'
 
 function response(body, status = 200) {
@@ -35,6 +36,129 @@ afterEach(() => {
 })
 
 describe('APM collection controls', () => {
+  it('can render embedded without its internal application sidebar', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.application-list').exists()).toBe(false)
+    expect(wrapper.get('.apm-layout').classes()).toContain('apm-layout--embedded')
+    expect(wrapper.text()).toContain('orders')
+    wrapper.unmount()
+  })
+
+  it('shows Kubernetes-only signals and opens logs for configured workloads', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-eks', name: 'orders-eks', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({
+        metrics: [{ metricName: 'cpu_cores', sum: 1, count: 1, average: 1, quality: 'full' }], health: { status: 'healthy', signals: [] }, latestRun: null,
+      })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-eks' },
+        resources: [{ id: 'deployment-a', type: 'kubernetes', kind: 'Deployment', name: 'api', namespace: 'orders', kubeContext: 'orders-eks', enabled: true, associationSource: 'manual' }], edges: [],
+      })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev' },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+    expect(wrapper.get('.kpi-grid').text()).toContain('Average CPU')
+    expect(wrapper.get('.kpi-grid').text()).not.toContain('Observed invocations')
+
+    await wrapper.findAll('.apm-view-tabs button').find(button => button.text().includes('Resources')).trigger('click')
+    await wrapper.get('.architecture-resources tbody button').trigger('click')
+    expect(wrapper.emitted('open-kubernetes-logs')[0][0]).toMatchObject({ name: 'api', kubeContext: 'orders-eks', kind: 'Deployment' })
+    wrapper.unmount()
+  })
+
+  it('filters metric series to a resource opened from Architecture', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-orders', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], metricsByResourceType: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-orders' },
+        resources: [{ id: 'lambda-a', type: 'lambda', name: 'orders-handler', arn: 'arn:aws:lambda:us-east-1:123:function:orders-handler', enabled: true }],
+        edges: [],
+      })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 1, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: {
+        profileId: 'local:dev',
+        focusResource: {
+          view: 'metrics',
+          node: { provider: 'aws', resourceType: 'lambda', name: 'orders-handler', arn: 'arn:aws:lambda:us-east-1:123:function:orders-handler' },
+        },
+      },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.apm-resource-focus').text()).toContain('orders-handler')
+    expect(global.fetch.mock.calls.some(([url]) => url.includes('/series?') && url.includes('resourceId=lambda-a'))).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps the selected tab when a linked focus is refreshed but the user is browsing topology', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [{ id: 'lambda-a', type: 'lambda', name: 'orders' }], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: {
+        profileId: 'local:dev',
+        focusResource: {
+          view: 'metrics',
+          node: { provider: 'aws', resourceType: 'lambda', name: 'orders', arn: 'arn:aws:lambda:us-east-1:123:function:orders' },
+        },
+      },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.apm-view-tabs button')
+    const topologyTab = tabs.find(button => button.text().includes('Topology'))
+    expect(topologyTab).toBeTruthy()
+
+    await topologyTab.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.apm-view-tabs button.active').text()).toContain('Topology')
+
+    await wrapper.setProps({ focusResource: { view: 'metrics', node: { provider: 'aws', resourceType: 'lambda', name: 'orders', arn: 'arn:aws:lambda:us-east-1:123:function:orders' } } })
+    await flushPromises()
+    expect(wrapper.find('.apm-view-tabs button.active').text()).toContain('Topology')
+    wrapper.unmount()
+  })
+
   it('does not collect until the user confirms the read', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
@@ -152,6 +276,33 @@ describe('APM collection controls', () => {
   })
 })
 
+describe('Application provider logs', () => {
+  it('loads AWS resource logs from CloudWatch in the selected Application context', async () => {
+    global.fetch = vi.fn((url) => {
+      expect(url).toContain('/api/cloud/aws/logs/lambda/orders-worker')
+      return response({ events: [{ timestamp: '2026-08-04T12:00:00Z', message: 'ok', logStreamName: 'stream' }] })
+    })
+
+    const wrapper = mount(ApmApplicationLogs, {
+      props: {
+        provider: 'aws',
+        profileId: 'aws:dev',
+        application: { id: 'app-orders', region: 'us-east-1' },
+        resources: [{ id: 'lambda-1', type: 'lambda', provider: 'aws', name: 'orders-worker' }],
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('CloudWatch Logs')
+    expect(wrapper.text()).toContain('ok')
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/cloud/aws/logs/lambda/orders-worker'),
+      expect.objectContaining({ headers: { 'X-Profile-Id': 'aws:dev' } }),
+    )
+    wrapper.unmount()
+  })
+})
+
 describe('APM process traces', () => {
   it('requests sanitized data explicitly and allows selecting a recent execution', async () => {
     const wrapper = mount(ApmProcessTrace, {
@@ -180,10 +331,13 @@ describe('APM process traces', () => {
 describe('APM setup cost consent', () => {
   it('detects EKS workloads without selecting them and persists only explicit choices', async () => {
     global.fetch = vi.fn((url, options = {}) => {
-      if (url.endsWith('/kubernetes-workloads')) return response({
+      if (url.endsWith('/kubernetes-contexts')) return response({
+        contexts: [{ id: 'arn:aws:eks:us-east-1:123:cluster/dev', name: 'orders-eks' }],
+      })
+      if (url.includes('/kubernetes-workloads?contexts=arn%3Aaws%3Aeks%3Aus-east-1%3A123%3Acluster%2Fdev')) return response({
         estimate: { awsRequests: 0, kubernetesRequests: 3 },
         contexts: ['arn:aws:eks:us-east-1:123:cluster/dev'],
-        failedContexts: [{ context: 'arn:aws:eks:us-east-1:123:cluster/old', code: 'ENOTFOUND' }],
+        failedContexts: [],
         workloads: [{
           key: 'arn:aws:eks:us-east-1:123:cluster/dev/orders/Deployment/api',
           context: 'arn:aws:eks:us-east-1:123:cluster/dev',
@@ -204,11 +358,13 @@ describe('APM setup cost consent', () => {
       global: { stubs: { teleport: true } },
     })
     await wrapper.get('input[placeholder="orders"]').setValue('orders')
+    await wrapper.findAll('button').find(button => button.text().includes('Load clusters')).trigger('click')
+    await flushPromises()
+    await wrapper.get('.eks-context-tools select').setValue('arn:aws:eks:us-east-1:123:cluster/dev')
     await wrapper.findAll('button').find(button => button.text().includes('Detect workloads')).trigger('click')
     await flushPromises()
 
     const workloadInput = wrapper.get('.eks-workloads .resource-option input')
-    expect(wrapper.text()).toContain('Some contexts could not be reached')
     expect(workloadInput.element.checked).toBe(false)
     expect(findButton('Create application').disabled).toBe(true)
     await workloadInput.setValue(true)
@@ -477,9 +633,44 @@ describe('APM topology intelligence', () => {
     expect(wrapper.text()).toContain('shared name: gasco, orders')
     await wrapper.find('.suggestion-row button').trigger('click')
     expect(wrapper.emitted('confirm-dependency')[0][0].confirmed).toBe(false)
+    await wrapper.find('.suggestion-heading button').trigger('click')
+    expect(wrapper.emitted('confirm-all-dependencies')[0][0]).toHaveLength(1)
     await wrapper.find('.analysis-heading button').trigger('click')
     expect(wrapper.emitted('analyze-cloud')).toHaveLength(1)
     await wrapper.find('.unresolved-row button').trigger('click')
     expect(wrapper.emitted('add-cloud-resource')[0][0].candidate.name).toBe('shared-worker')
+  })
+})
+
+describe('APM registry resources', () => {
+  it('marks Architecture-only resources and explains that Observability is missing them', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', architectureProjectId: 'project-a' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'healthy', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [], analysis: {} })
+      if (url.includes('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/registry')) return response({
+        resources: [{
+          id: 'resource-a', provider: 'aws', resourceType: 'lambda', displayName: 'orders-worker',
+          scopeId: '123456789012', location: 'us-east-1', sources: ['architecture_node'], correlatable: true, divergent: true,
+        }], relationships: [], syncStatus: null,
+      })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev' },
+      global: { stubs: { teleport: true } },
+    })
+    await flushPromises()
+
+    await [...wrapper.findAll('.apm-view-tabs button')].find(button => button.text().includes('Resources')).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('orders-worker')
+    expect(wrapper.text()).toContain('Architecture')
+    expect(wrapper.text()).toContain('Single source')
+    wrapper.unmount()
   })
 })
