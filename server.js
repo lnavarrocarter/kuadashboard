@@ -100,9 +100,14 @@ const wssExec    = new WebSocket.Server({ noServer: true });
 const wssShell   = new WebSocket.Server({ noServer: true });
 const wssEc2Shell = new WebSocket.Server({ noServer: true });
 const wssEc2Rdp   = new WebSocket.Server({ noServer: true });
+const { createConsoleSessions, mountConsoleRoutes, admitConsoleUpgrade } = require('./lib/consoleSessions');
+const consoleSessions = createConsoleSessions({
+  audit: auditLog, getKubeConfig: () => currentKc,
+});
 
 server.on('upgrade', (request, socket, head) => {
-  const { pathname } = new URL(request.url, 'http://localhost');
+  const pathname = admitConsoleUpgrade(consoleSessions, request, socket);
+  if (!pathname) return;
   if (pathname === '/ws/logs') {
     wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
   } else if (pathname === '/ws/exec') {
@@ -119,6 +124,11 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 app.use(express.json({ limit: '10mb' }));
+mountConsoleRoutes(app, consoleSessions);
+
+for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp]) {
+  transport.on('connection', (ws, req) => consoleSessions.attach(ws, req.consoleSession));
+}
 
 const CLOUD_LIST_PATHS = {
   aws: new Set([
@@ -701,8 +711,9 @@ async function resolveMetricPods(resourceType, namespace, name) {
   return pods.body.items.filter(pod => !['Succeeded', 'Failed'].includes(pod.status?.phase));
 }
 
-async function resolveLogPods(resourceType, namespace, name) {
-  const { apps, core } = clients();
+async function resolveLogPods(resourceType, namespace, name, config = currentKc) {
+  const core = config.makeApiClient(k8s.CoreV1Api);
+  const apps = config.makeApiClient(k8s.AppsV1Api);
   let workload;
   if (!resourceType || resourceType === 'pods') {
     const podRes = await core.readNamespacedPod(name, namespace);
@@ -2354,7 +2365,7 @@ app.put('/api/apply', async (req, res) => {
 
 // ─── WebSocket – Log streaming ────────────────────────────────────────────────
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, request) => {
   let currentStreams = [];
   let currentReqs    = [];
 
@@ -2378,11 +2389,13 @@ wss.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopStream();
-      const { namespace, pod, resourceType = 'pods', container, selectedPod, previous, tailLines = 200 } = msg;
+      const { namespace, name: pod, resourceType = 'pods', container, selectedPod } = request.consoleSession.session.target;
+      const { previous, tailLines = 200 } = msg;
 
       try {
-        const { log } = clients();
-        const pods = await resolveLogPods(resourceType, namespace, pod);
+        const config = request.consoleSession.authority.kubeConfig;
+        const log = new k8s.Log(config);
+        const pods = await resolveLogPods(resourceType, namespace, pod, config);
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'targets', pods: pods.map(target => target.name) }));
         }
@@ -2423,7 +2436,7 @@ wss.on('connection', ws => {
 
 // ─── WebSocket – Exec (interactive shell) ────────────────────────────────────
 
-wssExec.on('connection', ws => {
+wssExec.on('connection', (ws, request) => {
   let stdin  = null;
   let execWs = null;
 
@@ -2446,9 +2459,9 @@ wssExec.on('connection', ws => {
 
     if (msg.action === 'start') {
       stopExec();
-      const { namespace, pod, container } = msg;
+      const { namespace, name: pod, container } = request.consoleSession.session.target;
       try {
-        const exec   = new k8s.Exec(currentKc);
+        const exec   = new k8s.Exec(request.consoleSession.authority.kubeConfig);
         const stdout = new stream.PassThrough();
         const stderr = new stream.PassThrough();
         stdin = new stream.PassThrough();
@@ -2675,27 +2688,7 @@ wssEc2Shell.on('connection', (ws, req) => {
 
     if (msg.action === 'connect') {
       const { Client } = require('ssh2');
-      const { host, user = 'ec2-user', keyPath, port = 22, passphrase, authMethod = 'key', password } = msg;
-
-      if (!host) { send({ type: 'error', data: 'host is required' }); return; }
-
-      if (authMethod === 'key') {
-        if (!keyPath) { send({ type: 'error', data: 'keyPath is required for key authentication' }); return; }
-      } else if (authMethod === 'password') {
-        if (!password) { send({ type: 'error', data: 'password is required for password authentication' }); return; }
-      } else {
-        send({ type: 'error', data: 'Invalid authMethod. Use "key" or "password"' }); return;
-      }
-
-      let privateKey;
-      if (authMethod === 'key') {
-        try {
-          privateKey = fs.readFileSync(keyPath);
-        } catch (e) {
-          send({ type: 'error', data: `Cannot read key file: ${e.message}` });
-          return;
-        }
-      }
+      const { host, user, port = 22 } = req.consoleSession.session.target;
 
       cleanup();
       sshConn = new Client();
@@ -2703,7 +2696,7 @@ wssEc2Shell.on('connection', (ws, req) => {
       sshConn.on('ready', () => {
         sshConn.shell({ term: 'dumb', cols: 220, rows: 50 }, (err, stream) => {
           if (err) {
-            send({ type: 'error', data: `Shell error: ${err.message}` });
+            send({ type: 'error', data: 'SSH shell failed' });
             cleanup();
             return;
           }
@@ -2725,8 +2718,8 @@ wssEc2Shell.on('connection', (ws, req) => {
         });
       });
 
-      sshConn.on('error', err => {
-        send({ type: 'error', data: `SSH error: ${err.message}` });
+      sshConn.on('error', () => {
+        send({ type: 'error', data: 'SSH connection failed' });
         cleanup();
       });
 
@@ -2737,15 +2730,14 @@ wssEc2Shell.on('connection', (ws, req) => {
         }
       });
 
-      const connectOpts = { host, port, username: user };
-      if (authMethod === 'key') {
-        connectOpts.privateKey = privateKey;
-        if (passphrase) connectOpts.passphrase = passphrase;
-      } else {
-        connectOpts.password = password;
-      }
+      const connectOpts = { host, port, username: user, ...req.consoleSession.authority.ssh };
 
-      sshConn.connect(connectOpts);
+      try {
+        sshConn.connect(connectOpts);
+      } catch (_) {
+        send({ type: 'error', data: 'Invalid SSH connection credentials' });
+        cleanup();
+      }
       return;
     }
 
@@ -2770,7 +2762,7 @@ wssEc2Shell.on('connection', (ws, req) => {
 
 // ─── WebSocket – EC2 RDP Canvas ───────────────────────────────────────────────
 // Protocol (client → server):
-//   { action: 'connect', host, user, password, domain?, port?, width?, height? }
+//   { action: 'connect' } — target/credentials come from the validated session.
 //   { action: 'mouse', x, y, button, isDown }
 //   { action: 'key',   code, isDown, extended? }
 //   { action: 'stop' }
@@ -2813,9 +2805,10 @@ wssEc2Rdp.on('connection', (ws, req) => {
       const rdp = require('node-rdpjs-2');
       const {
         host, port = 3389,
-        user = 'Administrator', password, domain = '',
+        user = 'Administrator', domain = '',
         width = 1280, height = 800,
-      } = msg;
+      } = req.consoleSession.session.target;
+      const { password } = req.consoleSession.authority.rdp;
 
       if (!host)     { send({ type: 'error', data: 'host is required' }); return; }
       if (!password) { send({ type: 'error', data: 'password is required' }); return; }

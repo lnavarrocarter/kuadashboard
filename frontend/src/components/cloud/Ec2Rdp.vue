@@ -19,6 +19,7 @@
 
         <!-- Connect form -->
         <div v-if="sessionStatus === 'disconnected'" class="rdpc-form">
+          <p v-if="errorMsg" role="alert">{{ errorMsg }}</p>
 
           <!-- NLA warning -->
           <div class="rdpc-notice">
@@ -42,8 +43,8 @@
             <input v-model="form.user" placeholder="Administrator" class="rdpc-input" style="width:200px" />
           </div>
           <div class="rdpc-form-row">
-            <label>Contraseña</label>
-            <input v-model="form.password" type="password" placeholder="Contraseña de Windows" class="rdpc-input" style="width:240px" />
+            <label>ID de perfil</label>
+            <input v-model="form.profileId" placeholder="Perfil Env Manager con RDP_PASSWORD" class="rdpc-input" style="width:240px" />
           </div>
           <div class="rdpc-form-row">
             <label>Dominio</label>
@@ -61,7 +62,7 @@
           </div>
 
           <div class="rdpc-form-actions">
-            <button class="btn" @click="connect" :disabled="!form.host || !form.password">Conectar</button>
+            <button class="btn" @click="connect" :disabled="!form.host || !form.profileId">Conectar</button>
             <button class="btn btn-ghost" @click="$emit('close')">Cancelar</button>
             <button class="btn btn-ghost" @click="downloadRdpFile" :disabled="!form.host">⬇ Archivo .rdp</button>
           </div>
@@ -152,6 +153,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted, markRaw } from 'vue'
+import { prepareConsoleConnection } from '../../composables/consoleConnection'
 
 const props = defineProps({
   open:     { type: Boolean, default: false },
@@ -179,7 +181,7 @@ const form = ref({
   host:       '',
   port:       3389,
   user:       'Administrator',
-  password:   '',
+  profileId:  '',
   domain:     '',
   resolution: '1280x800',
 })
@@ -202,15 +204,11 @@ const statusLabel = computed(() => ({
   ended:        'Sesión terminada',
 })[sessionStatus.value] || sessionStatus.value)
 
-// ── WS URL ────────────────────────────────────────────────────────────────────
-function wsUrl(path) {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}${path}`
-}
-
 // ── Connection ────────────────────────────────────────────────────────────────
-function connect() {
+let connectionAttempt = 0
+async function connect() {
   disconnectWs()
+  const attempt = connectionAttempt
   errorMsg.value = ''
   sessionStatus.value = 'connecting'
 
@@ -218,19 +216,25 @@ function connect() {
   canvasW.value = w
   canvasH.value = h
 
-  const sock = markRaw(new WebSocket(wsUrl('/ws/ec2-rdp')))
+  let prepared
+  try {
+    prepared = await prepareConsoleConnection({
+      provider: 'aws', transport: 'rdp', profileId: form.value.profileId,
+      target: { host: form.value.host, user: form.value.user || 'Administrator', port: form.value.port || 3389, domain: form.value.domain, width: w, height: h, instanceId: props.instance?.id },
+    })
+  } catch (_) {
+    if (attempt !== connectionAttempt) return
+    sessionStatus.value = 'disconnected'
+    errorMsg.value = 'Contexto o perfil de credenciales inválido'
+    return
+  }
+  if (attempt !== connectionAttempt) return
+  const sock = markRaw(new WebSocket(prepared.url))
   ws.value = sock
 
   sock.addEventListener('open', () => {
     sock.send(JSON.stringify({
       action:   'connect',
-      host:     form.value.host,
-      port:     form.value.port || 3389,
-      user:     form.value.user || 'Administrator',
-      password: form.value.password,
-      domain:   form.value.domain || '',
-      width:    w,
-      height:   h,
     }))
   })
 
@@ -269,6 +273,7 @@ function connect() {
 }
 
 function disconnectWs() {
+  connectionAttempt++
   if (ws.value) {
     try { ws.value.send(JSON.stringify({ action: 'stop' })); ws.value.close() } catch (_) {}
     ws.value = null

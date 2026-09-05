@@ -1,5 +1,13 @@
 # Changelog
 
+## Sin publicar
+
+- Las conexiones de consola validan su contexto antes de abrirse. SSH/RDP de EC2
+  usan el ID de un perfil de credenciales de Env Manager, en lugar de introducir
+  contraseñas o rutas de claves en la consola. Local y Kubernetes siguen disponibles;
+  SSM, shell GCP y logs Vercel quedan explícitamente planificados, no habilitados.
+  Ver [sesiones de consola](../architecture/console-sessions.md).
+
 ## v1.15.0 (2026-09-05)
 
 Architecture Foundation integra arquitectura y observabilidad centradas en aplicaciones dentro de KUApps.

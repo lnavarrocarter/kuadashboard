@@ -14,6 +14,7 @@ export default defineConfig({
     port: 7193,
     strictPort: true,
     proxy: {
+      '/api/console': { target: `http://localhost:${process.env.VITE_BACKEND_PORT || 7190}`, changeOrigin: false },
       '/api': { target: `http://localhost:${process.env.VITE_BACKEND_PORT || 7190}`, changeOrigin: true },
       '/ws':  { target: `ws://localhost:${process.env.VITE_BACKEND_PORT || 7190}`,   ws: true, changeOrigin: true },
     }

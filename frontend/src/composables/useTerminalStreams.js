@@ -1,38 +1,62 @@
 import { markRaw } from 'vue'
 import { useTerminalStore } from '../stores/useTerminalStore'
-import { useToast } from './useToast'
-
-// Resolve the correct WebSocket URL for any environment:
-//   - Dev (Vite proxy)   → ws://localhost:<vite-port>/ws/... (proxy forwards to backend)
-//   - Production Electron → ws://localhost:7190/ws/... (served directly by Express)
-// NOTE: The server uses noServer:true + manual upgrade routing, so the Vite
-// proxy correctly forwards WS upgrades without "Invalid frame header" issues.
-function wsUrl(path) {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}${path}`
-}
+import { prepareConsoleConnection } from './consoleConnection'
 
 export function useTerminalStreams() {
   const store     = useTerminalStore()
-  const { toast } = useToast()
 
-  function startLogStream(tab, previous = false) {
+  async function connect(tab) {
     store.stopStream(tab)
-    tab._logBuffers = {}
-    tab.streaming = true
+    const attempt = tab._connectionAttempt
+    tab.connectionState = 'validating'
+    try {
+      const prepared = await prepareConsoleConnection({
+        ...tab,
+        target: tab.provider === 'kubernetes'
+          ? { namespace: tab.ns, name: tab.pod, resourceType: tab.resourceType || 'pods', container: tab.container, selectedPod: tab.selectedPod }
+          : tab.target,
+      })
+      if (tab._connectionAttempt !== attempt) return null
+      Object.assign(tab, prepared.session)
+      tab.connectionState = 'connecting'
+      const ws = markRaw(new WebSocket(prepared.url))
+      tab.ws = ws
+      tab.streaming = true
+      ws.addEventListener('open', () => { if (tab.ws === ws) tab.connectionState = 'connected' })
+      ws.addEventListener('close', () => { if (tab.ws === ws) tab.connectionState = 'closed' })
+      ws.addEventListener('error', () => { if (tab.ws === ws) tab.connectionState = 'error' })
+      ws.addEventListener('message', e => {
+        if (tab.ws !== ws) return
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.type === 'error') tab.connectionState = 'error'
+          if (msg.type === 'done') tab.connectionState = 'closed'
+        } catch (_) {}
+      })
+      return ws
+    } catch (_) {
+      if (tab._connectionAttempt !== attempt) return null
+      tab.connectionState = 'error'
+      store.pushLine(tab, '✖ Invalid console context or credentials', 'err')
+      return null
+    }
+  }
 
-    const ws = markRaw(new WebSocket(wsUrl('/ws/logs')))
-    tab.ws = ws
+  async function startLogStream(tab, previous = false) {
+    const ws = await connect(tab)
+    if (!ws) return
+    const targetContext = tab.target
+    tab._logBuffers = {}
 
     ws.addEventListener('open', () => {
       ws.send(JSON.stringify({
         action: 'start',
-        namespace:  tab.ns,
-        pod:        tab.pod,
-        resourceType: tab.resourceType || 'pods',
-        container:  tab.container || null,
-        selectedPod: tab.selectedPod || null,
-        previous,
+        namespace:  targetContext.namespace,
+        pod:        targetContext.name,
+        resourceType: targetContext.resourceType || 'pods',
+        container:  targetContext.container || null,
+        selectedPod: targetContext.selectedPod || null,
+        previous: Boolean(previous),
         tailLines:  500,
       }))
       const target = tab.resourceType && tab.resourceType !== 'pods' ? `${tab.resourceType}/${tab.pod}` : tab.pod
@@ -69,19 +93,17 @@ export function useTerminalStreams() {
     })
   }
 
-  function startExecStream(tab) {
-    store.stopStream(tab)
-    tab.streaming = true
-
-    const ws = markRaw(new WebSocket(wsUrl('/ws/exec')))
-    tab.ws = ws
+  async function startExecStream(tab) {
+    const ws = await connect(tab)
+    if (!ws) return
+    const targetContext = tab.target
 
     ws.addEventListener('open', () => {
       ws.send(JSON.stringify({
         action:    'start',
-        namespace: tab.ns,
-        pod:       tab.pod,
-        container: tab.container || null,
+        namespace: targetContext.namespace,
+        pod:       targetContext.name,
+        container: targetContext.container || null,
       }))
     })
 
@@ -174,12 +196,9 @@ export function useTerminalStreams() {
   }
 
   /** Connect to the local shell WebSocket (/ws/shell) */
-  function startLocalStream(tab) {
-    store.stopStream(tab)
-    tab.streaming = true
-
-    const ws = markRaw(new WebSocket(wsUrl('/ws/shell')))
-    tab.ws = ws
+  async function startLocalStream(tab) {
+    const ws = await connect(tab)
+    if (!ws) return
 
     ws.addEventListener('open', () => {
       store.pushLine(tab, '▶ Connecting to local shell…', 'sys')
