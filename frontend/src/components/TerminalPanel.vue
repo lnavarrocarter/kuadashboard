@@ -22,7 +22,7 @@
         >
           <span :class="['tab-dot', { streaming: tab.streaming, stopped: !tab.streaming }]"></span>
           <!-- Context chip -->
-          <span :class="['tab-ctx-chip', `ctx-${tab.context || 'pod'}`]">{{ CTX_LABELS[tab.context || 'pod'] }}</span>
+          <span :class="['tab-ctx-chip', `ctx-${tab.context || 'pod'}`]" :title="store.capabilityRegistry.filter(c => c.provider === tab.provider).map(c => `${c.id}: ${c.status}`).join('\n')">{{ tab.provider || 'kubernetes' }}</span>
           <span class="tab-label" :title="tab.label || tab.pod" @click="store.activateTab(tab.id)">{{ tab.label || tab.pod }}</span>
           <button class="tab-close" :title="t('term.closeTab')" @click.stop="closeTab(tab.id)">✕</button>
         </div>
@@ -297,7 +297,6 @@ const fileViewerPath = ref(null)
 const fileViewerMode = ref('auto')
 
 // ── Context labels ─────────────────────────────────────────────────────────
-const CTX_LABELS = { pod: 'k8s', local: 'local', aws: 'AWS', gcp: 'GCP' }
 
 // ── Current tab state ──────────────────────────────────────────────────────
 const activeTab           = computed(() => store.tabs.find(t => t.id === store.activeId) || null)
@@ -903,4 +902,3 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', stopResize)
 })
 </script>
-
