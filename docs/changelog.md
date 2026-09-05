@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.15.0 (2026-09-05)
+
+Architecture Foundation brings application-centered architecture and observability together in KUApps.
 
 Continues the KUA Application convergence plan (Phases 9-16): persistent Architecture context, node-level navigation, Canvas health overlays, a canonical shared Resources view, fewer surprise graph revisions, visible sync diagnostics, shared Canvas/Routes filters, and deterministic log-based relationship suggestions. Also fixes a real duplication bug found while validating this work.
 

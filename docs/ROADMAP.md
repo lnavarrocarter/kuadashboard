@@ -1,7 +1,7 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
-> **Versión actual:** v1.14.1
-> **Última actualización:** 2026-08-26
+> **Versión actual:** v1.15.0
+> **Última actualización:** 2026-09-05
 
 ---
 

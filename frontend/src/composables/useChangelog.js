@@ -4,13 +4,14 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.11.3'
+export const CHANGELOG_VERSION = '1.15.0'
 
 export const CHANGELOG = [
   {
-    version: '1.12.0-dev',
-    date: 'Agosto 2026 · En desarrollo',
+    version: '1.15.0',
+    date: 'Septiembre 2026',
     items: [
+      { type: 'new',    text: 'Architecture Foundation — KUApps integra arquitectura y observabilidad en un espacio centrado en aplicaciones, con recursos compartidos y discovery AWS, Kubernetes, GCP y Vercel' },
       { type: 'better', text: 'Canvas — layouts inteligentes con más espacio al activar overlays y orden por relaciones dentro de secciones de proveedor/recurso' },
       { type: 'new',    text: 'Canvas Architecture — exportación a PDF del diagrama completo (sin recortes) y descarga del grafo visible como archivo Mermaid' },
       { type: 'new',    text: 'Architecture — nuevo espacio por perfil para crear proyectos de arquitectura de aplicaciones orientados inicialmente a AWS' },

@@ -323,6 +323,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
 import { settings, applySettings } from '../../composables/useSettings.js'
 import { useI18n } from '../../composables/useI18n.js'

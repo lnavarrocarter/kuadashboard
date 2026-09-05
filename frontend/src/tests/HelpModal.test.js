@@ -15,7 +15,7 @@ describe('HelpModal release history', () => {
     setActivePinia(createPinia())
   })
 
-  it('summarizes long prerelease history and expands details on demand', async () => {
+  it('summarizes release history and expands details on demand', async () => {
     const wrapper = mount(HelpModal, {
       props: { show: true },
       global: { stubs: { BaseModal: BaseModalStub } },
@@ -24,6 +24,7 @@ describe('HelpModal release history', () => {
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
     const firstRelease = wrapper.get('.release-block')
 
+    expect(firstRelease.text()).toContain('1.15.0')
     expect(firstRelease.findAll('.release-summary-pill').length).toBeGreaterThan(1)
     expect(firstRelease.findAll('.change-item')).toHaveLength(8)
     expect(firstRelease.get('.release-toggle').text()).toContain('Mostrar')
