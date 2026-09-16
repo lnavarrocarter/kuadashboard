@@ -94,9 +94,43 @@ resolution and connection admission migrate now to enforce the boundary. Full
 provider UI unification and transport adapters remain #39 work. Loopback admission
 is a desktop boundary, not multi-user authentication or cloud authorization.
 
+## Global access and dedicated workspace (#38)
+
+The quick panel (`TerminalPanel.vue`, bottom of the app) stays the default,
+per-action surface: opening logs/exec from a resource table still opens it,
+unchanged. A new, separate global header button (`ConsoleWorkspaceView.vue`,
+toggled the same way as Env Manager/Audit Log via `cloudView`) reads the exact
+same `useTerminalStore()` Pinia singleton, so both surfaces always show the same
+session list — there is no second store, no synced copy, and no way for a
+session opened in one to be invisible in the other.
+
+**Scope decision:** EC2 SSH/RDP stay out of `useTerminalStore` for this ticket.
+They're listed in the workspace launcher as "available, opened from the AWS
+view" rather than a generic connect button, since building a generic
+profile/instance picker here would duplicate `Ec2Shell.vue`/`Ec2Rdp.vue`'s
+existing UI. Folding them into the shared store/launcher is #39's job
+("Migrar Local, Kubernetes y EC2 al registro comun"). Planned capabilities
+(`aws-ssm`, `gcp-shell`, `vercel-logs`) render disabled with no click handler at
+all — the registry's `status` is the only thing gating them, so a newly
+"available" capability lights up the launcher with no further UI change.
+
+### Entry points
+
+| Where | What it opens |
+| --- | --- |
+| Header terminal icon (any module) | Local shell quick-panel tab (unchanged) |
+| Header console icon (any module) | Dedicated Console workspace (`cloudView = 'console'`) |
+| Kubernetes resource table "View logs"/"Exec" | Quick panel, as before |
+| Architecture Canvas / KUApps observability "View logs" | Quick panel, as before |
+| AWS EC2 row actions | `Ec2Shell.vue`/`Ec2Rdp.vue` modal, outside the shared store (see scope decision) |
+
+The header buttons live in `App.vue`'s `.header-right`, in the tail that renders
+regardless of `activeProvider` — reachability from every module is structural
+(the button is simply always in the DOM), not a per-module wiring decision.
+
 ## Validation
 
 ```sh
 node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js
-npm --prefix frontend test -- useTerminalStore.test.js useTerminalStreams.test.js consoleCloudConnections.test.js
+npm --prefix frontend test -- useTerminalStore.test.js useTerminalStreams.test.js consoleCloudConnections.test.js ConsoleWorkspaceView.test.js
 ```
