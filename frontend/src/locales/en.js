@@ -18,6 +18,7 @@ export default {
   'nav.localShell':          'Local Shell',
   'nav.console':             'Console',
   'nav.auditLog':            'Audit Log',
+  'nav.account':             'Account',
   'nav.lightMode':           'Switch to light mode',
   'nav.darkMode':            'Switch to dark mode',
   'nav.help':                'Help',
@@ -776,6 +777,24 @@ export default {
   'console.unavailable':     'Unavailable',
   'console.clearAllHistory': 'Clear all history',
   'console.clearAllHistoryConfirm': 'Clear command history for every session target? This cannot be undone.',
+
+  // ── Account (KUA Control Plane) ────────────────────────────────────────
+  'account.title':           'Account',
+  'account.loading':         'Loading account…',
+  'account.unavailable':     'Cloud login isn\'t available on this KUA instance yet.',
+  'account.error':           'Could not reach the account service',
+  'account.retry':           'Retry',
+  'account.signInHint':      'Every local feature keeps working without an account. Sign in to unlock cloud backups and team sharing once available.',
+  'account.signInGoogle':    'Sign in with Google',
+  'account.signOut':         'Sign out',
+  'account.plan.free':       'Free plan',
+  'account.plan.pro':        'Pro plan',
+  'account.plan.team':       'Team plan',
+  'account.feature.cloudBackup':   'Cloud backups',
+  'account.feature.remoteHistory': 'Remote history',
+  'account.feature.teamSharing':   'Team sharing',
+  'account.feature.teamRoles':     'Team roles',
+  'account.feature.auditComments': 'Audit comments',
 
   // ── Common ─────────────────────────────────────────────────────────────
   'common.confirm':          'Confirm',

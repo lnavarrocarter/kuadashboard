@@ -18,6 +18,7 @@ export default {
   'nav.localShell':          'Terminal local',
   'nav.console':             'Consola',
   'nav.auditLog':            'Log de Auditoría',
+  'nav.account':             'Cuenta',
   'nav.lightMode':           'Cambiar a modo claro',
   'nav.darkMode':            'Cambiar a modo oscuro',
   'nav.help':                'Ayuda',
@@ -776,6 +777,25 @@ export default {
   'console.clearAllHistory': 'Borrar todo el historial',
   'console.clearAllHistoryConfirm': '¿Borrar el historial de comandos de todos los destinos? Esta acción no se puede deshacer.',
 
+  // ── Cuenta (KUA Control Plane) ─────────────────────────────────────────
+  'account.title':           'Cuenta',
+  'account.loading':         'Cargando cuenta…',
+  'account.unavailable':     'El login en la nube todavía no está disponible en esta instancia de KUA.',
+  'account.error':           'No se pudo contactar el servicio de cuenta',
+  'account.retry':           'Reintentar',
+  'account.signInHint':      'Todas las funciones locales siguen funcionando sin una cuenta. Iniciá sesión para desbloquear backups en la nube y compartir con tu equipo cuando estén disponibles.',
+  'account.signInGoogle':    'Iniciar sesión con Google',
+  'account.signOut':         'Cerrar sesión',
+  'account.plan.free':       'Plan Free',
+  'account.plan.pro':        'Plan Pro',
+  'account.plan.team':       'Plan Team',
+  'account.feature.cloudBackup':   'Backups en la nube',
+  'account.feature.remoteHistory': 'Historial remoto',
+  'account.feature.teamSharing':   'Compartir con equipo',
+  'account.feature.teamRoles':     'Roles de equipo',
+  'account.feature.auditComments': 'Comentarios de auditoría',
+
   // ── Common ─────────────────────────────────────────────────────────────
   'common.confirm':          'Confirmar',
-  'common.cancel':           'Cancelar',}
+  'common.cancel':           'Cancelar',
+}

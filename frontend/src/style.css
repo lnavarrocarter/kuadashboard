@@ -402,6 +402,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   font-size: 15px; flex-shrink: 0;
 }
 .btn.btn-icon:hover { color: var(--accent); }
+.header-account-avatar { width: 20px; height: 20px; border-radius: 50%; }
 .btn.btn-icon.stop { color: rgba(244,67,54,.6); }
 .btn.btn-icon.stop:hover { color: var(--red); background: rgba(244,67,54,.13); }
 .btn.btn-donate { color: rgba(255,100,100,.7); }

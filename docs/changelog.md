@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- KUA now has an optional Account header button (hidden unless `VITE_CONTROL_PLANE_URL`
+  is configured) that connects the frontend to the KUA Control Plane: sign in/out with
+  Google, and a read-only account panel showing the current plan (Free/Pro/Team) and
+  which cloud features it unlocks. Every local/free feature keeps working exactly as
+  before with no control plane configured — the button simply doesn't render. Clicking
+  "Sign in" against a control plane that hasn't configured Google OAuth yet shows a clear
+  "not available yet" message instead of navigating to a raw JSON error page.
+- Fixed the KUA Control Plane silently ignoring its own `.env` file: `npm start` never
+  actually loaded it (no `dotenv`), so every value in `.env` fell back to defaults
+  regardless of what was configured, contradicting the README's own setup instructions.
+
 ## v1.16.0 (2026-09-16)
 
 Console Sessions unifies every remote connection — Kubernetes, Local Shell, EC2 SSH, AWS SSM, GCP, and Vercel — behind one shared session registry and a global workspace.

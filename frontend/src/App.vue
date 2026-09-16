@@ -112,6 +112,10 @@
           <i :data-lucide="settings.theme === 'dark' ? 'sun' : 'moon'"></i>
         </button>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'audit' }" :title="t('nav.auditLog')" @click="toggleAuditLog"><i data-lucide="shield-check"></i></button>
+        <button v-if="accountStore.enabled" class="btn btn-icon" :class="{ primary: cloudView === 'account' }" :title="t('nav.account')" @click="toggleAccount">
+          <img v-if="accountStore.user?.picture" :src="accountStore.user.picture" class="header-account-avatar" alt="" />
+          <i v-else data-lucide="user"></i>
+        </button>
         <button class="btn btn-icon" @click="modals.help = true" :title="t('nav.help')"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" :title="t('nav.supportProject')">
           <i data-lucide="heart"></i>
@@ -356,6 +360,7 @@
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
           <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
+          <AccountView v-else-if="cloudView === 'account'" />
           <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
@@ -499,6 +504,7 @@ import { useAwsStore }         from './stores/useAwsStore'
 import { useGcpStore }         from './stores/useGcpStore'
 import { useVercelStore }      from './stores/useVercelStore'
 import { useEnvStore }         from './stores/useEnvStore'
+import { useAccountStore }     from './stores/useAccountStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
@@ -512,6 +518,7 @@ import HelmView         from './components/HelmView.vue'
 import AuditLogView    from './components/AuditLogView.vue'
 import ConsoleWorkspaceView from './components/ConsoleWorkspaceView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
+import AccountView     from './components/AccountView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
@@ -544,6 +551,7 @@ const awsStore     = useAwsStore()
 const gcpStore     = useGcpStore()
 const vercelStore  = useVercelStore()
 const envStore     = useEnvStore()
+const accountStore = useAccountStore()
 const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream, startGcpLogsStream, startVercelLogsStream } = useTerminalStreams()
 const { toast } = useToast()
 
@@ -1032,6 +1040,10 @@ function toggleConsole() {
   cloudView.value = cloudView.value === 'console' ? null : 'console'
   nextTick(() => createIcons({ icons }))
 }
+function toggleAccount() {
+  cloudView.value = cloudView.value === 'account' ? null : 'account'
+  nextTick(() => createIcons({ icons }))
+}
 function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.resource = r; store.loadResources() }
 function setCloudView(view)   { cloudView.value = view }
 
@@ -1240,6 +1252,7 @@ function onKey(e) { if (e.key === 'Escape') Object.keys(modals).forEach(k => mod
 
 onMounted(async () => {
   applySettings()
+  if (accountStore.enabled) accountStore.consumeAuthComplete()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
   await store.loadContexts()
