@@ -120,6 +120,27 @@ describe('useTerminalStore', () => {
       expect(tab.provider).toBe('aws')
       expect(tab.transport).toBe('ssh')
     })
+
+    it('reuses an existing SSM tab for the same instance/profile (instanceId-keyed target)', () => {
+      const tab1 = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      const tab2 = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      expect(tab1.id).toBe(tab2.id)
+      expect(store.tabs).toHaveLength(1)
+    })
+
+    it('creates a new SSM tab for a different instance or profile', () => {
+      store.openCloudTab('ssm', 'a', { profileId: 'profile-1', target: { instanceId: 'i-1' } })
+      store.openCloudTab('ssm', 'b', { profileId: 'profile-1', target: { instanceId: 'i-2' } })
+      store.openCloudTab('ssm', 'c', { profileId: 'profile-2', target: { instanceId: 'i-1' } })
+      expect(store.tabs).toHaveLength(3)
+    })
+
+    it('sets tab type/provider/transport for ssm', () => {
+      const tab = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      expect(tab.type).toBe('ssm')
+      expect(tab.provider).toBe('aws')
+      expect(tab.transport).toBe('ssm')
+    })
   })
 
   describe('activateTab()', () => {
@@ -310,6 +331,17 @@ describe('useTerminalStore', () => {
       store.pushHistory(tabA, 'kubectl get pods')
       expect(store.historyFor(tabA)).toEqual(['kubectl get pods'])
       expect(store.historyFor(tabB)).toEqual([])
+    })
+
+    it('separates SSM history by instance/profile, not by ephemeral tab id (#41)', () => {
+      const tab1 = store.openCloudTab('ssm', 'i-1', { profileId: 'profile-1', target: { instanceId: 'i-1' } })
+      store.pushHistory(tab1, 'uptime')
+      store.closeTab(tab1.id)
+      const tab2 = store.openCloudTab('ssm', 'i-1', { profileId: 'profile-1', target: { instanceId: 'i-1' } })
+      expect(store.historyFor(tab2)).toEqual(['uptime'])
+
+      const otherInstance = store.openCloudTab('ssm', 'i-2', { profileId: 'profile-1', target: { instanceId: 'i-2' } })
+      expect(store.historyFor(otherInstance)).toEqual([])
     })
 
     it('ignores blank input', () => {

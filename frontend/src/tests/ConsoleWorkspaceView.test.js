@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { nextTick } from 'vue'
 import ConsoleWorkspaceView from '../components/ConsoleWorkspaceView.vue'
@@ -8,14 +8,15 @@ import { useKubeStore } from '../stores/useKubeStore'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
-const { startLogStream, startExecStream, startLocalStream, startSshStream } = vi.hoisted(() => ({
+const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream } = vi.hoisted(() => ({
   startLogStream: vi.fn(),
   startExecStream: vi.fn(),
   startLocalStream: vi.fn(),
   startSshStream: vi.fn(),
+  startSsmStream: vi.fn(),
 }))
 vi.mock('../composables/useTerminalStreams', () => ({
-  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream, startSshStream }),
+  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream }),
 }))
 
 describe('ConsoleWorkspaceView', () => {
@@ -31,6 +32,16 @@ describe('ConsoleWorkspaceView', () => {
     startExecStream.mockClear()
     startLocalStream.mockClear()
     startSshStream.mockClear()
+    startSsmStream.mockClear()
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => [{ id: 'session-manager-plugin', installed: true }],
+    })))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   afterEach(() => {
@@ -115,17 +126,19 @@ describe('ConsoleWorkspaceView', () => {
     expect(startExecStream).toHaveBeenCalledTimes(1)
   })
 
-  // #39 migrated ec2-ssh into the shared store, so it now gets its own launcher card
-  // (like Kubernetes) instead of an "available elsewhere" hint — only ec2-rdp still
-  // isn't launchable generically (it stays in its own AwsView modal, out of scope for #39).
-  it('shows planned capabilities as disabled and only ec2-rdp as available elsewhere', () => {
+  // #39 migrated ec2-ssh, #41 migrated aws-ssm into the shared store, so both now get
+  // their own launcher card (like Kubernetes) instead of an "available elsewhere" hint
+  // — only ec2-rdp still isn't launchable generically (it stays in its own AwsView
+  // modal, out of scope for both tickets).
+  it('shows planned capabilities as disabled and only ec2-rdp as available elsewhere', async () => {
     wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
     const text = wrapper.text()
 
-    expect(wrapper.findAll('.console-planned-badge')).toHaveLength(3) // aws-ssm, gcp-shell, vercel-logs
-    expect(text).toContain('aws-ssm')
+    expect(wrapper.findAll('.console-planned-badge')).toHaveLength(2) // gcp-shell, vercel-logs
     expect(text).toContain('gcp-shell')
     expect(text).toContain('vercel-logs')
+    expect(text).not.toContain('aws-ssm')
 
     const hints = wrapper.findAll('.console-hint')
     expect(hints).toHaveLength(1) // ec2-rdp
@@ -148,5 +161,49 @@ describe('ConsoleWorkspaceView', () => {
     expect(store.tabs[0]).toMatchObject({ type: 'ec2', provider: 'aws', profileId: 'profile-1' })
     expect(store.tabs[0].target).toMatchObject({ host: '1.2.3.4', user: 'ec2-user' })
     expect(startSshStream).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the SSM launcher when session-manager-plugin is not installed, with an install hint', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => [{ id: 'session-manager-plugin', installed: false }],
+    })))
+    wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
+
+    const card = wrapper.findAll('.console-launcher-card').find(c => c.text().includes('AWS SSM'))
+    expect(card.find('.console-hint').exists()).toBe(true)
+    wrapper.vm.ssmForm.instanceId = 'i-123'
+    wrapper.vm.ssmForm.profileId = 'profile-1'
+    await nextTick()
+    expect(card.find('button').attributes('disabled')).toBeDefined()
+  })
+
+  it('requires the plugin, an instance id and a profile before enabling the SSM launcher, then confirms before connecting', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
+
+    const card = wrapper.findAll('.console-launcher-card').find(c => c.text().includes('AWS SSM'))
+    const connectButton = card.find('button')
+    expect(connectButton.attributes('disabled')).toBeDefined()
+
+    wrapper.vm.ssmForm.instanceId = 'i-0123456789abcdef0'
+    wrapper.vm.ssmForm.profileId = 'profile-1'
+    await nextTick()
+    expect(connectButton.attributes('disabled')).toBeUndefined()
+
+    await connectButton.trigger('click')
+    // Connecting requires confirming first — no tab/stream yet.
+    expect(store.tabs).toHaveLength(0)
+    expect(startSsmStream).not.toHaveBeenCalled()
+    expect(wrapper.vm.showSsmConfirm).toBe(true)
+
+    wrapper.vm.confirmSsmConnect()
+    await nextTick()
+    expect(store.tabs).toHaveLength(1)
+    expect(store.tabs[0]).toMatchObject({ type: 'ssm', provider: 'aws', profileId: 'profile-1' })
+    expect(store.tabs[0].target).toMatchObject({ instanceId: 'i-0123456789abcdef0' })
+    expect(startSsmStream).toHaveBeenCalledTimes(1)
   })
 })

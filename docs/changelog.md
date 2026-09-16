@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- AWS SSM Session Manager sessions can now be started from the Console — no SSH keys
+  needed, just a confirmed AWS profile and instance ID. Requires AWS's
+  `session-manager-plugin` to be installed (the launcher shows an install hint and
+  disables Connect if it isn't); starting a session always requires explicit
+  confirmation first. A denied permission never leaves an orphaned session. See
+  [console sessions](./architecture/console-sessions.md).
 - Console tabs, their order, the active tab, and wrap/height preferences now survive
   a reload — restored tabs always come back disconnected, never silently resuming a
   remote session, and require an explicit Reconnect (now available from the quick

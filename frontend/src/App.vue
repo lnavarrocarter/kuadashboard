@@ -544,7 +544,7 @@ const awsStore     = useAwsStore()
 const gcpStore     = useGcpStore()
 const vercelStore  = useVercelStore()
 const envStore     = useEnvStore()
-const { startLogStream, startExecStream, startLocalStream, startSshStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream } = useTerminalStreams()
 const { toast } = useToast()
 
 const LABELS = {
@@ -1133,6 +1133,7 @@ function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
   else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
+  else if (tab.type === 'ssm') startSsmStream(tab, { reconnect: true })
   else startLogStream(tab, previous, { reconnect: true })
 }
 

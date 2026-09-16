@@ -324,6 +324,49 @@ describe('useTerminalStreams', () => {
     })
   })
 
+  describe('startSsmStream()', () => {
+    it('creates a WebSocket to /ws/aws-ssm', async () => {
+      const tab = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      await streams.startSsmStream(tab)
+      expect(getMockWs().url).toBe('ws://localhost:7190/ws/aws-ssm?ticket=test-ticket')
+    })
+
+    it('sends a connect action on open', async () => {
+      const tab = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      await streams.startSsmStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      expect(JSON.parse(ws._lastSent)).toEqual({ action: 'connect' })
+    })
+
+    it('pushes a sys line on "connected" and appends out/err output', async () => {
+      const tab = store.openCloudTab('ssm', 'i-123', { profileId: 'profile-1', target: { instanceId: 'i-123' } })
+      await streams.startSsmStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'connected', instanceId: 'i-123' }) })
+      expect(tab.lines.some(l => l.includes('SSM session started on i-123'))).toBe(true)
+      ws._emit('message', { data: JSON.stringify({ type: 'out', data: 'hello\n' }) })
+      expect(tab.lines.some(l => l.includes('hello'))).toBe(true)
+    })
+
+    it('sets connectionState to "done" on a clean exit and "error" on a backend error', async () => {
+      const tab = store.openCloudTab('ssm', 'i-1', { profileId: 'p', target: { instanceId: 'i-1' } })
+      await streams.startSsmStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'done', code: 0 }) })
+      expect(tab.connectionState).toBe('done')
+
+      const tab2 = store.openCloudTab('ssm', 'i-2', { profileId: 'p', target: { instanceId: 'i-2' } })
+      await streams.startSsmStream(tab2)
+      const ws2 = getMockWs()
+      ws2._emit('open', {})
+      ws2._emit('message', { data: JSON.stringify({ type: 'error', data: 'Access denied' }) })
+      expect(tab2.connectionState).toBe('error')
+    })
+  })
+
   describe('reconnect state', () => {
     it('shows "reconnecting" while a reconnect attempt is preparing, distinct from a first connect', async () => {
       const tab = store.openLocalTab()

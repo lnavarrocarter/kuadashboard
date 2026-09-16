@@ -101,6 +101,17 @@ const TOOLS = [
     downloadUrl: 'https://helm.sh/docs/intro/install/',
     docsUrl:     'https://helm.sh/docs/intro/install/',
   },
+  {
+    id:          'session-manager-plugin',
+    name:        'AWS Session Manager Plugin',
+    binary:      'session-manager-plugin',
+    versionArgs: ['--version'],
+    // version output is a bare version string, e.g. "1.2.463.0"
+    versionRegex: /(\d+\.\d+\.\d+\.\d+)/,
+    description: 'Required for AWS SSM Session Manager console sessions.',
+    downloadUrl: 'https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html',
+    docsUrl:     'https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html',
+  },
 ];
 
 // ─── Detection helpers ────────────────────────────────────────────────────────

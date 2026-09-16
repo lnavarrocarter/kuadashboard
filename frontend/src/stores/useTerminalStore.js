@@ -69,6 +69,7 @@ function targetKeyFor(tab) {
   if (tab.provider === 'kubernetes') return `kubernetes:${tab.kubeContext || ''}:${tab.ns || ''}:${tab.resourceType || 'pods'}:${tab.container || ''}`
   if (tab.provider === 'local') return `local:${tab.environment || 'default'}:${tab.applicationId || ''}`
   if (tab.target?.host) return `${tab.type}:${tab.target.host}:${tab.target.user || ''}:${tab.profileId || ''}`
+  if (tab.target?.instanceId) return `${tab.type}:${tab.target.instanceId}:${tab.profileId || ''}`
   return `${tab.provider || 'unknown'}:${tab.id}`
 }
 
@@ -189,6 +190,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     if (descriptor.target.host) {
       const existing = tabs.value.find(t => t.type === contextType && t.target?.host === descriptor.target.host
         && t.target?.user === descriptor.target.user && t.profileId === descriptor.profileId)
+      if (existing) { activateTab(existing.id); visible.value = true; return existing }
+    } else if (descriptor.target.instanceId) {
+      const existing = tabs.value.find(t => t.type === contextType && t.target?.instanceId === descriptor.target.instanceId
+        && t.profileId === descriptor.profileId)
       if (existing) { activateTab(existing.id); visible.value = true; return existing }
     }
     const tab = {

@@ -5,7 +5,7 @@ export const capabilityRegistry = Object.freeze([
   { id: 'kubernetes-exec', provider: 'kubernetes', transport: 'exec', path: '/ws/exec', status: 'available', required: ['target.namespace', 'target.name'] },
   { id: 'ec2-ssh', provider: 'aws', transport: 'ssh', path: '/ws/ec2-shell', status: 'available', required: ['profileId', 'target.host', 'target.user'] },
   { id: 'ec2-rdp', provider: 'aws', transport: 'rdp', path: '/ws/ec2-rdp', status: 'available', required: ['profileId', 'target.host', 'target.user'] },
-  { id: 'aws-ssm', provider: 'aws', transport: 'ssm', status: 'planned', required: ['profileId', 'region', 'target.instanceId'] },
+  { id: 'aws-ssm', provider: 'aws', transport: 'ssm', path: '/ws/aws-ssm', status: 'available', required: ['profileId', 'target.instanceId'] },
   { id: 'gcp-shell', provider: 'gcp', transport: 'cloud-shell', status: 'planned', required: ['profileId', 'project'] },
   { id: 'vercel-logs', provider: 'vercel', transport: 'deployment-logs', status: 'planned', required: ['profileId', 'target.name'] },
 ].map(item => Object.freeze({ ...item, required: Object.freeze(item.required) })))
