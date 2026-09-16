@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+- Las pestañas de Consola, su orden, la pestaña activa y las preferencias de ajuste
+  de línea/altura ahora sobreviven a una recarga — las pestañas restauradas siempre
+  vuelven desconectadas, nunca reanudando una sesión remota en silencio, y requieren
+  un Reconectar explícito (ahora disponible también desde el panel rápido, no solo
+  desde el workspace de Consola). El historial de comandos ahora es compartido y se
+  persiste por destino exacto (namespace/pod/container, ambiente, o host/usuario/
+  perfil) en lugar de dos historiales separados, no persistidos y sin alcance,
+  acotado a 200 comandos por destino y 50 destinos en total, con una acción
+  explícita de "Borrar historial" por pestaña y "Borrar todo el historial" en el
+  workspace de Consola. Nunca se escribe nada sensible en el almacenamiento — solo
+  el descriptor de sesión, nunca output crudo ni credenciales.
+  Ver [sesiones de consola](../architecture/console-sessions.md).
 - Las sesiones SSH de EC2 ahora se unen al mismo registro compartido de Consola
   que Terminal local y logs/exec de Kubernetes: conectarse al mismo host/usuario/
   perfil de credenciales desde la vista de AWS y desde el lanzador del workspace

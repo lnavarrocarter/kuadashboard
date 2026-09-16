@@ -62,7 +62,14 @@
         <button v-if="activeTab" class="btn btn-icon" title="Copiar seleccion" @click="copySelectedOutput"><i data-lucide="copy"></i></button>
         <button v-if="activeTab" class="btn btn-icon" title="Copiar output" @click="copyAllOutput"><i data-lucide="clipboard"></i></button>
         <button v-if="isShellTab" class="btn btn-icon" title="Pegar en terminal" @click="pasteIntoInput"><i data-lucide="clipboard-paste"></i></button>
+        <button
+          v-if="activeTab && activeTab.connectionState !== 'connected'"
+          class="btn btn-icon primary"
+          :title="t('term.reconnect')"
+          @click="emit('restartStream', activeTab, showPrevious)"
+        ><i data-lucide="refresh-cw"></i></button>
         <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
+        <button v-if="isShellTab" class="btn btn-icon" :title="t('term.clearHistory')" @click="clearActiveHistory"><i data-lucide="history"></i></button>
         <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button
           v-if="activeTab && !isShellTab"
@@ -598,7 +605,6 @@ function safeFileName(name) {
 }
 
 // ── Shell input ────────────────────────────────────────────────────────────
-const cmdHistory = ref([])
 const historyIdx = ref(-1)
 const suggestion = ref('')
 
@@ -606,11 +612,7 @@ function sendInput() {
   const tab = activeTab.value
   if (!tab?.ws || tab.ws.readyState !== 1) return
   const cmd = cmdInput.value
-  if (cmd.trim()) {
-    cmdHistory.value.unshift(cmd)
-    if (cmdHistory.value.length > 200) cmdHistory.value.pop()
-
-  }
+  store.pushHistory(tab, cmd)
   historyIdx.value = -1
   suggestion.value = ''
   tab.ws.send(JSON.stringify({ action: 'stdin', data: cmd + '\n' }))
@@ -619,17 +621,25 @@ function sendInput() {
 }
 
 function historyUp() {
-  if (!cmdHistory.value.length) return
-  historyIdx.value = Math.min(historyIdx.value + 1, cmdHistory.value.length - 1)
-  cmdInput.value   = cmdHistory.value[historyIdx.value]
+  const history = activeTab.value ? store.historyFor(activeTab.value) : []
+  if (!history.length) return
+  historyIdx.value = Math.min(historyIdx.value + 1, history.length - 1)
+  cmdInput.value   = history[historyIdx.value]
   suggestion.value = ''
 }
 
 function historyDown() {
+  const history = activeTab.value ? store.historyFor(activeTab.value) : []
   if (historyIdx.value <= 0) { historyIdx.value = -1; cmdInput.value = ''; return }
   historyIdx.value--
-  cmdInput.value   = cmdHistory.value[historyIdx.value]
+  cmdInput.value   = history[historyIdx.value]
   suggestion.value = ''
+}
+
+function clearActiveHistory() {
+  if (!activeTab.value) return
+  store.clearHistory(activeTab.value)
+  historyIdx.value = -1
 }
 
 function sendCtrlC() {
@@ -693,8 +703,9 @@ async function tabComplete() {
 }
 
 function showHistorySuggestions(input) {
-  if (!cmdHistory.value.length) return
-  const matches = cmdHistory.value.filter(c => c.startsWith(input))
+  const history = activeTab.value ? store.historyFor(activeTab.value) : []
+  if (!history.length) return
+  const matches = history.filter(c => c.startsWith(input))
   if (matches.length) {
     store.pushLine(activeTab.value, '  ' + matches.slice(0, 8).join('  |  '), 'sys')
     scrollEnd()
@@ -733,7 +744,7 @@ watch(cmdInput, val => {
     suggestion.value = ''
     return
   }
-  const match = cmdHistory.value.find(c => c.startsWith(val) && c !== val)
+  const match = store.historyFor(activeTab.value).find(c => c.startsWith(val) && c !== val)
   suggestion.value = match ? match.slice(val.length) : ''
 })
 
