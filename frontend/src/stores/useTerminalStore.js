@@ -1,16 +1,113 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { capabilityRegistry, sessionDescriptor } from '../shared/consoleSession.mjs'
 
 export const TERMINAL_MAX_LINES = 5000
 
+// Persisted state (#40): tab descriptors, order, active tab and preferences survive a
+// reload; live connections and raw output never do. Restored tabs always come back
+// disconnected — nothing here ever silently reopens a remote session.
+const TABS_STORAGE_KEY = 'kua:console:tabs'
+const HISTORY_STORAGE_KEY = 'kua:console:history'
+const STORAGE_VERSION = 1
+const HISTORY_MAX_PER_TARGET = 200
+const HISTORY_MAX_TARGETS = 50
+
+// Only descriptor-ish fields are persisted. Never: ws, entries, lines, _logBuffers,
+// _connectionAttempt, cwd, streaming, connectionState (recomputed as 'idle' on restore),
+// capabilities (recomputed from the registry, not stored).
+const PERSISTED_TAB_FIELDS = [
+  'id', 'type', 'context', 'label', 'provider', 'environment', 'applicationId', 'profileId',
+  'region', 'project', 'kubeContext', 'target', 'transport', 'ns', 'pod', 'resourceType',
+  'containers', 'container', 'selectedPod',
+]
+
+function serializeTab(tab) {
+  const out = {}
+  for (const key of PERSISTED_TAB_FIELDS) out[key] = tab[key]
+  return out
+}
+
+function restoreTab(saved) {
+  return {
+    ...saved,
+    capabilities: capabilityRegistry.filter(c => c.provider === saved.provider).map(c => c.id),
+    connectionState: 'idle',
+    ws: null, lines: [], entries: [], lineCount: 0, streaming: false,
+    logPods: saved.logPods || [],
+  }
+}
+
+function loadPersistedTabs() {
+  const empty = { tabs: [], activeId: null, wrap: false, height: 280, visible: false }
+  try {
+    const raw = JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) || 'null')
+    if (!raw || raw.version !== STORAGE_VERSION || !Array.isArray(raw.tabs)) return empty
+    const tabs = raw.tabs.map(restoreTab)
+    return {
+      tabs,
+      activeId: tabs.some(t => t.id === raw.activeId) ? raw.activeId : (tabs[0]?.id ?? null),
+      wrap: Boolean(raw.wrap),
+      height: Number.isFinite(raw.height) ? raw.height : 280,
+      visible: Boolean(tabs.length),
+    }
+  } catch (_) {
+    return empty
+  }
+}
+
+function loadPersistedHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || 'null')
+    return raw && raw.version === STORAGE_VERSION && raw.entries && typeof raw.entries === 'object' ? raw.entries : {}
+  } catch (_) {
+    return {}
+  }
+}
+
+function targetKeyFor(tab) {
+  if (tab.provider === 'kubernetes') return `kubernetes:${tab.kubeContext || ''}:${tab.ns || ''}:${tab.resourceType || 'pods'}:${tab.container || ''}`
+  if (tab.provider === 'local') return `local:${tab.environment || 'default'}:${tab.applicationId || ''}`
+  if (tab.target?.host) return `${tab.type}:${tab.target.host}:${tab.target.user || ''}:${tab.profileId || ''}`
+  return `${tab.provider || 'unknown'}:${tab.id}`
+}
+
 export const useTerminalStore = defineStore('terminal', () => {
-  const tabs     = ref([])   // [{ id, ns, pod, containers, container, ws, lines, lineCount, streaming, type }]
-  const activeId = ref(null)
-  const visible  = ref(false)
-  const wrap     = ref(false)
-  const height   = ref(280)
+  const restored = loadPersistedTabs()
+  const tabs     = ref(restored.tabs)   // [{ id, ns, pod, containers, container, ws, lines, lineCount, streaming, type }]
+  const activeId = ref(restored.activeId)
+  const visible  = ref(restored.visible)
+  const wrap     = ref(restored.wrap)
+  const height   = ref(restored.height)
+  const history  = ref(loadPersistedHistory())
   let tabSeq = 0
+
+  function persistTabsNow() {
+    try {
+      localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify({
+        version: STORAGE_VERSION,
+        tabs: tabs.value.map(serializeTab),
+        activeId: activeId.value,
+        wrap: wrap.value,
+        height: height.value,
+      }))
+    } catch (_) {}
+  }
+
+  let persistTimer = null
+  function schedulePersistTabs() {
+    clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistTabsNow, 400)
+  }
+  // Preferences change on every resize-drag pixel/keystroke — debounce those; discrete
+  // tab actions (open/close/activate) call persistTabsNow() directly, immediately.
+  watch([wrap, height], schedulePersistTabs)
+
+  function persistHistoryNow() {
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, entries: history.value }))
+    } catch (_) {}
+  }
 
   function nextTabId() {
     tabSeq += 1
@@ -41,6 +138,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
+    persistTabsNow()
     return tabs.value.find(t => t.id === tab.id)
   }
 
@@ -57,6 +155,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
+    persistTabsNow()
     return tabs.value.find(t => t.id === tab.id)
   }
 
@@ -78,6 +177,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
+    persistTabsNow()
     return tabs.value.find(t => t.id === tab.id)
   }
 
@@ -104,11 +204,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     visible.value = true
     activateTab(tab.id)
+    persistTabsNow()
     return tabs.value.find(t => t.id === tab.id)
   }
 
   function activateTab(id) {
     activeId.value = id
+    persistTabsNow()
   }
 
   function closeTab(id) {
@@ -123,6 +225,15 @@ export const useTerminalStore = defineStore('terminal', () => {
     } else {
       activateTab(tabs.value[Math.min(idx, tabs.value.length - 1)].id)
     }
+    persistTabsNow()
+  }
+
+  /** Remove any tab the given predicate rejects (e.g. its profile/context no longer
+   * exists) without blocking startup — called once the relevant list has loaded. */
+  function pruneStaleTabs(isValid) {
+    const stale = tabs.value.filter(tab => !isValid(tab))
+    if (!stale.length) return
+    for (const tab of stale) closeTab(tab.id)
   }
 
   function stopStream(tab) {
@@ -173,9 +284,41 @@ export const useTerminalStore = defineStore('terminal', () => {
     return Number.isNaN(date.getTime()) ? null : date.getTime()
   }
 
+  // ── Per-target command history (#40) ─────────────────────────────────────────
+  function pushHistory(tab, cmd) {
+    if (!cmd || !cmd.trim()) return
+    const key = targetKeyFor(tab)
+    const entry = history.value[key] || { commands: [], lastUsed: 0 }
+    entry.commands.unshift(cmd)
+    if (entry.commands.length > HISTORY_MAX_PER_TARGET) entry.commands.length = HISTORY_MAX_PER_TARGET
+    entry.lastUsed = Date.now()
+    history.value[key] = entry
+    const keys = Object.keys(history.value)
+    if (keys.length > HISTORY_MAX_TARGETS) {
+      const oldest = keys.sort((a, b) => history.value[a].lastUsed - history.value[b].lastUsed)[0]
+      delete history.value[oldest]
+    }
+    persistHistoryNow()
+  }
+
+  function historyFor(tab) {
+    return history.value[targetKeyFor(tab)]?.commands || []
+  }
+
+  function clearHistory(tab) {
+    delete history.value[targetKeyFor(tab)]
+    persistHistoryNow()
+  }
+
+  function clearAllHistory() {
+    history.value = {}
+    try { localStorage.removeItem(HISTORY_STORAGE_KEY) } catch (_) {}
+  }
+
   return {
-    tabs, activeId, visible, wrap, height, capabilityRegistry,
+    tabs, activeId, visible, wrap, height, capabilityRegistry, history,
     activeTab, openLogsTab, openExecTab, openLocalTab, openCloudTab,
-    activateTab, closeTab, stopStream, pushLine,
+    activateTab, closeTab, stopStream, pushLine, pruneStaleTabs,
+    pushHistory, historyFor, clearHistory, clearAllHistory,
   }
 })

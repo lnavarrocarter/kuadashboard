@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Console tabs, their order, the active tab, and wrap/height preferences now survive
+  a reload — restored tabs always come back disconnected, never silently resuming a
+  remote session, and require an explicit Reconnect (now available from the quick
+  panel too, not just the Console workspace). Command history is now shared and
+  persisted per exact target (namespace/pod/container, environment, or host/user/
+  profile) instead of two separate, non-persisted, unscoped histories, bounded at
+  200 commands per target and 50 targets total, with an explicit "Clear history"
+  action per tab and a "Clear all history" action in the Console workspace. Nothing
+  sensitive is ever written to storage — only the session descriptor, never raw
+  output or credentials. See [console sessions](./architecture/console-sessions.md).
 - EC2 SSH sessions now join the same shared Console registry as Local Shell and
   Kubernetes logs/exec: connecting to the same host/user/credential profile from
   the AWS view and from the Console workspace launcher converges on one session

@@ -23,10 +23,12 @@ and `openLocalTab` carries application/environment/profile context.
 name, resourceType, container, selectedPod, host, user, instanceId, domain, port,
 width and height. Arbitrary cloud `meta` is no longer retained.
 
-Connection states: `idle → validating → connecting → connected → closed`, or
-`error`. Closing/restarting a pending tab invalidates its asynchronous attempt.
-Sessions are not persisted; commands and output remain in existing memory-only
-terminal buffers, not in the session descriptor.
+Connection states: `idle → validating|reconnecting → connecting → connected`, ending in
+`done`, `error` or `stopped` (see "EC2 SSH joins the shared registry" below for the full
+normalization). Closing/restarting a pending tab invalidates its asynchronous attempt.
+The tab descriptor (this section) is now persisted across a reload (see "Tab and
+history persistence" below) — the live connection and its output are not; a restored
+tab always comes back disconnected.
 
 ## Capability matrix
 
@@ -184,6 +186,44 @@ never overwritten by the socket's subsequent `close` event.
 - **Session shows "done" but you expected it to keep running**: the backend process
   exited (shell/exec) or the SSH session ended — this is a clean exit, not a dropped
   connection; reconnect to start a new one.
+
+## Tab and history persistence (#40)
+
+A reload restores tab organization without ever silently resuming a remote session or
+writing anything sensitive to disk — the explicit anti-pattern this avoids is
+`usePortForwardStore.js`'s `autoRestore()`, which re-establishes live port-forwards on
+every reload with no confirmation.
+
+**What's persisted** (`localStorage['kua:console:tabs']`, versioned): each tab's
+descriptor fields only — `id, type, context, label, provider, environment,
+applicationId, profileId, region, project, kubeContext, target, transport, ns, pod,
+resourceType, containers, container, selectedPod` — plus tab order, the active tab id,
+and the `wrap`/`height` preferences. **Never persisted**: the live `WebSocket`, raw
+output (`entries`/`lines`/`_logBuffers` — this is where a command's secrets-looking
+output would live), `connectionState`, or `capabilities` (recomputed from the registry
+on restore). A restored tab always comes back with `connectionState: 'idle'` and no
+`ws` — it renders as disconnected and requires an explicit Reconnect (now available
+from both the quick panel's header and the Console workspace's row action).
+
+**Command history** (`localStorage['kua:console:history']`, separate key): previously
+two independent, non-persisted, not-per-target implementations (`Ec2Shell.vue`'s own,
+and `TerminalPanel.vue`'s own — shared across every tab type with no target scoping).
+Both now read/write the same store-level history, keyed per exact target so history
+never crosses environments or resources:
+- Kubernetes: `kubernetes:<kubeContext>:<namespace>:<resourceType>:<container>`
+- Local: `local:<environment>:<applicationId>`
+- EC2 SSH: `ec2:<host>:<user>:<profileId>`
+
+Bounded at 200 commands per target (the number both prior implementations already
+used) and 50 distinct targets total, evicting the least-recently-used target once
+that's exceeded. Clearing is explicit and immediate: a per-tab "Clear history" action
+in the quick panel, and a "Clear all history" action in the Console workspace header.
+
+**Stale profiles/contexts don't block startup**: tabs restore optimistically, then
+`App.vue` prunes any tab whose `profileId`/`kubeContext` no longer exists once the
+fresh profile/context list loads — the same reconcile-after-load pattern already used
+for the persisted AWS/GCP/Vercel profile selection, not a synchronous validity check
+during store hydration.
 
 ## Validation
 

@@ -544,7 +544,7 @@ const awsStore     = useAwsStore()
 const gcpStore     = useGcpStore()
 const vercelStore  = useVercelStore()
 const envStore     = useEnvStore()
-const { startLogStream, startExecStream, startLocalStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream, startSshStream } = useTerminalStreams()
 const { toast } = useToast()
 
 const LABELS = {
@@ -761,6 +761,14 @@ watch(() => envStore.profiles, (profiles) => {
     const aws = profiles.filter(p => p.provider === 'aws')
     if (aws.length === 1) { awsProfileId.value = aws[0].id; awsStore.setActiveProfile(aws[0].id) }
   }
+  // Console tabs restored from a previous session (#40) may reference a profile that no
+  // longer exists — prune them once the fresh profile list is known, rather than blocking
+  // startup on a synchronous check.
+  termStore.pruneStaleTabs(tab => !tab.profileId || profiles.some(p => p.id === tab.profileId))
+}, { deep: true })
+
+watch(() => store.contexts, contexts => {
+  termStore.pruneStaleTabs(tab => !tab.kubeContext || contexts.some(c => c.name === tab.kubeContext))
 }, { deep: true })
 watch(availableObservabilityProviders, providers => {
   if (!providers.length) {
@@ -1124,6 +1132,7 @@ function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, p
 function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
+  else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
   else startLogStream(tab, previous, { reconnect: true })
 }
 

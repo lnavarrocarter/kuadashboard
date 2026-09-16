@@ -6,6 +6,7 @@
         {{ t('console.title') }}
       </h2>
       <span class="console-total">{{ store.tabs.length }} {{ t('console.sessions') }}</span>
+      <button class="btn sm" @click="confirmClearHistory"><i data-lucide="history"></i> {{ t('console.clearAllHistory') }}</button>
     </div>
 
     <div class="console-body">
@@ -201,6 +202,10 @@ function connectEc2Ssh() {
     target: { host: ec2Form.host, user: ec2Form.user || 'ec2-user', port: ec2Form.port || 22 },
   })
   startSshStream(tab)
+}
+
+function confirmClearHistory() {
+  if (window.confirm(t('console.clearAllHistoryConfirm'))) store.clearAllHistory()
 }
 
 onMounted(() => {
