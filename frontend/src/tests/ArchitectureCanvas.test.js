@@ -206,7 +206,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
         },
       },
@@ -335,7 +335,7 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
-        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false,
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
         providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
       },
     })
@@ -383,6 +383,27 @@ describe('ArchitectureCanvas', () => {
     const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'worker')
     expect(node.data.collection).toMatchObject({ status: 'partial', label: 'Partial' })
     expect(wrapper.emitted('operation')[0][0].value.showCollectionOverlay).toBe(true)
+  })
+
+  it('shows opt-in Kubernetes warning events on canvas nodes and requests them on first toggle', async () => {
+    const eventsGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'deploy', name: 'orders-api', resourceType: 'deployment', provider: 'kubernetes', kind: 'Deployment' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: eventsGraph }, global: { stubs } })
+
+    await wrapper.get('button[title="Toggle Kubernetes warning events overlay"]').trigger('click')
+    expect(wrapper.emitted('request-events')).toHaveLength(1)
+    expect(wrapper.emitted('operation')[0][0].value.showEventsOverlay).toBe(true)
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'deploy').data.events).toBeNull()
+
+    await wrapper.setProps({ events: { deploy: { count: 3, detail: '2× BackOff · 1× FailedMount' } } })
+    const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'deploy')
+    expect(node.data.events).toEqual({ count: 3, detail: '2× BackOff · 1× FailedMount' })
   })
 
   it('expands canvas spacing when operational overlays make nodes larger', async () => {
@@ -568,16 +589,19 @@ describe('ArchitectureCanvas', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph: kubeGraph }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')
     const actionButtons = wrapper.findAll('.component-node-actions button')
-    expect(actionButtons).toHaveLength(4)
+    expect(actionButtons).toHaveLength(5)
 
     await actionButtons[0].trigger('click')
     expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'kubernetes-logs', node: kubeGraph.document.nodes[0] }])
 
     await actionButtons[1].trigger('click')
-    expect(wrapper.emitted('node-action')[1]).toEqual([{ action: 'kubernetes-log-suggestions', node: kubeGraph.document.nodes[0] }])
+    expect(wrapper.emitted('node-action')[1]).toEqual([{ action: 'inline-logs', node: kubeGraph.document.nodes[0] }])
 
-    await actionButtons[3].trigger('click')
-    expect(wrapper.emitted('node-action')[2]).toEqual([{ action: 'kubernetes-pods', node: kubeGraph.document.nodes[0] }])
+    await actionButtons[2].trigger('click')
+    expect(wrapper.emitted('node-action')[2]).toEqual([{ action: 'kubernetes-log-suggestions', node: kubeGraph.document.nodes[0] }])
+
+    await actionButtons[4].trigger('click')
+    expect(wrapper.emitted('node-action')[3]).toEqual([{ action: 'kubernetes-pods', node: kubeGraph.document.nodes[0] }])
   })
 
   it('exposes AWS Lambda node navigation actions', async () => {
@@ -592,10 +616,13 @@ describe('ArchitectureCanvas', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph: lambdaGraph }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')
     const actionButtons = wrapper.findAll('.component-node-actions button')
-    expect(actionButtons).toHaveLength(2)
+    expect(actionButtons).toHaveLength(3)
 
     await actionButtons[1].trigger('click')
-    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'aws-detail', node: lambdaGraph.document.nodes[0] }])
+    expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'inline-logs', node: lambdaGraph.document.nodes[0] }])
+
+    await actionButtons[2].trigger('click')
+    expect(wrapper.emitted('node-action')[1]).toEqual([{ action: 'aws-detail', node: lambdaGraph.document.nodes[0] }])
   })
 
   it('exposes resource-level observability metrics navigation when linked', async () => {
@@ -610,10 +637,13 @@ describe('ArchitectureCanvas', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph: lambdaGraph, observabilityEnabled: true }, global: { stubs } })
     await wrapper.get('.select-node').trigger('click')
     const actionButtons = wrapper.findAll('.component-node-actions button')
-    expect(actionButtons).toHaveLength(3)
+    expect(actionButtons).toHaveLength(5)
 
-    await actionButtons[2].trigger('click')
+    await actionButtons[3].trigger('click')
     expect(wrapper.emitted('node-action')[0]).toEqual([{ action: 'observability-metrics', node: lambdaGraph.document.nodes[0] }])
+
+    await actionButtons[4].trigger('click')
+    expect(wrapper.emitted('node-action')[1]).toEqual([{ action: 'inline-metrics', node: lambdaGraph.document.nodes[0] }])
   })
 
   it('exposes resource-level observability traces for Step Functions when linked', async () => {
