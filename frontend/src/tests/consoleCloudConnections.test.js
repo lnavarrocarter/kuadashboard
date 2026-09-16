@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { setActivePinia, createPinia } from 'pinia'
 import Ec2Shell from '../components/cloud/Ec2Shell.vue'
 import Ec2Rdp from '../components/cloud/Ec2Rdp.vue'
 import { capabilityRegistry } from '../shared/consoleSession.mjs'
+
+vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
 describe.each([
   ['SSH', Ec2Shell, 'ssh'],
@@ -10,6 +13,10 @@ describe.each([
 ])('%s console boundary', (_label, component, transport) => {
   let wrapper
   beforeEach(() => {
+    // Ec2Shell.vue now stores its session in useTerminalStore (shared with the quick
+    // panel and Console workspace, see #39); Ec2Rdp.vue doesn't need it but sharing the
+    // setup is harmless.
+    setActivePinia(createPinia())
     global.WebSocket.reset()
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
       const session = JSON.parse(options.body)

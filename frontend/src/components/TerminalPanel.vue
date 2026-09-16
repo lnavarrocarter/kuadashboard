@@ -300,7 +300,7 @@ const fileViewerMode = ref('auto')
 
 // ── Current tab state ──────────────────────────────────────────────────────
 const activeTab           = computed(() => store.tabs.find(t => t.id === store.activeId) || null)
-const isShellTab          = computed(() => ['exec', 'local', 'aws', 'gcp'].includes(activeTab.value?.type))
+const isShellTab          = computed(() => ['exec', 'local', 'ec2', 'gcp'].includes(activeTab.value?.type))
 const activeTabContainers = computed(() => activeTab.value?.containers || [])
 const activeLogPods       = computed(() => activeTab.value?.logPods || [])
 const activeContainer     = ref('')

@@ -84,6 +84,24 @@
           </div>
         </div>
 
+        <div class="console-launcher-card">
+          <div class="console-launcher-card-header">
+            <i data-lucide="cloud"></i>
+            <strong>EC2 SSH</strong>
+          </div>
+          <div class="console-launcher-form">
+            <input v-model.trim="ec2Form.host" class="ctrl-input sm" :placeholder="t('console.host')" />
+            <input v-model.trim="ec2Form.user" class="ctrl-input sm" placeholder="ec2-user" />
+            <input v-model.number="ec2Form.port" type="number" min="1" max="65535" class="ctrl-input sm" placeholder="22" />
+            <input v-model.trim="ec2Form.profileId" class="ctrl-input sm" :placeholder="t('console.profileId')" />
+          </div>
+          <div class="console-launcher-actions">
+            <button class="btn sm" :disabled="!ec2Form.host || !ec2Form.profileId" @click="connectEc2Ssh">
+              <i data-lucide="plus"></i> {{ t('console.connect') }}
+            </button>
+          </div>
+        </div>
+
         <div v-for="group in otherGroups" :key="group.provider" class="console-launcher-card">
           <div class="console-launcher-card-header">
             <i :data-lucide="providerIcon(group.provider)"></i>
@@ -111,9 +129,10 @@ import { useKubeStore } from '../stores/useKubeStore'
 const { t } = useI18n()
 const store = useTerminalStore()
 const kubeStore = useKubeStore()
-const { startLogStream, startExecStream, startLocalStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream, startSshStream } = useTerminalStreams()
 
 const kubeForm = reactive({ context: '', namespace: '', name: '', resourceType: 'pods' })
+const ec2Form = reactive({ host: '', user: 'ec2-user', port: 22, profileId: '' })
 
 const PROVIDER_ORDER = ['local', 'kubernetes', 'aws', 'gcp', 'vercel']
 const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
@@ -121,10 +140,12 @@ const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
 const kubernetesLogsCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-logs'))
 const kubernetesExecCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-exec'))
 
+// ec2-ssh gets its own dedicated launcher card (like Kubernetes) since it's now a real,
+// store-backed tab; the remaining AWS/GCP/Vercel capabilities stay hint/planned-only.
 const otherGroups = computed(() => {
   const groups = {}
   for (const capability of store.capabilityRegistry) {
-    if (capability.provider === 'local' || capability.provider === 'kubernetes') continue
+    if (capability.provider === 'local' || capability.provider === 'kubernetes' || capability.id === 'ec2-ssh') continue
     if (!groups[capability.provider]) groups[capability.provider] = []
     groups[capability.provider].push(capability)
   }
@@ -152,9 +173,10 @@ function targetSummary(tab) {
 }
 
 function reconnect(tab) {
-  if (tab.type === 'exec') startExecStream(tab)
-  else if (tab.type === 'local') startLocalStream(tab)
-  else startLogStream(tab)
+  if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
+  else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
+  else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
+  else startLogStream(tab, false, { reconnect: true })
 }
 
 function connectLocal() {
@@ -171,6 +193,14 @@ function connectKubernetes(transport) {
     const tab = store.openLogsTab(kubeForm.namespace, kubeForm.name, [], kubeForm.resourceType, context)
     startLogStream(tab)
   }
+}
+
+function connectEc2Ssh() {
+  const tab = store.openCloudTab('ec2', `${ec2Form.user}@${ec2Form.host}`, {
+    profileId: ec2Form.profileId,
+    target: { host: ec2Form.host, user: ec2Form.user || 'ec2-user', port: ec2Form.port || 22 },
+  })
+  startSshStream(tab)
 }
 
 onMounted(() => {

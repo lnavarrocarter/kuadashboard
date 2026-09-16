@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- Las sesiones SSH de EC2 ahora se unen al mismo registro compartido de Consola
+  que Terminal local y logs/exec de Kubernetes: conectarse al mismo host/usuario/
+  perfil de credenciales desde la vista de AWS y desde el lanzador del workspace
+  de Consola converge en una sola sesión en lugar de abrir una segunda conexión
+  en paralelo, y el estado de la sesión ahora es uno de `connected`, `error`,
+  `done`, `reconnecting` o `stopped` en lugar de un genérico "closed" único. RDP
+  de EC2 no cambia. Se eliminó la vista de Terminal local independiente, que ya
+  no se usaba. Ver [sesiones de consola](../architecture/console-sessions.md).
 - La Consola ahora es accesible desde un botón global en el header, disponible
   en cualquier módulo, además del panel rápido existente. Abre un workspace
   dedicado que lista todas las sesiones activas (proveedor, ambiente,

@@ -761,6 +761,8 @@ export default {
   'console.currentContext':  'Contexto actual',
   'console.namespace':       'Namespace',
   'console.resourceName':    'Nombre del recurso',
+  'console.host':            'Host / IP',
+  'console.profileId':       'ID del perfil de credenciales',
   'console.viewLogs':        'Ver logs',
   'console.availableElsewhere': 'Abrir desde la vista de AWS',
   'console.planned':         'Planificado',

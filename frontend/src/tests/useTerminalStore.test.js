@@ -97,6 +97,30 @@ describe('useTerminalStore', () => {
     })
   })
 
+  describe('openCloudTab()', () => {
+    it('reuses an existing tab for the same host/user/profile', () => {
+      const tab1 = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      const tab2 = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      expect(tab1.id).toBe(tab2.id)
+      expect(store.tabs).toHaveLength(1)
+    })
+
+    it('creates a new tab for a different host, user or profile', () => {
+      store.openCloudTab('ec2', 'a', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      store.openCloudTab('ec2', 'b', { profileId: 'profile-1', target: { host: '5.6.7.8', user: 'ec2-user' } })
+      store.openCloudTab('ec2', 'c', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'root' } })
+      store.openCloudTab('ec2', 'd', { profileId: 'profile-2', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      expect(store.tabs).toHaveLength(4)
+    })
+
+    it('sets tab type/provider/transport for ec2', () => {
+      const tab = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      expect(tab.type).toBe('ec2')
+      expect(tab.provider).toBe('aws')
+      expect(tab.transport).toBe('ssh')
+    })
+  })
+
   describe('activateTab()', () => {
     it('sets activeId to the given id', () => {
       const tab = store.openLogsTab('default', 'pod', ['c'])
