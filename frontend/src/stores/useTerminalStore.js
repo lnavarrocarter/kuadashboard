@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { capabilityRegistry, sessionDescriptor } from '../shared/consoleSession.mjs'
 
 export const TERMINAL_MAX_LINES = 5000
 
@@ -20,11 +21,15 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeId.value) || null
   }
 
-  function openLogsTab(ns, pod, containers, resourceType = 'pods') {
-    const existing = tabs.value.find(t => t.pod === pod && t.ns === ns && t.type === 'log' && t.resourceType === resourceType)
+  function openLogsTab(ns, pod, containers, resourceType = 'pods', context = {}) {
+    const descriptor = sessionDescriptor({ ...context, provider: 'kubernetes', transport: 'logs', target: { namespace: ns, name: pod, resourceType } })
+    const existing = tabs.value.find(t => t.pod === pod && t.ns === ns && t.type === 'log' && t.resourceType === resourceType
+      && t.kubeContext === descriptor.kubeContext
+      && t.environment === descriptor.environment && t.applicationId === descriptor.applicationId)
     if (existing) { activateTab(existing.id); return existing }
     const isPod = resourceType === 'pods'
     const tab = {
+      ...descriptor,
       id: nextTabId(),
       type: 'log', context: 'pod', resourceType, ns, pod,
       label: `${pod} (${isPod ? 'logs' : `${resourceType} logs`})`,
@@ -39,8 +44,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === tab.id)
   }
 
-  function openExecTab(ns, pod, containers) {
+  function openExecTab(ns, pod, containers, context = {}) {
     const tab = {
+      ...sessionDescriptor({ ...context, provider: 'kubernetes', transport: 'exec', target: { namespace: ns, name: pod, resourceType: 'pods' } }),
       id: nextTabId(),
       type: 'exec', context: 'pod', ns, pod,
       label: pod,
@@ -55,11 +61,13 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   /** Open a local shell tab (connects to /ws/shell) */
-  function openLocalTab() {
+  function openLocalTab(context = {}) {
+    const descriptor = sessionDescriptor({ ...context, provider: 'local', transport: 'shell' })
     // Reuse existing idle local tab if available
-    const existing = tabs.value.find(t => t.type === 'local' && !t.streaming)
+    const existing = tabs.value.find(t => t.type === 'local' && !t.streaming && t.environment === descriptor.environment && t.applicationId === descriptor.applicationId)
     if (existing) { activateTab(existing.id); visible.value = true; return existing }
     const tab = {
+      ...descriptor,
       id: nextTabId(),
       type: 'local', context: 'local',
       label: 'Local Shell',
@@ -75,13 +83,17 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   /** Open a cloud shell tab (future: AWS SSM, GCP Cloud Shell, etc.) */
   function openCloudTab(contextType, label, meta = {}) {
+    const aliases = { ec2: ['aws', 'ssh'], ssm: ['aws', 'ssm'], gcp: ['gcp', 'cloud-shell'], vercel: ['vercel', 'deployment-logs'] }
+    const [provider, transport] = aliases[contextType] || [contextType, meta.transport]
+    const descriptor = sessionDescriptor({ ...meta, provider, transport, target: meta.target || { instanceId: meta.instanceId } })
     const tab = {
+      ...descriptor,
       id: nextTabId(),
       type: contextType, context: contextType,
       label,
       pod: label,
       containers: [], container: null,
-      meta,  // extra info like instanceId, region, projectId
+      meta: descriptor,
       ws: null, lines: [], entries: [], lineCount: 0, streaming: false
     }
     tabs.value.push(tab)
@@ -109,12 +121,14 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function stopStream(tab) {
+    tab._connectionAttempt = (tab._connectionAttempt || 0) + 1
     if (tab.ws) {
       try { tab.ws.send(JSON.stringify({ action: 'stop' })) } catch (_) {}
       try { tab.ws.close() } catch (_) {}
       tab.ws = null
     }
     tab.streaming = false
+    tab.connectionState = 'closed'
   }
 
   function pushLine(tab, text, cls = '') {
@@ -155,7 +169,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   return {
-    tabs, activeId, visible, wrap, height,
+    tabs, activeId, visible, wrap, height, capabilityRegistry,
     activeTab, openLogsTab, openExecTab, openLocalTab, openCloudTab,
     activateTab, closeTab, stopStream, pushLine,
   }

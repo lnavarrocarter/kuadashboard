@@ -101,6 +101,7 @@
       "server.js",
       "routes/**",
       "lib/**",
+      "frontend/src/shared/**",
       "config/**",
       "public/**",
       "assets/icon.ico",

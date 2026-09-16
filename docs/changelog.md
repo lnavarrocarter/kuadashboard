@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Console connections now validate their context before opening. EC2 SSH/RDP
+  use an Env Manager credential profile ID instead of entering passwords or key
+  paths in the console. Local and Kubernetes transports remain available; SSM,
+  GCP shell and Vercel logs are explicitly planned, not enabled.
+  See [console sessions](./architecture/console-sessions.md).
+
 ## v1.15.0 (2026-09-05)
 
 Architecture Foundation brings application-centered architecture and observability together in KUApps.

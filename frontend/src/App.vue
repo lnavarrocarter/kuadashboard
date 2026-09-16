@@ -1112,8 +1112,8 @@ function handleAction(fn, args) {
   h[fn]?.(args)
 }
 
-function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType); startLogStream(tab, false) }
-function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers); startExecStream(tab) }
+function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext }); startLogStream(tab, false) }
+function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers, { kubeContext: store.currentContext }); startExecStream(tab) }
 function restartStream(tab, previous = false) { if (tab.type === 'exec') startExecStream(tab); else startLogStream(tab, previous) }
 
 function openExternalUrl(url) {

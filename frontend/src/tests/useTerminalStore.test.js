@@ -41,6 +41,22 @@ describe('useTerminalStore', () => {
       expect(store.tabs).toHaveLength(1)
     })
 
+    it('keeps identical resources in different clusters separate', () => {
+      const first = store.openLogsTab('default', 'api', ['app'], 'pods', { kubeContext: 'cluster-a' })
+      const second = store.openLogsTab('default', 'api', ['app'], 'pods', { kubeContext: 'cluster-b' })
+      expect(second.id).not.toBe(first.id)
+      expect(store.openLogsTab('default', 'api', ['app'], 'pods', { kubeContext: 'cluster-a' }).id).toBe(first.id)
+      expect(first.kubeContext).toBe('cluster-a')
+    })
+
+    it('does not treat an omitted context as a wildcard for a pinned tab', () => {
+      const pinned = store.openLogsTab('default', 'api', ['app'])
+      pinned.kubeContext = 'cluster-a'
+      const unresolved = store.openLogsTab('default', 'api', ['app'])
+      expect(unresolved.id).not.toBe(pinned.id)
+      expect(unresolved.kubeContext).toBeNull()
+    })
+
     it('creates separate tabs for same pod in different namespaces', () => {
       store.openLogsTab('ns-a', 'pod', ['app'])
       store.openLogsTab('ns-b', 'pod', ['app'])

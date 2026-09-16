@@ -151,12 +151,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 'vue'
-
-// ── WS URL builder ────────────────────────────────────────────────────────────
-function wsUrl(path) {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}${path}`
-}
+import { prepareConsoleConnection } from '../composables/consoleConnection'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const outputRef   = ref(null)
@@ -248,12 +243,22 @@ const inputPlaceholder = computed(() => {
 })
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
-function wsConnect() {
+let connectionAttempt = 0
+async function wsConnect() {
+  const attempt = ++connectionAttempt
   if (ws.value) {
     try { ws.value.close() } catch (_) {}
   }
   sessionStatus.value = 'connecting'
-  const sock = markRaw(new WebSocket(wsUrl('/ws/shell')))
+  let prepared
+  try {
+    prepared = await prepareConsoleConnection({ provider: 'local', transport: 'shell' })
+  } catch (_) {
+    if (attempt === connectionAttempt) sessionStatus.value = 'disconnected'
+    return
+  }
+  if (attempt !== connectionAttempt) return
+  const sock = markRaw(new WebSocket(prepared.url))
   ws.value   = sock
 
   sock.addEventListener('open', () => {
@@ -605,6 +610,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  connectionAttempt++
   if (ws.value) try { ws.value.close() } catch (_) {}
 })
 </script>
