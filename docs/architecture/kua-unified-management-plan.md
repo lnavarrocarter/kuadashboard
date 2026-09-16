@@ -245,6 +245,20 @@ Exit criteria (once scope is confirmed): no code path infers a resource's provid
 
 ## Analysis Roadmap
 
+## Provisioning, Cost and Control Roadmap
+
+KUA Application should also become the boundary for planning and creating infrastructure, not only observing it after it exists. The detailed plan lives in [KUA Provisioning and Control Plan](./provisioning-and-control-plan.md).
+
+The high-level direction is:
+
+- model planned resources inside KUApps/Architecture before cloud mutation;
+- estimate cost while the plan is being assembled;
+- generate Terraform/OpenTofu or provider-native manifests for durable changes;
+- import applied resources back into the shared registry;
+- expose live controls through typed operations with guarded destructive actions.
+
+This extends the same safety principles used by discovery: preview before mutation, provider-scoped capabilities, explicit confirmation, audit logging and no uncontrolled delete path.
+
 The analysis engine should combine three evidence classes without pretending they have equal certainty:
 
 - **Declared**: CloudFormation, Kubernetes ownership, deployment manifests, Vercel project configuration and source metadata.

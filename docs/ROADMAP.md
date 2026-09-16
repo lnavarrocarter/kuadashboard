@@ -81,7 +81,7 @@ Features transformacionales que agregan capacidades no existentes hoy.
 | **Runbooks automatizados** | Secuencias de acciones guionadas (ej: "drenar nodo + cordon + reemplazar pod") |
 | **Webhook receiver** | Endpoint para recibir alerts de AWS/GCP/K8s y gatillar acciones |
 | **Scheduled actions** | Programar start/stop de instancias, escalado, backups |
-| **Terraform integración** | Explorar state files y lanzar applies desde KUA |
+| **Planificación, costos e IaC** | Diseñar recursos desde KUApps, estimar costos, generar Terraform/OpenTofu y aplicar cambios con revisión controlada. Ver [KUA Provisioning and Control Plan](./architecture/provisioning-and-control-plan.md). |
 
 ### Gestión Unificada de Aplicaciones
 
@@ -92,6 +92,7 @@ Features transformacionales que agregan capacidades no existentes hoy.
 | **Registro compartido** | Unificar identidad, lineage y decisiones de relaciones; mantener telemetría en su almacenamiento especializado |
 | **Overlays operativos** | Mostrar salud, frescura, métricas, trazas, deployments y hallazgos dentro del diagrama |
 | **Adaptadores multi-cloud** | Extender el mismo contrato a Kubernetes, GCP y Vercel con capacidades declaradas |
+| **Control center** | Operar recursos vivos desde la KUA Application: editar, prender, apagar, escalar, desactivar y eliminar con guardrails y auditoría |
 
 ### 💰 FinOps y Costos
 | Feature | Descripción |
