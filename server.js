@@ -100,6 +100,7 @@ const wssExec    = new WebSocket.Server({ noServer: true });
 const wssShell   = new WebSocket.Server({ noServer: true });
 const wssEc2Shell = new WebSocket.Server({ noServer: true });
 const wssEc2Rdp   = new WebSocket.Server({ noServer: true });
+const wssAwsSsm   = new WebSocket.Server({ noServer: true });
 const { createConsoleSessions, mountConsoleRoutes, admitConsoleUpgrade } = require('./lib/consoleSessions');
 const consoleSessions = createConsoleSessions({
   audit: auditLog, getKubeConfig: () => currentKc,
@@ -118,6 +119,8 @@ server.on('upgrade', (request, socket, head) => {
     wssEc2Shell.handleUpgrade(request, socket, head, ws => wssEc2Shell.emit('connection', ws, request));
   } else if (pathname === '/ws/ec2-rdp') {
     wssEc2Rdp.handleUpgrade(request, socket, head, ws => wssEc2Rdp.emit('connection', ws, request));
+  } else if (pathname === '/ws/aws-ssm') {
+    wssAwsSsm.handleUpgrade(request, socket, head, ws => wssAwsSsm.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
@@ -126,7 +129,7 @@ server.on('upgrade', (request, socket, head) => {
 app.use(express.json({ limit: '10mb' }));
 mountConsoleRoutes(app, consoleSessions);
 
-for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp]) {
+for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm]) {
   transport.on('connection', (ws, req) => consoleSessions.attach(ws, req.consoleSession));
 }
 
@@ -2875,6 +2878,87 @@ wssEc2Rdp.on('connection', (ws, req) => {
     if (msg.action === 'stop') {
       cleanup();
       send({ type: 'done' });
+    }
+  });
+
+  ws.on('close', () => { cleanup(); });
+});
+
+// ─── WebSocket – AWS SSM Session Manager ───────────────────────────────────────
+// Protocol (client → server):
+//   First message:  { action: 'connect' }   (profile/instance come from the ticket, never the client)
+//   Then:           { action: 'stdin', data: string }
+//                   { action: 'stop' }
+// Protocol (server → client):
+//   { type: 'connected', instanceId }
+//   { type: 'out',  data: string }
+//   { type: 'err',  data: string }
+//   { type: 'done', code: number }
+//   { type: 'error', data: string }
+//
+// The interactive data channel is AWS's proprietary binary WebSocket protocol with no
+// public spec and no AWS-SDK-for-JS support — this delegates it to AWS's own
+// `session-manager-plugin` binary (the same thing `aws ssm start-session` shells out to),
+// see docs/architecture/console-sessions.md.
+
+wssAwsSsm.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) { ws.close(1008, 'Local connections only'); return; }
+
+  const { createSsmBroker } = require('./lib/awsSsmBroker');
+  const broker = createSsmBroker();
+  let child = null;
+  let client = null;
+  let sessionId = null;
+
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  function cleanup() {
+    if (child) { try { child.kill(); } catch (_) {} child = null; }
+    const pendingClient = client;
+    const pendingSessionId = sessionId;
+    client = null;
+    sessionId = null;
+    if (pendingClient && pendingSessionId) broker.terminateSession(pendingClient, pendingSessionId);
+  }
+
+  ws.on('message', async rawMsg => {
+    let msg;
+    try { msg = JSON.parse(rawMsg); } catch (_) { return; }
+
+    if (msg.action === 'connect') {
+      cleanup();
+      const { profileId, target } = req.consoleSession.session;
+      try {
+        const started = await broker.startSession({ profileId, instanceId: target.instanceId });
+        client = started.client;
+        sessionId = started.response.SessionId;
+        child = broker.spawnPlugin(started);
+        send({ type: 'connected', instanceId: target.instanceId });
+
+        child.stdout.on('data', chunk => send({ type: 'out', data: stripAnsi(chunk.toString('utf8')) }));
+        child.stderr.on('data', chunk => send({ type: 'err', data: stripAnsi(chunk.toString('utf8')) }));
+        child.on('exit', code => { send({ type: 'done', code: code ?? 0 }); cleanup(); });
+        child.on('error', () => { send({ type: 'error', data: 'session-manager-plugin failed to start' }); cleanup(); });
+      } catch (err) {
+        const status = err.$metadata?.httpStatusCode;
+        send({ type: 'error', data: status === 403 ? 'Access denied for this profile/instance' : 'Unable to start SSM session' });
+        cleanup();
+      }
+      return;
+    }
+
+    if (msg.action === 'stdin' && child) {
+      try { child.stdin.write(msg.data); } catch (_) {}
+      return;
+    }
+
+    if (msg.action === 'stop') {
+      cleanup();
+      send({ type: 'done', code: 0 });
     }
   });
 

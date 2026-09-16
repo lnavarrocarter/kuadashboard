@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+- Ahora se pueden iniciar sesiones AWS SSM Session Manager desde la Consola — sin
+  necesidad de claves SSH, solo un perfil de AWS confirmado y un ID de instancia.
+  Requiere tener instalado `session-manager-plugin` de AWS (el lanzador muestra una
+  ayuda de instalación y deshabilita Conectar si no está); iniciar una sesión siempre
+  requiere confirmación explícita primero. Un permiso denegado nunca deja una sesión
+  huérfana. Ver [sesiones de consola](../architecture/console-sessions.md).
 - Las pestañas de Consola, su orden, la pestaña activa y las preferencias de ajuste
   de línea/altura ahora sobreviven a una recarga — las pestañas restauradas siempre
   vuelven desconectadas, nunca reanudando una sesión remota en silencio, y requieren

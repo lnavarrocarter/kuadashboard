@@ -103,6 +103,26 @@
           </div>
         </div>
 
+        <div class="console-launcher-card">
+          <div class="console-launcher-card-header">
+            <i data-lucide="cloud"></i>
+            <strong>AWS SSM</strong>
+          </div>
+          <div class="console-launcher-form">
+            <input v-model.trim="ssmForm.instanceId" class="ctrl-input sm" placeholder="i-0123456789abcdef0" />
+            <input v-model.trim="ssmForm.profileId" class="ctrl-input sm" :placeholder="t('console.profileId')" />
+          </div>
+          <p v-if="ssmPluginChecked && !ssmPluginInstalled" class="console-hint">
+            {{ t('console.ssmPluginMissing') }}
+            <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html" target="_blank" rel="noopener">{{ t('console.ssmPluginInstallLink') }}</a>
+          </p>
+          <div class="console-launcher-actions">
+            <button class="btn sm" :disabled="!ssmPluginInstalled || !ssmForm.instanceId || !ssmForm.profileId" @click="connectSsm">
+              <i data-lucide="plus"></i> {{ t('console.connect') }}
+            </button>
+          </div>
+        </div>
+
         <div v-for="group in otherGroups" :key="group.provider" class="console-launcher-card">
           <div class="console-launcher-card-header">
             <i :data-lucide="providerIcon(group.provider)"></i>
@@ -116,24 +136,40 @@
         </div>
       </section>
     </div>
+
+    <ConfirmModal
+      :show="showSsmConfirm"
+      :title="t('console.ssmConfirmTitle')"
+      :message="t('console.ssmConfirmMessage')"
+      :confirm-label="t('console.connect')"
+      icon="terminal-square"
+      @confirm="confirmSsmConnect"
+      @close="showSsmConfirm = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useI18n } from '../composables/useI18n.js'
+import { api } from '../composables/useApi.js'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { useTerminalStreams } from '../composables/useTerminalStreams'
 import { useKubeStore } from '../stores/useKubeStore'
+import ConfirmModal from './ConfirmModal.vue'
 
 const { t } = useI18n()
 const store = useTerminalStore()
 const kubeStore = useKubeStore()
-const { startLogStream, startExecStream, startLocalStream, startSshStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream } = useTerminalStreams()
 
 const kubeForm = reactive({ context: '', namespace: '', name: '', resourceType: 'pods' })
 const ec2Form = reactive({ host: '', user: 'ec2-user', port: 22, profileId: '' })
+const ssmForm = reactive({ instanceId: '', profileId: '' })
+const ssmPluginInstalled = ref(false)
+const ssmPluginChecked = ref(false)
+const showSsmConfirm = ref(false)
 
 const PROVIDER_ORDER = ['local', 'kubernetes', 'aws', 'gcp', 'vercel']
 const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
@@ -141,12 +177,14 @@ const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
 const kubernetesLogsCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-logs'))
 const kubernetesExecCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-exec'))
 
-// ec2-ssh gets its own dedicated launcher card (like Kubernetes) since it's now a real,
-// store-backed tab; the remaining AWS/GCP/Vercel capabilities stay hint/planned-only.
+// ec2-ssh and aws-ssm get their own dedicated launcher cards (like Kubernetes) since
+// they're now real, store-backed tabs; the remaining AWS/GCP/Vercel capabilities stay
+// hint/planned-only.
 const otherGroups = computed(() => {
   const groups = {}
   for (const capability of store.capabilityRegistry) {
-    if (capability.provider === 'local' || capability.provider === 'kubernetes' || capability.id === 'ec2-ssh') continue
+    if (capability.provider === 'local' || capability.provider === 'kubernetes'
+      || capability.id === 'ec2-ssh' || capability.id === 'aws-ssm') continue
     if (!groups[capability.provider]) groups[capability.provider] = []
     groups[capability.provider].push(capability)
   }
@@ -177,6 +215,7 @@ function reconnect(tab) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
   else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
+  else if (tab.type === 'ssm') startSsmStream(tab, { reconnect: true })
   else startLogStream(tab, false, { reconnect: true })
 }
 
@@ -208,8 +247,34 @@ function confirmClearHistory() {
   if (window.confirm(t('console.clearAllHistoryConfirm'))) store.clearAllHistory()
 }
 
+function connectSsm() {
+  if (!ssmPluginInstalled.value || !ssmForm.instanceId || !ssmForm.profileId) return
+  showSsmConfirm.value = true
+}
+
+function confirmSsmConnect() {
+  showSsmConfirm.value = false
+  const tab = store.openCloudTab('ssm', ssmForm.instanceId, {
+    profileId: ssmForm.profileId,
+    target: { instanceId: ssmForm.instanceId },
+  })
+  startSsmStream(tab)
+}
+
+async function checkSsmPlugin() {
+  try {
+    const tools = await api('GET', '/api/system/tools')
+    ssmPluginInstalled.value = Boolean(tools.find(tool => tool.id === 'session-manager-plugin')?.installed)
+  } catch (_) {
+    ssmPluginInstalled.value = false
+  } finally {
+    ssmPluginChecked.value = true
+  }
+}
+
 onMounted(() => {
   if (!kubeStore.contexts.length) kubeStore.loadContexts()
+  checkSsmPlugin()
   nextTick(() => createIcons({ icons }))
 })
 </script>

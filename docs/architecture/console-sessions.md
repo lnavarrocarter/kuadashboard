@@ -39,7 +39,7 @@ tab always comes back disconnected.
 | Kubernetes | kubernetes-exec / exec | target.namespace, target.name | Available |
 | AWS EC2 | ec2-ssh / ssh | profileId, target.host, target.user | Available |
 | AWS EC2 | ec2-rdp / rdp | profileId, target.host, target.user | Available (existing NLA limitation) |
-| AWS | aws-ssm / ssm | profileId, region, target.instanceId | Planned |
+| AWS | aws-ssm / ssm | profileId, target.instanceId | Available (requires `session-manager-plugin`) |
 | GCP | gcp-shell / cloud-shell | profileId, project | Planned |
 | Vercel | vercel-logs / deployment-logs | profileId, target.name | Planned |
 
@@ -112,9 +112,10 @@ view" rather than a generic connect button, since building a generic
 profile/instance picker here would duplicate `Ec2Shell.vue`/`Ec2Rdp.vue`'s
 existing UI. Folding them into the shared store/launcher is #39's job
 ("Migrar Local, Kubernetes y EC2 al registro comun"). Planned capabilities
-(`aws-ssm`, `gcp-shell`, `vercel-logs`) render disabled with no click handler at
-all — the registry's `status` is the only thing gating them, so a newly
-"available" capability lights up the launcher with no further UI change.
+render disabled with no click handler at all — the registry's `status` is the
+only thing gating them, so a newly "available" capability (as `aws-ssm` became
+in #41) lights up the launcher with no further UI change. `gcp-shell` and
+`vercel-logs` remain planned as of this writing.
 
 ### Entry points
 
@@ -127,6 +128,7 @@ all — the registry's `status` is the only thing gating them, so a newly
 | AWS EC2 SSH row action (`AwsView.vue`) | `Ec2Shell.vue` modal, now store-backed (see #39 below) |
 | AWS EC2 RDP row action (`AwsView.vue`) | `Ec2Rdp.vue` modal, still outside the shared store (untouched, see #39) |
 | Console workspace EC2 SSH launcher | Creates/reuses the same store tab as the `Ec2Shell.vue` modal, for the same host/user/profile |
+| Console workspace AWS SSM launcher | Creates/reuses a store tab driving `/ws/aws-ssm` (see #41 below); disabled with an install hint if `session-manager-plugin` isn't detected |
 
 The header buttons live in `App.vue`'s `.header-right`, in the tail that renders
 regardless of `activeProvider` — reachability from every module is structural
@@ -187,6 +189,62 @@ never overwritten by the socket's subsequent `close` event.
   exited (shell/exec) or the SSH session ended — this is a clean exit, not a dropped
   connection; reconnect to start a new one.
 
+## AWS SSM Session Manager adapter (#41)
+
+Unlike EC2 SSH (a raw socket), SSM Session Manager's interactive data channel is an
+AWS-proprietary binary WebSocket protocol with no public spec and no AWS-SDK-for-JS
+support. There is no maintained pure-JS reimplementation to depend on instead — the
+only well-precedented path, and what `aws ssm start-session` itself does internally, is
+shelling out to AWS's official `session-manager-plugin` binary. This is a new external
+tool dependency (same detection pattern as kubectl/helm/gcloud/AWS CLI in
+`routes/systemTools.js`), but for an interactive live session rather than a one-off
+action — the Console workspace's SSM launcher checks `GET /api/system/tools` before
+ever offering a Connect button, rather than only surfacing the plugin's absence as a
+connection error after the fact.
+
+**Architecture**: `lib/awsSsmBroker.js` is a small, dependency-injectable module (the
+same testability pattern as `lib/consoleSessions.js`) with three functions —
+`startSession` (resolves credentials via the same `resolveAwsConfig` every AWS route
+uses, then calls `StartSessionCommand`), `spawnPlugin` (spawns `session-manager-plugin`
+with the StartSession response as an argument and AWS credentials in the child's env,
+never on argv), and `terminateSession` (best-effort `TerminateSessionCommand`, always
+called on stop/close). `server.js`'s `/ws/aws-ssm` handler is a thin wrapper — same
+shape as the EC2 SSH handler (`send`/`cleanup` closures, ticket-gated via
+`consoleSessions.attach` like every other transport), just delegating the AWS/child-
+process work to the broker.
+
+**Message protocol** — deliberately identical to EC2 SSH's, so `useTerminalStreams.js`'s
+`startSsmStream` is structurally the same function:
+```
+Client → server:  {action:'connect'} | {action:'stdin', data} | {action:'stop'}
+Server → client:  {type:'connected', instanceId} | {type:'out'|'err', data}
+                   | {type:'done', code} | {type:'error', data}
+```
+No `resize` support — the plugin runs under plain stdio pipes, not a pty, and nothing in
+this ticket's requirements asks for it.
+
+**Why a denied permission never orphans a session**: `StartSessionCommand` failing
+(e.g. `AccessDeniedException`) never produces a `SessionId`, so there is nothing to
+terminate and no plugin process is ever spawned. An explicit `stop`, or the WS closing
+for any reason, always calls both `child.kill()` and `terminateSession()`.
+
+**Minimum IAM policy** (scope `Resource` to specific instance ARNs where possible):
+```json
+{
+  "Effect": "Allow",
+  "Action": ["ssm:StartSession", "ssm:TerminateSession", "ssm:DescribeSessions", "ssm:GetConnectionStatus"],
+  "Resource": "*"
+}
+```
+Target-side requirements: the SSM Agent running on the instance, an instance profile
+with `AmazonSSMManagedInstanceCore` (or equivalent), and network reachability to the
+regional SSM endpoints (directly or via VPC endpoints in a private subnet).
+
+**Cost note**: Session Manager itself has no additional AWS charge. The confirm dialog
+before connecting is about opening a live interactive shell on a real instance — an
+operational caution, not a billing one — and the UI copy says so plainly rather than
+overstating cost.
+
 ## Tab and history persistence (#40)
 
 A reload restores tab organization without ever silently resuming a remote session or
@@ -228,6 +286,6 @@ during store hydration.
 ## Validation
 
 ```sh
-node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js
+node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js lib/awsSsmBroker.test.js
 npm --prefix frontend test -- useTerminalStore.test.js useTerminalStreams.test.js consoleCloudConnections.test.js ConsoleWorkspaceView.test.js
 ```

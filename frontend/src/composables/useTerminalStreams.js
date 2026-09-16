@@ -285,5 +285,44 @@ export function useTerminalStreams() {
     })
   }
 
-  return { startLogStream, startExecStream, startLocalStream, startSshStream }
+  /** Connect an AWS SSM Session Manager tab (/ws/aws-ssm) */
+  async function startSsmStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
+    if (!ws) return
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ action: 'connect' }))
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'connected') {
+        store.pushLine(tab, `▶ SSM session started on ${msg.instanceId}`, 'sys')
+      } else if (msg.type === 'out') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'err') {
+        _appendRaw(tab, msg.data, 'err')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
+      } else if (msg.type === 'done') {
+        tab.streaming = false
+        store.pushLine(tab, `■ Session ended (exit ${msg.code})`, 'sys')
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  return { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream }
 }
