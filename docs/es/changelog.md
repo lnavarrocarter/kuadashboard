@@ -1,6 +1,8 @@
 # Changelog
 
-## Sin publicar
+## v1.16.0 (2026-09-16)
+
+Console Sessions unifica toda conexión remota — Kubernetes, Terminal local, SSH de EC2, AWS SSM, GCP y Vercel — detrás de un único registro compartido de sesiones y un workspace global.
 
 - Las sesiones de Consola ahora tienen acciones contextuales "Open in Console" de un
   clic donde realmente existe la capacidad: una fila de instancia EC2 obtiene una nueva

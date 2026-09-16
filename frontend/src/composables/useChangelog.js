@@ -4,9 +4,27 @@
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
  */
 
-export const CHANGELOG_VERSION = '1.15.0'
+export const CHANGELOG_VERSION = '1.16.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.16.0',
+    date: 'Septiembre 2026',
+    items: [
+      { type: 'new',    text: 'Console Sessions — acciones "Open in Console" de un clic en filas de EC2 (⚡ SSM), Logs de GCP Cloud Run y deployments de Vercel; cierra el épico de Consola (#36-43)' },
+      { type: 'fix',    text: 'Toda sesión de Consola abierta desde Architecture, Observability o las nuevas acciones contextuales ahora registra su environment y application id reales en vez de "environment: default"' },
+      { type: 'new',    text: 'Console Sessions — GCP y Vercel se suman a la Consola: logs de Cloud Run y de deployments de Vercel como sesiones de solo lectura, sin shell' },
+      { type: 'better', text: 'GCP Cloud Shell queda marcado explícitamente como no disponible en el lanzador, con el motivo visible, ya que no puede iniciarse desde una credencial de service account' },
+      { type: 'new',    text: 'AWS SSM Session Manager — sesiones desde la Consola sin llaves SSH, requiere session-manager-plugin instalado y confirmación explícita antes de conectar' },
+      { type: 'new',    text: 'Console — pestañas, orden, pestaña activa y preferencias de wrap/altura sobreviven a una recarga; las sesiones restauradas vuelven siempre desconectadas y requieren Reconectar explícito' },
+      { type: 'new',    text: 'Console — historial de comandos compartido y persistido por destino exacto, acotado a 200 comandos por destino y 50 destinos, con acciones de "Borrar historial" por pestaña y global' },
+      { type: 'better', text: 'EC2 SSH converge en el mismo registro compartido de Consola que Terminal local y Kubernetes logs/exec, con estados de sesión unificados (connected/error/done/reconnecting/stopped)' },
+      { type: 'fix',    text: 'Se eliminó la vista standalone de Terminal local, ya innecesaria tras la convergencia al registro compartido de Consola' },
+      { type: 'new',    text: 'Console global — un botón en el header de cada módulo abre un workspace único con todas las sesiones activas y un lanzador para Terminal local y Kubernetes logs/exec' },
+      { type: 'new',    text: 'Architecture Canvas — overlay opcional de Eventos de Kubernetes sobre los nodos afectados, con acciones inline "Ver métricas aquí" / "Ver logs aquí"' },
+      { type: 'better', text: 'Console — validación de contexto antes de conectar; EC2 SSH/RDP usan un perfil de credenciales del Env Manager en vez de contraseñas o rutas de llave' },
+    ],
+  },
   {
     version: '1.15.0',
     date: 'Septiembre 2026',

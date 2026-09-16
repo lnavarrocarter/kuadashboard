@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.16.0 (2026-09-16)
+
+Console Sessions unifies every remote connection — Kubernetes, Local Shell, EC2 SSH, AWS SSM, GCP, and Vercel — behind one shared session registry and a global workspace.
 
 - Console sessions now have contextual "Open in Console" one-click actions wherever a
   capability actually exists: an EC2 instance row gets a new "⚡ SSM" action alongside

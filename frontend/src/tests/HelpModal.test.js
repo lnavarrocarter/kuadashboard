@@ -24,7 +24,7 @@ describe('HelpModal release history', () => {
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
     const firstRelease = wrapper.get('.release-block')
 
-    expect(firstRelease.text()).toContain('1.15.0')
+    expect(firstRelease.text()).toContain('1.16.0')
     expect(firstRelease.findAll('.release-summary-pill').length).toBeGreaterThan(1)
     expect(firstRelease.findAll('.change-item')).toHaveLength(8)
     expect(firstRelease.get('.release-toggle').text()).toContain('Mostrar')
