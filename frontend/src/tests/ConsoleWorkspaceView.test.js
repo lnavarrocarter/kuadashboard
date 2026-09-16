@@ -77,6 +77,26 @@ describe('ConsoleWorkspaceView', () => {
     expect(wrapper.findAll('.console-row')).toHaveLength(1)
   })
 
+  // #43: contextual actions from Aws/Gcp/VercelView and App.vue all call the same
+  // store functions a manual launcher would — this proves every transport, not just
+  // local, converges on one shared list regardless of which surface opened it.
+  it('shows a session opened via every open*Tab function in the same shared list, for every transport', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    expect(wrapper.findAll('.console-row')).toHaveLength(0)
+
+    store.openLogsTab('orders', 'api-1', ['app'])
+    store.openExecTab('orders', 'api-2', ['app'])
+    store.openLocalTab()
+    store.openCloudTab('ec2', 'ec2-user@10.0.0.1', { profileId: 'p1', target: { host: '10.0.0.1', user: 'ec2-user', instanceId: 'i-1' } })
+    store.openCloudTab('ssm', 'i-2', { profileId: 'p1', target: { instanceId: 'i-2' } })
+    store.openCloudTab('gcp-logs', 'svc-1', { profileId: 'p1', region: 'us-central1', target: { name: 'svc-1' } })
+    store.openCloudTab('vercel', 'dpl_1', { profileId: 'p1', target: { name: 'dpl_1' } })
+    await nextTick()
+
+    expect(store.tabs).toHaveLength(7)
+    expect(wrapper.findAll('.console-row')).toHaveLength(7)
+  })
+
   it('closes a session from the workspace', async () => {
     store.openLocalTab()
     wrapper = mount(ConsoleWorkspaceView)
@@ -176,6 +196,25 @@ describe('ConsoleWorkspaceView', () => {
     expect(store.tabs[0]).toMatchObject({ type: 'gcp-logs', provider: 'gcp', profileId: 'profile-1', project: 'proj-1', region: 'us-central1' })
     expect(store.tabs[0].target).toMatchObject({ name: 'my-svc' })
     expect(startGcpLogsStream).toHaveBeenCalledTimes(1)
+  })
+
+  // #43: the project id is resolved from the credential profile server-side
+  // (lib/gcpLogsBroker.js), so requiring the user to type it here was pure friction.
+  it('launches a GCP Cloud Run logs session without a project id, resolved from the profile', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
+    const card = wrapper.findAll('.console-launcher-card').find(c => c.text().includes('GCP Logs'))
+    const connectButton = card.find('button')
+
+    wrapper.vm.gcpLogsForm.region = 'us-central1'
+    wrapper.vm.gcpLogsForm.service = 'my-svc'
+    wrapper.vm.gcpLogsForm.profileId = 'profile-1'
+    await nextTick()
+    expect(connectButton.attributes('disabled')).toBeUndefined()
+
+    await connectButton.trigger('click')
+    expect(store.tabs).toHaveLength(1)
+    expect(store.tabs[0].project).toBeFalsy()
   })
 
   it('launches a Vercel deployment logs session with deployment id/profile', async () => {

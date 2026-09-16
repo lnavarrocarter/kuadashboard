@@ -87,6 +87,10 @@
                       🪟 RDP
                     </button>
                   </template>
+                  <button class="btn sm" style="background:rgba(249,168,37,.18);border-color:#f9a825;color:#f9a825"
+                    @click="openEc2Ssm(i)" :disabled="i.state !== 'running'">
+                    ⚡ SSM
+                  </button>
                 </div>
               </td>
             </tr>
@@ -2262,6 +2266,8 @@
       :key="session.id"
       :open="session.open"
       :instance="session.instance"
+      :environment="props.environment"
+      :application-id="props.applicationId"
       @close="session.open = false"
     />
     <Ec2Rdp
@@ -3777,16 +3783,19 @@ import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
+import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
   activeService: { type: String, default: 'ec2' },
   applicationId: { type: String, default: '' },
+  environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
 })
 const emit = defineEmits(['open-architecture', 'open-kubernetes-logs'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
+const termStore = useTerminalStore()
 const { toast }    = useToast()
 const { apiFetch } = useApi()
 const { sortBy, sortRows, sortIcon, thClass, resetSort } = useSortable()
@@ -4215,6 +4224,18 @@ function openEc2Shell(instance) {
 
 function openEc2Rdp(instance) {
   openRemoteSession('rdp', instance)
+}
+
+// ─── EC2 SSM (Session Manager) — opens directly in the shared Console session,
+// no manual host/user form needed since SSM only needs the instance id ─────────
+
+function openEc2Ssm(instance) {
+  termStore.openCloudTab('ssm', instance.name || instance.id, {
+    profileId: selectedProfileId.value,
+    environment: props.environment,
+    applicationId: props.applicationId,
+    target: { instanceId: instance.id },
+  })
 }
 
 function openRemoteSession(type, instance) {

@@ -1,12 +1,14 @@
 # Terminal & Shell
 
-KuaDashboard incluye un potente panel de terminal integrado que te da acceso interactivo completo a shells de pods, streams de logs, sesiones SSH/RDP a instancias EC2 y una shell local del sistema — todo desde la misma ventana.
+KuaDashboard incluye un potente panel de terminal integrado que te da acceso interactivo completo a shells de pods, streams de logs, sesiones SSH/RDP/SSM a instancias EC2, logs de Cloud Run (GCP) y de despliegues de Vercel, y una shell local del sistema — todo desde la misma ventana.
 
 ![KuaDashboard — vista de pods](/screenshots/dashboard-pods.png)
 
 ## Descripción General
 
-El panel de terminal se encuentra en la parte inferior de la vista principal y soporta **múltiples pestañas simultáneas**, cada una con código de color por contexto:
+Toda sesión abierta desde cualquier parte de la app — desde una tabla de recursos, desde Architecture/Observability o desde el workspace dedicado de Console — comparte la misma lista de sesiones. El panel rápido en la parte inferior y el **workspace de Console** dedicado (ícono de consola del encabezado, en cualquier módulo) siempre muestran las mismas pestañas; abrir o cerrar una en cualquiera de los dos se refleja de inmediato en el otro.
+
+El panel de terminal soporta **múltiples pestañas simultáneas**, cada una con código de color por contexto:
 
 | Contexto | Color | Descripción |
 |---|---|---|
@@ -15,6 +17,9 @@ El panel de terminal se encuentra en la parte inferior de la vista principal y s
 | `exec` | Morado | Sesión de shell interactiva dentro de un pod |
 | `local` | Verde | Shell local del sistema (bash / zsh / PowerShell) |
 | `ec2` | Teal | Sesión SSH/RDP en navegador a una instancia EC2 |
+| `ssm` | Ámbar | Shell de AWS Systems Manager Session Manager a una instancia EC2 (sin necesidad de clave SSH) |
+| `gcp-logs` | Celeste | Logs en vivo de un servicio de GCP Cloud Run |
+| `vercel` | Gris pizarra | Logs en vivo de un despliegue de Vercel |
 
 ---
 
@@ -68,6 +73,32 @@ Abre una sesión SSH o RDP en el navegador a cualquier instancia EC2 en ejecuci�
 
 Las sesiones remotas son persistentes. Cerrar la ventana solo la oculta; el WebSocket permanece vivo y la sesión puede restaurarse desde la bandeja flotante de sesiones. Usa **Disconnect** dentro de la sesión, o cierra el tab de la bandeja, cuando quieras terminarla.
 
+### AWS Systems Manager (SSM)
+
+Abre una shell a una instancia EC2 sin necesidad de clave SSH, regla de security group o IP pública — Session Manager solo necesita el SSM Agent y un instance profile:
+
+1. Ve a **Cloud > AWS > pestaña EC2**
+2. Haz clic en **⚡ SSM** sobre cualquier instancia en ejecución (funciona tanto para instancias Linux como Windows)
+3. Se abre una pestaña de Console y conecta usando el perfil de credenciales seleccionado actualmente para AWS
+
+SSM requiere el binario `session-manager-plugin` instalado localmente — al conectar desde el lanzador de SSM del workspace de Console dedicado se muestra automáticamente un aviso de instalación si falta. AWS no cobra un cargo adicional por usar Session Manager.
+
+### Logs de GCP Cloud Run
+
+Sigue en vivo los logs de un servicio de Cloud Run, en una pestaña de Console reconectable, en vez de la vista de snapshot en línea:
+
+1. Ve a **Cloud > GCP > Cloud Run**, selecciona un servicio y abre su pestaña **Logs**
+2. Haz clic en **Open in Console** junto a **Refresh**
+3. Se abre una pestaña de Console y comienza a seguir nuevas entradas de log — no necesitas escribir un project id de GCP, se resuelve desde el perfil de credenciales seleccionado
+
+### Logs de Despliegues de Vercel
+
+Sigue en vivo los logs de build/runtime de un despliegue en una pestaña de Console reconectable, junto al visor de logs en línea existente:
+
+1. Ve a **Cloud > Vercel > Projects** y busca un despliegue
+2. Haz clic en **Open in Console** junto a **Logs**
+3. Se abre una pestaña de Console y comienza a transmitir nuevas líneas de log
+
 ---
 
 ## Barra de Herramientas del Terminal
@@ -94,7 +125,7 @@ La barra de herramientas del encabezado ofrece controles rápidos para la pesta�
 
 ## Barra de Entrada
 
-Las pestañas de shell (exec, local, EC2) muestran una barra de entrada en la parte inferior con:
+Las pestañas de shell (exec, local, EC2, SSM) muestran una barra de entrada en la parte inferior con:
 
 - **Prompt de comando** (❯) — verde cuando está conectado, gris cuando está desconectado
 - **Campo de entrada** — escribe tu comando y presiona Enter para enviar
@@ -168,6 +199,14 @@ Puedes tener tantas pestañas de terminal abiertas como necesites:
 - Cambiar entre pestañas al instante con un solo clic
 - Cerrar pestañas individuales con el botón **✕** de cada pestaña
 - El contenido de las pestañas se preserva en memoria mientras no está activo
+
+---
+
+## Reconexión y Persistencia de Sesión
+
+Recargar la ventana restaura tus pestañas abiertas y su orden, pero nunca retoma en silencio una sesión remota en vivo — una pestaña restaurada siempre vuelve desconectada, mostrando su output previo. Haz clic en **Reconnect** (disponible tanto en el panel rápido como en las acciones de fila del workspace de Console) para restablecerla.
+
+El historial de comandos se recuerda por objetivo exacto (por pod/contenedor, por host EC2, por shell local), de modo que cambiar entre recursos nunca mezcla historiales. Usa la acción **Clear history** (por pestaña en el panel rápido, o "Clear all history" en el encabezado del workspace de Console) para reiniciarlo.
 
 ---
 

@@ -365,6 +365,7 @@ export default {
   'vercel.action.viewDomains':          'Dominios',
   'vercel.action.viewEnvVars':          'Vars de Entorno',
   'vercel.action.logs':                 'Logs',
+  'vercel.action.openConsole':          'Abrir en Consola',
   'vercel.action.functions':            'Archivos',
   'vercel.action.redeploy':             'Redeployar',
   'vercel.action.promote':              'Promover a Prod',

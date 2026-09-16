@@ -383,9 +383,9 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
-          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
-          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" @open-architecture="openApplicationArchitecture" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
+          <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
             v-else-if="activeProvider === 'kuapps'"
             ref="kuappsViewRef"
@@ -1127,8 +1127,11 @@ function handleAction(fn, args) {
   h[fn]?.(args)
 }
 
-function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext }); startLogStream(tab, false) }
-function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers, { kubeContext: store.currentContext }); startExecStream(tab) }
+function applicationAuditContext() {
+  return { environment: activeApplicationContext.value?.environment, applicationId: activeApplicationContext.value?.id }
+}
+function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext, ...applicationAuditContext() }); startLogStream(tab, false) }
+function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers, { kubeContext: store.currentContext, ...applicationAuditContext() }); startExecStream(tab) }
 function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })

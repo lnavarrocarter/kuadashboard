@@ -149,6 +149,7 @@
                   <option :value="1">Last 1h</option><option :value="3">Last 3h</option><option :value="6">Last 6h</option><option :value="24">Last 24h</option><option :value="72">Last 3d</option>
                 </select>
                 <button class="btn sm" @click="crLoadLogs()" :disabled="crPanel.logsLoading">{{ crPanel.logsLoading ? 'Loading...' : 'Refresh' }}</button>
+                <button class="btn sm" @click="openCloudRunConsole(crPanel.resource)">Open in Console</button>
                 <span class="text-dim" style="font-size:11px">{{ crPanel.logs.length }} entries</span>
               </div>
               <div v-if="crPanel.logsLoading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
@@ -1886,10 +1887,12 @@ import { useApi }      from '../../composables/useApi'
 import GcsBrowser       from './GcsBrowser.vue'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
+import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
   activeService: { type: String, default: 'cloudrun' },
   applicationId: { type: String, default: '' },
+  environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
 })
 
@@ -1897,6 +1900,7 @@ const emit = defineEmits(['connect-gke', 'open-architecture'])
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
+const termStore = useTerminalStore()
 const { toast }    = useToast()
 const { apiFetch } = useApi()
 
@@ -2690,6 +2694,22 @@ const resLogsTarget  = ref(null)
 const resLogsEntries = ref([])
 const resLogsLoading = ref(false)
 const resLogsError   = ref(null)
+
+// Cloud Run's inline Logs tab already fetches a snapshot; this opens the same
+// service's live tail in the shared Console session instead. `project` is left
+// blank — resolveGcpAuth resolves it from the profile server-side, same as the
+// snapshot call above never needed a project id from the client either.
+function openCloudRunConsole(resource) {
+  if (!resource) return
+  termStore.openCloudTab('gcp-logs', resource.name, {
+    profileId: selectedProfileId.value,
+    environment: props.environment,
+    applicationId: props.applicationId,
+    project: '',
+    region: resource.region,
+    target: { name: resource.name },
+  })
+}
 
 async function openLogs(type, target) {
   resLogsType.value   = type

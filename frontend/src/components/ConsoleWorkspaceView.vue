@@ -129,13 +129,13 @@
             <strong>GCP Logs</strong>
           </div>
           <div class="console-launcher-form">
-            <input v-model.trim="gcpLogsForm.project" class="ctrl-input sm" placeholder="project-id" />
+            <input v-model.trim="gcpLogsForm.project" class="ctrl-input sm" placeholder="project-id (optional)" />
             <input v-model.trim="gcpLogsForm.region" class="ctrl-input sm" placeholder="us-central1" />
             <input v-model.trim="gcpLogsForm.service" class="ctrl-input sm" placeholder="Cloud Run service" />
             <input v-model.trim="gcpLogsForm.profileId" class="ctrl-input sm" :placeholder="t('console.profileId')" />
           </div>
           <div class="console-launcher-actions">
-            <button class="btn sm" :disabled="!gcpLogsForm.project || !gcpLogsForm.region || !gcpLogsForm.service || !gcpLogsForm.profileId" @click="connectGcpLogs">
+            <button class="btn sm" :disabled="!gcpLogsForm.region || !gcpLogsForm.service || !gcpLogsForm.profileId" @click="connectGcpLogs">
               <i data-lucide="scroll-text"></i> {{ t('console.viewLogs') }}
             </button>
           </div>

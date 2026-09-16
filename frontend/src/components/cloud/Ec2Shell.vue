@@ -89,8 +89,10 @@ import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useTerminalStreams } from '../../composables/useTerminalStreams'
 
 const props = defineProps({
-  open:     { type: Boolean, default: false },
-  instance: { type: Object,  default: null  },
+  open:          { type: Boolean, default: false },
+  instance:      { type: Object,  default: null  },
+  environment:   { type: String,  default: ''    },
+  applicationId: { type: String,  default: ''    },
 })
 defineEmits(['close'])
 
@@ -165,6 +167,8 @@ async function connect() {
   contextError.value = ''
   const nextTab = store.openCloudTab('ec2', `${form.value.user}@${form.value.host}`, {
     profileId: form.value.profileId,
+    environment: props.environment,
+    applicationId: props.applicationId,
     target: { host: form.value.host, user: form.value.user || 'ec2-user', port: form.value.port || 22, instanceId: props.instance?.id },
   })
   const isReconnect = Boolean(nextTab.entries?.length)

@@ -193,6 +193,7 @@
                       {{ t('vercel.action.inspect') }}
                     </a>
                     <button class="btn sm" @click="openLogs(d)">{{ t('vercel.action.logs') }}</button>
+                    <button class="btn sm" @click="openDeploymentConsole(d)">{{ t('vercel.action.openConsole') }}</button>
                     <button class="btn sm" @click="viewFunctions(d)">{{ t('vercel.action.functions') }}</button>
                     <button
                       class="btn sm"
@@ -609,10 +610,12 @@ import { useVercelStore } from '../../stores/useVercelStore'
 import { useI18n }        from '../../composables/useI18n.js'
 import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
+import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
   activeService: { type: String, default: 'projects' },
   applicationId: { type: String, default: '' },
+  environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
 })
 
@@ -620,6 +623,7 @@ const emit = defineEmits(['open-architecture'])
 
 const { t }       = useI18n()
 const vercelStore = useVercelStore()
+const termStore   = useTerminalStore()
 
 const search                      = ref('')
 const deploymentTarget            = ref('')
@@ -724,6 +728,18 @@ function loadProjectCron(project) {
 
 function openLogs(deployment) {
   logsDeployment.value = deployment
+}
+
+// Opens the same deployment's log stream in the shared Console session, alongside
+// the inline SSE viewer above — useful when the user wants it in a reconnectable,
+// persisted tab instead of a one-off modal.
+function openDeploymentConsole(deployment) {
+  termStore.openCloudTab('vercel', deployment.id, {
+    profileId: vercelStore.activeProfileId,
+    environment: props.environment,
+    applicationId: props.applicationId,
+    target: { name: deployment.id },
+  })
 }
 
 function viewFunctions(deployment) {

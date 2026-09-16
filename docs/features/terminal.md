@@ -1,12 +1,14 @@
 # Terminal & Shell
 
-KuaDashboard includes a powerful integrated terminal panel that gives you full interactive access to pod shells, log streams, EC2 SSH/RDP sessions and a local system shell — all from within the same window.
+KuaDashboard includes a powerful integrated terminal panel that gives you full interactive access to pod shells, log streams, EC2 SSH/RDP/SSM sessions, GCP Cloud Run and Vercel deployment logs, and a local system shell — all from within the same window.
 
 ![KuaDashboard — pod overview](/screenshots/dashboard-pods.png)
 
 ## Overview
 
-The terminal panel sits at the bottom of the main view and supports **multiple simultaneous tabs**, each colour-coded by context:
+Every session opened anywhere in the app — from a resource table, from Architecture/Observability, or from the dedicated Console workspace — shares the same underlying session list. The quick panel at the bottom of the main view and the dedicated **Console workspace** (header console icon, any module) always show the same tabs; opening or closing one in either place is reflected in the other immediately.
+
+The terminal panel supports **multiple simultaneous tabs**, each colour-coded by context:
 
 | Context | Colour | Description |
 | --- | --- | --- |
@@ -15,6 +17,9 @@ The terminal panel sits at the bottom of the main view and supports **multiple s
 | `exec` | Purple | Interactive shell session inside a pod |
 | `local` | Green | Local system shell (bash / zsh / PowerShell) |
 | `ec2` | Teal | Browser-based SSH/RDP session to an EC2 instance |
+| `ssm` | Amber | AWS Systems Manager Session Manager shell to an EC2 instance (no SSH key needed) |
+| `gcp-logs` | Sky blue | Live-tailed logs from a GCP Cloud Run service |
+| `vercel` | Slate | Live-tailed logs from a Vercel deployment |
 
 ---
 
@@ -69,6 +74,32 @@ Open a browser-based SSH or RDP session to any running EC2 instance:
 
 Remote sessions are persistent. Closing the session window only hides it; the WebSocket remains alive and the session can be restored from the floating remote-session dock. Use **Disconnect** inside the session, or close the dock tab, when you want to end it.
 
+### AWS Systems Manager (SSM)
+
+Open a shell to an EC2 instance without an SSH key, security group rule or public IP — Session Manager only needs the SSM Agent and an instance profile:
+
+1. Go to **Cloud > AWS > EC2** tab
+2. Click **⚡ SSM** on any running instance (works for both Linux and Windows instances)
+3. A Console tab opens and connects using the credential profile currently selected for AWS
+
+SSM requires the `session-manager-plugin` binary installed locally — connecting from the dedicated Console workspace's SSM launcher shows an install hint automatically if it's missing. There is no charge from AWS for using Session Manager itself.
+
+### GCP Cloud Run Logs
+
+Tail a Cloud Run service's logs live, in a reconnectable Console tab, instead of the inline snapshot view:
+
+1. Go to **Cloud > GCP > Cloud Run**, select a service, open its **Logs** tab
+2. Click **Open in Console** next to **Refresh**
+3. A Console tab opens and starts tailing new log entries — no GCP project id needs to be entered, it's resolved from the selected credential profile
+
+### Vercel Deployment Logs
+
+Tail a deployment's build/runtime logs in a reconnectable Console tab, alongside the existing inline log viewer:
+
+1. Go to **Cloud > Vercel > Projects**, find a deployment
+2. Click **Open in Console** next to **Logs**
+3. A Console tab opens and starts streaming new log lines
+
 ---
 
 ## Terminal Toolbar
@@ -95,7 +126,7 @@ The header toolbar provides quick controls for the active tab:
 
 ## Input Bar
 
-Shell tabs (exec, local, EC2) display an input bar at the bottom with:
+Shell tabs (exec, local, EC2, SSM) display an input bar at the bottom with:
 
 - **Command prompt** (❯) — green when connected, grey when disconnected
 - **Command input field** — type your command and press Enter to send
@@ -169,6 +200,14 @@ You can have as many terminal tabs open as needed:
 - Switch between tabs instantly with a single click
 - Close individual tabs with the **✕** button on each tab
 - Tab content is preserved in memory while the tab is not active
+
+---
+
+## Reconnecting & Session Persistence
+
+Reloading the window restores your open tabs and their order, but never silently resumes a live remote session — a restored tab always comes back disconnected, showing its prior output. Click **Reconnect** (available in both the quick panel and the Console workspace's row actions) to re-establish it.
+
+Command history is remembered per exact target (per pod/container, per EC2 host, per local shell) so switching between resources never mixes up history. Use the **Clear history** action (per-tab in the quick panel, or "Clear all history" in the Console workspace header) to reset it.
 
 ---
 
