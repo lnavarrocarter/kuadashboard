@@ -104,6 +104,7 @@
         </template>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
         <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
+        <button class="btn btn-icon" :class="{ primary: cloudView === 'console' }" :title="t('nav.console')" @click="toggleConsole"><i data-lucide="square-terminal"></i></button>
         <button class="btn btn-icon btn-lang" @click="toggleLang" :title="settings.lang === 'es' ? 'Switch to English' : 'Cambiar a Español'">
           <span class="lang-flag">{{ settings.lang === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
         </button>
@@ -354,6 +355,7 @@
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
+          <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
           <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
@@ -508,6 +510,7 @@ import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import HelmView         from './components/HelmView.vue'
 import AuditLogView    from './components/AuditLogView.vue'
+import ConsoleWorkspaceView from './components/ConsoleWorkspaceView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
@@ -1015,6 +1018,10 @@ function toggleEnvManager() {
 }
 function toggleAuditLog() {
   cloudView.value = cloudView.value === 'audit' ? null : 'audit'
+  nextTick(() => createIcons({ icons }))
+}
+function toggleConsole() {
+  cloudView.value = cloudView.value === 'console' ? null : 'console'
   nextTick(() => createIcons({ icons }))
 }
 function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.resource = r; store.loadResources() }

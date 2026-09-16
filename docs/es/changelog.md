@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+- La Consola ahora es accesible desde un botón global en el header, disponible
+  en cualquier módulo, además del panel rápido existente. Abre un workspace
+  dedicado que lista todas las sesiones activas (proveedor, ambiente,
+  región/proyecto, destino, estado) con acciones de cerrar/reconectar, más un
+  lanzador para iniciar nuevas sesiones de Terminal local o logs/exec de
+  Kubernetes. Ambas superficies leen el mismo store de sesiones, así que nada
+  abierto en una queda invisible en la otra. SSH/RDP de EC2 siguen siendo
+  accesibles solo desde la vista de AWS por ahora.
+  Ver [sesiones de consola](../architecture/console-sessions.md).
 - El Canvas de Architecture agrega un overlay opt-in de "Events" que muestra los
   Kubernetes Warning Events sobre el nodo correspondiente (ahora se captura
   `kind`/`name`/`namespace` de cada evento), y acciones de nodo inline
