@@ -107,7 +107,6 @@ const tab = ref(null)
 const contextError = ref('')
 const outputHtml    = computed(() => (tab.value?.lines || []).join(''))
 const cmdInput      = ref('')
-const cmdHistory    = ref([])
 const historyIdx    = ref(-1)
 const clipboardMsg  = ref('')
 let clipboardTimer = null
@@ -270,10 +269,7 @@ function sendCmd() {
   if (sessionStatus.value !== 'connected') return
   const cmd = cmdInput.value
   store.pushLine(tab.value, '❯ ' + cmd, 'cmd')
-  if (cmd.trim()) {
-    cmdHistory.value.unshift(cmd)
-    if (cmdHistory.value.length > 200) cmdHistory.value.pop()
-  }
+  store.pushHistory(tab.value, cmd)
   historyIdx.value = -1
   sendRaw(cmd + '\n')
   cmdInput.value = ''
@@ -288,15 +284,17 @@ function sendCtrlC() { sendRaw('\x03') }
 function sendCtrlD() { sendRaw('\x04') }
 
 function historyUp() {
-  if (!cmdHistory.value.length) return
-  historyIdx.value = Math.min(historyIdx.value + 1, cmdHistory.value.length - 1)
-  cmdInput.value   = cmdHistory.value[historyIdx.value]
+  const history = store.historyFor(tab.value)
+  if (!history.length) return
+  historyIdx.value = Math.min(historyIdx.value + 1, history.length - 1)
+  cmdInput.value   = history[historyIdx.value]
 }
 
 function historyDown() {
+  const history = store.historyFor(tab.value)
   if (historyIdx.value <= 0) { historyIdx.value = -1; cmdInput.value = ''; return }
   historyIdx.value--
-  cmdInput.value = cmdHistory.value[historyIdx.value]
+  cmdInput.value = history[historyIdx.value]
 }
 
 onUnmounted(() => { if (tab.value) store.stopStream(tab.value) })

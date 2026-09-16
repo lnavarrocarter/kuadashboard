@@ -6,6 +6,7 @@ describe('useTerminalStore', () => {
   let store
 
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     store = useTerminalStore()
   })
@@ -247,6 +248,124 @@ describe('useTerminalStore', () => {
       const tab = store.openLogsTab('default', 'pod', ['c'])
       // Pinia returns reactive proxies; compare by identity property
       expect(store.activeTab()?.id).toBe(tab.id)
+    })
+  })
+
+  describe('persistence (#40)', () => {
+    // Simulates a page reload: a fresh Pinia instance + a fresh useTerminalStore() call
+    // re-reads whatever the previous instance wrote to localStorage.
+    function reload() {
+      setActivePinia(createPinia())
+      return useTerminalStore()
+    }
+
+    it('restores tabs, order and the active tab after a reload, but disconnected', () => {
+      store.openLogsTab('default', 'pod-a', ['app'])
+      const tab2 = store.openLogsTab('default', 'pod-b', ['app'])
+      store.activateTab(tab2.id)
+
+      const restored = reload()
+      expect(restored.tabs).toHaveLength(2)
+      expect(restored.tabs.map(t => t.pod)).toEqual(['pod-a', 'pod-b'])
+      expect(restored.activeId).toBe(tab2.id)
+      for (const tab of restored.tabs) {
+        expect(tab.connectionState).toBe('idle')
+        expect(tab.ws).toBeNull()
+        expect(tab.streaming).toBe(false)
+      }
+    })
+
+    it('restores wrap/height preferences', async () => {
+      store.wrap = true
+      store.height = 400
+      await new Promise(resolve => setTimeout(resolve, 450)) // flush the debounced watcher
+      const restored = reload()
+      expect(restored.wrap).toBe(true)
+      expect(restored.height).toBe(400)
+    })
+
+    it('never persists raw output, even after streaming secrets-looking text', () => {
+      const tab = store.openLocalTab()
+      store.pushLine(tab, 'password: super-secret-value', '')
+      store.pushLine(tab, 'AKIAFAKEEXAMPLEKEY', '')
+
+      const raw = localStorage.getItem('kua:console:tabs')
+      expect(raw).not.toContain('super-secret-value')
+      expect(raw).not.toContain('AKIAFAKEEXAMPLEKEY')
+      expect(raw).not.toContain('entries')
+      expect(raw).not.toContain('"lines"')
+    })
+
+    it('ignores a corrupted persisted payload instead of throwing', () => {
+      localStorage.setItem('kua:console:tabs', 'not-json')
+      expect(() => reload()).not.toThrow()
+      expect(reload().tabs).toEqual([])
+    })
+  })
+
+  describe('command history (#40)', () => {
+    it('separates history by exact target', () => {
+      const tabA = store.openLogsTab('ns-a', 'pod', ['app'])
+      const tabB = store.openLogsTab('ns-b', 'pod', ['app'])
+      store.pushHistory(tabA, 'kubectl get pods')
+      expect(store.historyFor(tabA)).toEqual(['kubectl get pods'])
+      expect(store.historyFor(tabB)).toEqual([])
+    })
+
+    it('ignores blank input', () => {
+      const tab = store.openLocalTab()
+      store.pushHistory(tab, '   ')
+      expect(store.historyFor(tab)).toEqual([])
+    })
+
+    it('caps history at 200 entries per target', () => {
+      const tab = store.openLocalTab()
+      for (let i = 0; i < 210; i += 1) store.pushHistory(tab, `cmd-${i}`)
+      expect(store.historyFor(tab)).toHaveLength(200)
+      expect(store.historyFor(tab)[0]).toBe('cmd-209')
+    })
+
+    it('clears history for one target without touching others', () => {
+      const tabA = store.openLogsTab('ns-a', 'pod', ['app'])
+      const tabB = store.openLogsTab('ns-b', 'pod', ['app'])
+      store.pushHistory(tabA, 'cmd-a')
+      store.pushHistory(tabB, 'cmd-b')
+      store.clearHistory(tabA)
+      expect(store.historyFor(tabA)).toEqual([])
+      expect(store.historyFor(tabB)).toEqual(['cmd-b'])
+    })
+
+    it('clears all history', () => {
+      const tab = store.openLocalTab()
+      store.pushHistory(tab, 'cmd')
+      store.clearAllHistory()
+      expect(store.historyFor(tab)).toEqual([])
+      expect(localStorage.getItem('kua:console:history')).toBeNull()
+    })
+
+    it('persists history across a reload', () => {
+      const tab = store.openLocalTab()
+      store.pushHistory(tab, 'echo hi')
+      setActivePinia(createPinia())
+      const restored = useTerminalStore()
+      const restoredTab = restored.openLocalTab()
+      expect(restored.historyFor(restoredTab)).toEqual(['echo hi'])
+    })
+  })
+
+  describe('pruneStaleTabs()', () => {
+    it('removes only tabs the predicate rejects', () => {
+      const keep = store.openLogsTab('default', 'keep', ['app'])
+      store.openLogsTab('default', 'drop', ['app'])
+      store.pruneStaleTabs(tab => tab.pod === 'keep')
+      expect(store.tabs).toHaveLength(1)
+      expect(store.tabs[0].id).toBe(keep.id)
+    })
+
+    it('does nothing when every tab satisfies the predicate', () => {
+      store.openLogsTab('default', 'pod', ['app'])
+      store.pruneStaleTabs(() => true)
+      expect(store.tabs).toHaveLength(1)
     })
   })
 })

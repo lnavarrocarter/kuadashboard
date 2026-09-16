@@ -16,6 +16,7 @@ describe.each([
     // Ec2Shell.vue now stores its session in useTerminalStore (shared with the quick
     // panel and Console workspace, see #39); Ec2Rdp.vue doesn't need it but sharing the
     // setup is harmless.
+    localStorage.clear()
     setActivePinia(createPinia())
     global.WebSocket.reset()
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => {

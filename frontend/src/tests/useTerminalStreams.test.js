@@ -13,6 +13,7 @@ describe('useTerminalStreams', () => {
   let store, streams
 
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     global.WebSocket.reset()
     store   = useTerminalStore()

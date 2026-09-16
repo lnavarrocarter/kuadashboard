@@ -22,6 +22,7 @@ describe('ConsoleWorkspaceView', () => {
   let store, kubeStore, wrapper
 
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     store = useTerminalStore()
     kubeStore = useKubeStore()

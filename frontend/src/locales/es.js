@@ -276,6 +276,7 @@ export default {
   'term.reconnect':          'Reconectar',
   'term.stop':               'Detener flujo',
   'term.clear':              'Limpiar',
+  'term.clearHistory':       'Borrar historial de comandos',
   'term.searchFiles':        'Buscar archivos…',
 
   // ── Port Forwarding ───────────────────────────────────────────────────────
@@ -766,6 +767,8 @@ export default {
   'console.viewLogs':        'Ver logs',
   'console.availableElsewhere': 'Abrir desde la vista de AWS',
   'console.planned':         'Planificado',
+  'console.clearAllHistory': 'Borrar todo el historial',
+  'console.clearAllHistoryConfirm': '¿Borrar el historial de comandos de todos los destinos? Esta acción no se puede deshacer.',
 
   // ── Common ─────────────────────────────────────────────────────────────
   'common.confirm':          'Confirmar',
