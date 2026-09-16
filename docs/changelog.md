@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Architecture Canvas adds an opt-in "Events" overlay showing Kubernetes Warning
+  Events on the node they apply to (`kind`/`name`/`namespace` now captured from
+  each event), and inline "View metrics here" / "View logs here" node actions
+  that open in a modal instead of always navigating away from the Canvas.
 - Console connections now validate their context before opening. EC2 SSH/RDP
   use an Env Manager credential profile ID instead of entering passwords or key
   paths in the console. Local and Kubernetes transports remain available; SSM,
