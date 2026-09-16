@@ -184,7 +184,7 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   /** Open a cloud shell tab (future: AWS SSM, GCP Cloud Shell, etc.) */
   function openCloudTab(contextType, label, meta = {}) {
-    const aliases = { ec2: ['aws', 'ssh'], ssm: ['aws', 'ssm'], gcp: ['gcp', 'cloud-shell'], vercel: ['vercel', 'deployment-logs'] }
+    const aliases = { ec2: ['aws', 'ssh'], ssm: ['aws', 'ssm'], gcp: ['gcp', 'cloud-shell'], 'gcp-logs': ['gcp', 'logs'], vercel: ['vercel', 'deployment-logs'] }
     const [provider, transport] = aliases[contextType] || [contextType, meta.transport]
     const descriptor = sessionDescriptor({ ...meta, provider, transport, target: meta.target || { instanceId: meta.instanceId } })
     if (descriptor.target.host) {
@@ -193,6 +193,14 @@ export const useTerminalStore = defineStore('terminal', () => {
       if (existing) { activateTab(existing.id); visible.value = true; return existing }
     } else if (descriptor.target.instanceId) {
       const existing = tabs.value.find(t => t.type === contextType && t.target?.instanceId === descriptor.target.instanceId
+        && t.profileId === descriptor.profileId)
+      if (existing) { activateTab(existing.id); visible.value = true; return existing }
+    } else if (contextType === 'gcp-logs') {
+      const existing = tabs.value.find(t => t.type === 'gcp-logs' && t.project === descriptor.project
+        && t.region === descriptor.region && t.target?.name === descriptor.target.name && t.profileId === descriptor.profileId)
+      if (existing) { activateTab(existing.id); visible.value = true; return existing }
+    } else if (contextType === 'vercel') {
+      const existing = tabs.value.find(t => t.type === 'vercel' && t.target?.name === descriptor.target.name
         && t.profileId === descriptor.profileId)
       if (existing) { activateTab(existing.id); visible.value = true; return existing }
     }

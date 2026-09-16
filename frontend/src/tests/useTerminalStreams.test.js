@@ -367,6 +367,52 @@ describe('useTerminalStreams', () => {
     })
   })
 
+  describe('startGcpLogsStream()', () => {
+    it('creates a WebSocket to /ws/gcp-logs and sends a start action, not connect', async () => {
+      const tab = store.openCloudTab('gcp-logs', 'my-svc', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'my-svc' } })
+      await streams.startGcpLogsStream(tab)
+      expect(getMockWs().url).toBe('ws://localhost:7190/ws/gcp-logs?ticket=test-ticket')
+      const ws = getMockWs()
+      ws._emit('open', {})
+      expect(JSON.parse(ws._lastSent)).toEqual({ action: 'start' })
+    })
+
+    it('appends log lines and surfaces errors without a stdin channel', async () => {
+      const tab = store.openCloudTab('gcp-logs', 'my-svc', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'my-svc' } })
+      await streams.startGcpLogsStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: '[INFO] hello\n' }) })
+      expect(tab.lines.some(l => l.includes('hello'))).toBe(true)
+      ws._emit('message', { data: JSON.stringify({ type: 'error', data: 'Permission denied' }) })
+      expect(tab.lines.some(l => l.includes('Permission denied'))).toBe(true)
+      expect(tab.streaming).toBe(false)
+    })
+  })
+
+  describe('startVercelLogsStream()', () => {
+    it('creates a WebSocket to /ws/vercel-logs and sends a start action, not connect', async () => {
+      const tab = store.openCloudTab('vercel', 'dpl_1', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      await streams.startVercelLogsStream(tab)
+      expect(getMockWs().url).toBe('ws://localhost:7190/ws/vercel-logs?ticket=test-ticket')
+      const ws = getMockWs()
+      ws._emit('open', {})
+      expect(JSON.parse(ws._lastSent)).toEqual({ action: 'start' })
+    })
+
+    it('appends log lines and surfaces errors without a stdin channel', async () => {
+      const tab = store.openCloudTab('vercel', 'dpl_1', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      await streams.startVercelLogsStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'log', data: 'build succeeded' }) })
+      expect(tab.lines.some(l => l.includes('build succeeded'))).toBe(true)
+      ws._emit('message', { data: JSON.stringify({ type: 'error', data: 'Deployment not found' }) })
+      expect(tab.lines.some(l => l.includes('Deployment not found'))).toBe(true)
+      expect(tab.streaming).toBe(false)
+    })
+  })
+
   describe('reconnect state', () => {
     it('shows "reconnecting" while a reconnect attempt is preparing, distinct from a first connect', async () => {
       const tab = store.openLocalTab()

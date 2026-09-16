@@ -101,6 +101,8 @@ const wssShell   = new WebSocket.Server({ noServer: true });
 const wssEc2Shell = new WebSocket.Server({ noServer: true });
 const wssEc2Rdp   = new WebSocket.Server({ noServer: true });
 const wssAwsSsm   = new WebSocket.Server({ noServer: true });
+const wssGcpLogs    = new WebSocket.Server({ noServer: true });
+const wssVercelLogs = new WebSocket.Server({ noServer: true });
 const { createConsoleSessions, mountConsoleRoutes, admitConsoleUpgrade } = require('./lib/consoleSessions');
 const consoleSessions = createConsoleSessions({
   audit: auditLog, getKubeConfig: () => currentKc,
@@ -121,6 +123,10 @@ server.on('upgrade', (request, socket, head) => {
     wssEc2Rdp.handleUpgrade(request, socket, head, ws => wssEc2Rdp.emit('connection', ws, request));
   } else if (pathname === '/ws/aws-ssm') {
     wssAwsSsm.handleUpgrade(request, socket, head, ws => wssAwsSsm.emit('connection', ws, request));
+  } else if (pathname === '/ws/gcp-logs') {
+    wssGcpLogs.handleUpgrade(request, socket, head, ws => wssGcpLogs.emit('connection', ws, request));
+  } else if (pathname === '/ws/vercel-logs') {
+    wssVercelLogs.handleUpgrade(request, socket, head, ws => wssVercelLogs.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
@@ -129,7 +135,7 @@ server.on('upgrade', (request, socket, head) => {
 app.use(express.json({ limit: '10mb' }));
 mountConsoleRoutes(app, consoleSessions);
 
-for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm]) {
+for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssVercelLogs]) {
   transport.on('connection', (ws, req) => consoleSessions.attach(ws, req.consoleSession));
 }
 
@@ -2963,6 +2969,107 @@ wssAwsSsm.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => { cleanup(); });
+});
+
+// ─── WebSocket – GCP Cloud Logging tail (Cloud Run) ────────────────────────────
+// Protocol (client → server): {action:'start'} | {action:'stop'}   (project/region/
+// service come from the ticket-resolved session, never the client message)
+// Protocol (server → client): {type:'log', data} | {type:'error', data}
+// One-way, follow-mode — same shape as /ws/logs, never sends `done`.
+
+wssGcpLogs.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) { ws.close(1008, 'Local connections only'); return; }
+
+  const { createGcpLogsBroker } = require('./lib/gcpLogsBroker');
+  const broker = createGcpLogsBroker();
+  let pollTimer = null;
+  let stopped = true;
+
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  function stopPolling() {
+    stopped = true;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  }
+
+  async function poll(sinceTimestamp) {
+    if (stopped) return;
+    try {
+      const { profileId, project, region } = req.consoleSession.session;
+      const { name: service } = req.consoleSession.session.target;
+      const { entries, nextSince } = await broker.fetchEntries({ profileId, project, region, service, sinceTimestamp });
+      for (const entry of entries) send({ type: 'log', data: `[${entry.severity}] ${entry.message}` });
+      if (!stopped) pollTimer = setTimeout(() => poll(nextSince), 3000);
+    } catch (err) {
+      send({ type: 'error', data: err.message });
+      stopPolling();
+    }
+  }
+
+  ws.on('message', raw => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch (_) { return; }
+    if (msg.action === 'start') {
+      stopPolling();
+      stopped = false;
+      poll(new Date().toISOString());
+    } else if (msg.action === 'stop') {
+      stopPolling();
+    }
+  });
+
+  ws.on('close', () => stopPolling());
+});
+
+// ─── WebSocket – Vercel deployment logs ────────────────────────────────────────
+// Protocol (client → server): {action:'start'} | {action:'stop'}   (deployment id
+// comes from the ticket-resolved session, never the client message)
+// Protocol (server → client): {type:'log', data} | {type:'error', data}
+// One-way, follow-mode (wraps the same upstream SSE the existing HTTP proxy uses) —
+// same shape as /ws/logs, never sends `done`.
+
+wssVercelLogs.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!isLocal) { ws.close(1008, 'Local connections only'); return; }
+
+  const { createVercelLogsBroker } = require('./lib/vercelLogsBroker');
+  const broker = createVercelLogsBroker();
+  let handle = null;
+
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  function cleanup() {
+    if (handle) { try { handle.stop(); } catch (_) {} handle = null; }
+  }
+
+  ws.on('message', async raw => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch (_) { return; }
+    if (msg.action === 'start') {
+      cleanup();
+      try {
+        const { profileId } = req.consoleSession.session;
+        const { name: deploymentId } = req.consoleSession.session.target;
+        handle = await broker.streamDeploymentLogs({ profileId, deploymentId }, {
+          onEntry: text => send({ type: 'log', data: text }),
+          onError: err => send({ type: 'error', data: err.message }),
+        });
+      } catch (err) {
+        send({ type: 'error', data: err.message });
+      }
+    } else if (msg.action === 'stop') {
+      cleanup();
+    }
+  });
+
+  ws.on('close', () => cleanup());
 });
 
 // For any GET that doesn't match an API route or static file, serve index.html

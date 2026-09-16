@@ -40,8 +40,9 @@ tab always comes back disconnected.
 | AWS EC2 | ec2-ssh / ssh | profileId, target.host, target.user | Available |
 | AWS EC2 | ec2-rdp / rdp | profileId, target.host, target.user | Available (existing NLA limitation) |
 | AWS | aws-ssm / ssm | profileId, target.instanceId | Available (requires `session-manager-plugin`) |
-| GCP | gcp-shell / cloud-shell | profileId, project | Planned |
-| Vercel | vercel-logs / deployment-logs | profileId, target.name | Planned |
+| GCP | gcp-shell / cloud-shell | profileId, project | **Unavailable** — Cloud Shell needs interactive per-user OAuth, no service-account path exists |
+| GCP | gcp-logs / logs | profileId, project, region, target.name | Available (Cloud Run only) |
+| Vercel | vercel-logs / deployment-logs | profileId, target.name | Available |
 
 Kubernetes additionally requires a unique, valid backend kubeconfig context with
 cluster and user entries. If omitted, the backend resolves its current context
@@ -245,6 +246,66 @@ before connecting is about opening a live interactive shell on a real instance �
 operational caution, not a billing one — and the UI copy says so plainly rather than
 overstating cost.
 
+## GCP and Vercel adapters (#42)
+
+Related Architecture work (not duplicated here): #19 built GCP/Vercel *discovery*
+(`lib/architecture/gcpDiscoveryReader.js`/`vercelDiscoveryReader.js`) — this ticket
+reuses its exact auth resolvers (`resolveGcpAuth`/`resolveVercelAuth` from
+`routes/gcp.js`/`routes/vercel.js`) the same way those readers already do, but doesn't
+touch discovery/preview/import.
+
+**Why no GCP interactive shell**: Cloud Shell is a per-user, browser-driven VM tied to
+interactive end-user OAuth — there is no service-to-service API to start one on behalf
+of a stored service-account credential (this app's only GCP auth model). GCP Compute
+SSH via IAP tunneling is technically real but a bigger lift than SSM: no installed
+library, and either shelling out to `gcloud compute start-iap-tunnel` or hand-rolling
+the relay protocol, *plus* `ssh2` on top once tunneled. Both stay out of this ticket —
+`gcp-shell` is marked `unavailable` (see below), IAP-tunneled SSH stays `planned`.
+
+**A new registry status: `unavailable`**. Until now every capability was `available` or
+`planned`; `gcp-shell` is the first `unavailable` entry, with a `reason` string the
+launcher shows on hover instead of a bare "Planned" badge — the distinction matters:
+`planned` means "not built yet, but buildable"; `unavailable` means "no path exists with
+this app's current credential model."
+
+**`gcp-logs` (Cloud Run only) and `vercel-logs`** are structurally one-way log tails —
+the same shape as `/ws/logs` (Kubernetes), not `ec2-shell`/`aws-ssm`'s two-way
+interactive shell — because that's what they actually are, and because both already
+have working, already-authenticated, one-way implementations in this codebase to reuse
+rather than reinvent:
+- `lib/gcpLogsBroker.js` wraps the exact same Cloud Logging REST call already used by
+  the one-off `GET /cloudrun/:region/:service/logs` route (`routes/gcp.js`), polling
+  `entries:list` on an interval (`/ws/gcp-logs`, `{action:'start'|'stop'}` in,
+  `{type:'log'|'error', data}` out, no `done` — follow-mode, same as `/ws/logs`).
+  GKE, Compute serial, Cloud Functions, Cloud SQL and Workflows logs already have their
+  own working snapshot endpoints in `routes/gcp.js` — same mechanical pattern (a
+  different `resource.type` filter), deliberately not wired into the Console in this
+  ticket, to keep it to one concretely working resource type.
+- `lib/vercelLogsBroker.js` wraps the exact same upstream SSE call the existing
+  `GET /deployments/:id/logs` route already makes, but parses the frames server-side
+  instead of piping raw bytes to a browser `EventSource` — the line-extraction
+  (`entry.text || entry.payload?.text || JSON.stringify(...)`) is copied verbatim from
+  `VercelDeploymentLogs.vue`'s already-working parsing, not re-guessed at.
+
+**Minimum IAM/OIDC**:
+- GCP: `roles/logging.viewer` (or the narrower `logging.logEntries.list` permission),
+  scoped to the project — the same service-account profile every other GCP route in
+  this app already uses (`GCP_SERVICE_ACCOUNT_JSON` in the credential store, or a local
+  `gcloud` CLI configuration).
+- Vercel: an API token (`VERCEL_API_TOKEN`) with read access to the team/project's
+  deployments — the same token every other Vercel route already uses.
+
+**Troubleshooting**:
+- **"error" right after starting a GCP Logs tab**: usually a permission or project
+  mismatch — confirm the service account has `logging.logEntries.list` on the project
+  and that the Cloud Run service/region names are exact.
+- **Vercel tab shows an error immediately**: the deployment ID is wrong, or the token's
+  team doesn't own that deployment — `teamId` is resolved from the profile, not typed by
+  the user, so a token scoped to the wrong team will look like "deployment not found."
+- **A GCP Logs tab never shows anything but doesn't error**: normal if the Cloud Run
+  service simply hasn't logged anything since the tab connected — this is a live tail,
+  not a snapshot; there is nothing to backfill before connect.
+
 ## Tab and history persistence (#40)
 
 A reload restores tab organization without ever silently resuming a remote session or
@@ -286,6 +347,6 @@ during store hydration.
 ## Validation
 
 ```sh
-node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js lib/awsSsmBroker.test.js
+node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js lib/awsSsmBroker.test.js lib/gcpLogsBroker.test.js lib/vercelLogsBroker.test.js
 npm --prefix frontend test -- useTerminalStore.test.js useTerminalStreams.test.js consoleCloudConnections.test.js ConsoleWorkspaceView.test.js
 ```

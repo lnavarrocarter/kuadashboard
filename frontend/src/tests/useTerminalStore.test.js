@@ -141,6 +141,50 @@ describe('useTerminalStore', () => {
       expect(tab.provider).toBe('aws')
       expect(tab.transport).toBe('ssm')
     })
+
+    it('reuses an existing GCP logs tab for the same project/region/service/profile', () => {
+      const tab1 = store.openCloudTab('gcp-logs', 'my-svc', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'my-svc' } })
+      const tab2 = store.openCloudTab('gcp-logs', 'my-svc', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'my-svc' } })
+      expect(tab1.id).toBe(tab2.id)
+      expect(store.tabs).toHaveLength(1)
+    })
+
+    it('creates a new GCP logs tab for a different project, region, service or profile', () => {
+      store.openCloudTab('gcp-logs', 'a', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'svc' } })
+      store.openCloudTab('gcp-logs', 'b', { profileId: 'profile-1', project: 'proj-2', region: 'us-central1', target: { name: 'svc' } })
+      store.openCloudTab('gcp-logs', 'c', { profileId: 'profile-1', project: 'proj-1', region: 'us-east1', target: { name: 'svc' } })
+      store.openCloudTab('gcp-logs', 'd', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'other-svc' } })
+      store.openCloudTab('gcp-logs', 'e', { profileId: 'profile-2', project: 'proj-1', region: 'us-central1', target: { name: 'svc' } })
+      expect(store.tabs).toHaveLength(5)
+    })
+
+    it('sets tab type/provider/transport for gcp-logs', () => {
+      const tab = store.openCloudTab('gcp-logs', 'my-svc', { profileId: 'profile-1', project: 'proj-1', region: 'us-central1', target: { name: 'my-svc' } })
+      expect(tab.type).toBe('gcp-logs')
+      expect(tab.provider).toBe('gcp')
+      expect(tab.transport).toBe('logs')
+    })
+
+    it('reuses an existing Vercel logs tab for the same deployment/profile', () => {
+      const tab1 = store.openCloudTab('vercel', 'dpl_1', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      const tab2 = store.openCloudTab('vercel', 'dpl_1', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      expect(tab1.id).toBe(tab2.id)
+      expect(store.tabs).toHaveLength(1)
+    })
+
+    it('creates a new Vercel logs tab for a different deployment or profile', () => {
+      store.openCloudTab('vercel', 'a', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      store.openCloudTab('vercel', 'b', { profileId: 'profile-1', target: { name: 'dpl_2' } })
+      store.openCloudTab('vercel', 'c', { profileId: 'profile-2', target: { name: 'dpl_1' } })
+      expect(store.tabs).toHaveLength(3)
+    })
+
+    it('sets tab type/provider/transport for vercel', () => {
+      const tab = store.openCloudTab('vercel', 'dpl_1', { profileId: 'profile-1', target: { name: 'dpl_1' } })
+      expect(tab.type).toBe('vercel')
+      expect(tab.provider).toBe('vercel')
+      expect(tab.transport).toBe('deployment-logs')
+    })
   })
 
   describe('activateTab()', () => {

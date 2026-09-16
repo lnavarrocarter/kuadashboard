@@ -771,6 +771,7 @@ export default {
   'console.viewLogs':        'Ver logs',
   'console.availableElsewhere': 'Abrir desde la vista de AWS',
   'console.planned':         'Planificado',
+  'console.unavailable':     'No disponible',
   'console.clearAllHistory': 'Borrar todo el historial',
   'console.clearAllHistoryConfirm': '¿Borrar el historial de comandos de todos los destinos? Esta acción no se puede deshacer.',
 

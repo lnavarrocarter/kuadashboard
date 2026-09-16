@@ -324,5 +324,71 @@ export function useTerminalStreams() {
     })
   }
 
-  return { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream }
+  /** Connect a GCP Cloud Logging tail (Cloud Run, /ws/gcp-logs) */
+  async function startGcpLogsStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
+    if (!ws) return
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ action: 'start' }))
+      store.pushLine(tab, `▶ Tailing Cloud Run service ${tab.target?.name}`, 'sys')
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'log') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  /** Connect a Vercel deployment logs tail (/ws/vercel-logs) */
+  async function startVercelLogsStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
+    if (!ws) return
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ action: 'start' }))
+      store.pushLine(tab, `▶ Tailing deployment ${tab.target?.name}`, 'sys')
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'log') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  return { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream, startGcpLogsStream, startVercelLogsStream }
 }

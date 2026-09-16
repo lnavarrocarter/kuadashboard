@@ -6,8 +6,9 @@ export const capabilityRegistry = Object.freeze([
   { id: 'ec2-ssh', provider: 'aws', transport: 'ssh', path: '/ws/ec2-shell', status: 'available', required: ['profileId', 'target.host', 'target.user'] },
   { id: 'ec2-rdp', provider: 'aws', transport: 'rdp', path: '/ws/ec2-rdp', status: 'available', required: ['profileId', 'target.host', 'target.user'] },
   { id: 'aws-ssm', provider: 'aws', transport: 'ssm', path: '/ws/aws-ssm', status: 'available', required: ['profileId', 'target.instanceId'] },
-  { id: 'gcp-shell', provider: 'gcp', transport: 'cloud-shell', status: 'planned', required: ['profileId', 'project'] },
-  { id: 'vercel-logs', provider: 'vercel', transport: 'deployment-logs', status: 'planned', required: ['profileId', 'target.name'] },
+  { id: 'gcp-shell', provider: 'gcp', transport: 'cloud-shell', status: 'unavailable', reason: 'Cloud Shell requires interactive per-user OAuth in a browser; not obtainable from a stored service-account or gcloud CLI profile.', required: ['profileId', 'project'] },
+  { id: 'gcp-logs', provider: 'gcp', transport: 'logs', path: '/ws/gcp-logs', status: 'available', required: ['profileId', 'project', 'region', 'target.name'] },
+  { id: 'vercel-logs', provider: 'vercel', transport: 'deployment-logs', path: '/ws/vercel-logs', status: 'available', required: ['profileId', 'target.name'] },
 ].map(item => Object.freeze({ ...item, required: Object.freeze(item.required) })))
 
 const text = value => typeof value === 'string' && value.length <= 512 && !/[\r\n\x00]/.test(value) ? value : null

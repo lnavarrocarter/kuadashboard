@@ -123,6 +123,40 @@
           </div>
         </div>
 
+        <div class="console-launcher-card">
+          <div class="console-launcher-card-header">
+            <i data-lucide="cloud"></i>
+            <strong>GCP Logs</strong>
+          </div>
+          <div class="console-launcher-form">
+            <input v-model.trim="gcpLogsForm.project" class="ctrl-input sm" placeholder="project-id" />
+            <input v-model.trim="gcpLogsForm.region" class="ctrl-input sm" placeholder="us-central1" />
+            <input v-model.trim="gcpLogsForm.service" class="ctrl-input sm" placeholder="Cloud Run service" />
+            <input v-model.trim="gcpLogsForm.profileId" class="ctrl-input sm" :placeholder="t('console.profileId')" />
+          </div>
+          <div class="console-launcher-actions">
+            <button class="btn sm" :disabled="!gcpLogsForm.project || !gcpLogsForm.region || !gcpLogsForm.service || !gcpLogsForm.profileId" @click="connectGcpLogs">
+              <i data-lucide="scroll-text"></i> {{ t('console.viewLogs') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="console-launcher-card">
+          <div class="console-launcher-card-header">
+            <i data-lucide="triangle"></i>
+            <strong>Vercel</strong>
+          </div>
+          <div class="console-launcher-form">
+            <input v-model.trim="vercelForm.deploymentId" class="ctrl-input sm" placeholder="dpl_..." />
+            <input v-model.trim="vercelForm.profileId" class="ctrl-input sm" :placeholder="t('console.profileId')" />
+          </div>
+          <div class="console-launcher-actions">
+            <button class="btn sm" :disabled="!vercelForm.deploymentId || !vercelForm.profileId" @click="connectVercel">
+              <i data-lucide="scroll-text"></i> {{ t('console.viewLogs') }}
+            </button>
+          </div>
+        </div>
+
         <div v-for="group in otherGroups" :key="group.provider" class="console-launcher-card">
           <div class="console-launcher-card-header">
             <i :data-lucide="providerIcon(group.provider)"></i>
@@ -131,6 +165,7 @@
           <div class="console-capability-row" v-for="capability in group.capabilities" :key="capability.id">
             <span>{{ capability.id }}</span>
             <span v-if="capability.status === 'available'" class="console-hint">{{ t('console.availableElsewhere') }}</span>
+            <span v-else-if="capability.status === 'unavailable'" class="console-unavailable-badge" :title="capability.reason">{{ t('console.unavailable') }}</span>
             <span v-else class="console-planned-badge">{{ t('console.planned') }}</span>
           </div>
         </div>
@@ -162,11 +197,13 @@ import ConfirmModal from './ConfirmModal.vue'
 const { t } = useI18n()
 const store = useTerminalStore()
 const kubeStore = useKubeStore()
-const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream } = useTerminalStreams()
+const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream, startGcpLogsStream, startVercelLogsStream } = useTerminalStreams()
 
 const kubeForm = reactive({ context: '', namespace: '', name: '', resourceType: 'pods' })
 const ec2Form = reactive({ host: '', user: 'ec2-user', port: 22, profileId: '' })
 const ssmForm = reactive({ instanceId: '', profileId: '' })
+const gcpLogsForm = reactive({ project: '', region: '', service: '', profileId: '' })
+const vercelForm = reactive({ deploymentId: '', profileId: '' })
 const ssmPluginInstalled = ref(false)
 const ssmPluginChecked = ref(false)
 const showSsmConfirm = ref(false)
@@ -177,14 +214,15 @@ const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
 const kubernetesLogsCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-logs'))
 const kubernetesExecCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-exec'))
 
-// ec2-ssh and aws-ssm get their own dedicated launcher cards (like Kubernetes) since
-// they're now real, store-backed tabs; the remaining AWS/GCP/Vercel capabilities stay
-// hint/planned-only.
+// ec2-ssh, aws-ssm, gcp-logs and vercel-logs get their own dedicated launcher cards
+// (like Kubernetes) since they're now real, store-backed tabs; gcp-shell stays in this
+// generic list since it's unavailable (no launchable transport), not planned/available.
 const otherGroups = computed(() => {
   const groups = {}
   for (const capability of store.capabilityRegistry) {
     if (capability.provider === 'local' || capability.provider === 'kubernetes'
-      || capability.id === 'ec2-ssh' || capability.id === 'aws-ssm') continue
+      || capability.id === 'ec2-ssh' || capability.id === 'aws-ssm'
+      || capability.id === 'gcp-logs' || capability.id === 'vercel-logs') continue
     if (!groups[capability.provider]) groups[capability.provider] = []
     groups[capability.provider].push(capability)
   }
@@ -216,6 +254,8 @@ function reconnect(tab) {
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
   else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
   else if (tab.type === 'ssm') startSsmStream(tab, { reconnect: true })
+  else if (tab.type === 'gcp-logs') startGcpLogsStream(tab, { reconnect: true })
+  else if (tab.type === 'vercel') startVercelLogsStream(tab, { reconnect: true })
   else startLogStream(tab, false, { reconnect: true })
 }
 
@@ -241,6 +281,24 @@ function connectEc2Ssh() {
     target: { host: ec2Form.host, user: ec2Form.user || 'ec2-user', port: ec2Form.port || 22 },
   })
   startSshStream(tab)
+}
+
+function connectGcpLogs() {
+  const tab = store.openCloudTab('gcp-logs', gcpLogsForm.service, {
+    profileId: gcpLogsForm.profileId,
+    project: gcpLogsForm.project,
+    region: gcpLogsForm.region,
+    target: { name: gcpLogsForm.service },
+  })
+  startGcpLogsStream(tab)
+}
+
+function connectVercel() {
+  const tab = store.openCloudTab('vercel', vercelForm.deploymentId, {
+    profileId: vercelForm.profileId,
+    target: { name: vercelForm.deploymentId },
+  })
+  startVercelLogsStream(tab)
 }
 
 function confirmClearHistory() {
@@ -317,6 +375,7 @@ onMounted(() => {
 .console-capability-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
 .console-hint { color: var(--text-dim); font-size: 0.74rem; }
 .console-planned-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text-dim); }
+.console-unavailable-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: color-mix(in srgb, #f85149 14%, transparent); color: #f85149; cursor: help; }
 
 @media (max-width: 860px) {
   .console-body { grid-template-columns: 1fr; overflow-y: auto; overflow-x: hidden; }
