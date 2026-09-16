@@ -772,6 +772,7 @@ export default {
   'console.viewLogs':        'View logs',
   'console.availableElsewhere': 'Open from the AWS view',
   'console.planned':         'Planned',
+  'console.unavailable':     'Unavailable',
   'console.clearAllHistory': 'Clear all history',
   'console.clearAllHistoryConfirm': 'Clear command history for every session target? This cannot be undone.',
 

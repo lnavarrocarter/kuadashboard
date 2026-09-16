@@ -8,15 +8,17 @@ import { useKubeStore } from '../stores/useKubeStore'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
-const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream } = vi.hoisted(() => ({
+const { startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream, startGcpLogsStream, startVercelLogsStream } = vi.hoisted(() => ({
   startLogStream: vi.fn(),
   startExecStream: vi.fn(),
   startLocalStream: vi.fn(),
   startSshStream: vi.fn(),
   startSsmStream: vi.fn(),
+  startGcpLogsStream: vi.fn(),
+  startVercelLogsStream: vi.fn(),
 }))
 vi.mock('../composables/useTerminalStreams', () => ({
-  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream }),
+  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream, startSshStream, startSsmStream, startGcpLogsStream, startVercelLogsStream }),
 }))
 
 describe('ConsoleWorkspaceView', () => {
@@ -33,6 +35,8 @@ describe('ConsoleWorkspaceView', () => {
     startLocalStream.mockClear()
     startSshStream.mockClear()
     startSsmStream.mockClear()
+    startGcpLogsStream.mockClear()
+    startVercelLogsStream.mockClear()
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       headers: { get: () => 'application/json' },
@@ -126,24 +130,71 @@ describe('ConsoleWorkspaceView', () => {
     expect(startExecStream).toHaveBeenCalledTimes(1)
   })
 
-  // #39 migrated ec2-ssh, #41 migrated aws-ssm into the shared store, so both now get
-  // their own launcher card (like Kubernetes) instead of an "available elsewhere" hint
-  // — only ec2-rdp still isn't launchable generically (it stays in its own AwsView
-  // modal, out of scope for both tickets).
-  it('shows planned capabilities as disabled and only ec2-rdp as available elsewhere', async () => {
+  // #39/#41/#42 migrated ec2-ssh/aws-ssm/gcp-logs/vercel-logs into the shared store, so
+  // they all get their own launcher card instead of an "available elsewhere" hint or a
+  // generic planned/unavailable row — only ec2-rdp (stays in its own AwsView modal) and
+  // gcp-shell (genuinely unavailable, no service-account path to Cloud Shell) remain in
+  // the generic capability list.
+  it('shows ec2-rdp as available elsewhere and gcp-shell as unavailable with a reason, no planned capabilities left', async () => {
     wrapper = mount(ConsoleWorkspaceView)
     await flushPromises()
     const text = wrapper.text()
 
-    expect(wrapper.findAll('.console-planned-badge')).toHaveLength(2) // gcp-shell, vercel-logs
-    expect(text).toContain('gcp-shell')
-    expect(text).toContain('vercel-logs')
+    expect(wrapper.findAll('.console-planned-badge')).toHaveLength(0)
+    expect(text).not.toContain('vercel-logs')
     expect(text).not.toContain('aws-ssm')
+    expect(text).not.toContain('gcp-logs')
 
     const hints = wrapper.findAll('.console-hint')
     expect(hints).toHaveLength(1) // ec2-rdp
     expect(text).toContain('ec2-rdp')
+
+    const unavailable = wrapper.findAll('.console-unavailable-badge')
+    expect(unavailable).toHaveLength(1) // gcp-shell
+    expect(text).toContain('gcp-shell')
+    expect(unavailable[0].attributes('title')).toMatch(/interactive per-user OAuth/)
+
     expect(wrapper.find('.console-capability-row button').exists()).toBe(false)
+  })
+
+  it('launches a GCP Cloud Run logs session with project/region/service/profile', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
+    const card = wrapper.findAll('.console-launcher-card').find(c => c.text().includes('GCP Logs'))
+    const connectButton = card.find('button')
+    expect(connectButton.attributes('disabled')).toBeDefined()
+
+    wrapper.vm.gcpLogsForm.project = 'proj-1'
+    wrapper.vm.gcpLogsForm.region = 'us-central1'
+    wrapper.vm.gcpLogsForm.service = 'my-svc'
+    wrapper.vm.gcpLogsForm.profileId = 'profile-1'
+    await nextTick()
+    expect(connectButton.attributes('disabled')).toBeUndefined()
+
+    await connectButton.trigger('click')
+    expect(store.tabs).toHaveLength(1)
+    expect(store.tabs[0]).toMatchObject({ type: 'gcp-logs', provider: 'gcp', profileId: 'profile-1', project: 'proj-1', region: 'us-central1' })
+    expect(store.tabs[0].target).toMatchObject({ name: 'my-svc' })
+    expect(startGcpLogsStream).toHaveBeenCalledTimes(1)
+  })
+
+  it('launches a Vercel deployment logs session with deployment id/profile', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    await flushPromises()
+    const card = wrapper.findAll('.console-launcher-card').find(c => c.text().includes('Vercel'))
+    const connectButton = card.find('button')
+    expect(connectButton.attributes('disabled')).toBeDefined()
+
+    wrapper.vm.vercelForm.deploymentId = 'dpl_123'
+    wrapper.vm.vercelForm.profileId = 'profile-1'
+    await nextTick()
+    expect(connectButton.attributes('disabled')).toBeUndefined()
+
+    await connectButton.trigger('click')
+    expect(store.tabs).toHaveLength(1)
+    expect(store.tabs[0]).toMatchObject({ type: 'vercel', provider: 'vercel', profileId: 'profile-1' })
+    expect(store.tabs[0].target).toMatchObject({ name: 'dpl_123' })
+    expect(startVercelLogsStream).toHaveBeenCalledTimes(1)
   })
 
   it('disables the EC2 SSH launcher until host and profile are filled, then launches a session', async () => {

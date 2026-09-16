@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- GCP and Vercel join the Console with honest capabilities: GCP Cloud Run logs and
+  Vercel deployment logs can now be tailed as sessions (no shell — both are one-way log
+  streams), while GCP Cloud Shell is explicitly marked unavailable with the reason shown
+  in the launcher, since there's no way to start it from a stored service-account
+  credential. See [console sessions](./architecture/console-sessions.md).
 - AWS SSM Session Manager sessions can now be started from the Console — no SSH keys
   needed, just a confirmed AWS profile and instance ID. Requires AWS's
   `session-manager-plugin` to be installed (the launcher shows an install hint and
