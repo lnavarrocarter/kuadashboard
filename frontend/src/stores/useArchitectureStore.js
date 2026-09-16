@@ -533,6 +533,21 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  // Read-only preview for the Canvas Events overlay: reuses the same discovery endpoint as
+  // previewKubernetesResources but returns the result instead of writing it into the shared
+  // kubernetesPreview ref, so it never clobbers an in-progress Discovery panel review.
+  async function previewKubernetesEvents({ contexts }) {
+    if (!selectedProjectId.value || !contexts?.length) return null
+    try {
+      return await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/kubernetes/preview`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({ contexts }) },
+      )
+    } catch {
+      return null
+    }
+  }
+
   async function previewCloudResources(provider) {
     if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
     discovering.value = true
@@ -750,6 +765,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     projects,
     previewAwsResources,
     previewKubernetesResources,
+    previewKubernetesEvents,
     previewCloudResources,
     importCloudResources,
     previewAwsSync,

@@ -251,11 +251,14 @@
               :trace-enabled="traceEnabled"
               :trace="traceOverlay"
               :trace-loading="traceLoading"
+              :events="eventsByNode"
+              :events-loading="eventsLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @node-action="handleNodeAction"
               @request-metrics="loadOperationalMetrics"
               @request-trace="loadOperationalTrace"
+              @request-events="loadOperationalEvents"
             />
 
             <ArchitectureResources
@@ -273,6 +276,25 @@
               initial-tab="diagram"
               @close="selectedWorkflow = null"
             />
+
+            <BaseModal :show="Boolean(inlineNode)" wide @close="inlineNode = null">
+              <template #title>{{ inlineNode?.name }} — {{ inlineMode === 'logs' ? 'Logs' : 'Metrics' }}</template>
+              <ApmProviderMetrics
+                v-if="inlineNode && inlineMode === 'metrics'"
+                :provider="store.linkedApplication?.provider || 'aws'"
+                :profile-id="store.linkedApplication?.profileId"
+                :application="store.linkedApplication"
+                :resources="inlineResources"
+              />
+              <ApmApplicationLogs
+                v-else-if="inlineNode"
+                :provider="store.linkedApplication?.provider || 'aws'"
+                :profile-id="store.linkedApplication?.profileId"
+                :application="store.linkedApplication"
+                :resources="inlineResources"
+                @open-kubernetes-logs="handleNodeAction({ action: 'kubernetes-logs', node: inlineNode })"
+              />
+            </BaseModal>
 
             <section v-if="store.snapshots.length" class="snapshot-list">
               <header><span>Snapshots</span><small>Immutable local history</small></header>
@@ -320,6 +342,9 @@ import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useToast } from '../../composables/useToast'
 import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
+import BaseModal from '../BaseModal.vue'
+import ApmProviderMetrics from '../cloud/apm/ApmProviderMetrics.vue'
+import ApmApplicationLogs from '../cloud/apm/ApmApplicationLogs.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
@@ -399,6 +424,15 @@ const traceEnabled = computed(() => Boolean(
   store.linkedApplication?.provider === 'aws' &&
   store.graph?.document?.nodes?.some(node => node.resourceType === 'stepfunctions' && node.arn),
 ))
+const eventsByNode = ref({})
+const eventsLoading = ref(false)
+const inlineNode = ref(null)
+const inlineMode = ref('metrics')
+const inlineResources = computed(() => {
+  if (!inlineNode.value) return []
+  const resource = (apmStore.topology.resources || []).find(candidate => sameApmResource(candidate, inlineNode.value))
+  return resource ? [resource] : []
+})
 
 const METRIC_LABELS = {
   invocations_observed: 'Invocations',
@@ -581,6 +615,38 @@ async function loadOperationalTrace() {
   }
 }
 
+async function loadOperationalEvents() {
+  const contexts = [...new Set((store.graph?.document?.nodes || [])
+    .filter(node => node.provider === 'kubernetes' && node.kubeContext)
+    .map(node => node.kubeContext))]
+  if (!contexts.length) return
+  eventsLoading.value = true
+  try {
+    const preview = await store.previewKubernetesEvents({ contexts })
+    if (!preview) return
+    const next = {}
+    for (const node of store.graph?.document?.nodes || []) {
+      if (node.provider !== 'kubernetes') continue
+      const warnings = (preview.health || [])
+        .filter(entry => entry.context === node.kubeContext)
+        .flatMap(entry => entry.warningEvents || [])
+        .filter(event => event.regardingName === node.name &&
+          (event.regardingNamespace || '') === (node.namespace || '') &&
+          (!event.regardingKind || event.regardingKind.toLowerCase() === (node.kind || '').toLowerCase()))
+      if (!warnings.length) continue
+      const reasonCounts = new Map()
+      for (const event of warnings) reasonCounts.set(event.reason, (reasonCounts.get(event.reason) || 0) + event.count)
+      next[node.id] = {
+        count: warnings.reduce((sum, event) => sum + event.count, 0),
+        detail: [...reasonCounts.entries()].map(([reason, count]) => `${count}× ${reason}`).join(' · '),
+      }
+    }
+    eventsByNode.value = next
+  } finally {
+    eventsLoading.value = false
+  }
+}
+
 async function selectApplication(applicationId) {
   if (!profileId) {
     const application = store.applications.find(item => item.id === applicationId)
@@ -724,6 +790,12 @@ function handleNodeAction({ action, node } = {}) {
       view: action === 'observability-traces' ? 'traces' : 'metrics',
       node,
     })
+    return
+  }
+  if (['inline-metrics', 'inline-logs'].includes(action)) {
+    if (!store.linkedApplication || !node) return
+    inlineNode.value = node
+    inlineMode.value = action === 'inline-logs' ? 'logs' : 'metrics'
     return
   }
   const eventName = NODE_ACTION_EVENTS[action]

@@ -69,6 +69,9 @@
         <button :class="['btn', 'sm', { primary: showTraceOverlay }]" :disabled="traceLoading || !traceEnabled || !flowNodes.length" title="Highlight the latest process trace" @click="toggleTraceOverlay">
           <i :data-lucide="traceLoading ? 'loader-2' : 'route'"></i> Trace
         </button>
+        <button :class="['btn', 'sm', { primary: showEventsOverlay }]" :disabled="eventsLoading || !flowNodes.length" title="Toggle Kubernetes warning events overlay" @click="toggleEventsOverlay">
+          <i :data-lucide="eventsLoading ? 'loader-2' : 'triangle-alert'"></i> Events
+        </button>
         <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
           <i data-lucide="printer"></i> Export PDF
         </button>
@@ -129,6 +132,9 @@
             </span>
             <span v-if="data.trace" class="node-trace-badge" :title="data.trace.detail">
               <i data-lucide="route"></i>{{ data.trace.sequence }}
+            </span>
+            <span v-if="data.events" class="node-events-badge" :title="data.events.detail">
+              <i data-lucide="triangle-alert"></i>{{ data.events.count }}
             </span>
           </div>
         </template>
@@ -259,8 +265,10 @@ const props = defineProps({
   traceEnabled: { type: Boolean, default: false },
   trace: { type: Object, default: null },
   traceLoading: { type: Boolean, default: false },
+  events: { type: Object, default: () => ({}) },
+  eventsLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events'])
 
 const nodeTypes = [
   { value: 'service', label: 'Service' },
@@ -287,6 +295,7 @@ const showHealthOverlay = ref(false)
 const showMetricsOverlay = ref(false)
 const showCollectionOverlay = ref(false)
 const showTraceOverlay = ref(false)
+const showEventsOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -354,18 +363,24 @@ const nodeActions = computed(() => {
   if (node.provider === 'kubernetes') {
     if (KUBE_LOG_KINDS.includes(node.kind)) {
       actions.push({ key: 'kubernetes-logs', label: 'View logs', icon: 'scroll-text' })
+      actions.push({ key: 'inline-logs', label: 'View logs here', icon: 'panel-right' })
       actions.push({ key: 'kubernetes-log-suggestions', label: 'Suggest relationships from logs', icon: 'sparkles' })
     }
     if (KUBE_DETAIL_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-detail', label: 'View detail', icon: 'file-code-2' })
     if (KUBE_WORKLOAD_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-pods', label: 'View pods', icon: 'boxes' })
     if (props.observabilityEnabled && OBSERVABILITY_KUBE_KINDS.includes(node.kind)) {
       actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
+      actions.push({ key: 'inline-metrics', label: 'View metrics here', icon: 'panel-right' })
     }
   } else if (AWS_DETAIL_TYPES.includes(node.resourceType)) {
-    if (node.resourceType === 'lambda') actions.push({ key: 'aws-logs', label: 'View logs', icon: 'scroll-text' })
+    if (node.resourceType === 'lambda') {
+      actions.push({ key: 'aws-logs', label: 'View logs', icon: 'scroll-text' })
+      actions.push({ key: 'inline-logs', label: 'View logs here', icon: 'panel-right' })
+    }
     actions.push({ key: 'aws-detail', label: 'Open in AWS view', icon: 'external-link' })
     if (props.observabilityEnabled && ['lambda', 'ec2'].includes(node.resourceType)) {
       actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
+      actions.push({ key: 'inline-metrics', label: 'View metrics here', icon: 'panel-right' })
     }
     if (props.observabilityEnabled && node.resourceType === 'stepfunctions') {
       actions.push({ key: 'observability-traces', label: 'View traces', icon: 'route' })
@@ -400,10 +415,10 @@ const filteredGraphDocument = computed(() => {
 const traceNodeIds = computed(() => new Set(props.trace?.nodeIds || []))
 const traceEdgeIds = computed(() => new Set(props.trace?.edgeIds || []))
 const smartSpacing = computed(() => {
-  const expanded = showMetricsOverlay.value || showCollectionOverlay.value || showTraceOverlay.value
+  const expanded = showMetricsOverlay.value || showCollectionOverlay.value || showTraceOverlay.value || showEventsOverlay.value
   const denseLabels = showEdgeLabels.value && flowEdges.value.length > 20
-  const extraY = (showMetricsOverlay.value ? 54 : 0) + (showCollectionOverlay.value ? 28 : 0) + (showTraceOverlay.value ? 24 : 0) + (denseLabels ? 18 : 0)
-  const extraX = (showMetricsOverlay.value ? 58 : 0) + (showCollectionOverlay.value ? 34 : 0) + (denseLabels ? 24 : 0)
+  const extraY = (showMetricsOverlay.value ? 54 : 0) + (showCollectionOverlay.value ? 28 : 0) + (showTraceOverlay.value ? 24 : 0) + (showEventsOverlay.value ? 28 : 0) + (denseLabels ? 18 : 0)
+  const extraX = (showMetricsOverlay.value ? 58 : 0) + (showCollectionOverlay.value ? 34 : 0) + (showEventsOverlay.value ? 34 : 0) + (denseLabels ? 24 : 0)
   return {
     requestXGap: 280 + extraX,
     requestYGap: 130 + extraY,
@@ -496,6 +511,13 @@ function nodeTraceOverlay(node) {
   return sequence ? { sequence, detail: `${props.trace.executionName || 'Latest trace'} · step ${sequence}` } : null
 }
 
+// Kubernetes Warning Events, already collected by discovery — opt-in overlay projects them
+// onto the node they're `regarding`, no data means no badge (unlike Metrics/Collection).
+function nodeEventsOverlay(node) {
+  if (!showEventsOverlay.value) return null
+  return props.events[node.id] || null
+}
+
 function fallbackPosition(index, columns) {
   return {
     x: 80 + (index % columns) * smartSpacing.value.gridXGap,
@@ -525,6 +547,7 @@ function syncGraph(hydrateView = true) {
     showMetricsOverlay.value = document.view.showMetricsOverlay === true
     showCollectionOverlay.value = document.view.showCollectionOverlay === true
     showTraceOverlay.value = document.view.showTraceOverlay === true
+    showEventsOverlay.value = document.view.showEventsOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -556,6 +579,7 @@ function syncGraph(hydrateView = true) {
         metrics: nodeMetricsOverlay(node),
         collection: nodeCollectionOverlay(node),
         trace: nodeTraceOverlay(node),
+        events: nodeEventsOverlay(node),
       },
     }
   })
@@ -622,6 +646,7 @@ function persistView() {
       showMetricsOverlay: showMetricsOverlay.value,
       showCollectionOverlay: showCollectionOverlay.value,
       showTraceOverlay: showTraceOverlay.value,
+      showEventsOverlay: showEventsOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -661,6 +686,12 @@ function toggleTraceOverlay() {
 
 function clearTraceOverlay() {
   showTraceOverlay.value = false
+  persistView()
+}
+
+function toggleEventsOverlay() {
+  showEventsOverlay.value = !showEventsOverlay.value
+  if (showEventsOverlay.value && !Object.keys(props.events).length) emit('request-events')
   persistView()
 }
 
@@ -916,7 +947,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace], () => syncGraph(false), { deep: true })
+watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1012,6 +1043,8 @@ onMounted(refreshIcons)
 .trace-overlay-status .btn { min-height: 22px; padding: 2px 6px; color: var(--text-dim); }
 .node-trace-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #f778ba; background: color-mix(in srgb, #f778ba 14%, transparent); font-size: 9px; font-weight: 700; }
 .node-trace-badge > svg { width: 11px; height: 11px; }
+.node-events-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); font-size: 9px; font-weight: 700; }
+.node-events-badge > svg { width: 11px; height: 11px; }
 :deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
 :deep(.vue-flow__node-resource-section) { border: 0; background: transparent; box-shadow: none; pointer-events: none; }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }
