@@ -122,11 +122,68 @@ all — the registry's `status` is the only thing gating them, so a newly
 | Header console icon (any module) | Dedicated Console workspace (`cloudView = 'console'`) |
 | Kubernetes resource table "View logs"/"Exec" | Quick panel, as before |
 | Architecture Canvas / KUApps observability "View logs" | Quick panel, as before |
-| AWS EC2 row actions | `Ec2Shell.vue`/`Ec2Rdp.vue` modal, outside the shared store (see scope decision) |
+| AWS EC2 SSH row action (`AwsView.vue`) | `Ec2Shell.vue` modal, now store-backed (see #39 below) |
+| AWS EC2 RDP row action (`AwsView.vue`) | `Ec2Rdp.vue` modal, still outside the shared store (untouched, see #39) |
+| Console workspace EC2 SSH launcher | Creates/reuses the same store tab as the `Ec2Shell.vue` modal, for the same host/user/profile |
 
 The header buttons live in `App.vue`'s `.header-right`, in the tail that renders
 regardless of `activeProvider` — reachability from every module is structural
 (the button is simply always in the DOM), not a per-module wiring decision.
+
+## EC2 SSH joins the shared registry, RDP does not (#39)
+
+`Ec2Shell.vue` no longer owns its connection: it creates/reuses a `useTerminalStore`
+tab via `openCloudTab('ec2', label, { profileId, target })` and drives it with a new
+`startSshStream(tab)` in `useTerminalStreams.js` — same shape as `startLocalStream`.
+`openCloudTab` now dedups on `(type, target.host, target.user, profileId)`, mirroring
+`openLocalTab`'s existing dedup pattern, so opening the same host/user/profile from
+`AwsView.vue`'s per-instance button and from the Console workspace's launcher converges
+on one session instead of two independent SSH connections. The component's own UI
+(command history, clipboard, Ctrl+C/D, connect form) is unchanged — only its state
+ownership moved to the shared tab, reusing `store.pushLine` for output formatting
+instead of a bespoke per-component formatter (a small, intentional side effect: SSH
+output now gets the same content-based line classification — error/warning highlighting
+— that local/exec/log tabs already have, and the command-echo prompt glyph is now the
+same color as the rest of the echoed line instead of a separate accent color).
+
+**RDP is out of scope.** `Ec2Rdp.vue`/`/ws/ec2-rdp` are canvas/bitmap streaming (mouse
+and key events, not a text/command tab) and don't fit the shared registry's text-tab
+model — left exactly as-is.
+
+**Backend transports are unchanged.** All of `/ws/shell`, `/ws/logs`, `/ws/exec` and
+`/ws/ec2-shell` already worked correctly through the shared registry before this ticket
+(as of #37/#38); this work is entirely frontend wiring for EC2, not a backend protocol
+change. Their message shapes have some pre-existing inconsistencies, documented as
+accepted below rather than silently changed:
+
+| Transport | `done` includes `code`? | `error.data` detail | Resize support |
+| --- | --- | --- | --- |
+| `/ws/logs` | Never sends `done` (follow-mode; ends via client `stop` or socket close) | Full message | N/A |
+| `/ws/exec` | Yes | Full message | No pty to resize |
+| `/ws/shell` | Yes | Full message | Not implemented ("future node-pty") |
+| `/ws/ec2-shell` | Yes | Generic fixed strings only (no SSH error detail forwarded) | Implemented server-side (`action:'resize'`), never sent by the frontend |
+
+### Connection states
+
+Normalized to: `idle → validating → (connecting|reconnecting) → connecting → connected`,
+ending in one of `done` (clean backend-reported end), `error`, or `stopped` (explicit
+`stopStream()`, e.g. the user closed the tab). `reconnecting` replaces `validating` only
+when an existing tab with prior output is being reconnected (from `ConsoleWorkspaceView`'s
+Reconnect action or a container/pod switch), so the UI can distinguish "first connect"
+from "retrying an existing session." A `done`/`error` already recorded from a message is
+never overwritten by the socket's subsequent `close` event.
+
+### Troubleshooting
+
+- **Tab stuck on "reconnecting"/"validating"**: the ticket POST (`/api/console/sessions`)
+  is failing — check the browser console for a 400 (missing/invalid context) or 403
+  (not same-origin/loopback).
+- **"error" immediately after connecting**: for EC2 SSH, this is almost always a
+  credential/host problem — the backend intentionally doesn't forward the underlying SSH
+  error detail (see table above), so check the Env Manager profile and host/port.
+- **Session shows "done" but you expected it to keep running**: the backend process
+  exited (shell/exec) or the SSH session ended — this is a clean exit, not a dropped
+  connection; reconnect to start a new one.
 
 ## Validation
 

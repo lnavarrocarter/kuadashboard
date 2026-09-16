@@ -84,8 +84,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onUnmounted, markRaw } from 'vue'
-import { prepareConsoleConnection } from '../../composables/consoleConnection'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { useTerminalStore } from '../../stores/useTerminalStore'
+import { useTerminalStreams } from '../../composables/useTerminalStreams'
 
 const props = defineProps({
   open:     { type: Boolean, default: false },
@@ -94,14 +95,17 @@ const props = defineProps({
 defineEmits(['close'])
 
 // ── State ─────────────────────────────────────────────────────────────────────
+// The session itself lives in useTerminalStore (shared with the quick panel and the
+// Console workspace) — this component only owns the connect form and its own UI chrome.
+const store = useTerminalStore()
+const { startSshStream } = useTerminalStreams()
+
 const outputRef  = ref(null)
 const inputRef   = ref(null)
 
-const sessionStatus = ref('disconnected')
+const tab = ref(null)
 const contextError = ref('')
-const ws            = ref(null)
-const outputLines   = ref([])
-const outputHtml    = computed(() => outputLines.value.join(''))
+const outputHtml    = computed(() => (tab.value?.lines || []).join(''))
 const cmdInput      = ref('')
 const cmdHistory    = ref([])
 const historyIdx    = ref(-1)
@@ -115,6 +119,16 @@ const form = ref({
   profileId:  '',
 })
 
+const sessionStatus = computed(() => {
+  if (contextError.value) return 'config'
+  if (!tab.value) return 'disconnected'
+  const state = tab.value.connectionState
+  if (['validating', 'connecting', 'reconnecting'].includes(state)) return 'connecting'
+  if (state === 'connected') return 'connected'
+  if (['error', 'done', 'stopped'].includes(state)) return 'ended'
+  return 'disconnected'
+})
+
 // ── Watchers ──────────────────────────────────────────────────────────────────
 watch(() => props.open, (val) => {
   if (!val) return
@@ -123,6 +137,8 @@ watch(() => props.open, (val) => {
   }
   nextTick(() => inputRef.value?.focus())
 }, { immediate: true })
+
+watch(sessionStatus, status => { if (status === 'connected') nextTick(() => inputRef.value?.focus()) })
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const statusLabel = computed(() => {
@@ -143,127 +159,30 @@ const inputPlaceholder = computed(() => {
 })
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
-let connectionAttempt = 0
+// The session lives in useTerminalStore: connecting attaches to (or creates) a shared
+// tab, so the same host/user/profile reused from the Console workspace's launcher
+// converges on one session instead of opening a second parallel connection.
 async function connect() {
-  disconnectWs()
-  const attempt = connectionAttempt
   contextError.value = ''
-  sessionStatus.value = 'connecting'
-
-  let prepared
-  try {
-    prepared = await prepareConsoleConnection({
-      provider: 'aws', transport: 'ssh', profileId: form.value.profileId,
-      target: { host: form.value.host, user: form.value.user || 'ec2-user', port: form.value.port || 22, instanceId: props.instance?.id },
-    })
-  } catch (_) {
-    if (attempt !== connectionAttempt) return
-    sessionStatus.value = 'config'
-    contextError.value = 'Invalid console context or credential profile'
-    pushSys('Invalid console context or credential profile', 'err')
-    return
-  }
-  if (attempt !== connectionAttempt) return
-  const sock = markRaw(new WebSocket(prepared.url))
-  ws.value   = sock
-
-  sock.addEventListener('open', () => {
-    sock.send(JSON.stringify({ action: 'connect' }))
+  const nextTab = store.openCloudTab('ec2', `${form.value.user}@${form.value.host}`, {
+    profileId: form.value.profileId,
+    target: { host: form.value.host, user: form.value.user || 'ec2-user', port: form.value.port || 22, instanceId: props.instance?.id },
   })
-
-  sock.addEventListener('message', e => {
-    let msg
-    try { msg = JSON.parse(e.data) } catch (_) { return }
-
-    if (msg.type === 'connected') {
-      sessionStatus.value = 'connected'
-      pushSys(`Connected to ${msg.user}@${msg.host}`)
-      nextTick(() => inputRef.value?.focus())
-    } else if (msg.type === 'out') {
-      appendOutput(msg.data)
-    } else if (msg.type === 'err') {
-      appendOutput(msg.data, 'err')
-    } else if (msg.type === 'error') {
-      pushSys('Error: ' + msg.data, 'err')
-      sessionStatus.value = 'ended'
-    } else if (msg.type === 'done') {
-      pushSys(`Session ended (exit ${msg.code})`, 'sys')
-      sessionStatus.value = 'ended'
-    }
-  })
-
-  sock.addEventListener('close', () => {
-    if (sessionStatus.value === 'connected') {
-      pushSys('Connection closed', 'sys')
-      sessionStatus.value = 'ended'
-    } else if (sessionStatus.value === 'connecting') {
-      pushSys('Could not connect', 'err')
-      sessionStatus.value = 'disconnected'
-    }
-  })
-
-  sock.addEventListener('error', () => {
-    pushSys('WebSocket error', 'err')
-    sessionStatus.value = 'ended'
-  })
-}
-
-function disconnectWs() {
-  connectionAttempt++
-  if (ws.value) {
-    try {
-      ws.value.send(JSON.stringify({ action: 'stop' }))
-      ws.value.close()
-    } catch (_) {}
-    ws.value = null
-  }
+  const isReconnect = Boolean(nextTab.entries?.length)
+  tab.value = nextTab
+  await startSshStream(tab.value, { reconnect: isReconnect })
+  if (!tab.value.ws) contextError.value = 'Invalid console context or credential profile'
 }
 
 function disconnect() {
-  disconnectWs()
-  sessionStatus.value = 'ended'
-  pushSys('Disconnected by user', 'sys')
+  if (!tab.value) return
+  store.stopStream(tab.value)
+  store.pushLine(tab.value, 'Disconnected by user', 'sys')
 }
 
 // ── Output helpers ────────────────────────────────────────────────────────────
-function escape(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function appendOutput(text, forceCls = '') {
-  // Strip any remaining ANSI/VT escape codes (CSI, OSC, 2-byte ESC, DEC private)
-  const stripped = text
-    .replace(/\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g, '')
-    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
-    .replace(/\x1b[()][A-B0-9]/g, '')
-    .replace(/\x1b[@-_]/g, '')
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-  const lines = stripped.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]
-    if (!raw && i === lines.length - 1) break
-    const cls = forceCls || ''
-    const ts  = new Date().toTimeString().slice(0, 8)
-    outputLines.value.push(
-      `<div class="ec2sh-line${cls ? ' ' + cls : ''}"><span class="ts">${ts}</span>${escape(raw)}</div>`
-    )
-  }
-  scrollToEnd()
-}
-
-function pushSys(text, cls = 'sys') {
-  const ts = new Date().toTimeString().slice(0, 8)
-  outputLines.value.push(
-    `<div class="ec2sh-line ${cls}"><span class="ts">${ts}</span>${escape(text)}</div>`
-  )
-  scrollToEnd()
-}
-
 function clearOutput() {
-  outputLines.value = []
+  if (tab.value) { tab.value.lines = []; tab.value.entries = []; tab.value.lineCount = 0 }
   sendRaw('\x0C')
 }
 
@@ -314,7 +233,7 @@ function copySelectedOutput() {
 }
 
 function copyAllOutput() {
-  writeClipboardText(outputLines.value.map(htmlToText).join('\n'), 'Output copied')
+  writeClipboardText((tab.value?.lines || []).map(htmlToText).join('\n'), 'Output copied')
 }
 
 async function pasteIntoInput() {
@@ -344,15 +263,13 @@ function scrollToEnd() {
     if (outputRef.value) outputRef.value.scrollTop = outputRef.value.scrollHeight
   })
 }
+watch(() => tab.value?.entries?.length, () => scrollToEnd())
 
 // ── Command input ─────────────────────────────────────────────────────────────
 function sendCmd() {
   if (sessionStatus.value !== 'connected') return
   const cmd = cmdInput.value
-  const ts  = new Date().toTimeString().slice(0, 8)
-  outputLines.value.push(
-    `<div class="ec2sh-line cmd"><span class="ts">${ts}</span><span class="ec2sh-prompt-echo">&#x276F;</span> ${escape(cmd)}</div>`
-  )
+  store.pushLine(tab.value, '❯ ' + cmd, 'cmd')
   if (cmd.trim()) {
     cmdHistory.value.unshift(cmd)
     if (cmdHistory.value.length > 200) cmdHistory.value.pop()
@@ -360,12 +277,11 @@ function sendCmd() {
   historyIdx.value = -1
   sendRaw(cmd + '\n')
   cmdInput.value = ''
-  scrollToEnd()
 }
 
 function sendRaw(data) {
-  if (ws.value?.readyState === WebSocket.OPEN)
-    ws.value.send(JSON.stringify({ action: 'stdin', data }))
+  if (tab.value?.ws?.readyState === WebSocket.OPEN)
+    tab.value.ws.send(JSON.stringify({ action: 'stdin', data }))
 }
 
 function sendCtrlC() { sendRaw('\x03') }
@@ -383,7 +299,7 @@ function historyDown() {
   cmdInput.value = cmdHistory.value[historyIdx.value]
 }
 
-onUnmounted(() => { disconnectWs() })
+onUnmounted(() => { if (tab.value) store.stopStream(tab.value) })
 </script>
 
 <style scoped>
@@ -586,12 +502,13 @@ onUnmounted(() => { disconnectWs() })
 .ec2sh-cmd-input:disabled { color: #8b949e; }
 
 /* Output line styles */
-:deep(.ec2sh-line)            { white-space: pre-wrap; word-break: break-all; padding: 0 2px; color: #e6edf3; }
-:deep(.ec2sh-line .ts)        { color: #484f58; margin-right: 8px; font-size: 0.75rem; user-select: none; }
-:deep(.ec2sh-line.sys)        { color: #8b949e; font-style: italic; }
-:deep(.ec2sh-line.err)        { color: #f85149; }
-:deep(.ec2sh-line.cmd)        { color: #79c0ff; }
-:deep(.ec2sh-prompt-echo)     { color: #3fb950; margin-right: 6px; }
+/* Line markup here matches useTerminalStore's pushLine() output (shared with the
+   quick panel/Console workspace), not a bespoke format. */
+:deep(.term-line)            { white-space: pre-wrap; word-break: break-all; padding: 0 2px; color: #e6edf3; }
+:deep(.term-line .ts)        { color: #484f58; margin-right: 8px; font-size: 0.75rem; user-select: none; }
+:deep(.term-line.sys)        { color: #8b949e; font-style: italic; }
+:deep(.term-line.err)        { color: #f85149; }
+:deep(.term-line.cmd)        { color: #79c0ff; }
 
 /* btn reuse */
 .btn {

@@ -5,10 +5,10 @@ import { prepareConsoleConnection } from './consoleConnection'
 export function useTerminalStreams() {
   const store     = useTerminalStore()
 
-  async function connect(tab) {
+  async function connect(tab, { reconnect = false } = {}) {
     store.stopStream(tab)
     const attempt = tab._connectionAttempt
-    tab.connectionState = 'validating'
+    tab.connectionState = reconnect ? 'reconnecting' : 'validating'
     try {
       const prepared = await prepareConsoleConnection({
         ...tab,
@@ -23,14 +23,19 @@ export function useTerminalStreams() {
       tab.ws = ws
       tab.streaming = true
       ws.addEventListener('open', () => { if (tab.ws === ws) tab.connectionState = 'connected' })
-      ws.addEventListener('close', () => { if (tab.ws === ws) tab.connectionState = 'closed' })
+      ws.addEventListener('close', () => {
+        if (tab.ws !== ws) return
+        // A prior 'done'/'error' message already recorded why the stream ended;
+        // a bare close after that shouldn't downgrade it to a generic 'stopped'.
+        if (!['done', 'error'].includes(tab.connectionState)) tab.connectionState = 'stopped'
+      })
       ws.addEventListener('error', () => { if (tab.ws === ws) tab.connectionState = 'error' })
       ws.addEventListener('message', e => {
         if (tab.ws !== ws) return
         try {
           const msg = JSON.parse(e.data)
           if (msg.type === 'error') tab.connectionState = 'error'
-          if (msg.type === 'done') tab.connectionState = 'closed'
+          if (msg.type === 'done') tab.connectionState = 'done'
         } catch (_) {}
       })
       return ws
@@ -42,8 +47,8 @@ export function useTerminalStreams() {
     }
   }
 
-  async function startLogStream(tab, previous = false) {
-    const ws = await connect(tab)
+  async function startLogStream(tab, previous = false, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
     if (!ws) return
     const targetContext = tab.target
     tab._logBuffers = {}
@@ -93,8 +98,8 @@ export function useTerminalStreams() {
     })
   }
 
-  async function startExecStream(tab) {
-    const ws = await connect(tab)
+  async function startExecStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
     if (!ws) return
     const targetContext = tab.target
 
@@ -196,8 +201,8 @@ export function useTerminalStreams() {
   }
 
   /** Connect to the local shell WebSocket (/ws/shell) */
-  async function startLocalStream(tab) {
-    const ws = await connect(tab)
+  async function startLocalStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
     if (!ws) return
 
     ws.addEventListener('open', () => {
@@ -241,5 +246,44 @@ export function useTerminalStreams() {
     })
   }
 
-  return { startLogStream, startExecStream, startLocalStream }
+  /** Connect an EC2 SSH tab (/ws/ec2-shell) */
+  async function startSshStream(tab, { reconnect = false } = {}) {
+    const ws = await connect(tab, { reconnect })
+    if (!ws) return
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ action: 'connect' }))
+    })
+
+    ws.addEventListener('message', e => {
+      let msg
+      try { msg = JSON.parse(e.data) } catch (_) { return }
+      if (msg.type === 'connected') {
+        store.pushLine(tab, `▶ Connected to ${msg.user}@${msg.host}`, 'sys')
+      } else if (msg.type === 'out') {
+        _appendRaw(tab, msg.data, '')
+      } else if (msg.type === 'err') {
+        _appendRaw(tab, msg.data, 'err')
+      } else if (msg.type === 'error') {
+        store.pushLine(tab, '✖ ' + msg.data, 'err')
+        tab.streaming = false
+      } else if (msg.type === 'done') {
+        tab.streaming = false
+        store.pushLine(tab, `■ Session ended (exit ${msg.code})`, 'sys')
+      }
+    })
+
+    ws.addEventListener('close', () => {
+      if (tab.ws !== ws) return
+      tab.ws = null
+      tab.streaming = false
+    })
+
+    ws.addEventListener('error', () => {
+      store.pushLine(tab, '✖ WebSocket error', 'err')
+      tab.streaming = false
+    })
+  }
+
+  return { startLogStream, startExecStream, startLocalStream, startSshStream }
 }

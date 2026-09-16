@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- EC2 SSH sessions now join the same shared Console registry as Local Shell and
+  Kubernetes logs/exec: connecting to the same host/user/credential profile from
+  the AWS view and from the Console workspace launcher converges on one session
+  instead of opening a second parallel connection, and the session's connection
+  state is now one of `connected`, `error`, `done`, `reconnecting` or `stopped`
+  instead of a single generic "closed". EC2 RDP is unchanged. The now-unused
+  standalone Local Shell view was removed. See
+  [console sessions](./architecture/console-sessions.md).
 - The Console is now reachable from a global header button in every module, in
   addition to the existing per-action quick panel. It opens a dedicated
   workspace listing every active session (provider, environment, region/project,

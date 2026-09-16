@@ -8,13 +8,14 @@ import { useKubeStore } from '../stores/useKubeStore'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
-const { startLogStream, startExecStream, startLocalStream } = vi.hoisted(() => ({
+const { startLogStream, startExecStream, startLocalStream, startSshStream } = vi.hoisted(() => ({
   startLogStream: vi.fn(),
   startExecStream: vi.fn(),
   startLocalStream: vi.fn(),
+  startSshStream: vi.fn(),
 }))
 vi.mock('../composables/useTerminalStreams', () => ({
-  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream }),
+  useTerminalStreams: () => ({ startLogStream, startExecStream, startLocalStream, startSshStream }),
 }))
 
 describe('ConsoleWorkspaceView', () => {
@@ -28,6 +29,7 @@ describe('ConsoleWorkspaceView', () => {
     startLogStream.mockClear()
     startExecStream.mockClear()
     startLocalStream.mockClear()
+    startSshStream.mockClear()
   })
 
   afterEach(() => {
@@ -76,9 +78,9 @@ describe('ConsoleWorkspaceView', () => {
     expect(reconnectButtons).toHaveLength(3)
     for (const button of reconnectButtons) await button.trigger('click')
 
-    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ id: logTab.id }))
-    expect(startExecStream).toHaveBeenCalledWith(expect.objectContaining({ id: execTab.id }))
-    expect(startLocalStream).toHaveBeenCalledWith(expect.objectContaining({ id: localTab.id }))
+    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ id: logTab.id }), false, { reconnect: true })
+    expect(startExecStream).toHaveBeenCalledWith(expect.objectContaining({ id: execTab.id }), { reconnect: true })
+    expect(startLocalStream).toHaveBeenCalledWith(expect.objectContaining({ id: localTab.id }), { reconnect: true })
   })
 
   it('launches a local shell session from the launcher', async () => {
@@ -112,7 +114,10 @@ describe('ConsoleWorkspaceView', () => {
     expect(startExecStream).toHaveBeenCalledTimes(1)
   })
 
-  it('shows planned capabilities as disabled and EC2 as available elsewhere, never as a launchable button', () => {
+  // #39 migrated ec2-ssh into the shared store, so it now gets its own launcher card
+  // (like Kubernetes) instead of an "available elsewhere" hint — only ec2-rdp still
+  // isn't launchable generically (it stays in its own AwsView modal, out of scope for #39).
+  it('shows planned capabilities as disabled and only ec2-rdp as available elsewhere', () => {
     wrapper = mount(ConsoleWorkspaceView)
     const text = wrapper.text()
 
@@ -122,9 +127,25 @@ describe('ConsoleWorkspaceView', () => {
     expect(text).toContain('vercel-logs')
 
     const hints = wrapper.findAll('.console-hint')
-    expect(hints).toHaveLength(2) // ec2-ssh, ec2-rdp
-    expect(text).toContain('ec2-ssh')
+    expect(hints).toHaveLength(1) // ec2-rdp
     expect(text).toContain('ec2-rdp')
     expect(wrapper.find('.console-capability-row button').exists()).toBe(false)
+  })
+
+  it('disables the EC2 SSH launcher until host and profile are filled, then launches a session', async () => {
+    wrapper = mount(ConsoleWorkspaceView)
+    const connectButton = wrapper.findAll('.console-launcher-card').find(card => card.text().includes('EC2 SSH')).find('button')
+    expect(connectButton.attributes('disabled')).toBeDefined()
+
+    wrapper.vm.ec2Form.host = '1.2.3.4'
+    wrapper.vm.ec2Form.profileId = 'profile-1'
+    await nextTick()
+    expect(connectButton.attributes('disabled')).toBeUndefined()
+
+    await connectButton.trigger('click')
+    expect(store.tabs).toHaveLength(1)
+    expect(store.tabs[0]).toMatchObject({ type: 'ec2', provider: 'aws', profileId: 'profile-1' })
+    expect(store.tabs[0].target).toMatchObject({ host: '1.2.3.4', user: 'ec2-user' })
+    expect(startSshStream).toHaveBeenCalledTimes(1)
   })
 })

@@ -86,6 +86,11 @@ export const useTerminalStore = defineStore('terminal', () => {
     const aliases = { ec2: ['aws', 'ssh'], ssm: ['aws', 'ssm'], gcp: ['gcp', 'cloud-shell'], vercel: ['vercel', 'deployment-logs'] }
     const [provider, transport] = aliases[contextType] || [contextType, meta.transport]
     const descriptor = sessionDescriptor({ ...meta, provider, transport, target: meta.target || { instanceId: meta.instanceId } })
+    if (descriptor.target.host) {
+      const existing = tabs.value.find(t => t.type === contextType && t.target?.host === descriptor.target.host
+        && t.target?.user === descriptor.target.user && t.profileId === descriptor.profileId)
+      if (existing) { activateTab(existing.id); visible.value = true; return existing }
+    }
     const tab = {
       ...descriptor,
       id: nextTabId(),
@@ -128,7 +133,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       tab.ws = null
     }
     tab.streaming = false
-    tab.connectionState = 'closed'
+    tab.connectionState = 'stopped'
   }
 
   function pushLine(tab, text, cls = '') {

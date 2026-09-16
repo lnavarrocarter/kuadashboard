@@ -25,9 +25,9 @@ App.vue
 │   ├── ResourceTable (recursos K8s)
 │   ├── EnvManagerView (perfiles de credenciales)
 │   ├── GcpView (panel GCP)
-│   ├── AwsView (panel AWS)
-│   └── LocalShellView (terminal)
-├── TerminalPanel (logs/exec multi-tab)
+│   └── AwsView (panel AWS)
+├── ConsoleWorkspaceView (workspace dedicado de sesiones de Consola)
+├── TerminalPanel (panel rápido de logs/exec/local/EC2 multi-tab)
 ├── PortForwardPanel
 ├── StatusBar
 ├── Modales

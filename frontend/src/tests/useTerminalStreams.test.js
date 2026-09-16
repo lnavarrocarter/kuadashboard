@@ -76,7 +76,7 @@ describe('useTerminalStreams', () => {
     getMockWs()._emit('open', {})
     expect(tab.connectionState).toBe('connected')
     getMockWs()._emit('close', {})
-    expect(tab.connectionState).toBe('closed')
+    expect(tab.connectionState).toBe('stopped')
   })
 
   describe('startLogStream()', () => {
@@ -277,6 +277,77 @@ describe('useTerminalStreams', () => {
       expect(() => {
         ws._emit('message', { data: 'not-json' })
       }).not.toThrow()
+    })
+  })
+
+  describe('startSshStream()', () => {
+    it('creates a WebSocket to /ws/ec2-shell', async () => {
+      const tab = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      await streams.startSshStream(tab)
+      expect(getMockWs().url).toBe('ws://localhost:7190/ws/ec2-shell?ticket=test-ticket')
+    })
+
+    it('sends a connect action on open', async () => {
+      const tab = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      await streams.startSshStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      expect(JSON.parse(ws._lastSent)).toEqual({ action: 'connect' })
+    })
+
+    it('pushes a sys line on "connected" and appends out/err output', async () => {
+      const tab = store.openCloudTab('ec2', 'ec2-user@1.2.3.4', { profileId: 'profile-1', target: { host: '1.2.3.4', user: 'ec2-user' } })
+      await streams.startSshStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'connected', user: 'ec2-user', host: '1.2.3.4' }) })
+      expect(tab.lines.some(l => l.includes('Connected to ec2-user@1.2.3.4'))).toBe(true)
+      ws._emit('message', { data: JSON.stringify({ type: 'out', data: 'hello\n' }) })
+      expect(tab.lines.some(l => l.includes('hello'))).toBe(true)
+    })
+
+    it('sets connectionState to "done" on a clean exit and "error" on a backend error', async () => {
+      const tab = store.openCloudTab('ec2', 'a', { profileId: 'p', target: { host: 'a', user: 'u' } })
+      await streams.startSshStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'done', code: 0 }) })
+      expect(tab.connectionState).toBe('done')
+
+      const tab2 = store.openCloudTab('ec2', 'b', { profileId: 'p', target: { host: 'b', user: 'u' } })
+      await streams.startSshStream(tab2)
+      const ws2 = getMockWs()
+      ws2._emit('open', {})
+      ws2._emit('message', { data: JSON.stringify({ type: 'error', data: 'SSH connection failed' }) })
+      expect(tab2.connectionState).toBe('error')
+    })
+  })
+
+  describe('reconnect state', () => {
+    it('shows "reconnecting" while a reconnect attempt is preparing, distinct from a first connect', async () => {
+      const tab = store.openLocalTab()
+      await streams.startLocalStream(tab)
+      getMockWs()._emit('open', {})
+      expect(tab.connectionState).toBe('connected')
+
+      let resolveFetch
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { resolveFetch = resolve })))
+      const reconnectPromise = streams.startLocalStream(tab, { reconnect: true })
+      expect(tab.connectionState).toBe('reconnecting')
+      resolveFetch({ ok: true, json: async () => ({ ticket: 't', session: tab, path: '/ws/shell' }) })
+      await reconnectPromise
+      expect(tab.connectionState).toBe('connecting')
+    })
+
+    it('does not downgrade a "done" state to "stopped" when the socket then closes', async () => {
+      const tab = store.openLocalTab()
+      await streams.startLocalStream(tab)
+      const ws = getMockWs()
+      ws._emit('open', {})
+      ws._emit('message', { data: JSON.stringify({ type: 'done', code: 0 }) })
+      expect(tab.connectionState).toBe('done')
+      ws._emit('close', {})
+      expect(tab.connectionState).toBe('done')
     })
   })
 })
