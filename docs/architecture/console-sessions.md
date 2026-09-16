@@ -344,9 +344,113 @@ fresh profile/context list loads — the same reconcile-after-load pattern alrea
 for the persisted AWS/GCP/Vercel profile selection, not a synchronous validity check
 during store hydration.
 
+## Release readiness (#43)
+
+This closes the Console epic (#36-43). Every registered transport now has at least one
+contextual, one-click entry point in addition to the dedicated workspace's manual
+launcher — the gap this ticket closes was inconsistency, not a missing capability.
+
+### Capability → entry point matrix
+
+| Capability | Dedicated workspace launcher | Contextual entry point |
+| --- | --- | --- |
+| `local-shell` | Yes | Header terminal icon (any module) |
+| `kubernetes-logs` / `kubernetes-exec` | Yes | Kubernetes resource table, Architecture Canvas, Observability |
+| `ec2-ssh` | Yes (converges on the same tab) | `AwsView.vue` EC2 row "🖥 SSH" |
+| `ec2-rdp` | No (stays in `Ec2Rdp.vue`, not in the shared registry) | `AwsView.vue` EC2 row "🪟 RDP" |
+| `aws-ssm` | Yes | **New**: `AwsView.vue` EC2 row "⚡ SSM" |
+| `gcp-shell` | N/A (`unavailable`) | N/A |
+| `gcp-logs` | Yes | **New**: `GcpView.vue` Cloud Run "Logs" tab → "Open in Console" |
+| `vercel-logs` | Yes | **New**: `VercelView.vue` deployment row → "Open in Console" |
+
+**Explicitly not wired**: AWS Lambda has no registered capability (no interactive/log
+transport exists for it in the registry), so no contextual action was added for it —
+adding a button with nothing behind it would be worse than no button.
+`ApmObservabilityView.vue`/`ApmApplicationLogs.vue`'s own resource-log lists were left
+untouched: the same capability is already one click away from each resource's own
+dedicated provider view, so a third entry point there would be redundant surface, not a
+gap.
+
+### Decision record: context threading and the `gcp-logs` required-field fix
+
+**Problem:** `sessionDescriptor()` (`consoleSession.mjs`) has always generically lifted
+`environment`/`applicationId` off whatever object it's given, and `auditSession()` has
+always logged `session.environment` — but no caller ever actually passed those fields.
+`App.vue`'s `openLogs`/`openExec` and `Ec2Shell.vue`'s `openCloudTab('ec2', ...)` call
+only ever supplied `kubeContext`/`profileId`/`target`, so every Console session's audit
+entry read `environment: 'default'` regardless of which real environment it targeted.
+
+**Decision:** thread `environment`/`applicationId` from `store.linkedApplication`
+(Architecture/Observability) or `activeApplicationContext` (`App.vue`'s
+`useArchitectureContext`) through every existing and new session-opening call site, and
+add `applicationId` to `auditSession()`'s logged `details` alongside the already-present
+`environment`. No registry or `sessionDescriptor` changes were needed — this was a
+caller-side gap only.
+
+**Related fix, not a threading change:** `ArchitectureView.vue` had four
+`application.provider || 'aws'` fallbacks that fire only once a linked application is
+already confirmed to exist — a real record with a missing/legacy `provider` was silently
+mislabeled as AWS instead of routing to `apmStore`/`ApmProviderMetrics` as unknown. These
+now fall back to `'generic'`, matching the convention `App.vue`'s
+`kuappsObservabilityProvider` already established for the same situation.
+`useArchitectureContext.js`'s own `|| 'aws'` fallback was reviewed and left as-is: its
+only caller (`AwsView.vue`'s bare-`projectId` `open-architecture` emit) is intentionally
+AWS-only, and every other caller (`ApmObservabilityView.vue`, `GcpView.vue`,
+`VercelView.vue`) already supplies an explicit `provider` — there is no live path where
+it fires incorrectly today.
+
+**Separate finding — `gcp-logs`'s required `project` was stricter than the code behind
+it:** `resolveSession`'s GCP branch never reads `session.project`; it resolves the
+project from the credential profile via `resolveGcpAuth` regardless
+(`lib/gcpLogsBroker.js`'s own test suite already proved the broker tolerates a blank
+project). But `validateSession()` rejected an empty `project` before a session could ever
+reach that fallback — the existing "falls back to the resolved profile project" test
+covered a path production traffic could never take. `project` is no longer in
+`gcp-logs`'s `required` list; the workspace's GCP Logs form no longer requires it either,
+and `GcpView.vue`'s new "Open in Console" button relies on this to avoid asking the user
+for a project id the app never needed them to type for the equivalent inline "Logs" tab.
+
+### Security / permissions / cost / observability checklist
+
+- **Credentials**: every transport still resolves authority server-side from the
+  existing credential store/profiles (SSH/RDP keys, AWS SDK config, GCP service account,
+  Vercel API token) — nothing new is introduced by contextual wiring; see "Decision
+  record: credentials, validation and audit" above for the full boundary.
+- **Minimum IAM/permissions per provider**: AWS SSM (`## AWS SSM Session Manager adapter`
+  above), GCP/Vercel (`## GCP and Vercel adapters` above) — unchanged by this ticket.
+- **Audit**: every session now logs `provider`, `environment`, `applicationId` and
+  `transport` — previously `environment`/`applicationId` were present in the schema but
+  never actually populated by any caller.
+- **Cost**: `gcp-logs` polls `entries:list` every 3s per open tab; `vercel-logs` and
+  Kubernetes logs are push/stream, not polled. No change to SSM's plugin-process
+  lifecycle (one `session-manager-plugin` child process per open tab, killed on
+  stop/close, per the #41 section above).
+- **Observability of the feature itself**: `docs/features/terminal.md` is the
+  user-facing reference for every tab type below; this doc is the operator/developer
+  reference.
+
+### Release checklist
+
+1. `node --test lib/*.test.js` — backend suite green.
+2. `npx vitest run` (in `frontend/`) — frontend suite green.
+3. `npx vite build` (in `frontend/`) — clean production build; revert the regenerated
+   `public/` diff before committing (`public/` is committed build output, not part of
+   source changes).
+4. Manual: from a real AWS/GCP/Vercel profile, click each new contextual button
+   (EC2 "⚡ SSM", Cloud Run "Open in Console", Vercel deployment "Open in Console") and
+   confirm a Console tab opens and streams; confirm a GCP session connects with no
+   project id typed in; inspect the audit log for a session opened from
+   Architecture/Observability and confirm `environment`/`applicationId` are populated,
+   not `default`/blank.
+5. Link the GitHub Project
+   (`https://github.com/users/lnavarrocarter/projects/1`) and issues #36-43 in the
+   closing PR — the epic shipped incrementally across PRs #44/#46/#47/#55/#57/#58 and
+   this one, not as a single `feature/global-console-foundation` branch.
+
 ## Validation
 
 ```sh
-node --test lib/consoleSessions.test.js lib/awsProfileResolver.test.js lib/awsSsmBroker.test.js lib/gcpLogsBroker.test.js lib/vercelLogsBroker.test.js
-npm --prefix frontend test -- useTerminalStore.test.js useTerminalStreams.test.js consoleCloudConnections.test.js ConsoleWorkspaceView.test.js
+node --test lib/*.test.js
+npm --prefix frontend test
+(cd frontend && npx vite build) # verify only; revert the generated public/ diff after
 ```

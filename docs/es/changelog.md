@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+- Las sesiones de Consola ahora tienen acciones contextuales "Open in Console" de un
+  clic donde realmente existe la capacidad: una fila de instancia EC2 obtiene una nueva
+  acción "⚡ SSM" junto a SSH/RDP, la pestaña Logs de un servicio de GCP Cloud Run
+  obtiene una acción "Open in Console", y una fila de deployment de Vercel obtiene otra.
+  Toda sesión abierta desde Architecture, Observability o estas nuevas acciones ahora
+  encadena correctamente su environment y application id reales hacia la sesión (antes,
+  toda entrada de auditoría de una sesión mostraba `environment: default` sin importar
+  desde dónde se abriera). El lanzador de Console de GCP Cloud Run ya no requiere
+  escribir un project id — siempre se resolvía desde el perfil de credenciales del lado
+  del servidor, pero una validación más estricta del lado del cliente bloqueaba que ese
+  fallback se usara. Esto cierra el épico de Consola (#36-43). Ver
+  [sesiones de consola](../architecture/console-sessions.md).
 - GCP y Vercel se suman a la Consola con capacidades honestas: ahora se pueden seguir
   logs de Cloud Run (GCP) y de deployments (Vercel) como sesiones (sin shell — ambas son
   streams de logs de una sola vía), mientras que Cloud Shell de GCP queda marcado

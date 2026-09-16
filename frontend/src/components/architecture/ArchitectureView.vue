@@ -281,14 +281,14 @@
               <template #title>{{ inlineNode?.name }} — {{ inlineMode === 'logs' ? 'Logs' : 'Metrics' }}</template>
               <ApmProviderMetrics
                 v-if="inlineNode && inlineMode === 'metrics'"
-                :provider="store.linkedApplication?.provider || 'aws'"
+                :provider="store.linkedApplication?.provider || 'generic'"
                 :profile-id="store.linkedApplication?.profileId"
                 :application="store.linkedApplication"
                 :resources="inlineResources"
               />
               <ApmApplicationLogs
                 v-else-if="inlineNode"
-                :provider="store.linkedApplication?.provider || 'aws'"
+                :provider="store.linkedApplication?.provider || 'generic'"
                 :profile-id="store.linkedApplication?.profileId"
                 :application="store.linkedApplication"
                 :resources="inlineResources"
@@ -533,7 +533,7 @@ async function loadOperationalMetrics() {
   metricsByNode.value = {}
   collectionByNode.value = {}
   try {
-    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    apmStore.setActiveProfile(application.profileId, application.provider || 'generic')
     await apmStore.selectApplication(application.id)
     const resources = apmStore.topology.resources || []
     const collectionStatus = collectionOverlay(apmStore.overview?.latestRun)
@@ -575,7 +575,7 @@ async function loadOperationalTrace() {
   traceLoading.value = true
   traceOverlay.value = null
   try {
-    apmStore.setActiveProfile(application.profileId, application.provider || 'aws')
+    apmStore.setActiveProfile(application.profileId, application.provider || 'generic')
     await apmStore.selectApplication(application.id)
     const result = await apmStore.traceProcess(application.id, workflowNode.arn)
     const trace = result?.traces?.[0]
