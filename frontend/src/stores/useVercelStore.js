@@ -12,6 +12,7 @@ import { useApi } from '../composables/useApi'
 export const useVercelStore = defineStore('vercel', () => {
   const { apiFetch: request } = useApi()
   let backgroundRequests = 0
+  let projectChangeRequestId = 0
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
@@ -32,6 +33,10 @@ export const useVercelStore = defineStore('vercel', () => {
   const cronJobs        = ref([])
   const selectedDomain      = ref(null)
   const selectedEdgeConfig  = ref(null)
+  const selectedDeploymentForFunctions = ref(null)
+  const selectedDeploymentForChecks    = ref(null)
+  const logsDeployment                 = ref(null)
+  const deploymentTarget               = ref('')
   const loading         = ref(false)
   const error           = ref(null)
 
@@ -43,6 +48,10 @@ export const useVercelStore = defineStore('vercel', () => {
   }
 
   function setError(e) { error.value = e?.message || String(e) }
+
+  function shouldIgnoreResponse(requestId) {
+    return requestId !== projectChangeRequestId
+  }
 
   function apiFetch(path, options = {}) {
     return request(path, {
@@ -67,6 +76,7 @@ export const useVercelStore = defineStore('vercel', () => {
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
   function setActiveProfile(id) {
+    projectChangeRequestId++
     activeProfileId.value = id
     teams.value           = []
     projects.value        = []
@@ -85,10 +95,15 @@ export const useVercelStore = defineStore('vercel', () => {
     cronJobs.value        = []
     selectedDomain.value      = null
     selectedEdgeConfig.value  = null
+    selectedDeploymentForFunctions.value = null
+    selectedDeploymentForChecks.value    = null
+    logsDeployment.value                 = null
+    deploymentTarget.value               = ''
     error.value           = null
   }
 
   function selectProject(project) {
+    projectChangeRequestId++
     selectedProject.value = project
     deployments.value     = []
     domains.value         = []
@@ -98,6 +113,10 @@ export const useVercelStore = defineStore('vercel', () => {
     dnsRecords.value      = []
     cronJobs.value        = []
     selectedDomain.value  = null
+    selectedDeploymentForFunctions.value = null
+    selectedDeploymentForChecks.value    = null
+    logsDeployment.value                 = null
+    deploymentTarget.value               = ''
     error.value           = null
   }
 
@@ -116,52 +135,92 @@ export const useVercelStore = defineStore('vercel', () => {
   }
 
   async function fetchDeployments(projectId, { limit = 20, target = '' } = {}) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
       let path = `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/deployments?limit=${limit}`
       if (target) path += `&target=${encodeURIComponent(target)}`
-      deployments.value = await apiFetch(path, { headers: headers() })
-    } catch (e) { setError(e) } finally { loading.value = false }
+      const nextData = await apiFetch(path, { headers: headers() })
+      if (shouldIgnoreResponse(requestId)) return
+      deployments.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   async function fetchDomains(projectId) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
-      domains.value = await apiFetch(
+      const nextData = await apiFetch(
         `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/domains`,
         { headers: headers() }
       )
-    } catch (e) { setError(e) } finally { loading.value = false }
+      if (shouldIgnoreResponse(requestId)) return
+      domains.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   async function fetchEnvVars(projectId) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
-      envVars.value = await apiFetch(
+      const nextData = await apiFetch(
         `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/env`,
         { headers: headers() }
       )
-    } catch (e) { setError(e) } finally { loading.value = false }
+      if (shouldIgnoreResponse(requestId)) return
+      envVars.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   async function fetchFunctions(deploymentId) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
-      functions.value = await apiFetch(
+      const nextData = await apiFetch(
         `/api/cloud/vercel/deployments/${encodeURIComponent(deploymentId)}/functions`,
         { headers: headers() }
       )
-    } catch (e) { setError(e) } finally { loading.value = false }
+      if (shouldIgnoreResponse(requestId)) return
+      functions.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   async function fetchChecks(deploymentId) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
-      checks.value = await apiFetch(
+      const nextData = await apiFetch(
         `/api/cloud/vercel/deployments/${encodeURIComponent(deploymentId)}/checks`,
         { headers: headers() }
       )
-    } catch (e) { setError(e) } finally { loading.value = false }
+      if (shouldIgnoreResponse(requestId)) return
+      checks.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   // ─── Mutative actions ─────────────────────────────────────────────────────────
@@ -263,13 +322,21 @@ export const useVercelStore = defineStore('vercel', () => {
   }
 
   async function fetchCronJobs(projectId) {
+    const requestId = projectChangeRequestId
     loading.value = true; error.value = null
     try {
-      cronJobs.value = await apiFetch(
+      const nextData = await apiFetch(
         `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/cron`,
         { headers: headers() }
       )
-    } catch (e) { setError(e) } finally { loading.value = false }
+      if (shouldIgnoreResponse(requestId)) return
+      cronJobs.value = nextData
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      setError(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
   }
 
   return {
@@ -292,6 +359,10 @@ export const useVercelStore = defineStore('vercel', () => {
     cronJobs,
     selectedDomain,
     selectedEdgeConfig,
+    selectedDeploymentForFunctions,
+    selectedDeploymentForChecks,
+    logsDeployment,
+    deploymentTarget,
     loading,
     error,
     // actions
@@ -315,5 +386,6 @@ export const useVercelStore = defineStore('vercel', () => {
     fetchEdgeConfigItems,
     fetchDnsRecords,
     fetchCronJobs,
+    shouldIgnoreResponse,
   }
 })

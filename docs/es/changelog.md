@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Arreglado
+- **Vista Vercel:** Arreglado bug donde datos obsoletos de proyectos anteriores persistían tras cambios rápidos de proyecto. Se implementó protección contra condiciones de carrera con IDs de solicitud y limpieza explícita de contexto al cambiar de proyecto o perfil.
+
 ## v1.16.0 (2026-09-16)
 
 Console Sessions unifica toda conexión remota — Kubernetes, Terminal local, SSH de EC2, AWS SSM, GCP y Vercel — detrás de un único registro compartido de sesiones y un workspace global.

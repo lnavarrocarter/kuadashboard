@@ -119,18 +119,18 @@
           <div style="display:flex;gap:6px;margin-left:auto">
             <button
               class="btn sm"
-              :class="{ active: deploymentTarget === '' }"
-              @click="deploymentTarget = ''; reloadDeployments()"
+              :class="{ active: vercelStore.deploymentTarget === '' }"
+              @click="setDeploymentTarget('')"
             >All</button>
             <button
               class="btn sm"
-              :class="{ active: deploymentTarget === 'production' }"
-              @click="deploymentTarget = 'production'; reloadDeployments()"
+              :class="{ active: vercelStore.deploymentTarget === 'production' }"
+              @click="setDeploymentTarget('production')"
             >Production</button>
             <button
               class="btn sm"
-              :class="{ active: deploymentTarget === 'preview' }"
-              @click="deploymentTarget = 'preview'; reloadDeployments()"
+              :class="{ active: vercelStore.deploymentTarget === 'preview' }"
+              @click="setDeploymentTarget('preview')"
             >Preview</button>
           </div>
         </div>
@@ -295,11 +295,11 @@
 
       <!-- ── Deployment Files ─────────────────────────────────────────────── -->
       <div v-show="activeService === 'functions'" class="tab-panel">
-        <div v-if="!selectedDeploymentForFunctions" class="empty-row">{{ t('vercel.functions.selectDeployment') }}</div>
+        <div v-if="!vercelStore.selectedDeploymentForFunctions" class="empty-row">{{ t('vercel.functions.selectDeployment') }}</div>
         <template v-else>
           <div class="context-banner">
             <span>{{ t('vercel.functions.contextLabel') }}</span>
-            <strong>{{ selectedDeploymentForFunctions.id }}</strong>
+            <strong>{{ vercelStore.selectedDeploymentForFunctions.id }}</strong>
           </div>
           <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
           <div v-else-if="!filteredFunctions.length" class="empty-row">
@@ -328,13 +328,13 @@
 
       <!-- ── Checks ───────────────────────────────────────────────────────── -->
       <div v-show="activeService === 'checks'" class="tab-panel">
-        <div v-if="!selectedDeploymentForChecks" class="empty-row text-dim">
+        <div v-if="!vercelStore.selectedDeploymentForChecks" class="empty-row text-dim">
           {{ t('vercel.checks.noDeployment') }}
         </div>
         <template v-else>
           <div class="context-banner">
             <span>{{ t('vercel.checks.contextLabel') }}</span>
-            <strong class="mono-xs">{{ selectedDeploymentForChecks.id }}</strong>
+            <strong class="mono-xs">{{ vercelStore.selectedDeploymentForChecks.id }}</strong>
           </div>
           <div v-if="vercelStore.loading" class="empty-row">{{ t('vercel.loading') }}</div>
           <div v-else-if="!vercelStore.checks.length" class="empty-row">{{ t('vercel.checks.none') }}</div>
@@ -572,10 +572,10 @@
 
       <!-- ── Logs panel ───────────────────────────────────────────────────── -->
       <VercelDeploymentLogs
-        v-if="logsDeployment"
-        :deployment="logsDeployment"
+        v-if="vercelStore.logsDeployment"
+        :deployment="vercelStore.logsDeployment"
         :profile-id="vercelStore.activeProfileId"
-        @close="logsDeployment = null"
+        @close="closeLogs()"
       />
 
       <!-- ── Action confirm modal ─────────────────────────────────────────── -->
@@ -626,10 +626,6 @@ const vercelStore = useVercelStore()
 const termStore   = useTerminalStore()
 
 const search                      = ref('')
-const deploymentTarget            = ref('')
-const logsDeployment              = ref(null)
-const selectedDeploymentForFunctions = ref(null)
-const selectedDeploymentForChecks    = ref(null)
 const confirmAction               = ref(null)
 const actionPending               = ref(false)
 const apmViewRef                  = ref(null)
@@ -644,7 +640,7 @@ const apmPlatformResources = computed(() => vercelStore.projects.map(project => 
 // ─── Load data when tab/profile changes ──────────────────────────────────────
 
 watch(
-  () => [props.activeService, vercelStore.activeProfileId],
+  () => [props.activeService, vercelStore.activeProfileId, vercelStore.selectedProject?.id],
   ([service, profileId]) => {
     if (!profileId) return
     reload(service)
@@ -661,15 +657,15 @@ function reload(service, options = {}) {
   }
   else if (svc === 'projects') load = () => vercelStore.fetchProjects()
   else if (svc === 'deployments' && vercelStore.selectedProject)
-    load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: deploymentTarget.value })
+    load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: vercelStore.deploymentTarget })
   else if (svc === 'domains' && vercelStore.selectedProject)
     load = () => vercelStore.fetchDomains(vercelStore.selectedProject.id)
   else if (svc === 'env-vars' && vercelStore.selectedProject)
     load = () => vercelStore.fetchEnvVars(vercelStore.selectedProject.id)
-  else if (svc === 'functions' && selectedDeploymentForFunctions.value)
-    load = () => vercelStore.fetchFunctions(selectedDeploymentForFunctions.value.id)
-  else if (svc === 'checks' && selectedDeploymentForChecks.value)
-    load = () => vercelStore.fetchChecks(selectedDeploymentForChecks.value.id)
+  else if (svc === 'functions' && vercelStore.selectedDeploymentForFunctions)
+    load = () => vercelStore.fetchFunctions(vercelStore.selectedDeploymentForFunctions.id)
+  else if (svc === 'checks' && vercelStore.selectedDeploymentForChecks)
+    load = () => vercelStore.fetchChecks(vercelStore.selectedDeploymentForChecks.id)
   else if (svc === 'dns-records' && vercelStore.selectedDomain)
     load = () => vercelStore.fetchDnsRecords(vercelStore.selectedDomain)
   else if (svc === 'aliases')
@@ -682,7 +678,10 @@ function reload(service, options = {}) {
     load = () => vercelStore.fetchEdgeConfigs()
   else if (svc === 'activity')
     load = () => vercelStore.fetchEvents()
-  if (!load) return Promise.resolve()
+  if (!load) {
+    // No hay contexto para esta vista — data array ya está vacío por selectProject()/setActiveProfile()
+    return Promise.resolve()
+  }
   return options.background ? vercelStore.runInBackground(load) : load()
 }
 
@@ -694,7 +693,16 @@ defineExpose({ reloadActiveTab })
 
 function reloadDeployments() {
   if (!vercelStore.selectedProject) return
-  vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: deploymentTarget.value })
+  vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: vercelStore.deploymentTarget })
+}
+
+function setDeploymentTarget(target) {
+  vercelStore.deploymentTarget = target
+  reloadDeployments()
+}
+
+function closeLogs() {
+  vercelStore.logsDeployment = null
 }
 
 // ─── Project selection ───────────────────────────────────────────────────────
@@ -705,7 +713,7 @@ function handleSelectProject(project) {
 
 function loadProjectDeployments(project) {
   vercelStore.selectProject(project)
-  deploymentTarget.value = ''
+  vercelStore.deploymentTarget = ''
   vercelStore.fetchDeployments(project.id)
 }
 
@@ -727,7 +735,7 @@ function loadProjectCron(project) {
 // ─── Deployment actions ───────────────────────────────────────────────────────
 
 function openLogs(deployment) {
-  logsDeployment.value = deployment
+  vercelStore.logsDeployment = deployment
 }
 
 // Opens the same deployment's log stream in the shared Console session, alongside
@@ -743,12 +751,12 @@ function openDeploymentConsole(deployment) {
 }
 
 function viewFunctions(deployment) {
-  selectedDeploymentForFunctions.value = deployment
+  vercelStore.selectedDeploymentForFunctions = deployment
   vercelStore.fetchFunctions(deployment.id)
 }
 
 function viewChecks(deployment) {
-  selectedDeploymentForChecks.value = deployment
+  vercelStore.selectedDeploymentForChecks = deployment
   vercelStore.fetchChecks(deployment.id)
 }
 

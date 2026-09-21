@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
+
 ## v1.16.0 (2026-09-16)
 
 Console Sessions unifies every remote connection — Kubernetes, Local Shell, EC2 SSH, AWS SSM, GCP, and Vercel — behind one shared session registry and a global workspace.
