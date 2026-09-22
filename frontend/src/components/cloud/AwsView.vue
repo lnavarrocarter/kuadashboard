@@ -1519,26 +1519,44 @@
             </div>
           </div>
           <!-- Records -->
-          <div style="flex:1;overflow:auto">
-            <div v-if="route53State.loadingRecords" class="empty-row">Loading records...</div>
-            <div v-else-if="!route53State.selectedZoneId" class="empty-row">Select a zone to view its records.</div>
-            <div v-else-if="!route53State.records.length" class="empty-row">No records in this zone.</div>
-            <table v-else class="cloud-table">
-              <thead><tr>
-                <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th>
-              </tr></thead>
-              <tbody>
-                <tr v-for="(r, idx) in route53State.records" :key="idx">
-                  <td class="mono-xs">{{ r.name }}</td>
-                  <td><span class="tag-chip">{{ r.type }}</span></td>
-                  <td class="text-dim">{{ r.ttl ?? '-' }}</td>
-                  <td class="text-dim mono-xs" style="word-break:break-all">
-                    <span v-if="r.alias">{{ r.alias.dnsName }}</span>
-                    <span v-else>{{ (r.records || []).join(', ') }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div style="flex:1;overflow:auto;display:flex;flex-direction:column">
+            <!-- Toolbar: Search + Filter + Export -->
+            <div v-if="route53State.selectedZoneId && route53State.records.length" style="flex-shrink:0;padding:8px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input v-model="route53State.search" type="text" placeholder="Search by name or value..." style="flex:1;min-width:180px;padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:inherit;font-size:.85rem" />
+              <select v-model="route53State.selectedRecordType" style="padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:inherit;font-size:.85rem">
+                <option :value="null">All Types</option>
+                <option v-for="type in route53RecordTypes" :key="type" :value="type">{{ type }}</option>
+              </select>
+              <button v-if="filteredRoute53Records.length" @click="selectAllVisibleRecords" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" title="Select all visible">✓ Select All</button>
+              <button v-if="route53State.selectedRecords.size" @click="clearRecordSelection" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" title="Clear selection">✕ Clear</button>
+              <button v-if="route53State.selectedRecords.size || filteredRoute53Records.length" @click="exportRoute53Records" style="padding:4px 10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:4px;cursor:pointer;font-size:.85rem;color:#58a6ff" title="Export selected records as CSV">⬇ Export</button>
+              <span v-if="route53State.selectedRecords.size" style="font-size:.8rem;color:#8b949e">{{ route53State.selectedRecords.size }} selected</span>
+            </div>
+            <!-- Records Table -->
+            <div style="flex:1;overflow:auto">
+              <div v-if="route53State.loadingRecords" class="empty-row">Loading records...</div>
+              <div v-else-if="!route53State.selectedZoneId" class="empty-row">Select a zone to view its records.</div>
+              <div v-else-if="!route53State.records.length" class="empty-row">No records in this zone.</div>
+              <div v-else-if="!filteredRoute53Records.length" class="empty-row">No records match the search or filter.</div>
+              <table v-else class="cloud-table">
+                <thead><tr>
+                  <th style="width:30px"><input type="checkbox" @change="e => e.target.checked ? selectAllVisibleRecords() : clearRecordSelection()" :checked="filteredRoute53Records.length > 0 && filteredRoute53Records.every((r, idx) => route53State.selectedRecords.has(`${r.name}|${r.type}|${idx}`))"></th>
+                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th>
+                </tr></thead>
+                <tbody>
+                  <tr v-for="(r, idx) in filteredRoute53Records" :key="`${r.name}|${r.type}|${idx}`">
+                    <td><input type="checkbox" @change="toggleRecordSelection(r, idx)" :checked="route53State.selectedRecords.has(`${r.name}|${r.type}|${idx}`)"></td>
+                    <td class="mono-xs">{{ r.name }}</td>
+                    <td><span class="tag-chip">{{ r.type }}</span></td>
+                    <td class="text-dim">{{ r.ttl ?? '-' }}</td>
+                    <td class="text-dim mono-xs" style="word-break:break-all">
+                      <span v-if="r.alias">{{ r.alias.dnsName }}</span>
+                      <span v-else>{{ (r.records || []).join(', ') }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -5272,16 +5290,104 @@ async function submitCfCreate() {
 
 // ─── Route 53 Actions ─────────────────────────────────────────────────────────
 
-const route53State = reactive({ selectedZoneId: null, records: [], loadingRecords: false })
+const route53State = reactive({
+  selectedZoneId: null,
+  records: [],
+  loadingRecords: false,
+  search: '',
+  selectedRecordType: null,
+  selectedRecords: new Set(),
+})
+
+const route53RecordTypes = computed(() => {
+  const types = new Set(route53State.records.map(r => r.type))
+  return Array.from(types).sort()
+})
+
+const filteredRoute53Records = computed(() => {
+  let filtered = route53State.records
+  if (route53State.search) {
+    const q = route53State.search.toLowerCase()
+    filtered = filtered.filter(r =>
+      r.name?.toLowerCase().includes(q) ||
+      r.records?.some(v => v?.toLowerCase().includes(q)) ||
+      r.alias?.dnsName?.toLowerCase().includes(q)
+    )
+  }
+  if (route53State.selectedRecordType) {
+    filtered = filtered.filter(r => r.type === route53State.selectedRecordType)
+  }
+  return filtered
+})
 
 async function loadRoute53Records(zone) {
   route53State.selectedZoneId = zone.id
   route53State.records = []
+  route53State.search = ''
+  route53State.selectedRecordType = null
+  route53State.selectedRecords.clear()
   route53State.loadingRecords = true
   try {
     const data = await awsStore.fetchRoute53Records(zone.id)
     route53State.records = data || []
   } finally { route53State.loadingRecords = false }
+}
+
+function toggleRecordSelection(record, idx) {
+  const key = `${record.name}|${record.type}|${idx}`
+  if (route53State.selectedRecords.has(key)) {
+    route53State.selectedRecords.delete(key)
+  } else {
+    route53State.selectedRecords.add(key)
+  }
+}
+
+function selectAllVisibleRecords() {
+  filteredRoute53Records.value.forEach((record, idx) => {
+    const key = `${record.name}|${record.type}|${idx}`
+    route53State.selectedRecords.add(key)
+  })
+}
+
+function clearRecordSelection() {
+  route53State.selectedRecords.clear()
+}
+
+function exportRoute53Records() {
+  const selectedIndices = Array.from(route53State.selectedRecords).map(key => {
+    const parts = key.split('|')
+    return route53State.records.findIndex(r => r.name === parts[0] && r.type === parts[1])
+  })
+
+  const recordsToExport = selectedIndices.length > 0
+    ? selectedIndices.map(idx => route53State.records[idx]).filter(Boolean)
+    : filteredRoute53Records.value
+
+  if (recordsToExport.length === 0) return
+
+  const headers = ['Name', 'Type', 'TTL', 'Value / Alias']
+  const rows = recordsToExport.map(r => [
+    r.name || '',
+    r.type || '',
+    r.ttl ?? '-',
+    r.alias ? r.alias.dnsName : (r.records || []).join('; '),
+  ])
+
+  const csv = [
+    headers.map(h => `"${h}"`).join(','),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `route53-records-${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 // ─── Cognito Actions ──────────────────────────────────────────────────────────

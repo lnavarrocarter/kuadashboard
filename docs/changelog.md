@@ -6,6 +6,9 @@
 - **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
 - **AWS Lambda modal:** Fixed env var table cells not wrapping long values (ARNs, long strings). Made the Code tab layout responsive on mobile and tablet devices: file tree and code viewer now stack vertically on screens ≤768px.
 
+### Added
+- **AWS Route 53:** Added search and filter functionality for DNS records. Users can now search records by name or value, filter by record type (A, TXT, MX, CNAME, etc.), select multiple records with checkboxes, and export selected records as CSV for backup or analysis.
+
 ## v1.16.0 (2026-09-16)
 
 Console Sessions unifies every remote connection — Kubernetes, Local Shell, EC2 SSH, AWS SSM, GCP, and Vercel — behind one shared session registry and a global workspace.

@@ -6,6 +6,9 @@
 - **Vista Vercel:** Arreglado bug donde datos obsoletos de proyectos anteriores persistían tras cambios rápidos de proyecto. Se implementó protección contra condiciones de carrera con IDs de solicitud y limpieza explícita de contexto al cambiar de proyecto o perfil.
 - **Modal AWS Lambda:** Arreglado que las celdas de la tabla de variables de entorno no envolvían valores largos (ARNs, strings largos). Se hizo responsive el layout de la pestaña Código en dispositivos móviles y tablets: el árbol de archivos y el visor de código ahora se apilan verticalmente en pantallas ≤768px.
 
+### Añadido
+- **AWS Route 53:** Se agregó funcionalidad de búsqueda y filtrado para registros DNS. Los usuarios ahora pueden buscar registros por nombre o valor, filtrar por tipo de registro (A, TXT, MX, CNAME, etc.), seleccionar múltiples registros con checkboxes, y exportar los registros seleccionados como CSV para respaldo o análisis.
+
 ## v1.16.0 (2026-09-16)
 
 Console Sessions unifica toda conexión remota — Kubernetes, Terminal local, SSH de EC2, AWS SSM, GCP y Vercel — detrás de un único registro compartido de sesiones y un workspace global.
