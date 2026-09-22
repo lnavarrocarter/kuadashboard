@@ -4,6 +4,7 @@
 
 ### Arreglado
 - **Vista Vercel:** Arreglado bug donde datos obsoletos de proyectos anteriores persistían tras cambios rápidos de proyecto. Se implementó protección contra condiciones de carrera con IDs de solicitud y limpieza explícita de contexto al cambiar de proyecto o perfil.
+- **Modal AWS Lambda:** Arreglado que las celdas de la tabla de variables de entorno no envolvían valores largos (ARNs, strings largos). Se hizo responsive el layout de la pestaña Código en dispositivos móviles y tablets: el árbol de archivos y el visor de código ahora se apilan verticalmente en pantallas ≤768px.
 
 ## v1.16.0 (2026-09-16)
 

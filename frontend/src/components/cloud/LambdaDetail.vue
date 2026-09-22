@@ -111,7 +111,7 @@
                   <tbody>
                     <tr v-for="e in data.config.envVars" :key="e.k">
                       <td class="mono">{{ e.k }}</td>
-                      <td class="mono">{{ showEnvValues ? e.v : '••••••••' }}</td>
+                      <td class="mono wrap">{{ showEnvValues ? e.v : '••••••••' }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -721,6 +721,11 @@ function copyField(val, key) {
   overflow-y: auto;
   padding: 14px 16px;
 }
+@media (max-width: 768px) {
+  .lmd-body {
+    padding: 10px 12px;
+  }
+}
 .lmd-section { display: flex; flex-direction: column; }
 
 .lmd-spinner-wrap {
@@ -754,6 +759,11 @@ function copyField(val, key) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 10px;
+}
+@media (max-width: 768px) {
+  .lmd-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .lmd-card {
   background: #161b22;
@@ -839,12 +849,25 @@ dd.wrap { word-break: break-all; }
   border-radius: 8px;
   overflow: hidden;
 }
+@media (max-width: 768px) {
+  .lmd-code-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
 
 .lmd-file-tree {
   background: #161b22;
   border-right: 1px solid #21262d;
   display: flex; flex-direction: column;
   overflow: hidden;
+}
+@media (max-width: 768px) {
+  .lmd-file-tree {
+    border-right: none;
+    border-bottom: 1px solid #21262d;
+    max-height: 40vh;
+  }
 }
 .lmd-file-tree-title {
   padding: 8px 12px;
@@ -899,6 +922,13 @@ dd.wrap { word-break: break-all; }
   color: #e6edf3;
   white-space: pre;
   background: transparent;
+}
+@media (max-width: 768px) {
+  .lmd-code-pre {
+    font-size: .72rem;
+    padding: 10px 12px;
+    max-height: 50vh;
+  }
 }
 
 /* Buttons */

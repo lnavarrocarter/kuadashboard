@@ -4,6 +4,7 @@
 
 ### Fixed
 - **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
+- **AWS Lambda modal:** Fixed env var table cells not wrapping long values (ARNs, long strings). Made the Code tab layout responsive on mobile and tablet devices: file tree and code viewer now stack vertically on screens ≤768px.
 
 ## v1.16.0 (2026-09-16)
 
