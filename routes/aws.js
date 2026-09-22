@@ -3631,6 +3631,26 @@ router.get('/route53/zones/:id/records', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// POST /route53/validate  → validate a DNS record
+router.post('/route53/validate', async (req, res) => {
+  const { hostname, type, selector } = req.body;
+  if (!hostname || !type) {
+    return res.status(400).json({ error: 'Missing hostname or type' });
+  }
+
+  try {
+    const DNSValidator = require('../lib/dnsValidator');
+    const result = await DNSValidator.validate(hostname, type.toUpperCase(), { selector });
+    res.json(result);
+  } catch (err) {
+    res.json({
+      status: 'ERROR',
+      values: [],
+      message: err.message,
+    });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── AMAZON COGNITO ───────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════

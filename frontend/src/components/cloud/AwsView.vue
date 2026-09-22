@@ -1541,7 +1541,7 @@
               <table v-else class="cloud-table">
                 <thead><tr>
                   <th style="width:30px"><input type="checkbox" @change="e => e.target.checked ? selectAllVisibleRecords() : clearRecordSelection()" :checked="filteredRoute53Records.length > 0 && filteredRoute53Records.every((r, idx) => route53State.selectedRecords.has(`${r.name}|${r.type}|${idx}`))"></th>
-                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th>
+                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th><th>Test</th>
                 </tr></thead>
                 <tbody>
                   <tr v-for="(r, idx) in filteredRoute53Records" :key="`${r.name}|${r.type}|${idx}`">
@@ -1552,6 +1552,14 @@
                     <td class="text-dim mono-xs" style="word-break:break-all">
                       <span v-if="r.alias">{{ r.alias.dnsName }}</span>
                       <span v-else>{{ (r.records || []).join(', ') }}</span>
+                    </td>
+                    <td style="width:120px">
+                      <div v-if="route53State.testingRecord === `${r.name}|${r.type}`" style="font-size:.8rem;color:#8b949e">Testing...</div>
+                      <div v-else-if="route53State.testResults[`${r.name}|${r.type}`]" :style="{ fontSize: '.8rem', fontWeight: 600, color: route53State.testResults[`${r.name}|${r.type}`].status === 'OK' ? '#3fb950' : route53State.testResults[`${r.name}|${r.type}`].status === 'WARNING' ? '#d29922' : '#f85149' }">
+                        {{ route53State.testResults[`${r.name}|${r.type}`].status }}
+                        <div style="font-size:.75rem;font-weight:400;color:#8b949e;margin-top:2px">{{ route53State.testResults[`${r.name}|${r.type}`].message }}</div>
+                      </div>
+                      <button v-else @click="testRoute53Record(r)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.8rem;color:#58a6ff">Test</button>
                     </td>
                   </tr>
                 </tbody>
@@ -5297,6 +5305,8 @@ const route53State = reactive({
   search: '',
   selectedRecordType: null,
   selectedRecords: new Set(),
+  testingRecord: null,
+  testResults: {},
 })
 
 const route53RecordTypes = computed(() => {
@@ -5388,6 +5398,33 @@ function exportRoute53Records() {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+async function testRoute53Record(record) {
+  const key = `${record.name}|${record.type}`
+  route53State.testingRecord = key
+
+  try {
+    // Remove trailing dot from hostname if present
+    const hostname = record.name.replace(/\.$/, '')
+
+    const res = await fetch('/api/route53/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname, type: record.type }),
+    })
+
+    const result = await res.json()
+    route53State.testResults[key] = result
+  } catch (err) {
+    route53State.testResults[key] = {
+      status: 'ERROR',
+      message: err.message,
+      values: [],
+    }
+  } finally {
+    route53State.testingRecord = null
+  }
 }
 
 // ─── Cognito Actions ──────────────────────────────────────────────────────────

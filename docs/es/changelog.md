@@ -8,6 +8,7 @@
 
 ### Añadido
 - **AWS Route 53:** Se agregó funcionalidad de búsqueda y filtrado para registros DNS. Los usuarios ahora pueden buscar registros por nombre o valor, filtrar por tipo de registro (A, TXT, MX, CNAME, etc.), seleccionar múltiples registros con checkboxes, y exportar los registros seleccionados como CSV para respaldo o análisis.
+- **AWS Route 53 Validación DNS:** Se agregó validación y diagnóstico de registros DNS. Los usuarios pueden probar registros directamente desde la vista de Route 53 para verificar que se resuelven correctamente y están publicados en Internet. Soporta registros A (con verificación de conectividad TCP), TXT, MX, CNAME, NS además de validación de SPF y DKIM. El backend usa el módulo dns nativo de Node para resolución DNS pública.
 
 ## v1.16.0 (2026-09-16)
 

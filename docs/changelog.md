@@ -8,6 +8,7 @@
 
 ### Added
 - **AWS Route 53:** Added search and filter functionality for DNS records. Users can now search records by name or value, filter by record type (A, TXT, MX, CNAME, etc.), select multiple records with checkboxes, and export selected records as CSV for backup or analysis.
+- **AWS Route 53 DNS Validation:** Added DNS record validation and diagnostics. Users can test records directly from the Route 53 view to verify they resolve correctly and are published on the internet. Supports A (with TCP connectivity check), TXT, MX, CNAME, NS records plus SPF and DKIM validation. Backend uses Node's native dns module for public DNS resolution.
 
 ## v1.16.0 (2026-09-16)
 
