@@ -44,6 +44,7 @@ jobs:
           gcloud builds submit . \
             --project="$GCP_PROJECT_ID" \
             --config=cloudbuild.yaml \
+            --gcs-source-staging-dir="gs://ncaicloud-kua-control-plane-build/source" \
             --substitutions="_TAG=${GITHUB_SHA}"
 
       - name: Deploy Cloud Run service
