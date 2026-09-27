@@ -6,6 +6,9 @@
 - **Vista Vercel:** Arreglado bug donde datos obsoletos de proyectos anteriores persistían tras cambios rápidos de proyecto. Se implementó protección contra condiciones de carrera con IDs de solicitud y limpieza explícita de contexto al cambiar de proyecto o perfil.
 - **Modal AWS Lambda:** Arreglado que las celdas de la tabla de variables de entorno no envolvían valores largos (ARNs, strings largos). Se hizo responsive el layout de la pestaña Código en dispositivos móviles y tablets: el árbol de archivos y el visor de código ahora se apilan verticalmente en pantallas ≤768px.
 
+### Cambiado
+- **AWS VPC:** La acción "Details" de VPC ahora se llama "Info" y abre un modal dedicado alineado al patrón Info de EC2/Lambda (tabs subrayados, listas de definición, botones de copiar, badges en el header). Mismos datos y endpoint que antes.
+
 ### Añadido
 - **AWS Route 53:** Se agregó funcionalidad de búsqueda y filtrado para registros DNS. Los usuarios ahora pueden buscar registros por nombre o valor, filtrar por tipo de registro (A, TXT, MX, CNAME, etc.), seleccionar múltiples registros con checkboxes, y exportar los registros seleccionados como CSV para respaldo o análisis.
 - **AWS Route 53 Validación DNS:** Se agregó validación y diagnóstico de registros DNS. Los usuarios pueden probar registros directamente desde la vista de Route 53 para verificar que se resuelven correctamente y están publicados en Internet. Soporta registros A (con verificación de conectividad TCP), TXT, MX, CNAME, NS además de validación de SPF y DKIM. El backend usa el módulo dns nativo de Node para resolución DNS pública.

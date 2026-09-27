@@ -6,6 +6,9 @@
 - **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
 - **AWS Lambda modal:** Fixed env var table cells not wrapping long values (ARNs, long strings). Made the Code tab layout responsive on mobile and tablet devices: file tree and code viewer now stack vertically on screens ≤768px.
 
+### Changed
+- **AWS VPC:** The VPC "Details" action is now "Info" and opens a dedicated modal aligned with the EC2/Lambda Info pattern (underlined tabs, definition lists, copy buttons, header badges). Same data and endpoint as before.
+
 ### Added
 - **AWS Route 53:** Added search and filter functionality for DNS records. Users can now search records by name or value, filter by record type (A, TXT, MX, CNAME, etc.), select multiple records with checkboxes, and export selected records as CSV for backup or analysis.
 - **AWS Route 53 DNS Validation:** Added DNS record validation and diagnostics. Users can test records directly from the Route 53 view to verify they resolve correctly and are published on the internet. Supports A (with TCP connectivity check), TXT, MX, CNAME, NS records plus SPF and DKIM validation. Backend uses Node's native dns module for public DNS resolution.

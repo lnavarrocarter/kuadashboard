@@ -372,8 +372,7 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openTags('vpc', `VPC: ${v.name}`, v.id, v.tags)">Tags</button>
                   <button class="btn sm" @click="openConfig('vpc', `VPC: ${v.name}`, v, { id: v.id })">Config</button>
-                  <button class="btn sm" style="background:rgba(88,166,255,.18);border-color:#58a6ff;color:#58a6ff"
-                    @click="openVpcDetails(v)">Details</button>
+                  <button class="btn sm" @click="openVpcDetail(v)">ℹ Info</button>
                 </div>
               </td>
             </tr>
@@ -1879,151 +1878,6 @@
       </div>
     </div>
 
-    <!-- ── VPC Details Modal ──────────────────────────────────────────────── -->
-    <div v-if="vpcDetailModal.open" class="modal-overlay" @click.self="vpcDetailModal.open = false">
-      <div class="modal" style="width:1020px;max-width:97vw;max-height:90vh;display:flex;flex-direction:column">
-        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">VPC Details — {{ vpcDetailModal.name }}</span>
-          <button class="btn sm" @click="vpcDetailModal.open = false">✕</button>
-        </div>
-        <div v-if="vpcDetailModal.loading" class="empty-row" style="padding:20px">Loading details...</div>
-        <div v-else-if="vpcDetailModal.error" class="alert-error" style="margin:8px">{{ vpcDetailModal.error }}</div>
-        <template v-else-if="vpcDetailModal.data">
-          <!-- inner tab bar -->
-          <div style="display:flex;gap:2px;padding:4px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
-            <button v-for="t in vpcDetailTabs" :key="t.id"
-              :class="['btn','sm', vpcDetailModal.tab === t.id ? 'active' : '']"
-              @click="vpcDetailModal.tab = t.id">{{ t.label }}</button>
-          </div>
-          <div style="flex:1;overflow:auto;padding:8px">
-            <!-- Overview -->
-            <div v-if="vpcDetailModal.tab === 'overview'">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <div class="config-section">
-                  <div class="config-title">VPC Info</div>
-                  <div class="config-row"><span>VPC ID</span><span class="mono-xs">{{ vpcDetailModal.data.vpc?.VpcId }}</span></div>
-                  <div class="config-row"><span>CIDR</span><span class="mono-xs">{{ vpcDetailModal.data.vpc?.CidrBlock }}</span></div>
-                  <div class="config-row"><span>State</span><span :class="vpcDetailModal.data.vpc?.State === 'available' ? 'status-ok' : 'status-warn'">{{ vpcDetailModal.data.vpc?.State }}</span></div>
-                  <div class="config-row"><span>Default</span><span :class="vpcDetailModal.data.vpc?.IsDefault ? 'status-warn' : 'text-dim'">{{ vpcDetailModal.data.vpc?.IsDefault ? 'Yes' : 'No' }}</span></div>
-                  <div class="config-row"><span>Tenancy</span><span class="text-dim">{{ vpcDetailModal.data.vpc?.InstanceTenancy }}</span></div>
-                  <div class="config-row"><span>DHCPOptionsId</span><span class="mono-xs text-dim">{{ vpcDetailModal.data.vpc?.DhcpOptionsId }}</span></div>
-                </div>
-                <div class="config-section">
-                  <div class="config-title">Summary</div>
-                  <div class="config-row"><span>Subnets</span><span style="font-weight:600">{{ vpcDetailModal.data.subnets?.length ?? 0 }}</span></div>
-                  <div class="config-row"><span>Security Groups</span><span style="font-weight:600">{{ vpcDetailModal.data.securityGroups?.length ?? 0 }}</span></div>
-                  <div class="config-row"><span>Route Tables</span><span style="font-weight:600">{{ vpcDetailModal.data.routeTables?.length ?? 0 }}</span></div>
-                  <div class="config-row"><span>Internet Gateways</span><span style="font-weight:600">{{ vpcDetailModal.data.internetGateways?.length ?? 0 }}</span></div>
-                  <div class="config-row"><span>NAT Gateways</span><span style="font-weight:600">{{ vpcDetailModal.data.natGateways?.length ?? 0 }}</span></div>
-                </div>
-              </div>
-              <div class="config-section" style="margin-top:12px" v-if="vpcDetailModal.data.vpc?.Tags?.length">
-                <div class="config-title">Tags</div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
-                  <span v-for="t in vpcDetailModal.data.vpc.Tags" :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
-                </div>
-              </div>
-            </div>
-            <!-- Subnets -->
-            <div v-else-if="vpcDetailModal.tab === 'subnets'">
-              <div v-if="!vpcDetailModal.data.subnets?.length" class="empty-row">No subnets.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Subnet ID</th><th>CIDR</th><th>AZ</th><th>State</th><th>Public IP</th><th>Available IPs</th></tr></thead>
-                <tbody>
-                  <tr v-for="s in vpcDetailModal.data.subnets" :key="s.SubnetId">
-                    <td class="mono-xs">{{ s.SubnetId }}</td>
-                    <td class="text-dim">{{ s.CidrBlock }}</td>
-                    <td class="text-dim">{{ s.AvailabilityZone }}</td>
-                    <td><span :class="s.State === 'available' ? 'status-ok' : 'status-warn'">{{ s.State }}</span></td>
-                    <td><span :class="s.MapPublicIpOnLaunch ? 'status-warn' : 'text-dim'">{{ s.MapPublicIpOnLaunch ? 'Yes' : 'No' }}</span></td>
-                    <td class="text-dim">{{ s.AvailableIpAddressCount }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <!-- Security Groups -->
-            <div v-else-if="vpcDetailModal.tab === 'sgs'">
-              <div v-if="!vpcDetailModal.data.securityGroups?.length" class="empty-row">No security groups.</div>
-              <div v-else style="display:flex;flex-direction:column;gap:10px">
-                <div v-for="sg in vpcDetailModal.data.securityGroups" :key="sg.GroupId"
-                  class="config-section">
-                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-                    <span style="font-weight:600">{{ sg.GroupName }}</span>
-                    <span class="mono-xs text-dim">{{ sg.GroupId }}</span>
-                    <span class="text-dim" style="font-size:11px">{{ sg.Description }}</span>
-                  </div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Inbound Rules ({{ sg.IpPermissions?.length ?? 0 }})</div>
-                  <table class="cloud-table" style="font-size:11px">
-                    <thead><tr><th>Protocol</th><th>Port</th><th>Source</th></tr></thead>
-                    <tbody>
-                      <tr v-for="(rule, i) in (sg.IpPermissions || [])" :key="i">
-                        <td>{{ rule.IpProtocol === '-1' ? 'All' : rule.IpProtocol }}</td>
-                        <td>{{ rule.FromPort != null ? (rule.FromPort === rule.ToPort ? rule.FromPort : `${rule.FromPort}-${rule.ToPort}`) : '*' }}</td>
-                        <td>{{ (rule.IpRanges||[]).map(r=>r.CidrIp).concat((rule.Ipv6Ranges||[]).map(r=>r.CidrIpv6)).join(', ') || (rule.UserIdGroupPairs||[]).map(p=>p.GroupId).join(', ') || '*' }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <!-- Route Tables -->
-            <div v-else-if="vpcDetailModal.tab === 'routes'">
-              <div v-if="!vpcDetailModal.data.routeTables?.length" class="empty-row">No route tables.</div>
-              <div v-else style="display:flex;flex-direction:column;gap:10px">
-                <div v-for="rt in vpcDetailModal.data.routeTables" :key="rt.RouteTableId" class="config-section">
-                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-                    <span class="mono-xs" style="font-weight:600">{{ rt.RouteTableId }}</span>
-                    <span v-if="rt.Associations?.some(a => a.Main)" style="font-size:11px;padding:1px 6px;border-radius:3px;background:rgba(124,158,248,.15);color:var(--accent)">Main</span>
-                    <span class="text-dim" style="font-size:11px">{{ (rt.Tags||[]).find(t=>t.Key==='Name')?.Value || '' }}</span>
-                  </div>
-                  <table class="cloud-table" style="font-size:11px">
-                    <thead><tr><th>Destination</th><th>Target</th><th>State</th></tr></thead>
-                    <tbody>
-                      <tr v-for="(r, i) in (rt.Routes || [])" :key="i">
-                        <td class="mono-xs">{{ r.DestinationCidrBlock || r.DestinationIpv6CidrBlock || r.DestinationPrefixListId }}</td>
-                        <td class="mono-xs text-dim">{{ r.GatewayId || r.NatGatewayId || r.TransitGatewayId || r.InstanceId || 'local' }}</td>
-                        <td><span :class="r.State === 'active' ? 'status-ok' : 'status-warn'">{{ r.State }}</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <!-- IGWs -->
-            <div v-else-if="vpcDetailModal.tab === 'igws'">
-              <div v-if="!vpcDetailModal.data.internetGateways?.length" class="empty-row">No internet gateways attached.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Gateway ID</th><th>State</th><th>Name</th></tr></thead>
-                <tbody>
-                  <tr v-for="igw in vpcDetailModal.data.internetGateways" :key="igw.InternetGatewayId">
-                    <td class="mono-xs">{{ igw.InternetGatewayId }}</td>
-                    <td><span :class="igw.Attachments?.[0]?.State === 'available' ? 'status-ok' : 'status-warn'">{{ igw.Attachments?.[0]?.State || '-' }}</span></td>
-                    <td class="text-dim">{{ (igw.Tags||[]).find(t=>t.Key==='Name')?.Value || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <!-- NAT Gateways -->
-            <div v-else-if="vpcDetailModal.tab === 'nats'">
-              <div v-if="!vpcDetailModal.data.natGateways?.length" class="empty-row">No NAT gateways.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>NAT ID</th><th>Subnet</th><th>Public IP</th><th>Private IP</th><th>State</th></tr></thead>
-                <tbody>
-                  <tr v-for="nat in vpcDetailModal.data.natGateways" :key="nat.NatGatewayId">
-                    <td class="mono-xs">{{ nat.NatGatewayId }}</td>
-                    <td class="mono-xs text-dim">{{ nat.SubnetId }}</td>
-                    <td class="text-dim">{{ nat.NatGatewayAddresses?.[0]?.PublicIp || '-' }}</td>
-                    <td class="text-dim">{{ nat.NatGatewayAddresses?.[0]?.PrivateIp || '-' }}</td>
-                    <td><span :class="nat.State === 'available' ? 'status-ok' : 'status-warn'">{{ nat.State }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-
     <!-- ── ECR Deploy to K8s Modal ────────────────────────────────────────── -->
     <div v-if="ecrDeployModal.open" class="modal-overlay" @click.self="ecrDeployModal.open = false">
       <div class="modal" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
@@ -2305,6 +2159,7 @@
     />
     <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
     <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
+    <VpcDetail    :open="vpcDetailModal.open" :vpc="vpcDetailModal.vpc" @close="vpcDetailModal.open = false" />
     <StepFnDetail :open="stepFnDetailModal.open" :sm="stepFnDetailModal.sm" :profile-id="selectedProfileId" @close="stepFnDetailModal.open = false" />
 
     <!-- API Gateway Routes & Integrations Modal -->
@@ -3805,6 +3660,7 @@ import Ec2Rdp              from './Ec2Rdp.vue'
 import Ec2RdpInfo          from './Ec2RdpInfo.vue'
 import Ec2Detail           from './Ec2Detail.vue'
 import LambdaDetail        from './LambdaDetail.vue'
+import VpcDetail           from './VpcDetail.vue'
 import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
@@ -4413,36 +4269,13 @@ async function testS3Bucket(bucketName) {
   }
 }
 
-// ─── VPC Details Modal ────────────────────────────────────────────────────────
+// ─── VPC Info Modal ───────────────────────────────────────────────────────────
 
-const vpcDetailTabs = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'subnets',  label: 'Subnets' },
-  { id: 'sgs',      label: 'Security Groups' },
-  { id: 'routes',   label: 'Route Tables' },
-  { id: 'igws',     label: 'Internet GWs' },
-  { id: 'nats',     label: 'NAT GWs' },
-]
+const vpcDetailModal = reactive({ open: false, vpc: null })
 
-const vpcDetailModal = reactive({
-  open: false, loading: false, error: null,
-  name: '', vpcId: '', tab: 'overview', data: null,
-})
-
-async function openVpcDetails(v) {
-  Object.assign(vpcDetailModal, { open: true, loading: true, error: null, name: v.name, vpcId: v.id, tab: 'overview', data: null })
-  try {
-    const data = await awsStore.fetchResourceConfig('vpc', { id: v.id })
-    if (data) {
-      vpcDetailModal.data = data
-    } else {
-      vpcDetailModal.error = awsStore.error || 'Failed to load VPC details'
-    }
-  } catch (e) {
-    vpcDetailModal.error = e?.message || 'Error'
-  } finally {
-    vpcDetailModal.loading = false
-  }
+function openVpcDetail(v) {
+  vpcDetailModal.vpc  = v
+  vpcDetailModal.open = true
 }
 
 // ─── ECR Deploy to K8s Modal ─────────────────────────────────────────────────
