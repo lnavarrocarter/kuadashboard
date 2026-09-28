@@ -55,7 +55,15 @@ Cada servicio se lee por separado, en paralelo y con un tiempo máximo: si falta
 Debajo del resumen, el Resumen agrega (cargado en segundo plano para no demorar el resto):
 
 - **Costos**: lo gastado en el mes, la proyección a fin de mes y el mes anterior, más los servicios que más cuestan (los que están fuera de KUA se marcan). Los datos vienen de Cost Explorer, que AWS cobra a USD 0.01 por consulta, así que KUA los guarda por perfil durante **12 horas** en disco (`~/.kuadashboard/aws-cost-cache.json`, o la carpeta de datos de la app de escritorio) y **Actualizar costos** fuerza una actualización (2 consultas). Sin acceso a Cost Explorer, KUA muestra el total estimado de la cuenta desde la métrica de facturación de CloudWatch (solo disponible con *Receive Billing Alerts* habilitado) y ofrece **Solicitar acceso**.
-- **Actividad de Lambda**: invocaciones, errores (con su tasa) y throttles de toda la cuenta en las últimas 24 horas, con un gráfico por hora (CloudWatch).
+- **Actividad · últimas 24 h**: una tarjeta por servicio con datos, de toda la cuenta, con una línea de tendencia por hora:
+  - **Lambda**: invocaciones, errores (y su tasa) y throttles.
+  - **EC2**: CPU promedio de las instancias, pico y última hora.
+  - **Load balancers**: requests, errores 5xx y latencia de los ALB, y tráfico de los NLB. Cuando es el propio load balancer el que devuelve los 5xx (suele indicar que no hay targets sanos), la tarjeta lo indica.
+  - **EKS**: nodos, nodos con falla, CPU y memoria, si Container Insights está habilitado; si no, la tarjeta explica cómo obtenerlos.
+  - **Glue**: ejecuciones de jobs iniciadas en las últimas 24 h (exitosas, fallidas, en curso, tiempo total) y los jobs que más fallaron.
+  - **S3**: almacenamiento y cantidad de objetos de los buckets de la región del perfil (métrica diaria de CloudWatch).
+
+  Las expresiones `SEARCH` de CloudWatch agregan todas las instancias o load balancers en una sola consulta, así que las tarjetas cuestan fracciones de centavo; las ejecuciones de Glue salen de la API de Glue.
 - **Servicios fuera de KUA**: servicios con costo este mes o el anterior, recursos etiquetados (Resource Groups Tagging API, primeros 1.000 recursos) o cambios en las últimas 24 horas (solo eventos de escritura de CloudTrail, así que las lecturas de KUA no cuentan) que KUA todavía no gestiona, como Elastic Load Balancing, SQS, KMS o Kinesis. Los servicios que KUA solo usa indirectamente (CloudWatch, CloudWatch Logs, CloudFormation) aparecen al final como *Parcial en KUA*.
 
 Cada fuente se lee por separado: si falta un permiso, solo se oculta esa fuente y se ofrece **Solicitar acceso**.

@@ -55,7 +55,15 @@ Every service is read on its own, in parallel and with a timeout: a missing perm
 Below the summary the Overview adds, loaded in the background so the rest never waits:
 
 - **Costs** — this month so far, the month-end forecast and last month, plus the most expensive services (services outside KUA are marked). Data comes from Cost Explorer, which AWS bills at USD 0.01 per request, so KUA caches it per profile for **12 hours** on disk (`~/.kuadashboard/aws-cost-cache.json`, or the app data folder in the desktop app) and **Refresh costs** forces an update (2 requests). Without Cost Explorer access, KUA shows the account's estimated total from the CloudWatch billing metric (only available when *Receive Billing Alerts* is enabled) and offers **Request access**.
-- **Lambda activity** — invocations, errors (with the error rate) and throttles for the whole account in the last 24 hours, with an hourly chart (CloudWatch).
+- **Activity · last 24h** — one card per service that has data, account-wide, with an hourly trend line:
+  - **Lambda**: invocations, errors (and rate) and throttles.
+  - **EC2**: average CPU across instances, peak and last hour.
+  - **Load balancers**: ALB requests, 5xx errors and latency, and NLB traffic. When the load balancer itself returns the 5xx (usually no healthy targets), the card says so.
+  - **EKS**: nodes, failed nodes, CPU and memory, when Container Insights is enabled; otherwise the card explains how to get them.
+  - **Glue**: job runs started in the last 24h (succeeded, failed, running, run time) and the jobs that failed most.
+  - **S3**: storage and object count of the buckets in the profile's region (daily CloudWatch metric).
+
+  CloudWatch `SEARCH` expressions aggregate every instance or load balancer in one request, so the cards cost fractions of a cent; Glue runs come from the Glue API.
 - **Services outside KUA** — services with cost this or last month, tagged resources (Resource Groups Tagging API, first 1,000 resources) or changes in the last 24 hours (CloudTrail write events only, so KUA's own reads do not count) that KUA does not manage yet, such as Elastic Load Balancing, SQS, KMS or Kinesis. Services KUA only uses indirectly (CloudWatch, CloudWatch Logs, CloudFormation) are listed last as *Partly in KUA*.
 
 Each source is read on its own: a missing permission only hides that source and offers **Request access**.

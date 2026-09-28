@@ -6,7 +6,7 @@
     <template v-else-if="insights">
       <div v-if="section === 'summary'" class="aoi-grid">
         <!-- Costs -->
-        <section class="aoi-card">
+        <section class="aoi-card aoi-costs">
           <div class="aoi-card-head">
             <h3>{{ t('awsInsights.costs') }}</h3>
             <span v-if="costs.status === 'ok' && costs.estimated" class="aoi-tag">{{ t('awsInsights.estimated') }}</span>
@@ -60,28 +60,49 @@
           </div>
         </section>
 
-        <!-- Lambda activity -->
-        <section class="aoi-card">
-          <div class="aoi-card-head"><h3>{{ t('awsInsights.lambdaActivity') }}</h3></div>
-          <template v-if="lambda.status === 'ok'">
-            <div class="aoi-figures">
-              <div><span class="aoi-label">{{ t('awsInsights.invocations') }}</span><span class="aoi-big">{{ num(lambda.invocations) }}</span></div>
-              <div><span class="aoi-label">{{ t('awsInsights.errors') }}</span><span class="aoi-mid" :class="{ bad: lambda.errors }">{{ num(lambda.errors) }} <small>({{ lambda.errorRate }}%)</small></span></div>
-              <div><span class="aoi-label">{{ t('awsInsights.throttles') }}</span><span class="aoi-mid" :class="{ bad: lambda.throttles }">{{ num(lambda.throttles) }}</span></div>
-            </div>
-            <CloudMetricChart
-              v-if="lambda.series.invocations.length"
-              :label="t('awsInsights.invocationsPerHour')" unit="count" :points="lambda.series.invocations"
-              :x-tick-limit="6" color="#0e9de8"
-            />
-            <p v-else class="aoi-note">{{ t('awsInsights.noLambdaActivity') }}</p>
-          </template>
-          <div v-else class="aoi-notice">
-            <i data-lucide="lock"></i><span>{{ errorText(lambda.error) }}</span>
-            <button v-if="lambda.access" class="aoi-link" @click="openAccess(lambda)">{{ t('awsAccess.requestAccess') }}</button>
-          </div>
-        </section>
       </div>
+
+      <!-- Activity, last 24h: one card per service that has data -->
+      <section v-if="section === 'summary'" class="aoi-activity">
+        <div class="aoi-section-head">
+          <h3>{{ t('awsInsights.activity') }}</h3>
+          <span class="aoi-dim">{{ t('awsInsights.activityHint') }}</span>
+        </div>
+        <div v-if="usage.cloudwatch" class="aoi-notice">
+          <i data-lucide="lock"></i><span>{{ t('awsInsights.cloudwatchUnavailable', { reason: errorText(usage.cloudwatch.error) }) }}</span>
+          <button v-if="usage.cloudwatch.access" class="aoi-link" @click="openAccess(usage.cloudwatch)">{{ t('awsAccess.requestAccess') }}</button>
+        </div>
+        <p v-else-if="!activityCards.length" class="aoi-note">{{ t('awsInsights.noActivity') }}</p>
+        <div class="aoi-kpis">
+          <button
+            v-for="card in activityCards" :key="card.id"
+            :class="['aoi-kpi', { clickable: !!card.tab, warn: card.warn }]"
+            :disabled="!card.tab"
+            :title="card.tab ? t('awsOverview.openService', { service: card.title }) : ''"
+            @click="card.tab && emit('open-tab', card.tab)"
+          >
+            <span class="aoi-kpi-head">
+              <span class="aoi-kpi-title">{{ card.title }}</span>
+              <span v-if="card.outside" class="aoi-tag warn">{{ t('awsInsights.notInKua') }}</span>
+            </span>
+            <span class="aoi-kpi-main">
+              <span class="aoi-kpi-value" :class="{ bad: card.mainBad }">{{ card.main }}</span>
+              <span class="aoi-kpi-caption">{{ card.mainLabel }}</span>
+            </span>
+            <span class="aoi-kpi-facts">
+              <span v-for="fact in card.facts" :key="fact.label" :class="{ bad: fact.bad }">
+                <span class="aoi-dim">{{ fact.label }}</span> {{ fact.value }}
+              </span>
+            </span>
+            <Sparkline v-if="card.series?.length > 1" :points="card.series" :label="card.seriesLabel" />
+            <span v-if="card.note" class="aoi-kpi-note">{{ card.note }}</span>
+            <span
+              v-if="card.access" class="aoi-link" role="button" tabindex="0"
+              @click.stop="openAccess(card.access)" @keydown.enter.stop="openAccess(card.access)"
+            >{{ t('awsAccess.requestAccess') }}</span>
+          </button>
+        </div>
+      </section>
 
       <!-- Services outside KUA -->
       <section v-if="section === 'uncovered'" class="aoi-card">
@@ -137,15 +158,16 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, h } from 'vue'
 import { useI18n } from '../../composables/useI18n'
 import { settings } from '../../composables/useSettings'
-import CloudMetricChart from './CloudMetricChart.vue'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 
 const props = defineProps({
-  // 'summary' = costs and Lambda activity; 'uncovered' = services outside KUA.
+  // 'summary' = costs and activity; 'uncovered' = services outside KUA.
   section: { type: String, default: 'summary' },
+  // Resource counts from the overview (e.g. { eks: 1 }), to explain missing metrics.
+  resourceCounts: { type: Object, default: () => ({}) },
   insights: { type: Object, default: null },
   loading: Boolean,
   error: { type: String, default: null },
@@ -158,7 +180,133 @@ const { t } = useI18n()
 
 const accessFailure = ref(null)
 const costs = computed(() => props.insights?.costs || {})
-const lambda = computed(() => props.insights?.usage?.lambda || {})
+const usage = computed(() => props.insights?.usage || {})
+
+// Tiny trend line; the value range is in the tooltip, the card holds the numbers.
+const Sparkline = ({ points, label }) => {
+  const values = points.map(p => p.v)
+  const lo = Math.min(...values)
+  const hi = Math.max(...values)
+  const span = hi - lo || 1
+  const coords = values.map((v, i) => `${(i / (values.length - 1)) * 100},${34 - ((v - lo) / span) * 30}`).join(' ')
+  // Inline presentation: scoped styles do not reach elements built with h().
+  return h('svg', { class: 'aoi-spark', viewBox: '0 0 100 36', preserveAspectRatio: 'none', role: 'img', 'aria-label': label, style: { width: '100%', height: '36px', display: 'block' } },
+    [h('title', label), h('polyline', {
+      points: coords, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke',
+    })])
+}
+Sparkline.props = ['points', 'label']
+
+function bytes(value) {
+  if (value == null) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let n = value
+  let unit = 0
+  while (n >= 1000 && unit < units.length - 1) { n /= 1000; unit += 1 }
+  return `${new Intl.NumberFormat(settings.lang === 'es' ? 'es' : 'en-US', { maximumFractionDigits: n >= 100 ? 0 : 1 }).format(n)} ${units[unit]}`
+}
+function pct(value) {
+  return value == null ? '—' : `${value}%`
+}
+function duration(seconds) {
+  if (!seconds) return '0 min'
+  return seconds >= 3600 ? `${(seconds / 3600).toFixed(1)} h` : `${Math.round(seconds / 60)} min`
+}
+function seriesLabel(name, points, format) {
+  const values = points.map(p => p.v)
+  return t('awsInsights.seriesRange', { name, min: format(Math.min(...values)), max: format(Math.max(...values)) })
+}
+
+const activityCards = computed(() => {
+  const u = usage.value
+  if (u.cloudwatch) return glueCard(u.glue) ? [glueCard(u.glue)] : []
+  const cards = []
+  if (u.lambda?.present) {
+    cards.push({
+      id: 'lambda', tab: 'lambda', title: 'Lambda',
+      main: num(u.lambda.invocations), mainLabel: t('awsInsights.invocations'),
+      facts: [
+        { label: t('awsInsights.errors'), value: `${num(u.lambda.errors)} (${u.lambda.errorRate}%)`, bad: u.lambda.errors > 0 },
+        { label: t('awsInsights.throttles'), value: num(u.lambda.throttles), bad: u.lambda.throttles > 0 },
+      ],
+      series: u.lambda.series, seriesLabel: seriesLabel(t('awsInsights.invocationsPerHour'), u.lambda.series, num),
+    })
+  }
+  if (u.ec2?.present) {
+    cards.push({
+      id: 'ec2', tab: 'ec2', title: 'EC2',
+      main: pct(u.ec2.cpuAvg), mainLabel: t('awsInsights.cpuAvg'), mainBad: u.ec2.cpuAvg >= 80,
+      facts: [
+        { label: t('awsInsights.cpuPeak'), value: pct(u.ec2.cpuPeak), bad: u.ec2.cpuPeak >= 90 },
+        { label: t('awsInsights.cpuNow'), value: pct(u.ec2.cpuNow) },
+      ],
+      series: u.ec2.series, seriesLabel: seriesLabel(t('awsInsights.cpuAvgPerHour'), u.ec2.series, v => `${v.toFixed(1)}%`),
+    })
+  }
+  if (u.elb?.present) {
+    const onlyElb5xx = u.elb.elbGenerated5xx > u.elb.requests
+    cards.push({
+      id: 'elb', tab: null, outside: true, title: t('awsInsights.loadBalancers'), warn: u.elb.errors5xx > 0,
+      main: num(u.elb.requests), mainLabel: t('awsInsights.requests'),
+      facts: [
+        // A rate over 100% is meaningless: 5xx generated by the load balancer are not in RequestCount.
+        { label: '5xx', value: u.elb.errorRate != null && u.elb.errorRate <= 100 ? `${num(u.elb.errors5xx)} (${u.elb.errorRate}%)` : num(u.elb.errors5xx), bad: u.elb.errors5xx > 0 },
+        ...(u.elb.latencyMs != null ? [{ label: t('awsInsights.latency'), value: `${num(u.elb.latencyMs)} ms` }] : []),
+        ...(u.elb.nlbBytes != null ? [{ label: 'NLB', value: bytes(u.elb.nlbBytes) }] : []),
+      ],
+      note: onlyElb5xx ? t('awsInsights.elbGenerated5xx', { n: num(u.elb.elbGenerated5xx) }) : '',
+      series: u.elb.series, seriesLabel: seriesLabel(t('awsInsights.requestsPerHour'), u.elb.series || [], num),
+    })
+  }
+  if (u.eks?.present) {
+    cards.push({
+      id: 'eks', tab: 'eks', title: 'EKS', warn: u.eks.failedNodes > 0,
+      main: num(u.eks.nodes), mainLabel: t('awsInsights.nodes'),
+      facts: [
+        { label: t('awsInsights.failedNodes'), value: num(u.eks.failedNodes), bad: u.eks.failedNodes > 0 },
+        { label: 'CPU', value: pct(u.eks.cpuAvg) },
+        { label: t('awsInsights.memory'), value: pct(u.eks.memoryAvg) },
+      ],
+      series: u.eks.series, seriesLabel: seriesLabel(t('awsInsights.cpuAvgPerHour'), u.eks.series, v => `${v.toFixed(1)}%`),
+    })
+  } else if (props.resourceCounts.eks > 0) {
+    cards.push({ id: 'eks', tab: 'eks', title: 'EKS', main: num(props.resourceCounts.eks), mainLabel: t('awsInsights.clusters'), facts: [], note: t('awsInsights.eksNoInsights') })
+  }
+  const glue = glueCard(u.glue)
+  if (glue) cards.push(glue)
+  if (u.s3?.present) {
+    cards.push({
+      id: 's3', tab: 's3', title: 'S3',
+      main: bytes(u.s3.bytes), mainLabel: t('awsInsights.storage'),
+      facts: [{ label: t('awsInsights.objects'), value: num(u.s3.objects) }],
+      note: t('awsInsights.s3Note', { date: u.s3.asOf ? new Date(u.s3.asOf).toLocaleDateString(settings.lang === 'es' ? 'es' : 'en-US') : '—' }),
+    })
+  }
+  return cards
+})
+
+function glueCard(glue) {
+  if (!glue) return null
+  if (glue.status !== 'ok') {
+    return glue.error?.kind === 'denied'
+      ? { id: 'glue', tab: 'glue', title: 'Glue', main: '—', mainLabel: t('awsInsights.jobRuns'), facts: [], note: errorText(glue.error), access: glue.access ? glue : null }
+      : null
+  }
+  if (!glue.present) return null
+  const failing = glue.failedJobs.slice(0, 3).map(item => `${item.job} (${item.count})`).join(', ')
+  return {
+    id: 'glue', tab: 'glue', title: 'Glue', warn: glue.failed > 0,
+    main: `${num(glue.runs)}${glue.truncated ? '+' : ''}`, mainLabel: t('awsInsights.jobRuns'),
+    facts: [
+      { label: t('awsInsights.succeeded'), value: num(glue.succeeded) },
+      { label: t('awsInsights.runsFailed'), value: num(glue.failed), bad: glue.failed > 0 },
+      { label: t('awsInsights.running'), value: num(glue.running) },
+      { label: t('awsInsights.execTime'), value: duration(glue.executionSeconds) },
+    ],
+    note: failing ? t('awsInsights.failingJobs', { jobs: failing }) : t('awsInsights.glueJobs', { n: num(glue.jobs) }),
+  }
+}
 const uncovered = computed(() => props.insights?.uncovered?.services || [])
 
 // Costs aggregated per KUA service (EC2 and "EC2 - Other" share a bar).
@@ -220,7 +368,8 @@ function openAccess(failure) {
 <style scoped>
 .aoi { display: flex; flex-direction: column; gap: 12px; }
 .aoi-loading { margin: 0; font-size: 12px; color: var(--text-dim); }
-.aoi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.aoi-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.aoi-costs .aoi-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 28px; }
 .aoi-card { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); padding: 12px 14px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .aoi-card-head { display: flex; align-items: center; gap: 8px; }
 .aoi-card-head h3 { margin: 0; font-size: 12px; font-weight: 600; flex: 1; }
@@ -260,7 +409,30 @@ function openAccess(failure) {
 .aoi-sources { margin: 0; padding-left: 16px; font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; }
 .aoi-sources li.warn { color: var(--yellow); }
 
-@media (max-width: 1000px) {
-  .aoi-grid { grid-template-columns: minmax(0, 1fr); }
+.aoi-activity { display: flex; flex-direction: column; gap: 8px; }
+.aoi-section-head { display: flex; align-items: baseline; gap: 10px; }
+.aoi-section-head h3 { margin: 0; font-size: 12px; font-weight: 600; }
+.aoi-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.aoi-kpi {
+  display: flex; flex-direction: column; gap: 6px; text-align: left; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel); color: var(--text); font: inherit; cursor: default;
+}
+.aoi-kpi.clickable { cursor: pointer; }
+.aoi-kpi.clickable:hover { border-color: var(--accent); background: var(--bg-hover); }
+.aoi-kpi.warn { border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+.aoi-kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.aoi-kpi-title { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.aoi-kpi-main { display: flex; align-items: baseline; gap: 8px; }
+.aoi-kpi-value { font-size: 24px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.aoi-kpi-value.bad { color: var(--red); }
+.aoi-kpi-caption { font-size: 11px; color: var(--text-dim); }
+.aoi-kpi-facts { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.aoi-kpi-facts .bad { color: var(--red); }
+.aoi-kpi-note { font-size: 11px; color: var(--text-dim); }
+.aoi-kpi.warn .aoi-kpi-note { color: var(--yellow); }
+
+@media (max-width: 900px) {
+  .aoi-costs .aoi-bars { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

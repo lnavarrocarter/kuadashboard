@@ -90,6 +90,7 @@
 
       <AwsOverviewInsights
         section="summary"
+        :resource-counts="resourceCounts"
         :insights="awsStore.overviewInsights"
         :loading="insightsLoading"
         :error="insightsError"
@@ -182,6 +183,7 @@ let clock = null
 
 const data = computed(() => awsStore.overview)
 const identity = computed(() => data.value?.identity || {})
+const resourceCounts = computed(() => Object.fromEntries((data.value?.services || []).map(s => [s.id, s.count || 0])))
 const totalResources = computed(() => (data.value?.services || []).reduce((sum, s) => sum + (s.count || 0), 0))
 
 const IDENTITY_TYPES = { user: 'awsOverview.typeUser', role: 'awsOverview.typeRole', sso: 'awsOverview.typeSso', root: 'awsOverview.typeRoot', federated: 'awsOverview.typeFederated' }

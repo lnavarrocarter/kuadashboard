@@ -29,7 +29,14 @@ function insights(overrides = {}) {
         { name: 'Tiny', key: 'x', label: 'Tiny', tab: null, monthToDate: 0 },
       ],
     },
-    usage: { lambda: { status: 'ok', invocations: 3129, errors: 6, throttles: 0, errorRate: 0.19, series: { invocations: [{ t: 1, v: 10 }, { t: 2, v: 20 }], errors: [] } } },
+    usage: {
+      lambda: { present: true, invocations: 3129, errors: 6, throttles: 0, errorRate: 0.19, series: [{ t: 1, v: 10 }, { t: 2, v: 20 }] },
+      ec2: { present: true, cpuAvg: 15.2, cpuPeak: 92.3, cpuNow: 11.6, series: [{ t: 1, v: 10 }, { t: 2, v: 20 }] },
+      elb: { present: true, requests: 22, errors5xx: 1208, elbGenerated5xx: 1202, errorRate: 5490.91, latencyMs: 1, nlbBytes: null, series: [{ t: 1, v: 1 }, { t: 2, v: 0 }] },
+      s3: { present: true, bytes: 463706964808, objects: 7665221, asOf: Date.parse('2026-09-27T00:00:00Z') },
+      eks: { present: false },
+      glue: { status: 'ok', present: true, jobs: 100, runs: 82, succeeded: 70, failed: 12, running: 0, executionSeconds: 5400, truncated: true, failedJobs: [{ job: 'etl-a', count: 8 }, { job: 'etl-b', count: 4 }] },
+    },
     uncovered: {
       services: [
         { key: 'elasticloadbalancing', label: 'Elastic Load Balancing', cost: 164.03, lastMonthCost: 180.84, taggedResources: 61, recentChanges: 4, sources: ['cost', 'tags', 'cloudtrail'] },
@@ -106,10 +113,55 @@ describe('AwsOverviewInsights', () => {
     expect(modal.props('access').failedAction).toBe('ce:GetCostAndUsage')
   })
 
-  it('shows Lambda activity for the last 24h with an hourly chart', () => {
-    const card = mountWith(insights()).findAll('.aoi-card')[1]
-    expect(card.findAll('.aoi-figures > div').map(d => d.text())).toEqual(['Invocations3,129', 'Errors6 (0.19%)', 'Throttles0'])
-    expect(card.find('.chart-stub').text()).toBe('Invocations per hour|2')
+  it('shows one activity card per service with data, in a fixed order', () => {
+    const wrapper = mountWith(insights(), { resourceCounts: { eks: 1 } })
+    expect(wrapper.findAll('.aoi-kpi-title').map(c => c.text())).toEqual(['Lambda', 'EC2', 'Load balancers', 'EKS', 'Glue', 'S3'])
+  })
+
+  it('summarizes each service with its main figure and facts', () => {
+    const cards = mountWith(insights()).findAll('.aoi-kpi')
+    const byTitle = Object.fromEntries(cards.map(c => [c.find('.aoi-kpi-title').text(), c]))
+    expect(byTitle.Lambda.find('.aoi-kpi-main').text()).toBe('3,129Invocations')
+    expect(byTitle.Lambda.find('.aoi-kpi-facts').text()).toContain('Errors 6 (0.19%)')
+    expect(byTitle.EC2.find('.aoi-kpi-main').text()).toBe('15.2%average CPU')
+    expect(byTitle.EC2.find('.aoi-kpi-facts .bad').text()).toContain('92.3%')
+    expect(byTitle.Glue.find('.aoi-kpi-main').text()).toBe('82+job runs')
+    expect(byTitle.Glue.find('.aoi-kpi-facts').text()).toContain('Failed 12')
+    expect(byTitle.Glue.find('.aoi-kpi-note').text()).toBe('Failing: etl-a (8), etl-b (4)')
+    expect(byTitle.S3.find('.aoi-kpi-main').text()).toBe('464 GBstored')
+  })
+
+  it('flags load balancers answering 5xx themselves and marks them outside KUA', async () => {
+    const wrapper = mountWith(insights())
+    const elb = wrapper.findAll('.aoi-kpi').find(c => c.text().includes('Load balancers'))
+    expect(elb.classes()).toContain('warn')
+    expect(elb.find('.aoi-tag').text()).toBe('Not in KUA')
+    expect(elb.find('.aoi-kpi-note').text()).toContain('1,202 5xx came from the load balancer itself')
+    expect(elb.attributes('disabled')).toBeDefined()
+    expect(elb.find('.aoi-kpi-facts').text()).toContain('5xx 1,208')
+    expect(elb.find('.aoi-kpi-facts').text()).not.toContain('%)')
+  })
+
+  it('draws a sparkline for hourly series and opens the service tab', async () => {
+    const wrapper = mountWith(insights())
+    const lambda = wrapper.findAll('.aoi-kpi')[0]
+    expect(lambda.find('svg.aoi-spark title').text()).toBe('Invocations per hour: 10 – 20')
+    expect(lambda.find('svg.aoi-spark polyline').attributes('stroke')).toBe('var(--accent)')
+    await lambda.trigger('click')
+    expect(wrapper.emitted('open-tab')).toEqual([['lambda']])
+  })
+
+  it('explains EKS without Container Insights when the account has clusters', () => {
+    const eks = mountWith(insights(), { resourceCounts: { eks: 2 } }).findAll('.aoi-kpi').find(c => c.text().startsWith('EKS'))
+    expect(eks.find('.aoi-kpi-main').text()).toBe('2clusters')
+    expect(eks.find('.aoi-kpi-note').text()).toContain('Container Insights')
+  })
+
+  it('hides services without data and explains a CloudWatch failure', () => {
+    const data = insights({ usage: { cloudwatch: { status: 'unavailable', error: { kind: 'denied', message: 'x' }, access: { failedAction: 'cloudwatch:GetMetricData', actions: ['cloudwatch:GetMetricData'], policy: {}, source: 'error' } }, glue: { status: 'ok', present: false } } })
+    const wrapper = mountWith(data)
+    expect(wrapper.findAll('.aoi-kpi')).toHaveLength(0)
+    expect(wrapper.find('.aoi-activity .aoi-notice').text()).toContain('CloudWatch metrics are not available (No permission)')
   })
 
   it('lists services outside KUA with how each one was detected', () => {
