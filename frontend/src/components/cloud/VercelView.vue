@@ -639,10 +639,17 @@ const apmPlatformResources = computed(() => vercelStore.projects.map(project => 
 
 // ─── Load data when tab/profile changes ──────────────────────────────────────
 
+// Views whose data depends on the selected project.
+const PROJECT_SCOPED_SERVICES = new Set(['deployments', 'domains', 'env-vars', 'cron'])
+
 watch(
   () => [props.activeService, vercelStore.activeProfileId, vercelStore.selectedProject?.id],
-  ([service, profileId]) => {
+  ([service, profileId], previous) => {
     if (!profileId) return
+    // A project change alone (from the header or the Projects table) only matters to
+    // project-scoped views; reloading others (e.g. Projects) would just flash the table.
+    const onlyProjectChanged = previous && service === previous[0] && profileId === previous[1]
+    if (onlyProjectChanged && !PROJECT_SCOPED_SERVICES.has(service)) return
     reload(service)
   },
   { immediate: true }

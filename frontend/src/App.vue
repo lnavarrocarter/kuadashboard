@@ -70,6 +70,7 @@
               <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
             </optgroup>
           </select>
+          <VercelProjectSelector />
         </template>
         <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
           <span class="header-application-context">
@@ -515,6 +516,7 @@ import EnvManagerView  from './components/cloud/EnvManagerView.vue'
 import GcpView         from './components/cloud/GcpView.vue'
 import AwsView         from './components/cloud/AwsView.vue'
 import VercelView      from './components/cloud/VercelView.vue'
+import VercelProjectSelector from './components/cloud/VercelProjectSelector.vue'
 import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
 import ArchitectureView from './components/architecture/ArchitectureView.vue'
 import KUAppsView       from './components/kuapps/KUAppsView.vue'

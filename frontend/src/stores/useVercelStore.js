@@ -13,6 +13,8 @@ export const useVercelStore = defineStore('vercel', () => {
   const { apiFetch: request } = useApi()
   let backgroundRequests = 0
   let projectChangeRequestId = 0
+  let profileChangeRequestId = 0   // guards the project list across profile switches
+  let projectsInFlight = null       // { profileId, promise } — dedupes header + view loads
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
@@ -38,6 +40,7 @@ export const useVercelStore = defineStore('vercel', () => {
   const logsDeployment                 = ref(null)
   const deploymentTarget               = ref('')
   const loading         = ref(false)
+  const projectsLoading = ref(false)
   const error           = ref(null)
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -51,6 +54,19 @@ export const useVercelStore = defineStore('vercel', () => {
 
   function shouldIgnoreResponse(requestId) {
     return requestId !== projectChangeRequestId
+  }
+
+  // Last project chosen per profile, so the header selector survives reloads.
+  const PROJECT_MEMORY_PREFIX = 'kua.vercel.project.'
+  function rememberProject(profileId, projectId) {
+    if (!profileId) return
+    try {
+      if (projectId) localStorage.setItem(PROJECT_MEMORY_PREFIX + profileId, projectId)
+      else localStorage.removeItem(PROJECT_MEMORY_PREFIX + profileId)
+    } catch { /* storage unavailable */ }
+  }
+  function rememberedProject(profileId) {
+    try { return profileId ? localStorage.getItem(PROJECT_MEMORY_PREFIX + profileId) : null } catch { return null }
   }
 
   function apiFetch(path, options = {}) {
@@ -77,6 +93,9 @@ export const useVercelStore = defineStore('vercel', () => {
 
   function setActiveProfile(id) {
     projectChangeRequestId++
+    profileChangeRequestId++
+    projectsInFlight = null
+    projectsLoading.value = false
     activeProfileId.value = id
     teams.value           = []
     projects.value        = []
@@ -105,6 +124,7 @@ export const useVercelStore = defineStore('vercel', () => {
   function selectProject(project) {
     projectChangeRequestId++
     selectedProject.value = project
+    rememberProject(activeProfileId.value, project?.id || null)
     deployments.value     = []
     domains.value         = []
     envVars.value         = []
@@ -127,11 +147,55 @@ export const useVercelStore = defineStore('vercel', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  /** Select by id from the loaded list ('' / null clears the project context). */
+  function selectProjectById(projectId) {
+    if (!projectId) {
+      if (selectedProject.value) selectProject(null)
+      return
+    }
+    if (selectedProject.value?.id === projectId) return
+    const project = projects.value.find(p => p.id === projectId)
+    if (project) selectProject(project)
+  }
+
+  // After the list (re)loads: keep the selection in sync with fresh data, drop it if the
+  // project no longer exists, or restore the last project used with this profile.
+  function reconcileSelectedProject() {
+    const current = selectedProject.value
+    if (current) {
+      const fresh = projects.value.find(p => p.id === current.id)
+      if (fresh) selectedProject.value = fresh   // same id: no context change, no reload
+      else selectProject(null)
+      return
+    }
+    const remembered = rememberedProject(activeProfileId.value)
+    const project = remembered && projects.value.find(p => p.id === remembered)
+    if (project) selectProject(project)
+  }
+
   async function fetchProjects() {
-    loading.value = true; error.value = null
-    try {
-      projects.value = await apiFetch('/api/cloud/vercel/projects', { headers: headers() })
-    } catch (e) { setError(e) } finally { loading.value = false }
+    const profileId = activeProfileId.value
+    if (projectsInFlight?.profileId === profileId) return projectsInFlight.promise
+    const requestId = profileChangeRequestId
+    const promise = (async () => {
+      loading.value = true; projectsLoading.value = true; error.value = null
+      try {
+        const nextProjects = await apiFetch('/api/cloud/vercel/projects', { headers: headers() })
+        if (requestId !== profileChangeRequestId) return
+        projects.value = nextProjects
+        reconcileSelectedProject()
+      } catch (e) {
+        if (requestId === profileChangeRequestId) setError(e)
+      } finally {
+        if (requestId === profileChangeRequestId) {
+          loading.value = false
+          projectsLoading.value = false
+          projectsInFlight = null
+        }
+      }
+    })()
+    projectsInFlight = { profileId, promise }
+    return promise
   }
 
   async function fetchDeployments(projectId, { limit = 20, target = '' } = {}) {
@@ -345,6 +409,7 @@ export const useVercelStore = defineStore('vercel', () => {
     teams,
     projects,
     selectedProject,
+    projectsLoading,
     deployments,
     domains,
     envVars,
@@ -371,6 +436,7 @@ export const useVercelStore = defineStore('vercel', () => {
     selectProject,
     fetchTeams,
     fetchProjects,
+    selectProjectById,
     fetchDeployments,
     fetchDomains,
     fetchEnvVars,
