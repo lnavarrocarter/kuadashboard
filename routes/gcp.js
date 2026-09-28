@@ -34,6 +34,7 @@ const { exec }       = require('child_process');
 const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
+const { createGcloudCli } = require('../lib/gcloudCli');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
   estimate, assertDeleteConfirmed, validateCreate,
@@ -59,41 +60,24 @@ async function gcloudExec(args, timeout = 10000) {
   return stdout.trim();
 }
 
+// Cached + deduplicated gcloud CLI access (see lib/gcloudCli.js)
+const gcloudCli = createGcloudCli({ exec: args => gcloudExec(args, 30000) });
+
 /**
- * List local gcloud configurations using the CLI.
- * Returns: [{ name, project, account, isActive }]
+ * List local gcloud configurations for the UI selector.
+ * Returns: [{ name, project, account, region, isActive }] — [] when gcloud is unavailable.
  */
 async function readGcloudConfigs() {
   try {
-    const raw  = await gcloudExec('config configurations list --format=json');
-    const list = JSON.parse(raw);
-    return list.map(c => ({
-      name:     c.name,
-      project:  c.properties?.core?.project  || null,
-      account:  c.properties?.core?.account  || null,
-      region:   c.properties?.compute?.region || null,
-      isActive: c.is_active === true,
-    }));
+    return await gcloudCli.listConfigs();
   } catch {
     return [];
   }
 }
 
-/**
- * Get an OAuth2 access token for the given gcloud configuration name.
- * Uses: gcloud auth print-access-token --configuration=<name>
- */
-async function getGcloudAccessToken(configName) {
-  const token = await gcloudExec(`auth print-access-token --configuration=${configName}`);
-  if (!token) throw new Error(`No access token returned for gcloud config: ${configName}`);
-  return token;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
-  const status = [400, 403, 404, 409].includes(err.code) ? err.code : 500;
+  const status = [400, 403, 404, 409, 503].includes(err.code) ? err.code : 500;
   res.status(status).json({ error: err.message });
 }
 
@@ -108,13 +92,19 @@ async function resolveGcpAuth(profileId) {
   // ── Local gcloud config ───────────────────────────────────────────────────
   if (profileId.startsWith('local:')) {
     const configName = profileId.slice(6);
-    const configs    = await readGcloudConfigs();
-    const cfg        = configs.find(c => c.name === configName);
+    // Throws a 503 "gcloud ... failed" when the CLI itself fails, so that is not
+    // misreported as a missing configuration.
+    let configs = await gcloudCli.listConfigs();
+    let cfg     = configs.find(c => c.name === configName);
+    if (!cfg) {
+      // The config may have been created outside KUA since the list was cached
+      configs = await gcloudCli.listConfigs({ force: true });
+      cfg     = configs.find(c => c.name === configName);
+    }
     if (!cfg) throw Object.assign(new Error(`gcloud config not found: ${configName}`), { code: 404 });
 
-    // Obtain a fresh OAuth2 access token via the gcloud CLI.
-    // This honours whichever account is active in that config.
-    const accessToken = await getGcloudAccessToken(configName);
+    // OAuth2 access token for the account active in that config (cached ~30 min)
+    const accessToken = await gcloudCli.getAccessToken(configName);
 
     // google-gax (v4+) requires a GoogleAuth instance (needs getUniverseDomain +
     // getClient). We pre-populate cachedCredential so GoogleAuth.getClient()
@@ -161,7 +151,8 @@ function requireProfileId(req, res) {
 
 router.get('/gcloud-configs', async (_req, res) => {
   try {
-    res.json(await readGcloudConfigs());
+    // Always fresh (one CLI call): this backs the selector and its Refresh action
+    res.json(await gcloudCli.listConfigs({ force: true }).catch(() => []));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -227,6 +218,7 @@ router.post('/gcloud-login', async (req, res) => {
     });
     child.unref();
 
+    gcloudCli.invalidate();   // the account/token behind a config may change after login
     res.json({ success: true, message: 'gcloud auth login launched — complete the browser flow, then click Refresh.' });
   } catch (err) {
     handleErr(res, err);
@@ -251,6 +243,7 @@ router.post('/gcloud-configs', async (req, res) => {
     if (project) await gcloudExec(`config set project ${project} --configuration=${name}`);
     if (account) await gcloudExec(`config set account ${account} --configuration=${name}`);
     if (region)  await gcloudExec(`config set compute/region ${region} --configuration=${name}`);
+    gcloudCli.invalidate();
 
     const configs = await readGcloudConfigs();
     const created = configs.find(c => c.name === name) || null;
