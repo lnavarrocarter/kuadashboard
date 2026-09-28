@@ -47,7 +47,13 @@
  *   POST /sns/activity                      → 24h published/delivered/failed and log groups per topic
  *   GET  /sns/:name/metrics                 → hourly 24h metrics of one topic
  *   GET  /ses                               → SES account, identities and configuration sets
- *   GET  /ses/metrics                       → hourly 24h account sending metrics
+ *   GET  /ses/metrics                       → hourly account sending metrics (?hours=24|168|720), health
+ *   GET  /sqs/:name/details                 → queue config, policy, tags, Lambda consumers, SNS producers
+ *   GET  /sns/:name/details                 → topic policies, tags, subscriptions with filters and DLQs
+ *   GET  /sns/:name/logs                    → delivery status log events (success/failure)
+ *   GET  /ses/suppression                   → account suppression list
+ *   GET  /ses/configuration-sets/:name/metrics → event metrics from a CloudWatch event destination
+ *   GET  /metrics/history                   → stored metric history (no AWS calls)
  *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
  * NOTE: AWS SDK v3 packages are lazy-required. Install them with:
@@ -77,11 +83,13 @@ const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib
 const { buildAwsOverview } = require('../lib/awsOverview');
 const { validLambdaFunctions, validStateMachines, lambdaActivity, stepFunctionsActivity } = require('../lib/awsActivity');
 const {
-  QUEUE_NAME_RE, TOPIC_NAME_RE, seriesTotals,
-  listSqsQueues, validQueueNames, sqsActivity, sqsQueueSeries,
-  listSnsTopics, validTopics, snsActivity, snsTopicSeries,
-  sesOverview, sesSeries,
+  QUEUE_NAME_RE, TOPIC_NAME_RE, QUEUE_URL_RE, TOPIC_ARN_RE, SET_NAME_RE, validHours, seriesTotals, latestRates,
+  listSqsQueues, validQueueNames, sqsActivity, sqsQueueSeries, sqsQueueDetails,
+  listSnsTopics, validTopics, snsActivity, snsTopicSeries, snsTopicDetails, snsDeliveryLogs,
+  sesOverview, sesSeries, sesSuppression, sesConfigurationSetMetrics,
 } = require('../lib/awsMessaging');
+const { sesHealth } = require('../lib/awsMessagingCatalog');
+const { getMetricHistory } = require('../lib/metricHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -1780,7 +1788,19 @@ router.get('/logs/eventbridge', async (req, res) => {
 
 // ─── SQS ──────────────────────────────────────────────────────────────────────
 // SQS bills every API call as a request (first 1M/month free, then USD 0.40
-// per million): listing N queues costs N+1 requests.
+// per million): listing N queues costs N+1 requests, a detail costs 2.
+// Metric reads keep hourly points in the local metric history, so a detail
+// only requests the metrics that were not read in the last `cacheMin` minutes.
+
+// Shared history (APM database); a broken history never breaks the view.
+function metricHistory() {
+  try { return getMetricHistory(); } catch (err) { console.warn('[metric-history]', err.message); return null; }
+}
+
+function cacheTtlMs(req) {
+  const minutes = Number(req.query.cacheMin || 15);
+  return (minutes >= 1 && minutes <= 1440 ? minutes : 15) * 60 * 1000;
+}
 
 router.get('/sqs', async (req, res) => {
   const profileId = requireProfileId(req, res);
@@ -1797,12 +1817,12 @@ router.post('/sqs/activity', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
-    const names = validQueueNames(req.body?.queues);
-    if (!names) return res.status(400).json({ error: 'Invalid queue list' });
+    const queues = validQueueNames(req.body?.queues);
+    if (!queues) return res.status(400).json({ error: 'Invalid queue list' });
     const cfg = await resolveAwsConfig(profileId);
     const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
     const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
-    res.json(await sqsActivity(cfg, names, { sdk }));
+    res.json(await sqsActivity(cfg, queues, { sdk, history: metricHistory(), profileId, region: cfg.region }));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1810,11 +1830,31 @@ router.get('/sqs/:name/metrics', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
-    if (!QUEUE_NAME_RE.test(req.params.name)) return res.status(400).json({ error: 'Invalid queue name' });
+    const hours = validHours(req.query.hours);
+    if (!QUEUE_NAME_RE.test(req.params.name) || !hours) return res.status(400).json({ error: 'Invalid queue name or range' });
     const cfg = await resolveAwsConfig(profileId);
     const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
     const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
-    res.json(await sqsQueueSeries(cfg, req.params.name, { sdk }));
+    res.json(await sqsQueueSeries(cfg, req.params.name, { sdk, hours, history: metricHistory(), ttlMs: cacheTtlMs(req), profileId, region: cfg.region }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/sqs/:name/details', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const url = String(req.query.url || '');
+    if (!QUEUE_NAME_RE.test(req.params.name) || !QUEUE_URL_RE.test(url) || !url.endsWith(`/${req.params.name}`)) return res.status(400).json({ error: 'Invalid queue' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { SQSClient, GetQueueAttributesCommand, ListQueueTagsCommand } = require('@aws-sdk/client-sqs');
+    const { LambdaClient, ListEventSourceMappingsCommand } = require('@aws-sdk/client-lambda');
+    const { SNSClient, ListSubscriptionsCommand } = require('@aws-sdk/client-sns');
+    const sdk = pkg => ({
+      'client-sqs': { SQSClient, GetQueueAttributesCommand, ListQueueTagsCommand },
+      'client-lambda': { LambdaClient, ListEventSourceMappingsCommand },
+      'client-sns': { SNSClient, ListSubscriptionsCommand },
+    })[pkg];
+    res.json(await sqsQueueDetails(cfg, url, { sdk }));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1844,7 +1884,7 @@ router.post('/sns/activity', async (req, res) => {
       'client-cloudwatch': { CloudWatchClient, GetMetricDataCommand },
       'client-cloudwatch-logs': { CloudWatchLogsClient, DescribeLogGroupsCommand },
     })[pkg];
-    res.json(await snsActivity(cfg, topics, { sdk }));
+    res.json(await snsActivity(cfg, topics, { sdk, history: metricHistory(), profileId, region: cfg.region }));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1852,11 +1892,43 @@ router.get('/sns/:name/metrics', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
-    if (!TOPIC_NAME_RE.test(req.params.name)) return res.status(400).json({ error: 'Invalid topic name' });
+    const hours = validHours(req.query.hours);
+    if (!TOPIC_NAME_RE.test(req.params.name) || !hours) return res.status(400).json({ error: 'Invalid topic name or range' });
     const cfg = await resolveAwsConfig(profileId);
     const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
     const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
-    res.json(await snsTopicSeries(cfg, req.params.name, { sdk }));
+    res.json(await snsTopicSeries(cfg, req.params.name, { sdk, hours, history: metricHistory(), ttlMs: cacheTtlMs(req), profileId, region: cfg.region }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/sns/:name/details', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const arn = String(req.query.arn || '');
+    if (!TOPIC_ARN_RE.test(arn) || !arn.endsWith(`:${req.params.name}`)) return res.status(400).json({ error: 'Invalid topic' });
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      SNSClient, GetTopicAttributesCommand, ListSubscriptionsByTopicCommand, GetSubscriptionAttributesCommand, ListTagsForResourceCommand,
+    } = require('@aws-sdk/client-sns');
+    const sdk = () => ({ SNSClient, GetTopicAttributesCommand, ListSubscriptionsByTopicCommand, GetSubscriptionAttributesCommand, ListTagsForResourceCommand });
+    res.json(await snsTopicDetails(cfg, arn, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Delivery status logs (FilterLogEvents: no per-GB charge, unlike Logs Insights).
+router.get('/sns/:name/logs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const arn = String(req.query.arn || '');
+    const hours = validHours(req.query.hours);
+    const status = req.query.status === 'failure' ? 'failure' : 'all';
+    if (!TOPIC_ARN_RE.test(arn) || !arn.endsWith(`:${req.params.name}`) || !hours) return res.status(400).json({ error: 'Invalid topic or range' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const sdk = () => ({ CloudWatchLogsClient, FilterLogEventsCommand });
+    res.json(await snsDeliveryLogs(cfg, arn, { sdk, hours, status, limit: req.query.limit }));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1879,16 +1951,91 @@ router.get('/ses', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
-// Account-level send/delivery/bounce/complaint/reject for the last 24h.
+// Account-level sending metrics with history, plus health with the latest rates.
 router.get('/ses/metrics', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
+    const hours = validHours(req.query.hours);
+    if (!hours) return res.status(400).json({ error: 'Invalid range' });
     const cfg = await resolveAwsConfig(profileId);
     const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const { SESv2Client, GetAccountCommand } = require('@aws-sdk/client-sesv2');
     const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
-    const data = await sesSeries(cfg, { sdk });
-    res.json({ ...data, totals: seriesTotals(data.series) });
+    const [data, account] = await Promise.all([
+      sesSeries(cfg, { sdk, hours, history: metricHistory(), ttlMs: cacheTtlMs(req), profileId }),
+      new SESv2Client(cfg).send(new GetAccountCommand({})).catch(() => null),
+    ]);
+    const rates = latestRates(data.series);
+    const accountRow = account ? {
+      sendingEnabled: account.SendingEnabled !== false,
+      productionAccess: !!account.ProductionAccessEnabled,
+      enforcementStatus: account.EnforcementStatus || null,
+      max24HourSend: account.SendQuota?.Max24HourSend ?? null,
+      sentLast24Hours: account.SendQuota?.SentLast24Hours ?? null,
+    } : null;
+    res.json({ ...data, totals: seriesTotals(data.series), rates, health: sesHealth(accountRow, rates) });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/ses/suppression', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SESv2Client, ListSuppressedDestinationsCommand } = require('@aws-sdk/client-sesv2');
+    const sdk = () => ({ SESv2Client, ListSuppressedDestinationsCommand });
+    res.json(await sesSuppression(cfg, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ?estimate=1 only counts the metrics (ListMetrics) so the UI can show the cost first.
+router.get('/ses/configuration-sets/:name/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const hours = validHours(req.query.hours);
+    if (!SET_NAME_RE.test(req.params.name) || !hours) return res.status(400).json({ error: 'Invalid configuration set or range' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { SESv2Client, GetConfigurationSetEventDestinationsCommand } = require('@aws-sdk/client-sesv2');
+    const { CloudWatchClient, GetMetricDataCommand, ListMetricsCommand } = require('@aws-sdk/client-cloudwatch');
+    const sdk = pkg => ({
+      'client-sesv2': { SESv2Client, GetConfigurationSetEventDestinationsCommand },
+      'client-cloudwatch': { CloudWatchClient, GetMetricDataCommand, ListMetricsCommand },
+    })[pkg];
+    res.json(await sesConfigurationSetMetrics(cfg, req.params.name, {
+      sdk, hours, estimate: req.query.estimate === '1', history: metricHistory(), ttlMs: cacheTtlMs(req), profileId,
+    }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /metrics/history ─────────────────────────────────────────────────────
+// Reads stored metric history only (no AWS calls, no cost). Meant for views and,
+// later, KUA Applications: ?identity=AWS::SQS::Queue:orders&metrics=sent,received&hours=168
+
+router.get('/metrics/history', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const identity = String(req.query.identity || '');
+    const metrics = String(req.query.metrics || '').split(',').filter(Boolean);
+    const hours = Number(req.query.hours || 24);
+    if (!/^AWS::[A-Za-z0-9]+::[A-Za-z0-9]+:[^\s]{1,300}$/.test(identity) || !metrics.length || metrics.length > 50 || !(hours >= 1 && hours <= 24 * 400)) {
+      return res.status(400).json({ error: 'identity, metrics (1–50) and hours are required' });
+    }
+    const history = metricHistory();
+    if (!history) return res.status(503).json({ error: 'Metric history is not available' });
+    const region = String(req.query.region || '');
+    const to = Math.floor(Date.now() / 3600000) * 3600000 + 3600000;
+    const from = to - hours * 3600000;
+    const series = {};
+    const coverage = {};
+    for (const metric of metrics) {
+      const item = { provider: 'aws', profileId, region, resourceId: identity, metric, periodS: 3600 };
+      series[metric] = history.read(item, { from, to });
+      coverage[metric] = history.coverage(item);
+    }
+    res.json({ identity, windowHours: hours, series, coverage });
   } catch (err) { handleErr(res, err); }
 });
 

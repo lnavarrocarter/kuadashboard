@@ -153,6 +153,12 @@
   "GET /sqs/:name/metrics": [
     "cloudwatch:GetMetricData"
   ],
+  "GET /sqs/:name/details": [
+    "lambda:ListEventSourceMappings",
+    "sns:ListSubscriptions",
+    "sqs:GetQueueAttributes",
+    "sqs:ListQueueTags"
+  ],
   "GET /sns": [
     "sns:GetTopicAttributes",
     "sns:ListSubscriptions",
@@ -165,6 +171,15 @@
   "GET /sns/:name/metrics": [
     "cloudwatch:GetMetricData"
   ],
+  "GET /sns/:name/details": [
+    "sns:GetSubscriptionAttributes",
+    "sns:GetTopicAttributes",
+    "sns:ListSubscriptionsByTopic",
+    "sns:ListTagsForResource"
+  ],
+  "GET /sns/:name/logs": [
+    "logs:FilterLogEvents"
+  ],
   "GET /ses": [
     "ses:GetAccount",
     "ses:GetConfigurationSetEventDestinations",
@@ -173,7 +188,16 @@
     "ses:ListEmailIdentities"
   ],
   "GET /ses/metrics": [
-    "cloudwatch:GetMetricData"
+    "cloudwatch:GetMetricData",
+    "ses:GetAccount"
+  ],
+  "GET /ses/suppression": [
+    "ses:ListSuppressedDestinations"
+  ],
+  "GET /ses/configuration-sets/:name/metrics": [
+    "cloudwatch:GetMetricData",
+    "cloudwatch:ListMetrics",
+    "ses:GetConfigurationSetEventDestinations"
   ],
   "GET /stepfunctions": [
     "states:ListStateMachines"

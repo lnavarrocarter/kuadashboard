@@ -888,7 +888,13 @@ function cacheSettingsResponse() {
     kubeListCacheSec: Math.round(kubeResponseCache.freshMs / 1000),
     kubeListStaleSec: Math.round(kubeResponseCache.staleMs / 1000),
     kubePrometheusDiscoveryMin: Math.round(prometheusDiscoveryTtlMs / 60000),
+    metricHistoryDays: metricHistoryRetentionDays(),
   };
+}
+
+// Retention of the local metric history (lib/metricHistory.js), in days.
+function metricHistoryRetentionDays() {
+  try { return require('./lib/metricHistory').getMetricHistory().retentionDays; } catch { return null; }
 }
 
 app.get('/api/system/cache-settings', (_req, res) => res.json(cacheSettingsResponse()));
@@ -898,10 +904,15 @@ app.put('/api/system/cache-settings', (req, res) => {
   const discoveryMin = Number(req.body?.kubePrometheusDiscoveryMin);
   if (req.body?.kubeListCacheSec !== undefined && !(listSec >= 0 && listSec <= 600)) return res.status(400).json({ error: 'kubeListCacheSec must be 0–600' });
   if (req.body?.kubePrometheusDiscoveryMin !== undefined && !(discoveryMin >= 1 && discoveryMin <= 120)) return res.status(400).json({ error: 'kubePrometheusDiscoveryMin must be 1–120' });
+  const historyDays = Number(req.body?.metricHistoryDays);
+  if (req.body?.metricHistoryDays !== undefined && !(historyDays >= 1 && historyDays <= 400)) return res.status(400).json({ error: 'metricHistoryDays must be 1–400' });
   if (req.body?.kubeListCacheSec !== undefined) {
     kubeResponseCache.configure({ freshMs: listSec * 1000, staleMs: Math.max(120, listSec * 4) * 1000 });
   }
   if (req.body?.kubePrometheusDiscoveryMin !== undefined) prometheusDiscoveryTtlMs = discoveryMin * 60000;
+  if (req.body?.metricHistoryDays !== undefined) {
+    try { require('./lib/metricHistory').getMetricHistory().setRetentionDays(historyDays); } catch (err) { console.warn('[metric-history]', err.message); }
+  }
   res.json(cacheSettingsResponse());
 });
 
