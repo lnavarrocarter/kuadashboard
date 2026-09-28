@@ -27,6 +27,7 @@ KuaDashboard provides comprehensive Google Cloud Platform management accessed fr
 ### Compute Engine VMs
 - Table of VMs with status, machine type (Spot/Preemptible flagged), internal and external IP, network/subnet, disk count and size, deletion protection and creation date
 - **Start / Stop / Delete** inline; **＋ New VM** creates one (see [safe actions](#creating-starting-and-deleting-resources-safely))
+- **⌨ SSH** opens a shell on a running VM in the KUA console, like EC2 SSH — no key to configure. For each connection KUA generates a temporary ed25519 key (valid 30 minutes, never stored) and makes Google trust it the way `gcloud compute ssh` does: if the VM uses **OS Login**, the key is added to your OS Login profile with an expiration; otherwise it is added to the VM's `ssh-keys` metadata with a `google-ssh` `expireOn` that the guest agent honours (expired KUA keys are pruned on the next connection). Works with gcloud and service-account profiles. Connects to the external IP; VMs without one use the internal IP (requires VPN/VPC access). The firewall must allow TCP 22 from your machine (the `default-allow-ssh` rule on the default network does). Required permissions: `compute.instances.get` and `compute.instances.setMetadata` (metadata mode) or `roles/compute.osAdminLogin`/`osLogin` (OS Login).
 
 ## Database
 

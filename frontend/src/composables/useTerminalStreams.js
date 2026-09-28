@@ -246,7 +246,7 @@ export function useTerminalStreams() {
     })
   }
 
-  /** Connect an EC2 SSH tab (/ws/ec2-shell) */
+  /** Connect an SSH tab: EC2 (/ws/ec2-shell) or GCP VM (/ws/gcp-ssh) — same protocol */
   async function startSshStream(tab, { reconnect = false } = {}) {
     const ws = await connect(tab, { reconnect })
     if (!ws) return
@@ -260,6 +260,8 @@ export function useTerminalStreams() {
       try { msg = JSON.parse(e.data) } catch (_) { return }
       if (msg.type === 'connected') {
         store.pushLine(tab, `▶ Connected to ${msg.user}@${msg.host}`, 'sys')
+      } else if (msg.type === 'status') {
+        store.pushLine(tab, `… ${msg.data}`, 'sys')
       } else if (msg.type === 'out') {
         _appendRaw(tab, msg.data, '')
       } else if (msg.type === 'err') {

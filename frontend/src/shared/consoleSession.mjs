@@ -8,6 +8,7 @@ export const capabilityRegistry = Object.freeze([
   { id: 'aws-ssm', provider: 'aws', transport: 'ssm', path: '/ws/aws-ssm', status: 'available', required: ['profileId', 'target.instanceId'] },
   { id: 'gcp-shell', provider: 'gcp', transport: 'cloud-shell', status: 'unavailable', reason: 'Cloud Shell requires interactive per-user OAuth in a browser; not obtainable from a stored service-account or gcloud CLI profile.', required: ['profileId', 'project'] },
   { id: 'gcp-logs', provider: 'gcp', transport: 'logs', path: '/ws/gcp-logs', status: 'available', required: ['profileId', 'region', 'target.name'] },
+  { id: 'gcp-ssh', provider: 'gcp', transport: 'ssh', path: '/ws/gcp-ssh', status: 'available', required: ['profileId', 'target.name', 'target.zone'] },
   { id: 'vercel-logs', provider: 'vercel', transport: 'deployment-logs', path: '/ws/vercel-logs', status: 'available', required: ['profileId', 'target.name'] },
 ].map(item => Object.freeze({ ...item, required: Object.freeze(item.required) })))
 
@@ -15,7 +16,7 @@ const text = value => typeof value === 'string' && value.length <= 512 && !/[\r\
 export function sessionDescriptor(input = {}) {
   if (!input || typeof input !== 'object') input = {}
   const target = {}
-  for (const key of ['namespace', 'name', 'resourceType', 'container', 'selectedPod', 'host', 'user', 'instanceId', 'domain']) {
+  for (const key of ['namespace', 'name', 'resourceType', 'container', 'selectedPod', 'host', 'user', 'instanceId', 'domain', 'zone', 'addressType']) {
     const value = text(input.target?.[key])
     if (value) target[key] = value
   }
@@ -39,6 +40,11 @@ export function validateSession(input) {
   if (!capability || capability.status !== 'available') throw new Error('Capability unavailable')
   for (const field of capability.required) {
     if (!field.split('.').reduce((value, key) => value?.[key], session)) throw new Error(`Missing context: ${field}`)
+  }
+  if (session.provider === 'gcp' && session.transport === 'ssh') {
+    if (!/^[a-z]+-[a-z]+\d+-[a-z]$/.test(session.target.zone)) throw new Error('Invalid GCP zone')
+    if (!/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(session.target.name)) throw new Error('Invalid GCP instance name')
+    if (session.target.addressType && !['external', 'internal'].includes(session.target.addressType)) throw new Error('Invalid address type')
   }
   if (session.provider === 'kubernetes') {
     const resourceType = session.target.resourceType || 'pods'

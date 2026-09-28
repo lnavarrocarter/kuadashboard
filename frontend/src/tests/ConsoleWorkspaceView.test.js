@@ -155,7 +155,7 @@ describe('ConsoleWorkspaceView', () => {
   // generic planned/unavailable row — only ec2-rdp (stays in its own AwsView modal) and
   // gcp-shell (genuinely unavailable, no service-account path to Cloud Shell) remain in
   // the generic capability list.
-  it('shows ec2-rdp as available elsewhere and gcp-shell as unavailable with a reason, no planned capabilities left', async () => {
+  it('shows ec2-rdp and gcp-ssh as available elsewhere and gcp-shell as unavailable with a reason, no planned capabilities left', async () => {
     wrapper = mount(ConsoleWorkspaceView)
     await flushPromises()
     const text = wrapper.text()
@@ -166,8 +166,10 @@ describe('ConsoleWorkspaceView', () => {
     expect(text).not.toContain('gcp-logs')
 
     const hints = wrapper.findAll('.console-hint')
-    expect(hints).toHaveLength(1) // ec2-rdp
+    expect(hints).toHaveLength(2) // ec2-rdp (AWS view), gcp-ssh (GCP VMs table)
     expect(text).toContain('ec2-rdp')
+    expect(text).toContain('gcp-ssh')
+    expect(hints.map(h => h.text()).sort()).toEqual(['Abrir desde la vista de AWS', 'Abrir desde la vista de GCP'])
 
     const unavailable = wrapper.findAll('.console-unavailable-badge')
     expect(unavailable).toHaveLength(1) // gcp-shell

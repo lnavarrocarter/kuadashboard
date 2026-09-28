@@ -773,7 +773,7 @@ export default {
   'console.ssmConfirmTitle': '¿Iniciar sesión SSM?',
   'console.ssmConfirmMessage': 'Esto abre una shell interactiva en vivo en la instancia destino. Session Manager en sí no tiene costo adicional de AWS, pero tratá esto como una acción operativa sobre una instancia real.',
   'console.viewLogs':        'Ver logs',
-  'console.availableElsewhere': 'Abrir desde la vista de AWS',
+  'console.availableElsewhere': 'Abrir desde la vista de {provider}',
   'console.planned':         'Planificado',
   'console.unavailable':     'No disponible',
   'console.clearAllHistory': 'Borrar todo el historial',

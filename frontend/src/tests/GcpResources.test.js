@@ -9,6 +9,7 @@ import GcpCreateModal from '../components/cloud/GcpCreateModal.vue'
 import GcpView from '../components/cloud/GcpView.vue'
 import { gcpActionConfig } from '../components/cloud/gcpActions'
 import { useGcpStore } from '../stores/useGcpStore'
+import { useTerminalStore } from '../stores/useTerminalStore'
 
 const LOW_ESTIMATE = { known: true, monthlyUsd: 12.5, highCost: false, items: [{ label: 'VM e2-small', monthlyUsd: 12.5 }], warnings: ['Billing starts…'], disclaimer: 'Approximate' }
 const HIGH_ESTIMATE = { ...LOW_ESTIMATE, monthlyUsd: 480, highCost: true }
@@ -78,6 +79,18 @@ describe('gcpActionConfig (#74)', () => {
     expect(cfg.requireName).toBe('web-1')
     expect(cfg.lines.join(' ')).toMatch(/1 disco\(s\) sin auto-delete/)
     expect(gcpActionConfig('sql', 'delete', SQL[0]).lines.join(' ')).toMatch(/backups/)
+  })
+
+  it('ssh explains the temporary key and picks the address', () => {
+    const cfg = gcpActionConfig('vm', 'ssh', VMS[0])
+    expect(cfg.addressType).toBe('external')
+    expect(cfg.lines.join(' ')).toMatch(/llave SSH temporal/)
+    expect(cfg.blocked).toBe('')
+    const internal = gcpActionConfig('vm', 'ssh', { ...VMS[0], externalIp: null })
+    expect(internal.addressType).toBe('internal')
+    expect(internal.lines.join(' ')).toMatch(/IP interna/)
+    expect(gcpActionConfig('vm', 'ssh', VMS[1]).blocked).toMatch(/TERMINATED/)
+    expect(() => gcpActionConfig('sql', 'ssh', SQL[0])).toThrow(/only available for VMs/)
   })
 
   it('delete is blocked when the resource has deletion protection', () => {
@@ -333,6 +346,30 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     const del = calls.find(c => c.method === 'DELETE')
     expect(del.url).toBe('/api/cloud/gcp/cloudrun/us-central1/api')
     expect(del.body).toEqual({ confirmName: 'api' })
+  })
+
+  it('SSH opens a gcp-ssh console tab for the VM after confirmation', async () => {
+    const w = await mountTab('vms')
+    const ssh = w.findAll('[data-test="vm-table"] tbody tr')[0].find('[data-test="ssh"]')
+    expect(ssh.attributes('disabled')).toBeUndefined()
+    await ssh.trigger('click')
+    const modal = openConfirm(w)
+    expect(modal.props('title')).toBe('SSH a web-1')
+    await modal.find('[data-test="confirm"]').trigger('click')
+    await flushPromises()
+
+    const tab = useTerminalStore().tabs.find(t => t.type === 'gcp-ssh')
+    expect(tab).toBeTruthy()
+    expect(tab.provider).toBe('gcp')
+    expect(tab.transport).toBe('ssh')
+    expect(tab.profileId).toBe('gcp-1')
+    expect(tab.target).toEqual({ name: 'web-1', zone: 'us-central1-a', addressType: 'external' })
+    expect(calls.some(c => c.url === '/api/console/sessions' && c.method === 'POST')).toBe(true)
+  })
+
+  it('SSH is disabled for stopped VMs', async () => {
+    const w = await mountTab('vms')
+    expect(w.findAll('[data-test="vm-table"] tbody tr')[1].find('[data-test="ssh"]').attributes('disabled')).toBeDefined()
   })
 
   it('opens the create modal from the toolbar', async () => {
