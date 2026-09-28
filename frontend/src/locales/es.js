@@ -1202,4 +1202,5 @@ export default {
   'awsDashboards.alarmMissing': '{name} (no encontrada)',
   'awsDashboards.unsupported': 'Los widgets "{type}" se ven en la consola de AWS.',
   'awsDashboards.renderNote': 'Dibujado por KUA desde la definición del dashboard. Las métricas cuestan USD 0.01 por cada 1.000 consultadas; las consultas de logs corren solas solo si la estimación es menor a 1 GB.',
+  'awsDashboards.logsEstimateUnknown': 'No se conoce el tamaño de estos log groups (por ejemplo, son de otra cuenta), así que la consulta no corre sola.',
 }

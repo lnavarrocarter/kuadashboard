@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- **AWS dashboards:** Log widgets whose `SOURCE` is a log group ARN (for example `SOURCE "arn:aws:logs:…:log-group:/aws/lambda/…"`) failed with *Value at 'logGroupNamePrefix' failed to satisfy constraint*. The size estimate now uses the log group name and the query uses `logGroupIdentifiers`, which accepts names and ARNs; groups that cannot be sized (for example, from another account) never run automatically. Widgets with their own relative range (`start`/`end`) and hidden legends are now respected.
 - **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
 - **AWS Lambda modal:** Fixed env var table cells not wrapping long values (ARNs, long strings). Made the Code tab layout responsive on mobile and tablet devices: file tree and code viewer now stack vertically on screens ≤768px.
 

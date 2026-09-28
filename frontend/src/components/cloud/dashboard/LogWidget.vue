@@ -3,7 +3,8 @@
     <div v-if="phase === 'estimating'" class="lw-state">{{ t('awsDashboards.estimating') }}</div>
 
     <div v-else-if="phase === 'confirm'" class="lw-state">
-      <span>{{ t('awsDashboards.logsEstimate', { bytes: formatBytes(estimate?.estimatedBytes), cost: costText }) }}</span>
+      <span v-if="estimate?.unknown">{{ t('awsDashboards.logsEstimateUnknown') }}</span>
+      <span v-else>{{ t('awsDashboards.logsEstimate', { bytes: formatBytes(estimate?.estimatedBytes), cost: costText }) }}</span>
       <button class="btn sm" @click="run">{{ t('awsDashboards.runQuery') }}</button>
     </div>
 

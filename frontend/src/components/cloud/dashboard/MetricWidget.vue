@@ -38,7 +38,7 @@
           v-for="axis in axes" :key="axis" class="mw-chart"
           :datasets="axisDatasets(axis)" :stacked="!!props.widget.properties?.stacked"
           :y-min="axisConfig(axis).min ?? null" :y-max="axisConfig(axis).max ?? null"
-          :show-legend="axisDatasets(axis).length > 1" :format-value="fmt" :format-time="formatTime"
+          :show-legend="legendVisible && axisDatasets(axis).length > 1" :format-value="fmt" :format-time="formatTime"
           :aria-label="`${title} (${axis})`"
         />
       </div>
@@ -79,9 +79,13 @@ const axes = computed(() => {
   return ['left', 'right'].filter(axis => used.has(axis))
 })
 
+const legendVisible = computed(() => props.widget.properties?.legend?.position !== 'hidden')
+// Widgets with their own range (e.g. "start": "-P30D") are drawn over that range.
+const shownRange = computed(() => data.value?.ownRange || props.range)
+
 const fmt = v => formatNumber(v, settings.lang)
 const formatTime = ts => {
-  const long = (props.range.end - props.range.start) > 2 * 86400000
+  const long = (shownRange.value.end - shownRange.value.start) > 2 * 86400000
   return new Date(ts).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', long ? { day: '2-digit', month: '2-digit', hour: '2-digit' } : { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -106,7 +110,7 @@ function axisDatasets(axis) {
   // Horizontal annotations (and alarm thresholds) as dashed reference lines across the range.
   const refs = (data.value?.horizontal || []).filter(h => (h.yAxis || 'left') === axis).map(h => ({
     label: h.label || String(h.value),
-    data: [{ t: props.range.start, v: h.value }, { t: props.range.end, v: h.value }],
+    data: [{ t: shownRange.value.start, v: h.value }, { t: shownRange.value.end, v: h.value }],
     borderColor: h.color || '#d62728', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, fill: false, stack: `ref-${h.value}`,
   }))
   return [...lines, ...refs]

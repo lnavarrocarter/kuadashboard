@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Arreglado
+- **Dashboards de AWS:** Los widgets de logs cuyo `SOURCE` es el ARN de un log group (por ejemplo `SOURCE "arn:aws:logs:…:log-group:/aws/lambda/…"`) fallaban con *Value at 'logGroupNamePrefix' failed to satisfy constraint*. La estimación de tamaño ahora usa el nombre del log group y la consulta usa `logGroupIdentifiers`, que acepta nombres y ARNs; los grupos cuyo tamaño no se puede conocer (por ejemplo, de otra cuenta) nunca corren solos. También se respetan los widgets con rango propio (`start`/`end`) y la leyenda oculta.
 - **Vista Vercel:** Arreglado bug donde datos obsoletos de proyectos anteriores persistían tras cambios rápidos de proyecto. Se implementó protección contra condiciones de carrera con IDs de solicitud y limpieza explícita de contexto al cambiar de proyecto o perfil.
 - **Modal AWS Lambda:** Arreglado que las celdas de la tabla de variables de entorno no envolvían valores largos (ARNs, strings largos). Se hizo responsive el layout de la pestaña Código en dispositivos móviles y tablets: el árbol de archivos y el visor de código ahora se apilan verticalmente en pantallas ≤768px.
 

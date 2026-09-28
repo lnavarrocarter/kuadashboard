@@ -69,7 +69,8 @@ const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
 const {
-  dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, estimateLogScan, normalizeQueryResults,
+  dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, logGroupIdentifier, logGroupName,
+  estimateLogScan, normalizeQueryResults,
 } = require('../lib/cloudwatchDashboardData');
 
 const router = express.Router();
@@ -480,7 +481,10 @@ router.get('/cloudwatch/dashboards/:name/widgets/:index/logs/estimate', async (r
     const { logGroups } = splitLogQuery(widget.properties?.query);
     const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
     const client = new CloudWatchLogsClient({ ...cfg, region: widgetRegion(widget, cfg) });
-    const groups = await Promise.all(logGroups.map(async name => {
+    // SOURCE may be an ARN; DescribeLogGroups only takes the name. Groups of other
+    // accounts are not found here, which leaves the estimate unknown.
+    const groups = await Promise.all(logGroups.map(async source => {
+      const name = logGroupName(source);
       const resp = await client.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name, limit: 5 }));
       const group = (resp.logGroups || []).find(g => g.logGroupName === name);
       return group
@@ -502,8 +506,9 @@ router.post('/cloudwatch/dashboards/:name/widgets/:index/logs/query', async (req
     if (!logGroups.length || !queryString) return res.status(400).json({ error: 'The widget has no Logs Insights query' });
     const region = widgetRegion(widget, cfg);
     const { CloudWatchLogsClient, StartQueryCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    // logGroupIdentifiers accepts names and ARNs (also cross-account), unlike logGroupNames.
     const resp = await new CloudWatchLogsClient({ ...cfg, region }).send(new StartQueryCommand({
-      logGroupNames: logGroups, queryString, startTime: Math.floor(start / 1000), endTime: Math.ceil(end / 1000),
+      logGroupIdentifiers: logGroups.map(logGroupIdentifier), queryString, startTime: Math.floor(start / 1000), endTime: Math.ceil(end / 1000),
     }));
     res.json({ queryId: resp.queryId, region });
   } catch (err) { handleErr(res, err); }
