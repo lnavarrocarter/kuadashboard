@@ -122,7 +122,10 @@ jobs:
       - name: Post-implementation health check
         shell: bash
         run: |
-          PORT=7199 npm start >/tmp/kuadashboard-health.log 2>&1 &
+          # `npm start` hardcodes PORT=7190 (cross-env), so run the server directly to use
+          # the health-check port; native:node is what `prestart` would have run.
+          npm run native:node
+          PORT=7199 node server.js >/tmp/kuadashboard-health.log 2>&1 &
           server_pid=$!
           trap 'kill ${server_pid}' EXIT
 
