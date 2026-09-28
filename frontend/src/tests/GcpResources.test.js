@@ -13,6 +13,25 @@ import { useGcpStore } from '../stores/useGcpStore'
 const LOW_ESTIMATE = { known: true, monthlyUsd: 12.5, highCost: false, items: [{ label: 'VM e2-small', monthlyUsd: 12.5 }], warnings: ['Billing starts…'], disclaimer: 'Approximate' }
 const HIGH_ESTIMATE = { ...LOW_ESTIMATE, monthlyUsd: 480, highCost: true }
 
+const PRESETS = {
+  locations: [
+    { region: 'us-central1', label: 'Iowa (us-central1)', zones: ['us-central1-a', 'us-central1-b'] },
+    { region: 'us-east1', label: 'Carolina del Sur (us-east1)', zones: ['us-east1-b', 'us-east1-c'] },
+  ],
+  vm: [
+    { value: 'e2-micro', label: 'Micro', specs: '2 vCPU compartidas · 1 GB', use: 'Pruebas', monthlyUsd: 6.11 },
+    { value: 'e2-small', label: 'Pequeña', specs: '2 vCPU compartidas · 2 GB', use: 'Dev', monthlyUsd: 12.23 },
+    { value: 'e2-standard-2', label: 'Estándar', specs: '2 vCPU · 8 GB', use: 'Prod', monthlyUsd: 48.91 },
+  ],
+  sql: [
+    { value: 'db-f1-micro', label: 'Micro', specs: 'compartida · 0.6 GB', use: 'Dev', monthlyUsd: 7.67 },
+    { value: 'db-custom-2-7680', label: 'Estándar', specs: '2 vCPU · 7.5 GB', use: 'Prod', monthlyUsd: 98.62 },
+  ],
+  vmImages: [{ key: 'debian-12', label: 'Debian 12', project: 'debian-cloud', family: 'debian-12' }, { key: 'ubuntu-2404', label: 'Ubuntu 24.04 LTS', project: 'ubuntu-os-cloud', family: 'ubuntu-2404-lts-amd64' }],
+  sqlVersions: ['POSTGRES_16', 'MYSQL_8_0'],
+  cloudRun: { cpu: ['1', '2'], memory: ['512Mi', '1Gi'] },
+}
+
 const CLOUD_RUN = [{ name: 'api', region: 'us-central1', status: 'ready', image: 'gcr.io/p/api:1', cpu: '1', memory: '512Mi', minInstances: 1, maxInstances: 5, ingress: 'all', latestRevision: 'api-00002', revisionPending: true, updatedAt: '2026-01-01T00:00:00Z' }]
 const VMS = [
   { name: 'web-1', zone: 'us-central1-a', status: 'RUNNING', machineType: 'e2-small', internalIp: '10.0.0.2', externalIp: '34.1.2.3', network: 'default', subnetwork: 'default', diskCount: 2, diskSizeGb: 120, keptDiskCount: 1, provisioningModel: 'SPOT', deletionProtection: false },
@@ -20,11 +39,12 @@ const VMS = [
 ]
 const SQL = [{ name: 'db', database: 'POSTGRES_16', region: 'us-central1', zone: 'us-central1-c', state: 'RUNNABLE', status: 'STOPPED', activationPolicy: 'NEVER', tier: 'db-custom-2-7680', availabilityType: 'REGIONAL', storageGb: 50, storageType: 'PD_SSD', backupEnabled: true, publicIp: '34.9.9.9', privateIp: null, deletionProtection: false }]
 
-function stubFetch(estimate = LOW_ESTIMATE) {
+function stubFetch(estimate = LOW_ESTIMATE, { presets = PRESETS } = {}) {
   const calls = []
   const fetchMock = vi.fn(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : undefined })
-    const body = url.includes('/estimate/') ? estimate : url.includes('/cloudrun') && opts.method === 'POST' ? { success: true } : opts.method === 'DELETE' ? { success: true } : []
+    if (url.endsWith('/presets') && !presets) return { ok: false, status: 500, headers: { get: () => 'application/json' }, json: async () => ({ error: 'boom' }), text: async () => '' }
+    const body = url.endsWith('/presets') ? presets : url.includes('/estimate/') ? estimate : url.includes('/cloudrun') && opts.method === 'POST' ? { success: true } : opts.method === 'DELETE' ? { success: true } : []
     return { ok: true, headers: { get: () => 'application/json' }, json: async () => body, text: async () => JSON.stringify(body) }
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -166,6 +186,59 @@ describe('GcpCreateModal (#74)', () => {
     await settle()
     await w.find('[data-test="review"]').trigger('click')
     expect(w.findComponent(GcpConfirmModal).props('lines').join(' ')).toMatch(/PÚBLICO/)
+  })
+
+  it('shows machine presets as cards with specs and price, and sends the chosen one', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await settle()
+    const cards = w.findAll('[data-test="machine-presets"] .gcpn-preset')
+    expect(cards).toHaveLength(4) // 3 presets + "Otro…"
+    expect(cards[0].text()).toContain('Micro')
+    expect(cards[0].text()).toContain('~$6.11/mes')
+    expect(w.find('[data-test="machine-presets"] .gcpn-preset.active').text()).toContain('e2-small')
+
+    await cards[2].find('input').trigger('change')
+    await w.find('[data-test="name"]').setValue('web-3')
+    await settle()
+    expect(calls.filter(c => c.url === '/api/cloud/gcp/estimate/vm').at(-1).body.machineType).toBe('e2-standard-2')
+    expect(w.find('[data-test="machine-presets"] .gcpn-preset.active').text()).toContain('Estándar')
+  })
+
+  it('"Otro…" reveals a free-text machine type', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await settle()
+    expect(w.find('[data-test="machine-type"]').exists()).toBe(false)
+    await w.find('[data-test="machine-other"]').trigger('change')
+    await w.find('[data-test="machine-type"]').setValue('n2-standard-8')
+    await settle()
+    expect(calls.filter(c => c.url === '/api/cloud/gcp/estimate/vm').at(-1).body.machineType).toBe('n2-standard-8')
+  })
+
+  it('offers only the real zones of the selected region', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm', defaultRegion: 'us-central1' } })
+    await settle()
+    expect(w.findAll('[data-test="zone"] option').map(o => o.element.value)).toEqual(['us-central1-a', 'us-central1-b'])
+    await w.find('[data-test="region"]').setValue('us-east1')
+    await flushPromises()
+    expect(w.findAll('[data-test="zone"] option').map(o => o.element.value)).toEqual(['us-east1-b', 'us-east1-c'])
+    expect(w.find('[data-test="zone"]').element.value).toBe('us-east1-b')
+  })
+
+  it('shows SQL tier presets with prices', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'sql' } })
+    await settle()
+    const text = w.find('[data-test="tier-presets"]').text()
+    expect(text).toContain('db-custom-2-7680')
+    expect(text).toContain('~$98.62/mes')
+  })
+
+  it('falls back to basic options when presets cannot be loaded', async () => {
+    vi.unstubAllGlobals()
+    calls = stubFetch(LOW_ESTIMATE, { presets: null })
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await settle()
+    expect(w.text()).toContain('No se pudieron cargar las opciones predefinidas')
+    expect(w.findAll('[data-test="machine-presets"] .gcpn-preset').length).toBeGreaterThan(1)
   })
 
   it('blocks review with an invalid name', async () => {

@@ -8,6 +8,7 @@
 
       <div class="gcpn-body">
         <div class="gcpn-form">
+          <div v-if="presetsError" class="gcpn-invalid wide">No se pudieron cargar las opciones predefinidas ({{ presetsError }}); se usan valores básicos.</div>
           <label class="gcpn-field">
             <span>Nombre</span>
             <input v-model.trim="form.name" class="gcpn-input" data-test="name" :placeholder="PLACEHOLDERS[kind]" />
@@ -17,13 +18,15 @@
           <!-- Cloud Run -->
           <template v-if="kind === 'cloudrun'">
             <label class="gcpn-field"><span>Región</span>
-              <input v-model.trim="form.region" class="gcpn-input" list="gcpn-regions" /></label>
+              <select v-model="form.region" class="gcpn-input" data-test="region">
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+              </select></label>
             <label class="gcpn-field wide"><span>Imagen</span>
               <input v-model.trim="form.image" class="gcpn-input mono" /></label>
             <label class="gcpn-field"><span>CPU</span>
-              <select v-model="form.cpu" class="gcpn-input"><option v-for="c in ['1','2','4']" :key="c" :value="c">{{ c }} vCPU</option></select></label>
+              <select v-model="form.cpu" class="gcpn-input"><option v-for="c in cloudRunOptions.cpu" :key="c" :value="c">{{ c }} vCPU</option></select></label>
             <label class="gcpn-field"><span>Memoria</span>
-              <select v-model="form.memory" class="gcpn-input"><option v-for="m in ['512Mi','1Gi','2Gi','4Gi']" :key="m">{{ m }}</option></select></label>
+              <select v-model="form.memory" class="gcpn-input"><option v-for="m in cloudRunOptions.memory" :key="m">{{ m }}</option></select></label>
             <label class="gcpn-field"><span>Min instancias</span>
               <input v-model.number="form.minInstances" type="number" min="0" max="10" class="gcpn-input" data-test="min-instances" /></label>
             <label class="gcpn-field"><span>Max instancias</span>
@@ -36,13 +39,33 @@
 
           <!-- Compute VM -->
           <template v-else-if="kind === 'vm'">
+            <label class="gcpn-field"><span>Región</span>
+              <select v-model="form.region" class="gcpn-input" data-test="region">
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+              </select></label>
             <label class="gcpn-field"><span>Zona</span>
-              <input v-model.trim="form.zone" class="gcpn-input" list="gcpn-zones" /></label>
-            <label class="gcpn-field"><span>Tipo de máquina</span>
-              <input v-model.trim="form.machineType" class="gcpn-input" list="gcpn-machine-types" data-test="machine-type" /></label>
+              <select v-model="form.zone" class="gcpn-input" data-test="zone">
+                <option v-for="z in zonesForRegion" :key="z" :value="z">{{ z }}</option>
+              </select></label>
+            <fieldset class="gcpn-presets wide" data-test="machine-presets">
+              <legend>Tipo de máquina</legend>
+              <label v-for="p in presets.vm" :key="p.value" :class="['gcpn-preset', { active: !customMachine && form.machineType === p.value }]">
+                <input type="radio" name="gcpn-machine" :value="p.value" :checked="!customMachine && form.machineType === p.value" @change="pickPreset('machineType', p.value)" />
+                <span class="gcpn-preset-name">{{ p.label }} <small class="mono">{{ p.value }}</small></span>
+                <span class="gcpn-preset-specs">{{ p.specs }}</span>
+                <span class="gcpn-preset-use">{{ p.use }}</span>
+                <span class="gcpn-preset-price">{{ p.monthlyUsd != null ? `~$${p.monthlyUsd.toFixed(2)}/mes` : '' }}</span>
+              </label>
+              <label :class="['gcpn-preset', 'other', { active: customMachine }]">
+                <input type="radio" name="gcpn-machine" :checked="customMachine" @change="customMachine = true" data-test="machine-other" />
+                <span class="gcpn-preset-name">Otro…</span>
+                <input v-if="customMachine" v-model.trim="form.machineType" class="gcpn-input mono" placeholder="n2-standard-8" data-test="machine-type" @click.stop />
+                <span v-else class="gcpn-preset-use">Escribe cualquier tipo de máquina</span>
+              </label>
+            </fieldset>
             <label class="gcpn-field"><span>Imagen</span>
               <select v-model="form.imageKey" class="gcpn-input">
-                <option v-for="img in IMAGES" :key="img.key" :value="img.key">{{ img.label }}</option>
+                <option v-for="img in presets.vmImages" :key="img.key" :value="img.key">{{ img.label }}</option>
               </select></label>
             <label class="gcpn-field"><span>Disco (GB)</span>
               <input v-model.number="form.diskSizeGb" type="number" min="10" class="gcpn-input" /></label>
@@ -56,13 +79,29 @@
           <!-- Cloud SQL -->
           <template v-else-if="kind === 'sql'">
             <label class="gcpn-field"><span>Región</span>
-              <input v-model.trim="form.region" class="gcpn-input" list="gcpn-regions" /></label>
+              <select v-model="form.region" class="gcpn-input" data-test="region">
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+              </select></label>
             <label class="gcpn-field"><span>Motor</span>
               <select v-model="form.databaseVersion" class="gcpn-input">
-                <option v-for="v in ['POSTGRES_16','POSTGRES_15','MYSQL_8_0','MYSQL_8_4']" :key="v">{{ v }}</option>
+                <option v-for="v in presets.sqlVersions" :key="v">{{ v }}</option>
               </select></label>
-            <label class="gcpn-field"><span>Tier</span>
-              <input v-model.trim="form.tier" class="gcpn-input" list="gcpn-sql-tiers" data-test="tier" /></label>
+            <fieldset class="gcpn-presets wide" data-test="tier-presets">
+              <legend>Tamaño de la instancia</legend>
+              <label v-for="p in presets.sql" :key="p.value" :class="['gcpn-preset', { active: !customTier && form.tier === p.value }]">
+                <input type="radio" name="gcpn-tier" :value="p.value" :checked="!customTier && form.tier === p.value" @change="pickPreset('tier', p.value)" />
+                <span class="gcpn-preset-name">{{ p.label }} <small class="mono">{{ p.value }}</small></span>
+                <span class="gcpn-preset-specs">{{ p.specs }}</span>
+                <span class="gcpn-preset-use">{{ p.use }}</span>
+                <span class="gcpn-preset-price">{{ p.monthlyUsd != null ? `~$${p.monthlyUsd.toFixed(2)}/mes` : '' }}</span>
+              </label>
+              <label :class="['gcpn-preset', 'other', { active: customTier }]">
+                <input type="radio" name="gcpn-tier" :checked="customTier" @change="customTier = true" data-test="tier-other" />
+                <span class="gcpn-preset-name">Otro…</span>
+                <input v-if="customTier" v-model.trim="form.tier" class="gcpn-input mono" placeholder="db-custom-8-30720" data-test="tier" @click.stop />
+                <span v-else class="gcpn-preset-use">Tier personalizado</span>
+              </label>
+            </fieldset>
             <label class="gcpn-field"><span>Almacenamiento (GB)</span>
               <input v-model.number="form.storageGb" type="number" min="10" class="gcpn-input" /></label>
             <label class="gcpn-field"><span>Tipo</span>
@@ -100,10 +139,6 @@
         <button class="btn sm primary" :disabled="!formValid" data-test="review" @click="reviewing = true">Revisar y crear…</button>
       </div>
 
-      <datalist id="gcpn-regions"><option v-for="r in REGIONS" :key="r" :value="r" /></datalist>
-      <datalist id="gcpn-zones"><option v-for="z in REGIONS.map(r => r + '-a')" :key="z" :value="z" /></datalist>
-      <datalist id="gcpn-machine-types"><option v-for="m in MACHINE_TYPES" :key="m" :value="m" /></datalist>
-      <datalist id="gcpn-sql-tiers"><option v-for="t in SQL_TIERS" :key="t" :value="t" /></datalist>
     </div>
   </div>
 
@@ -147,35 +182,80 @@ const NAME_RULES = {
   vm: /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   sql: /^[a-z](?:[a-z0-9-]{0,96}[a-z0-9])?$/,
 }
-const REGIONS = ['us-central1', 'us-east1', 'us-west1', 'southamerica-east1', 'southamerica-west1', 'europe-west1', 'asia-east1']
-const MACHINE_TYPES = ['e2-micro', 'e2-small', 'e2-medium', 'e2-standard-2', 'e2-standard-4', 'n2-standard-2', 'n2-standard-4', 'n2d-standard-2']
-const SQL_TIERS = ['db-f1-micro', 'db-g1-small', 'db-custom-1-3840', 'db-custom-2-7680', 'db-custom-4-15360']
-const IMAGES = [
-  { key: 'debian-12', label: 'Debian 12', project: 'debian-cloud', family: 'debian-12' },
-  { key: 'ubuntu-2404', label: 'Ubuntu 24.04 LTS', project: 'ubuntu-os-cloud', family: 'ubuntu-2404-lts-amd64' },
-  { key: 'rocky-9', label: 'Rocky Linux 9', project: 'rocky-linux-cloud', family: 'rocky-linux-9' },
-]
+// Minimal fallback if GET /presets fails; the backend list is the source of truth
+// (it also carries prices from the same table as the estimates).
+const FALLBACK_PRESETS = {
+  locations: [{ region: 'us-central1', label: 'Iowa (us-central1)', zones: ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-f'] }],
+  vm: [{ value: 'e2-small', label: 'Pequeña', specs: '2 vCPU compartidas · 2 GB', use: '', monthlyUsd: null }],
+  sql: [{ value: 'db-f1-micro', label: 'Micro', specs: 'vCPU compartida · 0.6 GB', use: '', monthlyUsd: null }],
+  vmImages: [{ key: 'debian-12', label: 'Debian 12', project: 'debian-cloud', family: 'debian-12' }],
+  sqlVersions: ['POSTGRES_16', 'MYSQL_8_0'],
+  cloudRun: { cpu: ['1', '2', '4'], memory: ['512Mi', '1Gi', '2Gi', '4Gi'] },
+}
+const presets = ref(FALLBACK_PRESETS)
+const presetsError = ref('')
+const customMachine = ref(false)
+const customTier = ref(false)
+
+// Regions offered: curated list, plus the current default if it is not in it
+const locations = computed(() => {
+  const list = presets.value.locations
+  const region = props.defaultRegion
+  if (!region || list.some(l => l.region === region)) return list
+  // Unknown zones for a non-curated region: let the user pick after choosing a listed region
+  return [...list, { region, label: region, zones: ['b', 'c'].map(z => `${region}-${z}`) }]
+})
+const zonesForRegion = computed(() => locations.value.find(l => l.region === form.region)?.zones || [])
+const cloudRunOptions = computed(() => presets.value.cloudRun)
+
+function pickPreset(field, value) {
+  if (field === 'machineType') customMachine.value = false
+  if (field === 'tier') customTier.value = false
+  form[field] = value
+}
 
 function defaults(kind) {
   const region = props.defaultRegion || 'us-central1'
+  const zone = locations.value.find(l => l.region === region)?.zones[0] || `${region}-b`
   if (kind === 'cloudrun') return { name: '', region, image: 'us-docker.pkg.dev/cloudrun/container/hello', cpu: '1', memory: '512Mi', minInstances: 0, maxInstances: 3, allowUnauthenticated: false }
-  if (kind === 'vm') return { name: '', zone: `${region}-a`, machineType: 'e2-small', imageKey: 'debian-12', diskSizeGb: 10, diskType: 'pd-balanced', externalIp: true, spot: false, deletionProtection: false }
+  if (kind === 'vm') return { name: '', region, zone, machineType: 'e2-small', imageKey: 'debian-12', diskSizeGb: 10, diskType: 'pd-balanced', externalIp: true, spot: false, deletionProtection: false }
   return { name: '', region, databaseVersion: 'POSTGRES_16', tier: 'db-f1-micro', storageGb: 10, storageType: 'PD_SSD', availabilityType: 'ZONAL', rootPassword: '', backupEnabled: true, deletionProtection: true }
 }
 
-const form = reactive(defaults(props.kind))
+const form = reactive({})
 const reviewing = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const showPassword = ref(false)
 
-watch(() => [props.open, props.kind], ([open]) => {
-  if (!open) return
+function resetForm() {
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, defaults(props.kind))
+  customMachine.value = false
+  customTier.value = false
+}
+resetForm()
+
+watch(() => [props.open, props.kind], async ([open]) => {
+  if (!open) return
+  resetForm()
   reviewing.value = false
   createError.value = ''
   showPassword.value = false
+  try {
+    const res = await gcpStore.fetchPresets()
+    if (!Array.isArray(res?.vm) || !Array.isArray(res?.locations)) throw new Error('respuesta inválida')
+    presets.value = res
+    presetsError.value = ''
+  } catch (e) {
+    presetsError.value = e.message
+  }
+}, { immediate: true })
+
+// Keep the zone valid for the selected region (VM form), also after presets load
+watch(() => [form.region, zonesForRegion.value], () => {
+  if (props.kind !== 'vm' || !form.region) return
+  if (!zonesForRegion.value.includes(form.zone)) form.zone = zonesForRegion.value[0] || ''
 })
 
 const nameValid = computed(() => NAME_RULES[props.kind]?.test(form.name || ''))
@@ -189,8 +269,9 @@ const formValid = computed(() => {
 // Request body for the backend (image choice expanded, password kept out of the estimate)
 function payload() {
   if (props.kind === 'vm') {
-    const { imageKey, ...rest } = form
-    const img = IMAGES.find(i => i.key === imageKey) || IMAGES[0]
+    const { imageKey, region, ...rest } = form
+    const images = presets.value.vmImages
+    const img = images.find(i => i.key === imageKey) || images[0]
     return { ...rest, imageProject: img.project, imageFamily: img.family }
   }
   return { ...form }
@@ -231,7 +312,7 @@ const reviewLines = computed(() => {
   ]
   if (props.kind === 'vm') return [
     `Zona ${f.zone} · ${f.machineType}${f.spot ? ' (Spot)' : ''}`,
-    `Disco de ${f.diskSizeGb} GB ${f.diskType} · ${IMAGES.find(i => i.key === f.imageKey)?.label}`,
+    `Disco de ${f.diskSizeGb} GB ${f.diskType} · ${presets.value.vmImages.find(i => i.key === f.imageKey)?.label}`,
     f.externalIp ? '⚠ Tendrá una IP pública expuesta a Internet (red "default").' : 'Sin IP pública.',
     f.deletionProtection ? 'Protección contra eliminación activada.' : 'Sin protección contra eliminación.',
   ]
@@ -287,6 +368,20 @@ function generatePassword() {
 .gcpn-estimate.high .gcpn-estimate-total { color: var(--red); }
 .gcpn-high { color: var(--red); font-weight: 600; }
 .gcpn-item { display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); }
+.gcpn-presets { grid-column: 1 / -1; border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.gcpn-presets legend { font-size: 12px; color: var(--text-dim); padding: 0 4px; }
+.gcpn-preset { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; transition: border-color .15s, background .15s; }
+.gcpn-preset:hover { border-color: var(--accent); }
+.gcpn-preset.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.gcpn-preset input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.gcpn-preset input[type="radio"]:focus-visible + .gcpn-preset-name { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gcpn-preset-name { font-weight: 600; color: var(--text); }
+.gcpn-preset-name small { font-weight: 400; color: var(--text-dim); margin-left: 4px; }
+.gcpn-preset-specs { color: var(--text); }
+.gcpn-preset-use { color: var(--text-dim); font-size: 11px; }
+.gcpn-preset-price { color: var(--accent); font-weight: 600; margin-top: 2px; }
+.gcpn-preset.other .gcpn-input { margin-top: 4px; }
+.gcpn-invalid.wide { grid-column: 1 / -1; }
 .gcpn-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
 @media (max-width: 720px) {
   .gcpn-body { grid-template-columns: 1fr; }
