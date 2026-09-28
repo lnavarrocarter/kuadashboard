@@ -6,7 +6,7 @@
  * Desktop-ready: apiFetch can be replaced by an Electron IPC adapter.
  */
 import { acceptHMRUpdate, defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 
 export const useAwsStore = defineStore('aws', () => {
@@ -44,6 +44,9 @@ export const useAwsStore = defineStore('aws', () => {
   const cfnStacks        = ref([])
   const loading          = ref(false)
   const error            = ref(null)
+  const accessRequest    = ref(null)
+  // A new request clears the error; drop the access request with it.
+  watch(error, value => { if (!value) accessRequest.value = null })
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +55,11 @@ export const useAwsStore = defineStore('aws', () => {
     return { 'X-Profile-Id': activeProfileId.value }
   }
 
-  function setError(e) { error.value = e.message }
+  // Permission errors come with an access request (IAM actions + policy).
+  function setError(e) {
+    error.value = e.message
+    accessRequest.value = e.details?.access || null
+  }
 
   function apiFetch(path, options = {}) {
     return request(path, {
@@ -1035,7 +1042,7 @@ export const useAwsStore = defineStore('aws', () => {
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
     bedrockModels, lexBots, cfnStacks,
-    loading, error,
+    loading, error, accessRequest,
     setActiveProfile, runInBackground,
     fetchOverview, fetchRegions, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,

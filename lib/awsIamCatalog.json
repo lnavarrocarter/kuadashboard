@@ -1,0 +1,465 @@
+{
+  "GET /regions": [
+    "ec2:DescribeRegions"
+  ],
+  "GET /eks": [
+    "eks:DescribeCluster",
+    "eks:ListClusters"
+  ],
+  "GET /eks/:name/observability": [
+    "cloudwatch:GetMetricData",
+    "cloudwatch:ListMetrics",
+    "eks:DescribeCluster"
+  ],
+  "GET /ecs": [
+    "ecs:DescribeServices",
+    "ecs:ListClusters",
+    "ecs:ListServices"
+  ],
+  "POST /ecs/:cluster/:service/start": [
+    "ecs:UpdateService"
+  ],
+  "POST /ecs/:cluster/:service/stop": [
+    "ecs:UpdateService"
+  ],
+  "GET /ec2": [
+    "ec2:DescribeInstances"
+  ],
+  "GET /ec2/:id/details": [
+    "cloudwatch:GetMetricStatistics",
+    "ec2:DescribeInstanceStatus",
+    "ec2:DescribeInstances",
+    "ec2:DescribeSecurityGroups",
+    "ec2:DescribeVolumes"
+  ],
+  "POST /ec2/:id/start": [
+    "ec2:StartInstances"
+  ],
+  "POST /ec2/:id/stop": [
+    "ec2:StopInstances"
+  ],
+  "GET /lambda": [
+    "lambda:ListFunctions"
+  ],
+  "POST /lambda/:name/invoke": [
+    "lambda:InvokeFunction"
+  ],
+  "GET /apigateway": [
+    "apigateway:GET"
+  ],
+  "GET /logs/lambda/:name": [
+    "logs:FilterLogEvents"
+  ],
+  "GET /logs/ecs/:cluster/:service": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "GET /s3": [
+    "s3:GetBucketLocation",
+    "s3:ListAllMyBuckets"
+  ],
+  "POST /s3": [
+    "s3:CreateBucket",
+    "s3:GetBucketLocation",
+    "s3:PutBucketPublicAccessBlock"
+  ],
+  "GET /s3/:bucket/test": [
+    "s3:GetBucketLocation",
+    "s3:ListBucket"
+  ],
+  "GET /s3/:bucket/config": [
+    "s3:GetBucketAcl",
+    "s3:GetBucketLocation",
+    "s3:GetBucketPolicyStatus",
+    "s3:GetBucketTagging",
+    "s3:GetBucketVersioning",
+    "s3:GetEncryptionConfiguration"
+  ],
+  "GET /ecr": [
+    "ecr:DescribeRepositories"
+  ],
+  "GET /ecr/config": [
+    "ecr:DescribeRepositories",
+    "ecr:GetLifecyclePolicy",
+    "ecr:ListImages"
+  ],
+  "GET /ecr/:repo/images": [
+    "ecr:DescribeImages"
+  ],
+  "GET /vpc": [
+    "ec2:DescribeSubnets",
+    "ec2:DescribeVpcs"
+  ],
+  "GET /vpc/:id/config": [
+    "ec2:DescribeInternetGateways",
+    "ec2:DescribeNatGateways",
+    "ec2:DescribeRouteTables",
+    "ec2:DescribeSecurityGroups",
+    "ec2:DescribeSubnets",
+    "ec2:DescribeVpcs"
+  ],
+  "GET /eventbridge": [
+    "events:ListEventBuses",
+    "events:ListRules"
+  ],
+  "GET /eventbridge/config": [
+    "events:DescribeRule",
+    "events:ListTargetsByRule"
+  ],
+  "GET /logs/eventbridge": [
+    "cloudwatch:GetMetricStatistics",
+    "events:ListTargetsByRule",
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "GET /stepfunctions": [
+    "states:ListStateMachines"
+  ],
+  "GET /stepfunctions/config": [
+    "states:DescribeStateMachine",
+    "states:ListExecutions"
+  ],
+  "GET /stepfunctions/execution/events": [
+    "states:GetExecutionHistory"
+  ],
+  "GET /stepfunctions/executions/count": [
+    "states:ListExecutions"
+  ],
+  "GET /stepfunctions/versions": [
+    "states:ListStateMachineVersions"
+  ],
+  "GET /stepfunctions/versions/definition": [
+    "states:DescribeStateMachine"
+  ],
+  "GET /ec2/:id/config": [
+    "ec2:DescribeInstances"
+  ],
+  "GET /ecs/:cluster/:service/config": [
+    "ecs:DescribeServices",
+    "ecs:DescribeTaskDefinition"
+  ],
+  "GET /eks/:name/config": [
+    "eks:DescribeCluster",
+    "eks:ListNodegroups"
+  ],
+  "GET /lambda/:name/details": [
+    "cloudwatch:GetMetricStatistics",
+    "lambda:GetFunction",
+    "lambda:GetFunctionConcurrency",
+    "lambda:GetPolicy",
+    "lambda:ListAliases",
+    "lambda:ListVersionsByFunction"
+  ],
+  "GET /lambda/:name/code": [
+    "lambda:GetFunction"
+  ],
+  "GET /lambda/:name/config": [
+    "lambda:GetFunctionConfiguration",
+    "lambda:ListAliases"
+  ],
+  "GET /apigateway/:id/config": [
+    "apigateway:GET"
+  ],
+  "PUT /tags": [
+    "ec2:CreateTags",
+    "ec2:DeleteTags",
+    "s3:GetBucketTagging",
+    "s3:PutBucketTagging",
+    "states:TagResource",
+    "states:UntagResource"
+  ],
+  "GET /tags": [
+    "ec2:DescribeTags",
+    "lambda:ListTags",
+    "s3:GetBucketTagging",
+    "states:ListTagsForResource"
+  ],
+  "POST /lambda/:name/logging": [
+    "lambda:GetFunctionConfiguration",
+    "lambda:UpdateFunctionConfiguration",
+    "logs:CreateLogGroup",
+    "logs:PutRetentionPolicy"
+  ],
+  "POST /ecs/:cluster/:service/logging": [
+    "ecs:DescribeServices",
+    "ecs:DescribeTaskDefinition",
+    "ecs:RegisterTaskDefinition",
+    "ecs:UpdateService",
+    "logs:CreateLogGroup",
+    "logs:PutRetentionPolicy"
+  ],
+  "GET /apigateway/:id/integrations": [
+    "apigateway:GET"
+  ],
+  "POST /eks/:name/add-kubeconfig": [
+    "eks:DescribeCluster"
+  ],
+  "GET /s3/:bucket/browse": [
+    "s3:ListBucket"
+  ],
+  "GET /s3/:bucket/object": [
+    "s3:GetObject"
+  ],
+  "GET /s3/:bucket/download": [
+    "s3:GetObject"
+  ],
+  "GET /glue/jobs": [
+    "glue:GetJobs"
+  ],
+  "GET /glue/databases": [
+    "glue:GetDatabases"
+  ],
+  "GET /glue/databases/:db/tables": [
+    "glue:GetTables"
+  ],
+  "POST /glue/jobs/:name/run": [
+    "glue:StartJobRun"
+  ],
+  "GET /glue/jobs/:name/runs": [
+    "glue:GetJobRuns"
+  ],
+  "GET /glue/jobs/:name/config": [
+    "glue:GetJob"
+  ],
+  "GET /glue/connections": [
+    "glue:GetConnections"
+  ],
+  "GET /glue/logs/:name": [
+    "logs:FilterLogEvents"
+  ],
+  "GET /rds": [
+    "rds:DescribeDBInstances"
+  ],
+  "GET /rds/:id/config": [
+    "rds:DescribeDBInstances",
+    "rds:ListTagsForResource"
+  ],
+  "GET /rds/:id/connection-strings": [
+    "rds:DescribeDBInstances"
+  ],
+  "POST /rds/:id/reset-password": [
+    "rds:ModifyDBInstance"
+  ],
+  "GET /docdb": [
+    "rds:DescribeDBClusters"
+  ],
+  "GET /docdb/:id/config": [
+    "rds:DescribeDBClusters",
+    "rds:DescribeDBInstances"
+  ],
+  "POST /docdb/:id/reset-password": [
+    "rds:ModifyDBCluster"
+  ],
+  "POST /docdb": [
+    "rds:CreateDBCluster",
+    "rds:CreateDBInstance"
+  ],
+  "GET /docdb/:id/connection-strings": [
+    "rds:DescribeDBClusters"
+  ],
+  "GET /dynamodb": [
+    "dynamodb:DescribeTable",
+    "dynamodb:ListTables"
+  ],
+  "GET /dynamodb/:table/config": [
+    "dynamodb:DescribeTable"
+  ],
+  "POST /dynamodb/:table/scan": [
+    "dynamodb:Scan"
+  ],
+  "POST /dynamodb/:table/query": [
+    "dynamodb:Query"
+  ],
+  "PUT /dynamodb/:table/item": [
+    "dynamodb:PutItem"
+  ],
+  "DELETE /dynamodb/:table/item": [
+    "dynamodb:DeleteItem"
+  ],
+  "POST /dynamodb": [
+    "dynamodb:CreateTable"
+  ],
+  "GET /athena/workgroups": [
+    "athena:GetWorkGroup",
+    "athena:ListWorkGroups"
+  ],
+  "GET /athena/databases": [
+    "athena:ListDataCatalogs",
+    "athena:ListDatabases"
+  ],
+  "GET /athena/catalogs/:catalog/databases/:db/tables": [
+    "athena:ListTableMetadata"
+  ],
+  "GET /athena/history": [
+    "athena:GetQueryExecution",
+    "athena:ListQueryExecutions"
+  ],
+  "GET /athena/workgroups/:name": [
+    "athena:GetWorkGroup"
+  ],
+  "GET /athena/catalogs/:catalog": [
+    "athena:GetDataCatalog",
+    "athena:ListDatabases"
+  ],
+  "POST /athena/query": [
+    "athena:StartQueryExecution"
+  ],
+  "GET /athena/query/:id": [
+    "athena:GetQueryExecution",
+    "athena:GetQueryResults"
+  ],
+  "GET /cloudfront": [
+    "cloudfront:ListDistributions"
+  ],
+  "POST /cloudfront/:id/invalidate": [
+    "cloudfront:CreateInvalidation"
+  ],
+  "GET /cloudfront/:id/config": [
+    "cloudfront:GetDistribution"
+  ],
+  "GET /cloudfront/:id/stats": [
+    "cloudwatch:GetMetricStatistics"
+  ],
+  "POST /cloudfront": [
+    "cloudfront:CreateDistribution"
+  ],
+  "GET /route53/zones": [
+    "route53:ListHostedZones"
+  ],
+  "GET /route53/zones/:id/records": [
+    "route53:ListResourceRecordSets"
+  ],
+  "GET /cognito/userpools": [
+    "cognito-idp:DescribeUserPool",
+    "cognito-idp:ListUserPools"
+  ],
+  "GET /cognito/userpools/:id/config": [
+    "cognito-idp:DescribeUserPool"
+  ],
+  "GET /cognito/userpools/:id/users": [
+    "cognito-idp:ListUsers"
+  ],
+  "GET /cognito/userpools/:id/users/:username": [
+    "cognito-idp:AdminGetUser"
+  ],
+  "GET /cognito/userpools/:id/users/:username/groups": [
+    "cognito-idp:AdminListGroupsForUser"
+  ],
+  "PATCH /cognito/userpools/:id/users/:username": [
+    "cognito-idp:AdminUpdateUserAttributes"
+  ],
+  "POST /cognito/userpools/:id/users/:username/groups/:groupname": [
+    "cognito-idp:AdminAddUserToGroup"
+  ],
+  "DELETE /cognito/userpools/:id/users/:username/groups/:groupname": [
+    "cognito-idp:AdminRemoveUserFromGroup"
+  ],
+  "POST /cognito/userpools/:id/users": [
+    "cognito-idp:AdminCreateUser"
+  ],
+  "POST /cognito/userpools/:id/users/:username/reset-password": [
+    "cognito-idp:AdminResetUserPassword"
+  ],
+  "POST /cognito/userpools/:id/users/:username/set-password": [
+    "cognito-idp:AdminSetUserPassword"
+  ],
+  "POST /cognito/userpools/:id/users/:username/mfa": [
+    "cognito-idp:AdminSetUserMFAPreference"
+  ],
+  "POST /cognito/userpools/:id/users/:username/enable": [
+    "cognito-idp:AdminEnableUser"
+  ],
+  "POST /cognito/userpools/:id/users/:username/disable": [
+    "cognito-idp:AdminDisableUser"
+  ],
+  "DELETE /cognito/userpools/:id/users/:username": [
+    "cognito-idp:AdminDeleteUser"
+  ],
+  "GET /cognito/userpools/:id/clients": [
+    "cognito-idp:DescribeUserPoolClient",
+    "cognito-idp:ListUserPoolClients"
+  ],
+  "GET /cognito/userpools/:id/identity-providers": [
+    "cognito-idp:DescribeIdentityProvider",
+    "cognito-idp:ListIdentityProviders"
+  ],
+  "GET /cognito/userpools/:id/groups": [
+    "cognito-idp:ListGroups"
+  ],
+  "POST /cognito/userpools/:id/groups": [
+    "cognito-idp:CreateGroup"
+  ],
+  "GET /secrets": [
+    "secretsmanager:ListSecrets"
+  ],
+  "GET /secrets/:name/config": [
+    "secretsmanager:DescribeSecret"
+  ],
+  "GET /secrets/:name/preview-keys": [
+    "secretsmanager:GetSecretValue"
+  ],
+  "POST /secrets/:name/import-selected": [
+    "secretsmanager:GetSecretValue"
+  ],
+  "POST /secrets/:name/import-to-profile": [
+    "secretsmanager:GetSecretValue"
+  ],
+  "GET /datapipeline": [
+    "datapipeline:DescribePipelines",
+    "datapipeline:ListPipelines"
+  ],
+  "POST /datapipeline/:id/activate": [
+    "datapipeline:ActivatePipeline"
+  ],
+  "POST /datapipeline/:id/deactivate": [
+    "datapipeline:DeactivatePipeline"
+  ],
+  "GET /bedrock": [
+    "bedrock:ListFoundationModels"
+  ],
+  "GET /lex": [
+    "lex:ListBots"
+  ],
+  "GET /lex/:botId/intents": [
+    "lex:ListBotLocales",
+    "lex:ListIntents",
+    "lex:ListSlots"
+  ],
+  "GET /lex/:botId/logs": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "GET /lex/:botId/testsets": [
+    "lex:ListTestSets"
+  ],
+  "GET /lex/:botId/aliases": [
+    "lex:DescribeBot",
+    "lex:DescribeBotAlias",
+    "lex:ListBotAliases"
+  ],
+  "POST /lex/:botId/aliases": [
+    "lex:CreateBotAlias"
+  ],
+  "GET /lex/:botId/slot-types": [
+    "lex:DescribeSlotType",
+    "lex:ListBotLocales",
+    "lex:ListSlotTypes"
+  ],
+  "POST /lex/:botId/chat": [
+    "lex:RecognizeText"
+  ],
+  "GET /lex/:botId/missed-utterances": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "POST /lex/:botId/build": [
+    "lex:BuildBotLocale",
+    "lex:DescribeBotLocale"
+  ],
+  "GET /lex/:botId/metrics": [
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /cloudformation/stacks": [
+    "cloudformation:ListStacks"
+  ]
+}

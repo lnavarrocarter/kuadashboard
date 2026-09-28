@@ -1824,6 +1824,8 @@ kbd {
 .load-more-row { padding: 8px 12px; text-align: center; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; }
 .empty-state { text-align: center; padding: 48px 24px; color: var(--text-dim); font-size: 13px; line-height: 2; }
 .alert-error { background: rgba(244,67,54,.12); border: 1px solid var(--red); border-radius: 6px; padding: 10px 14px; color: var(--red); font-size: 12px; }
+.alert-error .aws-access-btn { margin-left: 10px; display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; }
+.alert-error .aws-access-btn svg { width: 12px; height: 12px; }
 
 /* Status inline badges (cloud views) */
 .status-ok   { color: var(--green); font-weight: 600; }

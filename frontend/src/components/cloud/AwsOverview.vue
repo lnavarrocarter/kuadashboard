@@ -103,6 +103,10 @@
           <template v-if="s.status === 'unavailable'">
             <span class="aov-service-error"><i data-lucide="lock"></i>{{ errorLabel(s.error) }}</span>
             <code v-if="s.error.action" class="aov-action">{{ s.error.action }}</code>
+            <span
+              v-if="s.access" class="aov-request" role="button" tabindex="0"
+              @click.stop="openAccess(s)" @keydown.enter.stop="openAccess(s)"
+            ><i data-lucide="key-round"></i>{{ t('awsAccess.requestAccess') }}</span>
           </template>
           <template v-else>
             <span class="aov-service-count">{{ s.count }}{{ s.truncated ? '+' : '' }}</span>
@@ -111,6 +115,13 @@
         </button>
       </section>
       <p class="aov-note">{{ t('awsOverview.scopeNote', { region: data.region }) }}</p>
+      <AwsAccessRequestModal
+        :show="!!accessService"
+        :access="accessService?.access || null"
+        :message="accessService?.error?.message || ''"
+        :identity="identity"
+        @close="accessService = null"
+      />
     </template>
   </div>
 </template>
@@ -121,6 +132,7 @@ import { createIcons, icons } from 'lucide'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
+import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 
 defineProps({
   profileId: { type: String, default: '' },
@@ -135,6 +147,11 @@ const { toast } = useToast()
 const loading = ref(false)
 const error = ref(null)
 const showRegions = ref(false)
+const accessService = ref(null)
+
+function openAccess(service) {
+  accessService.value = service
+}
 const now = ref(Date.now())
 let requestId = 0
 let clock = null
@@ -251,6 +268,9 @@ defineExpose({ load })
 .aov-service-detail { font-size: 11px; color: var(--text-dim); }
 .aov-service-error { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--yellow); }
 .aov-service-error svg { width: 12px; height: 12px; }
+.aov-request { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 11px; color: var(--accent); }
+.aov-request:hover { text-decoration: underline; }
+.aov-request svg { width: 11px; height: 11px; }
 .aov-action { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .aov-note { margin: 0; font-size: 11px; color: var(--text-dim); }
 

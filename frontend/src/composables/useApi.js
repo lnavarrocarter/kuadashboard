@@ -1,3 +1,11 @@
+// Error with the server message; `status` and the JSON body (`details`) are
+// kept so callers can react to structured errors (e.g. AWS access requests).
+async function responseError(res, ct) {
+  const body = ct.includes('json') ? await res.json().catch(() => null) : null
+  const message = body ? body.error : await res.text().catch(() => '')
+  return Object.assign(new Error(message || `HTTP ${res.status}`), { status: res.status, details: body })
+}
+
 // Thin wrapper around fetch — throws Error with server message on failure
 export async function api(method, path, body) {
   const opts = { method, headers: {} }
@@ -7,12 +15,7 @@ export async function api(method, path, body) {
   }
   const res = await fetch(path, opts)
   const ct = res.headers.get('content-type') || ''
-  if (!res.ok) {
-    const err = ct.includes('json')
-      ? (await res.json()).error
-      : await res.text()
-    throw new Error(err || `HTTP ${res.status}`)
-  }
+  if (!res.ok) throw await responseError(res, ct)
   return ct.includes('json') ? res.json() : res.text()
 }
 
@@ -34,12 +37,7 @@ export function useApi() {
     if (background) requestHeaders['X-KUA-Background'] = '1'
     const res = await fetch(path, { method, headers: requestHeaders, body })
     const ct  = res.headers.get('content-type') || ''
-    if (!res.ok) {
-      const err = ct.includes('json')
-        ? (await res.json()).error
-        : await res.text()
-      throw new Error(err || `HTTP ${res.status}`)
-    }
+    if (!res.ok) throw await responseError(res, ct)
     const result = ct.includes('json') ? await res.json() : await res.text()
     const isList = Array.isArray(result) || Array.isArray(result?.items)
     if (method === 'GET' && stabilize && isList) {

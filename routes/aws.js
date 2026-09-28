@@ -57,6 +57,7 @@ const {
 } = require('../lib/eksObservability');
 const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
 const { buildAwsOverview } = require('../lib/awsOverview');
+const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 
 const router = express.Router();
 
@@ -73,6 +74,15 @@ function handleErr(res, err) {
     message = 'AWS session credentials have expired. Refresh them (e.g. "aws sso login" or re-copy from IAM Identity Center) and update the profile.';
   } else if (/UnrecognizedClientException|InvalidClientTokenId/.test(err.name || '')) {
     message = `${message} — if you are using temporary credentials (key starts with "ASIA"), make sure the profile also includes AWS_SESSION_TOKEN.`;
+  } else {
+    // Permission errors carry the IAM actions to request (see lib/awsAccess.js).
+    const classified = classifyAwsError(err);
+    if (classified.kind === 'denied') {
+      const req = res.req;
+      const route = req?.route?.path ? `${req.method} ${req.route.path}` : null;
+      const account = classified.principal?.match(/^arn:[^:]+:(?:iam|sts)::(\d+):/)?.[1] || null;
+      return res.status(403).json({ error: message, code: 'AccessDenied', access: buildAccessRequest({ error: classified, route, account }) });
+    }
   }
   res.status(status).json({ error: message });
 }

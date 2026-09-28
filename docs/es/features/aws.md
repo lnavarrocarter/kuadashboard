@@ -50,6 +50,16 @@ Selecciona el perfil activo y la región desde los dropdowns en el encabezado de
 
 Cada servicio se lee por separado, en paralelo y con un tiempo máximo: si falta un permiso, solo esa tarjeta queda como *Sin permiso* (con la acción IAM cuando AWS la informa) y el resto carga igual. Al hacer clic en una tarjeta se abre la pestaña de ese servicio. Solo se hacen llamadas de lectura (List/Describe).
 
+## Solicitudes de acceso
+
+Cuando AWS rechaza una solicitud, KUA explica qué falta en vez de mostrar solo el error crudo. El aviso de error de la vista de AWS (y cada tarjeta *Sin permiso* del Resumen) ofrece **Solicitar acceso**, que abre:
+
+- **Los permisos que faltan**: la acción IAM que AWS informó como rechazada, más las otras acciones que usa la misma pantalla, para resolverlo con un solo permiso. Cuando AWS oculta la acción (por ejemplo, los mensajes de autorización codificados de EC2), KUA lista las acciones que usa esa pantalla.
+- **Un mensaje para el administrador de AWS**: con el ARN de tu identidad, la cuenta, las acciones y el recurso, en inglés o español (independiente del idioma de la app), listo para copiar.
+- **Una policy IAM sugerida**: la acción rechazada sobre el recurso informado y el resto de las acciones de la pantalla, lista para copiar.
+
+La lista de acciones sale de `lib/awsIamCatalog.json`, generado a partir de los comandos del SDK de AWS de cada ruta de KUA (`npm run aws:iam-catalog`; un test falla si queda desactualizado). Solo cubre los servicios de AWS que soporta KUA. Revisa las policies sugeridas antes de aplicarlas y acota `Resource` a ARNs específicos cuando se pueda.
+
 ## Cómputo
 
 ### EC2 Instances

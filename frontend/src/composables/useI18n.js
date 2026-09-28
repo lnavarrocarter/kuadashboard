@@ -46,6 +46,12 @@ export function useI18n() {
   return { t }
 }
 
+/** Translates into a given language regardless of the UI language (e.g. text to share). */
+export function translate(lang, key, params) {
+  const locale = LOCALES[lang] || LOCALES.en
+  return interpolate(locale[key] ?? LOCALES.en[key] ?? key, params)
+}
+
 const NUMBER_LOCALES = { es: 'es', en: 'en-US' }
 
 /**

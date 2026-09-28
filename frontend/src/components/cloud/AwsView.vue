@@ -7,7 +7,19 @@
     </div>
 
     <template v-else>
-      <div v-if="!SELF_LOADING_TABS.has(activeTab) && awsStore.error" class="alert-error">{{ awsStore.error }}</div>
+      <div v-if="!SELF_LOADING_TABS.has(activeTab) && awsStore.error" class="alert-error">
+        {{ awsStore.error }}
+        <button v-if="awsStore.accessRequest" class="btn sm aws-access-btn" @click="accessModalOpen = true">
+          <i data-lucide="key-round"></i> {{ t('awsAccess.requestAccess') }}
+        </button>
+      </div>
+      <AwsAccessRequestModal
+        :show="accessModalOpen"
+        :access="awsStore.accessRequest"
+        :message="awsStore.error || ''"
+        :identity="awsStore.overview?.identity || null"
+        @close="accessModalOpen = false"
+      />
 
       <div v-if="!SELF_LOADING_TABS.has(activeTab)" class="aws-toolbar">
         <input
@@ -3705,6 +3717,8 @@ import {
 } from './route53Records'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import AwsOverview from './AwsOverview.vue'
+import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
+import { useI18n } from '../../composables/useI18n'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
@@ -3758,6 +3772,8 @@ const TABS = [
 const activeTab  = ref('overview')
 const apmViewRef = ref(null)
 const overviewRef = ref(null)
+const accessModalOpen = ref(false)
+const { t } = useI18n()
 // Tabs that render their own header, loading and error states.
 const SELF_LOADING_TABS = new Set(['apm', 'overview'])
 

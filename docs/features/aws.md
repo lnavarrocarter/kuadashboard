@@ -50,6 +50,16 @@ Select your active profile and region from the dropdowns in the AWS panel header
 
 Every service is read on its own, in parallel and with a timeout: a missing permission marks only that card as *No permission* (with the IAM action when AWS reports it), and the rest still load. Clicking a card opens that service's tab. Only read-only List/Describe calls are made.
 
+## Access requests
+
+When AWS denies a request, KUA explains what is missing instead of only showing the raw error. The error banner of the AWS view (and every *No permission* card in the Overview) offers **Request access**, which opens:
+
+- **The missing permissions** — the IAM action AWS reported as denied, plus the other actions the same screen uses, so one grant fixes the whole view. When AWS hides the action (for example EC2's encoded authorization messages), KUA lists the actions that screen uses.
+- **A message for your AWS administrator** — with your identity ARN, account, the actions and the resource, in English or Spanish (independent of the app language), ready to copy.
+- **A suggested IAM policy** — the denied action on the reported resource and the rest of the screen's actions, ready to copy.
+
+The action list comes from `lib/awsIamCatalog.json`, generated from the AWS SDK commands of each KUA route (`npm run aws:iam-catalog`; a test fails if it gets out of date). It only covers the AWS services KUA supports. Review suggested policies before applying them and narrow `Resource` to specific ARNs where you can.
+
 ## Compute
 
 ### EC2 Instances
