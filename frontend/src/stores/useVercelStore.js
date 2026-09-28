@@ -5,7 +5,7 @@
  * Follows the flat-state pattern of useAwsStore.js.
  * All API calls inject X-Profile-Id from activeProfileId.
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
@@ -455,3 +455,7 @@ export const useVercelStore = defineStore('vercel', () => {
     shouldIgnoreResponse,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useVercelStore, import.meta.hot))
+}

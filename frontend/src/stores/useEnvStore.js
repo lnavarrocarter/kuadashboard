@@ -8,7 +8,7 @@
  * Desktop-ready: the `api` calls go through useApi() which can be swapped
  * for an Electron IPC adapter without touching this store.
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useApi } from '../composables/useApi'
 
@@ -153,3 +153,7 @@ export const useEnvStore = defineStore('envManager', () => {
     createProfile, updateProfile, deleteProfile, exportProfile, importEnv,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useEnvStore, import.meta.hot))
+}
