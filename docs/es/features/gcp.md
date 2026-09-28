@@ -10,8 +10,9 @@ KuaDashboard ofrece una gestión completa de Google Cloud Platform accesible des
 ## Cómputo
 
 ### Cloud Run
-- Listar todos los servicios Cloud Run con estado, región, URL y revisión
-- **Iniciar / Detener** servicios (ajusta el número mínimo de instancias)
+- Tabla de servicios con estado (incluye despliegues fallidos), imagen, CPU/memoria, instancias mín–máx, ingress, revisión activa (marca si hay una revisión más nueva que aún no recibe tráfico) y última actualización
+- **Start / Stop / Eliminar** en cada fila; **＋ Nuevo servicio** para crear (ver [acciones seguras](#crear-iniciar-y-eliminar-recursos-de-forma-segura))
+- **Start / Stop** ajusta el número mínimo de instancias
 - Enlace directo a Cloud Console
 
 ### Cloud Run Jobs
@@ -24,14 +25,14 @@ KuaDashboard ofrece una gestión completa de Google Cloud Platform accesible des
 - Copiar el comando de conexión `kubectl` al portapapeles
 
 ### Compute Engine VMs
-- Listar todas las instancias VM con zona, tipo de máquina, IP externa y estado
-- **Iniciar / Detener** instancias VM
+- Tabla de VMs con estado, tipo de máquina (marca Spot/Preemptible), IP interna y externa, red/subred, cantidad y tamaño de discos, protección contra eliminación y fecha de creación
+- **Start / Stop / Eliminar** en cada fila; **＋ Nueva VM** para crear (ver [acciones seguras](#crear-iniciar-y-eliminar-recursos-de-forma-segura))
 
 ## Base de datos
 
 ### Cloud SQL
-- Listar instancias Cloud SQL con versión de base de datos, tier y estado
-- **Iniciar / Detener** instancias (activar / desactivar)
+- Tabla de instancias con un estado claro — **RUNNING**, **STOPPED** (Cloud SQL informa RUNNABLE aunque esté detenida, así que KUA lo deriva de la política de activación), PENDING_CREATE, MAINTENANCE… — además de motor, tier/edición, zonal o HA, almacenamiento, backups, IP pública/privada y protección contra eliminación
+- **Start / Stop / Eliminar** en cada fila, habilitados según el estado; **＋ Nueva instancia** para crear (ver [acciones seguras](#crear-iniciar-y-eliminar-recursos-de-forma-segura))
 
 ### Cloud Spanner
 - Listar instancias Spanner con recuento de nodos y unidades de procesamiento
@@ -134,6 +135,25 @@ KuaDashboard ofrece una gestión completa de Google Cloud Platform accesible des
 ### Cloud Logging
 - **Panel de consulta interactivo** — introduce un filtro avanzado, elige un rango de horas (1–72) y ejecuta
 - Los resultados muestran timestamp, severidad (código de color), tipo de recurso, nombre del log y payload de texto
+
+## Crear, iniciar y eliminar recursos de forma segura
+
+Cloud Run, las VMs de Compute Engine y Cloud SQL muestran sus recursos en una tabla con las acciones en la misma fila (**Start**, **Stop**, **🗑 Eliminar**), y un botón **＋ Nuevo** para crear. Al hacer clic en una fila se abre su detalle debajo de la tabla. Toda acción que genera costos o no se puede deshacer pide confirmación antes:
+
+| Acción | Qué debes confirmar |
+|---|---|
+| **Start** | Muestra el costo mensual estimado de mantenerlo encendido y exige marcar *"Entiendo que esta acción genera costos"*. En Cloud Run, Start fija min instances = 1, que factura 24/7. |
+| **Stop** | Indica qué sigue facturando mientras está detenido (discos, IPs estáticas, almacenamiento de SQL) y los efectos secundarios (cambio de IP efímera, arranque en frío). |
+| **Eliminar** | Irreversible: debes escribir el nombre del recurso. El diálogo indica qué se pierde (revisiones y URL de Cloud Run; discos con auto-delete de la VM — los discos sin auto-delete se conservan y siguen facturando; todas las bases, usuarios y backups automáticos de Cloud SQL). Los recursos con **protección contra eliminación** no se pueden eliminar desde KUA: desactívala primero en la consola de Google Cloud. |
+| **Crear** | El formulario muestra el costo estimado en vivo. Antes de crear, una pantalla de revisión resume la configuración, destaca las opciones de riesgo (servicio Cloud Run público, VM con IP pública, SQL sin backups o sin protección contra eliminación) y exige escribir el nombre y aceptar el costo. Las estimaciones de **$100/mes o más** requieren una segunda confirmación explícita de costo alto. |
+
+Valores seguros por defecto al crear: los servicios Cloud Run quedan **privados** salvo que permitas explícitamente el acceso sin autenticación; las instancias Cloud SQL se crean con **backups automáticos** y **protección contra eliminación**; los recursos llevan la etiqueta `created-by=kua`.
+
+El backend aplica las mismas reglas: las solicitudes de creación y eliminación sin el nombre escrito o sin las confirmaciones requeridas se rechazan, así que no se pueden saltar llamando a la API directamente. Cada creación y eliminación queda en el registro de auditoría con su costo mensual estimado.
+
+::: warning Las estimaciones de costo son aproximadas
+Usan precios de lista on-demand de us-central1 y no incluyen descuentos por uso sostenido o comprometido, free tier, egress de red, licencias ni impuestos. Tómalas como advertencia, no como cotización; revisa la [calculadora de precios de Google Cloud](https://cloud.google.com/products/calculator) para cifras exactas.
+:::
 
 ## IAM
 

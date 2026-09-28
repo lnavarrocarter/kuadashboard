@@ -165,6 +165,34 @@ export const useGcpStore = defineStore('gcp', () => {
     } catch (e) { setError(e, 'sql'); return null }
   }
 
+  // ─── Create / delete (Cloud Run, VM, Cloud SQL) ──────────────────────────────
+  // These throw so the confirmation modals can show the backend error inline.
+  // The backend re-checks confirmName / acknowledgeCost / acknowledgeHighCost.
+
+  function jsonRequest(method, body) {
+    return { method, headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  }
+
+  async function estimateResource(kind, spec) {
+    return await apiFetch(`/api/cloud/gcp/estimate/${encodeURIComponent(kind)}`, jsonRequest('POST', spec))
+  }
+
+  const CREATE_PATHS = { cloudrun: '/api/cloud/gcp/cloudrun', vm: '/api/cloud/gcp/compute/vms', sql: '/api/cloud/gcp/sql' }
+  async function createResource(kind, body) {
+    return await apiFetch(CREATE_PATHS[kind], jsonRequest('POST', body))
+  }
+
+  function deletePath(kind, resource) {
+    const e = encodeURIComponent
+    if (kind === 'cloudrun') return `/api/cloud/gcp/cloudrun/${e(resource.region)}/${e(resource.name)}`
+    if (kind === 'vm') return `/api/cloud/gcp/compute/vms/${e(resource.zone)}/${e(resource.name)}`
+    if (kind === 'sql') return `/api/cloud/gcp/sql/${e(resource.name)}`
+    throw new Error(`Unknown resource kind: ${kind}`)
+  }
+  async function deleteResource(kind, resource, confirmName) {
+    return await apiFetch(deletePath(kind, resource), jsonRequest('DELETE', { confirmName }))
+  }
+
   // ─── Functions ──────────────────────────────────────────────────────────────
   async function invokeFunction(location, name, payload = {}) {
     try {
@@ -407,6 +435,7 @@ export const useGcpStore = defineStore('gcp', () => {
   const vms              = { get value() { return tabs.value.vms.data } }
 
   return {
+    estimateResource, createResource, deleteResource,
     activeProfileId, tabs,
     cloudRunServices, gkeClusters, vms,
     setActiveProfile, runInBackground,
