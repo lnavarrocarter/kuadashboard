@@ -24,6 +24,15 @@ La columna `Age` se muestra como duracion legible y ordena internamente por tiem
 
 Al seleccionar una fila se abre un panel lateral ajustable con resumen específico por recurso: labels, contenedores, red, almacenamiento, eventos o scheduling según el tipo seleccionado.
 
+### Tabla de Services
+
+Además de Type, Cluster IP y Ports, la tabla de Services muestra:
+
+- **App** — la aplicación detrás del Service, tomada de su selector (`app.kubernetes.io/name`, luego `app`, luego `k8s-app`); si no hay, usa las labels del propio Service, o `-`.
+- **Backend IPs** — IPs internas de los pods que respaldan el Service en este momento, leídas de sus EndpointSlices. Los pods que existen pero no están listos aparecen después de `not ready:`. Las listas largas se recortan; pasa el cursor para verlas todas. Los Services `ExternalName` muestran su destino (`→ host`), `-` indica que no hay pods detrás y `?` que KUA no pudo leer los EndpointSlices (revisa RBAC para `discovery.k8s.io/endpointslices`).
+
+Las IPs se obtienen con una sola llamada que lista los EndpointSlices del namespace (o del clúster completo en *All namespaces*), no con una consulta por Service, así que los namespaces grandes siguen siendo rápidos. El filtro de la tabla también busca por nombre de app e IPs de backend.
+
 ## Auto-refresh
 
 KuaDashboard puede refrescar automáticamente la vista activa de Kubernetes sin cambiar tu namespace, tipo de recurso o panel de detalle seleccionado.

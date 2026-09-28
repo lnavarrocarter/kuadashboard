@@ -87,8 +87,8 @@ export const RESOURCES = {
   },
   services: {
     title: 'Services',
-    cols:  ['Name', 'Namespace', 'Type', 'Cluster IP', 'Ports', 'Age'],
-    row:   r => [r.name, r.namespace, r.type, r.clusterIP, r.ports, age(r.age)],
+    cols:  ['Name', 'Namespace', 'App', 'Type', 'Cluster IP', 'Backend IPs', 'Ports', 'Age'],
+    row:   r => [r.name, r.namespace, r.app || '-', r.type, r.clusterIP, { truncate: r.backendIPs || '-', max: 48 }, r.ports, age(r.age)],
     actions: r => [
       { icon: 'cable',       label: 'Forward', cls: 'green', fn: 'openPortForward', args: [r.namespace, r.name, r.rawPorts] },
       { icon: 'file-code-2', label: 'YAML',    cls: 'blue',  fn: 'viewYaml',        args: ['services', r.namespace, r.name] },

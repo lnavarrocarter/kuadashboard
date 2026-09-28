@@ -11,6 +11,7 @@ const request    = require('request');
 const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
+const { listServicesWithBackends } = require('./lib/kubeServices');
 const { KubeResponseCache } = require('./lib/kubeResponseCache');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
@@ -1501,34 +1502,7 @@ app.get('/api/:namespace/cronjobs/:name/yaml', async (req, res) => {
 
 app.get('/api/:namespace/services', async (req, res) => {
   try {
-    const { core } = clients();
-    const { namespace } = req.params;
-    const result = namespace === 'all'
-      ? await core.listServiceForAllNamespaces()
-      : await core.listNamespacedService(namespace);
-
-    res.json(result.body.items.map(svc => {
-      const rawPorts = (svc.spec.ports || []).map(port => ({
-        name: port.name || '',
-        port: port.port,
-        targetPort: port.targetPort ?? port.port,
-        protocol: port.protocol || 'TCP',
-        nodePort: port.nodePort,
-      }));
-      return {
-      name:       svc.metadata.name,
-      namespace:  svc.metadata.namespace,
-      type:       svc.spec.type,
-      clusterIP:  svc.spec.clusterIP,
-      externalIP: svc.spec.externalIPs?.join(',')
-                  || svc.status.loadBalancer?.ingress?.[0]?.ip
-                  || svc.status.loadBalancer?.ingress?.[0]?.hostname
-                  || '-',
-      ports: rawPorts.map(p => `${p.port}:${p.targetPort}/${p.protocol}`).join(', ') || '-',
-      rawPorts,
-      age:   svc.metadata.creationTimestamp,
-    };
-    }));
+    res.json(await listServicesWithBackends(clients(), req.params.namespace));
   } catch (err) { handleError(res, err); }
 });
 

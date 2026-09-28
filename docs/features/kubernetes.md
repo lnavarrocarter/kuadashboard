@@ -20,6 +20,15 @@ Browse all major Kubernetes resources with sortable, filterable tables:
 
 Each resource table shows key fields (name, namespace, status, age) and provides contextual actions. Tables support multi-select for bulk deletion where Kubernetes allows deletion of the selected resource type.
 
+### Services table
+
+Besides Type, Cluster IP and Ports, the Services table shows:
+
+- **App** — the application behind the Service, taken from its selector (`app.kubernetes.io/name`, then `app`, then `k8s-app`); falls back to the Service's own labels, or `-`.
+- **Backend IPs** — internal IPs of the pods currently backing the Service, read from its EndpointSlices. Pods that exist but are not ready are listed after `not ready:`. Long lists are truncated; hover to see all of them. `ExternalName` Services show their target (`→ host`), `-` means no backing pods, and `?` means KUA could not read EndpointSlices (check RBAC for `discovery.k8s.io/endpointslices`).
+
+The IPs come from one EndpointSlice list call per namespace (or for the whole cluster in *All namespaces*), not one lookup per Service, so large namespaces stay fast. The table filter also matches app names and backend IPs.
+
 The `Age` column is displayed as a readable duration and still sorts by the real elapsed time, so values such as `30sec`, `2min`, `23hrs 10min` and `1day 3hrs 10min` order correctly in both directions.
 
 Selecting a row opens a resizable detail panel with a resource-specific summary, labels, containers, networking, storage, events or scheduling fields depending on the resource type.
