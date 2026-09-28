@@ -21,6 +21,7 @@ const {
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
+const { serializeRdpBitmap } = require('./lib/rdpBitmap');
 const {
   buildKubeConfig,
   kubeConfigPaths,
@@ -3063,6 +3064,7 @@ wssEc2Rdp.on('connection', (ws, req) => {
         password,
         enablePerf:       true,
         autoLogin:        true,
+        decompress:       true,
         screen:           { width, height },
         locale:           'en',
         enableGlyphCache: true,
@@ -3073,16 +3075,9 @@ wssEc2Rdp.on('connection', (ws, req) => {
       });
 
       rdpClient.on('bitmap', bitmap => {
-        // bitmap: destLeft, destTop, destRight, destBottom, width, height,
-        //         bitsPerPixel, isCompress, data (Buffer, already decompressed)
         send({
           type: 'bitmap',
-          x:    bitmap.destLeft,
-          y:    bitmap.destTop,
-          w:    bitmap.width  || (bitmap.destRight  - bitmap.destLeft + 1),
-          h:    bitmap.height || (bitmap.destBottom - bitmap.destTop  + 1),
-          bpp:  bitmap.bitsPerPixel,
-          data: bitmap.data.toString('base64'),
+          ...serializeRdpBitmap(bitmap),
         });
       });
 
