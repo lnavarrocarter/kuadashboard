@@ -173,6 +173,14 @@ export const useGcpStore = defineStore('gcp', () => {
     return { method, headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
   }
 
+  // Curated locations / machine types / tiers for the create forms (static: cached once)
+  let presetsPromise = null
+  function fetchPresets() {
+    presetsPromise ||= apiFetch('/api/cloud/gcp/presets', { headers: headers() })
+      .catch(e => { presetsPromise = null; throw e })
+    return presetsPromise
+  }
+
   async function estimateResource(kind, spec) {
     return await apiFetch(`/api/cloud/gcp/estimate/${encodeURIComponent(kind)}`, jsonRequest('POST', spec))
   }
@@ -435,7 +443,7 @@ export const useGcpStore = defineStore('gcp', () => {
   const vms              = { get value() { return tabs.value.vms.data } }
 
   return {
-    estimateResource, createResource, deleteResource,
+    estimateResource, createResource, deleteResource, fetchPresets,
     activeProfileId, tabs,
     cloudRunServices, gkeClusters, vms,
     setActiveProfile, runInBackground,

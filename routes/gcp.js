@@ -37,7 +37,7 @@ const auditLog     = require('../lib/auditLog');
 const { createGcloudCli } = require('../lib/gcloudCli');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
-  estimate, assertDeleteConfirmed, validateCreate,
+  estimate, createPresets, assertDeleteConfirmed, validateCreate,
 } = require('../lib/gcpResources');
 
 const router    = express.Router();
@@ -2423,6 +2423,11 @@ router.get('/kms/keyrings', async (req, res) => {
 // for the same, but it is enforced here so a direct request cannot skip it.
 
 const RESOURCE_LABELS = { 'created-by': 'kua' };
+
+// GET /presets → curated locations, machine types, SQL tiers and images (with prices)
+router.get('/presets', (_req, res) => {
+  res.json(createPresets());
+});
 
 // POST /estimate/:kind → approximate monthly cost for a create form (no side effects)
 router.post('/estimate/:kind', (req, res) => {
