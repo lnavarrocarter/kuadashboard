@@ -89,12 +89,17 @@ Mutacion opcional:
 ARN recomendados:
 
 - `arn:aws:eks:REGION:ACCOUNT:cluster/*`
+- `arn:aws:eks:REGION:ACCOUNT:nodegroup/*/*/*`
+- `arn:aws:eks:REGION:ACCOUNT:addon/*/*/*`
 
 Lectura:
 
 - `eks:ListClusters`
 - `eks:DescribeCluster`
 - `eks:ListNodegroups`
+- `eks:DescribeNodegroup`
+- `eks:ListAddons`
+- `eks:DescribeAddon`
 - `eks:ListTagsForResource`
 
 Mutacion opcional:
@@ -105,6 +110,7 @@ Mutacion opcional:
 Nota:
 
 - Para operar dentro del cluster con kubectl tambien necesitas permisos/RBAC de Kubernetes.
+- El panel Info de EKS y las columnas Node groups/EC2 tambien usan los permisos de lectura de EC2 (`ec2:DescribeInstances`, `ec2:DescribeVpcs`, `ec2:DescribeSubnets`, `ec2:DescribeSecurityGroups`). Si faltan, esas secciones se muestran como no disponibles.
 
 ---
 

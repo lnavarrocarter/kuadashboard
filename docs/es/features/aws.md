@@ -70,7 +70,16 @@ Visibilidad completa de los servicios ECS en todos los clusters:
 
 Navega todos los clusters EKS:
 
-- Nombre del cluster, región, versión de Kubernetes, estado, fecha de creación
+- Nombre del cluster y endpoint de la API, región, versión de Kubernetes, estado, fecha de creación
+- **Node groups** — managed node groups de cada cluster
+- **EC2** — cantidad de instancias EC2 que corren como nodos (managed node groups, Karpenter y nodos self-managed, detectados por sus tags de EKS/Kubernetes)
+- **Info** — infraestructura AWS del cluster, con el mismo diseño que los paneles Info de EC2 y Lambda:
+  - **Overview** — ARN, versión y versión de plataforma, rol IAM, acceso al endpoint de la API (público/privado, CIDRs permitidos), OIDC issuer, CIDR de services, logs del control plane habilitados y tags
+  - **Red** — VPC, cada subnet usada por el control plane, los node groups o los nodos (con CIDR, AZ, IPs libres y quién la usa) y los security groups del cluster, adicionales y de acceso remoto
+  - **Node groups** — estado, tipo de capacidad, arquitectura, tipos de instancia, escalado (min/deseado/max), cantidad de EC2, AMI y release, subnets, Auto Scaling groups, launch template, rol de nodo y problemas de salud
+  - **Instancias EC2** — cada instancia nodo con tipo, estado, origen (node group, `karpenter/<pool>` o `self-managed`), IP privada, AZ y spot/on-demand
+  - **Add-ons** — add-ons administrados por EKS con versión, estado, rol IRSA y problemas de salud
+  - Si falta un permiso (por ejemplo `ec2:DescribeInstances`), el resto de las secciones carga igual y un aviso indica qué no se pudo leer
 - **Config** — inspeccionar ARN, endpoint, rol IAM y tags
 - **Add to Dashboard** — ejecuta `aws eks update-kubeconfig` automáticamente para que el cluster aparezca en el panel de Kubernetes de inmediato
 

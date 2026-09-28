@@ -54,6 +54,7 @@ const {
   aggregateMetricResults,
   buildMetricQueries,
 } = require('../lib/eksObservability');
+const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
 
 const router = express.Router();
 
@@ -322,6 +323,8 @@ router.get('/eks', async (req, res) => {
         client.send(new DescribeClusterCommand({ name })).then(r => r.cluster)
       )
     );
+    const { EC2Client } = require('@aws-sdk/client-ec2');
+    const infra = await summarizeClusters({ eks: client, ec2: new EC2Client(cfg) }, details.map(c => c.name));
     res.json(details.map(c => ({
       name:     c.name,
       arn:      c.arn,
@@ -332,6 +335,8 @@ router.get('/eks', async (req, res) => {
       roleArn:  c.roleArn,
       createdAt: c.createdAt,
       tags:     c.tags || {},
+      nodegroups:    infra.get(c.name)?.nodegroups ?? null,
+      instanceCount: infra.get(c.name)?.instanceCount ?? null,
     })));
   } catch (err) { handleErr(res, err); }
 });
@@ -358,12 +363,7 @@ router.get('/eks/:name/observability', async (req, res) => {
     const now = new Date();
     const start = new Date(now.getTime() - hours * 60 * 60 * 1000);
 
-    const {
-      EKSClient,
-      DescribeClusterCommand,
-      DescribeNodegroupCommand,
-      ListNodegroupsCommand,
-    } = require('@aws-sdk/client-eks');
+    const { EKSClient, DescribeClusterCommand } = require('@aws-sdk/client-eks');
     const {
       CloudWatchClient,
       GetMetricDataCommand,
@@ -372,35 +372,13 @@ router.get('/eks/:name/observability', async (req, res) => {
 
     const eks = new EKSClient(cfg);
     const cloudWatch = new CloudWatchClient(cfg);
-    const [clusterResult, nodegroupListResult] = await Promise.allSettled([
+    const [clusterResult, nodegroupResult] = await Promise.allSettled([
       eks.send(new DescribeClusterCommand({ name: clusterName })),
-      eks.send(new ListNodegroupsCommand({ clusterName })),
+      describeNodegroups(eks, clusterName),
     ]);
     if (clusterResult.status === 'rejected') throw clusterResult.reason;
 
-    const nodegroupNames = nodegroupListResult.status === 'fulfilled'
-      ? nodegroupListResult.value.nodegroups || []
-      : [];
-    const nodegroupResults = await Promise.allSettled(nodegroupNames.map(nodegroupName =>
-      eks.send(new DescribeNodegroupCommand({ clusterName, nodegroupName }))
-    ));
-    const nodegroups = nodegroupResults
-      .filter(result => result.status === 'fulfilled' && result.value.nodegroup)
-      .map(result => {
-        const nodegroup = result.value.nodegroup;
-        const amiType = nodegroup.amiType || '';
-        return {
-          name: nodegroup.nodegroupName,
-          status: nodegroup.status,
-          architecture: amiType.includes('ARM_64') ? 'arm64' : amiType ? 'x86_64' : 'unknown',
-          amiType,
-          capacityType: nodegroup.capacityType || 'ON_DEMAND',
-          instanceTypes: nodegroup.instanceTypes || [],
-          scaling: nodegroup.scalingConfig || {},
-          labels: nodegroup.labels || {},
-          tags: nodegroup.tags || {},
-        };
-      });
+    const nodegroups = nodegroupResult.status === 'fulfilled' ? nodegroupResult.value : [];
 
     const catalog = [];
     let nextToken;
@@ -1676,6 +1654,21 @@ router.get('/ecs/:cluster/:service/config', async (req, res) => {
 });
 
 // ─── GET /eks/:name/config ────────────────────────────────────────────────────
+
+// ─── GET /eks/:name/details ───────────────────────────────────────────────────
+// AWS infrastructure of the cluster: VPC, subnets, SGs, node groups, EC2 nodes, add-ons
+
+router.get('/eks/:name/details', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EKSClient } = require('@aws-sdk/client-eks');
+    const { EC2Client } = require('@aws-sdk/client-ec2');
+    const details = await getEksDetails({ eks: new EKSClient(cfg), ec2: new EC2Client(cfg) }, req.params.name);
+    res.json({ region: cfg.region, ...details });
+  } catch (err) { handleErr(res, err); }
+});
 
 router.get('/eks/:name/config', async (req, res) => {
   const profileId = requireProfileId(req, res);

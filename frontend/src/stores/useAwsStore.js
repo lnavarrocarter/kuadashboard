@@ -361,6 +361,11 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  // Throws so the Info modal can show the error inline.
+  async function fetchEksDetails(name) {
+    return await apiFetch(`/api/cloud/aws/eks/${encodeURIComponent(name)}/details`, { headers: headers() })
+  }
+
   async function addEksKubeconfig(name) {
     try {
       return await apiFetch(`/api/cloud/aws/eks/${encodeURIComponent(name)}/add-kubeconfig`, {
@@ -1021,7 +1026,7 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels, lexBots, cfnStacks,
     loading, error,
     setActiveProfile, runInBackground,
-    fetchRegions, fetchEksClusters,
+    fetchRegions, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
     fetchLambdas, invokeLambda,

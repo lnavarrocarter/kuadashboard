@@ -150,15 +150,31 @@
             <th :class="thClass('region')"    @click="sortBy('region')">Region <span class="sort-icon">{{ sortIcon('region') }}</span></th>
             <th :class="thClass('version')"   @click="sortBy('version')">Version <span class="sort-icon">{{ sortIcon('version') }}</span></th>
             <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th>Node groups</th>
+            <th :class="thClass('instanceCount')" @click="sortBy('instanceCount')" title="EC2 instances running as nodes of this cluster">EC2 <span class="sort-icon">{{ sortIcon('instanceCount') }}</span></th>
             <th :class="thClass('createdAt')" @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
             <th>Tags</th><th>Actions</th>
           </tr></thead>
           <tbody>
             <tr v-for="c in sortRows(filteredEks)" :key="c.name">
-              <td>{{ c.name }}</td>
+              <td>
+                <div style="font-weight:500">{{ c.name }}</div>
+                <div v-if="c.endpoint" class="text-dim mono-xs" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="c.endpoint">{{ c.endpoint.replace(/^https:\/\//, '') }}</div>
+              </td>
               <td class="text-dim">{{ c.region }}</td>
-              <td class="text-dim">{{ c.version }}</td>
+              <td><span class="tag-chip">v{{ c.version }}</span></td>
               <td><span :class="eksStatusClass(c.status)">{{ c.status }}</span></td>
+              <td>
+                <span v-if="c.nodegroups == null" class="text-dim" title="Could not list node groups (check eks:ListNodegroups)">?</span>
+                <span v-else-if="!c.nodegroups.length" class="text-dim" title="No managed node groups (Fargate, Karpenter or self-managed)">—</span>
+                <div v-else class="tag-chips">
+                  <span v-for="ng in c.nodegroups" :key="ng" class="tag-chip">{{ ng }}</span>
+                </div>
+              </td>
+              <td>
+                <span v-if="c.instanceCount == null" class="text-dim" title="Could not list EC2 instances (check ec2:DescribeInstances)">?</span>
+                <span v-else :class="c.instanceCount ? '' : 'text-dim'" style="font-weight:600">{{ c.instanceCount }}</span>
+              </td>
               <td class="text-dim" style="white-space:nowrap">{{ c.createdAt ? formatDate(c.createdAt) : '-' }}</td>
               <td>
                 <div class="tag-chips">
@@ -167,6 +183,7 @@
               </td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm" title="AWS infrastructure: network, node groups, EC2 nodes, add-ons" @click="openEksDetail(c)">ℹ Info</button>
                   <button class="btn sm" title="Open Container Insights dashboard" @click="openEksObservability(c)">
                     <i data-lucide="chart-no-axes-combined"></i> Metrics
                   </button>
@@ -2168,6 +2185,7 @@
     <Ec2Detail    :open="ec2DetailModal.open" :instance="ec2DetailModal.instance" :profile-id="selectedProfileId" @close="ec2DetailModal.open = false" />
     <LambdaDetail :open="lambdaDetailModal.open" :fn="lambdaDetailModal.fn" :profile-id="selectedProfileId" @close="lambdaDetailModal.open = false" />
     <VpcDetail    :open="vpcDetailModal.open" :vpc="vpcDetailModal.vpc" @close="vpcDetailModal.open = false" />
+    <EksDetail    :open="eksDetailModal.open" :cluster="eksDetailModal.cluster" @close="eksDetailModal.open = false" />
     <StepFnDetail :open="stepFnDetailModal.open" :sm="stepFnDetailModal.sm" :profile-id="selectedProfileId" @close="stepFnDetailModal.open = false" />
 
     <!-- API Gateway Routes & Integrations Modal -->
@@ -3669,6 +3687,7 @@ import Ec2RdpInfo          from './Ec2RdpInfo.vue'
 import Ec2Detail           from './Ec2Detail.vue'
 import LambdaDetail        from './LambdaDetail.vue'
 import VpcDetail           from './VpcDetail.vue'
+import EksDetail           from './EksDetail.vue'
 import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
@@ -4200,6 +4219,13 @@ async function openApigwRoutes(api) {
 // ─── EKS Add to Dashboard ─────────────────────────────────────────────────────
 
 const eksObservabilityModal = reactive({ open: false, cluster: null })
+
+const eksDetailModal = reactive({ open: false, cluster: null })
+
+function openEksDetail(cluster) {
+  eksDetailModal.cluster = cluster
+  eksDetailModal.open    = true
+}
 
 function openEksObservability(cluster) {
   Object.assign(eksObservabilityModal, { open: true, cluster })
