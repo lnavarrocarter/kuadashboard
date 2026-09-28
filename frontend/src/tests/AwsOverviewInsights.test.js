@@ -35,6 +35,11 @@ function insights(overrides = {}) {
       elb: { present: true, requests: 22, errors5xx: 1208, elbGenerated5xx: 1202, errorRate: 5490.91, latencyMs: 1, nlbBytes: null, series: [{ t: 1, v: 1 }, { t: 2, v: 0 }] },
       s3: { present: true, bytes: 463706964808, objects: 7665221, asOf: Date.parse('2026-09-27T00:00:00Z') },
       eks: { present: false },
+      rds: { present: true, cpuAvg: 4.5, cpuPeak: 30, connections: 5, freeStorageMin: 3e9, series: [{ t: 1, v: 4 }, { t: 2, v: 5 }] },
+      dynamodb: { present: true, readUnits: 5790, writeUnits: 43, throttled: 2, systemErrors: 0, latencyMs: 0.67, series: [{ t: 1, v: 1 }, { t: 2, v: 2 }] },
+      stepfn: { present: true, started: 10, succeeded: 7, failed: 3, timedOut: 0, aborted: 0, avgDurationMs: 86177, series: [{ t: 1, v: 1 }, { t: 2, v: 2 }] },
+      eventbridge: { present: true, invocations: 2639, failed: 0, matched: 2638, series: [{ t: 1, v: 1 }, { t: 2, v: 2 }] },
+      cloudfront: { present: true, requests: 3, bytes: 463421, error4xxRate: 0, error5xxRate: 0, series: [{ t: 1, v: 3 }] },
       glue: { status: 'ok', present: true, jobs: 100, runs: 82, succeeded: 70, failed: 12, running: 0, executionSeconds: 5400, truncated: true, failedJobs: [{ job: 'etl-a', count: 8 }, { job: 'etl-b', count: 4 }] },
     },
     uncovered: {
@@ -115,7 +120,9 @@ describe('AwsOverviewInsights', () => {
 
   it('shows one activity card per service with data, in a fixed order', () => {
     const wrapper = mountWith(insights(), { resourceCounts: { eks: 1 } })
-    expect(wrapper.findAll('.aoi-kpi-title').map(c => c.text())).toEqual(['Lambda', 'EC2', 'Load balancers', 'EKS', 'Glue', 'S3'])
+    expect(wrapper.findAll('.aoi-kpi-title').map(c => c.text())).toEqual([
+      'Lambda', 'EC2', 'Load balancers', 'EKS', 'RDS', 'DynamoDB', 'Step Functions', 'EventBridge', 'Glue', 'CloudFront', 'S3',
+    ])
   })
 
   it('summarizes each service with its main figure and facts', () => {
@@ -129,6 +136,14 @@ describe('AwsOverviewInsights', () => {
     expect(byTitle.Glue.find('.aoi-kpi-facts').text()).toContain('Failed 12')
     expect(byTitle.Glue.find('.aoi-kpi-note').text()).toBe('Failing: etl-a (8), etl-b (4)')
     expect(byTitle.S3.find('.aoi-kpi-main').text()).toBe('464 GBstored')
+    expect(byTitle.RDS.classes()).toContain('warn')
+    expect(byTitle.RDS.find('.aoi-kpi-note').text()).toContain('less than 5 GB')
+    expect(byTitle.DynamoDB.find('.aoi-kpi-main').text()).toBe('5,790read units')
+    expect(byTitle.DynamoDB.find('.aoi-kpi-facts .bad').text()).toContain('Throttled 2')
+    expect(byTitle['Step Functions'].find('.aoi-kpi-facts').text()).toContain('Failed 3')
+    expect(byTitle['Step Functions'].find('.aoi-kpi-facts').text()).toContain('Avg duration 1.4 min')
+    expect(byTitle.EventBridge.find('.aoi-kpi-main').text()).toBe('2,639rule invocations')
+    expect(byTitle.CloudFront.find('.aoi-kpi-facts').text()).toContain('Downloaded 463 KB')
   })
 
   it('flags load balancers answering 5xx themselves and marks them outside KUA', async () => {

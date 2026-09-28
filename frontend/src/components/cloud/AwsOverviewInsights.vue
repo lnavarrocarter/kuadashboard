@@ -209,6 +209,10 @@ function bytes(value) {
 function pct(value) {
   return value == null ? '—' : `${value}%`
 }
+function ms(value) {
+  if (value < 1000) return `${value} ms`
+  return value < 60000 ? `${(value / 1000).toFixed(1)} s` : `${(value / 60000).toFixed(1)} min`
+}
 function duration(seconds) {
   if (!seconds) return '0 min'
   return seconds >= 3600 ? `${(seconds / 3600).toFixed(1)} h` : `${Math.round(seconds / 60)} min`
@@ -273,8 +277,72 @@ const activityCards = computed(() => {
   } else if (props.resourceCounts.eks > 0) {
     cards.push({ id: 'eks', tab: 'eks', title: 'EKS', main: num(props.resourceCounts.eks), mainLabel: t('awsInsights.clusters'), facts: [], note: t('awsInsights.eksNoInsights') })
   }
+  if (u.rds?.present) {
+    const lowStorage = u.rds.freeStorageMin != null && u.rds.freeStorageMin < 5e9
+    cards.push({
+      id: 'rds', tab: 'rds', title: 'RDS', warn: lowStorage || u.rds.cpuPeak >= 90,
+      main: pct(u.rds.cpuAvg), mainLabel: t('awsInsights.cpuAvg'), mainBad: u.rds.cpuAvg >= 80,
+      facts: [
+        { label: t('awsInsights.cpuPeak'), value: pct(u.rds.cpuPeak), bad: u.rds.cpuPeak >= 90 },
+        { label: t('awsInsights.connections'), value: num(u.rds.connections) },
+        { label: t('awsInsights.freeStorageMin'), value: bytes(u.rds.freeStorageMin), bad: lowStorage },
+      ],
+      note: lowStorage ? t('awsInsights.lowStorage') : '',
+      series: u.rds.series, seriesLabel: seriesLabel(t('awsInsights.cpuAvgPerHour'), u.rds.series, v => `${v.toFixed(1)}%`),
+    })
+  }
+  if (u.dynamodb?.present) {
+    cards.push({
+      id: 'dynamodb', tab: 'dynamodb', title: 'DynamoDB', warn: u.dynamodb.throttled > 0 || u.dynamodb.systemErrors > 0,
+      main: num(u.dynamodb.readUnits), mainLabel: t('awsInsights.readUnits'),
+      facts: [
+        { label: t('awsInsights.writeUnits'), value: num(u.dynamodb.writeUnits) },
+        { label: t('awsInsights.throttled'), value: num(u.dynamodb.throttled), bad: u.dynamodb.throttled > 0 },
+        ...(u.dynamodb.systemErrors ? [{ label: t('awsInsights.systemErrors'), value: num(u.dynamodb.systemErrors), bad: true }] : []),
+        ...(u.dynamodb.latencyMs != null ? [{ label: t('awsInsights.latency'), value: `${u.dynamodb.latencyMs} ms` }] : []),
+      ],
+      series: u.dynamodb.series, seriesLabel: seriesLabel(t('awsInsights.readUnitsPerHour'), u.dynamodb.series, num),
+    })
+  }
+  if (u.stepfn?.present) {
+    const failed = u.stepfn.failed + u.stepfn.timedOut
+    cards.push({
+      id: 'stepfn', tab: 'stepfn', title: 'Step Functions', warn: failed > 0,
+      main: num(u.stepfn.started), mainLabel: t('awsInsights.executions'),
+      facts: [
+        { label: t('awsInsights.succeeded'), value: num(u.stepfn.succeeded) },
+        { label: t('awsInsights.runsFailed'), value: num(u.stepfn.failed), bad: u.stepfn.failed > 0 },
+        ...(u.stepfn.timedOut ? [{ label: t('awsInsights.timedOut'), value: num(u.stepfn.timedOut), bad: true }] : []),
+        ...(u.stepfn.avgDurationMs != null ? [{ label: t('awsInsights.avgDuration'), value: ms(u.stepfn.avgDurationMs) }] : []),
+      ],
+      series: u.stepfn.series, seriesLabel: seriesLabel(t('awsInsights.executionsPerHour'), u.stepfn.series, num),
+    })
+  }
+  if (u.eventbridge?.present) {
+    cards.push({
+      id: 'eventbridge', tab: 'eventbridge', title: 'EventBridge', warn: u.eventbridge.failed > 0,
+      main: num(u.eventbridge.invocations), mainLabel: t('awsInsights.ruleInvocations'),
+      facts: [
+        { label: t('awsInsights.runsFailed'), value: num(u.eventbridge.failed), bad: u.eventbridge.failed > 0 },
+        { label: t('awsInsights.matchedEvents'), value: num(u.eventbridge.matched) },
+      ],
+      series: u.eventbridge.series, seriesLabel: seriesLabel(t('awsInsights.invocationsPerHour'), u.eventbridge.series, num),
+    })
+  }
   const glue = glueCard(u.glue)
   if (glue) cards.push(glue)
+  if (u.cloudfront?.present) {
+    cards.push({
+      id: 'cloudfront', tab: 'cloudfront', title: 'CloudFront', warn: u.cloudfront.error5xxRate > 1,
+      main: num(u.cloudfront.requests), mainLabel: t('awsInsights.requests'),
+      facts: [
+        { label: t('awsInsights.downloaded'), value: bytes(u.cloudfront.bytes) },
+        ...(u.cloudfront.error4xxRate != null ? [{ label: '4xx', value: `${u.cloudfront.error4xxRate}%` }] : []),
+        ...(u.cloudfront.error5xxRate != null ? [{ label: '5xx', value: `${u.cloudfront.error5xxRate}%`, bad: u.cloudfront.error5xxRate > 1 }] : []),
+      ],
+      series: u.cloudfront.series, seriesLabel: seriesLabel(t('awsInsights.requestsPerHour'), u.cloudfront.series, num),
+    })
+  }
   if (u.s3?.present) {
     cards.push({
       id: 's3', tab: 's3', title: 'S3',

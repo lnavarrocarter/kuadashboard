@@ -1132,4 +1132,21 @@ export default {
   'awsInsights.storage': 'almacenados',
   'awsInsights.objects': 'Objetos',
   'awsInsights.s3Note': 'Buckets de esta región, al {date} (métrica diaria).',
+
+  // ── AWS activity KPIs (data services) ─────────────────────────────
+  'awsInsights.connections': 'Conexiones',
+  'awsInsights.freeStorageMin': 'Menor espacio libre',
+  'awsInsights.readUnits': 'unidades de lectura',
+  'awsInsights.writeUnits': 'Escritura',
+  'awsInsights.throttled': 'Throttled',
+  'awsInsights.systemErrors': 'Errores de sistema',
+  'awsInsights.executions': 'ejecuciones',
+  'awsInsights.timedOut': 'Timeout',
+  'awsInsights.avgDuration': 'Duración prom.',
+  'awsInsights.ruleInvocations': 'invocaciones de reglas',
+  'awsInsights.matchedEvents': 'Eventos coincidentes',
+  'awsInsights.downloaded': 'Descargado',
+  'awsInsights.executionsPerHour': 'Ejecuciones por hora',
+  'awsInsights.readUnitsPerHour': 'Unidades de lectura por hora',
+  'awsInsights.lowStorage': 'Una instancia tiene menos de 5 GB de espacio libre.',
 }

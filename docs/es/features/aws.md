@@ -60,7 +60,12 @@ Debajo del resumen, el Resumen agrega (cargado en segundo plano para no demorar 
   - **EC2**: CPU promedio de las instancias, pico y última hora.
   - **Load balancers**: requests, errores 5xx y latencia de los ALB, y tráfico de los NLB. Cuando es el propio load balancer el que devuelve los 5xx (suele indicar que no hay targets sanos), la tarjeta lo indica.
   - **EKS**: nodos, nodos con falla, CPU y memoria, si Container Insights está habilitado; si no, la tarjeta explica cómo obtenerlos.
+  - **RDS**: CPU promedio y pico, conexiones y el menor espacio libre (se marca bajo 5 GB).
+  - **DynamoDB**: unidades de lectura y escritura consumidas, requests con throttling, errores de sistema y latencia.
+  - **Step Functions**: ejecuciones iniciadas, exitosas, fallidas o con timeout, y la duración promedio.
+  - **EventBridge**: invocaciones de reglas, invocaciones fallidas y eventos coincidentes, del bus por defecto y de los buses propios.
   - **Glue**: ejecuciones de jobs iniciadas en las últimas 24 h (exitosas, fallidas, en curso, tiempo total) y los jobs que más fallaron.
+  - **CloudFront**: requests, bytes descargados y tasas de error 4xx/5xx (leídos de us-east-1, donde CloudFront publica sus métricas).
   - **S3**: almacenamiento y cantidad de objetos de los buckets de la región del perfil (métrica diaria de CloudWatch).
 
   Las expresiones `SEARCH` de CloudWatch agregan todas las instancias o load balancers en una sola consulta, así que las tarjetas cuestan fracciones de centavo; las ejecuciones de Glue salen de la API de Glue.

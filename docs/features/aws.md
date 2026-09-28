@@ -60,7 +60,12 @@ Below the summary the Overview adds, loaded in the background so the rest never 
   - **EC2**: average CPU across instances, peak and last hour.
   - **Load balancers**: ALB requests, 5xx errors and latency, and NLB traffic. When the load balancer itself returns the 5xx (usually no healthy targets), the card says so.
   - **EKS**: nodes, failed nodes, CPU and memory, when Container Insights is enabled; otherwise the card explains how to get them.
+  - **RDS**: average and peak CPU, connections and the lowest free storage (flagged under 5 GB).
+  - **DynamoDB**: consumed read and write units, throttled requests, system errors and latency.
+  - **Step Functions**: executions started, succeeded, failed or timed out, and the average duration.
+  - **EventBridge**: rule invocations, failed invocations and matched events, across the default and custom buses.
   - **Glue**: job runs started in the last 24h (succeeded, failed, running, run time) and the jobs that failed most.
+  - **CloudFront**: requests, downloaded bytes and 4xx/5xx error rates (read from us-east-1, where CloudFront publishes its metrics).
   - **S3**: storage and object count of the buckets in the profile's region (daily CloudWatch metric).
 
   CloudWatch `SEARCH` expressions aggregate every instance or load balancer in one request, so the cards cost fractions of a cent; Glue runs come from the Glue API.
