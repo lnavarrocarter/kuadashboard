@@ -8,6 +8,7 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import ResourceTable from '../components/ResourceTable.vue'
 import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
+import { settings } from '../composables/useSettings'
 import {
   RECENT_LIMIT, loadTableView, loadFilterHistory,
   rememberFilter, toggleSavedFilter, forgetFilter,
@@ -99,7 +100,7 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
   it('narrows rows with quick filters and shows their counts', async () => {
     const wrapper = mount(ResourceTable)
     const chips = wrapper.findAll('.quick-chip')
-    expect(chips.map(c => c.text())).toEqual(['Con problemas 0', 'No Running 1', 'No listos 1', 'Con reinicios 1'])
+    expect(chips.map(c => c.text())).toEqual(['With problems 0', 'Not Running 1', 'Not ready 1', 'With restarts 1'])
 
     await chips[1].trigger('click')
     expect(names(wrapper)).toEqual(['api-2'])
@@ -112,7 +113,7 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
     expect(names(wrapper)).toEqual(['worker'])
 
     await switchTo('pods', PODS)
-    expect(wrapper.find('.quick-chip.active').text()).toContain('No listos')
+    expect(wrapper.find('.quick-chip.active').text()).toContain('Not ready')
     expect(names(wrapper)).toEqual(['web-1'])
   })
 
@@ -138,7 +139,7 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
 
     await items()[1].findAll('.filter-history-btn')[0].trigger('mousedown')
     expect(loadFilterHistory('pods')).toEqual({ saved: ['api'], recent: ['web'] })
-    expect(wrapper.find('.filter-history-label').text()).toBe('Guardados')
+    expect(wrapper.find('.filter-history-label').text()).toBe('Saved')
 
     await items()[1].findAll('.filter-history-btn')[1].trigger('mousedown')
     expect(loadFilterHistory('pods')).toEqual({ saved: ['api'], recent: [] })
@@ -183,5 +184,41 @@ describe('quick filter definitions', () => {
     ])).toEqual(['deny'])
     expect(matches('jobs', 'complete', [{ name: 'done', active: 0, completions: '1/1' }, { name: 'running', active: 1, completions: '0/1' }])).toEqual(['done'])
     expect(matches('ingresses', 'no-address', [{ name: 'pending', address: '-' }, { name: 'live', address: '1.2.3.4' }])).toEqual(['pending'])
+  })
+})
+
+describe('ResourceTable — language', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+    const store = useKubeStore()
+    store.resource = 'pods'
+    store.rows = PODS
+  })
+
+  it('translates quick filter chips and the filter box', async () => {
+    settings.lang = 'es'
+    try {
+      const wrapper = mount(ResourceTable)
+      expect(wrapper.findAll('.quick-chip').map(c => c.text())).toEqual(['Con problemas 0', 'No Running 1', 'No listos 1', 'Con reinicios 1'])
+      expect(wrapper.find('.search-input').attributes('placeholder')).toBe('Filtrar...')
+      settings.lang = 'en'
+      await nextTick()
+      expect(wrapper.find('.quick-chip').text()).toBe('With problems 0')
+      expect(wrapper.find('.search-input').attributes('placeholder')).toBe('Filter...')
+    } finally {
+      settings.lang = 'en'
+    }
+  })
+
+  it('uses an existing i18n key for every quick filter label', async () => {
+    const { default: en } = await import('../locales/en')
+    const { default: es } = await import('../locales/es')
+    for (const [name, cfg] of Object.entries(RESOURCES)) {
+      for (const qf of cfg.quickFilters || []) {
+        expect(en[qf.label], `${name}.${qf.id}`).toBeTruthy()
+        expect(es[qf.label], `${name}.${qf.id}`).toBeTruthy()
+      }
+    }
   })
 })

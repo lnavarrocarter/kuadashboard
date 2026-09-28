@@ -11,6 +11,7 @@ import KubeOverview from '../components/KubeOverview.vue'
 import * as ApiModule from '../composables/useApi'
 import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
+import { settings } from '../composables/useSettings'
 
 function overview(overrides = {}) {
   return {
@@ -90,7 +91,7 @@ describe('KubeOverview', () => {
     await flushPromises()
     const values = wrapper.findAll('.kov-tile-value').map(v => v.text())
     expect(values).toEqual(['4', '1', '1/2', '1', '2'])
-    expect(wrapper.find('.kov-tile.bad').text()).toContain('Pods con problemas')
+    expect(wrapper.find('.kov-tile.bad').text()).toContain('Pods with problems')
   })
 
   it('shows pods by phase and problem pods', async () => {
@@ -108,7 +109,7 @@ describe('KubeOverview', () => {
     const meters = wrapper.findAll('.kov-meter')
     expect(meters).toHaveLength(2)
     expect(meters[0].text()).toContain('25%')
-    expect(wrapper.find('.kov-prom').text()).toContain('No se detectó Prometheus')
+    expect(wrapper.find('.kov-prom').text()).toContain('No Prometheus found')
   })
 
   it('degrades with clear notices when metrics or a section are unavailable', async () => {
@@ -120,7 +121,7 @@ describe('KubeOverview', () => {
     const wrapper = mount(KubeOverview)
     await flushPromises()
     expect(wrapper.find('.kov-meter').exists()).toBe(false)
-    expect(wrapper.text()).toContain('la Metrics API (metrics-server) no está disponible')
+    expect(wrapper.text()).toContain('the Metrics API (metrics-server) is not available')
     expect(wrapper.text()).toContain('Forbidden: nodes is forbidden')
     expect(wrapper.find('.kov-prom').text()).toContain('monitoring/prometheus-server')
     // Other sections still render.
@@ -170,10 +171,10 @@ describe('KubeOverview', () => {
     await flushPromises()
     expect(apiSpy).toHaveBeenCalledWith('GET', '/api/overview/timeseries?namespace=default&range=1h')
     expect(wrapper.findAll('.chart-stub').map(c => c.text())).toEqual([
-      'CPU|cores|2|false', 'Memoria|bytes|2|false', 'Reinicios (ventana 5 min)|count|2|false', 'Pods no listos|count|0|false',
+      'CPU|cores|2|false', 'Memory|bytes|2|false', 'Restarts (5 min window)|count|2|false', 'Pods not ready|count|0|false',
     ])
     expect(wrapper.text()).toContain('kube-system/prometheus')
-    expect(wrapper.text()).toContain('Sin datos: Pods no listos')
+    expect(wrapper.text()).toContain('No data: Pods not ready')
   })
 
   it('switches and remembers the trend range', async () => {
@@ -197,9 +198,22 @@ describe('KubeOverview', () => {
     const wrapper = mount(KubeOverview)
     await flushPromises()
     expect(wrapper.find('.chart-stub').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Las tendencias necesitan Prometheus')
+    expect(wrapper.text()).toContain('Trends need Prometheus')
     // The rest of the Overview still renders.
     expect(wrapper.findAll('.kov-tile')).toHaveLength(5)
+  })
+
+  it('renders in Spanish when the app language is Spanish', async () => {
+    settings.lang = 'es'
+    try {
+      const wrapper = mount(KubeOverview)
+      await flushPromises()
+      expect(wrapper.find('.kov-tile.bad').text()).toContain('Pods con problemas')
+      expect(wrapper.text()).toContain('Uso del clúster')
+      expect(wrapper.findAll('.chart-stub').map(c => c.text())).toContain('Reinicios (ventana 5 min)|count|2|false')
+    } finally {
+      settings.lang = 'en'
+    }
   })
 
   it('links to quick filters that exist in the resource tables', () => {

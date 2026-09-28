@@ -27,11 +27,11 @@ describe('HelpModal release history', () => {
     expect(firstRelease.text()).toContain('1.16.0')
     expect(firstRelease.findAll('.release-summary-pill').length).toBeGreaterThan(1)
     expect(firstRelease.findAll('.change-item')).toHaveLength(8)
-    expect(firstRelease.get('.release-toggle').text()).toContain('Mostrar')
+    expect(firstRelease.get('.release-toggle').text()).toContain('Show')
 
     await firstRelease.get('.release-toggle').trigger('click')
 
     expect(wrapper.get('.release-block').findAll('.change-item').length).toBeGreaterThan(8)
-    expect(wrapper.get('.release-block .release-toggle').text()).toContain('menos')
+    expect(wrapper.get('.release-block .release-toggle').text()).toContain('fewer')
   })
 })

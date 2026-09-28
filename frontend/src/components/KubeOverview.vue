@@ -4,55 +4,55 @@
       <div>
         <h2 class="resource-title">{{ t('sidebar.overview') }}</h2>
         <div class="kov-scope">
-          {{ store.currentContext || 'cluster' }} · {{ store.namespace === 'all' ? 'todos los namespaces' : `namespace ${store.namespace}` }}
-          <span v-if="overview" class="kov-updated">· actualizado {{ updatedLabel }}</span>
+          {{ store.currentContext || 'cluster' }} · {{ store.namespace === 'all' ? t('overview.allNamespaces') : t('overview.namespaceScope', { ns: store.namespace }) }}
+          <span v-if="overview" class="kov-updated">· {{ t('overview.updated', { ago: updatedLabel }) }}</span>
         </div>
       </div>
-      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" title="Actualizar" @click="load()">
+      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('action.refresh')" @click="load()">
         <i data-lucide="refresh-cw"></i>
       </button>
     </div>
 
-    <div v-if="!overview && loading" class="loading-state">Loading...</div>
+    <div v-if="!overview && loading" class="loading-state">{{ t('common.loading') }}</div>
     <div v-else-if="!overview && error" class="error-state">
       <i data-lucide="alert-triangle"></i><span>{{ error }}</span>
-      <button class="btn sm" @click="load()">Retry</button>
+      <button class="btn sm" @click="load()">{{ t('common.retry') }}</button>
     </div>
 
     <template v-else-if="overview">
       <!-- Headline tiles -->
       <div class="kov-tiles">
-        <button class="kov-tile" title="Ver pods" @click="go('pods')">
+        <button class="kov-tile" :title="t('overview.viewPods')" @click="go('pods')">
           <span class="kov-tile-label">Pods</span>
           <span class="kov-tile-value">{{ pods.total ?? '—' }}</span>
-          <span class="kov-tile-sub">{{ pods.ready ?? 0 }} listos · {{ pods.phases?.Running ?? 0 }} running</span>
+          <span class="kov-tile-sub">{{ t('overview.podsSub', { ready: pods.ready ?? 0, running: pods.phases?.Running ?? 0 }) }}</span>
         </button>
-        <button class="kov-tile" :class="{ bad: pods.problemCount }" title="Ver pods con problemas" @click="go('pods', { quick: ['problems'] })">
-          <span class="kov-tile-label"><StatusDot :level="pods.problemCount ? 'critical' : 'good'" />Pods con problemas</span>
+        <button class="kov-tile" :class="{ bad: pods.problemCount }" :title="t('overview.viewProblemPods')" @click="go('pods', { quick: ['problems'] })">
+          <span class="kov-tile-label"><StatusDot :level="pods.problemCount ? 'critical' : 'good'" />{{ t('overview.problemPods') }}</span>
           <span class="kov-tile-value">{{ pods.problemCount ?? '—' }}</span>
-          <span class="kov-tile-sub">{{ pods.restarts ?? 0 }} reinicios en total</span>
+          <span class="kov-tile-sub">{{ t('overview.restartsTotal', { n: pods.restarts ?? 0 }) }}</span>
         </button>
-        <button class="kov-tile" :class="{ bad: nodes.notReady }" title="Ver nodos" @click="go('nodes', nodes.notReady ? { quick: ['not-ready'] } : {})">
-          <span class="kov-tile-label"><StatusDot :level="nodes.error ? 'unknown' : nodes.notReady ? 'critical' : 'good'" />Nodos</span>
+        <button class="kov-tile" :class="{ bad: nodes.notReady }" :title="t('overview.viewNodes')" @click="go('nodes', nodes.notReady ? { quick: ['not-ready'] } : {})">
+          <span class="kov-tile-label"><StatusDot :level="nodes.error ? 'unknown' : nodes.notReady ? 'critical' : 'good'" />{{ t('overview.nodes') }}</span>
           <span class="kov-tile-value">{{ nodes.error ? '—' : `${nodes.ready}/${nodes.total}` }}</span>
-          <span class="kov-tile-sub">{{ nodes.error ? 'sin permiso' : `${nodes.cordoned} cordoned · ${pressureCount} con presión` }}</span>
+          <span class="kov-tile-sub">{{ nodes.error ? t('overview.noPermission') : t('overview.nodesSub', { cordoned: nodes.cordoned, pressure: pressureCount }) }}</span>
         </button>
-        <button class="kov-tile" :class="{ warn: workloadsNotReady }" title="Ver deployments no listos" @click="go('deployments', { quick: ['not-ready'] })">
-          <span class="kov-tile-label"><StatusDot :level="workloadsNotReady ? 'warning' : 'good'" />Workloads no listos</span>
+        <button class="kov-tile" :class="{ warn: workloadsNotReady }" :title="t('overview.viewNotReadyDeployments')" @click="go('deployments', { quick: ['not-ready'] })">
+          <span class="kov-tile-label"><StatusDot :level="workloadsNotReady ? 'warning' : 'good'" />{{ t('overview.workloadsNotReady') }}</span>
           <span class="kov-tile-value">{{ overview.workloads.error ? '—' : workloadsNotReady }}</span>
-          <span class="kov-tile-sub">de {{ workloadsTotal }} deployments, statefulsets y daemonsets</span>
+          <span class="kov-tile-sub">{{ t('overview.workloadsSub', { n: workloadsTotal }) }}</span>
         </button>
-        <button class="kov-tile" :class="{ warn: events.warnings }" title="Ver eventos Warning y Critical" @click="go('events', { facets: ['critical', 'warning'] })">
-          <span class="kov-tile-label"><StatusDot :level="events.warnings ? 'warning' : 'good'" />Warnings</span>
+        <button class="kov-tile" :class="{ warn: events.warnings }" :title="t('overview.viewWarnings')" @click="go('events', { facets: ['critical', 'warning'] })">
+          <span class="kov-tile-label"><StatusDot :level="events.warnings ? 'warning' : 'good'" />{{ t('overview.warnings') }}</span>
           <span class="kov-tile-value">{{ events.warnings ?? '—' }}</span>
-          <span class="kov-tile-sub">en los últimos {{ events.windowMinutes ?? 60 }} min</span>
+          <span class="kov-tile-sub">{{ t('overview.lastMinutes', { n: events.windowMinutes ?? 60 }) }}</span>
         </button>
       </div>
 
       <div class="kov-grid">
         <!-- Cluster usage -->
         <section class="kov-card">
-          <h3>Uso del clúster</h3>
+          <h3>{{ t('overview.clusterUsage') }}</h3>
           <template v-if="nodes.usage">
             <div v-for="meter in usageMeters" :key="meter.label" class="kov-meter">
               <div class="kov-meter-head">
@@ -63,23 +63,23 @@
                 <div class="kov-meter-fill" :class="usageLevel(meter.percent)" :style="{ width: `${Math.min(100, meter.percent)}%` }"></div>
               </div>
             </div>
-            <p class="kov-note">Uso actual según {{ overview.metrics.source === 'prometheus' ? 'Prometheus (node-exporter)' : 'metrics-server' }} frente a la capacidad asignable de los nodos.</p>
+            <p class="kov-note">{{ t('overview.usageSource', { source: overview.metrics.source === 'prometheus' ? 'Prometheus (node-exporter)' : 'metrics-server' }) }}</p>
           </template>
           <p v-else class="kov-notice">
             <i data-lucide="info"></i>
-            No hay uso de CPU ni memoria: la Metrics API (metrics-server) no está disponible y no se detectó Prometheus con node-exporter.
+            {{ t('overview.noUsage') }}
             <span v-if="overview.metrics.error" class="kov-dim">{{ overview.metrics.error }}</span>
           </p>
           <div class="kov-prom">
             <StatusDot :level="overview.prometheus.available ? 'good' : 'unknown'" />
-            <span v-if="overview.prometheus.available">Prometheus detectado: <code>{{ overview.prometheus.service }}</code></span>
-            <span v-else>No se detectó Prometheus en el clúster.</span>
+            <span v-if="overview.prometheus.available">{{ t('overview.prometheusDetected') }} <code>{{ overview.prometheus.service }}</code></span>
+            <span v-else>{{ t('overview.noPrometheus') }}</span>
           </div>
         </section>
 
         <!-- Pods by phase -->
         <section class="kov-card">
-          <h3>Pods por estado</h3>
+          <h3>{{ t('overview.podsByStatus') }}</h3>
           <p v-if="pods.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ pods.error }}</p>
           <template v-else>
             <div v-if="pods.total" class="kov-stack" role="img" :aria-label="phaseSummary">
@@ -97,10 +97,10 @@
               </li>
             </ul>
             <div v-if="reasonList.length" class="kov-reasons">
-              <span class="kov-dim">Motivos:</span>
+              <span class="kov-dim">{{ t('overview.reasons') }}</span>
               <button
                 v-for="r in reasonList" :key="r.reason" class="facet-chip kov-reason"
-                :title="`Ver pods con ${r.reason}`" @click="go('pods', { filter: r.reason })"
+                :title="t('overview.viewPodsWith', { reason: r.reason })" @click="go('pods', { filter: r.reason })"
               >{{ r.reason }} <span class="facet-count">{{ r.count }}</span></button>
             </div>
           </template>
@@ -109,19 +109,19 @@
         <!-- Prometheus trends -->
         <section class="kov-card kov-wide">
           <div class="kov-card-head">
-            <h3>Tendencias <span class="kov-dim">· {{ trendScope }}</span></h3>
-            <div class="kov-range" role="group" aria-label="Rango de tiempo">
+            <h3>{{ t('overview.trends') }} <span class="kov-dim">· {{ trendScope }}</span></h3>
+            <div class="kov-range" role="group" :aria-label="t('overview.timeRange')">
               <button
                 v-for="r in RANGES" :key="r" :class="['kov-range-btn', { active: range === r }]"
                 :aria-pressed="range === r" @click="setRange(r)"
               >{{ r }}</button>
             </div>
           </div>
-          <p v-if="!timeseries && trendsLoading" class="kov-empty">Consultando Prometheus…</p>
+          <p v-if="!timeseries && trendsLoading" class="kov-empty">{{ t('overview.queryingPrometheus') }}</p>
           <p v-else-if="trendsError" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ trendsError }}</p>
           <p v-else-if="timeseries && !timeseries.available" class="kov-notice">
             <i data-lucide="info"></i>
-            Las tendencias necesitan Prometheus en el clúster (por ejemplo kube-prometheus-stack) y no se detectó ninguno.
+            {{ t('overview.trendsNeedPrometheus') }}
             <span v-if="timeseries.error" class="kov-dim">{{ timeseries.error }}</span>
           </p>
           <template v-else-if="timeseries">
@@ -133,18 +133,18 @@
               />
             </div>
             <p class="kov-note">
-              Fuente: <code>{{ timeseries.service }}</code> · un punto cada {{ stepLabel }}.
-              <template v-if="seriesErrors.length"> Sin datos: {{ seriesErrors.join(', ') }}.</template>
+              {{ t('overview.source') }} <code>{{ timeseries.service }}</code> · {{ t('overview.pointEvery', { step: stepLabel }) }}
+              <template v-if="seriesErrors.length"> {{ t('overview.noDataFor', { list: seriesErrors.join(', ') }) }}</template>
             </p>
           </template>
         </section>
 
         <!-- Problem pods -->
         <section class="kov-card kov-wide">
-          <h3>Pods con problemas <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">(top {{ pods.problems.length }} de {{ pods.problemCount }})</span></h3>
-          <p v-if="!pods.problems?.length" class="kov-empty">Ningún pod con problemas.</p>
+          <h3>{{ t('overview.problemPods') }} <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">{{ t('overview.topOf', { shown: pods.problems.length, total: pods.problemCount }) }}</span></h3>
+          <p v-if="!pods.problems?.length" class="kov-empty">{{ t('overview.noProblemPods') }}</p>
           <table v-else class="kov-table">
-            <thead><tr><th>Pod</th><th>Namespace</th><th>Motivo</th><th class="num">Reinicios</th></tr></thead>
+            <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestarts') }}</th></tr></thead>
             <tbody>
               <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
                 <td class="kov-link">{{ p.name }}</td>
@@ -158,10 +158,10 @@
 
         <!-- Nodes -->
         <section class="kov-card kov-wide">
-          <h3>Nodos</h3>
+          <h3>{{ t('overview.nodes') }}</h3>
           <p v-if="nodes.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ nodes.error }}</p>
           <table v-else class="kov-table">
-            <thead><tr><th>Nodo</th><th>Estado</th><th>Roles</th><th>Condiciones</th><th>CPU</th><th>Memoria</th></tr></thead>
+            <thead><tr><th>{{ t('overview.colNode') }}</th><th>{{ t('overview.colStatus') }}</th><th>{{ t('overview.colRoles') }}</th><th>{{ t('overview.colConditions') }}</th><th>CPU</th><th>{{ t('overview.memory') }}</th></tr></thead>
             <tbody>
               <tr v-for="n in nodes.items" :key="n.name" @click="go('nodes', { filter: n.name })">
                 <td class="kov-link">{{ n.name }}</td>
@@ -177,9 +177,9 @@
 
         <!-- Workloads not ready -->
         <section class="kov-card">
-          <h3>Workloads no listos</h3>
+          <h3>{{ t('overview.workloadsNotReady') }}</h3>
           <p v-if="overview.workloads.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ overview.workloads.error }}</p>
-          <p v-else-if="!notReadyWorkloads.length" class="kov-empty">Todos los workloads tienen sus réplicas listas.</p>
+          <p v-else-if="!notReadyWorkloads.length" class="kov-empty">{{ t('overview.allWorkloadsReady') }}</p>
           <ul v-else class="kov-list">
             <li v-for="w in notReadyWorkloads" :key="w.kind + w.namespace + w.name" @click="go(w.kind, { filter: w.name, quick: ['not-ready'] })">
               <span class="kov-link">{{ w.name }}</span>
@@ -191,9 +191,9 @@
 
         <!-- Recent warnings -->
         <section class="kov-card">
-          <h3>Warnings recientes</h3>
+          <h3>{{ t('overview.recentWarnings') }}</h3>
           <p v-if="events.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ events.error }}</p>
-          <p v-else-if="!events.recent?.length" class="kov-empty">Sin eventos Warning en la última hora.</p>
+          <p v-else-if="!events.recent?.length" class="kov-empty">{{ t('overview.noRecentWarnings') }}</p>
           <ul v-else class="kov-list">
             <li v-for="(e, i) in events.recent" :key="i" :title="e.message" @click="go('events', { filter: e.object.split('/')[1] || '' })">
               <span class="kov-link">{{ e.reason }}</span>
@@ -239,12 +239,13 @@ MiniMeter.props = ['value']
 
 const RANGES = ['1h', '6h', '24h', '7d']
 const RANGE_KEY = 'kua.kubeOverviewRange'
-const TREND_LABELS = {
-  cpu: 'CPU',
-  memory: 'Memoria',
-  restarts: 'Reinicios',
-  notReady: 'Pods no listos',
+const TREND_LABEL_KEYS = {
+  cpu: 'overview.trendCpu',
+  memory: 'overview.trendMemory',
+  restarts: 'overview.trendRestarts',
+  notReady: 'overview.trendNotReady',
 }
+const trendLabel = key => (TREND_LABEL_KEYS[key] ? t(TREND_LABEL_KEYS[key]) : key)
 
 function readRange() {
   try { return RANGES.includes(localStorage.getItem(RANGE_KEY)) ? localStorage.getItem(RANGE_KEY) : '1h' } catch { return '1h' }
@@ -290,20 +291,22 @@ const usageMeters = computed(() => {
   if (!usage) return []
   return [
     { label: 'CPU', percent: usage.cpu.percent ?? 0, detail: `${formatCores(usage.cpu.usedNano)} / ${formatCores(usage.cpu.allocatableNano)} cores` },
-    { label: 'Memoria', percent: usage.memory.percent ?? 0, detail: `${formatGiB(usage.memory.usedBytes)} / ${formatGiB(usage.memory.allocatableBytes)} GiB` },
+    { label: t('overview.memory'), percent: usage.memory.percent ?? 0, detail: `${formatGiB(usage.memory.usedBytes)} / ${formatGiB(usage.memory.allocatableBytes)} GiB` },
   ]
 })
 
-const trendScope = computed(() => store.namespace === 'all' ? 'clúster completo' : `namespace ${store.namespace}`)
+const trendScope = computed(() => store.namespace === 'all' ? t('overview.wholeCluster') : t('overview.namespaceScope', { ns: store.namespace }))
 const trendCharts = computed(() => Object.entries(timeseries.value?.series || {}).map(([key, series]) => ({
   key,
-  label: series.windowSeconds ? `${TREND_LABELS[key] || key} (ventana ${durationLabel(series.windowSeconds)})` : TREND_LABELS[key] || key,
+  label: series.windowSeconds
+    ? t('overview.withWindow', { label: trendLabel(key), window: durationLabel(series.windowSeconds) })
+    : trendLabel(key),
   unit: series.unit,
   points: series.points,
 })))
 const seriesErrors = computed(() => Object.entries(timeseries.value?.series || {})
   .filter(([, series]) => series.error || !series.points.length)
-  .map(([key]) => TREND_LABELS[key] || key))
+  .map(([key]) => trendLabel(key)))
 function durationLabel(seconds) {
   return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.round(seconds / 60)} min` : `${(seconds / 3600).toFixed(1)} h`
 }
@@ -311,7 +314,7 @@ const stepLabel = computed(() => durationLabel(timeseries.value?.step || 0))
 
 const updatedLabel = computed(() => {
   const seconds = Math.max(0, Math.round((now.value - new Date(overview.value.generatedAt)) / 1000))
-  return seconds < 60 ? `hace ${seconds}s` : `hace ${Math.round(seconds / 60)} min`
+  return seconds < 60 ? t('overview.agoSeconds', { n: seconds }) : t('overview.agoMinutes', { n: Math.round(seconds / 60) })
 })
 
 function formatCores(nano) { return (nano / 1e9).toFixed(nano >= 10e9 ? 0 : 1) }

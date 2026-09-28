@@ -3,11 +3,11 @@
     <div class="toolbar">
       <h2 class="resource-title">{{ cfg.title }}</h2>
       <div v-if="selectedRows.length" class="bulk-actions">
-        <span>{{ selectedRows.length }} seleccionado(s)</span>
-        <button class="btn sm danger" title="Eliminar seleccionados" @click="emit('bulk-delete', selectedRows)">
-          <i data-lucide="trash-2"></i> Eliminar
+        <span>{{ t('table.selected', { n: selectedRows.length }) }}</span>
+        <button class="btn sm danger" :title="t('table.deleteSelected')" @click="emit('bulk-delete', selectedRows)">
+          <i data-lucide="trash-2"></i> {{ t('action.delete') }}
         </button>
-        <button class="btn sm" title="Limpiar seleccion" @click="clearSelection">
+        <button class="btn sm" :title="t('table.clearSelection')" @click="clearSelection">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -17,30 +17,30 @@
             v-for="opt in cfg.facet.options" :key="opt.value"
             :class="['facet-chip', `facet-${opt.value}`, { active: activeFacets.has(opt.value) }]"
             :aria-pressed="activeFacets.has(opt.value)"
-            :title="`${activeFacets.has(opt.value) ? 'Quitar' : 'Mostrar solo'} ${opt.label}`"
+            :title="t(activeFacets.has(opt.value) ? 'table.stopFiltering' : 'table.showOnly', { label: opt.label })"
             @click="toggleFacet(opt.value)"
           >{{ opt.label }} <span class="facet-count">{{ facetCounts[opt.value] || 0 }}</span></button>
-          <button v-if="activeFacets.size" class="facet-clear" title="Mostrar todos" @click="activeFacets = new Set()">✕</button>
+          <button v-if="activeFacets.size" class="facet-clear" :title="t('table.showAll')" @click="activeFacets = new Set()">✕</button>
         </div>
-        <div v-if="cfg.quickFilters?.length" class="facet-chips" role="group" aria-label="Filtros rápidos">
+        <div v-if="cfg.quickFilters?.length" class="facet-chips" role="group" :aria-label="t('table.quickFilters')">
           <button
             v-for="qf in cfg.quickFilters" :key="qf.id"
             :class="['facet-chip', 'quick-chip', { active: activeQuick.has(qf.id) }]"
             :aria-pressed="activeQuick.has(qf.id)"
-            :title="`${activeQuick.has(qf.id) ? 'Quitar' : 'Mostrar solo'} ${qf.label}`"
+            :title="t(activeQuick.has(qf.id) ? 'table.stopFiltering' : 'table.showOnly', { label: t(qf.label) })"
             @click="toggleQuick(qf.id)"
-          >{{ qf.label }} <span class="facet-count">{{ quickCounts[qf.id] || 0 }}</span></button>
-          <button v-if="activeQuick.size" class="facet-clear" title="Quitar filtros rápidos" @click="activeQuick = new Set()">✕</button>
+          >{{ t(qf.label) }} <span class="facet-count">{{ quickCounts[qf.id] || 0 }}</span></button>
+          <button v-if="activeQuick.size" class="facet-clear" :title="t('table.clearQuickFilters')" @click="activeQuick = new Set()">✕</button>
         </div>
         <div class="filter-box">
           <input
-            v-model="filter" class="search-input" placeholder="Filter..."
+            v-model="filter" class="search-input" :placeholder="t('table.filterPlaceholder')"
             @focus="historyOpen = true" @blur="onFilterBlur" @keydown.enter="rememberCurrent"
             @keydown.esc="historyOpen = false"
           />
           <button
             v-if="filter.trim()" class="filter-save" :class="{ saved: isSaved }"
-            :title="isSaved ? 'Quitar de guardados' : 'Guardar filtro'"
+            :title="t(isSaved ? 'table.unsaveFilter' : 'table.saveFilter')"
             @mousedown.prevent @click="toggleSaved(filter)"
           >{{ isSaved ? '★' : '☆' }}</button>
           <div v-if="historyOpen && (history.saved.length || history.recent.length)" class="filter-history" role="listbox">
@@ -48,34 +48,34 @@
               <div v-if="section.items.length" class="filter-history-label">{{ section.label }}</div>
               <div
                 v-for="item in section.items" :key="section.label + item"
-                class="filter-history-item" role="option" :title="`Filtrar por ${item}`"
+                class="filter-history-item" role="option" :title="t('table.filterBy', { value: item })"
                 @mousedown.prevent="applyHistory(item)"
               >
                 <span class="filter-history-text">{{ item }}</span>
                 <button
                   class="filter-history-btn" :class="{ saved: section.saved }"
-                  :title="section.saved ? 'Quitar de guardados' : 'Guardar filtro'"
+                  :title="t(section.saved ? 'table.unsaveFilter' : 'table.saveFilter')"
                   @mousedown.prevent.stop="toggleSaved(item)"
                 >{{ section.saved ? '★' : '☆' }}</button>
-                <button class="filter-history-btn" title="Olvidar" @mousedown.prevent.stop="forget(item)">✕</button>
+                <button class="filter-history-btn" :title="t('table.forgetFilter')" @mousedown.prevent.stop="forget(item)">✕</button>
               </div>
             </template>
           </div>
         </div>
-        <button class="btn btn-icon" :class="{ refreshing: store.refreshing }" :disabled="store.loading || store.refreshing" title="Refresh (R)" @click="store.loadResources({ silent: true, force: true })">
+        <button class="btn btn-icon" :class="{ refreshing: store.refreshing }" :disabled="store.loading || store.refreshing" :title="t('table.refreshShortcut')" @click="store.loadResources({ silent: true, force: true })">
           <i data-lucide="refresh-cw"></i>
         </button>
       </div>
     </div>
 
     <div class="table-wrap">
-      <div v-if="store.loading" class="loading-state">Loading...</div>
+      <div v-if="store.loading" class="loading-state">{{ t('common.loading') }}</div>
       <div v-else-if="store.error" class="error-state">
         <i data-lucide="alert-triangle"></i>
         <span>{{ store.error }}</span>
-        <button class="btn sm" @click="store.loadResources()">Retry</button>
+        <button class="btn sm" @click="store.loadResources()">{{ t('common.retry') }}</button>
       </div>
-      <div v-else-if="!filtered.length" class="empty-state">{{ store.rows.length ? 'No resources match the current filters' : 'No resources found' }}</div>
+      <div v-else-if="!filtered.length" class="empty-state">{{ t(store.rows.length ? 'table.noMatches' : 'table.empty') }}</div>
       <table v-else class="rtable">
         <thead>
           <tr>
@@ -84,7 +84,7 @@
                 type="checkbox"
                 :checked="allVisibleSelected"
                 :disabled="!filtered.length"
-                title="Seleccionar visibles"
+                :title="t('table.selectVisible')"
                 @change="toggleAllVisible"
                 @click.stop
               />
@@ -97,7 +97,7 @@
               {{ col }}
               <span class="sort-icon">{{ colSortIcon(i) }}</span>
             </th>
-            <th>Actions</th>
+            <th>{{ t('table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -108,7 +108,7 @@
             @click="emit('select', store.resource, row)"
           >
             <td v-if="hasBulkDeleteRows" class="col-select" @click.stop>
-              <input type="checkbox" :checked="selectedKeys.has(rowKey(row))" :disabled="!rowSupportsBulkDelete(row)" :title="`Seleccionar ${row.name}`" @change="toggleRow(row)" />
+              <input type="checkbox" :checked="selectedKeys.has(rowKey(row))" :disabled="!rowSupportsBulkDelete(row)" :title="t('table.selectRow', { name: row.name })" @change="toggleRow(row)" />
             </td>
             <td v-for="(cell, i) in cfg.row(row)" :key="i" v-html="renderCell(cell)"></td>
             <td class="col-actions">
@@ -132,6 +132,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
 import { createIcons, icons } from 'lucide'
+import { useI18n } from '../composables/useI18n'
 import {
   loadTableView, saveTableView, loadFilterHistory, saveFilterHistory,
   rememberFilter, toggleSavedFilter, forgetFilter,
@@ -141,6 +142,7 @@ const props = defineProps({ resource: String, selectedKey: String, initialFilter
 const emit  = defineEmits(['action', 'select', 'bulk-delete'])
 
 const store  = useKubeStore()
+const { t } = useI18n()
 const filter = ref('')
 const selectedKeys = ref(new Set())
 
@@ -221,8 +223,8 @@ const history = ref({ saved: [], recent: [] })
 const historyOpen = ref(false)
 const isSaved = computed(() => history.value.saved.includes(filter.value.trim()))
 const historySections = computed(() => [
-  { label: 'Guardados', items: history.value.saved, saved: true },
-  { label: 'Recientes', items: history.value.recent, saved: false },
+  { label: t('table.savedFilters'), items: history.value.saved, saved: true },
+  { label: t('table.recentFilters'), items: history.value.recent, saved: false },
 ])
 
 function restoreView(resource) {

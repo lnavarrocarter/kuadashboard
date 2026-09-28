@@ -169,7 +169,7 @@ describe('ConsoleWorkspaceView', () => {
     expect(hints).toHaveLength(2) // ec2-rdp (AWS view), gcp-ssh (GCP VMs table)
     expect(text).toContain('ec2-rdp')
     expect(text).toContain('gcp-ssh')
-    expect(hints.map(h => h.text()).sort()).toEqual(['Abrir desde la vista de AWS', 'Abrir desde la vista de GCP'])
+    expect(hints.map(h => h.text()).sort()).toEqual(['Open from the AWS view', 'Open from the GCP view'])
 
     const unavailable = wrapper.findAll('.console-unavailable-badge')
     expect(unavailable).toHaveLength(1) // gcp-shell

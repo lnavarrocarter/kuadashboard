@@ -36,8 +36,10 @@ export function useI18n() {
    * @returns {string}
    */
   function t(key, params) {
-    const locale = LOCALES[settings.lang] || LOCALES.es
-    const str = locale[key] ?? key
+    // English is the base language: a key missing in the active locale
+    // falls back to English, then to the key itself.
+    const locale = LOCALES[settings.lang] || LOCALES.en
+    const str = locale[key] ?? LOCALES.en[key] ?? key
     return interpolate(str, params)
   }
 
@@ -61,8 +63,10 @@ export function formatNumber(value, options) {
  */
 export function getT() {
   return (key, params) => {
-    const locale = LOCALES[settings.lang] || LOCALES.es
-    const str = locale[key] ?? key
+    // English is the base language: a key missing in the active locale
+    // falls back to English, then to the key itself.
+    const locale = LOCALES[settings.lang] || LOCALES.en
+    const str = locale[key] ?? LOCALES.en[key] ?? key
     return interpolate(str, params)
   }
 }

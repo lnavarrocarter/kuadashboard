@@ -6,7 +6,7 @@ const SETTINGS_VERSION = 2
 const DEFAULTS = {
   settingsVersion: SETTINGS_VERSION,
   theme:        'dark',    // 'dark' | 'light'
-  lang:         'es',      // 'es' | 'en'
+  lang:         'en',      // 'en' | 'es'
   fontSize:     'normal',  // 'small' | 'normal' | 'large'
   compactMode:  false,     // reduce row padding
   showClock:    true,      // clock in header

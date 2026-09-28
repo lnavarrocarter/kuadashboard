@@ -5,24 +5,24 @@
         <span class="kdp-kind">{{ kindLabel }}</span>
         <strong :title="resource?.name">{{ resource?.name }}</strong>
       </div>
-      <button class="btn btn-icon" title="Cerrar" @click="$emit('close')"><i data-lucide="x"></i></button>
+      <button class="btn btn-icon" :title="t('action.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
     <div class="kdp-tabs">
-      <button :class="['kdp-tab', { active: tab === 'overview' }]" @click="tab = 'overview'"><i data-lucide="layout-list"></i> Resumen</button>
+      <button :class="['kdp-tab', { active: tab === 'overview' }]" @click="tab = 'overview'"><i data-lucide="layout-list"></i> {{ t('detail.tabOverview') }}</button>
       <button v-if="isDeployment" :class="['kdp-tab', { active: tab === 'env' }]" @click="tab = 'env'"><i data-lucide="list-plus"></i> Env</button>
       <button v-if="isDataEditable" :class="['kdp-tab', { active: tab === 'data' }]" @click="tab = 'data'"><i data-lucide="table-properties"></i> Data</button>
       <button :class="['kdp-tab', { active: tab === 'yaml' }]" @click="tab = 'yaml'"><i data-lucide="braces"></i> YAML</button>
-      <button :class="['kdp-tab', { active: tab === 'metrics' }]" @click="tab = 'metrics'"><i data-lucide="activity"></i> Metricas</button>
-      <button :class="['kdp-tab', { active: tab === 'events' }]" @click="tab = 'events'"><i data-lucide="bell-ring"></i> Eventos</button>
+      <button :class="['kdp-tab', { active: tab === 'metrics' }]" @click="tab = 'metrics'"><i data-lucide="activity"></i> {{ t('detail.tabMetrics') }}</button>
+      <button :class="['kdp-tab', { active: tab === 'events' }]" @click="tab = 'events'"><i data-lucide="bell-ring"></i> {{ t('detail.tabEvents') }}</button>
     </div>
 
     <section v-if="tab === 'overview'" class="kdp-body">
-      <div v-if="loading" class="kdp-empty">Cargando detalle...</div>
+      <div v-if="loading" class="kdp-empty">{{ t('detail.loading') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
         <div class="kdp-section">
-          <h3>Propiedades</h3>
+          <h3>{{ t('detail.properties') }}</h3>
           <dl class="kdp-props">
             <div v-for="item in properties" :key="item.label" class="kdp-prop-row">
               <dt>{{ item.label }}</dt>
@@ -31,7 +31,7 @@
           </dl>
         </div>
         <div v-if="labels.length" class="kdp-section">
-          <h3>Labels</h3>
+          <h3>{{ t('detail.labels') }}</h3>
           <div class="kdp-chips">
             <span v-for="label in labels" :key="label" class="kdp-chip">{{ label }}</span>
           </div>
@@ -52,13 +52,13 @@
               <span>{{ item.title }}</span>
               <small>{{ item.subtitle || '-' }}</small>
               <a v-if="item.url" class="kdp-open-link" :href="item.url" target="_blank" rel="noopener noreferrer">
-                <i data-lucide="external-link"></i> Abrir
+                <i data-lucide="external-link"></i> {{ t('detail.open') }}
               </a>
             </div>
           </div>
         </div>
         <div v-if="containers.length" class="kdp-section">
-          <h3>Contenedores</h3>
+          <h3>{{ t('detail.containers') }}</h3>
           <div class="kdp-list">
             <div v-for="container in containers" :key="container.name" class="kdp-list-item">
               <span>{{ container.name }}</span>
@@ -70,18 +70,18 @@
     </section>
 
     <section v-else-if="tab === 'yaml'" class="kdp-body">
-      <div v-if="loading" class="kdp-empty">Cargando YAML...</div>
+      <div v-if="loading" class="kdp-empty">{{ t('detail.loadingYaml') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
         <div class="kdp-yaml-tools">
           <div class="kdp-yaml-search">
             <i data-lucide="search"></i>
-            <input v-model.trim="yamlSearch" class="ctrl-input" placeholder="Buscar en YAML..." spellcheck="false" />
+            <input v-model.trim="yamlSearch" class="ctrl-input" :placeholder="t('detail.searchYaml')" spellcheck="false" />
             <span>{{ yamlSearchStatus }}</span>
           </div>
           <div class="kdp-yaml-actions">
-            <button class="btn sm" title="Expandir todo" @click="expandAllYaml"><i data-lucide="chevrons-down"></i></button>
-            <button class="btn sm" title="Colapsar todo" @click="collapseAllYaml"><i data-lucide="chevrons-up"></i></button>
+            <button class="btn sm" :title="t('detail.expandAll')" @click="expandAllYaml"><i data-lucide="chevrons-down"></i></button>
+            <button class="btn sm" :title="t('detail.collapseAll')" @click="collapseAllYaml"><i data-lucide="chevrons-up"></i></button>
           </div>
         </div>
         <div class="kdp-yaml-tree">
@@ -95,7 +95,7 @@
               <button
                 v-if="line.hasChildren"
                 class="kdp-yaml-toggle"
-                :title="isYamlExpanded(line.key) ? 'Colapsar' : 'Expandir'"
+                :title="t(isYamlExpanded(line.key) ? 'detail.collapse' : 'detail.expand')"
                 @click="toggleYamlKey(line.key)"
               >
                 <i :data-lucide="isYamlExpanded(line.key) ? 'chevron-down' : 'chevron-right'"></i>
@@ -105,13 +105,13 @@
               <span v-if="line.value !== undefined" class="kdp-yaml-value">{{ line.value }}</span>
             </div>
           </transition-group>
-          <div v-if="!yamlTreeLines.length" class="kdp-yaml-empty">Sin coincidencias</div>
+          <div v-if="!yamlTreeLines.length" class="kdp-yaml-empty">{{ t('detail.noMatches') }}</div>
         </div>
       </template>
     </section>
 
     <section v-else-if="tab === 'env'" class="kdp-body">
-      <div v-if="loading" class="kdp-empty">Cargando environments...</div>
+      <div v-if="loading" class="kdp-empty">{{ t('detail.loadingEnv') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
         <div v-for="group in envGroups" :key="group.name" class="kdp-section">
@@ -120,28 +120,28 @@
             <div v-for="row in group.rows" :key="row.id" :class="['kdp-env-row', { readonly: row.valueFrom }]">
               <input v-model.trim="row.name" class="ctrl-input" placeholder="KEY" :disabled="!!row.valueFrom" spellcheck="false" />
               <input v-model="row.value" class="ctrl-input" placeholder="value" :disabled="!!row.valueFrom" spellcheck="false" />
-              <button class="btn sm btn-icon" title="Eliminar variable" @click="removeEnvRow(group, row)"><i data-lucide="trash-2"></i></button>
+              <button class="btn sm btn-icon" :title="t('detail.deleteVariable')" @click="removeEnvRow(group, row)"><i data-lucide="trash-2"></i></button>
               <small v-if="row.valueFrom" class="kdp-env-source">{{ valueFromText(row.valueFrom) }}</small>
             </div>
-            <div v-if="!group.rows.length" class="kdp-empty compact">Sin variables en este contenedor.</div>
+            <div v-if="!group.rows.length" class="kdp-empty compact">{{ t('detail.noVariables') }}</div>
           </div>
-          <button class="btn sm" @click="addEnvRow(group)"><i data-lucide="plus"></i> Agregar variable</button>
+          <button class="btn sm" @click="addEnvRow(group)"><i data-lucide="plus"></i> {{ t('detail.addVariable') }}</button>
         </div>
         <div class="kdp-env-footer">
           <button class="btn primary" :disabled="savingEnv" @click="saveEnvVars">
-            <i :data-lucide="savingEnv ? 'loader-2' : 'save'"></i> {{ savingEnv ? 'Guardando...' : 'Guardar environments' }}
+            <i :data-lucide="savingEnv ? 'loader-2' : 'save'"></i> {{ t(savingEnv ? 'detail.saving' : 'detail.saveEnv') }}
           </button>
         </div>
       </template>
     </section>
 
     <section v-else-if="tab === 'data'" class="kdp-body">
-      <div v-if="loading" class="kdp-empty">Cargando data...</div>
+      <div v-if="loading" class="kdp-empty">{{ t('detail.loadingData') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
         <div v-if="isSecret && secretImmutable" class="kdp-alert warn">
           <i data-lucide="lock"></i>
-          <div>Este Secret esta marcado como immutable; Kubernetes puede rechazar cambios.</div>
+          <div>{{ t('detail.immutableSecret') }}</div>
         </div>
         <div v-if="dataBinaryKeys.length" class="kdp-section">
           <h3>binaryData</h3>
@@ -153,7 +153,7 @@
           <div class="kdp-section-head">
             <h3>{{ isSecret ? 'Secret data' : 'ConfigMap data' }}</h3>
             <button v-if="isSecret" class="btn sm" @click="toggleAllDataReveal">
-              <i :data-lucide="allDataRevealed ? 'eye-off' : 'eye'"></i> {{ allDataRevealed ? 'Ocultar' : 'Mostrar' }}
+              <i :data-lucide="allDataRevealed ? 'eye-off' : 'eye'"></i> {{ t(allDataRevealed ? 'detail.hide' : 'detail.show') }}
             </button>
           </div>
           <div class="kdp-data-list">
@@ -161,17 +161,17 @@
               <input v-model.trim="row.name" class="ctrl-input" placeholder="KEY" spellcheck="false" />
               <textarea v-model="row.value" :class="['ctrl-input', { masked: isSecret && !revealedDataKeys.has(row.id) }]" rows="2" placeholder="value" spellcheck="false"></textarea>
               <div class="kdp-data-actions">
-                <button v-if="isSecret" class="btn sm btn-icon" :title="revealedDataKeys.has(row.id) ? 'Ocultar valor' : 'Mostrar valor'" @click="toggleDataReveal(row)"><i :data-lucide="revealedDataKeys.has(row.id) ? 'eye-off' : 'eye'"></i></button>
-                <button class="btn sm btn-icon" title="Eliminar clave" @click="removeDataRow(row)"><i data-lucide="trash-2"></i></button>
+                <button v-if="isSecret" class="btn sm btn-icon" :title="t(revealedDataKeys.has(row.id) ? 'detail.hideValue' : 'detail.showValue')" @click="toggleDataReveal(row)"><i :data-lucide="revealedDataKeys.has(row.id) ? 'eye-off' : 'eye'"></i></button>
+                <button class="btn sm btn-icon" :title="t('detail.deleteKey')" @click="removeDataRow(row)"><i data-lucide="trash-2"></i></button>
               </div>
             </div>
-            <div v-if="!dataRows.length" class="kdp-empty compact">Sin claves todavia.</div>
+            <div v-if="!dataRows.length" class="kdp-empty compact">{{ t('detail.noKeys') }}</div>
           </div>
-          <button class="btn sm" @click="addDataRow"><i data-lucide="plus"></i> Agregar clave</button>
+          <button class="btn sm" @click="addDataRow"><i data-lucide="plus"></i> {{ t('detail.addKey') }}</button>
         </div>
         <div class="kdp-env-footer">
           <button class="btn primary" :disabled="savingData" @click="saveDataMap">
-            <i :data-lucide="savingData ? 'loader-2' : 'save'"></i> {{ savingData ? 'Guardando...' : 'Guardar data' }}
+            <i :data-lucide="savingData ? 'loader-2' : 'save'"></i> {{ t(savingData ? 'detail.saving' : 'detail.saveData') }}
           </button>
         </div>
       </template>
@@ -179,9 +179,9 @@
 
     <section v-else-if="tab === 'metrics'" class="kdp-body">
       <template v-if="isMetricsSupported">
-        <div v-if="metricsLoading" class="kdp-empty">Cargando metricas...</div>
+        <div v-if="metricsLoading" class="kdp-empty">{{ t('detail.loadingMetrics') }}</div>
         <div v-else-if="metrics" class="kdp-section">
-          <h3>Consumo actual</h3>
+          <h3>{{ t('detail.currentUsage') }}</h3>
           <div :class="['kdp-prom-status', prometheus?.available ? 'ok' : 'warn']">
             <i :data-lucide="prometheus?.available ? 'check-circle-2' : 'circle-dashed'"></i>
             <span>{{ prometheusLabel }}</span>
@@ -193,7 +193,7 @@
               <div class="kdp-bar"><span :style="{ width: `${metrics.cpu.percent}%` }"></span></div>
             </div>
             <div class="kdp-meter">
-              <span>Memoria</span>
+              <span>{{ t('detail.memory') }}</span>
               <strong>{{ metrics.memory.display }}</strong>
               <div class="kdp-bar memory"><span :style="{ width: `${metrics.memory.percent}%` }"></span></div>
             </div>
@@ -201,46 +201,46 @@
           <div v-if="metrics.items?.length" class="kdp-list kdp-metric-items">
             <div v-for="item in metrics.items" :key="item.name" class="kdp-list-item">
               <span>{{ item.name }}</span>
-              <small>CPU {{ item.cpu }} | Memoria {{ item.memory }}</small>
+              <small>CPU {{ item.cpu }} | {{ t('detail.memory') }} {{ item.memory }}</small>
             </div>
           </div>
-          <p class="kdp-muted">Fuente: <code>{{ metrics.source || 'metrics.k8s.io' }}</code>.</p>
+          <p class="kdp-muted">{{ t('detail.source') }} <code>{{ metrics.source || 'metrics.k8s.io' }}</code>.</p>
         </div>
         <div v-else class="kdp-alert warn">
           <i data-lucide="info"></i>
           <div>
-            <strong>Metricas no disponibles</strong>
-            <p>{{ metricsError || 'No se pudo consultar metrics.k8s.io en el cluster.' }}</p>
+            <strong>{{ t('detail.metricsUnavailable') }}</strong>
+            <p>{{ metricsError || t('detail.metricsQueryFailed') }}</p>
             <p>{{ prometheusLabel }}</p>
-            <button class="btn sm primary" @click="$emit('open-helm')"><i data-lucide="package-plus"></i> Abrir Helm</button>
+            <button class="btn sm primary" @click="$emit('open-helm')"><i data-lucide="package-plus"></i> {{ t('detail.openHelm') }}</button>
           </div>
         </div>
       </template>
       <div v-else class="kdp-alert warn">
         <i data-lucide="info"></i>
         <div>
-          <p>Las metricas visuales estan disponibles para Pods, Nodes, Services y workloads con selector.</p>
+          <p>{{ t('detail.metricsSupported') }}</p>
           <p>{{ prometheusLabel }}</p>
-          <button class="btn sm primary" @click="$emit('open-helm')"><i data-lucide="package-plus"></i> Abrir Helm</button>
+          <button class="btn sm primary" @click="$emit('open-helm')"><i data-lucide="package-plus"></i> {{ t('detail.openHelm') }}</button>
         </div>
       </div>
     </section>
 
     <section v-else class="kdp-body">
-      <div v-if="eventsLoading" class="kdp-empty">Cargando eventos...</div>
+      <div v-if="eventsLoading" class="kdp-empty">{{ t('detail.loadingEvents') }}</div>
       <div v-else-if="eventsError" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ eventsError }}</div>
       <template v-else>
         <div class="kdp-event-summary">
           <div class="kdp-event-card">
-            <span>Total</span>
+            <span>{{ t('detail.total') }}</span>
             <strong>{{ relatedEvents.total }}</strong>
           </div>
           <div class="kdp-event-card warn">
-            <span>Warnings</span>
+            <span>{{ t('detail.warnings') }}</span>
             <strong>{{ relatedEvents.warnings }}</strong>
           </div>
         </div>
-        <div v-if="!relatedEvents.events.length" class="kdp-empty compact">Sin eventos relacionados para este recurso.</div>
+        <div v-if="!relatedEvents.events.length" class="kdp-empty compact">{{ t('detail.noEvents') }}</div>
         <div v-else class="kdp-event-list">
           <div v-for="event in relatedEvents.events" :key="event.name || `${event.reason}-${event.lastTimestamp}`" :class="['kdp-event-item', event.type?.toLowerCase()]">
             <div class="kdp-event-top">
@@ -248,7 +248,7 @@
               <span>{{ formatEventDate(event.lastTimestamp || event.age) }}</span>
             </div>
             <p>{{ event.message || '-' }}</p>
-            <small>{{ event.namespace || 'cluster' }} · {{ event.object }} · count {{ event.count || 1 }} · {{ event.source || '-' }}</small>
+            <small>{{ event.namespace || 'cluster' }} · {{ event.object }} · {{ t('detail.count', { n: event.count || 1 }) }} · {{ event.source || '-' }}</small>
           </div>
         </div>
       </template>
@@ -262,6 +262,7 @@ import { createIcons, icons } from 'lucide'
 import yaml from 'js-yaml'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   resourceType: { type: String, required: true },
@@ -269,6 +270,7 @@ const props = defineProps({
 })
 defineEmits(['close', 'open-helm'])
 const { toast } = useToast()
+const { t } = useI18n()
 
 const CLUSTER_RESOURCES = new Set([
   'nodes', 'namespaces', 'pvs', 'storageclasses', 'ingressclasses',
@@ -314,13 +316,13 @@ const ownerText = computed(() => (metadata.value.ownerReferences || []).map(o =>
 const yamlAllLines = computed(() => flattenYaml(yamlObject.value))
 const yamlSearchTerm = computed(() => yamlSearch.value.toLowerCase())
 const yamlTreeLines = computed(() => filteredYamlLines())
-const yamlSearchStatus = computed(() => yamlSearch.value ? `${yamlTreeLines.value.filter(line => line.matches).length} coincidencia(s)` : `${yamlAllLines.value.length} lineas`)
+const yamlSearchStatus = computed(() => yamlSearch.value ? t('detail.matches', { n: yamlTreeLines.value.filter(line => line.matches).length }) : t('detail.lines', { n: yamlAllLines.value.length }))
 const detailSections = computed(() => resourceSections())
 const prometheusLabel = computed(() => {
-  if (!prometheus.value) return 'Prometheus no verificado.'
-  if (!prometheus.value.available) return 'No se detecto Prometheus en los Services del cluster.'
+  if (!prometheus.value) return t('detail.prometheusUnchecked')
+  if (!prometheus.value.available) return t('detail.prometheusNotFound')
   const svc = prometheus.value.services?.[0]
-  return `Prometheus disponible: ${svc.namespace}/${svc.name}.`
+  return t('detail.prometheusAvailable', { service: `${svc.namespace}/${svc.name}` })
 })
 
 watch(() => [props.resourceType, props.resource?.name, props.resource?.namespace], () => loadDetail(true), { immediate: true })
@@ -419,12 +421,12 @@ function singularTitle(type) {
 
 function baseProperties() {
   return compactRows([
-    row('Nombre', metadata.value.name || props.resource.name),
+    row(t('detail.name'), metadata.value.name || props.resource.name),
     row('Namespace', metadata.value.namespace || props.resource.namespace),
-    row('Estado', status.value.phase || props.resource.status || props.resource.ready),
-    row('Creado', metadata.value.creationTimestamp ? new Date(metadata.value.creationTimestamp).toLocaleString() : props.resource.age),
+    row(t('detail.status'), status.value.phase || props.resource.status || props.resource.ready),
+    row(t('detail.created'), metadata.value.creationTimestamp ? new Date(metadata.value.creationTimestamp).toLocaleString() : props.resource.age),
     row('UID', metadata.value.uid),
-    row('Version', metadata.value.resourceVersion),
+    row(t('detail.version'), metadata.value.resourceVersion),
     row('Owner', ownerText.value),
   ])
 }
@@ -435,7 +437,7 @@ function resourceSections() {
   if (['deployments', 'statefulsets', 'daemonsets'].includes(type)) return workloadSections(type)
   if (type === 'services') return serviceSections()
   if (type === 'ingresses') return ingressSections()
-  if (type === 'configmaps') return dataObjectSections('Datos', yamlObject.value?.data, yamlObject.value?.binaryData)
+  if (type === 'configmaps') return dataObjectSections(t('detail.data'), yamlObject.value?.data, yamlObject.value?.binaryData)
   if (type === 'secrets') return secretSections()
   if (type === 'pvcs') return pvcSections()
   if (type === 'nodes') return nodeSections()
@@ -446,16 +448,16 @@ function resourceSections() {
 function podSections() {
   return [
     {
-      title: 'Ejecucion',
+      title: t('detail.execution'),
       rows: compactRows([
-        row('Pod IP', status.value.podIP), row('Host IP', status.value.hostIP), row('Nodo', spec.value.nodeName),
-        row('Service Account', spec.value.serviceAccountName), row('QoS', status.value.qosClass), row('Reinicios', podRestartCount()),
-        row('Restart Policy', spec.value.restartPolicy), row('DNS Policy', spec.value.dnsPolicy), row('Prioridad', spec.value.priorityClassName || spec.value.priority),
+        row('Pod IP', status.value.podIP), row('Host IP', status.value.hostIP), row(t('detail.node'), spec.value.nodeName),
+        row('Service Account', spec.value.serviceAccountName), row('QoS', status.value.qosClass), row(t('detail.restarts'), podRestartCount()),
+        row('Restart Policy', spec.value.restartPolicy), row('DNS Policy', spec.value.dnsPolicy), row(t('detail.priority'), spec.value.priorityClassName || spec.value.priority),
       ]),
     },
-    { title: 'Condiciones', items: conditionItems(status.value.conditions) },
-    { title: 'Volumenes', items: volumeItems(spec.value.volumes) },
-    { title: 'Red', rows: compactRows([row('Host Network', spec.value.hostNetwork), row('DNS Config', spec.value.dnsConfig ? 'Configurado' : ''), row('Subdomain', spec.value.subdomain)]) },
+    { title: t('detail.conditions'), items: conditionItems(status.value.conditions) },
+    { title: t('detail.volumes'), items: volumeItems(spec.value.volumes) },
+    { title: t('detail.network'), rows: compactRows([row('Host Network', spec.value.hostNetwork), row('DNS Config', spec.value.dnsConfig ? t('detail.configured') : ''), row('Subdomain', spec.value.subdomain)]) },
   ].filter(sectionHasContent)
 }
 
@@ -463,20 +465,20 @@ function workloadSections(type) {
   const template = spec.value.template || {}
   return [
     {
-      title: 'Replicas',
+      title: t('detail.replicas'),
       rows: compactRows([
-        row('Deseadas', spec.value.replicas ?? (type === 'daemonsets' ? status.value.desiredNumberScheduled : undefined)),
-        row('Listas', status.value.readyReplicas ?? status.value.numberReady),
-        row('Disponibles', status.value.availableReplicas ?? status.value.numberAvailable),
-        row('Actualizadas', status.value.updatedReplicas ?? status.value.updatedNumberScheduled),
-        row('Observada', status.value.observedGeneration),
+        row(t('detail.desired'), spec.value.replicas ?? (type === 'daemonsets' ? status.value.desiredNumberScheduled : undefined)),
+        row(t('detail.ready'), status.value.readyReplicas ?? status.value.numberReady),
+        row(t('detail.available'), status.value.availableReplicas ?? status.value.numberAvailable),
+        row(t('detail.updated'), status.value.updatedReplicas ?? status.value.updatedNumberScheduled),
+        row(t('detail.observed'), status.value.observedGeneration),
       ]),
     },
     { title: 'Selector', chips: selectorChips(spec.value.selector) },
     {
-      title: 'Estrategia',
+      title: t('detail.strategy'),
       rows: compactRows([
-        row('Tipo', spec.value.strategy?.type || spec.value.updateStrategy?.type),
+        row(t('detail.type'), spec.value.strategy?.type || spec.value.updateStrategy?.type),
         row('Max Surge', spec.value.strategy?.rollingUpdate?.maxSurge),
         row('Max Unavailable', spec.value.strategy?.rollingUpdate?.maxUnavailable || spec.value.updateStrategy?.rollingUpdate?.maxUnavailable),
         row('Service Name', spec.value.serviceName),
@@ -484,31 +486,31 @@ function workloadSections(type) {
       ]),
     },
     { title: 'Template', chips: objectChips(template.metadata?.labels), items: containerItems(template.spec?.containers) },
-    { title: 'Condiciones', items: conditionItems(status.value.conditions) },
+    { title: t('detail.conditions'), items: conditionItems(status.value.conditions) },
   ].filter(sectionHasContent)
 }
 
 function serviceSections() {
   return [
     {
-      title: 'Red',
+      title: t('detail.network'),
       rows: compactRows([
-        row('Tipo', spec.value.type), row('Cluster IP', spec.value.clusterIP), row('Cluster IPs', spec.value.clusterIPs?.join(', ')),
+        row(t('detail.type'), spec.value.type), row('Cluster IP', spec.value.clusterIP), row('Cluster IPs', spec.value.clusterIPs?.join(', ')),
         row('External IPs', spec.value.externalIPs?.join(', ')), row('LoadBalancer', loadBalancerText()), row('Session Affinity', spec.value.sessionAffinity),
         row('IP Families', spec.value.ipFamilies?.join(', ')), row('Traffic Policy', spec.value.externalTrafficPolicy),
       ]),
     },
     { title: 'Selector', chips: objectChips(spec.value.selector) },
-    { title: 'Puertos', items: (spec.value.ports || []).map(port => ({ title: `${port.name || port.port} ${port.protocol || 'TCP'}`, subtitle: `${port.port} -> ${port.targetPort || port.port}${port.nodePort ? ` | node ${port.nodePort}` : ''}` })) },
+    { title: t('detail.ports'), items: (spec.value.ports || []).map(port => ({ title: `${port.name || port.port} ${port.protocol || 'TCP'}`, subtitle: `${port.port} -> ${port.targetPort || port.port}${port.nodePort ? ` | node ${port.nodePort}` : ''}` })) },
   ].filter(sectionHasContent)
 }
 
 function ingressSections() {
   return [
-    { title: 'Entrada', rows: compactRows([row('Clase', ingressClassName()), row('TLS', spec.value.tls?.length ? `${spec.value.tls.length} secreto(s)` : 'No'), row('ELB / Address', loadBalancerText())]) },
+    { title: t('detail.entry'), rows: compactRows([row(t('detail.class'), ingressClassName()), row('TLS', spec.value.tls?.length ? t('detail.tlsSecrets', { n: spec.value.tls.length }) : t('common.no')), row('ELB / Address', loadBalancerText())]) },
     { title: 'URLs', items: ingressUrlItems() },
-    { title: 'Reglas', items: (spec.value.rules || []).flatMap(rule => (rule.http?.paths || []).map(path => ({ title: `${rule.host || '*'}${path.path || '/'}`, subtitle: `${path.pathType || 'Prefix'} -> ${backendText(path.backend)}` }))) },
-    { title: 'TLS', items: (spec.value.tls || []).map(tls => ({ title: tls.secretName || 'Sin secreto', subtitle: (tls.hosts || []).join(', ') || '-' })) },
+    { title: t('detail.rules'), items: (spec.value.rules || []).flatMap(rule => (rule.http?.paths || []).map(path => ({ title: `${rule.host || '*'}${path.path || '/'}`, subtitle: `${path.pathType || 'Prefix'} -> ${backendText(path.backend)}` }))) },
+    { title: 'TLS', items: (spec.value.tls || []).map(tls => ({ title: tls.secretName || t('detail.noSecret'), subtitle: (tls.hosts || []).join(', ') || '-' })) },
   ].filter(sectionHasContent)
 }
 
@@ -520,42 +522,42 @@ function dataObjectSections(title, data = {}, binaryData = {}) {
 
 function secretSections() {
   return [
-    { title: 'Secreto', rows: compactRows([row('Tipo', yamlObject.value?.type), row('Immutable', yamlObject.value?.immutable), row('Llaves', Object.keys(yamlObject.value?.data || {}).length)]) },
-    { title: 'Data', items: Object.keys(yamlObject.value?.data || {}).map(key => ({ title: key, subtitle: 'Valor redactado' })) },
+    { title: t('detail.secret'), rows: compactRows([row(t('detail.type'), yamlObject.value?.type), row('Immutable', yamlObject.value?.immutable), row(t('detail.keys'), Object.keys(yamlObject.value?.data || {}).length)]) },
+    { title: 'Data', items: Object.keys(yamlObject.value?.data || {}).map(key => ({ title: key, subtitle: t('detail.redacted') })) },
   ].filter(sectionHasContent)
 }
 
 function pvcSections() {
   return [
     {
-      title: 'Almacenamiento',
+      title: t('detail.storage'),
       rows: compactRows([
-        row('Estado', status.value.phase), row('StorageClass', spec.value.storageClassName), row('Volumen', spec.value.volumeName),
-        row('Capacidad', status.value.capacity?.storage), row('Solicitado', spec.value.resources?.requests?.storage), row('Access Modes', (spec.value.accessModes || []).join(', ')),
+        row(t('detail.status'), status.value.phase), row('StorageClass', spec.value.storageClassName), row(t('detail.volume'), spec.value.volumeName),
+        row(t('detail.capacity'), status.value.capacity?.storage), row(t('detail.requested'), spec.value.resources?.requests?.storage), row('Access Modes', (spec.value.accessModes || []).join(', ')),
         row('Volume Mode', spec.value.volumeMode),
       ]),
     },
-    { title: 'Condiciones', items: conditionItems(status.value.conditions) },
+    { title: t('detail.conditions'), items: conditionItems(status.value.conditions) },
   ].filter(sectionHasContent)
 }
 
 function nodeSections() {
   const nodeInfo = status.value.nodeInfo || {}
   return [
-    { title: 'Sistema', rows: compactRows([row('Roles', nodeRoles()), row('Schedulable', spec.value.unschedulable ? 'No' : 'Si'), row('Kubelet', nodeInfo.kubeletVersion), row('Runtime', nodeInfo.containerRuntimeVersion), row('OS', nodeInfo.osImage), row('Kernel', nodeInfo.kernelVersion), row('Arquitectura', nodeInfo.architecture)]) },
-    { title: 'Capacidad', rows: resourceRows(status.value.capacity) },
+    { title: t('detail.system'), rows: compactRows([row('Roles', nodeRoles()), row('Schedulable', spec.value.unschedulable ? t('common.no') : t('common.yes')), row('Kubelet', nodeInfo.kubeletVersion), row('Runtime', nodeInfo.containerRuntimeVersion), row('OS', nodeInfo.osImage), row('Kernel', nodeInfo.kernelVersion), row(t('detail.architecture'), nodeInfo.architecture)]) },
+    { title: t('detail.capacity'), rows: resourceRows(status.value.capacity) },
     { title: 'Allocatable', rows: resourceRows(status.value.allocatable) },
-    { title: 'Condiciones', items: conditionItems(status.value.conditions) },
+    { title: t('detail.conditions'), items: conditionItems(status.value.conditions) },
     { title: 'Taints', items: (spec.value.taints || []).map(t => ({ title: `${t.key}${t.value ? `=${t.value}` : ''}`, subtitle: t.effect })) },
   ].filter(sectionHasContent)
 }
 
 function eventSections() {
   return [{
-    title: 'Evento',
+    title: t('detail.event'),
     rows: compactRows([
-      row('Tipo', yamlObject.value?.type), row('Reason', yamlObject.value?.reason), row('Objeto', involvedObjectText()), row('Source', yamlObject.value?.source?.component || yamlObject.value?.reportingController),
-      row('Count', yamlObject.value?.count), row('Primero', yamlObject.value?.firstTimestamp || yamlObject.value?.eventTime), row('Ultimo', yamlObject.value?.lastTimestamp), row('Mensaje', yamlObject.value?.message),
+      row(t('detail.type'), yamlObject.value?.type), row('Reason', yamlObject.value?.reason), row(t('detail.object'), involvedObjectText()), row('Source', yamlObject.value?.source?.component || yamlObject.value?.reportingController),
+      row('Count', yamlObject.value?.count), row(t('detail.first'), yamlObject.value?.firstTimestamp || yamlObject.value?.eventTime), row(t('detail.last'), yamlObject.value?.lastTimestamp), row(t('detail.message'), yamlObject.value?.message),
     ]),
   }].filter(sectionHasContent)
 }
@@ -564,8 +566,8 @@ function row(label, value) { return { label, value: formatDetailValue(value) } }
 function compactRows(rows) { return rows.filter(item => item.value !== undefined && item.value !== null && item.value !== '') }
 function sectionHasContent(section) { return section.rows?.length || section.chips?.length || section.items?.length }
 function formatDetailValue(value) {
-  if (value === true) return 'Si'
-  if (value === false) return 'No'
+  if (value === true) return t('common.yes')
+  if (value === false) return t('common.no')
   if (Array.isArray(value)) return value.join(', ')
   if (value && typeof value === 'object') return JSON.stringify(value)
   return value
@@ -660,11 +662,11 @@ async function saveEnvVars() {
       const name = String(row.name || '').trim()
       if (!name && !row.value && !row.valueFrom) continue
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-        toast(`Nombre invalido en ${group.name}: ${name || '(vacio)'}`, 'error')
+        toast(t('detail.invalidName', { group: group.name, name: name || t('detail.emptyName') }), 'error')
         return
       }
       if (seen.has(name)) {
-        toast(`Variable duplicada en ${group.name}: ${name}`, 'error')
+        toast(t('detail.duplicateVariable', { group: group.name, name }), 'error')
         return
       }
       seen.add(name)
@@ -676,7 +678,7 @@ async function saveEnvVars() {
   savingEnv.value = true
   try {
     await api('PUT', `/api/${encodeURIComponent(props.resource.namespace)}/deployments/${encodeURIComponent(props.resource.name)}/env`, { containers: containersPayload })
-    toast('Environments guardados', 'success')
+    toast(t('detail.envSaved'), 'success')
     await loadDetail(false)
     tab.value = 'env'
   } catch (e) {
@@ -727,14 +729,14 @@ async function saveDataMap() {
   for (const row of dataRows.value) {
     const name = String(row.name || '').trim()
     if (!name && !row.value) continue
-    if (!name) { toast('Hay una clave sin nombre', 'error'); return }
-    if (data[name] !== undefined) { toast(`Clave duplicada: ${name}`, 'error'); return }
+    if (!name) { toast(t('detail.keyWithoutName'), 'error'); return }
+    if (data[name] !== undefined) { toast(t('detail.duplicateKey', { name }), 'error'); return }
     data[name] = String(row.value ?? '')
   }
   savingData.value = true
   try {
     await api('PUT', `/api/${encodeURIComponent(props.resource.namespace)}/${props.resourceType}/${encodeURIComponent(props.resource.name)}/data`, { data })
-    toast(`${isSecret.value ? 'Secret' : 'ConfigMap'} guardado`, 'success')
+    toast(t('detail.saved', { kind: isSecret.value ? 'Secret' : 'ConfigMap' }), 'success')
     await loadDetail(false)
     tab.value = 'data'
   } catch (e) {

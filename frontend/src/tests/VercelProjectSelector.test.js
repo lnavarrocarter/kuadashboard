@@ -138,7 +138,7 @@ describe('VercelProjectSelector + VercelView (#76)', () => {
     const header = mount(VercelProjectSelector)
     await flushPromises()
     const options = header.findAll('option').map(o => o.text())
-    expect(options).toEqual(['— Proyecto —', 'alpha', 'beta'])
+    expect(options).toEqual(['— Project —', 'alpha', 'beta'])
   })
 
   it('is disabled without a profile', () => {
@@ -195,6 +195,6 @@ describe('VercelProjectSelector + VercelView (#76)', () => {
     await flushPromises()
 
     expect(header.find('select').element.value).toBe('')
-    expect(header.findAll('option').map(o => o.text())).toEqual(['— Proyecto —', 'zeta'])
+    expect(header.findAll('option').map(o => o.text())).toEqual(['— Project —', 'zeta'])
   })
 })
