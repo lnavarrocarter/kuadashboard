@@ -131,6 +131,12 @@ Lista las funciones serverless y edge incluidas en un deployment seleccionado.
 
 ---
 
-## Cambiar de Perfil
+## Cambiar de Perfil y Proyecto
 
-Usa el dropdown de perfil en el encabezado para cambiar entre múltiples cuentas o perfiles de equipo de Vercel. La selección se persiste entre sesiones.
+El header funciona como **Cluster → Namespace** en Kubernetes: eliges un **perfil** y después un **proyecto**.
+
+- **Perfil** — cambia entre cuentas o perfiles de equipo de Vercel. Al cambiarlo se limpia el proyecto actual y se carga la lista de proyectos de ese perfil. La selección se mantiene entre sesiones.
+- **Proyecto** — el proyecto activo para las vistas que dependen de él: **Deployments**, **Domains**, **Env Vars** y **Cron**. Al elegir un proyecto se recarga la vista en la que estás; las vistas que no dependen del proyecto (Projects, Aliases, Webhooks, Edge Config, Activity) no se recargan. Elige **— Proyecto —** para quitarlo.
+- La lista de proyectos está disponible desde cualquier pestaña de Vercel, no hace falta abrir **Projects** primero.
+- KUA recuerda el último proyecto usado con cada perfil y lo vuelve a seleccionar cuando regresas a ese perfil. Si el proyecto ya no existe, la selección se limpia.
+- Hacer clic en una fila de la tabla **Projects** es un atajo para la misma selección: el header y la tabla siempre muestran el mismo proyecto.

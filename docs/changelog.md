@@ -16,6 +16,7 @@
 - **Kubernetes Services:** The Services table now shows the associated app (from the Service selector) and the internal IPs of the pods backing each Service, read from EndpointSlices with a single list call per namespace. Not-ready pods are flagged, and the Type and Cluster IP columns are unchanged.
 - **AWS EKS Info:** New Info panel for EKS clusters, following the EC2/Lambda layout, focused on the cluster's AWS infrastructure: VPC, subnets and security groups (with what uses each one), managed node groups, EC2 node instances (managed, Karpenter and self-managed) and EKS add-ons. Sections degrade independently with a notice when a permission is missing. The EKS table adds Node groups and EC2 instance count columns and shows the API endpoint under each cluster name.
 - **Kubernetes Events severity:** Events are colour-coded as Critical, Warning or Normal (badge column and row accent) based on their type and reason, and toolbar chips with counts filter the table by severity, combined with the text filter.
+- **Vercel Profile → Project selector:** A Project selector next to the Vercel profile in the header, like Cluster → Namespace in Kubernetes. Changing profile reloads its projects; changing project reloads the active project-scoped view. The last project per profile is remembered, and the Projects table stays in sync as a shortcut. Selecting a project no longer reloads views that do not depend on it, and project lists from a previous profile are ignored if they arrive late.
 
 ## v1.16.0 (2026-09-16)
 

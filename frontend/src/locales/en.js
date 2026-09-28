@@ -322,6 +322,9 @@ export default {
   // ── Vercel ────────────────────────────────────────────────────────────────
   'vercel.noProfile':                   '— Vercel profile —',
   'vercel.noProfileHint':               'No profile? Use the Env Manager (key icon) to create one.',
+  'vercel.header.noProject':             '— Project —',
+  'vercel.header.loadingProjects':       'Loading projects…',
+  'vercel.header.projectHint':           'Active Vercel project (applies to Deployments, Domains, Env Vars and Cron)',
   'vercel.loading':                     'Loading…',
   'vercel.searchPlaceholder':           'Search…',
   'vercel.result':                      'result',

@@ -131,6 +131,12 @@ Lists the serverless and edge functions included in a selected deployment.
 
 ---
 
-## Switching Profiles
+## Switching Profiles and Projects
 
-Use the profile dropdown in the header to switch between multiple Vercel accounts or team profiles. The selection is persisted across sessions.
+The header works like **Cluster → Namespace** in Kubernetes: pick a **profile**, then a **project**.
+
+- **Profile** — switches between Vercel accounts or team profiles. Changing it clears the current project and loads that profile's project list. The selection is persisted across sessions.
+- **Project** — the active project for the project-scoped views: **Deployments**, **Domains**, **Env Vars** and **Cron**. Choosing a project reloads the view you are on; views that do not depend on a project (Projects, Aliases, Webhooks, Edge Config, Activity) are not reloaded. Choose **— Project —** to clear it.
+- The project list is available from any Vercel tab, you do not need to open **Projects** first.
+- KUA remembers the last project used with each profile and selects it again when you come back to that profile. If the project no longer exists, the selection is cleared.
+- Clicking a row in the **Projects** table is a shortcut for the same selection: the header and the table always show the same project.

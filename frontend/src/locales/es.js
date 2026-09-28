@@ -322,6 +322,9 @@ export default {
   // ── Vercel ────────────────────────────────────────────────────────────────
   'vercel.noProfile':                   '— Perfil Vercel —',
   'vercel.noProfileHint':               '¿Sin perfil? Usa el Gestor de Credenciales (icono de llave) para crear uno.',
+  'vercel.header.noProject':             '— Proyecto —',
+  'vercel.header.loadingProjects':       'Cargando proyectos…',
+  'vercel.header.projectHint':           'Proyecto Vercel activo (se aplica a Deployments, Domains, Env Vars y Cron)',
   'vercel.loading':                     'Cargando…',
   'vercel.searchPlaceholder':           'Buscar…',
   'vercel.result':                      'resultado',
