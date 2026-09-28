@@ -1,4 +1,5 @@
 import { apmResourceIcon, apmResourceLabel } from './resourcePresentation'
+import { formatNumber } from '../../../composables/useI18n'
 
 // Single provider-agnostic source of truth for which metrics each resource type exposes.
 // Adding EC2, Cloud SQL, an Ingress collector or any future provider means adding one entry
@@ -231,10 +232,10 @@ export function formatMetricValue(value, format) {
     if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GiB`
     return `${(value / 1024 ** 2).toFixed(1)} MiB`
   }
-  if (format === METRIC_FORMATS.ms) return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ms`
-  if (format === METRIC_FORMATS.cores) return `${value.toLocaleString(undefined, { maximumFractionDigits: 3 })} cores`
+  if (format === METRIC_FORMATS.ms) return `${formatNumber(value, { maximumFractionDigits: 1 })} ms`
+  if (format === METRIC_FORMATS.cores) return `${formatNumber(value, { maximumFractionDigits: 3 })} cores`
   if (format === METRIC_FORMATS.percent) return `${value.toFixed(1)}%`
-  return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+  return formatNumber(value, { maximumFractionDigits: 0 })
 }
 
 function metricValue(metricsByName, name, aggregate) {
@@ -254,7 +255,7 @@ function kpiValue(kpi, metricsByName) {
     const total = metricValue(metricsByName, kpi.overMetric, 'sum')
     if (!total) return null
     const value = metricValue(metricsByName, kpi.metric, 'sum') || 0
-    return `${value.toLocaleString()} / ${total.toLocaleString()}`
+    return `${formatNumber(value)} / ${formatNumber(total)}`
   }
   return metricValue(metricsByName, kpi.metric, kpi.aggregate)
 }
@@ -308,7 +309,7 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
           labelKey: 'apm.resourceCountKpi',
           detailKey: collectsMetrics ? null : 'apm.topologyOnly',
           detailValue: null,
-          value: group.resourceCount.toLocaleString(),
+          value: formatNumber(group.resourceCount),
         },
         ...catalog.kpis.map(kpi => {
           const value = kpiValue(kpi, metricsByName)

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildResourceMetricSections, catalogFor, formatMetricValue } from '../components/cloud/apm/metricCatalog'
+import { settings } from '../composables/useSettings'
 
 describe('metricCatalog', () => {
   it('builds one section per resource type present in the application', () => {
@@ -164,10 +165,22 @@ describe('metricCatalog', () => {
     expect(deployment.charts.some(chart => chart.metric === 'log_bytes')).toBe(true)
   })
 
+  afterEach(() => { settings.lang = 'es' })
+
   it('formats each metric unit consistently', () => {
+    settings.lang = 'en'
     expect(formatMetricValue(null, 'bytes')).toBe('-')
     expect(formatMetricValue(1536 * 1024 ** 2, 'bytes')).toBe('1.50 GiB')
     expect(formatMetricValue(12.345, 'ms')).toBe('12.3 ms')
     expect(formatMetricValue(0.1234, 'cores')).toBe('0.123 cores')
+  })
+
+  it('formats numbers in the app language, not the OS locale', () => {
+    settings.lang = 'en'
+    expect(formatMetricValue(12.345, 'ms')).toBe('12.3 ms')
+    expect(formatMetricValue(12345, 'count')).toBe('12,345')
+    settings.lang = 'es'
+    expect(formatMetricValue(12.345, 'ms')).toBe('12,3 ms')
+    expect(formatMetricValue(12345, 'count')).toBe('12.345')
   })
 })

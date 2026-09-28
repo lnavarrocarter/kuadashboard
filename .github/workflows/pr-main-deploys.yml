@@ -5,11 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Note: `projects` is not a valid GITHUB_TOKEN permission (it made the whole
+# workflow file invalid). Adding failure issues to a Projects V2 board needs a
+# PAT or GitHub App token in the DEPLOYMENT_PROJECT_TOKEN secret instead.
 permissions:
   contents: read
   issues: write
   pull-requests: read
-  projects: write
 
 concurrency:
   group: pr-main-deploys-${{ github.event.pull_request.number || github.ref }}
@@ -32,6 +34,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Run backend unit tests
+        run: npm test
 
       - name: Run frontend unit tests
         working-directory: frontend
@@ -143,6 +148,9 @@ jobs:
           # Set this secret to the GitHub Project V2 ID to auto-add the issue to that board.
           PROJECT_V2_ID: ${{ secrets.DEPLOYMENT_PROJECT_V2_ID }}
         with:
+          # GITHUB_TOKEN cannot write to Projects V2; DEPLOYMENT_PROJECT_TOKEN (PAT/App
+          # token with project + issues access) enables that step when configured.
+          github-token: ${{ secrets.DEPLOYMENT_PROJECT_TOKEN || github.token }}
           script: |
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const prNumber = context.payload.pull_request?.number;
@@ -174,15 +182,20 @@ jobs:
             });
 
             if (process.env.PROJECT_V2_ID) {
-              await github.graphql(
-                `mutation($projectId: ID!, $issueId: ID!) {
-                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $issueId }) {
-                    item { id }
+              // Best effort: the issue above is the important part of this job.
+              try {
+                await github.graphql(
+                  `mutation($projectId: ID!, $issueId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $issueId }) {
+                      item { id }
+                    }
+                  }`,
+                  {
+                    projectId: process.env.PROJECT_V2_ID,
+                    issueId: issue.data.node_id,
                   }
-                }`,
-                {
-                  projectId: process.env.PROJECT_V2_ID,
-                  issueId: issue.data.node_id,
-                }
-              );
+                );
+              } catch (error) {
+                core.warning(`Could not add issue #${issue.data.number} to the project: ${error.message}`);
+              }
             }

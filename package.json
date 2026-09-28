@@ -10,6 +10,8 @@
   "scripts": {
     "native:node": "node scripts/ensure-node-native.js",
     "prestart": "npm run native:node",
+    "pretest": "npm run native:node",
+    "test": "node --test \"lib/**/*.test.js\" \"routes/**/*.test.js\" \"scripts/**/*.test.js\"",
     "start": "cross-env PORT=7190 node server.js",
     "predev": "npm run native:node",
     "dev": "cross-env PORT=7192 nodemon server.js",

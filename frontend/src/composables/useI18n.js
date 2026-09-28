@@ -44,6 +44,17 @@ export function useI18n() {
   return { t }
 }
 
+const NUMBER_LOCALES = { es: 'es', en: 'en-US' }
+
+/**
+ * Format a number in the app language (settings.lang), not the OS locale, so
+ * separators match the rest of the UI. Reactive when called from a template/computed.
+ * e.g. formatNumber(2880) → '2,880' (en) / '2880' (es)
+ */
+export function formatNumber(value, options) {
+  return Number(value).toLocaleString(NUMBER_LOCALES[settings.lang] || NUMBER_LOCALES.es, options)
+}
+
 /**
  * Standalone t() for use outside setup() (e.g. in computed config arrays).
  * Returns the current translation without reactivity — call inside computed() for reactivity.

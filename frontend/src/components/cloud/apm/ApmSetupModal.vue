@@ -199,7 +199,7 @@
         <i data-lucide="shield-check"></i>
         <div>
           <strong>{{ t('apm.costGuard') }}</strong>
-          <p>{{ t('apm.costForecast', { count: selectedLambdaCount, maximum: maximumForecast.toLocaleString() }) }}</p>
+          <p>{{ t('apm.costForecast', { count: selectedLambdaCount, maximum: formatNumber(maximumForecast) }) }}</p>
           <p>{{ t('apm.costDisclaimer') }}</p>
         </div>
         <label class="poll-toggle"><input v-model="form.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
@@ -233,7 +233,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../../BaseModal.vue'
 import { useApmStore } from '../../../stores/useApmStore'
-import { useI18n } from '../../../composables/useI18n'
+import { formatNumber, useI18n } from '../../../composables/useI18n'
 import { apmResourceIcon, apmResourceLabel, apmResourceLocation } from './resourcePresentation'
 
 const props = defineProps({
