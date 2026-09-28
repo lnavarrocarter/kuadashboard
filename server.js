@@ -94,6 +94,8 @@ const apmScheduler = new ApmScheduler({
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
 apmScheduler.start();
+// GCP resource state polling: runs only for profiles that enabled it (off by default)
+gcpRoutes.startStatePoller();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
 // where the first WebSocket.Server's upgrade listener destroys sockets meant for the second.
 const wss        = new WebSocket.Server({ noServer: true });
@@ -2829,6 +2831,8 @@ wssGcpSsh.on('connection', (ws, req) => {
         send({ type: 'status', data: prepared.reused
           ? `Reusing your KUA key already trusted by ${where} (valid until ${until}). Connecting to ${prepared.username}@${prepared.host}…`
           : `KUA key added to ${where} (valid until ${until}). Connecting to ${prepared.username}@${prepared.host}…` });
+        gcpRoutes.recordUserAction(req.consoleSession.session.profileId, project, 'gcp-vm', `${zone}/${name}`, name, 'ssh',
+          { user: prepared.username, mode: prepared.mode, keyRenewed: !prepared.reused });
         if (!prepared.reused) {
           auditLog.log({
             category: 'gcp', action: 'VM SSH key authorized', resource: `${zone}/${name}`,
@@ -3175,6 +3179,7 @@ function shutdown(signal) {
   shuttingDown = true;
   clearInterval(apmCleanupInterval);
   apmScheduler.stop();
+  gcpRoutes.stopStatePoller();
   console.log(`[server] ${signal} received, shutting down`);
 
   const forceExit = setTimeout(() => {
