@@ -14,6 +14,13 @@
         </button>
       </div>
       <AwsAccessRequestModal
+        :show="!!activityAccess"
+        :access="activityAccess?.access || null"
+        :message="activityAccess?.text || ''"
+        :identity="awsStore.overview?.identity || null"
+        @close="activityAccess = null"
+      />
+      <AwsAccessRequestModal
         :show="accessModalOpen"
         :access="awsStore.accessRequest"
         :message="awsStore.error || ''"
@@ -218,6 +225,10 @@
       </div>
 
       <div v-show="activeTab === 'lambda'" class="tab-panel">
+        <div v-if="lambdaActivityNotice" class="activity-notice">
+          <span>{{ lambdaActivityNotice.text }}</span>
+          <button v-if="lambdaActivityNotice.access" class="btn sm" @click="activityAccess = lambdaActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
+        </div>
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? 'No matches.' : 'No Lambda functions found.' }}</div>
         <table v-else class="cloud-table">
@@ -228,10 +239,12 @@
             <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
             <th :class="thClass('state')"        @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
             <th :class="thClass('lastModified')" @click="sortBy('lastModified')">Modified <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th :class="thClass('invocations24h')" @click="sortBy('invocations24h')" :title="t('awsActivity.invocationsHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('invocations24h') }}</span></th>
+            <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')">{{ t('awsActivity.logs') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
             <th>Tags</th><th>Actions</th>
           </tr></thead>
           <tbody>
-            <tr v-for="fn in sortRows(filteredLambda)" :key="fn.name">
+            <tr v-for="fn in sortRows(lambdaRows)" :key="fn.name">
               <td>
                 <div>{{ fn.name }}</div>
                 <div v-if="fn.description" class="text-dim mono-xs">{{ fn.description }}</div>
@@ -241,6 +254,20 @@
               <td class="text-dim">{{ fn.timeout }}s</td>
               <td><span :class="lambdaStateClass(fn.state)">{{ fn.state }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ fn.lastModified ? formatDate(fn.lastModified) : '-' }}</td>
+              <td class="activity-cell">
+                <template v-if="fn.invocations24h == null"><span class="text-dim">{{ lambdaActivityLoading ? '…' : '—' }}</span></template>
+                <template v-else>
+                  <span :class="fn.invocations24h ? '' : 'text-dim'">{{ fn.invocations24h.toLocaleString() }}</span>
+                  <span v-if="fn.errors24h" class="status-err activity-errors" :title="t('awsActivity.errorsHint', { n: fn.errors24h })">✗ {{ fn.errors24h.toLocaleString() }}</span>
+                </template>
+              </td>
+              <td>
+                <button
+                  v-if="fn.logStatus" :class="['log-badge', fn.logStatus]" :title="lambdaLogTitle(fn)"
+                  @click="fn.logStatus === 'missing' ? openLogging('lambda', fn) : openLogs('lambda', fn.name)"
+                >{{ t(`awsActivity.log_${fn.logStatus}`) }}</button>
+                <span v-else class="text-dim">{{ lambdaActivityLoading ? '…' : '—' }}</span>
+              </td>
               <td>
                 <div class="tag-chips">
                   <span v-for="(v, k) in (fn.tags || {})" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
@@ -456,6 +483,10 @@
       </div>
 
       <div v-show="activeTab === 'stepfn'" class="tab-panel">
+        <div v-if="stepFnActivityNotice" class="activity-notice">
+          <span>{{ stepFnActivityNotice.text }}</span>
+          <button v-if="stepFnActivityNotice.access" class="btn sm" @click="activityAccess = stepFnActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
+        </div>
         <div v-if="awsStore.loading" class="empty-row">Loading...</div>
         <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? 'No matches.' : 'No Step Functions found.' }}</div>
         <table v-else class="cloud-table">
@@ -464,10 +495,12 @@
             <th :class="thClass('type')"         @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
             <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
             <th>Executions</th>
+            <th :class="thClass('started24h')" @click="sortBy('started24h')" :title="t('awsActivity.sfnHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('started24h') }}</span></th>
+            <th :class="thClass('loggingRank')" @click="sortBy('loggingRank')">{{ t('awsActivity.logging') }} <span class="sort-icon">{{ sortIcon('loggingRank') }}</span></th>
             <th>Tags</th><th>ARN</th><th>Actions</th>
           </tr></thead>
           <tbody>
-            <tr v-for="sm in sortRows(filteredStepFn)" :key="sm.arn">
+            <tr v-for="sm in sortRows(stepFnRows)" :key="sm.arn">
               <td>{{ sm.name }}</td>
               <td><span :class="sm.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ sm.type }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(sm.creationDate) }}</td>
@@ -484,6 +517,19 @@
                 <template v-else>
                   <span class="text-dim" style="font-size:11px">—</span>
                 </template>
+              </td>
+              <td class="activity-cell">
+                <template v-if="sm.started24h == null"><span class="text-dim">{{ stepFnActivityLoading ? '…' : '—' }}</span></template>
+                <template v-else>
+                  <span :class="sm.started24h ? '' : 'text-dim'">{{ sm.started24h.toLocaleString() }}</span>
+                  <span v-if="sm.failed24h" class="status-err activity-errors" :title="t('awsActivity.sfnFailedHint', { n: sm.failed24h })">✗ {{ sm.failed24h.toLocaleString() }}</span>
+                </template>
+              </td>
+              <td>
+                <span v-if="sm.logging" :class="['log-badge', sm.logging.level === 'OFF' ? 'missing' : 'ok']" :title="stepFnLoggingTitle(sm)">
+                  {{ sm.logging.level === 'OFF' ? t('awsActivity.loggingOff') : sm.logging.level }}
+                </span>
+                <span v-else class="text-dim">{{ stepFnActivityLoading ? '…' : '—' }}</span>
               </td>
               <td>
                 <div class="tag-chips">
@@ -3843,12 +3889,66 @@ const filteredEc2         = computed(() => filterRows(awsStore.ec2Instances,    
 const filteredEcs         = computed(() => filterRows(awsStore.ecsServices,      search.ecs))
 const filteredEks         = computed(() => filterRows(awsStore.eksClusters,      search.eks))
 const filteredLambda      = computed(() => filterRows(awsStore.lambdas,          search.lambda))
+
+// ── 24h activity and log state (loaded after the table) ──────────────────────
+const lambdaActivityLoading = ref(false)
+const stepFnActivityLoading = ref(false)
+const activityAccess = ref(null)
+const LOG_STATUS_RANK = { missing: 0, unknown: 1, empty: 2, ok: 3 }
+const LOGGING_RANK = { OFF: 0, FATAL: 1, ERROR: 2, ALL: 3 }
+
+async function loadLambdaActivity() {
+  lambdaActivityLoading.value = true
+  try { await awsStore.fetchLambdaActivity() } finally { lambdaActivityLoading.value = false }
+}
+async function loadStepFnActivity() {
+  stepFnActivityLoading.value = true
+  try { await awsStore.fetchStepFnActivity() } finally { stepFnActivityLoading.value = false }
+}
+
+const lambdaRows = computed(() => {
+  const byName = awsStore.lambdaActivity?.functions || {}
+  return filteredLambda.value.map(fn => {
+    const a = byName[fn.name]
+    return a
+      ? { ...fn, invocations24h: a.invocations, errors24h: a.errors, logStatus: a.logStatus, logStatusRank: LOG_STATUS_RANK[a.logStatus], logInfo: a }
+      : fn
+  })
+})
+
+function activityNotice(activity, parts) {
+  if (!activity) return null
+  if (activity.failed) return { text: t('awsActivity.failed', { error: activity.failed }), access: activity.access }
+  const failure = parts.map(key => activity[key]).find(Boolean)
+  return failure ? { text: t('awsActivity.partial', { reason: failure.error?.message || '' }), access: failure.access } : null
+}
+const lambdaActivityNotice = computed(() => activityNotice(awsStore.lambdaActivity, ['metricsError', 'logsError']))
+const stepFnActivityNotice = computed(() => activityNotice(awsStore.stepFnActivity, ['metricsError', 'loggingError']))
+
+function lambdaLogTitle(fn) {
+  const info = fn.logInfo || {}
+  const retention = info.retentionInDays ? t('awsActivity.retentionDays', { n: info.retentionInDays }) : t('awsActivity.retentionNever')
+  return `${info.logGroup || ''} · ${t(`awsActivity.logHint_${fn.logStatus}`)}${fn.logStatus === 'ok' || fn.logStatus === 'empty' ? ` · ${retention}` : ''}`
+}
 const filteredApigw       = computed(() => filterRows(awsStore.apiGateways,      search.apigw))
 const filteredS3          = computed(() => filterRows(awsStore.s3Buckets,        search.s3))
 const filteredEcr         = computed(() => filterRows(awsStore.ecrRepos,         search.ecr))
 const filteredVpc         = computed(() => filterRows(awsStore.vpcs,             search.vpc))
 const filteredEventBridge = computed(() => filterRows(awsStore.eventBridgeRules, search.eventbridge))
 const filteredStepFn      = computed(() => filterRows(awsStore.stepFunctions,    search.stepfn))
+const stepFnRows = computed(() => {
+  const byArn = awsStore.stepFnActivity?.stateMachines || {}
+  return filteredStepFn.value.map(sm => {
+    const a = byArn[sm.arn]
+    return a
+      ? { ...sm, started24h: a.executions?.started ?? null, failed24h: a.executions ? a.executions.failed + a.executions.timedOut : null, logging: a.logging, loggingRank: LOGGING_RANK[a.logging?.level] ?? -1 }
+      : sm
+  })
+})
+function stepFnLoggingTitle(sm) {
+  if (sm.logging.level === 'OFF') return t('awsActivity.loggingOffHint')
+  return `${sm.logging.logGroup || ''} · ${sm.logging.includeExecutionData ? t('awsActivity.withExecutionData') : t('awsActivity.withoutExecutionData')}`
+}
 const filteredDynamo      = computed(() => filterRows(awsStore.dynamoTables,     search.dynamodb))
 const filteredRds         = computed(() => filterRows(awsStore.rdsClusters,      search.rds))
 const filteredGlue        = computed(() => filterRows(awsStore.glueJobs,         search.glue))
@@ -3998,13 +4098,13 @@ const fetchMap = {
   ec2:          () => awsStore.fetchEc2Instances(),
   ecs:          () => awsStore.fetchEcsServices(),
   eks:          () => awsStore.fetchEksClusters(),
-  lambda:       () => awsStore.fetchLambdas(),
+  lambda:       async () => { await awsStore.fetchLambdas(); loadLambdaActivity() },
   apigw:        () => awsStore.fetchApiGateways(),
   s3:           () => awsStore.fetchS3Buckets(),
   ecr:          () => awsStore.fetchEcrRepos(),
   vpc:          () => awsStore.fetchVpcs(),
   eventbridge:  () => awsStore.fetchEventBridgeRules(),
-  stepfn:       () => awsStore.fetchStepFunctions(),
+  stepfn:       async () => { await awsStore.fetchStepFunctions(); loadStepFnActivity() },
   dynamodb:     () => awsStore.fetchDynamoTables(),
   rds:          () => awsStore.fetchRdsClusters(),
   glue:         () => awsStore.fetchGlueJobs(),
@@ -4165,7 +4265,8 @@ async function reloadLogs() {
   try {
     const data = await awsStore.fetchLogs(logsModal.type, logsModal.name, logsModal.cluster, logsModal.minutes)
     if (!data) { logsModal.error = awsStore.error || 'Failed'; return }
-    if (data.message && !data.events?.length) logsModal.error = data.message
+    if (data.logGroupStatus === 'missing') logsModal.error = t('awsActivity.noLogGroup', { group: data.logGroupName })
+    else if (data.message && !data.events?.length) logsModal.error = data.message
     logsModal.logGroupName = data.logGroupName ?? null
     logsModal.events       = data.events ?? []
   } catch (e) { logsModal.error = e.message }

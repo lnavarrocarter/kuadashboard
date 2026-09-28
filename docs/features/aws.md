@@ -150,6 +150,11 @@ Browse all EKS clusters:
 
 ### Lambda Functions
 
+The table adds two sortable columns, loaded right after the list:
+
+- **24h** — invocations of the last 24 hours, with errors in red (CloudWatch, one bulk query for all functions).
+- **Logs** — the state of the function's CloudWatch Logs group, using its real group (custom `LoggingConfig` groups included): **Active** (has stored logs), **Empty**, **No log group** (the function never logged or the group was deleted; click to create it) or **Unknown** (the groups could not be read). Opening logs for a function without a log group shows a clear notice instead of an error.
+
 Manage Lambda functions with a rich detail modal — click any function name to open it.
 
 - Function name, description, runtime (Node.js / Python / Go / Java / etc.), memory (MB), timeout (s), state, last modified
@@ -381,6 +386,8 @@ Manage event-driven rules across all event buses:
 - **Config** — view full rule configuration
 
 ### Step Functions
+
+Two sortable columns show the **24h** executions started (with failed or timed-out ones in red) from CloudWatch, which also covers Express machines, and the **Logging** level (`ALL`, `ERROR`, `FATAL` or **Off**, flagged because failed executions then leave no logs), with the log group in the tooltip.
 
 Visualise and inspect state machines:
 

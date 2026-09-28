@@ -38,6 +38,8 @@
  *   GET  /cloudformation/stacks             → list CloudFormation stacks
  *   GET  /rds                               → list RDS instances
  *   GET  /logs/lambda/:name                 → CloudWatch logs for a Lambda function
+ *   POST /lambda/activity                   → 24h invocations/errors and log group state per function
+ *   POST /stepfunctions/activity            → 24h executions and logging settings per state machine
  *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
  * NOTE: AWS SDK v3 packages are lazy-required. Install them with:
@@ -65,6 +67,7 @@ const {
 } = require('../lib/eksObservability');
 const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
 const { buildAwsOverview } = require('../lib/awsOverview');
+const { validLambdaFunctions, validStateMachines, lambdaActivity, stepFunctionsActivity } = require('../lib/awsActivity');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -1044,7 +1047,7 @@ router.get('/lambda', async (req, res) => {
       description:  f.Description,
       state:        f.State,
       arn:          f.FunctionArn,
-      logGroup:     `/aws/lambda/${f.FunctionName}`,
+      logGroup:     f.LoggingConfig?.LogGroup || `/aws/lambda/${f.FunctionName}`,
       tags:         [],
     })));
   } catch (err) { handleErr(res, err); }
@@ -1131,13 +1134,28 @@ router.get('/logs/lambda/:name', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { LambdaClient, GetFunctionConfigurationCommand } = require('@aws-sdk/client-lambda');
     const client       = new CloudWatchLogsClient(cfg);
-    const logGroupName = `/aws/lambda/${req.params.name}`;
     const limit        = Math.min(parseInt(req.query.limit) || 200, 500);
     const minutes      = Math.min(parseInt(req.query.minutes) || 60, 1440);
     const startTime    = Date.now() - minutes * 60 * 1000;
 
-    const resp = await client.send(new FilterLogEventsCommand({ logGroupName, limit, startTime }));
+    // Functions may log to a custom group (LoggingConfig); fall back to the default name
+    // if the configuration cannot be read.
+    let logGroupName = `/aws/lambda/${req.params.name}`;
+    try {
+      const conf = await new LambdaClient(cfg).send(new GetFunctionConfigurationCommand({ FunctionName: req.params.name }));
+      logGroupName = conf.LoggingConfig?.LogGroup || logGroupName;
+    } catch { /* keep the default log group */ }
+
+    let resp;
+    try {
+      resp = await client.send(new FilterLogEventsCommand({ logGroupName, limit, startTime }));
+    } catch (err) {
+      // Typed "no log group" answer instead of an error the UI has to parse.
+      if (err.name === 'ResourceNotFoundException') return res.json({ logGroupName, logGroupStatus: 'missing', events: [] });
+      throw err;
+    }
     try {
       captureLambdaLogEvents({
         database: getApmDatabase(),
@@ -1152,12 +1170,53 @@ router.get('/logs/lambda/:name', async (req, res) => {
     }
     res.json({
       logGroupName,
+      logGroupStatus: 'ok',
       events: (resp.events || []).map(e => ({
         timestamp:     e.timestamp,
         message:       e.message,
         logStreamName: e.logStreamName,
       })),
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /lambda/activity ───────────────────────────────────────────────────
+// The client sends the functions it already listed (name + log group); the
+// server validates them and reads metrics and log groups in bulk.
+
+router.post('/lambda/activity', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const functions = validLambdaFunctions(req.body?.functions);
+    if (!functions) return res.status(400).json({ error: 'Invalid function list' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const sdk = pkg => ({
+      'client-cloudwatch': { CloudWatchClient, GetMetricDataCommand },
+      'client-cloudwatch-logs': { CloudWatchLogsClient, DescribeLogGroupsCommand },
+    })[pkg];
+    res.json(await lambdaActivity(cfg, functions, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── POST /stepfunctions/activity ────────────────────────────────────────────
+
+router.post('/stepfunctions/activity', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const machines = validStateMachines(req.body?.stateMachines);
+    if (!machines) return res.status(400).json({ error: 'Invalid state machine list' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const { SFNClient, DescribeStateMachineCommand } = require('@aws-sdk/client-sfn');
+    const sdk = pkg => ({
+      'client-cloudwatch': { CloudWatchClient, GetMetricDataCommand },
+      'client-sfn': { SFNClient, DescribeStateMachineCommand },
+    })[pkg];
+    res.json(await stepFunctionsActivity(cfg, machines, { sdk }));
   } catch (err) { handleErr(res, err); }
 });
 

@@ -70,7 +70,16 @@
     "apigateway:GET"
   ],
   "GET /logs/lambda/:name": [
+    "lambda:GetFunctionConfiguration",
     "logs:FilterLogEvents"
+  ],
+  "POST /lambda/activity": [
+    "cloudwatch:GetMetricData",
+    "logs:DescribeLogGroups"
+  ],
+  "POST /stepfunctions/activity": [
+    "cloudwatch:GetMetricData",
+    "states:DescribeStateMachine"
   ],
   "GET /logs/ecs/:cluster/:service": [
     "logs:DescribeLogGroups",

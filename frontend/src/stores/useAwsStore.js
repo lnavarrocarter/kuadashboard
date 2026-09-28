@@ -40,6 +40,8 @@ export const useAwsStore = defineStore('aws', () => {
   const cognitoUserPools = ref([])
   const secrets          = ref([])
   const cwDashboards     = ref([])
+  const lambdaActivity   = ref(null)
+  const stepFnActivity   = ref(null)
   const dataPipelines    = ref([])
   const bedrockModels    = ref([])
   const lexBots          = ref([])
@@ -111,6 +113,8 @@ export const useAwsStore = defineStore('aws', () => {
     cognitoUserPools.value = []
     secrets.value          = []
     cwDashboards.value     = []
+    lambdaActivity.value   = null
+    stepFnActivity.value   = null
     dataPipelines.value    = []
     bedrockModels.value    = []
     lexBots.value          = []
@@ -942,6 +946,40 @@ export const useAwsStore = defineStore('aws', () => {
     return apiFetch(`/api/cloud/aws/cloudwatch/logs-query/${encodeURIComponent(queryId)}?region=${encodeURIComponent(region)}`, { headers: headers() })
   }
 
+  // 24h activity and log state for the Lambda / Step Functions tables. Loaded
+  // after the table, never blocking it; failures stay inside the result.
+  async function fetchLambdaActivity() {
+    if (!lambdas.value.length) { lambdaActivity.value = null; return null }
+    const profile = activeProfileId.value
+    try {
+      const data = await apiFetch('/api/cloud/aws/lambda/activity', {
+        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ functions: lambdas.value.map(fn => ({ name: fn.name, logGroup: fn.logGroup })) }),
+      })
+      if (profile === activeProfileId.value) lambdaActivity.value = data
+      return data
+    } catch (e) {
+      if (profile === activeProfileId.value) lambdaActivity.value = { failed: e.message, access: e.details?.access || null }
+      return null
+    }
+  }
+
+  async function fetchStepFnActivity() {
+    if (!stepFunctions.value.length) { stepFnActivity.value = null; return null }
+    const profile = activeProfileId.value
+    try {
+      const data = await apiFetch('/api/cloud/aws/stepfunctions/activity', {
+        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stateMachines: stepFunctions.value.map(sm => ({ arn: sm.arn })) }),
+      })
+      if (profile === activeProfileId.value) stepFnActivity.value = data
+      return data
+    } catch (e) {
+      if (profile === activeProfileId.value) stepFnActivity.value = { failed: e.message, access: e.details?.access || null }
+      return null
+    }
+  }
+
   async function fetchSecrets() {
     loading.value = true; error.value = null
     try { secrets.value = await apiFetch('/api/cloud/aws/secrets', { headers: headers() }) }
@@ -1086,11 +1124,11 @@ export const useAwsStore = defineStore('aws', () => {
     activeProfileId, overview, overviewInsights, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
-    cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards,
+    cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions,
+    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
     fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,

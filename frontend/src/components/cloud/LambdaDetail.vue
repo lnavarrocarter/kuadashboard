@@ -185,19 +185,15 @@
                   <span>CloudWatch Logs</span>
                   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                     <select v-model="logsState.minutes" class="lmd-select" @change="loadLogs" style="font-size:.78rem">
-                      <option :value="15">15 min</option>
-                      <option :value="60">1 hora</option>
-                      <option :value="180">3 horas</option>
-                      <option :value="720">12 horas</option>
-                      <option :value="1440">24 horas</option>
+                      <option v-for="m in LOG_MINUTES" :key="m" :value="m">{{ minutesLabel(m) }}</option>
                     </select>
-                    <button class="btn sm" @click="loadLogs" :disabled="logsState.loading">{{ logsState.loading ? '...' : '↺ Refresh' }}</button>
+                    <button class="btn sm" @click="loadLogs" :disabled="logsState.loading">{{ logsState.loading ? '...' : `↺ ${t('action.refresh')}` }}</button>
                   </div>
                 </div>
                 <dl style="margin-top:4px">
                   <dt>Log Group</dt>
                   <dd class="mono wrap" style="font-size:.8rem">{{ data.basic.logGroup || `/aws/lambda/${data.basic.name}` }}</dd>
-                  <dt>Formato</dt>
+                  <dt>{{ t('lambdaLogs.format') }}</dt>
                   <dd>{{ data.basic.logFormat || 'Text' }}</dd>
                 </dl>
               </div>
@@ -205,19 +201,14 @@
               <!-- No log group → opción de crear -->
               <div v-if="logsState.noGroup" class="lmd-logs-nogroup">
                 <div style="font-size:1.8rem">📭</div>
-                <div>No se encontró el log group <span class="mono-xs">{{ data.basic.logGroup || `/aws/lambda/${data.basic.name}` }}</span> en CloudWatch.</div>
-                <div style="font-size:.82rem;color:#8b949e">La función no ha generado logs todavía o el log group fue eliminado.</div>
+                <div>{{ t('lambdaLogs.noGroupTitle') }} <span class="mono-xs">{{ logsState.logGroup || data.basic.logGroup || `/aws/lambda/${data.basic.name}` }}</span></div>
+                <div style="font-size:.82rem;color:#8b949e">{{ t('lambdaLogs.noGroupReason') }}</div>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
                   <select v-model="logsState.createRetention" class="lmd-select">
-                    <option :value="7">Retención: 7 días</option>
-                    <option :value="14">Retención: 14 días</option>
-                    <option :value="30">Retención: 30 días</option>
-                    <option :value="60">Retención: 60 días</option>
-                    <option :value="90">Retención: 90 días</option>
-                    <option :value="365">Retención: 1 año</option>
+                    <option v-for="d in RETENTION_DAYS" :key="d" :value="d">{{ t('lambdaLogs.retention', { days: d }) }}</option>
                   </select>
                   <button class="btn" @click="createLogGroup" :disabled="logsState.creating">
-                    {{ logsState.creating ? 'Creando...' : '+ Crear Log Group en CloudWatch' }}
+                    {{ logsState.creating ? t('lambdaLogs.creating') : t('lambdaLogs.create') }}
                   </button>
                 </div>
                 <div v-if="logsState.createResult" class="lmd-logs-ok">{{ logsState.createResult }}</div>
@@ -228,7 +219,7 @@
               <template v-else-if="!logsState.loading">
                 <div v-if="logsState.error && !logsState.noGroup" class="lmd-error" style="margin-bottom:8px">{{ logsState.error }}</div>
                 <div v-if="!logsState.events.length && !logsState.error" class="text-dim" style="text-align:center;padding:24px;font-size:.85rem">
-                  Sin eventos en el período seleccionado.
+                  {{ t('lambdaLogs.noEvents') }}
                 </div>
                 <div v-else class="lmd-logs-wrap">
                   <div v-for="(e, i) in logsState.events" :key="i" class="lmd-log-row">
@@ -385,7 +376,15 @@
 </template>
 
 <script setup>
+import { useI18n } from '../../composables/useI18n'
 import { ref, computed, watch } from 'vue'
+
+const { t } = useI18n()
+const LOG_MINUTES = [15, 60, 180, 720, 1440]
+const RETENTION_DAYS = [7, 14, 30, 60, 90, 365]
+function minutesLabel(m) {
+  return m < 60 ? t('lambdaLogs.minutes', { n: m }) : t('lambdaLogs.hours', { n: m / 60 })
+}
 
 const props = defineProps({
   open:      { type: Boolean, default: false },
@@ -459,15 +458,16 @@ async function loadLogs() {
     const res = await fetch(url, { headers: h })
     if (!res.ok) {
       const b = await res.json().catch(() => ({}))
-      const msg = b.error || `HTTP ${res.status}`
-      if (msg.includes('ResourceNotFoundException') || msg.includes('does not exist')) {
-        logsState.value.noGroup = true
-      } else {
-        logsState.value.error = msg
-      }
+      logsState.value.error = b.error || `HTTP ${res.status}`
       return
     }
     const d = await res.json()
+    // The API answers a missing log group with a typed status, not an error.
+    if (d.logGroupStatus === 'missing') {
+      logsState.value.noGroup = true
+      logsState.value.logGroup = d.logGroupName
+      return
+    }
     logsState.value.events = d.events || []
   } catch (e) {
     logsState.value.error = e.message
@@ -496,7 +496,7 @@ async function createLogGroup() {
       throw new Error(b.error || `HTTP ${res.status}`)
     }
     const r = await res.json()
-    logsState.value.createResult = `Log group "${r.logGroup}" creado con retención de ${r.retentionDays} días.`
+    logsState.value.createResult = t('lambdaLogs.created', { group: r.logGroup, days: r.retentionDays })
     logsState.value.noGroup = false
     // Reload logs after a moment
     setTimeout(() => loadLogs(), 1500)
