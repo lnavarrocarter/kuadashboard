@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '../composables/useApi'
 
@@ -44,3 +44,7 @@ export const usePortForwardStore = defineStore('portforward', () => {
 
   return { list, load, start, stop, persist, autoRestore }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(usePortForwardStore, import.meta.hot))
+}

@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '../composables/useApi'
 
@@ -108,3 +108,7 @@ export const useKubeStore = defineStore('kube', () => {
     loadNamespaces, loadResources,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useKubeStore, import.meta.hot))
+}

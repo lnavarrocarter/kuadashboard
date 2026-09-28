@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUpdateStore = defineStore('update', () => {
@@ -43,3 +43,7 @@ export const useUpdateStore = defineStore('update', () => {
 
   return { updateAvailable, updateDownloaded, updateError, newVersion, installing, initListeners, installUpdate, checkForUpdates }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useUpdateStore, import.meta.hot))
+}

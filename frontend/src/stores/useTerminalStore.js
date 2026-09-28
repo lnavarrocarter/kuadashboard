@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { capabilityRegistry, sessionDescriptor } from '../shared/consoleSession.mjs'
 
@@ -335,3 +335,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     pushHistory, historyFor, clearHistory, clearAllHistory,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useTerminalStore, import.meta.hot))
+}

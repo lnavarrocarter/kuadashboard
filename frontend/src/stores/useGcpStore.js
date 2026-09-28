@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
@@ -487,3 +487,7 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchMonitoringTimeSeries,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useGcpStore, import.meta.hot))
+}
