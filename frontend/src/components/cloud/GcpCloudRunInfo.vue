@@ -149,6 +149,8 @@ const props = defineProps({
 })
 const d = computed(() => props.detail || {})
 
+// GCP returns the default Compute SA by email when no custom one is set
+const DEFAULT_SA = /-compute@developer\.gserviceaccount\.com$/
 const SECRET_NAME = /(secret|token|password|passwd|api[_-]?key|private[_-]?key|credential)/i
 function looksSecret(e) { return !e.secret && SECRET_NAME.test(e.name) && (e.value || '').length >= 8 }
 
@@ -167,7 +169,7 @@ const notes = computed(() => {
   if ((v.scaling?.minInstances || 0) > 0) out.push({ level: 'warn', text: `${v.scaling.minInstances} instancia(s) mínima(s): se facturan 24/7 aunque no haya tráfico.` })
   const plain = (v.envVars || []).filter(looksSecret)
   if (plain.length) out.push({ level: 'err', text: `Posibles secretos en texto plano: ${plain.map(e => e.name).join(', ')}. Usa Secret Manager.` })
-  if (!v.serviceAccount) out.push({ level: 'warn', text: 'Usa la cuenta de servicio por defecto de Compute (suele tener permisos amplios).' })
+  if (!v.serviceAccount || DEFAULT_SA.test(v.serviceAccount)) out.push({ level: 'warn', text: 'Usa la cuenta de servicio por defecto de Compute (suele tener el rol Editor del proyecto). Crea una dedicada con permisos mínimos.' })
   if (v.status === 'failed') out.push({ level: 'err', text: v.statusMessage || 'El último despliegue falló.' })
   return out
 })
