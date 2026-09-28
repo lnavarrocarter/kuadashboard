@@ -54,7 +54,15 @@ export const useAwsStore = defineStore('aws', () => {
   const lambdaActivity   = ref(null)
   const stepFnActivity   = ref(null)
   // When each cached block was fetched, and for which profile/resource set.
-  const fetchedAt = { overview: null, insights: null, lambda: null, stepfn: null }
+  const sqsQueues        = ref([])
+  const sqsTruncated     = ref(false)
+  const sqsActivity      = ref(null)
+  const snsTopics        = ref([])
+  const snsTruncated     = ref(false)
+  const snsActivity      = ref(null)
+  const sesData          = ref(null)
+  const sesMetrics       = ref(null)
+  const fetchedAt = { overview: null, insights: null, lambda: null, stepfn: null, sqs: null, sns: null, ses: null }
   function isFresh(kind, ttl, key) {
     const entry = fetchedAt[kind]
     return !!entry && entry.key === key && Date.now() - entry.at < ttl
@@ -122,6 +130,12 @@ export const useAwsStore = defineStore('aws', () => {
     vpcs.value             = []
     eventBridgeRules.value = []
     stepFunctions.value    = []
+    sqsQueues.value        = []
+    sqsActivity.value      = null
+    snsTopics.value        = []
+    snsActivity.value      = null
+    sesData.value          = null
+    sesMetrics.value       = null
     glueJobs.value         = []
     glueDatabases.value    = []
     rdsClusters.value      = []
@@ -1021,6 +1035,80 @@ export const useAwsStore = defineStore('aws', () => {
     }
   }
 
+  // ── SQS / SNS / SES ─────────────────────────────────────────────────────
+  // Listing SQS queues is billed per request (1 + one per queue); activity and
+  // SES metrics are GetMetricData and follow the activity cache time.
+
+  async function fetchSqsQueues() {
+    loading.value = true; error.value = null
+    try {
+      const data = await apiFetch('/api/cloud/aws/sqs', { headers: headers() })
+      sqsQueues.value = data.queues || []
+      sqsTruncated.value = !!data.truncated
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchSnsTopics() {
+    loading.value = true; error.value = null
+    try {
+      const data = await apiFetch('/api/cloud/aws/sns', { headers: headers() })
+      snsTopics.value = data.topics || []
+      snsTruncated.value = !!data.truncated
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  async function fetchSes() {
+    loading.value = true; error.value = null
+    try { sesData.value = await apiFetch('/api/cloud/aws/ses', { headers: headers() }) }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  // Shared by the three activity loaders: cache per profile + resource list.
+  async function cachedActivity(kind, target, key, load, { force = false } = {}) {
+    const profile = activeProfileId.value
+    const fullKey = `${profile}|${key}`
+    if (!force && target.value && !target.value.failed && isFresh(kind, ttlMs(settings.awsActivityCacheMin, ACTIVITY_TTL_MS), fullKey)) return target.value
+    try {
+      const data = await load()
+      if (profile === activeProfileId.value) {
+        target.value = data
+        markFetched(kind, fullKey)
+      }
+      return data
+    } catch (e) {
+      if (profile === activeProfileId.value) target.value = { failed: e.message, access: e.details?.access || null }
+      return null
+    }
+  }
+
+  function fetchSqsActivity(options) {
+    if (!sqsQueues.value.length) { sqsActivity.value = null; return null }
+    const names = sqsQueues.value.map(q => q.name)
+    return cachedActivity('sqs', sqsActivity, names.join(','), () => apiFetch('/api/cloud/aws/sqs/activity', {
+      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ queues: names }),
+    }), options)
+  }
+
+  function fetchSnsActivity(options) {
+    if (!snsTopics.value.length) { snsActivity.value = null; return null }
+    const topics = snsTopics.value.map(topic => ({ name: topic.name, logging: !!topic.deliveryLogging?.enabled }))
+    return cachedActivity('sns', snsActivity, topics.map(topic => `${topic.name}:${topic.logging}`).join(','), () => apiFetch('/api/cloud/aws/sns/activity', {
+      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ topics }),
+    }), options)
+  }
+
+  function fetchSesMetrics(options) {
+    return cachedActivity('ses', sesMetrics, 'account', () => apiFetch('/api/cloud/aws/ses/metrics', { headers: headers() }), options)
+  }
+
+  // Detail charts: one GetMetricData call (5 metrics) each time a detail opens.
+  function fetchSqsQueueMetrics(name) {
+    return apiFetch(`/api/cloud/aws/sqs/${encodeURIComponent(name)}/metrics`, { headers: headers() })
+  }
+  function fetchSnsTopicMetrics(name) {
+    return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(name)}/metrics`, { headers: headers() })
+  }
+
   async function fetchSecrets() {
     loading.value = true; error.value = null
     try { secrets.value = await apiFetch('/api/cloud/aws/secrets', { headers: headers() }) }
@@ -1166,6 +1254,8 @@ export const useAwsStore = defineStore('aws', () => {
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
+    sqsQueues, sqsTruncated, sqsActivity, snsTopics, snsTruncated, snsActivity, sesData, sesMetrics,
+    fetchSqsQueues, fetchSnsTopics, fetchSes, fetchSqsActivity, fetchSnsActivity, fetchSesMetrics, fetchSqsQueueMetrics, fetchSnsTopicMetrics,
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,

@@ -143,6 +143,38 @@
     "logs:DescribeLogGroups",
     "logs:FilterLogEvents"
   ],
+  "GET /sqs": [
+    "sqs:GetQueueAttributes",
+    "sqs:ListQueues"
+  ],
+  "POST /sqs/activity": [
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /sqs/:name/metrics": [
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /sns": [
+    "sns:GetTopicAttributes",
+    "sns:ListSubscriptions",
+    "sns:ListTopics"
+  ],
+  "POST /sns/activity": [
+    "cloudwatch:GetMetricData",
+    "logs:DescribeLogGroups"
+  ],
+  "GET /sns/:name/metrics": [
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /ses": [
+    "ses:GetAccount",
+    "ses:GetConfigurationSetEventDestinations",
+    "ses:GetEmailIdentity",
+    "ses:ListConfigurationSets",
+    "ses:ListEmailIdentities"
+  ],
+  "GET /ses/metrics": [
+    "cloudwatch:GetMetricData"
+  ],
   "GET /stepfunctions": [
     "states:ListStateMachines"
   ],

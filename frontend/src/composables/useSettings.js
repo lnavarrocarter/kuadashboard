@@ -13,6 +13,7 @@ export const SETTINGS_DEFAULTS = {
   autoRefresh:  5,         // 0 = off, seconds interval
   accentColor:  'blue',    // 'blue' | 'teal' | 'purple' | 'orange'
   // Cache & refresh (Options). Billed AWS reads are reused so auto-refresh does not repeat them.
+  awsListRefreshSec:     30,   // AWS tables: min seconds between auto-refreshes (SQS lists are billed per call)
   awsOverviewCacheMin:   5,    // resource counts (free)
   awsInsightsCacheMin:   15,   // Overview KPIs (CloudWatch GetMetricData, billed)
   awsActivityCacheMin:   15,   // Lambda / Step Functions 24h activity (GetMetricData, billed)

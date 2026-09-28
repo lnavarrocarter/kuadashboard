@@ -398,6 +398,54 @@ Visualiza e inspecciona state machines:
 
 ---
 
+## Mensajería
+
+El menú **Integration** tiene tres pestañas para los servicios de mensajería de AWS. Cada detalle carga gráficos por hora de las últimas 24 h, y cada pestaña indica cuánto cuestan sus lecturas.
+
+### SQS
+
+Muestra las colas (estándar y FIFO) con:
+
+- mensajes visibles y en vuelo;
+- mensajes enviados, recibidos y borrados en las últimas 24 h;
+- dead-letter queue y redrive (`maxReceiveCount`);
+- cifrado (SSE-SQS o KMS) y retención.
+
+Las dead-letter queues se marcan como **DLQ** y sus mensajes visibles se destacan como fallos. **Detalle** muestra la URL, el ARN, los mensajes retrasados, el visibility timeout, qué colas le envían sus fallos, y gráficos de enviados, recibidos, borrados, visibles y antigüedad del mensaje más viejo.
+
+SQS no escribe logs propios: las llamadas a la API llegan a CloudTrail solo como data events. La señal son las métricas de CloudWatch. Una cola sin actividad por unas 6 horas deja de publicarlas, y el detalle lo explica.
+
+**Costo:** SQS cobra cada llamada a la API como una solicitud, incluidas `ListQueues` y `GetQueueAttributes`. Listar N colas cuesta N+1 solicitudes (el primer millón al mes es gratis, luego USD 0.40 por millón). Por eso **Opciones → Caché y actualización → AWS → Auto-actualización de tablas** limita las recargas en segundo plano (30 s por defecto). La actividad de 24 h usa `GetMetricData` de CloudWatch (3 métricas por cola, USD 0.01 por cada 1.000), y abrir un detalle lee 5 métricas más.
+
+### SNS
+
+Muestra los tópicos con:
+
+- suscripciones confirmadas y pendientes, y sus protocolos;
+- mensajes publicados, entregados y fallidos en las últimas 24 h;
+- el estado del **delivery status logging**.
+
+El estado del logging puede ser *Apagado* (ningún protocolo tiene roles de feedback), *Activo*, *Vacío* o *Sin log group*. Se revisa contra los log groups `sns/<región>/<cuenta>/<tópico>[/Failure]`.
+
+**Detalle** lista cada suscripción con su endpoint y estado de confirmación, el logging por protocolo con su muestra de éxitos, y gráficos de publicados, entregados y fallidos.
+
+**Costo:** las llamadas de listado de SNS no tienen cargo relevante. La actividad usa `GetMetricData` (3 métricas por tópico). Los log groups solo se listan cuando algún tópico tiene el logging activo.
+
+### SES
+
+Usa la API SES v2 en la región del perfil:
+
+- **Cuenta:** si el envío está activo, sandbox o acceso a producción, estado de cumplimiento, enviados frente a la cuota de 24 h (se pone amarilla sobre el 80%) y tasa máxima de envío.
+- **Métricas de 24 h:** enviados, entregados, rebotes, quejas y rechazados, con las últimas tasas de rebote y queja. Los gráficos por hora están a un clic.
+- **Identidades:** dominios y correos con su verificación, DKIM, SPF (dominio MAIL FROM propio, o `amazonses.com` si no hay) y configuration set por defecto. **Detalle** muestra adónde van los eventos de cada identidad.
+- **Configuration sets:** los destinos de eventos de cada set (CloudWatch, Firehose, SNS, EventBridge, Pinpoint), activos o no.
+
+Si ningún configuration set tiene un destino activo, un aviso explica que los rebotes, quejas y entregas no quedan registrados en ninguna parte.
+
+**Costo:** las lecturas de la cuenta, las identidades y los configuration sets son gratis. Las métricas de la cuenta usan `GetMetricData` (7 métricas por carga).
+
+En las tres pestañas, la actividad sigue **Opciones → Caché de actividad** (15 minutos por defecto); el botón de actualizar la vuelve a leer. Si faltan permisos, aparece un aviso con **Solicitar acceso**, y la policy sugerida lista las acciones de toda la pantalla (por ejemplo `sqs:ListQueues` y `sqs:GetQueueAttributes`). SQS, SNS y SES se cuentan en el **Resumen** y ya no aparecen como *servicios fuera de KUA*.
+
 ## Características Comunes
 
 Las 19 pestañas de servicios AWS comparten estas funcionalidades globales:

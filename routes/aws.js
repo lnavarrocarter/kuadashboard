@@ -40,6 +40,14 @@
  *   GET  /logs/lambda/:name                 → CloudWatch logs for a Lambda function
  *   POST /lambda/activity                   → 24h invocations/errors and log group state per function
  *   POST /stepfunctions/activity            → 24h executions and logging settings per state machine
+ *   GET  /sqs                               → SQS queues with attributes, DLQ and redrive
+ *   POST /sqs/activity                      → 24h sent/received/deleted per queue
+ *   GET  /sqs/:name/metrics                 → hourly 24h metrics of one queue
+ *   GET  /sns                               → SNS topics, subscriptions and delivery status logging
+ *   POST /sns/activity                      → 24h published/delivered/failed and log groups per topic
+ *   GET  /sns/:name/metrics                 → hourly 24h metrics of one topic
+ *   GET  /ses                               → SES account, identities and configuration sets
+ *   GET  /ses/metrics                       → hourly 24h account sending metrics
  *   GET  /logs/ecs/:cluster/:service        → CloudWatch logs for an ECS service
  *
  * NOTE: AWS SDK v3 packages are lazy-required. Install them with:
@@ -68,6 +76,12 @@ const {
 const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
 const { buildAwsOverview } = require('../lib/awsOverview');
 const { validLambdaFunctions, validStateMachines, lambdaActivity, stepFunctionsActivity } = require('../lib/awsActivity');
+const {
+  QUEUE_NAME_RE, TOPIC_NAME_RE, seriesTotals,
+  listSqsQueues, validQueueNames, sqsActivity, sqsQueueSeries,
+  listSnsTopics, validTopics, snsActivity, snsTopicSeries,
+  sesOverview, sesSeries,
+} = require('../lib/awsMessaging');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -1761,6 +1775,120 @@ router.get('/logs/eventbridge', async (req, res) => {
     }
 
     res.json({ metrics, totals, logGroupName, logEvents, period });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── SQS ──────────────────────────────────────────────────────────────────────
+// SQS bills every API call as a request (first 1M/month free, then USD 0.40
+// per million): listing N queues costs N+1 requests.
+
+router.get('/sqs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SQSClient, ListQueuesCommand, GetQueueAttributesCommand } = require('@aws-sdk/client-sqs');
+    const sdk = () => ({ SQSClient, ListQueuesCommand, GetQueueAttributesCommand });
+    res.json(await listSqsQueues(cfg, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/sqs/activity', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const names = validQueueNames(req.body?.queues);
+    if (!names) return res.status(400).json({ error: 'Invalid queue list' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
+    res.json(await sqsActivity(cfg, names, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/sqs/:name/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    if (!QUEUE_NAME_RE.test(req.params.name)) return res.status(400).json({ error: 'Invalid queue name' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
+    res.json(await sqsQueueSeries(cfg, req.params.name, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── SNS ──────────────────────────────────────────────────────────────────────
+
+router.get('/sns', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { SNSClient, ListTopicsCommand, ListSubscriptionsCommand, GetTopicAttributesCommand } = require('@aws-sdk/client-sns');
+    const sdk = () => ({ SNSClient, ListTopicsCommand, ListSubscriptionsCommand, GetTopicAttributesCommand });
+    res.json(await listSnsTopics(cfg, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/sns/activity', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const topics = validTopics(req.body?.topics);
+    if (!topics) return res.status(400).json({ error: 'Invalid topic list' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const sdk = pkg => ({
+      'client-cloudwatch': { CloudWatchClient, GetMetricDataCommand },
+      'client-cloudwatch-logs': { CloudWatchLogsClient, DescribeLogGroupsCommand },
+    })[pkg];
+    res.json(await snsActivity(cfg, topics, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/sns/:name/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    if (!TOPIC_NAME_RE.test(req.params.name)) return res.status(400).json({ error: 'Invalid topic name' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
+    res.json(await snsTopicSeries(cfg, req.params.name, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── SES (v2) ─────────────────────────────────────────────────────────────────
+
+router.get('/ses', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      SESv2Client, GetAccountCommand, ListEmailIdentitiesCommand, GetEmailIdentityCommand,
+      ListConfigurationSetsCommand, GetConfigurationSetEventDestinationsCommand,
+    } = require('@aws-sdk/client-sesv2');
+    const sdk = () => ({
+      SESv2Client, GetAccountCommand, ListEmailIdentitiesCommand, GetEmailIdentityCommand,
+      ListConfigurationSetsCommand, GetConfigurationSetEventDestinationsCommand,
+    });
+    res.json(await sesOverview(cfg, { sdk }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Account-level send/delivery/bounce/complaint/reject for the last 24h.
+router.get('/ses/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const sdk = () => ({ CloudWatchClient, GetMetricDataCommand });
+    const data = await sesSeries(cfg, { sdk });
+    res.json({ ...data, totals: seriesTotals(data.series) });
   } catch (err) { handleErr(res, err); }
 });
 

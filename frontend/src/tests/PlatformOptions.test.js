@@ -46,21 +46,23 @@ describe('Options: cache & refresh', () => {
     const wrapper = mountHelp()
     await wrapper.findAll('.help-nav-item')[2].trigger('click')
     const rows = () => wrapper.findAll('.opts-row-stack')
-    expect(rows()).toHaveLength(11)
+    expect(rows()).toHaveLength(12)
     expect(wrapper.findAll('.opts-provider').map(p => p.text().split(/[.;]/)[0])).toEqual(expect.arrayContaining([expect.stringContaining('AWS'), expect.stringContaining('Kubernetes'), expect.stringContaining('Google Cloud'), expect.stringContaining('Vercel')]))
-    expect(rows()[0].text()).toContain('Lambda & Step Functions activity')
-    expect(rows()[0].text()).toContain('at most 4 times per hour')
+    expect(rows()[1].text()).toContain('Lambda & Step Functions activity')
+    expect(rows()[1].text()).toContain('at most 4 times per hour')
 
-    await rows()[0].find('select').setValue('60')
+    await rows()[1].find('select').setValue('60')
     expect(settings.awsActivityCacheMin).toBe(60)
-    expect(rows()[0].text()).toContain('at most 1 times per hour')
+    expect(rows()[1].text()).toContain('at most 1 times per hour')
 
-    await rows()[3].find('select').setValue('24')
+    await rows()[4].find('select').setValue('24')
     expect(settings.awsCostCacheHours).toBe(24)
-    expect(rows()[3].text()).toContain('at most 1 requests per day (USD 0.01)')
+    expect(rows()[4].text()).toContain('at most 1 requests per day (USD 0.01)')
+    // AWS tables come first: SQS lists are billed per call.
+    expect(rows()[0].text()).toContain('SQS bills every call')
     // Resource counts are free: no cost marker.
-    expect(rows()[2].find('.opts-note').classes()).not.toContain('billed')
-    expect(rows()[0].find('.opts-note').classes()).toContain('billed')
+    expect(rows()[3].find('.opts-note').classes()).not.toContain('billed')
+    expect(rows()[1].find('.opts-note').classes()).toContain('billed')
   })
 
   it('reset keeps the language and restores cache defaults', async () => {

@@ -551,6 +551,16 @@
       </div>
 
       <!-- ══ DynamoDB ══════════════════════════════════════════════════════ -->
+      <div v-show="activeTab === 'sqs'" class="tab-panel">
+        <AwsSqsTab :search="search.sqs" :activity-loading="sqsActivityLoading" @request-access="activityAccess = $event" />
+      </div>
+      <div v-show="activeTab === 'sns'" class="tab-panel">
+        <AwsSnsTab :search="search.sns" :activity-loading="snsActivityLoading" @request-access="activityAccess = $event" />
+      </div>
+      <div v-show="activeTab === 'ses'" class="tab-panel">
+        <AwsSesTab :search="search.ses" :metrics-loading="sesMetricsLoading" @request-access="activityAccess = $event" />
+      </div>
+
       <div v-show="activeTab === 'dynamodb'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
           <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openDynamoCreate">+ Create Table</button>
@@ -3774,6 +3784,11 @@ import { useAwsStore }  from '../../stores/useAwsStore'
 import { useToast }     from '../../composables/useToast'
 import { useApi }       from '../../composables/useApi'
 import { useSortable }  from '../../composables/useSortable'
+import { settings as appSettings } from '../../composables/useSettings'
+import { createRefreshGate } from '../../composables/refreshGate'
+import AwsSqsTab from './messaging/AwsSqsTab.vue'
+import AwsSnsTab from './messaging/AwsSnsTab.vue'
+import AwsSesTab from './messaging/AwsSesTab.vue'
 import StepFnDiagram       from '../StepFnDiagram.vue'
 import StepFnDetail        from '../StepFnDetail.vue'
 import EventBridgeDetail   from '../EventBridgeDetail.vue'
@@ -3835,6 +3850,9 @@ const TABS = [
   { id: 'vpc',          label: 'VPC'            },
   { id: 'eventbridge',  label: 'EventBridge'    },
   { id: 'stepfn',       label: 'Step Functions' },
+  { id: 'sqs',          label: 'SQS'            },
+  { id: 'sns',          label: 'SNS'            },
+  { id: 'ses',          label: 'SES'            },
   { id: 'dynamodb',     label: 'DynamoDB'       },
   { id: 'rds',          label: 'RDS'            },
   { id: 'glue',         label: 'Glue'           },
@@ -3893,6 +3911,13 @@ const filteredLambda      = computed(() => filterRows(awsStore.lambdas,         
 // ── 24h activity and log state (loaded after the table) ──────────────────────
 const lambdaActivityLoading = ref(false)
 const stepFnActivityLoading = ref(false)
+const sqsActivityLoading = ref(false)
+const snsActivityLoading = ref(false)
+const sesMetricsLoading = ref(false)
+async function withFlag(flag, load) {
+  flag.value = true
+  try { await load() } finally { flag.value = false }
+}
 const activityAccess = ref(null)
 const LOG_STATUS_RANK = { missing: 0, unknown: 1, empty: 2, ok: 3 }
 const LOGGING_RANK = { OFF: 0, FATAL: 1, ERROR: 2, ALL: 3 }
@@ -4068,6 +4093,9 @@ const tabFilteredMap = {
   cloudfront: filteredCloudfront, route53: filteredRoute53,
   cognito: filteredCognito, secrets: filteredSecrets,
   cwdashboards: filteredCwDashboards,
+  sqs: computed(() => filterRows(awsStore.sqsQueues, search.sqs)),
+  sns: computed(() => filterRows(awsStore.snsTopics, search.sns)),
+  ses: computed(() => filterRows(awsStore.sesData?.identities || [], search.ses)),
 }
 
 const activeRowCount = computed(() => tabFilteredMap[activeTab.value]?.value?.length ?? 0)
@@ -4087,6 +4115,7 @@ function tabCount(id) {
     route53: awsStore.route53Zones, cognito: awsStore.cognitoUserPools,
     secrets: awsStore.secrets,
     cwdashboards: awsStore.cwDashboards,
+    sqs: awsStore.sqsQueues, sns: awsStore.snsTopics, ses: awsStore.sesData?.identities,
   }
   return map[id]?.length ?? 0
 }
@@ -4106,6 +4135,10 @@ const fetchMap = {
   vpc:          () => awsStore.fetchVpcs(),
   eventbridge:  () => awsStore.fetchEventBridgeRules(),
   stepfn:       async (o = {}) => { await awsStore.fetchStepFunctions(); loadStepFnActivity({ force: o.force }) },
+  // SQS listing is billed per request; activity and SES metrics are cached (GetMetricData).
+  sqs:          async (o = {}) => { await awsStore.fetchSqsQueues(); withFlag(sqsActivityLoading, () => awsStore.fetchSqsActivity({ force: o.force })) },
+  sns:          async (o = {}) => { await awsStore.fetchSnsTopics(); withFlag(snsActivityLoading, () => awsStore.fetchSnsActivity({ force: o.force })) },
+  ses:          async (o = {}) => { await awsStore.fetchSes(); withFlag(sesMetricsLoading, () => awsStore.fetchSesMetrics({ force: o.force })) },
   dynamodb:     () => awsStore.fetchDynamoTables(),
   rds:          () => awsStore.fetchRdsClusters(),
   glue:         () => awsStore.fetchGlueJobs(),
@@ -4142,7 +4175,14 @@ async function loadTab(id, options = {}) {
   }
 }
 
+// Auto-refresh reloads a table at most every `awsListRefreshSec` (Options):
+// some list APIs are billed per call (SQS). Manual refreshes always load.
+const refreshGate = createRefreshGate()
+
 async function reloadActiveTab(options = {}) {
+  const gateKey = `${selectedProfileId.value}|${activeTab.value}`
+  if (options.background && refreshGate.fresh(gateKey, appSettings.awsListRefreshSec)) return
+  refreshGate.mark(gateKey)
   loaded[activeTab.value] = false
   await loadTab(activeTab.value, options)
 }

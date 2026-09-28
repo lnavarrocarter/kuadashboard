@@ -386,6 +386,8 @@ const reloadsPerHour = n => {
   return Math.round(3600 / Math.max(n, tick))
 }
 const AWS_OPTIONS = [
+  { key: 'awsListRefreshSec', icon: 'table', billed: true, values: [0, 15, 30, 60, 300], label: seconds,
+    note: v => t('opts.awsListNote', { loads: reloadsPerHour(v) }) },
   { key: 'awsActivityCacheMin', icon: 'activity', billed: true, values: [5, 15, 30, 60], label: minutes,
     note: v => t('opts.awsActivityNote', { loads: perHour(v) }) },
   { key: 'awsInsightsCacheMin', icon: 'gauge', billed: true, values: [5, 15, 30, 60], label: minutes,

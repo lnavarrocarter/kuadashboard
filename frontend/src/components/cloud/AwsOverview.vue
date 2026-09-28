@@ -203,6 +203,8 @@ function detailLabel(service) {
     case 'vpc': return t('awsOverview.detailVpc', { custom: d.custom ?? 0 })
     case 'rds': return t('awsOverview.detailRds', { available: d.available ?? 0 })
     case 'eventbridge': return t('awsOverview.detailEventbridge', { enabled: d.enabled ?? 0 })
+    case 'sqs': return d.fifo ? t('awsOverview.detailSqs', { fifo: d.fifo }) : ''
+    case 'ses': return t('awsOverview.detailSes', { verified: d.verified ?? 0 })
     default: return ''
   }
 }

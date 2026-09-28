@@ -398,6 +398,39 @@ Visualise and inspect state machines:
 
 ---
 
+## Messaging
+
+The **Integration** menu has three tabs for AWS messaging services. Each detail loads hourly charts of the last 24h, and every tab says what its reads cost.
+
+### SQS
+
+Queues (standard and FIFO) with messages visible and in flight, messages sent/received/deleted in the last 24h, dead-letter queue and redrive (`maxReceiveCount`), encryption (SSE-SQS or KMS) and retention. Dead-letter queues are marked **DLQ**, and their visible messages are highlighted as failures. **Details** shows the URL, ARN, delayed messages, visibility timeout, which queues send their failures here, and charts of sent/received/deleted, visible messages and the oldest message's age.
+
+SQS writes no logs of its own: API calls reach CloudTrail only as data events. CloudWatch metrics are the signal, and a queue idle for about 6 hours stops publishing them, which the detail explains.
+
+**Cost:** SQS bills every API call as a request, including `ListQueues` and `GetQueueAttributes`. Listing N queues costs N+1 requests (the first 1M per month are free, then USD 0.40 per million). This is why **Options → Cache & refresh → AWS → Table auto-refresh** limits background reloads (30 s by default). The 24h activity uses CloudWatch `GetMetricData` (3 metrics per queue, USD 0.01 per 1,000), and opening a detail reads 5 more.
+
+### SNS
+
+Topics with confirmed and pending subscriptions, protocols, messages published/delivered/failed in the last 24h, and the state of **delivery status logging**: *Off* (no protocol has feedback roles), *Active*, *Empty* or *No log group* (checked against the `sns/<region>/<account>/<topic>[/Failure]` log groups). **Details** lists every subscription with its endpoint and confirmation state, the logging per protocol with its success sample rate, and charts of published/delivered/failed.
+
+**Cost:** SNS list calls have no relevant charge. Activity uses `GetMetricData` (3 metrics per topic), and log groups are listed only when some topic has logging on.
+
+### SES
+
+Uses the SES v2 API in the profile's region:
+
+- **Account:** whether sending is enabled, sandbox or production access, enforcement status, sent vs. 24h quota (turns yellow above 80%), and maximum send rate.
+- **24h metrics:** sent, delivered, bounces, complaints and rejects, with the latest bounce and complaint rates. Hourly charts are one click away.
+- **Identities:** domains and email addresses with verification, DKIM, SPF (custom MAIL FROM domain, or `amazonses.com` when there is none), and default configuration set. **Details** shows where each identity's events go.
+- **Configuration sets:** each set's event destinations (CloudWatch, Firehose, SNS, EventBridge, Pinpoint), enabled or not.
+
+When no configuration set has an enabled destination, a notice explains that bounces, complaints and deliveries are not logged anywhere.
+
+**Cost:** account, identity and configuration set reads are free. The account metrics use `GetMetricData` (7 metrics per load).
+
+In all three tabs, activity follows **Options → Activity cache** (15 minutes by default); the refresh button reads it again. Missing permissions show a notice with **Request access**, and the suggested policy lists the actions of the whole screen (for example `sqs:ListQueues` and `sqs:GetQueueAttributes`). SQS, SNS and SES are counted in the **Overview** and no longer appear under *services outside KUA*.
+
 ## Common Features
 
 All 19 AWS service tabs share these global features:
