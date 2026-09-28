@@ -91,3 +91,20 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 - Notificaciones toast
 - Diálogos modales para acciones destructivas
 - Barra de estado con información de contexto y namespace
+
+## Opciones de Plataforma: Caché y Almacenamiento
+
+**Ayuda → Opciones** define cada cuánto KUA vuelve a leer datos por su cuenta y muestra cuánto cuesta cada lectura con el valor elegido (lo que se cobra lleva **$**). Los botones de actualizar siempre vuelven a leer, sin importar la opción.
+
+| Opción | Por defecto | Valores | Costo |
+|---|---|---|---|
+| Actividad de Lambda y Step Functions | 15 min | 5, 15, 30, 60 min | `GetMetricData` de CloudWatch, USD 0.01 por cada 1.000 métricas (fuera de la capa gratuita) |
+| KPIs del Resumen de AWS | 15 min | 5, 15, 30, 60 min | `GetMetricData` igual que arriba; las lecturas de CloudTrail y Glue son gratis |
+| Conteo de recursos de AWS | 5 min | 1, 5, 15, 30 min | Gratis |
+| Costos de AWS (Cost Explorer) | 12 h | 1, 6, 12, 24, 48 h | USD 0.01 por consulta, por perfil; se guarda en disco |
+| Auto-actualización de dashboards de CloudWatch | 1 min | 1, 5, 15 min | `GetMetricData` para métricas y alarmas, solo con la auto-actualización activada |
+| Límite de ejecución automática de Logs Insights | 1 GB | Preguntar siempre, 256 MB, 1 GB, 5 GB | USD 0.005 por GB leído; las consultas más grandes preguntan antes |
+
+**Almacenamiento local** muestra el espacio que usa la carpeta de datos de KUA (`KUA_DATA_DIR` o `~/.kuadashboard`): el total, cada base SQLite (espacio usado, páginas libres y journal WAL), sus tablas con filas y tamaño, cada archivo con su última modificación, el almacenamiento del navegador que usan vistas, filtros y conexiones guardadas, los perfiles con costos de AWS en caché y el espacio libre en disco. Solo lee; no cambia nada.
+
+**Restaurar valores por defecto** vuelve todas las opciones a su valor inicial, salvo el idioma.

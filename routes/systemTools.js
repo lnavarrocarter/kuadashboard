@@ -166,4 +166,16 @@ router.get('/tools', async (_req, res) => {
   }
 });
 
+// ─── GET /storage ─────────────────────────────────────────────────────────────
+// Disk used by KUA's local data (SQLite databases, caches, audit log). Read-only.
+
+router.get('/storage', (_req, res) => {
+  try {
+    res.json(require('../lib/dataStorage').inspectDataStorage());
+  } catch (err) {
+    console.error('[systemTools] storage', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

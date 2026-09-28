@@ -91,3 +91,20 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - Toast notifications
 - Modal dialogs for destructive actions
 - Status bar with context and namespace info
+
+## Platform Options: Cache & Storage
+
+**Help → Options** controls how often KUA re-reads data on its own, and shows what each re-read costs at the chosen value (billed items are marked with **$**). The refresh buttons always read again, whatever the setting.
+
+| Option | Default | Choices | Cost |
+|---|---|---|---|
+| Lambda & Step Functions activity | 15 min | 5, 15, 30, 60 min | CloudWatch `GetMetricData`, USD 0.01 per 1,000 metrics (not in the free tier) |
+| AWS Overview KPIs | 15 min | 5, 15, 30, 60 min | `GetMetricData` as above; CloudTrail and Glue reads are free |
+| AWS resource counts | 5 min | 1, 5, 15, 30 min | Free |
+| AWS costs (Cost Explorer) | 12 h | 1, 6, 12, 24, 48 h | USD 0.01 per request, per profile; cached on disk |
+| CloudWatch dashboard auto-refresh | 1 min | 1, 5, 15 min | `GetMetricData` for metrics and alarms, only while auto-refresh is on |
+| Logs Insights auto-run limit | 1 GB | Always ask, 256 MB, 1 GB, 5 GB | USD 0.005 per GB scanned; larger queries ask first |
+
+**Local storage** shows the disk used by KUA's data folder (`KUA_DATA_DIR` or `~/.kuadashboard`): the total, each SQLite database (used space, free pages and WAL journal), its tables with rows and size, every file with its last change, the browser storage used by views, filters and saved connections, the profiles with cached AWS costs, and the free disk space. It only reads; nothing is changed.
+
+**Restore defaults** resets every option except the language.

@@ -352,7 +352,8 @@ router.get('/overview', async (req, res) => {
 
 // ─── GET /overview/insights ───────────────────────────────────────────────────
 // Costs, Lambda activity and services outside KUA. Cost Explorer bills every
-// request, so costs are cached per profile for 12h; ?refreshCosts=1 forces it.
+// request, so costs are cached per profile (12h by default, ?costCacheHours=
+// overrides it); ?refreshCosts=1 forces it.
 
 const costCache = createCostCache();
 
@@ -361,7 +362,10 @@ router.get('/overview/insights', async (req, res) => {
   if (!profileId) return;
   try {
     const cfg = await resolveAwsConfig(profileId);
-    res.json(await buildAwsInsights(cfg, { cache: costCache, cacheKey: profileId, refreshCosts: req.query.refreshCosts === '1' }));
+    // ?costCacheHours= comes from Options (1–168 h); anything else keeps the 12h default.
+    const hours = Number(req.query.costCacheHours);
+    const costTtlMs = Number.isFinite(hours) && hours >= 1 && hours <= 168 ? hours * 3600 * 1000 : undefined;
+    res.json(await buildAwsInsights(cfg, { cache: costCache, cacheKey: profileId, refreshCosts: req.query.refreshCosts === '1', costTtlMs }));
   } catch (err) { handleErr(res, err); }
 });
 

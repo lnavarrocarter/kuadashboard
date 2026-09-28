@@ -22,6 +22,15 @@ export function formatNumber(value, lang = 'en') {
   return n.toLocaleString(locale, { maximumFractionDigits: abs < 10 ? 2 : 1 })
 }
 
+// Logs Insights bills per GB scanned: run on its own only when the estimate is
+// known and under the limit chosen in Options (MB; 0 = always ask).
+export function shouldAutoRunLogs(estimate, limitMb = 1024) {
+  const mb = Number(limitMb)
+  if (!estimate || estimate.unknown || !(mb > 0)) return false
+  if (estimate.estimatedBytes == null || estimate.logGroups?.length === 0) return false
+  return estimate.estimatedBytes <= mb * 1024 ** 2
+}
+
 export function formatBytes(value) {
   if (value == null) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']

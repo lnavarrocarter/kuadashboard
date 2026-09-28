@@ -75,11 +75,13 @@ import AwsAccessRequestModal from '../AwsAccessRequestModal.vue'
 import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'
 import { RANGE_PRESETS, rangeLabel } from './dashboardFormat'
+import { settings } from '../../../composables/useSettings'
 
 const props = defineProps({ name: { type: String, required: true } })
 const emit = defineEmits(['back'])
 
-const AUTO_REFRESH_MS = 60 * 1000
+// Interval chosen in Options (default 1 min).
+const autoRefreshMs = computed(() => Math.max(60, Number(settings.cwDashboardRefreshSec) || 60) * 1000)
 
 const awsStore = useAwsStore()
 const { t } = useI18n()
@@ -161,14 +163,14 @@ async function load() {
 }
 
 // Auto-refresh only re-reads metrics and alarms; log queries (billed per GB) run on demand.
-watch(autoRefresh, on => {
+watch([autoRefresh, autoRefreshMs], ([on]) => {
   clearInterval(timer)
   if (on) {
     timer = setInterval(() => {
       if (document.hidden) return
       computeRange()
       metricRefreshKey.value += 1
-    }, AUTO_REFRESH_MS)
+    }, autoRefreshMs.value)
   }
 })
 

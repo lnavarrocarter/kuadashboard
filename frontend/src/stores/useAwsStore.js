@@ -8,13 +8,17 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { useApi } from '../composables/useApi'
+import { settings } from '../composables/useSettings'
 
 // Background auto-refresh runs every few seconds. Data that is billed
 // (GetMetricData: USD 0.01 per 1,000 metrics, not in the free tier) or that
 // covers 24h windows is reused for a while; only a manual refresh forces it.
+// The times are chosen in Options; these are the defaults.
 export const OVERVIEW_TTL_MS = 5 * 60 * 1000
 export const INSIGHTS_TTL_MS = 15 * 60 * 1000
 export const ACTIVITY_TTL_MS = 15 * 60 * 1000
+const DEFAULT_COST_CACHE_HOURS = 12
+const ttlMs = (minutes, fallback) => (Number(minutes) > 0 ? Number(minutes) * 60 * 1000 : fallback)
 
 export const useAwsStore = defineStore('aws', () => {
   const { apiFetch: request } = useApi()
@@ -142,7 +146,7 @@ export const useAwsStore = defineStore('aws', () => {
   // Errors are thrown to the caller, which keeps the previous overview visible.
   async function fetchOverview({ force = false } = {}) {
     const key = activeProfileId.value
-    if (!force && overview.value && isFresh('overview', OVERVIEW_TTL_MS, key)) return overview.value
+    if (!force && overview.value && isFresh('overview', ttlMs(settings.awsOverviewCacheMin, OVERVIEW_TTL_MS), key)) return overview.value
     const data = await apiFetch('/api/cloud/aws/overview', { headers: headers() })
     markFetched('overview', key)
     overview.value = data
@@ -154,8 +158,12 @@ export const useAwsStore = defineStore('aws', () => {
   // call), Lambda activity and services outside KUA.
   async function fetchOverviewInsights({ refreshCosts = false, force = false } = {}) {
     const key = activeProfileId.value
-    if (!force && !refreshCosts && overviewInsights.value && isFresh('insights', INSIGHTS_TTL_MS, key)) return overviewInsights.value
-    const query = refreshCosts ? '?refreshCosts=1' : ''
+    if (!force && !refreshCosts && overviewInsights.value && isFresh('insights', ttlMs(settings.awsInsightsCacheMin, INSIGHTS_TTL_MS), key)) return overviewInsights.value
+    const params = new URLSearchParams()
+    if (refreshCosts) params.set('refreshCosts', '1')
+    const costHours = Number(settings.awsCostCacheHours)
+    if (costHours > 0 && costHours !== DEFAULT_COST_CACHE_HOURS) params.set('costCacheHours', String(costHours))
+    const query = params.toString() ? `?${params}` : ''
     const data = await apiFetch(`/api/cloud/aws/overview/insights${query}`, { headers: headers() })
     markFetched('insights', key)
     overviewInsights.value = data
@@ -975,7 +983,7 @@ export const useAwsStore = defineStore('aws', () => {
     if (!lambdas.value.length) { lambdaActivity.value = null; return null }
     const profile = activeProfileId.value
     const key = `${profile}|${lambdas.value.map(fn => fn.name).join(',')}`
-    if (!force && lambdaActivity.value && !lambdaActivity.value.failed && isFresh('lambda', ACTIVITY_TTL_MS, key)) return lambdaActivity.value
+    if (!force && lambdaActivity.value && !lambdaActivity.value.failed && isFresh('lambda', ttlMs(settings.awsActivityCacheMin, ACTIVITY_TTL_MS), key)) return lambdaActivity.value
     try {
       const data = await apiFetch('/api/cloud/aws/lambda/activity', {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
@@ -996,7 +1004,7 @@ export const useAwsStore = defineStore('aws', () => {
     if (!stepFunctions.value.length) { stepFnActivity.value = null; return null }
     const profile = activeProfileId.value
     const key = `${profile}|${stepFunctions.value.map(sm => sm.arn).join(',')}`
-    if (!force && stepFnActivity.value && !stepFnActivity.value.failed && isFresh('stepfn', ACTIVITY_TTL_MS, key)) return stepFnActivity.value
+    if (!force && stepFnActivity.value && !stepFnActivity.value.failed && isFresh('stepfn', ttlMs(settings.awsActivityCacheMin, ACTIVITY_TTL_MS), key)) return stepFnActivity.value
     try {
       const data = await apiFetch('/api/cloud/aws/stepfunctions/activity', {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },

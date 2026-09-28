@@ -253,11 +253,30 @@
                 <span class="opts-desc">{{ t('help.langDesc') }}</span>
               </div>
               <div class="btn-toggle-group">
-                <button :class="['btn','sm', settings.lang === 'es' ? 'active' : '']" @click="settings.lang = 'es'">­ƒç¬­ƒç© Español</button>
-                <button :class="['btn','sm', settings.lang === 'en' ? 'active' : '']" @click="settings.lang = 'en'">­ƒç║­ƒç© English</button>
+                <button :class="['btn','sm', settings.lang === 'es' ? 'active' : '']" @click="settings.lang = 'es'">🇪🇸 Español</button>
+                <button :class="['btn','sm', settings.lang === 'en' ? 'active' : '']" @click="settings.lang = 'en'">🇺🇸 English</button>
               </div>
             </div>
           </div>
+
+          <!-- Cache & refresh: every automatic re-read, with what it costs -->
+          <div class="opts-group">
+            <div class="opts-group-title">{{ t('opts.cacheGroup') }}</div>
+            <div v-for="opt in CACHE_OPTIONS" :key="opt.key" class="opts-row opts-row-stack">
+              <div class="opts-label">
+                <i :data-lucide="opt.icon"></i>
+                <div class="opts-text">
+                  <span class="opts-title">{{ t(`opts.${opt.key}`) }}</span>
+                  <span class="opts-note" :class="{ billed: opt.billed }">{{ opt.note(settings[opt.key]) }}</span>
+                </div>
+              </div>
+              <select v-model.number="settings[opt.key]" class="ctrl-select opts-select" :aria-label="t(`opts.${opt.key}`)">
+                <option v-for="value in opt.values" :key="value" :value="value">{{ opt.label(value) }}</option>
+              </select>
+            </div>
+          </div>
+
+          <PlatformStorage v-if="activeTab === 'options'" />
 
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px">
             <button class="btn sm" @click="resetSettings">{{ t('help.resetSettings') }}</button>
@@ -325,7 +344,8 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
-import { settings, applySettings } from '../../composables/useSettings.js'
+import { settings, applySettings, SETTINGS_DEFAULTS } from '../../composables/useSettings.js'
+import PlatformStorage from '../PlatformStorage.vue'
 import { useI18n } from '../../composables/useI18n.js'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
 import { CHANGELOG, CHANGELOG_VERSION } from '../../composables/useChangelog.js'
@@ -343,13 +363,30 @@ const ACCENT_OPTIONS = [
   { id: 'orange', label: 'Naranja', color: '#ff9800' },
 ]
 
+// Keeps the chosen language; everything else goes back to its default.
 function resetSettings() {
-  Object.assign(settings, {
-    settingsVersion: 2,
-    theme: 'dark', lang: 'es', fontSize: 'normal',
-    compactMode: false, showClock: true, autoRefresh: 5, accentColor: 'blue',
-  })
+  Object.assign(settings, { ...SETTINGS_DEFAULTS, lang: settings.lang })
 }
+
+// Each automatic re-read, its choices and what it costs at the chosen value.
+const minutes = n => (n >= 60 ? t('opts.hours', { n: n / 60 }) : t('opts.minutes', { n }))
+const hours = n => t('opts.hours', { n })
+const perHour = n => Math.max(1, Math.round(60 / n))
+const CACHE_OPTIONS = [
+  { key: 'awsActivityCacheMin', icon: 'activity', billed: true, values: [5, 15, 30, 60], label: minutes,
+    note: v => t('opts.awsActivityNote', { loads: perHour(v) }) },
+  { key: 'awsInsightsCacheMin', icon: 'gauge', billed: true, values: [5, 15, 30, 60], label: minutes,
+    note: v => t('opts.awsInsightsNote', { loads: perHour(v) }) },
+  { key: 'awsOverviewCacheMin', icon: 'layout-dashboard', billed: false, values: [1, 5, 15, 30], label: minutes,
+    note: () => t('opts.awsOverviewNote') },
+  { key: 'awsCostCacheHours', icon: 'receipt', billed: true, values: [1, 6, 12, 24, 48], label: hours,
+    note: v => t('opts.awsCostNote', { perDay: Math.max(1, Math.round(24 / v)), usd: (Math.max(1, Math.round(24 / v)) * 0.01).toFixed(2) }) },
+  { key: 'cwDashboardRefreshSec', icon: 'timer', billed: true, values: [60, 300, 900], label: s => minutes(s / 60),
+    note: v => t('opts.cwDashboardNote', { loads: Math.round(3600 / v) }) },
+  { key: 'logsAutoRunMb', icon: 'scroll-text', billed: true, values: [0, 256, 1024, 5120],
+    label: mb => (mb === 0 ? t('opts.alwaysAsk') : mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`),
+    note: mb => (mb === 0 ? t('opts.logsAskNote') : t('opts.logsNote', { usd: ((mb / 1024) * 0.005).toFixed(4) })) },
+]
 
 function installUpdate() {
   updateStore.installUpdate()
@@ -615,6 +652,24 @@ function open(url) {
 .opts-label > i, .opts-label > svg { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
 .opts-label > span:first-of-type { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .opts-desc { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opts-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.opts-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.opts-note { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+.opts-note.billed::before { content: '$ '; color: var(--yellow); font-weight: 700; }
+.opts-select { width: 130px; font-size: 12px; flex-shrink: 0; }
+.opts-row-stack { align-items: flex-start; }
+.opts-row-stack .opts-label > i, .opts-row-stack .opts-label > svg { margin-top: 2px; }
+@media (max-width: 560px) {
+  /* Phone width: tabs on top, content full width, controls under their labels. */
+  .help-layout { flex-direction: column; min-height: 0; }
+  .help-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 8px; margin-bottom: 12px; }
+  .help-nav-item { flex-shrink: 0; }
+  .help-content { padding: 0; min-width: 0; }
+  .opts-row { flex-wrap: wrap; }
+  .opts-desc { display: none; }
+  .opts-row-stack { flex-direction: column; }
+  .opts-row-stack .opts-select { width: 100%; }
+}
 
 /* Toggle switch */
 .toggle-switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0; }

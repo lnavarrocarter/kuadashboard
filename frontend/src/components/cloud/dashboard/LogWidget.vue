@@ -59,7 +59,7 @@ import DashboardChart from './DashboardChart.vue'
 import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'
 import { settings } from '../../../composables/useSettings'
-import { formatBytes, formatNumber, numericField } from './dashboardFormat'
+import { formatBytes, formatNumber, numericField, shouldAutoRunLogs } from './dashboardFormat'
 
 const props = defineProps({
   dashboard: { type: String, required: true },
@@ -119,7 +119,7 @@ async function prepare() {
     const est = await awsStore.estimateCwWidgetLogs(props.dashboard, props.index, props.range)
     if (id !== runId) return
     estimate.value = est
-    if (est.autoRun) run()
+    if (shouldAutoRunLogs(est, settings.logsAutoRunMb)) run()
     else phase.value = 'confirm'
   } catch (e) {
     if (id !== runId) return

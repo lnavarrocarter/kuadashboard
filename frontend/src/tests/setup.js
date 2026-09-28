@@ -49,4 +49,6 @@ global.localStorage = {
   setItem:    (key, val) => { store[key] = String(val) },
   removeItem: key        => { delete store[key] },
   clear:      ()         => { Object.keys(store).forEach(k => delete store[k]) },
+  key:        index      => Object.keys(store)[index] ?? null,
+  get length() { return Object.keys(store).length },
 }

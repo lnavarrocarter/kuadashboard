@@ -3,7 +3,7 @@ import { reactive, watch } from 'vue'
 const STORAGE_KEY = 'kua:settings'
 const SETTINGS_VERSION = 2
 
-const DEFAULTS = {
+export const SETTINGS_DEFAULTS = {
   settingsVersion: SETTINGS_VERSION,
   theme:        'dark',    // 'dark' | 'light'
   lang:         'en',      // 'en' | 'es'
@@ -12,7 +12,15 @@ const DEFAULTS = {
   showClock:    true,      // clock in header
   autoRefresh:  5,         // 0 = off, seconds interval
   accentColor:  'blue',    // 'blue' | 'teal' | 'purple' | 'orange'
+  // Cache & refresh (Options). Billed AWS reads are reused so auto-refresh does not repeat them.
+  awsOverviewCacheMin:   5,    // resource counts (free)
+  awsInsightsCacheMin:   15,   // Overview KPIs (CloudWatch GetMetricData, billed)
+  awsActivityCacheMin:   15,   // Lambda / Step Functions 24h activity (GetMetricData, billed)
+  awsCostCacheHours:     12,   // Cost Explorer (USD 0.01 per request)
+  cwDashboardRefreshSec: 60,   // dashboard auto-refresh interval (metrics and alarms only)
+  logsAutoRunMb:         1024, // Logs Insights runs on its own up to this estimate; 0 = always ask
 }
+const DEFAULTS = SETTINGS_DEFAULTS
 
 function load() {
   try {
