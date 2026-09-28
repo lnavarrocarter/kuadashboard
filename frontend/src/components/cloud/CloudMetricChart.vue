@@ -43,6 +43,14 @@ function formatValue(value, unit) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   if (unit === '%') return `${number.toFixed(1)}%`
+  // SES reputation rates come as fractions (0.012 = 1.2%).
+  if (unit === 'ratio') return `${(number * 100).toFixed(2)}%`
+  if (unit === 's') {
+    if (number >= 86400) return `${(number / 86400).toFixed(1)} d`
+    if (number >= 3600) return `${(number / 3600).toFixed(1)} h`
+    if (number >= 60) return `${(number / 60).toFixed(1)} min`
+    return `${Math.round(number)} s`
+  }
   if (unit === 'cores') return `${number.toFixed(number >= 10 ? 1 : 2)} cores`
   if (unit === 'count') return Math.round(number).toLocaleString()
   if (unit === 'bytes') {

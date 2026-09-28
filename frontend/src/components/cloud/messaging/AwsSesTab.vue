@@ -8,6 +8,11 @@
 
     <div v-if="awsStore.loading && !ses" class="empty-row">{{ t('common.loading') }}</div>
     <template v-else-if="ses">
+      <div class="ses-health">
+        <HealthBadge :health="health" />
+        <HealthBadge :health="health" list />
+      </div>
+
       <!-- Account: sending state and quota -->
       <div class="ses-cards">
         <div class="ses-card">
@@ -32,17 +37,24 @@
         <div v-for="kpi in KPIS" :key="kpi.key" class="ses-card">
           <span class="ses-card-label">{{ t(`ses.kpi_${kpi.key}`) }} · 24h</span>
           <strong :class="kpi.bad && totals[kpi.key] ? 'status-err' : ''">{{ metricsLoading && !metrics ? '…' : formatCount(totals[kpi.key], settings.lang) }}</strong>
-          <span v-if="kpi.rate && rate(kpi.rate) != null" class="ses-card-sub">{{ t('ses.reputation', { pct: rate(kpi.rate) }) }}</span>
+          <span v-if="kpi.rate && rate(kpi.rate) != null" :class="['ses-card-sub', rateClass(kpi.rate)]" :title="t(`ses.threshold_${kpi.rate}`)">{{ t('ses.reputation', { pct: rate(kpi.rate) }) }}</span>
+          <span v-else-if="kpi.key === 'delivery' && deliveryRate != null" class="ses-card-sub">{{ t('ses.deliveryRate', { pct: deliveryRate }) }}</span>
         </div>
       </div>
 
       <div v-if="!ses.eventLogging" class="activity-notice">{{ t('ses.noEventLogging') }}</div>
 
-      <details class="ses-charts">
+      <details class="ses-charts" @toggle="chartsOpen = $event.target.open">
         <summary>{{ t('ses.charts') }}</summary>
-        <div v-if="metrics?.series" class="arm-grid ses-grid">
-          <CloudMetricChart v-for="chart in charts" :key="chart.key" :label="chart.label" unit="count" :color="chart.color" :points="metrics.series[chart.key] || []" />
-        </div>
+        <AwsResourceMetrics
+          v-if="chartsOpen" class="ses-panel" resource-key="ses-account" :charts="charts"
+          :fetcher="hours => awsStore.fetchSesSeries(hours)" @request-access="emit('request-access', $event)"
+        />
+      </details>
+
+      <details class="ses-charts" @toggle="suppressionOpen = $event.target.open">
+        <summary>{{ t('ses.suppression') }}</summary>
+        <SesSuppression v-if="suppressionOpen" class="ses-panel" :reasons="account?.suppressedReasons || []" @request-access="emit('request-access', $event)" />
       </details>
 
       <!-- Identities -->
@@ -108,9 +120,10 @@
       <h4 class="ses-h">{{ t('ses.configSets', { n: ses.configurationSets.length }) }}</h4>
       <div v-if="!ses.configurationSets.length" class="empty-row">{{ t('ses.emptySets') }}</div>
       <table v-else class="cloud-table">
-        <thead><tr><th>{{ t('awsMsg.name') }}</th><th>{{ t('ses.destinations') }}</th></tr></thead>
+        <thead><tr><th>{{ t('awsMsg.name') }}</th><th>{{ t('ses.destinations') }}</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="set in ses.configurationSets" :key="set.name">
+          <template v-for="set in ses.configurationSets" :key="set.name">
+          <tr :class="{ 'msg-selected': selectedSet === set.name }">
             <td class="msg-name">{{ set.name }}</td>
             <td>
               <span v-if="set.destinations == null" class="text-dim">{{ t('ses.destinationsUnknown') }}</span>
@@ -119,7 +132,16 @@
                 {{ d.type }}{{ d.enabled ? '' : ` (${t('ses.disabled')})` }}
               </span>
             </td>
+            <td>
+              <button v-if="hasCloudWatch(set)" class="btn sm" :aria-expanded="selectedSet === set.name" @click="selectedSet = selectedSet === set.name ? null : set.name">
+                {{ selectedSet === set.name ? t('awsMsg.hide') : t('ses.setMetrics') }}
+              </button>
+            </td>
           </tr>
+          <tr v-if="selectedSet === set.name" class="msg-detail-row">
+            <td colspan="3"><SesConfigSetMetrics :name="set.name" @request-access="emit('request-access', $event)" /></td>
+          </tr>
+          </template>
         </tbody>
       </table>
     </template>
@@ -128,7 +150,10 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import CloudMetricChart from '../CloudMetricChart.vue'
+import AwsResourceMetrics from './AwsResourceMetrics.vue'
+import HealthBadge from './HealthBadge.vue'
+import SesSuppression from './SesSuppression.vue'
+import SesConfigSetMetrics from './SesConfigSetMetrics.vue'
 import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'
 import { useSortable } from '../../../composables/useSortable'
@@ -141,12 +166,17 @@ const awsStore = useAwsStore()
 const { t } = useI18n()
 const { sortBy, sortRows, sortIcon, thClass } = useSortable()
 const selected = ref(null)
+const selectedSet = ref(null)
+const chartsOpen = ref(false)
+const suppressionOpen = ref(false)
 
 const KPIS = [
   { key: 'send' }, { key: 'delivery' },
   { key: 'bounce', bad: true, rate: 'bounceRate' }, { key: 'complaint', bad: true, rate: 'complaintRate' },
-  { key: 'reject', bad: true },
+  { key: 'reject', bad: true }, { key: 'renderingFailure', bad: true },
 ]
+// AWS review thresholds (lib/awsMessagingCatalog.js): warning / at risk.
+const THRESHOLDS = { bounceRate: [0.05, 0.10], complaintRate: [0.001, 0.005] }
 
 const ses = computed(() => awsStore.sesData)
 const account = computed(() => ses.value?.account || null)
@@ -158,11 +188,29 @@ const quotaPct = computed(() => {
 })
 const identities = computed(() => filterRows(ses.value?.identities || [], props.search))
 const charts = computed(() => [
-  { key: 'send', label: t('ses.kpi_send'), color: '#58a6ff' },
-  { key: 'delivery', label: t('ses.kpi_delivery'), color: '#3fb950' },
-  { key: 'bounce', label: t('ses.kpi_bounce'), color: '#d29922' },
-  { key: 'complaint', label: t('ses.kpi_complaint'), color: '#f85149' },
+  { key: 'send', label: t('ses.kpi_send'), color: '#58a6ff', stat: 'sum' },
+  { key: 'delivery', label: t('ses.kpi_delivery'), color: '#3fb950', stat: 'sum' },
+  { key: 'bounce', label: t('ses.kpi_bounce'), color: '#d29922', stat: 'sum' },
+  { key: 'complaint', label: t('ses.kpi_complaint'), color: '#f85149', stat: 'sum' },
+  { key: 'reject', label: t('ses.kpi_reject'), color: '#db61a2', stat: 'sum' },
+  { key: 'bounceRate', label: t('ses.bounceRateChart'), color: '#d29922', stat: 'gauge', unit: 'ratio' },
+  { key: 'complaintRate', label: t('ses.complaintRateChart'), color: '#f85149', stat: 'gauge', unit: 'ratio' },
 ])
+// Health with the latest rates comes with the metrics; before that, the account-only one.
+const health = computed(() => metrics.value?.health || ses.value?.health || null)
+const deliveryRate = computed(() => {
+  const sent = totals.value.send
+  return sent ? Math.round((totals.value.delivery / sent) * 1000) / 10 : null
+})
+function rateClass(key) {
+  const value = metrics.value?.rates?.[key]
+  const [warn, critical] = THRESHOLDS[key]
+  if (value == null) return ''
+  return value >= critical ? 'status-err' : value >= warn ? 'status-warn' : ''
+}
+function hasCloudWatch(set) {
+  return (set.destinations || []).some(d => d.type === 'cloudwatch' && d.enabled)
+}
 
 const notices = computed(() => {
   const list = []
@@ -207,5 +255,6 @@ function toggle(name) {
 .ses-bar span.warn { background: var(--yellow); }
 .ses-h { margin: 8px 0 0; font-size: 12px; color: var(--text); }
 .ses-charts summary { cursor: pointer; font-size: 12px; color: var(--text-dim); }
-.ses-grid { margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ses-health { display: flex; align-items: flex-start; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.ses-panel { margin-top: 8px; }
 </style>

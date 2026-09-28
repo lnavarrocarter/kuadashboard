@@ -20,6 +20,16 @@ const QUEUES = [
 ]
 const DENIED = { error: { kind: 'denied', message: 'not authorized to perform cloudwatch:GetMetricData' }, access: { actions: ['cloudwatch:GetMetricData'], policy: {} } }
 
+// Routes each request by the first matching fragment of its URL.
+function stubRoutes(routes) {
+  const fn = vi.fn(async url => {
+    const key = Object.keys(routes).find(fragment => String(url).includes(fragment))
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => routes[key] ?? {} }
+  })
+  vi.stubGlobal('fetch', fn)
+  return fn
+}
+
 function stubFetch(body) {
   const fn = vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }))
   vi.stubGlobal('fetch', fn)
@@ -63,16 +73,30 @@ describe('SQS tab', () => {
     expect(wrapper.findAll('tbody tr')[0].text()).toContain('—')
   })
 
-  it('opens a detail with 24h charts and explains that SQS has no logs', async () => {
+  it('opens a detail with consumers, policy, 24h charts and explains that SQS has no logs', async () => {
     store.sqsQueues = QUEUES
-    const fetchMock = stubFetch({ windowHours: 24, series: { sent: [{ t: 1, v: 0 }], received: [], deleted: [], visible: [], oldestAge: [] } })
+    const fetchMock = stubRoutes({
+      '/metrics': { windowHours: 24, series: { sent: [{ t: 1, v: 0 }], received: [], deleted: [], emptyReceives: [], visible: [], inFlight: [], oldestAge: [] }, cache: { requested: 4, reused: 3 } },
+      '/details': {
+        arn: 'arn', config: { receiveWaitSeconds: 0, maxMessageBytes: 262144, delaySeconds: 0 }, redrive: null, redriveAllow: null,
+        policy: [{ effect: 'Allow', principals: ['*'], actions: ['sqs:SendMessage'], conditions: [] }], tags: { team: 'orders' },
+        consumers: [{ function: 'worker', functionArn: 'arn:fn', state: 'Enabled', batchSize: 10, lastResult: 'OK' }], producers: [],
+      },
+    })
     const wrapper = mount(AwsSqsTab, { props: { search: 'sqs/1/orders-dlq' } })
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     await wrapper.find('tbody button').trigger('click')
     await flushPromises()
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/cloud/aws/sqs/orders-dlq/metrics')
-    expect(wrapper.find('.msg-detail').text()).toContain('SQS writes no logs of its own')
-    expect(wrapper.findAll('.chart-stub')).toHaveLength(5)
+    const urls = fetchMock.mock.calls.map(c => c[0])
+    expect(urls.some(u => u.startsWith('/api/cloud/aws/sqs/orders-dlq/metrics?hours=24&cacheMin=15'))).toBe(true)
+    expect(urls.some(u => u.startsWith('/api/cloud/aws/sqs/orders-dlq/details?url='))).toBe(true)
+    const detail = wrapper.find('.msg-detail')
+    expect(detail.text()).toContain('SQS writes no logs of its own')
+    expect(detail.text()).toContain('short polling')
+    expect(detail.text()).toContain('worker')
+    expect(detail.text()).toContain('team=orders')
+    expect(detail.find('.arm-cost').text()).toContain('4 metrics requested from CloudWatch')
+    expect(wrapper.findAll('.chart-stub')).toHaveLength(7)
     expect(wrapper.find('.arm-quiet').text()).toContain('the queue has been idle')
   })
 })
@@ -173,14 +197,17 @@ describe('store: SQS/SNS/SES activity cache', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     await store.fetchSqsActivity({ force: true })
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ queues: ['orders', 'orders-dlq'] })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ queues: [
+      { name: 'orders', isDlq: false, hasDlq: true, visible: 5, retentionSeconds: 345600 },
+      { name: 'orders-dlq', isDlq: true, hasDlq: false, visible: 2, retentionSeconds: 1209600 },
+    ] })
   })
 
   it('sends each topic with whether delivery logging is on', async () => {
     const fetchMock = stubFetch({ topics: {} })
     store.snsTopics = [{ name: 'a', deliveryLogging: { enabled: true } }, { name: 'b', deliveryLogging: { enabled: false } }]
     await store.fetchSnsActivity()
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ topics: [{ name: 'a', logging: true }, { name: 'b', logging: false }] })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).topics.map(t => [t.name, t.logging])).toEqual([['a', true], ['b', false]])
   })
 
   it('formats durations for retention and timeouts', () => {

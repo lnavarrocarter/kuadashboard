@@ -12,11 +12,14 @@
     <table v-else class="cloud-table">
       <thead><tr>
         <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+        <th :class="thClass('healthRank')" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon">{{ sortIcon('healthRank') }}</span></th>
         <th :class="thClass('subscriptionsConfirmed')" @click="sortBy('subscriptionsConfirmed')">{{ t('sns.subscriptions') }} <span class="sort-icon">{{ sortIcon('subscriptionsConfirmed') }}</span></th>
         <th>{{ t('sns.protocols') }}</th>
         <th :class="thClass('published24h')" @click="sortBy('published24h')" :title="t('sns.activityHint')">{{ t('sns.published24h') }} <span class="sort-icon">{{ sortIcon('published24h') }}</span></th>
         <th :class="thClass('delivered24h')" @click="sortBy('delivered24h')">{{ t('sns.delivered24h') }} <span class="sort-icon">{{ sortIcon('delivered24h') }}</span></th>
         <th :class="thClass('failed24h')" @click="sortBy('failed24h')">{{ t('sns.failed24h') }} <span class="sort-icon">{{ sortIcon('failed24h') }}</span></th>
+        <th :class="thClass('successRate')" @click="sortBy('successRate')" :title="t('sns.successRateHint')">{{ t('sns.successRate') }} <span class="sort-icon">{{ sortIcon('successRate') }}</span></th>
+        <th :class="thClass('filtered24h')" @click="sortBy('filtered24h')" :title="t('sns.filteredHint')">{{ t('sns.filtered24h') }} <span class="sort-icon">{{ sortIcon('filtered24h') }}</span></th>
         <th :class="thClass('logRank')" @click="sortBy('logRank')" :title="t('sns.loggingHint')">{{ t('sns.logging') }} <span class="sort-icon">{{ sortIcon('logRank') }}</span></th>
         <th></th>
       </tr></thead>
@@ -28,6 +31,7 @@
               <span v-if="topic.fifo" class="msg-chip">FIFO</span>
               <span v-if="topic.encrypted" class="msg-chip" :title="t('sns.encrypted')">KMS</span>
             </td>
+            <td><HealthBadge :health="topic.health" :loading="activityLoading" /></td>
             <td class="activity-cell">
               {{ formatCount(topic.subscriptionsConfirmed, settings.lang) }}
               <span v-if="topic.subscriptionsPending" class="status-warn" :title="t('sns.pendingHint')"> · {{ t('sns.pending', { n: topic.subscriptionsPending }) }}</span>
@@ -39,48 +43,16 @@
             <td class="activity-cell"><span :class="topic.published24h ? '' : 'text-dim'">{{ activityCell(topic.published24h) }}</span></td>
             <td class="activity-cell"><span :class="topic.delivered24h ? '' : 'text-dim'">{{ activityCell(topic.delivered24h) }}</span></td>
             <td class="activity-cell"><span :class="topic.failed24h ? 'status-err' : 'text-dim'">{{ activityCell(topic.failed24h) }}</span></td>
+            <td class="activity-cell"><span :class="topic.successRate == null ? 'text-dim' : topic.successRate < 95 ? 'status-err' : topic.successRate < 100 ? 'status-warn' : ''">{{ topic.successRate == null ? '—' : `${topic.successRate}%` }}</span></td>
+            <td class="activity-cell"><span :class="topic.filtered24h ? '' : 'text-dim'">{{ activityCell(topic.filtered24h) }}</span></td>
             <td>
               <span :class="['log-badge', LOG_BADGE[topic.logStatus]]" :title="loggingTitle(topic)">{{ t(`sns.log_${topic.logStatus}`) }}</span>
             </td>
             <td><button class="btn sm" :aria-expanded="selected === topic.arn" @click="toggle(topic.arn)">{{ selected === topic.arn ? t('awsMsg.hide') : t('awsMsg.details') }}</button></td>
           </tr>
           <tr v-if="selected === topic.arn" class="msg-detail-row">
-            <td colspan="8">
-              <div class="msg-detail">
-                <dl class="msg-facts">
-                  <div><dt>ARN</dt><dd class="mono-xs">{{ topic.arn }}</dd></div>
-                  <div v-if="topic.displayName"><dt>{{ t('sns.displayName') }}</dt><dd>{{ topic.displayName }}</dd></div>
-                  <div>
-                    <dt>{{ t('awsMsg.logs') }}</dt>
-                    <dd>
-                      <template v-if="topic.deliveryLogging?.enabled">
-                        <div v-for="p in topic.deliveryLogging.protocols" :key="p.protocol">
-                          {{ p.protocol }}: {{ [p.success ? t('sns.success') : null, p.failure ? t('sns.failure') : null].filter(Boolean).join(' + ') }}
-                          <span v-if="p.sampleRate != null" class="text-dim">· {{ t('sns.sampleRate', { n: p.sampleRate }) }}</span>
-                        </div>
-                        <div v-for="g in topic.logGroups" :key="g" class="mono-xs text-dim">{{ g }}</div>
-                      </template>
-                      <span v-else class="text-dim">{{ t('sns.loggingOffHint') }}</span>
-                    </dd>
-                  </div>
-                </dl>
-                <table class="msg-subtable">
-                  <thead><tr><th>{{ t('sns.protocol') }}</th><th>{{ t('sns.endpoint') }}</th><th>{{ t('sns.status') }}</th></tr></thead>
-                  <tbody>
-                    <tr v-for="sub in topic.subscriptions" :key="sub.arn + sub.endpoint">
-                      <td>{{ sub.protocol }}</td>
-                      <td class="mono-xs">{{ sub.endpoint }}</td>
-                      <td><span :class="sub.pending ? 'status-warn' : 'status-ok'">{{ sub.pending ? t('sns.pendingConfirmation') : t('sns.confirmed') }}</span></td>
-                    </tr>
-                    <tr v-if="!topic.subscriptions.length"><td colspan="3" class="text-dim">{{ t('sns.noSubscriptions') }}</td></tr>
-                  </tbody>
-                </table>
-                <AwsResourceMetrics
-                  :resource-key="topic.name" :charts="charts" :empty-text="t('sns.noMetrics')"
-                  :fetcher="() => awsStore.fetchSnsTopicMetrics(topic.name)"
-                  @request-access="emit('request-access', $event)"
-                />
-              </div>
+            <td colspan="11">
+              <SnsTopicDetail :topic="topic" :health="topic.health" @request-access="emit('request-access', $event)" />
             </td>
           </tr>
         </template>
@@ -95,8 +67,9 @@ import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'
 import { useSortable } from '../../../composables/useSortable'
 import { settings } from '../../../composables/useSettings'
-import AwsResourceMetrics from './AwsResourceMetrics.vue'
-import { filterRows, formatCount } from './messagingFormat'
+import HealthBadge from './HealthBadge.vue'
+import SnsTopicDetail from './SnsTopicDetail.vue'
+import { filterRows, formatCount, HEALTH_RANK } from './messagingFormat'
 
 const props = defineProps({ search: { type: String, default: '' }, activityLoading: { type: Boolean, default: false } })
 const emit = defineEmits(['request-access'])
@@ -108,11 +81,6 @@ const selected = ref(null)
 const LOG_BADGE = { ok: 'ok', empty: 'empty', missing: 'missing', off: 'missing', unknown: 'empty', loading: 'empty' }
 const LOG_RANK = { off: 0, missing: 1, unknown: 2, loading: 2, empty: 3, ok: 4 }
 
-const charts = computed(() => [
-  { key: 'published', label: t('sns.published'), color: '#58a6ff', stat: 'sum' },
-  { key: 'delivered', label: t('sns.delivered'), color: '#3fb950', stat: 'sum' },
-  { key: 'failed', label: t('sns.failed'), color: '#f85149', stat: 'sum' },
-])
 
 const rows = computed(() => {
   const activity = awsStore.snsActivity?.topics || {}
@@ -125,6 +93,10 @@ const rows = computed(() => {
       published24h: a?.messages?.published ?? null,
       delivered24h: a?.messages?.delivered ?? null,
       failed24h: a?.messages?.failed ?? null,
+      filtered24h: a?.messages?.filteredOut ?? null,
+      successRate: a?.successRate ?? null,
+      health: a?.health || null,
+      healthRank: HEALTH_RANK[a?.health?.status] ?? -1,
       logStatus,
       logRank: LOG_RANK[logStatus],
       logGroups: a?.logGroups || [],

@@ -35,3 +35,6 @@ export function filterRows(rows, query) {
 export function arnName(arn = '') {
   return String(arn).split(':').pop()
 }
+
+// Sort order for health columns: worst first when sorting descending.
+export const HEALTH_RANK = { unknown: 0, ok: 1, warning: 2, critical: 3 }

@@ -12,6 +12,7 @@
     <table v-else class="cloud-table">
       <thead><tr>
         <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+        <th :class="thClass('healthRank')" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon">{{ sortIcon('healthRank') }}</span></th>
         <th :class="thClass('visible')" @click="sortBy('visible')" :title="t('sqs.visibleHint')">{{ t('sqs.visible') }} <span class="sort-icon">{{ sortIcon('visible') }}</span></th>
         <th :class="thClass('inFlight')" @click="sortBy('inFlight')" :title="t('sqs.inFlightHint')">{{ t('sqs.inFlight') }} <span class="sort-icon">{{ sortIcon('inFlight') }}</span></th>
         <th :class="thClass('sent24h')" @click="sortBy('sent24h')" :title="t('sqs.activityHint')">{{ t('sqs.sent24h') }} <span class="sort-icon">{{ sortIcon('sent24h') }}</span></th>
@@ -30,6 +31,7 @@
               <span v-if="q.fifo" class="msg-chip">FIFO</span>
               <span v-if="q.dlqFor.length" class="msg-chip warn" :title="t('sqs.isDlqFor', { list: q.dlqFor.join(', ') })">DLQ</span>
             </td>
+            <td><HealthBadge :health="q.health" :loading="activityLoading" /></td>
             <td class="activity-cell"><span :class="q.dlqFor.length && q.visible ? 'status-err' : ''">{{ formatCount(q.visible, settings.lang) }}</span></td>
             <td class="activity-cell">{{ formatCount(q.inFlight, settings.lang) }}</td>
             <td class="activity-cell"><span :class="q.sent24h ? '' : 'text-dim'">{{ activityCell(q.sent24h) }}</span></td>
@@ -45,23 +47,8 @@
             <td><button class="btn sm" :aria-expanded="selected === q.name" @click="toggle(q.name)">{{ selected === q.name ? t('awsMsg.hide') : t('awsMsg.details') }}</button></td>
           </tr>
           <tr v-if="selected === q.name" class="msg-detail-row">
-            <td colspan="10">
-              <div class="msg-detail">
-                <dl class="msg-facts">
-                  <div><dt>URL</dt><dd class="mono-xs">{{ q.url }}</dd></div>
-                  <div><dt>ARN</dt><dd class="mono-xs">{{ q.arn }}</dd></div>
-                  <div><dt>{{ t('sqs.delayed') }}</dt><dd>{{ formatCount(q.delayed, settings.lang) }}</dd></div>
-                  <div><dt>{{ t('sqs.visibilityTimeout') }}</dt><dd>{{ formatDuration(q.visibilityTimeout) }}</dd></div>
-                  <div><dt>{{ t('awsMsg.created') }}</dt><dd>{{ formatDate(q.createdAt, settings.lang) }}</dd></div>
-                  <div v-if="q.dlqFor.length"><dt>{{ t('sqs.redriveFrom') }}</dt><dd>{{ q.dlqFor.join(', ') }}</dd></div>
-                  <div><dt>{{ t('awsMsg.logs') }}</dt><dd class="text-dim">{{ t('sqs.logsNote') }}</dd></div>
-                </dl>
-                <AwsResourceMetrics
-                  :resource-key="q.name" :charts="charts" :empty-text="t('sqs.noMetrics')"
-                  :fetcher="() => awsStore.fetchSqsQueueMetrics(q.name)"
-                  @request-access="emit('request-access', $event)"
-                />
-              </div>
+            <td colspan="11">
+              <SqsQueueDetail :queue="q" :health="q.health" @request-access="emit('request-access', $event)" />
             </td>
           </tr>
         </template>
@@ -76,8 +63,9 @@ import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'
 import { useSortable } from '../../../composables/useSortable'
 import { settings } from '../../../composables/useSettings'
-import AwsResourceMetrics from './AwsResourceMetrics.vue'
-import { arnName, filterRows, formatCount, formatDate, formatDuration } from './messagingFormat'
+import HealthBadge from './HealthBadge.vue'
+import SqsQueueDetail from './SqsQueueDetail.vue'
+import { arnName, filterRows, formatCount, formatDuration, HEALTH_RANK } from './messagingFormat'
 
 const props = defineProps({ search: { type: String, default: '' }, activityLoading: { type: Boolean, default: false } })
 const emit = defineEmits(['request-access'])
@@ -86,19 +74,12 @@ const { t } = useI18n()
 const { sortBy, sortRows, sortIcon, thClass } = useSortable()
 const selected = ref(null)
 
-const charts = computed(() => [
-  { key: 'sent', label: t('sqs.sent'), color: '#58a6ff', stat: 'sum' },
-  { key: 'received', label: t('sqs.received'), color: '#a371f7', stat: 'sum' },
-  { key: 'deleted', label: t('sqs.deleted'), color: '#3fb950', stat: 'sum' },
-  { key: 'visible', label: t('sqs.visibleMax'), color: '#d29922', stat: 'gauge' },
-  { key: 'oldestAge', label: t('sqs.oldestAge'), color: '#f85149', stat: 'gauge', unit: 's' },
-])
 
 const rows = computed(() => {
   const activity = awsStore.sqsActivity?.queues || {}
   return filterRows(awsStore.sqsQueues, props.search).map(q => {
     const a = activity[q.name]
-    return { ...q, sent24h: a?.sent ?? null, received24h: a?.received ?? null, deleted24h: a?.deleted ?? null }
+    return { ...q, sent24h: a?.sent ?? null, received24h: a?.received ?? null, deleted24h: a?.deleted ?? null, health: a?.health || null, healthRank: HEALTH_RANK[a?.health?.status] ?? -1 }
   })
 })
 
@@ -138,4 +119,12 @@ function toggle(name) {
 .msg-subtable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .msg-subtable th { text-align: left; font-size: 11px; color: var(--text-dim); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
 .msg-subtable td { padding: 4px 6px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.msg-section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.msg-section h5 { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-dim); }
+.msg-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.msg-list { margin: 0; padding-left: 16px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.msg-list li { overflow-wrap: anywhere; }
+.msg-section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+.msg-code { font-family: monospace; font-size: 11px; padding: 0 4px; border-radius: 3px; background: var(--bg-hover); cursor: help; }
+.msg-group { margin-right: 14px; }
 </style>

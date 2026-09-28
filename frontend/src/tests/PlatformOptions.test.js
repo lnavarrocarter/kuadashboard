@@ -46,7 +46,7 @@ describe('Options: cache & refresh', () => {
     const wrapper = mountHelp()
     await wrapper.findAll('.help-nav-item')[2].trigger('click')
     const rows = () => wrapper.findAll('.opts-row-stack')
-    expect(rows()).toHaveLength(12)
+    expect(rows()).toHaveLength(13)
     expect(wrapper.findAll('.opts-provider').map(p => p.text().split(/[.;]/)[0])).toEqual(expect.arrayContaining([expect.stringContaining('AWS'), expect.stringContaining('Kubernetes'), expect.stringContaining('Google Cloud'), expect.stringContaining('Vercel')]))
     expect(rows()[1].text()).toContain('Lambda & Step Functions activity')
     expect(rows()[1].text()).toContain('at most 4 times per hour')

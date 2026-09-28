@@ -37,7 +37,7 @@ describe('server cache settings sync', () => {
     const stop = syncServerCacheSettings()
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('/api/system/cache-settings')
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ kubeListCacheSec: 15, kubePrometheusDiscoveryMin: 5 })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ kubeListCacheSec: 15, kubePrometheusDiscoveryMin: 5, metricHistoryDays: 30 })
     settings.kubeListCacheSec = 60
     await nextTick()
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'PUT' })

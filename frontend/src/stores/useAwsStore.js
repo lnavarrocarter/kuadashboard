@@ -1081,32 +1081,64 @@ export const useAwsStore = defineStore('aws', () => {
     }
   }
 
+  // Activity sends what health needs besides metrics (DLQ links, backlog, subscriptions).
   function fetchSqsActivity(options) {
     if (!sqsQueues.value.length) { sqsActivity.value = null; return null }
-    const names = sqsQueues.value.map(q => q.name)
-    return cachedActivity('sqs', sqsActivity, names.join(','), () => apiFetch('/api/cloud/aws/sqs/activity', {
-      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ queues: names }),
+    const queues = sqsQueues.value.map(q => ({ name: q.name, isDlq: q.dlqFor?.length > 0, hasDlq: !!q.dlqArn, visible: q.visible, retentionSeconds: q.retentionSeconds }))
+    return cachedActivity('sqs', sqsActivity, queues.map(q => `${q.name}:${q.isDlq}:${q.hasDlq}`).join(','), () => apiFetch('/api/cloud/aws/sqs/activity', {
+      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ queues }),
     }), options)
   }
 
   function fetchSnsActivity(options) {
     if (!snsTopics.value.length) { snsActivity.value = null; return null }
-    const topics = snsTopics.value.map(topic => ({ name: topic.name, logging: !!topic.deliveryLogging?.enabled }))
+    const topics = snsTopics.value.map(topic => ({
+      name: topic.name, logging: !!topic.deliveryLogging?.enabled,
+      subscriptionsConfirmed: topic.subscriptionsConfirmed, subscriptionsPending: topic.subscriptionsPending,
+    }))
     return cachedActivity('sns', snsActivity, topics.map(topic => `${topic.name}:${topic.logging}`).join(','), () => apiFetch('/api/cloud/aws/sns/activity', {
       method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ topics }),
     }), options)
   }
 
-  function fetchSesMetrics(options) {
-    return cachedActivity('ses', sesMetrics, 'account', () => apiFetch('/api/cloud/aws/ses/metrics', { headers: headers() }), options)
+  // Series endpoints reuse the local metric history for `cacheMin` minutes (Options).
+  function seriesQuery(hours = 24, extra = {}) {
+    const params = new URLSearchParams({ hours: String(hours), cacheMin: String(Number(settings.awsActivityCacheMin) || 15), ...extra })
+    return params.toString()
   }
 
-  // Detail charts: one GetMetricData call (5 metrics) each time a detail opens.
-  function fetchSqsQueueMetrics(name) {
-    return apiFetch(`/api/cloud/aws/sqs/${encodeURIComponent(name)}/metrics`, { headers: headers() })
+  function fetchSesMetrics(options) {
+    return cachedActivity('ses', sesMetrics, 'account', () => apiFetch(`/api/cloud/aws/ses/metrics?${seriesQuery(24)}`, { headers: headers() }), options)
   }
-  function fetchSnsTopicMetrics(name) {
-    return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(name)}/metrics`, { headers: headers() })
+  function fetchSesSeries(hours = 24) {
+    return apiFetch(`/api/cloud/aws/ses/metrics?${seriesQuery(hours)}`, { headers: headers() })
+  }
+
+  // Detail charts: GetMetricData only for the metrics history does not already hold.
+  function fetchSqsQueueMetrics(name, hours = 24) {
+    return apiFetch(`/api/cloud/aws/sqs/${encodeURIComponent(name)}/metrics?${seriesQuery(hours)}`, { headers: headers() })
+  }
+  function fetchSnsTopicMetrics(name, hours = 24) {
+    return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(name)}/metrics?${seriesQuery(hours)}`, { headers: headers() })
+  }
+
+  // Details: 2 billed SQS requests; SNS, SES and Lambda reads are free.
+  function fetchSqsQueueDetails(queue) {
+    return apiFetch(`/api/cloud/aws/sqs/${encodeURIComponent(queue.name)}/details?url=${encodeURIComponent(queue.url)}`, { headers: headers() })
+  }
+  function fetchSnsTopicDetails(topic) {
+    return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/details?arn=${encodeURIComponent(topic.arn)}`, { headers: headers() })
+  }
+  function fetchSnsDeliveryLogs(topic, { hours = 24, status = 'all' } = {}) {
+    const params = new URLSearchParams({ arn: topic.arn, hours: String(hours), status })
+    return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/logs?${params}`, { headers: headers() })
+  }
+  function fetchSesSuppression() {
+    return apiFetch('/api/cloud/aws/ses/suppression', { headers: headers() })
+  }
+  // estimate: true only lists the metrics (ListMetrics) so the cost can be shown first.
+  function fetchSesSetMetrics(name, { hours = 24, estimate = false } = {}) {
+    return apiFetch(`/api/cloud/aws/ses/configuration-sets/${encodeURIComponent(name)}/metrics?${seriesQuery(hours, estimate ? { estimate: '1' } : {})}`, { headers: headers() })
   }
 
   async function fetchSecrets() {
@@ -1255,7 +1287,8 @@ export const useAwsStore = defineStore('aws', () => {
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
     sqsQueues, sqsTruncated, sqsActivity, snsTopics, snsTruncated, snsActivity, sesData, sesMetrics,
-    fetchSqsQueues, fetchSnsTopics, fetchSes, fetchSqsActivity, fetchSnsActivity, fetchSesMetrics, fetchSqsQueueMetrics, fetchSnsTopicMetrics,
+    fetchSqsQueues, fetchSnsTopics, fetchSes, fetchSqsActivity, fetchSnsActivity, fetchSesMetrics, fetchSesSeries, fetchSqsQueueMetrics, fetchSnsTopicMetrics,
+    fetchSqsQueueDetails, fetchSnsTopicDetails, fetchSnsDeliveryLogs, fetchSesSuppression, fetchSesSetMetrics,
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,

@@ -431,6 +431,33 @@ When no configuration set has an enabled destination, a notice explains that bou
 
 In all three tabs, activity follows **Options → Activity cache** (15 minutes by default); the refresh button reads it again. Missing permissions show a notice with **Request access**, and the suggested policy lists the actions of the whole screen (for example `sqs:ListQueues` and `sqs:GetQueueAttributes`). SQS, SNS and SES are counted in the **Overview** and no longer appear under *services outside KUA*.
 
+### Health
+
+Each queue, topic and the SES account get a health status (**OK**, **Warning**, **Critical**) with the reasons behind it. Hover a badge to read them, or open **Details** to see the full list:
+
+- **SQS:** a dead-letter queue holding messages, the oldest message close to the retention period (messages about to be lost) or older than an hour, messages sent but never deleted (nobody consuming), and no dead-letter queue.
+- **SNS:** failed deliveries (critical above 5%), subscriptions waiting for confirmation, no subscriptions, and failures while delivery status logging is off.
+- **SES:** sending paused, an enforcement status other than *HEALTHY*, over 90% of the 24h quota used, and bounce and complaint rates checked against the AWS review thresholds (bounces 5% / 10%, complaints 0.1% / 0.5%).
+
+### Details and logs
+
+- **SQS:** receive wait, flagging **short polling** because each empty receive is a billed request. Also maximum message size, delivery delay, FIFO deduplication, and which queues may use it as a dead-letter queue. The detail lists the **Lambda functions that consume it** (state, batch size, last result), the **SNS topics that deliver to it**, a summary of its access policy (principals open to `*` without conditions are highlighted), and its tags. Charts add empty receives and messages in flight. A detail costs 2 billed SQS requests.
+- **SNS:** every subscription with its **filter policy** (attributes or body), raw delivery and **dead-letter queue**. Without one, undeliverable messages are lost. The detail also shows the HTTP retry policy, the access policy, and a **delivery status log viewer**: the latest events from the `sns/<region>/<account>/<topic>` groups and their `/Failure` counterparts, with status, provider response, attempts and dwell time, filterable to failures only. Logs load only when you click, with `FilterLogEvents`, which has no per-GB charge. The table adds the **delivery success rate** and **filtered** messages, and charts add *sent to DLQ*, *failed to reach DLQ* and average publish size.
+- **SES:** the **suppression list** (addresses SES will not send to, whether by bounce or complaint, and whether automatic suppression is on), rendering failures, the delivery rate, bounce and complaint rate charts, and **metrics by configuration set**. For a set with a CloudWatch destination, KUA first counts the event/dimension metrics that exist (`ListMetrics`) and shows the estimated cost. It reads them (sent, delivered, bounces, opens, clicks and so on per dimension value) only when you click.
+
+### Metric history
+
+Hourly metrics already read are kept in the local database (the APM database, table `kua_metric_points`). Because `GetMetricData` bills per metric requested, whatever the time range, history saves money by **not requesting** what was read recently:
+
+- The table activity is saved per hour, so opening a detail only requests the metrics the table did not read. For example, an SQS detail requests 4 metrics instead of 7.
+- Opening the same detail again within the activity cache time requests nothing.
+- The **24h / 7d / 30d** selector reads longer ranges from history once they are stored. Every chart says how many metrics were requested from CloudWatch and how many came from history.
+- Retention is set in **Options → Cache & refresh → AWS → Metric history** (30 days by default). **Local storage** shows the space it uses.
+
+### Ready for KUA Applications
+
+The three services use the same resource identities as the architecture inventory and the KUA registry, such as `AWS::SQS::Queue:orders` and `AWS::SNS::Topic:alerts`. A shared catalog (`lib/awsMessagingCatalog.js`) defines each service's metrics, the table and detail metrics, and the health rules. `GET /api/cloud/aws/metrics/history?identity=…&metrics=…&hours=…` returns stored history **without calling AWS**. A KUA Application that includes a queue or topic can therefore show its history and health without new reads. Automatic collection for applications is **not enabled**, because it would add recurring charges.
+
 ## Common Features
 
 All 19 AWS service tabs share these global features:

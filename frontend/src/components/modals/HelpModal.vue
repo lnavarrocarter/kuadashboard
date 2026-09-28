@@ -402,6 +402,8 @@ const AWS_OPTIONS = [
     label: mb => (mb === 0 ? t('opts.alwaysAsk') : mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`),
     note: mb => (mb === 0 ? t('opts.logsAskNote') : t('opts.logsNote', { usd: ((mb / 1024) * 0.005).toFixed(4) })) },
 ]
+AWS_OPTIONS.push({ key: 'metricHistoryDays', icon: 'history', billed: false, values: [7, 30, 90, 180, 365], label: n => t('opts.days', { n }),
+  note: () => t('opts.metricHistoryNote') })
 const KUBE_OPTIONS = [
   { key: 'kubeListCacheSec', icon: 'list', billed: false, values: [5, 15, 30, 60], label: seconds,
     note: v => t('opts.kubeListNote', { stale: minutes(Math.max(120, v * 4) / 60) }) },
