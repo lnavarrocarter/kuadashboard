@@ -301,6 +301,7 @@
                   <td @click.stop>
                     <div class="row-actions">
                       <button class="btn sm" data-test="start" :disabled="vm.status !== 'TERMINATED' && vm.status !== 'SUSPENDED'" @click="requestAction('vm', 'start', vm)">▶ Start</button>
+                      <button class="btn sm" data-test="ssh" :disabled="vm.status !== 'RUNNING'" title="Abrir una sesión SSH en la consola" @click="requestAction('vm', 'ssh', vm)">⌨ SSH</button>
                       <button class="btn sm" data-test="stop" :disabled="vm.status !== 'RUNNING'" @click="requestAction('vm', 'stop', vm)">■ Stop</button>
                       <button class="btn sm danger" data-test="delete" @click="requestAction('vm', 'delete', vm)">🗑</button>
                     </div>
@@ -317,6 +318,7 @@
                 <span :class="vmStatusClass(vmPanel.resource.status)" style="font-size:11px">{{ vmPanel.resource.status }}</span>
                 <div style="margin-left:auto;display:flex;gap:6px">
                   <button class="btn sm" @click="requestAction('vm', 'start', vmPanel.resource)" :disabled="vmPanel.resource.status !== 'TERMINATED' && vmPanel.resource.status !== 'SUSPENDED'">▶ Start</button>
+                  <button class="btn sm" @click="requestAction('vm', 'ssh', vmPanel.resource)" :disabled="vmPanel.resource.status !== 'RUNNING'">⌨ SSH</button>
                   <button class="btn sm" @click="requestAction('vm', 'stop', vmPanel.resource)" :disabled="vmPanel.resource.status !== 'RUNNING'">■ Stop</button>
                   <button class="btn sm danger" @click="requestAction('vm', 'delete', vmPanel.resource)">🗑 Eliminar</button>
                   <button class="btn sm" title="Cerrar detalle" @click="vmPanel.resource = null">✕</button>
@@ -1989,6 +1991,7 @@ import { gcpActionConfig } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
+import { useTerminalStreams } from '../../composables/useTerminalStreams'
 
 const props = defineProps({
   activeService: { type: String, default: 'cloudrun' },
@@ -2002,6 +2005,7 @@ const emit = defineEmits(['connect-gke', 'open-architecture'])
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
 const termStore = useTerminalStore()
+const { startSshStream } = useTerminalStreams()
 const { toast }    = useToast()
 const { apiFetch } = useApi()
 
@@ -2328,6 +2332,11 @@ async function runAction(acks) {
   actionModal.busy = true
   actionModal.error = ''
   try {
+    if (action === 'ssh') {
+      openVmSsh(resource, gcpActionConfig(kind, action, resource).addressType)
+      actionModal.open = false
+      return
+    }
     if (action === 'delete') {
       await gcpStore.deleteResource(kind, resource, acks.confirmName)
       const panel = panelFor(kind)
@@ -2351,6 +2360,17 @@ function refreshTab(tab, delay = 0) {
   const run = () => { loaded[tab] = false; loadTab(tab) }
   if (delay) setTimeout(run, delay)
   else run()
+}
+
+// Opens the SSH session as a console tab (same console as EC2 SSH / SSM)
+function openVmSsh(vm, addressType) {
+  const tab = termStore.openCloudTab('gcp-ssh', `${vm.name} (${vm.zone})`, {
+    profileId: selectedProfileId.value,
+    environment: props.environment,
+    applicationId: props.applicationId,
+    target: { name: vm.name, zone: vm.zone, addressType },
+  })
+  if (!tab.ws) startSshStream(tab)
 }
 
 const createModal = reactive({ open: false, kind: 'cloudrun' })

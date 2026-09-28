@@ -164,7 +164,7 @@
           </div>
           <div class="console-capability-row" v-for="capability in group.capabilities" :key="capability.id">
             <span>{{ capability.id }}</span>
-            <span v-if="capability.status === 'available'" class="console-hint">{{ t('console.availableElsewhere') }}</span>
+            <span v-if="capability.status === 'available'" class="console-hint">{{ t('console.availableElsewhere', { provider: group.provider.toUpperCase() }) }}</span>
             <span v-else-if="capability.status === 'unavailable'" class="console-unavailable-badge" :title="capability.reason">{{ t('console.unavailable') }}</span>
             <span v-else class="console-planned-badge">{{ t('console.planned') }}</span>
           </div>
@@ -253,6 +253,7 @@ function reconnect(tab) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
   else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
+  else if (tab.type === 'gcp-ssh') startSshStream(tab, { reconnect: true })
   else if (tab.type === 'ssm') startSsmStream(tab, { reconnect: true })
   else if (tab.type === 'gcp-logs') startGcpLogsStream(tab, { reconnect: true })
   else if (tab.type === 'vercel') startVercelLogsStream(tab, { reconnect: true })

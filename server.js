@@ -103,6 +103,7 @@ const wssEc2Shell = new WebSocket.Server({ noServer: true });
 const wssEc2Rdp   = new WebSocket.Server({ noServer: true });
 const wssAwsSsm   = new WebSocket.Server({ noServer: true });
 const wssGcpLogs    = new WebSocket.Server({ noServer: true });
+const wssGcpSsh     = new WebSocket.Server({ noServer: true });
 const wssVercelLogs = new WebSocket.Server({ noServer: true });
 const { createConsoleSessions, mountConsoleRoutes, admitConsoleUpgrade } = require('./lib/consoleSessions');
 const consoleSessions = createConsoleSessions({
@@ -124,6 +125,8 @@ server.on('upgrade', (request, socket, head) => {
     wssEc2Rdp.handleUpgrade(request, socket, head, ws => wssEc2Rdp.emit('connection', ws, request));
   } else if (pathname === '/ws/aws-ssm') {
     wssAwsSsm.handleUpgrade(request, socket, head, ws => wssAwsSsm.emit('connection', ws, request));
+  } else if (pathname === '/ws/gcp-ssh') {
+    wssGcpSsh.handleUpgrade(request, socket, head, ws => wssGcpSsh.emit('connection', ws, request));
   } else if (pathname === '/ws/gcp-logs') {
     wssGcpLogs.handleUpgrade(request, socket, head, ws => wssGcpLogs.emit('connection', ws, request));
   } else if (pathname === '/ws/vercel-logs') {
@@ -136,7 +139,7 @@ server.on('upgrade', (request, socket, head) => {
 app.use(express.json({ limit: '10mb' }));
 mountConsoleRoutes(app, consoleSessions);
 
-for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssVercelLogs]) {
+for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssGcpSsh, wssVercelLogs]) {
   transport.on('connection', (ws, req) => consoleSessions.attach(ws, req.consoleSession));
 }
 
@@ -2741,6 +2744,107 @@ wssEc2Shell.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => { cleanup(); });
+});
+
+// ─── WebSocket – GCP VM SSH (ephemeral key) ───────────────────────────────────
+// Same wire protocol as /ws/ec2-shell, plus { type: 'status', data } progress
+// messages. Target (name, zone, addressType) and GCP auth come from the
+// validated console session; the key pair is generated per connection (see
+// lib/gcpSsh.js) and kept only in this process.
+
+wssGcpSsh.on('connection', (ws, req) => {
+  const remote = req.socket.remoteAddress;
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote)) {
+    ws.close(1008, 'Local connections only');
+    return;
+  }
+
+  let sshConn = null;
+  let sshStream = null;
+  let closed = false;
+
+  const send = obj => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); };
+  function cleanup() {
+    if (sshStream) { try { sshStream.end(); } catch (_) {} sshStream = null; }
+    if (sshConn)   { try { sshConn.end(); } catch (_) {} sshConn = null; }
+  }
+
+  // New metadata keys take a few seconds to reach authorized_keys; retry auth.
+  function connectWithRetry(opts, attempt = 1) {
+    const { Client } = require('ssh2');
+    cleanup();
+    const conn = new Client();
+    sshConn = conn;
+    conn.on('ready', () => {
+      conn.shell({ term: 'dumb', cols: 220, rows: 50 }, (err, stream) => {
+        if (err) { send({ type: 'error', data: 'SSH shell failed' }); cleanup(); return; }
+        sshStream = stream;
+        send({ type: 'connected', host: opts.host, user: opts.username });
+        stream.on('data', chunk => send({ type: 'out', data: stripAnsi(chunk.toString('utf8')) }));
+        stream.stderr.on('data', chunk => send({ type: 'err', data: stripAnsi(chunk.toString('utf8')) }));
+        stream.on('close', code => { send({ type: 'done', code: code ?? 0 }); cleanup(); });
+      });
+    });
+    conn.on('error', err => {
+      if (closed || sshConn !== conn) return;
+      const retryable = err.level === 'client-authentication' || /ECONNREFUSED|ETIMEDOUT|ECONNRESET/.test(err.code || err.message || '');
+      if (retryable && attempt < 8) {
+        send({ type: 'status', data: `Waiting for the VM to accept the key (${attempt}/7)…` });
+        setTimeout(() => { if (!closed) connectWithRetry(opts, attempt + 1); }, 3000);
+        return;
+      }
+      send({ type: 'error', data: err.level === 'client-authentication'
+        ? `SSH authentication failed for ${opts.username}. Check that the VM allows SSH keys (OS Login permissions or metadata keys).`
+        : `SSH connection to ${opts.host}:22 failed (${err.code || err.message}). Check the firewall allows TCP 22 from this machine.` });
+      cleanup();
+    });
+    conn.on('end', () => { if (sshConn === conn && sshStream) { send({ type: 'done', code: 0 }); cleanup(); } });
+    conn.connect({ host: opts.host, port: opts.port, username: opts.username, privateKey: opts.privateKey, readyTimeout: 15000 });
+  }
+
+  ws.on('message', async rawMsg => {
+    let msg;
+    try { msg = JSON.parse(rawMsg); } catch (_) { return; }
+
+    if (msg.action === 'connect') {
+      const { name, zone, addressType } = req.consoleSession.session.target;
+      const authCtx = req.consoleSession.authority.gcp;
+      const { gcpFetch } = require('./routes/gcp');
+      const { prepareGcpSsh } = require('./lib/gcpSsh');
+      const project = req.consoleSession.session.project || authCtx.projectId;
+      const fetchJson = (url, method = 'GET', body) => gcpFetch(url, authCtx, method, body);
+      const waitZoneOperation = async (opZone, operation) => {
+        let op = operation;
+        for (let i = 0; i < 20 && op?.status !== 'DONE'; i++) {
+          op = await fetchJson(`https://compute.googleapis.com/compute/v1/projects/${project}/zones/${opZone}/operations/${op.name}/wait`, 'POST');
+        }
+        if (op?.error?.errors?.length) throw new Error(op.error.errors.map(e => e.message).join('; '));
+      };
+      try {
+        send({ type: 'status', data: `Preparing a temporary SSH key for ${name}…` });
+        const prepared = await prepareGcpSsh({ authCtx, project, zone, name, addressType }, { fetchJson, waitZoneOperation });
+        if (closed) return;
+        send({ type: 'status', data: prepared.mode === 'oslogin'
+          ? `Key added to your OS Login profile (expires in 30 min). Connecting to ${prepared.username}@${prepared.host}…`
+          : `Key added to the VM metadata (expires in 30 min). Connecting to ${prepared.username}@${prepared.host}…` });
+        auditLog.log({
+          category: 'gcp', action: 'VM SSH key authorized', resource: `${zone}/${name}`,
+          context: req.consoleSession.session.profileId, details: { mode: prepared.mode, user: prepared.username },
+        });
+        connectWithRetry(prepared);
+      } catch (err) {
+        let text = err.message || 'SSH preparation failed';
+        try { text = JSON.parse(text).error?.message || text; } catch (_) {}
+        send({ type: 'error', data: text });
+      }
+      return;
+    }
+    if (msg.action === 'stdin' && sshStream) { try { sshStream.write(msg.data); } catch (_) {} return; }
+    if (msg.action === 'resize' && sshStream) { try { sshStream.setWindow(msg.rows || 50, msg.cols || 220, 0, 0); } catch (_) {} return; }
+    if (msg.action === 'stop') { cleanup(); send({ type: 'done', code: 0 }); }
+  });
+
+  ws.on('close', () => { closed = true; cleanup(); });
 });
 
 // ─── WebSocket – EC2 RDP Canvas ───────────────────────────────────────────────

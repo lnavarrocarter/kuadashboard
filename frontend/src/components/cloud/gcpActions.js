@@ -107,8 +107,33 @@ function deleteConfig(kind, r) {
   }
 }
 
+// SSH into a VM: KUA authorizes a temporary key (OS Login profile or instance
+// metadata), so this is a real change on the VM/account and is confirmed first.
+function sshConfig(r) {
+  const internal = !r.externalIp
+  return {
+    tone: 'info',
+    title: `SSH a ${r.name}`,
+    message: 'Se abrirá una sesión en la consola de KUA.',
+    lines: [
+      'KUA genera una llave SSH temporal (30 min) solo para esta conexión; no se guarda.',
+      'Si la VM usa OS Login, la llave se agrega a tu perfil de OS Login; si no, a la metadata "ssh-keys" de la VM con vencimiento.',
+      internal
+        ? `⚠ La VM no tiene IP externa: se usará la IP interna ${r.internalIp || ''} (requiere VPN o acceso a la VPC).`
+        : `Conexión a ${r.externalIp}:22 (la regla de firewall debe permitir SSH desde tu IP).`,
+    ],
+    confirmLabel: 'Conectar',
+    addressType: internal ? 'internal' : 'external',
+    blocked: r.status !== 'RUNNING' ? `La VM está ${r.status}; iníciala antes de conectarte.` : '',
+  }
+}
+
 export function gcpActionConfig(kind, action, resource) {
   if (!KIND_LABEL[kind]) throw new Error(`Unknown GCP resource kind: ${kind}`)
+  if (action === 'ssh') {
+    if (kind !== 'vm') throw new Error('SSH is only available for VMs')
+    return sshConfig(resource)
+  }
   if (action === 'start') return startConfig(kind, resource)
   if (action === 'stop') return stopConfig(kind, resource)
   if (action === 'delete') return deleteConfig(kind, resource)

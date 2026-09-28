@@ -1138,6 +1138,7 @@ function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
   else if (tab.type === 'local') startLocalStream(tab, { reconnect: true })
   else if (tab.type === 'ec2') startSshStream(tab, { reconnect: true })
+  else if (tab.type === 'gcp-ssh') startSshStream(tab, { reconnect: true })
   else if (tab.type === 'ssm') startSsmStream(tab, { reconnect: true })
   else if (tab.type === 'gcp-logs') startGcpLogsStream(tab, { reconnect: true })
   else if (tab.type === 'vercel') startVercelLogsStream(tab, { reconnect: true })
