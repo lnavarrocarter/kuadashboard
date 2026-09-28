@@ -524,6 +524,46 @@ body.kube-resizing {
 .badge.failed, .badge.notready, .badge.lost, .badge.terminating { background: rgba(244,67,54,.2); color: #ef5350; }
 .badge.succeeded                                           { background: rgba(78,201,176,.2); color: var(--teal); }
 .badge.cordoned                                            { background: rgba(255,152,0,.15); color: var(--yellow); }
+.badge.critical { background: color-mix(in srgb, var(--red) 22%, transparent);    color: var(--red); }
+.badge.warning  { background: color-mix(in srgb, var(--yellow) 20%, transparent); color: var(--yellow); }
+.badge.normal   { background: color-mix(in srgb, var(--text-dim) 16%, transparent); color: var(--text-dim); }
+
+/* ── Severity rows (Events) ──────────────────────────────────────────────────── */
+.rtable tbody tr.sev-row td:first-child { box-shadow: inset 3px 0 0 var(--sev-color, transparent); }
+.rtable tbody tr.sev-critical { --sev-color: var(--red); }
+.rtable tbody tr.sev-critical td { background: color-mix(in srgb, var(--red) 6%, transparent); }
+.rtable tbody tr.sev-warning  { --sev-color: var(--yellow); }
+.rtable tbody tr.sev-normal   { --sev-color: color-mix(in srgb, var(--text-dim) 45%, transparent); }
+.rtable tbody tr.sev-critical:hover td { background: var(--bg-hover); }
+
+/* ── Facet chips (toolbar filters) ───────────────────────────────────────────── */
+.facet-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.facet-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 12px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.facet-chip:hover { color: var(--text); }
+.facet-count { font-weight: 400; opacity: .8; }
+.facet-chip.facet-critical { --facet-color: var(--red); }
+.facet-chip.facet-warning  { --facet-color: var(--yellow); }
+.facet-chip.facet-normal   { --facet-color: var(--text-dim); }
+.facet-chip::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--facet-color, var(--accent));
+}
+.facet-chip.active {
+  color: var(--facet-color, var(--accent));
+  border-color: var(--facet-color, var(--accent));
+  background: color-mix(in srgb, var(--facet-color, var(--accent)) 16%, transparent);
+}
+.facet-clear {
+  border: none; background: transparent; color: var(--text-dim);
+  cursor: pointer; font-size: 11px; padding: 2px 5px; border-radius: 4px;
+}
+.facet-clear:hover { color: var(--text); background: var(--bg-hover); }
 
 /* ── Inline action buttons ───────────────────────────────────────────────────── */
 .action-btn {

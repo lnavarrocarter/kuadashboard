@@ -15,6 +15,7 @@
 - **AWS Route 53 Validación DNS:** Se agregó validación y diagnóstico de registros DNS. Los usuarios pueden probar registros directamente desde la vista de Route 53 para verificar que se resuelven correctamente y están publicados en Internet. Soporta registros A (con verificación de conectividad TCP), TXT, MX, CNAME, NS además de validación de SPF y DKIM. El backend usa el módulo dns nativo de Node para resolución DNS pública.
 - **Services de Kubernetes:** La tabla de Services ahora muestra la app asociada (desde el selector del Service) y las IPs internas de los pods que respaldan cada Service, leídas de EndpointSlices con una sola llamada por namespace. Se marcan los pods no listos, y las columnas Type y Cluster IP no cambian.
 - **Info de AWS EKS:** Nuevo panel Info para clusters EKS, con el diseño de EC2/Lambda, enfocado en la infraestructura AWS del cluster: VPC, subnets y security groups (con qué usa cada uno), managed node groups, instancias EC2 nodo (managed, Karpenter y self-managed) y add-ons de EKS. Cada sección se degrada por separado con un aviso cuando falta un permiso. La tabla de EKS agrega las columnas Node groups y cantidad de instancias EC2, y muestra el endpoint de la API bajo el nombre de cada cluster.
+- **Severidad de eventos de Kubernetes:** Los eventos se colorean como Critical, Warning o Normal (columna con badge y borde de fila) según su tipo y motivo, y chips con conteos en la barra filtran la tabla por severidad, combinados con el filtro de texto.
 
 ## v1.16.0 (2026-09-16)
 

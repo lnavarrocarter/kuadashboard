@@ -33,6 +33,16 @@ The `Age` column is displayed as a readable duration and still sorts by the real
 
 Selecting a row opens a resizable detail panel with a resource-specific summary, labels, containers, networking, storage, events or scheduling fields depending on the resource type.
 
+### Events severity
+
+The Events table colour-codes every event by criticality and lets you filter by it:
+
+- **Critical** (red) — something is failing now: crash loops and back-offs, image pull errors, OOM kills, evictions, volume mount/attach failures, failed pod or job creation, and node problems (not ready, disk/memory/PID pressure).
+- **Warning** (amber) — any other `Warning` event, such as probe failures or scheduling retries.
+- **Normal** (grey) — `Normal` events.
+
+Use the **Critical / Warning / Normal** chips in the table toolbar to show only those severities (each chip shows how many events it matches; select several to combine them, ✕ to show all). The chips work together with the text filter, and clicking the **Severity** column header sorts critical events first.
+
 ## Auto Refresh
 
 KuaDashboard can refresh the active Kubernetes view automatically without changing your selected namespace, resource type or detail panel.

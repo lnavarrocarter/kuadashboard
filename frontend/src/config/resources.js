@@ -1,4 +1,11 @@
 // Resource table column / row / action definitions
+//
+// Optional per resource:
+//   rowClass(row) → extra CSS class for the <tr> (e.g. colour coding)
+//   facet         → { label, value(row), options: [{ value, label }] } renders
+//                   toggle chips with counts in the toolbar to filter rows
+
+import { SEVERITIES, eventSeverity, severityLabel, severityOrder } from './eventSeverity'
 
 export function age(ts) {
   if (!ts) return '-'
@@ -242,9 +249,14 @@ export const RESOURCES = {
   },
   events: {
     title: 'Events',
-    cols:  ['Namespace', 'Type', 'Reason', 'Object', 'Count', 'Message', 'Age'],
-    row:   r => [r.namespace, r.type, r.reason, r.object, r.count,
-                 { truncate: r.message, max: 80 }, age(r.age)],
+    cols:  ['Severity', 'Namespace', 'Type', 'Reason', 'Object', 'Count', 'Message', 'Age'],
+    row:   r => {
+      const sev = eventSeverity(r)
+      return [{ badge: severityLabel(sev), sort: severityOrder(sev) }, r.namespace, r.type, r.reason, r.object, r.count,
+              { truncate: r.message, max: 80 }, age(r.age)]
+    },
+    rowClass: r => `sev-row sev-${eventSeverity(r)}`,
+    facet: { label: 'Severity', value: eventSeverity, options: SEVERITIES },
     actions: () => [],
   },
 }

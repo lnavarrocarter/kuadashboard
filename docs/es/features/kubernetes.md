@@ -33,6 +33,16 @@ Además de Type, Cluster IP y Ports, la tabla de Services muestra:
 
 Las IPs se obtienen con una sola llamada que lista los EndpointSlices del namespace (o del clúster completo en *All namespaces*), no con una consulta por Service, así que los namespaces grandes siguen siendo rápidos. El filtro de la tabla también busca por nombre de app e IPs de backend.
 
+### Severidad de eventos
+
+La tabla de Events colorea cada evento según su criticidad y permite filtrar por ella:
+
+- **Critical** (rojo) — algo está fallando ahora: crash loops y back-offs, errores al descargar imágenes, OOM kills, evictions, fallos al montar o adjuntar volúmenes, fallos al crear pods o jobs, y problemas de nodos (not ready, presión de disco/memoria/PID).
+- **Warning** (ámbar) — cualquier otro evento `Warning`, como fallos de probes o reintentos de scheduling.
+- **Normal** (gris) — eventos `Normal`.
+
+Usa los chips **Critical / Warning / Normal** de la barra de la tabla para mostrar solo esas severidades (cada chip indica cuántos eventos coinciden; puedes combinar varios y usar ✕ para ver todos). Los chips se combinan con el filtro de texto, y al hacer clic en el encabezado **Severity** los eventos críticos quedan primero.
+
 ## Auto-refresh
 
 KuaDashboard puede refrescar automáticamente la vista activa de Kubernetes sin cambiar tu namespace, tipo de recurso o panel de detalle seleccionado.

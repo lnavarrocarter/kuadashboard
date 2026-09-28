@@ -12,6 +12,16 @@
         </button>
       </div>
       <div class="toolbar-right">
+        <div v-if="cfg.facet" class="facet-chips" role="group" :aria-label="cfg.facet.label">
+          <button
+            v-for="opt in cfg.facet.options" :key="opt.value"
+            :class="['facet-chip', `facet-${opt.value}`, { active: activeFacets.has(opt.value) }]"
+            :aria-pressed="activeFacets.has(opt.value)"
+            :title="`${activeFacets.has(opt.value) ? 'Quitar' : 'Mostrar solo'} ${opt.label}`"
+            @click="toggleFacet(opt.value)"
+          >{{ opt.label }} <span class="facet-count">{{ facetCounts[opt.value] || 0 }}</span></button>
+          <button v-if="activeFacets.size" class="facet-clear" title="Mostrar todos" @click="activeFacets = new Set()">✕</button>
+        </div>
         <input v-model="filter" class="search-input" placeholder="Filter..." />
         <button class="btn btn-icon" :class="{ refreshing: store.refreshing }" :disabled="store.loading || store.refreshing" title="Refresh (R)" @click="store.loadResources({ silent: true, force: true })">
           <i data-lucide="refresh-cw"></i>
@@ -26,7 +36,7 @@
         <span>{{ store.error }}</span>
         <button class="btn sm" @click="store.loadResources()">Retry</button>
       </div>
-      <div v-else-if="!filtered.length" class="empty-state">No resources found</div>
+      <div v-else-if="!filtered.length" class="empty-state">{{ store.rows.length ? 'No resources match the current filters' : 'No resources found' }}</div>
       <table v-else class="rtable">
         <thead>
           <tr>
@@ -55,7 +65,7 @@
           <tr
             v-for="row in filtered"
             :key="rowKey(row)"
-            :class="{ selected: selectedKey === rowKey(row), checked: selectedKeys.has(rowKey(row)) }"
+            :class="[cfg.rowClass?.(row), { selected: selectedKey === rowKey(row), checked: selectedKeys.has(rowKey(row)) }]"
             @click="emit('select', store.resource, row)"
           >
             <td v-if="hasBulkDeleteRows" class="col-select" @click.stop>
@@ -126,9 +136,33 @@ function cellSortVal(cell) {
   return String(cell)
 }
 
+// ── Facet chips (e.g. event severity) ──────────────────────────────────────
+// No chip active = show everything; otherwise show rows matching any active chip.
+const activeFacets = ref(new Set())
+
+const facetCounts = computed(() => {
+  const facet = cfg.value.facet
+  if (!facet) return {}
+  const counts = {}
+  for (const row of store.rows) {
+    const v = facet.value(row)
+    counts[v] = (counts[v] || 0) + 1
+  }
+  return counts
+})
+
+function toggleFacet(value) {
+  const next = new Set(activeFacets.value)
+  if (next.has(value)) next.delete(value)
+  else next.add(value)
+  activeFacets.value = next
+}
+
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
   let rows = store.rows
+  const facet = cfg.value.facet
+  if (facet && activeFacets.value.size) rows = rows.filter(r => activeFacets.value.has(facet.value(r)))
   if (q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q))
 
   if (sortColIdx.value === null) return rows
@@ -225,7 +259,7 @@ onMounted(() => {
 })
 onUnmounted(() => document.removeEventListener('keydown', onKey))
 
-watch(() => store.resource, () => { sortColIdx.value = null; sortDir.value = 'asc'; clearSelection() })
+watch(() => store.resource, () => { sortColIdx.value = null; sortDir.value = 'asc'; activeFacets.value = new Set(); clearSelection() })
 watch(() => store.namespace, () => clearSelection())
 watch(() => store.rows, () => {
   const valid = new Set(store.rows.map(rowKey))
