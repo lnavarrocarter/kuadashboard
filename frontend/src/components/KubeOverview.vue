@@ -211,6 +211,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
+import { settings } from '../composables/useSettings'
+import { createRefreshGate } from '../composables/refreshGate'
 import { useKubeStore } from '../stores/useKubeStore'
 import { useI18n } from '../composables/useI18n'
 import CloudMetricChart from './cloud/CloudMetricChart.vue'
@@ -347,8 +349,15 @@ function setRange(next) {
   loadTrends()
 }
 
+// Auto-refresh re-reads the overview and Prometheus trends at most every
+// `kubeOverviewRefreshSec` (Options); opening or refreshing it always loads.
+const refreshGate = createRefreshGate()
+
 async function load({ background = false } = {}) {
   if (background && loading.value) return
+  const gateKey = `${store.currentContext}|${store.namespace || 'all'}|${range.value}`
+  if (background && refreshGate.fresh(gateKey, settings.kubeOverviewRefreshSec)) return
+  refreshGate.mark(gateKey)
   loadTrends({ background })
   const id = ++requestId
   if (!background) loading.value = true

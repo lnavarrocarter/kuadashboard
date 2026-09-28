@@ -608,6 +608,8 @@
 import { ref, computed, watch } from 'vue'
 import { useVercelStore } from '../../stores/useVercelStore'
 import { useI18n }        from '../../composables/useI18n.js'
+import { settings } from '../../composables/useSettings'
+import { createRefreshGate } from '../../composables/refreshGate'
 import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -623,6 +625,10 @@ const emit = defineEmits(['open-architecture'])
 
 const { t }       = useI18n()
 const vercelStore = useVercelStore()
+// Auto-refresh reloads a table at most every `vercelListRefreshSec` (Options),
+// which keeps the token far from Vercel's API rate limits; manual reloads always run.
+const refreshGate = createRefreshGate()
+
 const termStore   = useTerminalStore()
 
 const search                      = ref('')
@@ -657,6 +663,9 @@ watch(
 
 function reload(service, options = {}) {
   const svc = typeof service === 'string' ? service : props.activeService
+  const gateKey = `${vercelStore.activeProfileId}|${vercelStore.selectedProject?.id || ''}|${svc}`
+  if (options.background && refreshGate.fresh(gateKey, settings.vercelListRefreshSec)) return Promise.resolve()
+  refreshGate.mark(gateKey)
   let load = null
   if (svc === 'apm') load = async () => {
     await vercelStore.fetchProjects()

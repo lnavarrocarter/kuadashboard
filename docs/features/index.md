@@ -105,6 +105,16 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 | CloudWatch dashboard auto-refresh | 1 min | 1, 5, 15 min | `GetMetricData` for metrics and alarms, only while auto-refresh is on |
 | Logs Insights auto-run limit | 1 GB | Always ask, 256 MB, 1 GB, 5 GB | USD 0.005 per GB scanned; larger queries ask first |
 
+Kubernetes, Google Cloud and Vercel have no per-call cost; their options limit cluster load and API quota use:
+
+| Provider | Option | Default | Choices | What it controls |
+|---|---|---|---|---|
+| Kubernetes | Resource list cache | 15 s | 5, 15, 30, 60 s | How long tables are served from KUA memory before a background refresh (kept up to 2 min, or 4× the value). Deletes, scales and edits clear the affected lists |
+| Kubernetes | Overview and trends auto-refresh | 30 s | Every auto-refresh, 15 s, 30 s, 1 min, 5 min | Minimum time between background reloads of the Overview and its Prometheus range queries |
+| Kubernetes | Prometheus discovery | 5 min | 1, 5, 15, 30 min | How long the Prometheus service found in the cluster is reused (finding it lists every Service) |
+| Google Cloud | Table auto-refresh | 30 s | Every auto-refresh, 15 s, 30 s, 1 min, 5 min | Minimum time between background reloads of a GCP table (list APIs have per-minute quotas). History polling keeps its own per-profile setting |
+| Vercel | Table auto-refresh | 30 s | Every auto-refresh, 15 s, 30 s, 1 min, 5 min | Minimum time between background reloads of a Vercel table (the API rate-limits each token) |
+
 **Local storage** shows the disk used by KUA's data folder (`KUA_DATA_DIR` or `~/.kuadashboard`): the total, each SQLite database (used space, free pages and WAL journal), its tables with rows and size, every file with its last change, the browser storage used by views, filters and saved connections, the profiles with cached AWS costs, and the free disk space. It only reads; nothing is changed.
 
 **Restore defaults** resets every option except the language.

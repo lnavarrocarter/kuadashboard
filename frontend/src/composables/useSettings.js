@@ -19,6 +19,11 @@ export const SETTINGS_DEFAULTS = {
   awsCostCacheHours:     12,   // Cost Explorer (USD 0.01 per request)
   cwDashboardRefreshSec: 60,   // dashboard auto-refresh interval (metrics and alarms only)
   logsAutoRunMb:         1024, // Logs Insights runs on its own up to this estimate; 0 = always ask
+  kubeListCacheSec:      15,   // backend list cache: fresh window (stale revalidates in background)
+  kubeOverviewRefreshSec: 30,  // Kubernetes Overview + Prometheus trends: min seconds between auto-refreshes
+  kubePrometheusDiscoveryMin: 5, // backend reuse of the Prometheus service discovery
+  gcpListRefreshSec:     30,   // GCP tables: min seconds between auto-refreshes (0 = every tick)
+  vercelListRefreshSec:  30,   // Vercel tables: min seconds between auto-refreshes (0 = every tick)
 }
 const DEFAULTS = SETTINGS_DEFAULTS
 

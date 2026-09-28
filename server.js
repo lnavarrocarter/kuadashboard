@@ -619,13 +619,13 @@ async function discoverPrometheusServices() {
 
 // Discovery lists every Service in the cluster, so reuse it per context
 // instead of repeating it for each Prometheus query.
-const PROMETHEUS_DISCOVERY_TTL_MS = 5 * 60 * 1000;
+let prometheusDiscoveryTtlMs = 5 * 60 * 1000; // set from Options (PUT /api/system/cache-settings)
 let prometheusDiscovery = null;
 
 async function cachedPrometheusServices({ refresh = false } = {}) {
   const fresh = prometheusDiscovery
     && prometheusDiscovery.context === currentContext
-    && Date.now() - prometheusDiscovery.at < PROMETHEUS_DISCOVERY_TTL_MS;
+    && Date.now() - prometheusDiscovery.at < prometheusDiscoveryTtlMs;
   if (fresh && !refresh) return prometheusDiscovery.services;
   const services = await discoverPrometheusServices();
   prometheusDiscovery = { context: currentContext, at: Date.now(), services };
@@ -875,6 +875,33 @@ app.use('/api', (req, res, next) => {
     return sendJson(body);
   };
   next();
+});
+
+// ─── Cache settings (Options) ─────────────────────────────────────────────────
+// The UI sends its Kubernetes cache choices on start and on every change.
+// Lists are served from memory while fresh, then revalidated in the background
+// while stale (at least 2 min, or 4× the fresh window).
+
+function cacheSettingsResponse() {
+  return {
+    kubeListCacheSec: Math.round(kubeResponseCache.freshMs / 1000),
+    kubeListStaleSec: Math.round(kubeResponseCache.staleMs / 1000),
+    kubePrometheusDiscoveryMin: Math.round(prometheusDiscoveryTtlMs / 60000),
+  };
+}
+
+app.get('/api/system/cache-settings', (_req, res) => res.json(cacheSettingsResponse()));
+
+app.put('/api/system/cache-settings', (req, res) => {
+  const listSec = Number(req.body?.kubeListCacheSec);
+  const discoveryMin = Number(req.body?.kubePrometheusDiscoveryMin);
+  if (req.body?.kubeListCacheSec !== undefined && !(listSec >= 0 && listSec <= 600)) return res.status(400).json({ error: 'kubeListCacheSec must be 0–600' });
+  if (req.body?.kubePrometheusDiscoveryMin !== undefined && !(discoveryMin >= 1 && discoveryMin <= 120)) return res.status(400).json({ error: 'kubePrometheusDiscoveryMin must be 1–120' });
+  if (req.body?.kubeListCacheSec !== undefined) {
+    kubeResponseCache.configure({ freshMs: listSec * 1000, staleMs: Math.max(120, listSec * 4) * 1000 });
+  }
+  if (req.body?.kubePrometheusDiscoveryMin !== undefined) prometheusDiscoveryTtlMs = discoveryMin * 60000;
+  res.json(cacheSettingsResponse());
 });
 
 // ─── Contexts & Namespaces ────────────────────────────────────────────────────

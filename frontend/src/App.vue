@@ -519,6 +519,7 @@ import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
+import { syncServerCacheSettings } from './composables/serverCacheSettings'
 import { useI18n } from './composables/useI18n'
 import { useArchitectureContext } from './composables/useArchitectureContext'
 
@@ -1271,6 +1272,8 @@ function toggleTheme() {
 }
 
 function onKey(e) { if (e.key === 'Escape') Object.keys(modals).forEach(k => modals[k] = false) }
+
+syncServerCacheSettings()
 
 onMounted(async () => {
   applySettings()

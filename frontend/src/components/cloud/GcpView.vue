@@ -1859,6 +1859,8 @@ import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
+import { settings as appSettings } from '../../composables/useSettings'
+import { createRefreshGate } from '../../composables/refreshGate'
 import GcsBrowser       from './GcsBrowser.vue'
 import GcpCreateModal   from './GcpCreateModal.vue'
 import GcpConfirmModal  from './GcpConfirmModal.vue'
@@ -1983,14 +1985,20 @@ const fetchMap = {
   kms:          () => gcpStore.fetchKmsKeyrings(),
 }
 
+// Auto-refresh reloads a table at most every `gcpListRefreshSec` (Options);
+// the refresh button and tab switches always load.
+const refreshGate = createRefreshGate()
+
 async function loadTab(id, options = {}) {
   if (loaded[id]) return
   const load = () => fetchMap[id]?.()
+  refreshGate.mark(`${selectedProfileId.value}|${id}`)
   await (options.background ? gcpStore.runInBackground(load) : load())
   loaded[id] = true
 }
 
 async function reloadActiveTab(options = {}) {
+  if (options.background && refreshGate.fresh(`${selectedProfileId.value}|${activeTab.value}`, appSettings.gcpListRefreshSec)) return
   loaded[activeTab.value] = false
   if (!options.preserveSearch) search.value = ''
   await loadTab(activeTab.value, options)

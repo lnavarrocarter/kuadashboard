@@ -105,6 +105,16 @@ KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kub
 | Auto-actualización de dashboards de CloudWatch | 1 min | 1, 5, 15 min | `GetMetricData` para métricas y alarmas, solo con la auto-actualización activada |
 | Límite de ejecución automática de Logs Insights | 1 GB | Preguntar siempre, 256 MB, 1 GB, 5 GB | USD 0.005 por GB leído; las consultas más grandes preguntan antes |
 
+Kubernetes, Google Cloud y Vercel no tienen costo por llamada; sus opciones limitan la carga del clúster y el uso de cuotas de API:
+
+| Proveedor | Opción | Por defecto | Valores | Qué controla |
+|---|---|---|---|---|
+| Kubernetes | Caché de listas de recursos | 15 s | 5, 15, 30, 60 s | Cuánto tiempo se sirven las tablas desde la memoria de KUA antes de actualizarse en segundo plano (se guardan hasta 2 min, o 4× el valor). Borrar, escalar o editar limpia las listas afectadas |
+| Kubernetes | Auto-actualización del Resumen y tendencias | 30 s | En cada auto-refresco, 15 s, 30 s, 1 min, 5 min | Tiempo mínimo entre recargas en segundo plano del Resumen y sus consultas de rango a Prometheus |
+| Kubernetes | Descubrimiento de Prometheus | 5 min | 1, 5, 15, 30 min | Cuánto se reutiliza el servicio de Prometheus encontrado en el clúster (encontrarlo lista todos los Services) |
+| Google Cloud | Auto-actualización de tablas | 30 s | En cada auto-refresco, 15 s, 30 s, 1 min, 5 min | Tiempo mínimo entre recargas en segundo plano de una tabla de GCP (las APIs de listado tienen cuotas por minuto). El sondeo de historial mantiene su opción por perfil |
+| Vercel | Auto-actualización de tablas | 30 s | En cada auto-refresco, 15 s, 30 s, 1 min, 5 min | Tiempo mínimo entre recargas en segundo plano de una tabla de Vercel (la API limita las solicitudes por token) |
+
 **Almacenamiento local** muestra el espacio que usa la carpeta de datos de KUA (`KUA_DATA_DIR` o `~/.kuadashboard`): el total, cada base SQLite (espacio usado, páginas libres y journal WAL), sus tablas con filas y tamaño, cada archivo con su última modificación, el almacenamiento del navegador que usan vistas, filtros y conexiones guardadas, los perfiles con costos de AWS en caché y el espacio libre en disco. Solo lee; no cambia nada.
 
 **Restaurar valores por defecto** vuelve todas las opciones a su valor inicial, salvo el idioma.

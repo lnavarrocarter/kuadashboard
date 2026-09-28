@@ -262,7 +262,12 @@
           <!-- Cache & refresh: every automatic re-read, with what it costs -->
           <div class="opts-group">
             <div class="opts-group-title">{{ t('opts.cacheGroup') }}</div>
-            <div v-for="opt in CACHE_OPTIONS" :key="opt.key" class="opts-row opts-row-stack">
+            <template v-for="group in CACHE_GROUPS" :key="group.id">
+            <div class="opts-provider">
+              <span>{{ group.label }}</span>
+              <span class="opts-provider-note">{{ t(`opts.provider.${group.id}`) }}</span>
+            </div>
+            <div v-for="opt in group.options" :key="opt.key" class="opts-row opts-row-stack">
               <div class="opts-label">
                 <i :data-lucide="opt.icon"></i>
                 <div class="opts-text">
@@ -274,6 +279,7 @@
                 <option v-for="value in opt.values" :key="value" :value="value">{{ opt.label(value) }}</option>
               </select>
             </div>
+            </template>
           </div>
 
           <PlatformStorage v-if="activeTab === 'options'" />
@@ -372,7 +378,14 @@ function resetSettings() {
 const minutes = n => (n >= 60 ? t('opts.hours', { n: n / 60 }) : t('opts.minutes', { n }))
 const hours = n => t('opts.hours', { n })
 const perHour = n => Math.max(1, Math.round(60 / n))
-const CACHE_OPTIONS = [
+const seconds = n => (n === 0 ? t('opts.everyTick') : n >= 60 ? minutes(n / 60) : t('opts.seconds', { n }))
+// Background reloads per hour with the tab open, bounded by the global auto-refresh.
+const reloadsPerHour = n => {
+  const tick = Number(settings.autoRefresh) || 0
+  if (!tick) return 0
+  return Math.round(3600 / Math.max(n, tick))
+}
+const AWS_OPTIONS = [
   { key: 'awsActivityCacheMin', icon: 'activity', billed: true, values: [5, 15, 30, 60], label: minutes,
     note: v => t('opts.awsActivityNote', { loads: perHour(v) }) },
   { key: 'awsInsightsCacheMin', icon: 'gauge', billed: true, values: [5, 15, 30, 60], label: minutes,
@@ -386,6 +399,28 @@ const CACHE_OPTIONS = [
   { key: 'logsAutoRunMb', icon: 'scroll-text', billed: true, values: [0, 256, 1024, 5120],
     label: mb => (mb === 0 ? t('opts.alwaysAsk') : mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`),
     note: mb => (mb === 0 ? t('opts.logsAskNote') : t('opts.logsNote', { usd: ((mb / 1024) * 0.005).toFixed(4) })) },
+]
+const KUBE_OPTIONS = [
+  { key: 'kubeListCacheSec', icon: 'list', billed: false, values: [5, 15, 30, 60], label: seconds,
+    note: v => t('opts.kubeListNote', { stale: minutes(Math.max(120, v * 4) / 60) }) },
+  { key: 'kubeOverviewRefreshSec', icon: 'layout-dashboard', billed: false, values: [0, 15, 30, 60, 300], label: seconds,
+    note: v => t('opts.kubeOverviewNote', { loads: reloadsPerHour(v) }) },
+  { key: 'kubePrometheusDiscoveryMin', icon: 'radar', billed: false, values: [1, 5, 15, 30], label: minutes,
+    note: () => t('opts.kubeDiscoveryNote') },
+]
+const GCP_OPTIONS = [
+  { key: 'gcpListRefreshSec', icon: 'table', billed: false, values: [0, 15, 30, 60, 300], label: seconds,
+    note: v => t('opts.gcpListNote', { loads: reloadsPerHour(v) }) },
+]
+const VERCEL_OPTIONS = [
+  { key: 'vercelListRefreshSec', icon: 'table', billed: false, values: [0, 15, 30, 60, 300], label: seconds,
+    note: v => t('opts.vercelListNote', { loads: reloadsPerHour(v) }) },
+]
+const CACHE_GROUPS = [
+  { id: 'aws', label: 'AWS', options: AWS_OPTIONS },
+  { id: 'kubernetes', label: 'Kubernetes', options: KUBE_OPTIONS },
+  { id: 'gcp', label: 'Google Cloud', options: GCP_OPTIONS },
+  { id: 'vercel', label: 'Vercel', options: VERCEL_OPTIONS },
 ]
 
 function installUpdate() {
@@ -657,6 +692,13 @@ function open(url) {
 .opts-note { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
 .opts-note.billed::before { content: '$ '; color: var(--yellow); font-weight: 700; }
 .opts-select { width: 130px; font-size: 12px; flex-shrink: 0; }
+.opts-provider {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 8px 14px 6px; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  font-size: 11px; font-weight: 700; color: var(--text);
+}
+.opts-provider-note { font-weight: 400; color: var(--text-dim); }
 .opts-row-stack { align-items: flex-start; }
 .opts-row-stack .opts-label > i, .opts-row-stack .opts-label > svg { margin-top: 2px; }
 @media (max-width: 560px) {
