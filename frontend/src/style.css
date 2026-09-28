@@ -1073,7 +1073,7 @@ body.kube-resizing {
   color: var(--text-dim);
   white-space: nowrap;
   min-width: 0;
-  max-width: 200px;
+  max-width: 260px;
   height: 34px;
   flex-shrink: 0;
   transition: background .1s, color .1s;
@@ -1219,6 +1219,11 @@ body.kube-resizing {
 }
 .ctx-pod   { background: rgba(14,157,232,.2);  color: #64b5f6; }
 .ctx-local { background: rgba(76,175,80,.2);   color: var(--green); }
+.tab-prov-chip {
+  padding: 0 6px; border-radius: 8px; font-size: 10px; font-weight: 700; letter-spacing: .02em; flex: none;
+  color: var(--prov, var(--text-dim)); background: color-mix(in srgb, var(--prov, var(--text)) 16%, transparent);
+}
+.term-tab .tab-rename { width: 150px; font-size: 12px; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg-row); color: var(--text); outline: none; }
 .ctx-aws   { background: rgba(255,153,0,.2);   color: #ffb347; }
 .ctx-gcp   { background: rgba(66,133,244,.2);  color: #7baaf7; }
 

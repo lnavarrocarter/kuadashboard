@@ -22,8 +22,19 @@
         >
           <span :class="['tab-dot', { streaming: tab.streaming, stopped: !tab.streaming }]"></span>
           <!-- Context chip -->
-          <span :class="['tab-ctx-chip', `ctx-${tab.context || 'pod'}`]" :title="store.capabilityRegistry.filter(c => c.provider === tab.provider).map(c => `${c.id}: ${c.status}`).join('\n')">{{ tab.provider || 'kubernetes' }}</span>
-          <span class="tab-label" :title="tab.label || tab.pod" @click="store.activateTab(tab.id)">{{ tab.label || tab.pod }}</span>
+          <span
+            class="tab-prov-chip" :style="{ '--prov': providerMeta(tab.provider || 'kubernetes').color }"
+            :title="store.capabilityRegistry.filter(c => c.provider === tab.provider).map(c => `${c.id}: ${c.status}`).join('\n')"
+          >{{ providerMeta(tab.provider || 'kubernetes').label }}</span>
+          <input
+            v-if="renamingTab === tab.id" v-model="renameText" class="tab-rename"
+            :aria-label="t('console.rename')"
+            @click.stop @keydown.enter="commitRename(tab)" @keydown.esc="renamingTab = null" @blur="commitRename(tab)"
+          />
+          <span
+            v-else class="tab-label" :title="`${tab.label || tab.pod} — ${t('term.renameHint')}`"
+            @click="store.activateTab(tab.id)" @dblclick.stop="startRename(tab)"
+          >{{ middleTruncate(tab.label || tab.pod, 24) }}</span>
           <button class="tab-close" :title="t('term.closeTab')" @click.stop="closeTab(tab.id)">✕</button>
         </div>
       </div>
@@ -270,10 +281,25 @@
 </template>
 
 <script setup>
+import { providerMeta, middleTruncate } from '../composables/consoleConnections'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 
 const { t } = useI18n()
+
+// Double-click a tab name to rename it (#63); the name is persisted with the tab.
+const renamingTab = ref(null)
+const renameText = ref('')
+function startRename(tab) {
+  renamingTab.value = tab.id
+  renameText.value = tab.label || tab.pod || ''
+  nextTick(() => document.querySelector('.tab-rename')?.select())
+}
+function commitRename(tab) {
+  if (renamingTab.value !== tab.id) return
+  store.renameTab(tab.id, renameText.value)
+  renamingTab.value = null
+}
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { createIcons, icons } from 'lucide'
 import FileViewerModal from './FileViewerModal.vue'

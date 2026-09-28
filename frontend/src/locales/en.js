@@ -1242,4 +1242,16 @@ export default {
   'lambdaLogs.create': '+ Create log group in CloudWatch',
   'lambdaLogs.noEvents': 'No events in the selected period.',
   'lambdaLogs.created': 'Log group "{group}" created with {days}-day retention.',
+
+  // ── Console: saved connections ────────────────────────────────────
+  'console.colName': 'Name',
+  'console.rename': 'Rename',
+  'console.saveConnection': 'Save connection',
+  'console.savedMark': 'Saved connection',
+  'console.savedTitle': 'Saved connections',
+  'console.savedEmpty': 'Save a session from the list to reopen it later with one click.',
+  'console.openSaved': 'Open',
+  'console.deleteSaved': 'Delete saved connection',
+  'console.deleteSavedConfirm': 'Delete the saved connection "{name}"?',
+  'term.renameHint': 'double-click to rename',
 }

@@ -202,6 +202,20 @@ Puedes tener tantas pestañas de terminal abiertas como necesites:
 
 ---
 
+## Conexiones Guardadas
+
+El workspace de **Consola** (botón del header) mantiene una lista de **Conexiones guardadas** para volver a abrir una sesión sin escribir sus datos otra vez:
+
+- **Guardar**: usa el botón de marcador en cualquier sesión activa. El nombre de la sesión pasa a ser el nombre de la conexión y puedes cambiarlo en el momento. Guardar el mismo destino otra vez solo lo renombra.
+- **Abrir**: el botón de play vuelve a abrir la sesión (logs o exec de Kubernetes, shell local, SSH a EC2, AWS SSM, logs o SSH de GCP, logs de Vercel) y nombra la pestaña nueva como la conexión. AWS SSM sigue pidiendo confirmación antes.
+- **Renombrar / Borrar**: el botón de lápiz (o doble clic en el nombre) la renombra; el botón de papelera la borra después de confirmar.
+
+Las conexiones guardadas solo almacenan lo necesario para reabrir una sesión (proveedor, contexto, namespace, recurso, host, instancia o deployment, y el *id* del perfil de credenciales); nunca credenciales, tokens ni output. Se guardan en el almacenamiento local de este equipo y sobreviven a una recarga.
+
+**Renombrar sesiones**: renombra una sesión activa con el botón de lápiz del workspace, o con doble clic en el nombre de una pestaña del panel de terminal. Los nombres se conservan al recargar.
+
+Las sesiones y pestañas muestran un icono de color por proveedor (Kubernetes, AWS, GCP, Vercel, local), y los nombres largos se acortan por el medio para que se vean el principio y el final; al pasar el mouse se ve el nombre completo.
+
 ## Reconexión y Persistencia de Sesión
 
 Recargar la ventana restaura tus pestañas abiertas y su orden, pero nunca retoma en silencio una sesión remota en vivo — una pestaña restaurada siempre vuelve desconectada, mostrando su output previo. Haz clic en **Reconnect** (disponible tanto en el panel rápido como en las acciones de fila del workspace de Console) para restablecerla.

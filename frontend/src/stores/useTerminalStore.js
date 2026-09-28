@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { capabilityRegistry, sessionDescriptor } from '../shared/consoleSession.mjs'
+import { connectionFromTab, sameConnection } from '../composables/consoleConnections'
 
 export const TERMINAL_MAX_LINES = 5000
 
@@ -9,6 +10,10 @@ export const TERMINAL_MAX_LINES = 5000
 // disconnected — nothing here ever silently reopens a remote session.
 const TABS_STORAGE_KEY = 'kua:console:tabs'
 const HISTORY_STORAGE_KEY = 'kua:console:history'
+// Saved connections (#63): name + provider + what is needed to reopen the session.
+// Never credentials, tokens or output.
+const SAVED_STORAGE_KEY = 'kua:console:saved'
+const SAVED_MAX = 100
 const STORAGE_VERSION = 1
 const HISTORY_MAX_PER_TARGET = 200
 const HISTORY_MAX_TARGETS = 50
@@ -65,6 +70,15 @@ function loadPersistedHistory() {
   }
 }
 
+function loadSavedConnections() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVED_STORAGE_KEY) || 'null')
+    return raw && raw.version === STORAGE_VERSION && Array.isArray(raw.items) ? raw.items : []
+  } catch (_) {
+    return []
+  }
+}
+
 function targetKeyFor(tab) {
   if (tab.provider === 'kubernetes') return `kubernetes:${tab.kubeContext || ''}:${tab.ns || ''}:${tab.resourceType || 'pods'}:${tab.container || ''}`
   if (tab.provider === 'local') return `local:${tab.environment || 'default'}:${tab.applicationId || ''}`
@@ -81,6 +95,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   const wrap     = ref(restored.wrap)
   const height   = ref(restored.height)
   const history  = ref(loadPersistedHistory())
+  const savedConnections = ref(loadSavedConnections())
   let tabSeq = 0
 
   function persistTabsNow() {
@@ -301,6 +316,67 @@ export const useTerminalStore = defineStore('terminal', () => {
     return Number.isNaN(date.getTime()) ? null : date.getTime()
   }
 
+  function renameTab(id, label) {
+    const tab = tabs.value.find(t => t.id === id)
+    const name = String(label || '').trim()
+    if (!tab || !name) return false
+    tab.label = name.slice(0, 80)
+    persistTabsNow()
+    return true
+  }
+
+  // ── Saved connections (#63) ──────────────────────────────────────────────────
+  function persistSavedNow() {
+    try {
+      localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, items: savedConnections.value }))
+    } catch (_) {}
+  }
+
+  /** Saves the session of a tab under a name; saving the same target again renames it. */
+  function saveConnection(tab, name) {
+    const connection = connectionFromTab(tab)
+    const label = String(name || tab.label || '').trim().slice(0, 80)
+    if (!connection || !label) return null
+    const existing = savedConnections.value.find(item => sameConnection(item, connection))
+    if (existing) {
+      existing.name = label
+      existing.updatedAt = Date.now()
+      persistSavedNow()
+      return existing
+    }
+    const item = { id: `conn-${Date.now()}-${++tabSeq}`, name: label, ...connection, createdAt: Date.now(), updatedAt: Date.now(), lastUsed: null }
+    savedConnections.value = [item, ...savedConnections.value].slice(0, SAVED_MAX)
+    persistSavedNow()
+    return item
+  }
+
+  function renameConnection(id, name) {
+    const item = savedConnections.value.find(c => c.id === id)
+    const label = String(name || '').trim()
+    if (!item || !label) return false
+    item.name = label.slice(0, 80)
+    item.updatedAt = Date.now()
+    persistSavedNow()
+    return true
+  }
+
+  function deleteConnection(id) {
+    savedConnections.value = savedConnections.value.filter(c => c.id !== id)
+    persistSavedNow()
+  }
+
+  function touchConnection(id) {
+    const item = savedConnections.value.find(c => c.id === id)
+    if (!item) return
+    item.lastUsed = Date.now()
+    persistSavedNow()
+  }
+
+  function isSaved(tab) {
+    const connection = connectionFromTab(tab)
+    return !!connection && savedConnections.value.some(item => sameConnection(item, connection))
+  }
+
   // ── Per-target command history (#40) ─────────────────────────────────────────
   function pushHistory(tab, cmd) {
     if (!cmd || !cmd.trim()) return
@@ -333,9 +409,10 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   return {
-    tabs, activeId, visible, wrap, height, capabilityRegistry, history,
+    tabs, activeId, visible, wrap, height, capabilityRegistry, history, savedConnections,
     activeTab, openLogsTab, openExecTab, openLocalTab, openCloudTab,
-    activateTab, closeTab, stopStream, pushLine, pruneStaleTabs,
+    activateTab, closeTab, stopStream, pushLine, pruneStaleTabs, renameTab,
+    saveConnection, renameConnection, deleteConnection, touchConnection, isSaved,
     pushHistory, historyFor, clearHistory, clearAllHistory,
   }
 })

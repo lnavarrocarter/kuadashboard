@@ -59,7 +59,7 @@ describe('ConsoleWorkspaceView', () => {
 
     const rows = wrapper.findAll('.console-row')
     expect(rows).toHaveLength(1)
-    expect(rows[0].text()).toContain('kubernetes')
+    expect(rows[0].text()).toContain('Kubernetes')
     expect(rows[0].text()).toContain('default')
     expect(rows[0].text()).toContain('orders/api-1')
     expect(rows[0].text()).toContain('idle')

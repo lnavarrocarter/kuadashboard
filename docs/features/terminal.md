@@ -203,6 +203,20 @@ You can have as many terminal tabs open as needed:
 
 ---
 
+## Saved Connections
+
+The **Console** workspace (header button) keeps a list of **Saved connections** so you can reopen a session without typing its details again:
+
+- **Save** — use the bookmark button on any active session. The session's name becomes the connection name; you can change it right away. Saving the same target again only renames it.
+- **Open** — the play button reopens the session (Kubernetes logs or exec, local shell, EC2 SSH, AWS SSM, GCP logs or SSH, Vercel logs) and names the new tab after the connection. AWS SSM still asks for confirmation first.
+- **Rename / Delete** — the pencil button (or a double-click on the name) renames it; the trash button deletes it after confirming.
+
+Saved connections only store what is needed to reopen a session (provider, context, namespace, resource, host, instance or deployment, and the credential profile *id*) — never credentials, tokens or output. They live in this device's local storage and survive reloads.
+
+**Renaming sessions** — rename an active session with the pencil button in the workspace, or double-click a tab name in the terminal panel. Names are kept across reloads.
+
+Sessions and tabs show a colored icon per provider (Kubernetes, AWS, GCP, Vercel, local), and long names are shortened in the middle so both the start and the end stay visible; hover to see the full name.
+
 ## Reconnecting & Session Persistence
 
 Reloading the window restores your open tabs and their order, but never silently resumes a live remote session — a restored tab always comes back disconnected, showing its prior output. Click **Reconnect** (available in both the quick panel and the Console workspace's row actions) to re-establish it.

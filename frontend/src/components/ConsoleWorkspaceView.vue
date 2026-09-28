@@ -17,8 +17,8 @@
             <thead>
               <tr>
                 <th>{{ t('console.colProvider') }}</th>
+                <th>{{ t('console.colName') }}</th>
                 <th>{{ t('console.colEnvironment') }}</th>
-                <th>{{ t('console.colScope') }}</th>
                 <th>{{ t('console.colTarget') }}</th>
                 <th>{{ t('console.colStatus') }}</th>
                 <th></th>
@@ -26,14 +26,34 @@
             </thead>
             <tbody>
               <tr v-for="tab in store.tabs" :key="tab.id" :class="['console-row', { active: tab.id === store.activeId }]" @click="store.activateTab(tab.id)">
-                <td><span class="console-provider-chip">{{ tab.provider || 'kubernetes' }}</span></td>
-                <td>{{ tab.environment || 'default' }}</td>
-                <td>{{ tab.region || tab.project || '—' }}</td>
-                <td class="console-target" :title="targetSummary(tab)">{{ targetSummary(tab) }}</td>
+                <td>
+                  <span class="console-provider-chip" :style="{ '--prov': providerMeta(tab.provider || 'kubernetes').color }">
+                    <i :data-lucide="providerMeta(tab.provider || 'kubernetes').icon"></i>{{ providerMeta(tab.provider || 'kubernetes').label }}
+                  </span>
+                </td>
+                <td class="console-name">
+                  <input
+                    v-if="renamingTab === tab.id" v-model="renameText" class="ctrl-input sm console-rename"
+                    :aria-label="t('console.rename')"
+                    @click.stop @keydown.enter="commitTabRename(tab)" @keydown.esc="renamingTab = null" @blur="commitTabRename(tab)"
+                  />
+                  <span v-else :title="tab.label || tab.pod" @dblclick.stop="startTabRename(tab)">
+                    {{ middleTruncate(tab.label || tab.pod, 34) }}
+                    <i v-if="store.isSaved(tab)" data-lucide="bookmark-check" class="console-saved-mark" :title="t('console.savedMark')"></i>
+                  </span>
+                </td>
+                <td class="console-env">
+                  {{ tab.environment || 'default' }}<span v-if="tab.region || tab.project" class="console-scope" :title="t('console.colScope')"> · {{ tab.region || tab.project }}</span>
+                </td>
+                <td class="console-target" :title="targetSummary(tab)">{{ middleTruncate(targetSummary(tab), 40) }}</td>
                 <td><span :class="['console-status-badge', `state-${tab.connectionState || 'idle'}`]">{{ tab.connectionState || 'idle' }}</span></td>
                 <td class="console-row-actions">
+                  <div class="console-row-buttons">
+                  <button class="btn sm btn-icon console-action-save" :title="t('console.saveConnection')" @click.stop="saveTab(tab)"><i data-lucide="bookmark-plus"></i></button>
+                  <button class="btn sm btn-icon console-action-rename" :title="t('console.rename')" @click.stop="startTabRename(tab)"><i data-lucide="pencil"></i></button>
                   <button class="btn sm btn-icon console-action-reconnect" :title="t('console.reconnect')" @click.stop="reconnect(tab)"><i data-lucide="refresh-cw"></i></button>
                   <button class="btn sm btn-icon console-action-close" :title="t('console.close')" @click.stop="store.closeTab(tab.id)"><i data-lucide="x"></i></button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -46,6 +66,28 @@
       </section>
 
       <section class="console-launcher">
+        <span class="console-section-title">{{ t('console.savedTitle') }}</span>
+        <div class="console-saved">
+          <p v-if="!store.savedConnections.length" class="console-saved-empty">{{ t('console.savedEmpty') }}</p>
+          <div v-for="conn in store.savedConnections" :key="conn.id" class="console-saved-item" :style="{ '--prov': providerMeta(connectionProvider(conn)).color }">
+            <i :data-lucide="providerMeta(connectionProvider(conn)).icon" class="console-saved-icon"></i>
+            <div class="console-saved-text">
+              <input
+                v-if="renamingConn === conn.id" v-model="renameText" class="ctrl-input sm console-rename"
+                :aria-label="t('console.rename')"
+                @keydown.enter="commitConnRename(conn)" @keydown.esc="renamingConn = null" @blur="commitConnRename(conn)"
+              />
+              <strong v-else :title="conn.name" @dblclick="startConnRename(conn)">{{ middleTruncate(conn.name, 30) }}</strong>
+              <span class="console-saved-target" :title="connectionTarget(conn)">{{ middleTruncate(connectionTarget(conn), 42) }}</span>
+            </div>
+            <div class="console-saved-actions">
+              <button class="btn sm primary console-saved-open" :title="t('console.openSaved')" @click="openSaved(conn)"><i data-lucide="play"></i></button>
+              <button class="btn sm btn-icon" :title="t('console.rename')" @click="startConnRename(conn)"><i data-lucide="pencil"></i></button>
+              <button class="btn sm btn-icon console-saved-delete" :title="t('console.deleteSaved')" @click="deleteSaved(conn)"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+        </div>
+
         <span class="console-section-title">{{ t('console.newSession') }}</span>
 
         <div class="console-launcher-card">
@@ -193,6 +235,7 @@ import { useTerminalStore } from '../stores/useTerminalStore'
 import { useTerminalStreams } from '../composables/useTerminalStreams'
 import { useKubeStore } from '../stores/useKubeStore'
 import ConfirmModal from './ConfirmModal.vue'
+import { providerMeta, middleTruncate, connectionProvider, connectionTarget } from '../composables/consoleConnections'
 
 const { t } = useI18n()
 const store = useTerminalStore()
@@ -207,6 +250,11 @@ const vercelForm = reactive({ deploymentId: '', profileId: '' })
 const ssmPluginInstalled = ref(false)
 const ssmPluginChecked = ref(false)
 const showSsmConfirm = ref(false)
+const renamingTab = ref(null)
+const renamingConn = ref(null)
+const renameText = ref('')
+// Name given to the tab that the pending SSM confirmation will open (saved connections).
+let pendingSsmName = null
 
 const PROVIDER_ORDER = ['local', 'kubernetes', 'aws', 'gcp', 'vercel']
 const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
@@ -260,46 +308,102 @@ function reconnect(tab) {
   else startLogStream(tab, false, { reconnect: true })
 }
 
+/**
+ * Opens a session of a given kind; used by the launcher forms and by saved
+ * connections. SSM goes through its confirmation (openSsm) instead.
+ */
+function openConnection(kind, p) {
+  const kubeContext = p.kubeContext ? { kubeContext: p.kubeContext } : {}
+  let tab = null
+  if (kind === 'local') { tab = store.openLocalTab(); startLocalStream(tab) }
+  else if (kind === 'exec') { tab = store.openExecTab(p.namespace, p.name, [], kubeContext); startExecStream(tab) }
+  else if (kind === 'log') { tab = store.openLogsTab(p.namespace, p.name, [], p.resourceType || 'pods', kubeContext); startLogStream(tab) }
+  else if (kind === 'ec2') {
+    tab = store.openCloudTab('ec2', `${p.user || 'ec2-user'}@${p.host}`, { profileId: p.profileId, target: { host: p.host, user: p.user || 'ec2-user', port: p.port || 22 } })
+    startSshStream(tab)
+  } else if (kind === 'gcp-logs') {
+    tab = store.openCloudTab('gcp-logs', p.service, { profileId: p.profileId, project: p.project, region: p.region, target: { name: p.service } })
+    startGcpLogsStream(tab)
+  } else if (kind === 'gcp-ssh') {
+    tab = store.openCloudTab('gcp-ssh', p.target?.name || 'gcp', { profileId: p.profileId, project: p.project, target: { ...(p.target || {}) } })
+    startSshStream(tab)
+  } else if (kind === 'vercel') {
+    tab = store.openCloudTab('vercel', p.deploymentId, { profileId: p.profileId, target: { name: p.deploymentId } })
+    startVercelLogsStream(tab)
+  }
+  return tab
+}
+
 function connectLocal() {
-  const tab = store.openLocalTab()
-  startLocalStream(tab)
+  openConnection('local', {})
 }
 
 function connectKubernetes(transport) {
-  const context = kubeForm.context ? { kubeContext: kubeForm.context } : {}
-  if (transport === 'exec') {
-    const tab = store.openExecTab(kubeForm.namespace, kubeForm.name, [], context)
-    startExecStream(tab)
-  } else {
-    const tab = store.openLogsTab(kubeForm.namespace, kubeForm.name, [], kubeForm.resourceType, context)
-    startLogStream(tab)
-  }
+  openConnection(transport === 'exec' ? 'exec' : 'log', { kubeContext: kubeForm.context, namespace: kubeForm.namespace, name: kubeForm.name, resourceType: kubeForm.resourceType })
 }
 
 function connectEc2Ssh() {
-  const tab = store.openCloudTab('ec2', `${ec2Form.user}@${ec2Form.host}`, {
-    profileId: ec2Form.profileId,
-    target: { host: ec2Form.host, user: ec2Form.user || 'ec2-user', port: ec2Form.port || 22 },
-  })
-  startSshStream(tab)
+  openConnection('ec2', { ...ec2Form })
 }
 
 function connectGcpLogs() {
-  const tab = store.openCloudTab('gcp-logs', gcpLogsForm.service, {
-    profileId: gcpLogsForm.profileId,
-    project: gcpLogsForm.project,
-    region: gcpLogsForm.region,
-    target: { name: gcpLogsForm.service },
-  })
-  startGcpLogsStream(tab)
+  openConnection('gcp-logs', { ...gcpLogsForm })
 }
 
 function connectVercel() {
-  const tab = store.openCloudTab('vercel', vercelForm.deploymentId, {
-    profileId: vercelForm.profileId,
-    target: { name: vercelForm.deploymentId },
-  })
-  startVercelLogsStream(tab)
+  openConnection('vercel', { ...vercelForm })
+}
+
+// ── Saved connections and renaming (#63) ────────────────────────────────────
+function openSaved(conn) {
+  store.touchConnection(conn.id)
+  if (conn.kind === 'ssm') {
+    Object.assign(ssmForm, { instanceId: conn.params.instanceId, profileId: conn.params.profileId })
+    pendingSsmName = conn.name
+    connectSsm()
+    return
+  }
+  const tab = openConnection(conn.kind, conn.params)
+  if (tab) store.renameTab(tab.id, conn.name)
+}
+
+function saveTab(tab) {
+  const saved = store.saveConnection(tab, tab.label || tab.pod)
+  if (saved) {
+    renamingConn.value = saved.id
+    renameText.value = saved.name
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
+function deleteSaved(conn) {
+  if (window.confirm(t('console.deleteSavedConfirm', { name: conn.name }))) store.deleteConnection(conn.id)
+}
+
+function startTabRename(tab) {
+  renamingConn.value = null
+  renamingTab.value = tab.id
+  renameText.value = tab.label || tab.pod || ''
+  nextTick(() => document.querySelector('.console-rename')?.focus())
+}
+
+function commitTabRename(tab) {
+  if (renamingTab.value !== tab.id) return
+  store.renameTab(tab.id, renameText.value)
+  renamingTab.value = null
+}
+
+function startConnRename(conn) {
+  renamingTab.value = null
+  renamingConn.value = conn.id
+  renameText.value = conn.name
+  nextTick(() => document.querySelector('.console-rename')?.focus())
+}
+
+function commitConnRename(conn) {
+  if (renamingConn.value !== conn.id) return
+  store.renameConnection(conn.id, renameText.value)
+  renamingConn.value = null
 }
 
 function confirmClearHistory() {
@@ -317,6 +421,8 @@ function confirmSsmConnect() {
     profileId: ssmForm.profileId,
     target: { instanceId: ssmForm.instanceId },
   })
+  if (pendingSsmName) store.renameTab(tab.id, pendingSsmName)
+  pendingSsmName = null
   startSsmStream(tab)
 }
 
@@ -351,14 +457,38 @@ onMounted(() => {
 
 .console-table-wrap { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
 .console-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.console-table th { position: sticky; top: 0; background: var(--bg-panel); padding: 8px 12px; text-align: left; font-weight: 600; color: var(--text-dim); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.console-table th { position: sticky; top: 0; background: var(--bg-panel); padding: 8px 10px; text-align: left; font-weight: 600; color: var(--text-dim); border-bottom: 1px solid var(--border); white-space: nowrap; }
 .console-row { cursor: pointer; }
 .console-row:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
 .console-row.active { background: color-mix(in srgb, #2f81f7 10%, transparent); }
-.console-row td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.console-target { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 0.78rem; }
-.console-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
-.console-provider-chip { padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text-dim); }
+.console-row td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.console-target { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 0.78rem; }
+.console-row-actions { width: 1%; white-space: nowrap; }
+.console-row-buttons { display: flex; gap: 4px; justify-content: flex-end; }
+.console-provider-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+  color: var(--prov, var(--text-dim)); background: color-mix(in srgb, var(--prov, var(--text)) 14%, transparent);
+}
+.console-provider-chip i { width: 12px; height: 12px; }
+.console-name { white-space: nowrap; }
+.console-env { white-space: nowrap; }
+.console-scope { color: var(--text-dim); font-size: 0.74rem; }
+.console-name span { cursor: text; display: inline-block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.console-saved-mark { width: 12px; height: 12px; margin-left: 4px; color: var(--accent); vertical-align: -2px; }
+.console-rename { width: 100%; min-width: 140px; }
+
+.console-saved { display: flex; flex-direction: column; gap: 6px; }
+.console-saved-empty { margin: 0; color: var(--text-dim); font-size: 0.74rem; }
+.console-saved-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px;
+  border-left: 3px solid var(--prov, var(--border));
+}
+.console-saved-icon { width: 15px; height: 15px; flex: none; color: var(--prov, var(--text-dim)); }
+.console-saved-text { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.console-saved-text strong { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.console-saved-target { font-size: 0.72rem; color: var(--text-dim); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console-saved-actions { display: flex; gap: 4px; flex: none; }
+.console-saved-actions .btn i { width: 12px; height: 12px; }
 .console-status-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
 .state-connected { background: rgba(63,185,80,0.18); color: #3fb950; }
 .state-connecting, .state-validating { background: rgba(210,153,34,0.18); color: #d29922; }
