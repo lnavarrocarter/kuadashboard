@@ -63,11 +63,11 @@
                 <div class="kov-meter-fill" :class="usageLevel(meter.percent)" :style="{ width: `${Math.min(100, meter.percent)}%` }"></div>
               </div>
             </div>
-            <p class="kov-note">Uso actual de metrics-server frente a la capacidad asignable de los nodos.</p>
+            <p class="kov-note">Uso actual según {{ overview.metrics.source === 'prometheus' ? 'Prometheus (node-exporter)' : 'metrics-server' }} frente a la capacidad asignable de los nodos.</p>
           </template>
           <p v-else class="kov-notice">
             <i data-lucide="info"></i>
-            La Metrics API (metrics-server) no está disponible, así que no hay uso de CPU ni memoria.
+            No hay uso de CPU ni memoria: la Metrics API (metrics-server) no está disponible y no se detectó Prometheus con node-exporter.
             <span v-if="overview.metrics.error" class="kov-dim">{{ overview.metrics.error }}</span>
           </p>
           <div class="kov-prom">
@@ -103,6 +103,39 @@
                 :title="`Ver pods con ${r.reason}`" @click="go('pods', { filter: r.reason })"
               >{{ r.reason }} <span class="facet-count">{{ r.count }}</span></button>
             </div>
+          </template>
+        </section>
+
+        <!-- Prometheus trends -->
+        <section class="kov-card kov-wide">
+          <div class="kov-card-head">
+            <h3>Tendencias <span class="kov-dim">· {{ trendScope }}</span></h3>
+            <div class="kov-range" role="group" aria-label="Rango de tiempo">
+              <button
+                v-for="r in RANGES" :key="r" :class="['kov-range-btn', { active: range === r }]"
+                :aria-pressed="range === r" @click="setRange(r)"
+              >{{ r }}</button>
+            </div>
+          </div>
+          <p v-if="!timeseries && trendsLoading" class="kov-empty">Consultando Prometheus…</p>
+          <p v-else-if="trendsError" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ trendsError }}</p>
+          <p v-else-if="timeseries && !timeseries.available" class="kov-notice">
+            <i data-lucide="info"></i>
+            Las tendencias necesitan Prometheus en el clúster (por ejemplo kube-prometheus-stack) y no se detectó ninguno.
+            <span v-if="timeseries.error" class="kov-dim">{{ timeseries.error }}</span>
+          </p>
+          <template v-else-if="timeseries">
+            <div class="kov-charts" :class="{ stale: trendsLoading }">
+              <CloudMetricChart
+                v-for="chart in trendCharts" :key="chart.key"
+                :label="chart.label" :unit="chart.unit" :points="chart.points"
+                :show-date="range === '7d'" :x-tick-limit="range === '7d' ? 4 : 6" color="#0e9de8"
+              />
+            </div>
+            <p class="kov-note">
+              Fuente: <code>{{ timeseries.service }}</code> · un punto cada {{ stepLabel }}.
+              <template v-if="seriesErrors.length"> Sin datos: {{ seriesErrors.join(', ') }}.</template>
+            </p>
           </template>
         </section>
 
@@ -180,6 +213,7 @@ import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
 import { useKubeStore } from '../stores/useKubeStore'
 import { useI18n } from '../composables/useI18n'
+import CloudMetricChart from './cloud/CloudMetricChart.vue'
 
 const emit = defineEmits(['navigate'])
 const store = useKubeStore()
@@ -203,11 +237,29 @@ const MiniMeter = props => props.value === null || props.value === undefined
   ])
 MiniMeter.props = ['value']
 
+const RANGES = ['1h', '6h', '24h', '7d']
+const RANGE_KEY = 'kua.kubeOverviewRange'
+const TREND_LABELS = {
+  cpu: 'CPU',
+  memory: 'Memoria',
+  restarts: 'Reinicios',
+  notReady: 'Pods no listos',
+}
+
+function readRange() {
+  try { return RANGES.includes(localStorage.getItem(RANGE_KEY)) ? localStorage.getItem(RANGE_KEY) : '1h' } catch { return '1h' }
+}
+
 const overview = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const now = ref(Date.now())
+const range = ref(readRange())
+const timeseries = ref(null)
+const trendsLoading = ref(false)
+const trendsError = ref(null)
 let requestId = 0
+let trendsRequestId = 0
 let timer = null
 
 const pods = computed(() => overview.value?.pods || {})
@@ -242,6 +294,21 @@ const usageMeters = computed(() => {
   ]
 })
 
+const trendScope = computed(() => store.namespace === 'all' ? 'clúster completo' : `namespace ${store.namespace}`)
+const trendCharts = computed(() => Object.entries(timeseries.value?.series || {}).map(([key, series]) => ({
+  key,
+  label: series.windowSeconds ? `${TREND_LABELS[key] || key} (ventana ${durationLabel(series.windowSeconds)})` : TREND_LABELS[key] || key,
+  unit: series.unit,
+  points: series.points,
+})))
+const seriesErrors = computed(() => Object.entries(timeseries.value?.series || {})
+  .filter(([, series]) => series.error || !series.points.length)
+  .map(([key]) => TREND_LABELS[key] || key))
+function durationLabel(seconds) {
+  return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.round(seconds / 60)} min` : `${(seconds / 3600).toFixed(1)} h`
+}
+const stepLabel = computed(() => durationLabel(timeseries.value?.step || 0))
+
 const updatedLabel = computed(() => {
   const seconds = Math.max(0, Math.round((now.value - new Date(overview.value.generatedAt)) / 1000))
   return seconds < 60 ? `hace ${seconds}s` : `hace ${Math.round(seconds / 60)} min`
@@ -251,8 +318,35 @@ function formatCores(nano) { return (nano / 1e9).toFixed(nano >= 10e9 ? 0 : 1) }
 function formatGiB(bytes) { return (bytes / 1024 ** 3).toFixed(1) }
 function usageLevel(value) { return value >= 90 ? 'critical' : value >= 75 ? 'warning' : 'good' }
 
+async function loadTrends({ background = false } = {}) {
+  const id = ++trendsRequestId
+  trendsLoading.value = true
+  if (!background) trendsError.value = null
+  try {
+    const ns = encodeURIComponent(store.namespace || 'all')
+    const data = await api('GET', `/api/overview/timeseries?namespace=${ns}&range=${range.value}`)
+    if (id !== trendsRequestId) return
+    timeseries.value = data
+    trendsError.value = null
+  } catch (e) {
+    if (id !== trendsRequestId) return
+    if (!background || !timeseries.value) trendsError.value = e.message
+  } finally {
+    if (id === trendsRequestId) trendsLoading.value = false
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
+function setRange(next) {
+  if (range.value === next) return
+  range.value = next
+  try { localStorage.setItem(RANGE_KEY, next) } catch { /* storage unavailable */ }
+  loadTrends()
+}
+
 async function load({ background = false } = {}) {
   if (background && loading.value) return
+  loadTrends({ background })
   const id = ++requestId
   if (!background) loading.value = true
   try {
@@ -276,6 +370,7 @@ function go(resource, view = {}) {
 
 watch(() => [store.namespace, store.currentContext], () => {
   overview.value = null
+  timeseries.value = null
   load()
 })
 
@@ -331,6 +426,15 @@ defineExpose({ load })
 .kov-meter-fill, .kov-mini-fill { display: block; height: 100%; border-radius: 4px; background: var(--green); }
 .kov-meter-fill.warning, .kov-mini-fill.warning { background: var(--yellow); }
 .kov-meter-fill.critical, .kov-mini-fill.critical { background: var(--red); }
+.kov-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.kov-card-head h3 { margin: 0; }
+.kov-range { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.kov-range-btn { border: none; background: transparent; color: var(--text-dim); font: inherit; font-size: 11px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
+.kov-range-btn + .kov-range-btn { border-left: 1px solid var(--border); }
+.kov-range-btn:hover { color: var(--text); background: var(--bg-hover); }
+.kov-range-btn.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.kov-charts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; transition: opacity .15s; }
+.kov-charts.stale { opacity: .6; }
 .kov-prom { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; }
 .kov-prom code { font-size: 11px; }
 
@@ -366,7 +470,11 @@ defineExpose({ load })
 .kov-ellipsis { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kov-list-value { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 
+@media (max-width: 1300px) {
+  .kov-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 900px) {
+  .kov-charts { grid-template-columns: minmax(0, 1fr); }
   .kov-grid { grid-template-columns: minmax(0, 1fr); }
   .kov-table th:nth-child(3), .kov-table td:nth-child(3) { display: none; }
 }

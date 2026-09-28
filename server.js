@@ -14,6 +14,10 @@ const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
 const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
+const {
+  isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries,
+  parseMatrix, nodeMetricsFromPrometheus, summarizeSeries,
+} = require('./lib/kubePrometheus');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
@@ -662,22 +666,45 @@ async function kubeApiGet(pathname) {
   });
 }
 
-async function prometheusQuery(query) {
+// Service/proxy pair that last answered, per context, so each query does not
+// walk every discovered service and port candidate again.
+let prometheusTarget = null;
+
+async function prometheusRequest(svc, proxyName, apiPath) {
+  const raw = await kubeApiGet(`/api/v1/namespaces/${encodeURIComponent(svc.namespace)}/services/${proxyName}/proxy/api/v1/${apiPath}`);
+  const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (body?.status !== 'success') throw new Error(body?.error || 'Prometheus query failed');
+  return body;
+}
+
+async function prometheusApi(apiPath) {
+  if (prometheusTarget?.context === currentContext) {
+    try {
+      return { body: await prometheusRequest(prometheusTarget.svc, prometheusTarget.proxyName, apiPath), service: prometheusTarget.svc };
+    } catch { /* fall back to trying every candidate */ }
+  }
   const services = await cachedPrometheusServices();
   let lastErr = null;
   for (const svc of services) {
     for (const proxyName of serviceProxyCandidates(svc)) {
       try {
-        const raw = await kubeApiGet(`/api/v1/namespaces/${encodeURIComponent(svc.namespace)}/services/${proxyName}/proxy/api/v1/query?query=${encodeURIComponent(query)}`);
-        const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (body?.status === 'success') return { body, service: svc };
-        lastErr = new Error(body?.error || 'Prometheus query failed');
+        const body = await prometheusRequest(svc, proxyName, apiPath);
+        prometheusTarget = { context: currentContext, svc, proxyName };
+        return { body, service: svc };
       } catch (err) {
         lastErr = err;
       }
     }
   }
   throw lastErr || new Error('No Prometheus service found');
+}
+
+function prometheusQuery(query) {
+  return prometheusApi(`query?query=${encodeURIComponent(query)}`);
+}
+
+function prometheusQueryRange(query, { start, end, step }) {
+  return prometheusApi(`query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`);
 }
 
 function prometheusScalar(body) {
@@ -943,7 +970,7 @@ app.get('/api/overview', async (req, res) => {
     const all = namespace === 'all';
     const { core, apps, custom } = clients();
     const settle = promise => promise.then(result => ({ ok: true, value: listItems(result) }), error => ({ ok: false, error }));
-    const [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics] = await Promise.all([
+    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics] = await Promise.all([
       settle(all ? core.listPodForAllNamespaces() : core.listNamespacedPod(namespace)),
       settle(core.listNode()),
       settle(all ? apps.listDeploymentForAllNamespaces() : apps.listNamespacedDeployment(namespace)),
@@ -959,11 +986,62 @@ app.get('/api/overview', async (req, res) => {
     } catch (err) {
       prometheus = { available: false, error: err.body?.message || err.message };
     }
+    // Without metrics-server, take current node usage from Prometheus.
+    let metricsSource = 'metrics.k8s.io';
+    if (!nodeMetrics.ok && prometheus.available) {
+      try {
+        const queries = nodeUsageQueries();
+        const [cpu, memory] = await Promise.all([prometheusQuery(queries.cpu), prometheusQuery(queries.memory)]);
+        const items = nodeMetricsFromPrometheus(cpu.body, memory.body);
+        if (items.length) {
+          nodeMetrics = { ok: true, value: items };
+          metricsSource = 'prometheus';
+        }
+      } catch { /* keep the metrics-server error */ }
+    }
     res.json(buildOverview({
       namespace,
       sources: { pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics },
+      metricsSource,
       prometheus,
     }));
+  } catch (err) { handleError(res, err); }
+});
+
+// Prometheus trends for the Overview charts. Each series settles on its own,
+// so a missing exporter (e.g. no kube-state-metrics) only empties its chart.
+app.get('/api/overview/timeseries', async (req, res) => {
+  try {
+    const namespace = String(req.query.namespace || 'all');
+    const window = rangeWindow(String(req.query.range || '1h'));
+    if (!isValidNamespace(namespace)) return res.status(400).json({ error: 'Invalid namespace' });
+    if (!window) return res.status(400).json({ error: 'Invalid range' });
+    let services;
+    try {
+      services = await cachedPrometheusServices();
+    } catch (err) {
+      return res.json({ available: false, error: err.body?.message || err.message, namespace, ...window });
+    }
+    if (!services.length) return res.json({ available: false, namespace, ...window });
+    const queries = timeseriesQueries(namespace, window.step);
+    let service = services[0];
+    const entries = await Promise.all(Object.entries(queries).map(async ([key, { query, ...meta }]) => {
+      try {
+        const result = await prometheusQueryRange(query, window);
+        service = result.service;
+        const points = parseMatrix(result.body);
+        return [key, { ...meta, points, ...summarizeSeries(points) }];
+      } catch (err) {
+        return [key, { ...meta, points: [], error: err.body?.message || err.message }];
+      }
+    }));
+    res.json({
+      available: true,
+      service: `${service.namespace}/${service.name}`,
+      namespace,
+      ...window,
+      series: Object.fromEntries(entries),
+    });
   } catch (err) { handleError(res, err); }
 });
 

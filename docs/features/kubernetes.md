@@ -12,10 +12,11 @@ description: Manage Kubernetes workloads, services, networking, storage, YAML, m
 **Overview** at the top of the Kubernetes sidebar summarizes the health of the active context:
 
 - **Headline tiles** — pods (ready and running), pods with problems and their total restarts, nodes ready, workloads (Deployments, StatefulSets, DaemonSets) below their desired replicas, and Warning events in the last hour.
-- **Cluster usage** — current CPU and memory against the nodes' allocatable capacity, read from the Metrics API (metrics-server). Without metrics-server the card says so and shows the API's answer. The card also shows whether a Prometheus service was detected in the cluster.
+- **Cluster usage** — current CPU and memory against the nodes' allocatable capacity, read from the Metrics API (metrics-server). Without metrics-server KUA reads the same numbers from Prometheus (node-exporter), per node too; with neither, the card says so and shows the API's answer. The card also shows which Prometheus service was detected.
 - **Pods by status** — a bar and legend with Running, Pending, Succeeded, Failed and Unknown counts, plus chips for each problem reason.
 - **Pods with problems** — the worst pods first (most restarts), with the reason kubectl would show: `CrashLoopBackOff`, `ImagePullBackOff`, `OOMKilled`, `Unschedulable`, `Evicted`, or `NotReady` for running pods failing their readiness probe.
 - **Nodes** — readiness, cordon state, pressure conditions (memory, disk, PID, network) and per-node CPU/memory when metrics-server is available.
+- **Trends** — with Prometheus in the cluster (for example kube-prometheus-stack), charts for CPU, memory, container restarts and not-ready pods over the last 1 h, 6 h, 24 h or 7 d (about 120 points per range; the chosen range is remembered). For the whole cluster CPU and memory come from node-exporter; for a namespace they come from its containers (cAdvisor). Restarts and not-ready pods need kube-state-metrics; a chart without data says so without hiding the others.
 - **Workloads not ready** and **recent warnings**.
 
 Pods, workloads and events follow the namespace selector (including *All namespaces*); nodes and usage always cover the whole cluster. Every tile, chip and row opens the matching table with the filter already applied, for example *Pods with problems* opens Pods with the **With problems** quick filter on. Each section degrades on its own: if your RBAC role cannot list nodes, only the node section shows the error. The view refreshes with the global auto-refresh interval.

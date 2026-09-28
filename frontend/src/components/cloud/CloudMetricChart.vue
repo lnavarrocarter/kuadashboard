@@ -30,6 +30,8 @@ const props = defineProps({
   points: { type: Array, default: () => [] },
   color: { type: String, default: '#58a6ff' },
   xTickLimit: { type: Number, default: 7 },
+  // Include the day in x labels, for ranges longer than a day.
+  showDate: { type: Boolean, default: false },
 })
 
 const canvasEl = ref(null)
@@ -41,6 +43,8 @@ function formatValue(value, unit) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   if (unit === '%') return `${number.toFixed(1)}%`
+  if (unit === 'cores') return `${number.toFixed(number >= 10 ? 1 : 2)} cores`
+  if (unit === 'count') return Math.round(number).toLocaleString()
   if (unit === 'bytes') {
     if (number >= 1e9) return `${(number / 1e9).toFixed(2)} GB`
     if (number >= 1e6) return `${(number / 1e6).toFixed(2)} MB`
@@ -57,7 +61,9 @@ function buildChart() {
   chart = new Chart(canvasEl.value, {
     type: 'line',
     data: {
-      labels: props.points.map(point => new Date(point.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+      labels: props.points.map(point => props.showDate
+        ? new Date(point.t).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit' })
+        : new Date(point.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
       datasets: [{
         data: props.points.map(point => point.v),
         borderColor: props.color,

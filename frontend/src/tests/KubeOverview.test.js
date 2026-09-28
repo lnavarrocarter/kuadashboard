@@ -3,6 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
+vi.mock('../components/cloud/CloudMetricChart.vue', () => ({
+  default: { name: 'CloudMetricChart', props: ['label', 'unit', 'points', 'showDate', 'xTickLimit', 'color'], template: '<div class="chart-stub">{{ label }}|{{ unit }}|{{ points.length }}|{{ showDate }}</div>' },
+}))
 
 import KubeOverview from '../components/KubeOverview.vue'
 import * as ApiModule from '../composables/useApi'
@@ -44,15 +47,36 @@ function overview(overrides = {}) {
   }
 }
 
+function timeseries(overrides = {}) {
+  const points = [{ t: 1, v: 1 }, { t: 2, v: 2 }]
+  return {
+    available: true, service: 'kube-system/prometheus', namespace: 'default', range: '1h', step: 30,
+    series: {
+      cpu: { unit: 'cores', points },
+      memory: { unit: 'bytes', points },
+      restarts: { unit: 'count', windowSeconds: 300, points },
+      notReady: { unit: 'count', points: [], error: 'no kube-state-metrics' },
+    },
+    ...overrides,
+  }
+}
+
 describe('KubeOverview', () => {
-  let store, apiSpy
+  let store, apiSpy, overviewResponse, timeseriesResponse
 
   beforeEach(() => {
     setActivePinia(createPinia())
     store = useKubeStore()
     store.namespace = 'default'
+    localStorage.clear()
     vi.restoreAllMocks()
-    apiSpy = vi.spyOn(ApiModule, 'api').mockResolvedValue(overview())
+    overviewResponse = overview()
+    timeseriesResponse = timeseries()
+    apiSpy = vi.spyOn(ApiModule, 'api').mockImplementation(async (_method, path) => {
+      const response = path.startsWith('/api/overview/timeseries') ? timeseriesResponse : overviewResponse
+      if (response instanceof Error) throw response
+      return response
+    })
   })
 
   it('requests the overview for the selected namespace', async () => {
@@ -88,15 +112,15 @@ describe('KubeOverview', () => {
   })
 
   it('degrades with clear notices when metrics or a section are unavailable', async () => {
-    apiSpy.mockResolvedValue(overview({
+    overviewResponse = overview({
       nodes: { error: 'Forbidden: nodes is forbidden' },
       metrics: { available: false, error: 'the server could not find the requested resource' },
       prometheus: { available: true, service: 'monitoring/prometheus-server' },
-    }))
+    })
     const wrapper = mount(KubeOverview)
     await flushPromises()
     expect(wrapper.find('.kov-meter').exists()).toBe(false)
-    expect(wrapper.text()).toContain('La Metrics API (metrics-server) no está disponible')
+    expect(wrapper.text()).toContain('la Metrics API (metrics-server) no está disponible')
     expect(wrapper.text()).toContain('Forbidden: nodes is forbidden')
     expect(wrapper.find('.kov-prom').text()).toContain('monitoring/prometheus-server')
     // Other sections still render.
@@ -104,7 +128,7 @@ describe('KubeOverview', () => {
   })
 
   it('shows an error with retry when the overview cannot load', async () => {
-    apiSpy.mockRejectedValue(new Error('connection refused'))
+    overviewResponse = new Error('connection refused')
     const wrapper = mount(KubeOverview)
     await flushPromises()
     expect(wrapper.find('.error-state').text()).toContain('connection refused')
@@ -130,7 +154,52 @@ describe('KubeOverview', () => {
     await flushPromises()
     store.namespace = 'kube-system'
     await flushPromises()
-    expect(apiSpy).toHaveBeenLastCalledWith('GET', '/api/overview?namespace=kube-system')
+    expect(apiSpy).toHaveBeenCalledWith('GET', '/api/overview?namespace=kube-system')
+    expect(apiSpy).toHaveBeenCalledWith('GET', '/api/overview/timeseries?namespace=kube-system&range=1h')
+  })
+
+  it('names the usage source when it comes from Prometheus', async () => {
+    overviewResponse = overview({ metrics: { available: true, source: 'prometheus' } })
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    expect(wrapper.find('.kov-note').text()).toContain('Prometheus (node-exporter)')
+  })
+
+  it('renders one Prometheus trend chart per series and names empty ones', async () => {
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    expect(apiSpy).toHaveBeenCalledWith('GET', '/api/overview/timeseries?namespace=default&range=1h')
+    expect(wrapper.findAll('.chart-stub').map(c => c.text())).toEqual([
+      'CPU|cores|2|false', 'Memoria|bytes|2|false', 'Reinicios (ventana 5 min)|count|2|false', 'Pods no listos|count|0|false',
+    ])
+    expect(wrapper.text()).toContain('kube-system/prometheus')
+    expect(wrapper.text()).toContain('Sin datos: Pods no listos')
+  })
+
+  it('switches and remembers the trend range', async () => {
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    const btn7d = wrapper.findAll('.kov-range-btn').find(b => b.text() === '7d')
+    await btn7d.trigger('click')
+    await flushPromises()
+    expect(apiSpy).toHaveBeenLastCalledWith('GET', '/api/overview/timeseries?namespace=default&range=7d')
+    expect(localStorage.getItem('kua.kubeOverviewRange')).toBe('7d')
+    expect(wrapper.find('.chart-stub').text()).toContain('|true')
+
+    wrapper.unmount()
+    const again = mount(KubeOverview)
+    await flushPromises()
+    expect(again.find('.kov-range-btn.active').text()).toBe('7d')
+  })
+
+  it('explains that trends need Prometheus when none is detected', async () => {
+    timeseriesResponse = timeseries({ available: false, series: undefined })
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    expect(wrapper.find('.chart-stub').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Las tendencias necesitan Prometheus')
+    // The rest of the Overview still renders.
+    expect(wrapper.findAll('.kov-tile')).toHaveLength(5)
   })
 
   it('links to quick filters that exist in the resource tables', () => {
