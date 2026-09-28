@@ -39,6 +39,17 @@ Select your active profile and region from the dropdowns in the AWS panel header
 
 ---
 
+## Overview
+
+**Overview** is the first item of the AWS sidebar and the view AWS opens on. It shows who the active profile is and what it can see:
+
+- **Account** — account ID (and alias when the profile may read it), with a copy button.
+- **Identity** — whether the profile is an IAM user, a role, an SSO permission set, a federated user or the root user, with its ARN. Root credentials show a warning.
+- **Region** — the profile's region and the regions enabled in the account.
+- **Services** — a card per service with its resource count: EC2 (running/stopped), Lambda, ECS (clusters and services), EKS, ECR, VPC, API Gateway (REST/HTTP), S3, DynamoDB, RDS, EventBridge, Step Functions, CloudFront, Route 53, Cognito and Secrets Manager. A service is **active** when it has at least one resource; active services come first. S3, CloudFront and Route 53 are account-wide (marked *Global*); the rest are counted in the profile's region. A `+` means there are more resources than the overview reads.
+
+Every service is read on its own, in parallel and with a timeout: a missing permission marks only that card as *No permission* (with the IAM action when AWS reports it), and the rest still load. Clicking a card opens that service's tab. Only read-only List/Describe calls are made.
+
 ## Compute
 
 ### EC2 Instances

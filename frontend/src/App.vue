@@ -174,6 +174,10 @@
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
           <div class="sidebar-section">
+            <a :class="['sidebar-item', { active: awsTab === 'overview' }]"
+               @click.prevent="awsTab = 'overview'">{{ t('sidebar.overview') }}</a>
+          </div>
+          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
@@ -389,7 +393,7 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
@@ -636,7 +640,7 @@ const activeProvider  = ref(['architecture', 'observability'].includes(storedPro
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
-const awsTab          = ref('ec2')
+const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
 const kubeResourceFilter = ref('')

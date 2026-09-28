@@ -14,6 +14,7 @@
  * Endpoints:
  *   GET  /local-profiles                    → list profile names from ~/.aws/credentials
  *   GET  /regions                           → list all available AWS regions
+ *   GET  /overview                          → account, identity, region and resources per service
  *   GET  /eks                               → list EKS clusters
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
@@ -55,6 +56,7 @@ const {
   buildMetricQueries,
 } = require('../lib/eksObservability');
 const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
+const { buildAwsOverview } = require('../lib/awsOverview');
 
 const router = express.Router();
 
@@ -305,6 +307,19 @@ router.get('/regions', async (req, res) => {
       endpoint: r.Endpoint,
       status:   r.OptInStatus,
     })));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /overview ────────────────────────────────────────────────────────────
+// Environment summary for the active profile. Only the caller identity is
+// required; alias, regions and every service count degrade on their own.
+
+router.get('/overview', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    res.json(await buildAwsOverview(cfg, { profile: { id: profileId } }));
   } catch (err) { handleErr(res, err); }
 });
 

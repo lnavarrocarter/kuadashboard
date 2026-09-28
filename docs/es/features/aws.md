@@ -39,6 +39,17 @@ Selecciona el perfil activo y la región desde los dropdowns en el encabezado de
 
 ---
 
+## Resumen
+
+**Resumen** es el primer elemento del menú de AWS y la vista con la que abre AWS. Muestra quién es el perfil activo y qué puede ver:
+
+- **Cuenta**: ID de la cuenta (y alias si el perfil puede leerlo), con botón para copiar.
+- **Identidad**: si el perfil es un usuario IAM, un rol, un permission set de SSO, un usuario federado o el usuario root, con su ARN. Las credenciales root muestran una advertencia.
+- **Región**: la región del perfil y las regiones habilitadas en la cuenta.
+- **Servicios**: una tarjeta por servicio con su cantidad de recursos: EC2 (running/detenidas), Lambda, ECS (clusters y servicios), EKS, ECR, VPC, API Gateway (REST/HTTP), S3, DynamoDB, RDS, EventBridge, Step Functions, CloudFront, Route 53, Cognito y Secrets Manager. Un servicio está **activo** si tiene al menos un recurso; los activos aparecen primero. S3, CloudFront y Route 53 son de toda la cuenta (marcados *Global*); el resto se cuenta en la región del perfil. Un `+` indica que hay más recursos de los que lee el resumen.
+
+Cada servicio se lee por separado, en paralelo y con un tiempo máximo: si falta un permiso, solo esa tarjeta queda como *Sin permiso* (con la acción IAM cuando AWS la informa) y el resto carga igual. Al hacer clic en una tarjeta se abre la pestaña de ese servicio. Solo se hacen llamadas de lectura (List/Describe).
+
 ## Cómputo
 
 ### EC2 Instances

@@ -7,9 +7,9 @@
     </div>
 
     <template v-else>
-      <div v-if="activeTab !== 'apm' && awsStore.error" class="alert-error">{{ awsStore.error }}</div>
+      <div v-if="!SELF_LOADING_TABS.has(activeTab) && awsStore.error" class="alert-error">{{ awsStore.error }}</div>
 
-      <div v-if="activeTab !== 'apm'" class="aws-toolbar">
+      <div v-if="!SELF_LOADING_TABS.has(activeTab)" class="aws-toolbar">
         <input
           v-model="search[activeTab]"
           class="ctrl-input aws-search"
@@ -20,6 +20,14 @@
         </span>
         <button class="btn sm" @click="reloadActiveTab" :disabled="tabLoading" title="Refresh"><i data-lucide="refresh-cw"></i></button>
       </div>
+
+      <AwsOverview
+        v-show="activeTab === 'overview'"
+        ref="overviewRef"
+        :profile-id="selectedProfileId"
+        :profile-name="selectedProfileName"
+        @open-tab="openTabFromOverview"
+      />
 
       <ApmObservabilityView
         v-show="activeTab === 'apm'"
@@ -3696,15 +3704,16 @@ import {
   recordsForExport, recordsToCsv, testResultKey, testsForRecord,
 } from './route53Records'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
+import AwsOverview from './AwsOverview.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
-  activeService: { type: String, default: 'ec2' },
+  activeService: { type: String, default: 'overview' },
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
 })
-const emit = defineEmits(['open-architecture', 'open-kubernetes-logs'])
+const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
@@ -3720,6 +3729,7 @@ const sshSessions       = computed(() => remoteSessions.value.filter(s => s.type
 const rdpSessions       = computed(() => remoteSessions.value.filter(s => s.type === 'rdp'))
 
 const TABS = [
+  { id: 'overview',     label: 'Overview'       },
   { id: 'apm',          label: 'Applications'   },
   { id: 'ec2',          label: 'EC2'            },
   { id: 'ecs',          label: 'ECS'            },
@@ -3745,8 +3755,23 @@ const TABS = [
   { id: 'secrets',      label: 'Secrets Manager'},
 ]
 
-const activeTab  = ref('ec2')
+const activeTab  = ref('overview')
 const apmViewRef = ref(null)
+const overviewRef = ref(null)
+// Tabs that render their own header, loading and error states.
+const SELF_LOADING_TABS = new Set(['apm', 'overview'])
+
+const selectedProfileName = computed(() => {
+  const id = selectedProfileId.value
+  if (id.startsWith('local:')) return `${id.slice(6)} (local)`
+  return envStore.findById(id)?.name || id
+})
+
+// Overview cards open the service tab; the parent keeps the sidebar in sync.
+function openTabFromOverview(tab) {
+  switchTab(tab)
+  emit('navigate-tab', tab)
+}
 const tabLoading = ref(false)
 const loaded     = reactive(Object.fromEntries(TABS.map(t => [t.id, false])))
 
@@ -3911,6 +3936,8 @@ function tabCount(id) {
 }
 
 const fetchMap = {
+  // The overview mounts with the view; wait a tick so its ref exists on first load.
+  overview:     async () => { await nextTick(); return overviewRef.value?.load() },
   apm:          () => apmViewRef.value?.refreshLocal(),
   ec2:          () => awsStore.fetchEc2Instances(),
   ecs:          () => awsStore.fetchEcsServices(),

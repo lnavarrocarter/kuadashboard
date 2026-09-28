@@ -15,6 +15,7 @@ export const useAwsStore = defineStore('aws', () => {
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId  = ref(null)
+  const overview         = ref(null)
   const regions          = ref([])
   const eksClusters      = ref([])
   const ecsServices      = ref([])
@@ -77,6 +78,7 @@ export const useAwsStore = defineStore('aws', () => {
 
   function setActiveProfile(id) {
     activeProfileId.value  = id
+    overview.value         = null
     regions.value          = []
     eksClusters.value      = []
     ecsServices.value      = []
@@ -102,6 +104,15 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels.value    = []
     lexBots.value          = []
     cfnStacks.value        = []
+  }
+
+  // Environment overview: identity, regions and resource counts per service.
+  // Errors are thrown to the caller, which keeps the previous overview visible.
+  async function fetchOverview() {
+    const data = await apiFetch('/api/cloud/aws/overview', { headers: headers() })
+    overview.value = data
+    if (data?.regions?.available) regions.value = data.regions.items.map(name => ({ name }))
+    return data
   }
 
   async function fetchRegions() {
@@ -1019,14 +1030,14 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, overview, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
     bedrockModels, lexBots, cfnStacks,
     loading, error,
     setActiveProfile, runInBackground,
-    fetchRegions, fetchEksClusters, fetchEksDetails,
+    fetchOverview, fetchRegions, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
     fetchLambdas, invokeLambda,
