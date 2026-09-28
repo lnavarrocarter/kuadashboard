@@ -43,7 +43,10 @@
       <div v-show="activeTab === 'cloudrun'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div class="gcp-list-toolbar">
           <span class="text-dim">{{ filteredCloudRun.length }} servicio(s)</span>
-          <button class="btn sm primary" data-test="create-cloudrun" @click="openCreate('cloudrun')">＋ Nuevo servicio</button>
+          <span class="gcp-toolbar-actions">
+            <button class="btn sm" :title="pollingTitle" @click="pollingModal.open = true">⏱ Historial: {{ pollingBadge }}</button>
+            <button class="btn sm primary" data-test="create-cloudrun" @click="openCreate('cloudrun')">＋ Nuevo servicio</button>
+          </span>
         </div>
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">API not available — see banner above.</div>
@@ -108,71 +111,26 @@
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'revisions',label:'Revisions'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
+              <button v-for="t in CR_TABS" :key="t.id"
                 :class="['aws-tab-btn', crPanel.tab === t.id ? 'active' : '']" @click="crSwitchTab(t.id)">{{ t.label }}</button>
             </div>
-            <!-- OVERVIEW -->
-            <div v-show="crPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
-              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+            <!-- DETAIL SECTIONS -->
+            <div v-show="['overview','revisions','variables'].includes(crPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="crPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">Cargando detalle…</div>
               <div v-else-if="crPanel.detailError" class="alert-error">{{ crPanel.detailError }}</div>
-              <div v-else-if="crPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Service</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">URL</span><a :href="crPanel.detail.uri" target="_blank" class="link mono-xs">{{ crPanel.detail.uri }}</a></div>
-                    <div class="kv-row"><span class="kv-k">Region</span><span>{{ crPanel.detail.region }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Status</span><span :class="statusClass(crPanel.detail.status)">{{ crPanel.detail.status }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Ingress</span><span class="text-dim">{{ crPanel.detail.ingressTraffic || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ crPanel.detail.created ? new Date(crPanel.detail.created).toLocaleString() : '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Updated</span><span class="text-dim">{{ crPanel.detail.updated ? new Date(crPanel.detail.updated).toLocaleString() : '--' }}</span></div>
-                  </div>
-                </div>
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Container</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Image</span><span class="mono-xs text-dim" style="word-break:break-all">{{ crPanel.detail.image || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">CPU</span><span class="text-dim">{{ crPanel.detail.cpu || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Memory</span><span class="text-dim">{{ crPanel.detail.memory || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Port</span><span class="text-dim">{{ crPanel.detail.port || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Min instances</span><span class="text-dim">{{ crPanel.detail.minInstances }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Max instances</span><span class="text-dim">{{ crPanel.detail.maxInstances ?? '∞' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Service Account</span><span class="mono-xs text-dim" style="word-break:break-all">{{ crPanel.detail.serviceAccount || '--' }}</span></div>
-                  </div>
-                </div>
-              </div>
+              <GcpCloudRunInfo v-else-if="crPanel.detail" :detail="crPanel.detail" :section="crPanel.tab" />
             </div>
-            <!-- REVISIONS -->
-            <div v-show="crPanel.tab === 'revisions'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="!crPanel.detail?.revisions?.length" class="empty-row">No revisions found.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Revision</th><th>Traffic</th><th>Created</th><th>Status</th></tr></thead>
-                <tbody>
-                  <tr v-for="r in crPanel.detail.revisions" :key="r.name">
-                    <td class="mono-xs">{{ r.name }}</td>
-                    <td>
-                      <span v-if="r.traffic != null" style="font-size:12px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:1px 8px;color:#818cf8">{{ r.traffic }}%</span>
-                      <span v-else class="text-dim">—</span>
-                    </td>
-                    <td class="text-dim" style="font-size:11px">{{ r.created ? new Date(r.created).toLocaleString() : '--' }}</td>
-                    <td><span :class="r.ready ? 'status-ok' : 'status-warn'">{{ r.ready ? 'Ready' : 'Pending' }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- LABELS -->
+            <div v-show="crPanel.tab === 'labels'" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="crPanel.detailLoading" class="gi-empty">Cargando detalle…</div>
+              <div v-else-if="crPanel.detailError" class="alert-error">{{ crPanel.detailError }}</div>
+              <GcpLabelsEditor v-else-if="crPanel.detail" :labels="crPanel.detail.labels" :busy="labelsState.busy" :error="labelsState.kind === 'cloudrun' ? labelsState.error : ''"
+                @save="saveLabels('cloudrun', crPanel.resource, $event)" />
             </div>
-            <!-- VARIABLES -->
-            <div v-show="crPanel.tab === 'variables'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="crPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="!crPanel.detail?.envVars?.length" class="empty-row">No environment variables configured.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Name</th><th>Value</th></tr></thead>
-                <tbody>
-                  <tr v-for="v in crPanel.detail.envVars" :key="v.name">
-                    <td class="mono-xs" style="font-weight:600">{{ v.name }}</td>
-                    <td class="mono-xs text-dim">{{ v.value || '—' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- HISTORY -->
+            <div v-show="crPanel.tab === 'history'" style="flex:1;overflow:auto;padding:14px 16px">
+              <GcpStateTimeline v-if="crPanel.resource" resource-type="gcp-cloud-run" :resource-key="`${crPanel.resource.region}/${crPanel.resource.name}`"
+                :active="crPanel.tab === 'history'" :reload-token="historyToken" @configure="pollingModal.open = true" />
             </div>
             <!-- LOGS -->
             <div v-show="crPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
@@ -267,7 +225,10 @@
       <div v-show="activeTab === 'vms'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div class="gcp-list-toolbar">
           <span class="text-dim">{{ filteredVms.length }} VM(s)</span>
-          <button class="btn sm primary" data-test="create-vm" @click="openCreate('vm')">＋ Nueva VM</button>
+          <span class="gcp-toolbar-actions">
+            <button class="btn sm" :title="pollingTitle" data-test="polling-open" @click="pollingModal.open = true">⏱ Historial: {{ pollingBadge }}</button>
+            <button class="btn sm primary" data-test="create-vm" @click="openCreate('vm')">＋ Nueva VM</button>
+          </span>
         </div>
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">API not available — see banner above.</div>
@@ -327,71 +288,26 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'disks',label:'Disks'},{id:'network',label:'Network'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
+              <button v-for="t in VM_TABS" :key="t.id"
                 :class="['aws-tab-btn', vmPanel.tab === t.id ? 'active' : '']" @click="vmSwitchTab(t.id)">{{ t.label }}</button>
             </div>
-            <!-- OVERVIEW -->
-            <div v-show="vmPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
-              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+            <!-- DETAIL SECTIONS -->
+            <div v-show="['overview','disks','network'].includes(vmPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="vmPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">Cargando detalle…</div>
               <div v-else-if="vmPanel.detailError" class="alert-error">{{ vmPanel.detailError }}</div>
-              <div v-else-if="vmPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Instance</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Status</span><span :class="vmStatusClass(vmPanel.detail.status)">{{ vmPanel.detail.status }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Zone</span><span class="text-dim">{{ vmPanel.detail.zone }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Machine Type</span><span class="text-dim">{{ vmPanel.detail.machineType }}</span></div>
-                    <div class="kv-row"><span class="kv-k">CPU Platform</span><span class="text-dim">{{ vmPanel.detail.cpuPlatform || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Deletion Protection</span><span :class="vmPanel.detail.deletionProtection ? 'status-ok' : 'status-warn'">{{ vmPanel.detail.deletionProtection ? 'Enabled' : 'Disabled' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ vmPanel.detail.created ? new Date(vmPanel.detail.created).toLocaleString() : '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Service Account</span><span class="mono-xs text-dim" style="word-break:break-all">{{ vmPanel.detail.serviceAccount || '--' }}</span></div>
-                  </div>
-                </div>
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Tags &amp; Labels</div>
-                  <div v-if="vmPanel.detail.tags?.length" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-                    <span v-for="tag in vmPanel.detail.tags" :key="tag" style="font-size:10px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:1px 7px;color:#818cf8">{{ tag }}</span>
-                  </div>
-                  <div v-else class="text-dim" style="font-size:12px;margin-bottom:8px">No tags</div>
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;margin-top:4px">Labels</div>
-                  <div v-if="Object.keys(vmPanel.detail.labels || {}).length" style="display:flex;flex-wrap:wrap;gap:4px">
-                    <span v-for="(v, k) in vmPanel.detail.labels" :key="k" style="font-size:10px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);border-radius:10px;padding:1px 7px;color:#34d399">{{ k }}={{ v }}</span>
-                  </div>
-                  <div v-else class="text-dim" style="font-size:12px">No labels</div>
-                </div>
-              </div>
+              <GcpVmInfo v-else-if="vmPanel.detail" :detail="vmPanel.detail" :section="vmPanel.tab" />
             </div>
-            <!-- DISKS -->
-            <div v-show="vmPanel.tab === 'disks'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="!vmPanel.detail?.disks?.length" class="empty-row">No disks found.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Name</th><th>Type</th><th>Mode</th><th>Boot</th></tr></thead>
-                <tbody>
-                  <tr v-for="d in vmPanel.detail.disks" :key="d.source">
-                    <td class="mono-xs">{{ d.source?.split('/').pop() || d.source }}</td>
-                    <td class="text-dim">{{ d.type || '--' }}</td>
-                    <td class="text-dim">{{ d.mode || '--' }}</td>
-                    <td><span :class="d.boot ? 'status-ok' : 'text-dim'">{{ d.boot ? 'Yes' : 'No' }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- LABELS -->
+            <div v-show="vmPanel.tab === 'labels'" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="vmPanel.detailLoading" class="gi-empty">Cargando detalle…</div>
+              <div v-else-if="vmPanel.detailError" class="alert-error">{{ vmPanel.detailError }}</div>
+              <GcpLabelsEditor v-else-if="vmPanel.detail" :labels="vmPanel.detail.labels" :busy="labelsState.busy" :error="labelsState.kind === 'vm' ? labelsState.error : ''"
+                @save="saveLabels('vm', vmPanel.resource, $event)" />
             </div>
-            <!-- NETWORK -->
-            <div v-show="vmPanel.tab === 'network'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="vmPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="!vmPanel.detail?.networks?.length" class="empty-row">No network interfaces found.</div>
-              <table v-else class="cloud-table">
-                <thead><tr><th>Network</th><th>Subnetwork</th><th>Internal IP</th><th>External IP</th></tr></thead>
-                <tbody>
-                  <tr v-for="n in vmPanel.detail.networks" :key="n.network">
-                    <td class="mono-xs">{{ n.network?.split('/').pop() || n.network }}</td>
-                    <td class="mono-xs text-dim">{{ n.subnetwork?.split('/').pop() || n.subnetwork }}</td>
-                    <td class="text-dim">{{ n.networkIP || '--' }}</td>
-                    <td class="text-dim">{{ n.accessConfigs?.[0]?.natIP || '--' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- HISTORY -->
+            <div v-show="vmPanel.tab === 'history'" style="flex:1;overflow:auto;padding:14px 16px">
+              <GcpStateTimeline v-if="vmPanel.resource" resource-type="gcp-vm" :resource-key="`${vmPanel.resource.zone}/${vmPanel.resource.name}`"
+                :active="vmPanel.tab === 'history'" :reload-token="historyToken" @configure="pollingModal.open = true" />
             </div>
             <!-- LOGS -->
             <div v-show="vmPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
@@ -436,7 +352,10 @@
       <div v-show="activeTab === 'sql'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div class="gcp-list-toolbar">
           <span class="text-dim">{{ filteredSql.length }} instancia(s)</span>
-          <button class="btn sm primary" data-test="create-sql" @click="openCreate('sql')">＋ Nueva instancia</button>
+          <span class="gcp-toolbar-actions">
+            <button class="btn sm" :title="pollingTitle" @click="pollingModal.open = true">⏱ Historial: {{ pollingBadge }}</button>
+            <button class="btn sm primary" data-test="create-sql" @click="openCreate('sql')">＋ Nueva instancia</button>
+          </span>
         </div>
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">API not available — see banner above.</div>
@@ -494,80 +413,26 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'config',label:'Config'},{id:'connection',label:'Connection'},{id:'logs',label:'Logs'},{id:'metrics',label:'Metrics'}]" :key="t.id"
+              <button v-for="t in SQL_TABS" :key="t.id"
                 :class="['aws-tab-btn', sqlPanel.tab === t.id ? 'active' : '']" @click="sqlSwitchTab(t.id)">{{ t.label }}</button>
             </div>
-            <!-- OVERVIEW -->
-            <div v-show="sqlPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
-              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
+            <!-- DETAIL SECTIONS -->
+            <div v-show="['overview','config','connection'].includes(sqlPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="sqlPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">Cargando detalle…</div>
               <div v-else-if="sqlPanel.detailError" class="alert-error">{{ sqlPanel.detailError }}</div>
-              <div v-else-if="sqlPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Instance</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Database</span><span class="text-dim">{{ sqlPanel.detail.database }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Region</span><span class="text-dim">{{ sqlPanel.detail.region }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Zone</span><span class="text-dim">{{ sqlPanel.detail.zone }}</span></div>
-                    <div class="kv-row"><span class="kv-k">State</span><span :class="sqlStatusClass(sqlPanel.detail.state)">{{ sqlPanel.detail.state }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Availability</span><span class="text-dim">{{ sqlPanel.detail.availabilityType || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Created</span><span class="text-dim">{{ sqlPanel.detail.created ? new Date(sqlPanel.detail.created).toLocaleString() : '--' }}</span></div>
-                  </div>
-                </div>
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Backup</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Enabled</span><span :class="sqlPanel.detail.backupEnabled ? 'status-ok' : 'status-warn'">{{ sqlPanel.detail.backupEnabled ? 'Yes' : 'No' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Backup Time</span><span class="text-dim">{{ sqlPanel.detail.backupTime || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Maintenance</span><span class="text-dim">{{ sqlPanel.detail.maintenanceWindow || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Activation</span><span class="text-dim">{{ sqlPanel.detail.activationPolicy || '--' }}</span></div>
-                  </div>
-                </div>
-              </div>
+              <GcpSqlInfo v-else-if="sqlPanel.detail" :detail="sqlPanel.detail" :section="sqlPanel.tab" />
             </div>
-            <!-- CONFIG -->
-            <div v-show="sqlPanel.tab === 'config'" style="flex:1;overflow:auto;padding:16px">
-              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="sqlPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Storage</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Tier</span><span class="text-dim">{{ sqlPanel.detail.tier }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Storage Type</span><span class="text-dim">{{ sqlPanel.detail.storageType }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Storage GB</span><span class="text-dim">{{ sqlPanel.detail.storageGb }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Auto Resize</span><span :class="sqlPanel.detail.storageAutoResize ? 'status-ok' : 'text-dim'">{{ sqlPanel.detail.storageAutoResize ? 'Enabled' : 'Disabled' }}</span></div>
-                  </div>
-                </div>
-                <div v-if="sqlPanel.detail.flags?.length" style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Database Flags</div>
-                  <div class="kv-list">
-                    <div class="kv-row" v-for="f in sqlPanel.detail.flags" :key="f.name"><span class="kv-k mono-xs">{{ f.name }}</span><span class="text-dim">{{ f.value || 'on' }}</span></div>
-                  </div>
-                </div>
-              </div>
+            <!-- LABELS -->
+            <div v-show="sqlPanel.tab === 'labels'" style="flex:1;overflow:auto;padding:14px 16px">
+              <div v-if="sqlPanel.detailLoading" class="gi-empty">Cargando detalle…</div>
+              <div v-else-if="sqlPanel.detailError" class="alert-error">{{ sqlPanel.detailError }}</div>
+              <GcpLabelsEditor v-else-if="sqlPanel.detail" :labels="sqlPanel.detail.labels" :busy="labelsState.busy" :error="labelsState.kind === 'sql' ? labelsState.error : ''"
+                @save="saveLabels('sql', sqlPanel.resource, $event)" />
             </div>
-            <!-- CONNECTION -->
-            <div v-show="sqlPanel.tab === 'connection'" style="flex:1;overflow:auto;padding:16px">
-              <div v-if="sqlPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">Loading...</div>
-              <div v-else-if="sqlPanel.detail" style="display:grid;gap:16px">
-                <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Connection</div>
-                  <div class="kv-list">
-                    <div class="kv-row"><span class="kv-k">Connection Name</span><span class="mono-xs text-dim">{{ sqlPanel.detail.connectionName || '--' }}</span></div>
-                  </div>
-                </div>
-                <div v-if="sqlPanel.detail.ipAddresses?.length" style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                  <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">IP Addresses</div>
-                  <table class="cloud-table">
-                    <thead><tr><th>Type</th><th>IP Address</th></tr></thead>
-                    <tbody>
-                      <tr v-for="ip in sqlPanel.detail.ipAddresses" :key="ip.ipAddress">
-                        <td class="text-dim">{{ ip.type || '--' }}</td>
-                        <td class="mono-xs">{{ ip.ipAddress }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <!-- HISTORY -->
+            <div v-show="sqlPanel.tab === 'history'" style="flex:1;overflow:auto;padding:14px 16px">
+              <GcpStateTimeline v-if="sqlPanel.resource" resource-type="gcp-sql" :resource-key="sqlPanel.resource.name"
+                :active="sqlPanel.tab === 'history'" :reload-token="historyToken" @configure="pollingModal.open = true" />
             </div>
             <!-- LOGS -->
             <div v-show="sqlPanel.tab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
@@ -1421,6 +1286,7 @@
   </Teleport>
 
   <!-- ══ Create / confirm modals (Cloud Run, VM, Cloud SQL) ═══════════════════ -->
+  <GcpPollingSettings :open="pollingModal.open" :profile-id="selectedProfileId" @close="pollingModal.open = false" @saved="onPollingSaved" />
   <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion"
     @close="createModal.open = false" @created="onCreated" />
   <GcpConfirmModal
@@ -1987,6 +1853,13 @@ import { useApi }      from '../../composables/useApi'
 import GcsBrowser       from './GcsBrowser.vue'
 import GcpCreateModal   from './GcpCreateModal.vue'
 import GcpConfirmModal  from './GcpConfirmModal.vue'
+import GcpVmInfo        from './GcpVmInfo.vue'
+import GcpCloudRunInfo  from './GcpCloudRunInfo.vue'
+import GcpSqlInfo       from './GcpSqlInfo.vue'
+import GcpLabelsEditor  from './GcpLabelsEditor.vue'
+import GcpStateTimeline from './GcpStateTimeline.vue'
+import GcpPollingSettings from './GcpPollingSettings.vue'
+import './gcpInfo.css'
 import { gcpActionConfig } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
@@ -2348,6 +2221,7 @@ async function runAction(acks) {
       toast(`${action === 'start' ? 'Iniciando' : 'Deteniendo'} ${resource.name}`, 'success')
     }
     actionModal.open = false
+    historyToken.value++
     refreshTab(tab, kind === 'vm' ? 3000 : 0)
   } catch (e) {
     actionModal.error = e.message
@@ -2372,6 +2246,53 @@ function openVmSsh(vm, addressType) {
   })
   if (!tab.ws) startSshStream(tab)
 }
+
+// ── Detail tabs (#81): structured Info sections + labels + history ──────────
+const CR_TABS  = [{ id: 'overview', label: 'Resumen' }, { id: 'revisions', label: 'Revisiones' }, { id: 'variables', label: 'Variables' }, { id: 'labels', label: 'Etiquetas' }, { id: 'history', label: 'Historial' }, { id: 'logs', label: 'Logs' }, { id: 'metrics', label: 'Métricas' }]
+const VM_TABS  = [{ id: 'overview', label: 'Resumen' }, { id: 'disks', label: 'Discos' }, { id: 'network', label: 'Red' }, { id: 'labels', label: 'Etiquetas' }, { id: 'history', label: 'Historial' }, { id: 'logs', label: 'Logs' }, { id: 'metrics', label: 'Métricas' }]
+const SQL_TABS = [{ id: 'overview', label: 'Resumen' }, { id: 'config', label: 'Flags' }, { id: 'connection', label: 'Conexión' }, { id: 'labels', label: 'Etiquetas' }, { id: 'history', label: 'Historial' }, { id: 'logs', label: 'Logs' }, { id: 'metrics', label: 'Métricas' }]
+
+// Bumped after actions so an open history timeline reloads
+const historyToken = ref(0)
+
+const labelsState = reactive({ busy: false, error: '', kind: '' })
+async function saveLabels(kind, resource, labels) {
+  Object.assign(labelsState, { busy: true, error: '', kind })
+  try {
+    await gcpStore.updateLabels(kind, resource, labels)
+    toast(`Etiquetas de ${resource.name} actualizadas`, 'success')
+    const panel = panelFor(kind)
+    panel.detail = null                      // force a fresh detail (labels come from it)
+    if (kind === 'cloudrun') crSwitchTab('labels')
+    else if (kind === 'vm') vmSwitchTab('labels')
+    else sqlSwitchTab('labels')
+    historyToken.value++
+    refreshTab(TAB_BY_KIND[kind])
+  } catch (e) {
+    labelsState.error = e.message
+  } finally {
+    labelsState.busy = false
+  }
+}
+
+// Background polling settings for the history (per profile, off by default)
+const pollingModal = reactive({ open: false })
+const pollingSettings = ref(null)
+async function loadPollingSettings() {
+  try { pollingSettings.value = await gcpStore.fetchPollSettings() } catch { pollingSettings.value = null }
+}
+function onPollingSaved(settings) {
+  pollingSettings.value = settings
+  historyToken.value++
+  toast(settings.enabled ? `Sondeo activado cada ${settings.intervalMinutes} min` : 'Sondeo desactivado', 'success')
+}
+const pollingBadge = computed(() => {
+  const s = pollingSettings.value
+  if (!s) return '—'
+  return s.enabled ? `cada ${s.intervalMinutes < 60 ? `${s.intervalMinutes} min` : `${s.intervalMinutes / 60} h`}` : 'sin sondeo'
+})
+const pollingTitle = computed(() => 'Historial de estados: configurar el sondeo en segundo plano')
+watch(selectedProfileId, id => { if (id) loadPollingSettings() }, { immediate: true })
 
 const createModal = reactive({ open: false, kind: 'cloudrun' })
 function openCreate(kind) {
@@ -2479,7 +2400,7 @@ function selectCloudRun(svc) {
 async function crSwitchTab(tab) {
   crPanel.tab = tab
   const svc = crPanel.resource; if (!svc) return
-  if (tab === 'overview' || tab === 'revisions' || tab === 'variables') {
+  if (tab === 'overview' || tab === 'revisions' || tab === 'variables' || tab === 'labels') {
     if (crPanel.detail && crPanel.detail._svc === svc.name) return
     crPanel.detailLoading = true; crPanel.detailError = null
     try {
@@ -2523,7 +2444,7 @@ function selectVm(vm) {
 async function vmSwitchTab(tab) {
   vmPanel.tab = tab
   const vm = vmPanel.resource; if (!vm) return
-  if (tab === 'overview' || tab === 'disks' || tab === 'network') {
+  if (tab === 'overview' || tab === 'disks' || tab === 'network' || tab === 'labels') {
     if (vmPanel.detail && vmPanel.detail._key === `${vm.zone}/${vm.name}`) return
     vmPanel.detailLoading = true; vmPanel.detailError = null
     try {
@@ -2563,7 +2484,7 @@ function selectSql(inst) {
 async function sqlSwitchTab(tab) {
   sqlPanel.tab = tab
   const inst = sqlPanel.resource; if (!inst) return
-  if (tab === 'overview' || tab === 'config' || tab === 'connection') {
+  if (tab === 'overview' || tab === 'config' || tab === 'connection' || tab === 'labels') {
     if (sqlPanel.detail && sqlPanel.detail._inst === inst.name) return
     sqlPanel.detailLoading = true; sqlPanel.detailError = null
     try {
@@ -3358,6 +3279,7 @@ async function openIamKeys(sa) {
 
 <style scoped>
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */
+.gcp-toolbar-actions { display: flex; gap: 6px; align-items: center; }
 .gcp-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 12px; }
 .gcp-list-table { flex: 1; overflow: auto; min-height: 0; }
 .gcp-list-table.split { flex: 0 0 auto; max-height: 42%; border-bottom: 2px solid var(--border); }

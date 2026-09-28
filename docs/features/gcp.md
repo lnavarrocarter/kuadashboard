@@ -156,6 +156,25 @@ The backend enforces the same rules: create and delete requests without the type
 Estimates use on-demand list prices for us-central1 and exclude sustained/committed-use discounts, free tier, network egress, licences and taxes. Use them as a warning, not a quote — check the [Google Cloud pricing calculator](https://cloud.google.com/products/calculator) for exact figures.
 :::
 
+## Resource details, labels and state history
+
+Clicking a Cloud Run service, VM or Cloud SQL instance opens its detail below the table:
+
+- **Summary / Revisions / Variables** (Cloud Run), **Summary / Disks / Network** (VMs), **Summary / Flags / Connection** (Cloud SQL): structured cards with the resource's configuration — machine and OS, scheduling, Shielded VM, service account scopes, disks with type, source image and encryption (VMs); container, probes, scaling, concurrency, timeout, VPC access, invoker access and traffic per revision (Cloud Run); storage, backups and PITR, maintenance window, SSL mode and authorized networks (Cloud SQL).
+- **Observations** at the top of the summary flag what deserves a second look: public access, 24/7 min instances, the default Compute service account, secret-looking environment variables stored in plain text, disabled backups, unencrypted connections, authorized networks open to `0.0.0.0/0`, missing deletion protection, disks without auto-delete…
+- Sensitive values are never shown: VM metadata such as `ssh-keys` or startup scripts shows only the key, and environment variables backed by Secret Manager show the secret reference.
+- **Labels**: add, edit and remove labels with GCP's rules validated as you type, and review the changes before saving. System labels (`goog-*`, `run.googleapis.com/…`) are shown read-only.
+- **History**: a timeline of state changes (for example `RUNNING → TERMINATED`) and your actions (start, stop, create, delete, labels, SSH sessions), each marked as *observed*, *poll* or *user*.
+
+### Background polling
+
+By default KUA records state changes only when a list is loaded and when you act on a resource. From **⏱ History** in the Cloud Run, VM or Cloud SQL toolbar you can turn on **background polling** for the current profile: KUA then checks the selected resource types periodically while it is running, even if the view is closed.
+
+- Interval from 5 minutes to once a day, the resource types to poll, and how long to keep the history (7–365 days).
+- The dialog shows how many API reads per day the setting makes (one list call per resource type per cycle). These list APIs are not billed per call but count toward the project quota.
+- **Poll now** runs one cycle on demand. The last run and any error are shown; one failing resource type (for example a disabled API) does not stop the others.
+- The history is stored locally in KUA's SQLite database; enabling or disabling polling is audited.
+
 ## IAM
 
 ### IAM Service Accounts

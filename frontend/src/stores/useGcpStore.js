@@ -197,6 +197,32 @@ export const useGcpStore = defineStore('gcp', () => {
     if (kind === 'sql') return `/api/cloud/gcp/sql/${e(resource.name)}`
     throw new Error(`Unknown resource kind: ${kind}`)
   }
+  // ─── Labels / state history / polling (#81) ─────────────────────────────────
+  function labelsPath(kind, resource) {
+    const e = encodeURIComponent
+    if (kind === 'cloudrun') return `/api/cloud/gcp/cloudrun/${e(resource.region)}/${e(resource.name)}/labels`
+    if (kind === 'vm') return `/api/cloud/gcp/compute/vms/${e(resource.zone)}/${e(resource.name)}/labels`
+    if (kind === 'sql') return `/api/cloud/gcp/sql/${e(resource.name)}/labels`
+    throw new Error(`Unknown resource kind: ${kind}`)
+  }
+  async function updateLabels(kind, resource, labels) {
+    return await apiFetch(labelsPath(kind, resource), jsonRequest('PUT', { labels }))
+  }
+  async function fetchHistory(type, key, { limit = 50, before = null } = {}) {
+    const q = new URLSearchParams({ type, key, limit: String(limit) })
+    if (before) q.set('before', String(before))
+    return await request(`/api/cloud/gcp/history?${q}`, { headers: headers() })
+  }
+  async function fetchPollSettings() {
+    return await request('/api/cloud/gcp/history/polling', { headers: headers() })
+  }
+  async function updatePollSettings(changes) {
+    return await apiFetch('/api/cloud/gcp/history/polling', jsonRequest('PUT', changes))
+  }
+  async function runPollNow() {
+    return await apiFetch('/api/cloud/gcp/history/polling/run', jsonRequest('POST', {}))
+  }
+
   async function deleteResource(kind, resource, confirmName) {
     return await apiFetch(deletePath(kind, resource), jsonRequest('DELETE', { confirmName }))
   }
@@ -444,6 +470,7 @@ export const useGcpStore = defineStore('gcp', () => {
 
   return {
     estimateResource, createResource, deleteResource, fetchPresets,
+    updateLabels, fetchHistory, fetchPollSettings, updatePollSettings, runPollNow,
     activeProfileId, tabs,
     cloudRunServices, gkeClusters, vms,
     setActiveProfile, runInBackground,
