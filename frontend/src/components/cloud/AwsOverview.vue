@@ -88,6 +88,18 @@
         </div>
       </div>
 
+      <AwsOverviewInsights
+        section="summary"
+        :insights="awsStore.overviewInsights"
+        :loading="insightsLoading"
+        :error="insightsError"
+        :refreshing-costs="refreshingCosts"
+        :identity="identity"
+        :now="now"
+        @open-tab="tab => emit('open-tab', tab)"
+        @refresh-costs="loadInsights({ refreshCosts: true })"
+      />
+
       <!-- Services -->
       <section class="aov-services">
         <button
@@ -115,6 +127,13 @@
         </button>
       </section>
       <p class="aov-note">{{ t('awsOverview.scopeNote', { region: data.region }) }}</p>
+
+      <AwsOverviewInsights
+        section="uncovered"
+        :insights="awsStore.overviewInsights"
+        :identity="identity"
+        :now="now"
+      />
       <AwsAccessRequestModal
         :show="!!accessService"
         :access="accessService?.access || null"
@@ -133,6 +152,7 @@ import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
+import AwsOverviewInsights from './AwsOverviewInsights.vue'
 
 defineProps({
   profileId: { type: String, default: '' },
@@ -148,6 +168,10 @@ const loading = ref(false)
 const error = ref(null)
 const showRegions = ref(false)
 const accessService = ref(null)
+const insightsLoading = ref(false)
+const insightsError = ref(null)
+const refreshingCosts = ref(false)
+let insightsRequestId = 0
 
 function openAccess(service) {
   accessService.value = service
@@ -196,7 +220,27 @@ async function copy(value) {
   }
 }
 
+// Costs and activity load next to the overview so they never delay it.
+async function loadInsights({ refreshCosts = false } = {}) {
+  const id = ++insightsRequestId
+  insightsLoading.value = true
+  if (refreshCosts) refreshingCosts.value = true
+  try {
+    await awsStore.fetchOverviewInsights({ refreshCosts })
+    if (id === insightsRequestId) insightsError.value = null
+  } catch (e) {
+    if (id === insightsRequestId) insightsError.value = e.message
+  } finally {
+    if (id === insightsRequestId) {
+      insightsLoading.value = false
+      refreshingCosts.value = false
+    }
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
 async function load() {
+  loadInsights()
   const id = ++requestId
   loading.value = true
   try {

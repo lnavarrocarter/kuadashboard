@@ -15,6 +15,7 @@
  *   GET  /local-profiles                    → list profile names from ~/.aws/credentials
  *   GET  /regions                           → list all available AWS regions
  *   GET  /overview                          → account, identity, region and resources per service
+ *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
  *   GET  /eks                               → list EKS clusters
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
@@ -58,6 +59,7 @@ const {
 const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib/eksInfrastructure');
 const { buildAwsOverview } = require('../lib/awsOverview');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
+const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 
 const router = express.Router();
 
@@ -330,6 +332,21 @@ router.get('/overview', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     res.json(await buildAwsOverview(cfg, { profile: { id: profileId } }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /overview/insights ───────────────────────────────────────────────────
+// Costs, Lambda activity and services outside KUA. Cost Explorer bills every
+// request, so costs are cached per profile for 12h; ?refreshCosts=1 forces it.
+
+const costCache = createCostCache();
+
+router.get('/overview/insights', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    res.json(await buildAwsInsights(cfg, { cache: costCache, cacheKey: profileId, refreshCosts: req.query.refreshCosts === '1' }));
   } catch (err) { handleErr(res, err); }
 });
 

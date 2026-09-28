@@ -131,7 +131,7 @@ describe('overview denied cards', () => {
     const wrapper = mount(AwsOverview, { global: { stubs: { teleport: true } } })
     await wrapper.find('.aov-request').trigger('click')
     expect(wrapper.emitted('open-tab')).toBeUndefined()
-    const modal = wrapper.findComponent(AwsAccessRequestModal)
+    const modal = wrapper.findAllComponents(AwsAccessRequestModal).find(m => m.props('show'))
     expect(modal.props('show')).toBe(true)
     expect(modal.props('access').failedAction).toBe('eks:ListClusters')
   })

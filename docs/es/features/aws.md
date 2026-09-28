@@ -50,6 +50,16 @@ Selecciona el perfil activo y la región desde los dropdowns en el encabezado de
 
 Cada servicio se lee por separado, en paralelo y con un tiempo máximo: si falta un permiso, solo esa tarjeta queda como *Sin permiso* (con la acción IAM cuando AWS la informa) y el resto carga igual. Al hacer clic en una tarjeta se abre la pestaña de ese servicio. Solo se hacen llamadas de lectura (List/Describe).
 
+### Costos, actividad y servicios fuera de KUA
+
+Debajo del resumen, el Resumen agrega (cargado en segundo plano para no demorar el resto):
+
+- **Costos**: lo gastado en el mes, la proyección a fin de mes y el mes anterior, más los servicios que más cuestan (los que están fuera de KUA se marcan). Los datos vienen de Cost Explorer, que AWS cobra a USD 0.01 por consulta, así que KUA los guarda por perfil durante **12 horas** en disco (`~/.kuadashboard/aws-cost-cache.json`, o la carpeta de datos de la app de escritorio) y **Actualizar costos** fuerza una actualización (2 consultas). Sin acceso a Cost Explorer, KUA muestra el total estimado de la cuenta desde la métrica de facturación de CloudWatch (solo disponible con *Receive Billing Alerts* habilitado) y ofrece **Solicitar acceso**.
+- **Actividad de Lambda**: invocaciones, errores (con su tasa) y throttles de toda la cuenta en las últimas 24 horas, con un gráfico por hora (CloudWatch).
+- **Servicios fuera de KUA**: servicios con costo este mes o el anterior, recursos etiquetados (Resource Groups Tagging API, primeros 1.000 recursos) o cambios en las últimas 24 horas (solo eventos de escritura de CloudTrail, así que las lecturas de KUA no cuentan) que KUA todavía no gestiona, como Elastic Load Balancing, SQS, KMS o Kinesis. Los servicios que KUA solo usa indirectamente (CloudWatch, CloudWatch Logs, CloudFormation) aparecen al final como *Parcial en KUA*.
+
+Cada fuente se lee por separado: si falta un permiso, solo se oculta esa fuente y se ofrece **Solicitar acceso**.
+
 ## Solicitudes de acceso
 
 Cuando AWS rechaza una solicitud, KUA explica qué falta en vez de mostrar solo el error crudo. El aviso de error de la vista de AWS (y cada tarjeta *Sin permiso* del Resumen) ofrece **Solicitar acceso**, que abre:

@@ -16,6 +16,7 @@ export const useAwsStore = defineStore('aws', () => {
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId  = ref(null)
   const overview         = ref(null)
+  const overviewInsights = ref(null)
   const regions          = ref([])
   const eksClusters      = ref([])
   const ecsServices      = ref([])
@@ -86,6 +87,7 @@ export const useAwsStore = defineStore('aws', () => {
   function setActiveProfile(id) {
     activeProfileId.value  = id
     overview.value         = null
+    overviewInsights.value = null
     regions.value          = []
     eksClusters.value      = []
     ecsServices.value      = []
@@ -119,6 +121,15 @@ export const useAwsStore = defineStore('aws', () => {
     const data = await apiFetch('/api/cloud/aws/overview', { headers: headers() })
     overview.value = data
     if (data?.regions?.available) regions.value = data.regions.items.map(name => ({ name }))
+    return data
+  }
+
+  // Costs (cached 12h server-side; refreshCosts forces a billed Cost Explorer
+  // call), Lambda activity and services outside KUA.
+  async function fetchOverviewInsights({ refreshCosts = false } = {}) {
+    const query = refreshCosts ? '?refreshCosts=1' : ''
+    const data = await apiFetch(`/api/cloud/aws/overview/insights${query}`, { headers: headers() })
+    overviewInsights.value = data
     return data
   }
 
@@ -1037,14 +1048,14 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, overview, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, overview, overviewInsights, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchRegions, fetchEksClusters, fetchEksDetails,
+    fetchOverview, fetchOverviewInsights, fetchRegions, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
     fetchLambdas, invokeLambda,

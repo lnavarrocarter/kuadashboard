@@ -50,6 +50,16 @@ Select your active profile and region from the dropdowns in the AWS panel header
 
 Every service is read on its own, in parallel and with a timeout: a missing permission marks only that card as *No permission* (with the IAM action when AWS reports it), and the rest still load. Clicking a card opens that service's tab. Only read-only List/Describe calls are made.
 
+### Costs, activity and services outside KUA
+
+Below the summary the Overview adds, loaded in the background so the rest never waits:
+
+- **Costs** — this month so far, the month-end forecast and last month, plus the most expensive services (services outside KUA are marked). Data comes from Cost Explorer, which AWS bills at USD 0.01 per request, so KUA caches it per profile for **12 hours** on disk (`~/.kuadashboard/aws-cost-cache.json`, or the app data folder in the desktop app) and **Refresh costs** forces an update (2 requests). Without Cost Explorer access, KUA shows the account's estimated total from the CloudWatch billing metric (only available when *Receive Billing Alerts* is enabled) and offers **Request access**.
+- **Lambda activity** — invocations, errors (with the error rate) and throttles for the whole account in the last 24 hours, with an hourly chart (CloudWatch).
+- **Services outside KUA** — services with cost this or last month, tagged resources (Resource Groups Tagging API, first 1,000 resources) or changes in the last 24 hours (CloudTrail write events only, so KUA's own reads do not count) that KUA does not manage yet, such as Elastic Load Balancing, SQS, KMS or Kinesis. Services KUA only uses indirectly (CloudWatch, CloudWatch Logs, CloudFormation) are listed last as *Partly in KUA*.
+
+Each source is read on its own: a missing permission only hides that source and offers **Request access**.
+
 ## Access requests
 
 When AWS denies a request, KUA explains what is missing instead of only showing the raw error. The error banner of the AWS view (and every *No permission* card in the Overview) offers **Request access**, which opens:
