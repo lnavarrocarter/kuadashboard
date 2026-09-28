@@ -148,7 +148,7 @@ Inspect Virtual Private Clouds:
 - VPC name, ID, CIDR block, state, subnet count, default VPC indicator
 - **Tags** — view all VPC tags
 - **Config** — view route tables, internet gateways and DHCP options
-- **Details** — deep-dive panel with 6 inner tabs:
+- **Info** — deep-dive panel (same layout as the EC2 and Lambda Info panels, with copy buttons on IDs) with 6 inner tabs:
   - **Overview** — VPC info card, resource summary counts (subnets, SGs, route tables, IGWs, NAT GWs) and all tags
   - **Subnets** — subnet ID, CIDR, availability zone, state, auto-assign public IP, available IP count
   - **Security Groups** — per-group card showing name, description and inbound rules table (protocol, port range, source CIDR)
@@ -172,7 +172,38 @@ Manage CDN distributions:
 Two-panel DNS browser:
 
 - **Left panel** — hosted zones with record count and public/private indicator
-- **Right panel** — click a zone to load all records: name, type, TTL, value or alias target
+- **Right panel** — click a zone to load all records (every page, including routing-policy sets with their Set ID): name, type, TTL, value or alias target
+- **Search** — filter by record name, value, alias target or Set ID
+- **Type filter** — show only one record type (A, TXT, MX, CNAME...)
+- **Select & export** — tick records (the selection survives search/filter changes) and click **Export** to download a CSV. With nothing selected, Export downloads the records currently visible
+
+#### DNS diagnostics
+
+The **DNS test** column checks whether a record is actually published on the internet. Tests run from the machine running KUA against its public resolver, so they show what the internet sees, not only what is stored in Route 53. They do not use AWS credentials.
+
+Only tests that make sense for the record type are offered:
+
+| Record | Test | What it checks |
+|---|---|---|
+| A / AAAA | Resolve + TCP | The name resolves, then opens a TCP connection to the first address on port 443 and then 80 (2 s timeout each). No ping or system binaries are used |
+| MX | Resolve | Mail exchangers, sorted by priority |
+| CNAME | Resolve | The alias target |
+| NS | Resolve | Name servers for the name |
+| TXT | Resolve | All TXT strings (chunked values are joined) |
+| TXT with `v=spf1` | SPF | Exactly one SPF record exists and it ends in an `all` mechanism or `redirect=` |
+| TXT at `<selector>._domainkey.<domain>` | DKIM | A DKIM record with a public key (`p=`) is published for that selector |
+
+Results use three states:
+
+- **OK** — the record resolves and passes the check.
+- **WARNING** — it resolves but something needs attention: A/AAAA not reachable on TCP 443/80, SPF with `+all` or without `all`, DKIM key revoked (empty `p=`), TXT name with no strings.
+- **ERROR** — it does not resolve (the resolver code, e.g. `ENOTFOUND` or `ENODATA`, is shown), SPF is missing or duplicated, or no DKIM key is found.
+
+Hover over a result to see the resolved values; click it to run the test again. Wildcard records (`*.example.com`) and types such as SOA, SRV or CAA show no test: test a concrete subdomain instead.
+
+::: tip
+A record that is **OK** in Route 53 but **ERROR** here usually means the domain's registrar is not delegating to the hosted zone's name servers, or the zone is private.
+:::
 
 ---
 

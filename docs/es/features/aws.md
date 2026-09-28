@@ -148,7 +148,7 @@ Inspecciona Virtual Private Clouds:
 - Nombre del VPC, ID, bloque CIDR, estado, número de subnets, indicador de VPC por defecto
 - **Tags** — ver todos los tags del VPC
 - **Config** — ver tablas de rutas, internet gateways y opciones DHCP
-- **Details** — panel de análisis profundo con 6 pestañas internas:
+- **Info** — panel de análisis profundo (mismo diseño que los paneles Info de EC2 y Lambda, con botones para copiar IDs) con 6 pestañas internas:
   - **Overview** — tarjeta de info del VPC, conteos resumen de recursos (subnets, SGs, tablas de rutas, IGWs, NAT GWs) y todos los tags
   - **Subnets** — subnet ID, CIDR, availability zone, estado, auto-assign IP pública, IPs disponibles
   - **Security Groups** — tarjeta por grupo con nombre, descripción y tabla de reglas inbound (protocolo, rango de puertos, CIDR fuente)
@@ -172,7 +172,38 @@ Gestiona distribuciones CDN:
 Explorador DNS de dos paneles:
 
 - **Panel izquierdo** — zonas alojadas con conteo de registros e indicador público/privado
-- **Panel derecho** — haz clic en una zona para cargar todos los registros: nombre, tipo, TTL, valor o target de alias
+- **Panel derecho** — haz clic en una zona para cargar todos los registros (todas las páginas, incluidos los sets con política de routing y su Set ID): nombre, tipo, TTL, valor o target de alias
+- **Búsqueda** — filtra por nombre, valor, target de alias o Set ID
+- **Filtro por tipo** — muestra un solo tipo de registro (A, TXT, MX, CNAME...)
+- **Seleccionar y exportar** — marca registros (la selección se mantiene aunque cambies la búsqueda o el filtro) y haz clic en **Export** para descargar un CSV. Sin selección, Export descarga los registros visibles
+
+#### Diagnóstico DNS
+
+La columna **DNS test** verifica si un registro está realmente publicado en Internet. Las pruebas se ejecutan desde la máquina donde corre KUA contra su resolver público, así que muestran lo que ve Internet y no solo lo guardado en Route 53. No usan credenciales de AWS.
+
+Solo se ofrecen las pruebas que tienen sentido para cada tipo de registro:
+
+| Registro | Prueba | Qué verifica |
+|---|---|---|
+| A / AAAA | Resolve + TCP | Que el nombre resuelve y luego abre una conexión TCP a la primera dirección en el puerto 443 y después 80 (2 s de timeout cada uno). No usa ping ni binarios del sistema |
+| MX | Resolve | Servidores de correo, ordenados por prioridad |
+| CNAME | Resolve | El destino del alias |
+| NS | Resolve | Los name servers del nombre |
+| TXT | Resolve | Todos los strings TXT (los valores partidos se unen) |
+| TXT con `v=spf1` | SPF | Que exista exactamente un registro SPF y termine en un mecanismo `all` o `redirect=` |
+| TXT en `<selector>._domainkey.<dominio>` | DKIM | Que haya un registro DKIM publicado con clave pública (`p=`) para ese selector |
+
+Los resultados tienen tres estados:
+
+- **OK** — el registro resuelve y pasa la verificación.
+- **WARNING** — resuelve pero algo requiere atención: A/AAAA sin respuesta TCP en 443/80, SPF con `+all` o sin `all`, clave DKIM revocada (`p=` vacío), nombre TXT sin strings.
+- **ERROR** — no resuelve (se muestra el código del resolver, por ejemplo `ENOTFOUND` o `ENODATA`), falta el SPF o está duplicado, o no se encuentra la clave DKIM.
+
+Pasa el cursor sobre un resultado para ver los valores resueltos; haz clic para repetir la prueba. Los registros wildcard (`*.example.com`) y tipos como SOA, SRV o CAA no muestran prueba: prueba un subdominio concreto.
+
+::: tip
+Un registro que está **OK** en Route 53 pero da **ERROR** aquí normalmente indica que el registrador del dominio no delega a los name servers de la zona, o que la zona es privada.
+:::
 
 ---
 

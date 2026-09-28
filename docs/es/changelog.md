@@ -8,6 +8,7 @@
 
 ### Cambiado
 - **AWS VPC:** La acción "Details" de VPC ahora se llama "Info" y abre un modal dedicado alineado al patrón Info de EC2/Lambda (tabs subrayados, listas de definición, botones de copiar, badges en el header). Mismos datos y endpoint que antes.
+- **AWS Route 53 (correcciones):** Las pruebas DNS ahora llegan al backend (la UI llamaba a una URL inexistente), las pruebas A/AAAA incluyen la verificación TCP 443/80, las pruebas SPF y DKIM se ofrecen en los registros TXT que las contienen y solo se muestran pruebas que tienen sentido para cada tipo de registro. La selección de registros ya no se desplaza al cambiar la búsqueda o el filtro, los registros con política de routing (mismo nombre y tipo) se exportan por separado con su Set ID y las zonas con más de 300 registros se cargan completas. Se agregó una guía de diagnóstico DNS a la documentación de AWS.
 
 ### Añadido
 - **AWS Route 53:** Se agregó funcionalidad de búsqueda y filtrado para registros DNS. Los usuarios ahora pueden buscar registros por nombre o valor, filtrar por tipo de registro (A, TXT, MX, CNAME, etc.), seleccionar múltiples registros con checkboxes, y exportar los registros seleccionados como CSV para respaldo o análisis.

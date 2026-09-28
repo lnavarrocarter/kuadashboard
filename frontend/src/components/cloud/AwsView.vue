@@ -1539,26 +1539,34 @@
               <div v-else-if="!filteredRoute53Records.length" class="empty-row">No records match the search or filter.</div>
               <table v-else class="cloud-table">
                 <thead><tr>
-                  <th style="width:30px"><input type="checkbox" @change="e => e.target.checked ? selectAllVisibleRecords() : clearRecordSelection()" :checked="filteredRoute53Records.length > 0 && filteredRoute53Records.every((r, idx) => route53State.selectedRecords.has(`${r.name}|${r.type}|${idx}`))"></th>
-                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th><th>Test</th>
+                  <th style="width:30px"><input type="checkbox" title="Select all visible" :checked="allVisibleRoute53Selected" @change="e => e.target.checked ? selectAllVisibleRecords() : clearVisibleRecordSelection()"></th>
+                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th><th>DNS test</th>
                 </tr></thead>
                 <tbody>
-                  <tr v-for="(r, idx) in filteredRoute53Records" :key="`${r.name}|${r.type}|${idx}`">
-                    <td><input type="checkbox" @change="toggleRecordSelection(r, idx)" :checked="route53State.selectedRecords.has(`${r.name}|${r.type}|${idx}`)"></td>
-                    <td class="mono-xs">{{ r.name }}</td>
+                  <tr v-for="r in filteredRoute53Records" :key="route53RecordKey(r)">
+                    <td><input type="checkbox" :checked="route53State.selectedRecords.has(route53RecordKey(r))" @change="toggleRecordSelection(r)"></td>
+                    <td class="mono-xs">
+                      {{ route53DisplayName(r.name) }}
+                      <span v-if="r.setIdentifier" class="text-dim" style="font-size:.72rem;margin-left:4px" :title="'Set ID: ' + r.setIdentifier">[{{ r.setIdentifier }}]</span>
+                    </td>
                     <td><span class="tag-chip">{{ r.type }}</span></td>
                     <td class="text-dim">{{ r.ttl ?? '-' }}</td>
                     <td class="text-dim mono-xs" style="word-break:break-all">
                       <span v-if="r.alias">{{ r.alias.dnsName }}</span>
                       <span v-else>{{ (r.records || []).join(', ') }}</span>
                     </td>
-                    <td style="width:120px">
-                      <div v-if="route53State.testingRecord === `${r.name}|${r.type}`" style="font-size:.8rem;color:#8b949e">Testing...</div>
-                      <div v-else-if="route53State.testResults[`${r.name}|${r.type}`]" :style="{ fontSize: '.8rem', fontWeight: 600, color: route53State.testResults[`${r.name}|${r.type}`].status === 'OK' ? '#3fb950' : route53State.testResults[`${r.name}|${r.type}`].status === 'WARNING' ? '#d29922' : '#f85149' }">
-                        {{ route53State.testResults[`${r.name}|${r.type}`].status }}
-                        <div style="font-size:.75rem;font-weight:400;color:#8b949e;margin-top:2px">{{ route53State.testResults[`${r.name}|${r.type}`].message }}</div>
+                    <td style="min-width:150px;max-width:280px">
+                      <span v-if="!route53TestsFor(r).length" class="text-dim" style="font-size:.75rem">—</span>
+                      <div v-for="t in route53TestsFor(r)" :key="t.id" style="margin:2px 0">
+                        <span v-if="route53State.testing[route53TestKey(r, t)]" style="font-size:.78rem;color:#8b949e">{{ t.label }}: testing…</span>
+                        <template v-else-if="route53State.testResults[route53TestKey(r, t)]">
+                          <button :title="route53ResultTitle(t, route53State.testResults[route53TestKey(r, t)])"
+                            :style="{ padding: '1px 7px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem', fontWeight: 600, ...route53StatusStyle(route53State.testResults[route53TestKey(r, t)].status) }"
+                            @click="testRoute53Record(r, t)">{{ t.label }}: {{ route53State.testResults[route53TestKey(r, t)].status }} ↺</button>
+                          <div style="font-size:.72rem;color:#8b949e;margin-top:2px;word-break:break-word">{{ route53State.testResults[route53TestKey(r, t)].message }}</div>
+                        </template>
+                        <button v-else @click="testRoute53Record(r, t)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.78rem;color:#58a6ff">Test {{ t.label }}</button>
                       </div>
-                      <button v-else @click="testRoute53Record(r)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.8rem;color:#58a6ff">Test</button>
                     </td>
                   </tr>
                 </tbody>
@@ -3664,6 +3672,10 @@ import VpcDetail           from './VpcDetail.vue'
 import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
+import {
+  displayName, filterRecords, hostnameOf, recordKey, recordTypes,
+  recordsForExport, recordsToCsv, testResultKey, testsForRecord,
+} from './route53Records'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 
@@ -5138,30 +5150,25 @@ const route53State = reactive({
   search: '',
   selectedRecordType: null,
   selectedRecords: new Set(),
-  testingRecord: null,
+  testing: {},
   testResults: {},
 })
 
-const route53RecordTypes = computed(() => {
-  const types = new Set(route53State.records.map(r => r.type))
-  return Array.from(types).sort()
-})
+const route53RecordKey   = recordKey
+const route53DisplayName = displayName
+const route53TestsFor    = testsForRecord
+const route53TestKey     = testResultKey
 
-const filteredRoute53Records = computed(() => {
-  let filtered = route53State.records
-  if (route53State.search) {
-    const q = route53State.search.toLowerCase()
-    filtered = filtered.filter(r =>
-      r.name?.toLowerCase().includes(q) ||
-      r.records?.some(v => v?.toLowerCase().includes(q)) ||
-      r.alias?.dnsName?.toLowerCase().includes(q)
-    )
-  }
-  if (route53State.selectedRecordType) {
-    filtered = filtered.filter(r => r.type === route53State.selectedRecordType)
-  }
-  return filtered
-})
+const route53RecordTypes = computed(() => recordTypes(route53State.records))
+
+const filteredRoute53Records = computed(() => filterRecords(route53State.records, {
+  search: route53State.search,
+  type:   route53State.selectedRecordType,
+}))
+
+const allVisibleRoute53Selected = computed(() =>
+  filteredRoute53Records.value.length > 0
+  && filteredRoute53Records.value.every(r => route53State.selectedRecords.has(recordKey(r))))
 
 async function loadRoute53Records(zone) {
   route53State.selectedZoneId = zone.id
@@ -5169,27 +5176,29 @@ async function loadRoute53Records(zone) {
   route53State.search = ''
   route53State.selectedRecordType = null
   route53State.selectedRecords.clear()
+  route53State.testing = {}
+  route53State.testResults = {}
   route53State.loadingRecords = true
   try {
     const data = await awsStore.fetchRoute53Records(zone.id)
-    route53State.records = data || []
-  } finally { route53State.loadingRecords = false }
-}
-
-function toggleRecordSelection(record, idx) {
-  const key = `${record.name}|${record.type}|${idx}`
-  if (route53State.selectedRecords.has(key)) {
-    route53State.selectedRecords.delete(key)
-  } else {
-    route53State.selectedRecords.add(key)
+    if (route53State.selectedZoneId === zone.id) route53State.records = data || []
+  } finally {
+    if (route53State.selectedZoneId === zone.id) route53State.loadingRecords = false
   }
 }
 
+function toggleRecordSelection(record) {
+  const key = recordKey(record)
+  if (route53State.selectedRecords.has(key)) route53State.selectedRecords.delete(key)
+  else route53State.selectedRecords.add(key)
+}
+
 function selectAllVisibleRecords() {
-  filteredRoute53Records.value.forEach((record, idx) => {
-    const key = `${record.name}|${record.type}|${idx}`
-    route53State.selectedRecords.add(key)
-  })
+  filteredRoute53Records.value.forEach(r => route53State.selectedRecords.add(recordKey(r)))
+}
+
+function clearVisibleRecordSelection() {
+  filteredRoute53Records.value.forEach(r => route53State.selectedRecords.delete(recordKey(r)))
 }
 
 function clearRecordSelection() {
@@ -5197,66 +5206,46 @@ function clearRecordSelection() {
 }
 
 function exportRoute53Records() {
-  const selectedIndices = Array.from(route53State.selectedRecords).map(key => {
-    const parts = key.split('|')
-    return route53State.records.findIndex(r => r.name === parts[0] && r.type === parts[1])
-  })
+  const rows = recordsForExport(route53State.records, filteredRoute53Records.value, route53State.selectedRecords)
+  if (!rows.length) return
 
-  const recordsToExport = selectedIndices.length > 0
-    ? selectedIndices.map(idx => route53State.records[idx]).filter(Boolean)
-    : filteredRoute53Records.value
-
-  if (recordsToExport.length === 0) return
-
-  const headers = ['Name', 'Type', 'TTL', 'Value / Alias']
-  const rows = recordsToExport.map(r => [
-    r.name || '',
-    r.type || '',
-    r.ttl ?? '-',
-    r.alias ? r.alias.dnsName : (r.records || []).join('; '),
-  ])
-
-  const csv = [
-    headers.map(h => `"${h}"`).join(','),
-    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
-  ].join('\n')
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const zone = awsStore.route53Zones.find(z => z.id === route53State.selectedZoneId)
+  const zoneName = (zone?.name || route53State.selectedZoneId || 'zone').replace(/\.$/, '')
+  const blob = new Blob([recordsToCsv(rows)], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', `route53-records-${new Date().toISOString().split('T')[0]}.csv`)
-  link.style.visibility = 'hidden'
+  link.href = url
+  link.download = `route53-${zoneName}-${new Date().toISOString().split('T')[0]}.csv`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
 
-async function testRoute53Record(record) {
-  const key = `${record.name}|${record.type}`
-  route53State.testingRecord = key
+function route53StatusStyle(status) {
+  if (status === 'OK')      return { background: 'rgba(63,185,80,.18)',  color: '#3fb950' }
+  if (status === 'WARNING') return { background: 'rgba(210,153,34,.18)', color: '#d29922' }
+  return { background: 'rgba(248,81,73,.18)', color: '#f85149' }
+}
 
+function route53ResultTitle(test, result) {
+  const values = result?.values?.length ? `\n${result.values.join('\n')}` : ''
+  return `Re-run ${test.label}${values}`
+}
+
+async function testRoute53Record(record, test) {
+  const key = testResultKey(record, test)
+  route53State.testing[key] = true
   try {
-    // Remove trailing dot from hostname if present
-    const hostname = record.name.replace(/\.$/, '')
-
-    const res = await fetch('/api/route53/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname, type: record.type }),
+    route53State.testResults[key] = await awsStore.validateRoute53Record({
+      hostname: hostnameOf(record),
+      type:     test.type,
+      checkTcp: !!test.checkTcp,
     })
-
-    const result = await res.json()
-    route53State.testResults[key] = result
   } catch (err) {
-    route53State.testResults[key] = {
-      status: 'ERROR',
-      message: err.message,
-      values: [],
-    }
+    route53State.testResults[key] = { status: 'ERROR', message: err?.message || 'Error', values: [] }
   } finally {
-    route53State.testingRecord = null
+    delete route53State.testing[key]
   }
 }
 

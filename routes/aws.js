@@ -3620,34 +3620,39 @@ router.get('/route53/zones/:id/records', async (req, res) => {
     const cfg = await resolveAwsConfig(profileId);
     const { Route53Client, ListResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
     const client = new Route53Client({ ...cfg, region: 'us-east-1' });
-    const resp = await client.send(new ListResourceRecordSetsCommand({ HostedZoneId: req.params.id }));
-    res.json((resp.ResourceRecordSets || []).map(r => ({
-      name:    r.Name,
-      type:    r.Type,
-      ttl:     r.TTL,
-      records: (r.ResourceRecords || []).map(rr => rr.Value),
-      alias:   r.AliasTarget ? { dnsName: r.AliasTarget.DNSName, zoneId: r.AliasTarget.HostedZoneId } : null,
+    const sets = [];
+    let next = {};
+    do {
+      const resp = await client.send(new ListResourceRecordSetsCommand({ HostedZoneId: req.params.id, ...next }));
+      sets.push(...(resp.ResourceRecordSets || []));
+      next = resp.IsTruncated
+        ? { StartRecordName: resp.NextRecordName, StartRecordType: resp.NextRecordType, StartRecordIdentifier: resp.NextRecordIdentifier }
+        : null;
+    } while (next);
+    res.json(sets.map(r => ({
+      name:          r.Name,
+      type:          r.Type,
+      ttl:           r.TTL,
+      setIdentifier: r.SetIdentifier || null,
+      records:       (r.ResourceRecords || []).map(rr => rr.Value),
+      alias:         r.AliasTarget ? { dnsName: r.AliasTarget.DNSName, zoneId: r.AliasTarget.HostedZoneId } : null,
     })));
   } catch (err) { handleErr(res, err); }
 });
 
-// POST /route53/validate  → validate a DNS record
+// POST /route53/validate  → validate public resolution of a DNS record
 router.post('/route53/validate', async (req, res) => {
-  const { hostname, type, selector } = req.body;
+  const { hostname, type, selector, checkTcp } = req.body || {};
   if (!hostname || !type) {
     return res.status(400).json({ error: 'Missing hostname or type' });
   }
 
   try {
     const DNSValidator = require('../lib/dnsValidator');
-    const result = await DNSValidator.validate(hostname, type.toUpperCase(), { selector });
+    const result = await DNSValidator.validate(hostname, type, { selector, checkTcp: checkTcp === true });
     res.json(result);
   } catch (err) {
-    res.json({
-      status: 'ERROR',
-      values: [],
-      message: err.message,
-    });
+    res.json({ status: 'ERROR', values: [], message: err.message });
   }
 });
 

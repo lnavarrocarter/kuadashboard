@@ -5,7 +5,7 @@
  * All API calls inject X-Profile-Id from the activeProfileId state.
  * Desktop-ready: apiFetch can be replaced by an Electron IPC adapter.
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 
@@ -715,6 +715,15 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  // Public DNS check; does not use AWS credentials, so no profile header.
+  async function validateRoute53Record({ hostname, type, selector, checkTcp = false }) {
+    return await apiFetch('/api/cloud/aws/route53/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname, type, selector, checkTcp }),
+    })
+  }
+
   // ─── Cognito ─────────────────────────────────────────────────────────────────
 
   async function fetchCognitoUserPools() {
@@ -1033,7 +1042,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchGlueTables,
     fetchCloudfrontDists, invalidateCloudfront,
     fetchCloudfrontConfig, fetchCloudfrontStats, createCloudfrontFromS3,
-    fetchRoute53Zones, fetchRoute53Records,
+    fetchRoute53Zones, validateRoute53Record, fetchRoute53Records,
     fetchCognitoUserPools, fetchCognitoPoolConfig,
     fetchCognitoUsers, fetchCognitoUserDetail, fetchCognitoUserGroups, createCognitoUser,
     resetCognitoUserPassword, setCognitoUserPassword,
@@ -1049,3 +1058,7 @@ export const useAwsStore = defineStore('aws', () => {
     createS3Bucket, testS3Bucket, fetchEcrImages, applyK8sManifest,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAwsStore, import.meta.hot))
+}

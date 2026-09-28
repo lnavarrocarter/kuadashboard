@@ -8,6 +8,7 @@
 
 ### Changed
 - **AWS VPC:** The VPC "Details" action is now "Info" and opens a dedicated modal aligned with the EC2/Lambda Info pattern (underlined tabs, definition lists, copy buttons, header badges). Same data and endpoint as before.
+- **AWS Route 53 (fixes):** DNS tests now reach the backend (the UI was calling a non-existent URL), A/AAAA tests include the TCP 443/80 check, SPF and DKIM tests are offered on the TXT records that carry them, and only tests that make sense for each record type are shown. Record selection no longer shifts when the search or filter changes, routing-policy records (same name and type) are exported separately with their Set ID, and zones with more than 300 records load completely. Added a DNS diagnostics guide to the AWS docs.
 
 ### Added
 - **AWS Route 53:** Added search and filter functionality for DNS records. Users can now search records by name or value, filter by record type (A, TXT, MX, CNAME, etc.), select multiple records with checkboxes, and export selected records as CSV for backup or analysis.
