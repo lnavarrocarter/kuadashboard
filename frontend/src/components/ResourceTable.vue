@@ -22,7 +22,46 @@
           >{{ opt.label }} <span class="facet-count">{{ facetCounts[opt.value] || 0 }}</span></button>
           <button v-if="activeFacets.size" class="facet-clear" title="Mostrar todos" @click="activeFacets = new Set()">✕</button>
         </div>
-        <input v-model="filter" class="search-input" placeholder="Filter..." />
+        <div v-if="cfg.quickFilters?.length" class="facet-chips" role="group" aria-label="Filtros rápidos">
+          <button
+            v-for="qf in cfg.quickFilters" :key="qf.id"
+            :class="['facet-chip', 'quick-chip', { active: activeQuick.has(qf.id) }]"
+            :aria-pressed="activeQuick.has(qf.id)"
+            :title="`${activeQuick.has(qf.id) ? 'Quitar' : 'Mostrar solo'} ${qf.label}`"
+            @click="toggleQuick(qf.id)"
+          >{{ qf.label }} <span class="facet-count">{{ quickCounts[qf.id] || 0 }}</span></button>
+          <button v-if="activeQuick.size" class="facet-clear" title="Quitar filtros rápidos" @click="activeQuick = new Set()">✕</button>
+        </div>
+        <div class="filter-box">
+          <input
+            v-model="filter" class="search-input" placeholder="Filter..."
+            @focus="historyOpen = true" @blur="onFilterBlur" @keydown.enter="rememberCurrent"
+            @keydown.esc="historyOpen = false"
+          />
+          <button
+            v-if="filter.trim()" class="filter-save" :class="{ saved: isSaved }"
+            :title="isSaved ? 'Quitar de guardados' : 'Guardar filtro'"
+            @mousedown.prevent @click="toggleSaved(filter)"
+          >{{ isSaved ? '★' : '☆' }}</button>
+          <div v-if="historyOpen && (history.saved.length || history.recent.length)" class="filter-history" role="listbox">
+            <template v-for="section in historySections" :key="section.label">
+              <div v-if="section.items.length" class="filter-history-label">{{ section.label }}</div>
+              <div
+                v-for="item in section.items" :key="section.label + item"
+                class="filter-history-item" role="option" :title="`Filtrar por ${item}`"
+                @mousedown.prevent="applyHistory(item)"
+              >
+                <span class="filter-history-text">{{ item }}</span>
+                <button
+                  class="filter-history-btn" :class="{ saved: section.saved }"
+                  :title="section.saved ? 'Quitar de guardados' : 'Guardar filtro'"
+                  @mousedown.prevent.stop="toggleSaved(item)"
+                >{{ section.saved ? '★' : '☆' }}</button>
+                <button class="filter-history-btn" title="Olvidar" @mousedown.prevent.stop="forget(item)">✕</button>
+              </div>
+            </template>
+          </div>
+        </div>
         <button class="btn btn-icon" :class="{ refreshing: store.refreshing }" :disabled="store.loading || store.refreshing" title="Refresh (R)" @click="store.loadResources({ silent: true, force: true })">
           <i data-lucide="refresh-cw"></i>
         </button>
@@ -93,16 +132,17 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
 import { createIcons, icons } from 'lucide'
+import {
+  loadTableView, saveTableView, loadFilterHistory, saveFilterHistory,
+  rememberFilter, toggleSavedFilter, forgetFilter,
+} from '../composables/useTableViews'
 
 const props = defineProps({ resource: String, selectedKey: String, initialFilter: { type: String, default: '' } })
 const emit  = defineEmits(['action', 'select', 'bulk-delete'])
 
 const store  = useKubeStore()
-const filter = ref(props.initialFilter)
+const filter = ref('')
 const selectedKeys = ref(new Set())
-
-// Allows external navigation (e.g. Architecture "view pods") to seed the search box.
-watch(() => props.initialFilter, v => { if (v) filter.value = v })
 
 const cfg = computed(() => RESOURCES[store.resource] || RESOURCES.pods)
 
@@ -158,11 +198,100 @@ function toggleFacet(value) {
   activeFacets.value = next
 }
 
+// ── Quick filters (one-click predefined predicates, combined with AND) ─────
+const activeQuick = ref(new Set())
+
+const quickCounts = computed(() => {
+  const counts = {}
+  for (const qf of cfg.value.quickFilters || []) counts[qf.id] = store.rows.filter(qf.test).length
+  return counts
+})
+
+function toggleQuick(id) {
+  const next = new Set(activeQuick.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  activeQuick.value = next
+}
+
+// ── Per-resource view state and filter history ─────────────────────────────
+// Filter, sort and chips are kept per resource, so navigating away and back
+// (or reloading) shows the table as the user left it.
+const history = ref({ saved: [], recent: [] })
+const historyOpen = ref(false)
+const isSaved = computed(() => history.value.saved.includes(filter.value.trim()))
+const historySections = computed(() => [
+  { label: 'Guardados', items: history.value.saved, saved: true },
+  { label: 'Recientes', items: history.value.recent, saved: false },
+])
+
+function restoreView(resource) {
+  const view = loadTableView(resource)
+  const resourceCfg = RESOURCES[resource] || RESOURCES.pods
+  const quickIds = new Set((resourceCfg.quickFilters || []).map(qf => qf.id))
+  const facetValues = new Set((resourceCfg.facet?.options || []).map(opt => opt.value))
+  const col = resourceCfg.cols.indexOf(view.sortCol)
+  filter.value = view.filter
+  sortColIdx.value = col >= 0 ? col : null
+  sortDir.value = view.sortDir === 'desc' ? 'desc' : 'asc'
+  activeFacets.value = new Set(view.facets.filter(v => facetValues.has(v)))
+  activeQuick.value = new Set(view.quick.filter(id => quickIds.has(id)))
+  history.value = loadFilterHistory(resource)
+}
+
+function persistView() {
+  saveTableView(store.resource, {
+    filter: filter.value,
+    sortCol: sortColIdx.value === null ? null : cfg.value.cols[sortColIdx.value],
+    sortDir: sortDir.value,
+    facets: [...activeFacets.value],
+    quick: [...activeQuick.value],
+  })
+}
+
+function updateHistory(resource, next) {
+  if (resource === store.resource) history.value = next
+  saveFilterHistory(resource, next)
+}
+
+function rememberCurrent() {
+  updateHistory(store.resource, rememberFilter(history.value, filter.value))
+}
+
+function onFilterBlur() {
+  historyOpen.value = false
+  rememberCurrent()
+}
+
+function applyHistory(item) {
+  filter.value = item
+  historyOpen.value = false
+  rememberCurrent()
+}
+
+function toggleSaved(item) {
+  updateHistory(store.resource, toggleSavedFilter(history.value, item))
+}
+
+function forget(item) {
+  updateHistory(store.resource, forgetFilter(history.value, item))
+}
+
+restoreView(store.resource)
+if (props.initialFilter) filter.value = props.initialFilter
+
+// Allows external navigation (e.g. Architecture "view pods") to seed the search box.
+watch(() => props.initialFilter, v => { if (v) filter.value = v })
+watch([filter, sortColIdx, sortDir, activeFacets, activeQuick], persistView)
+
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
   let rows = store.rows
   const facet = cfg.value.facet
   if (facet && activeFacets.value.size) rows = rows.filter(r => activeFacets.value.has(facet.value(r)))
+  for (const qf of cfg.value.quickFilters || []) {
+    if (activeQuick.value.has(qf.id)) rows = rows.filter(qf.test)
+  }
   if (q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q))
 
   if (sortColIdx.value === null) return rows
@@ -259,7 +388,13 @@ onMounted(() => {
 })
 onUnmounted(() => document.removeEventListener('keydown', onKey))
 
-watch(() => store.resource, () => { sortColIdx.value = null; sortDir.value = 'asc'; activeFacets.value = new Set(); clearSelection() })
+// Sync flush: the leaving filter is recorded under the previous resource
+// before the next resource's view replaces it.
+watch(() => store.resource, (next, previous) => {
+  updateHistory(previous, rememberFilter(loadFilterHistory(previous), filter.value))
+  restoreView(next)
+  clearSelection()
+}, { flush: 'sync' })
 watch(() => store.namespace, () => clearSelection())
 watch(() => store.rows, () => {
   const valid = new Set(store.rows.map(rowKey))

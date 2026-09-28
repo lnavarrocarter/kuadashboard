@@ -113,6 +113,6 @@ describe('ResourceTable — Events severity colours and filter', () => {
     store.resource = 'pods'
     store.rows = []
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('.facet-chips').exists()).toBe(false)
+    expect(wrapper.find('.facet-chip:not(.quick-chip)').exists()).toBe(false)
   })
 })

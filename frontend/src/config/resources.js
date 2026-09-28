@@ -4,6 +4,8 @@
 //   rowClass(row) → extra CSS class for the <tr> (e.g. colour coding)
 //   facet         → { label, value(row), options: [{ value, label }] } renders
 //                   toggle chips with counts in the toolbar to filter rows
+//   quickFilters  → [{ id, label, test(row) }] one-click chips; active chips
+//                   narrow the rows together (AND)
 
 import { SEVERITIES, eventSeverity, severityLabel, severityOrder } from './eventSeverity'
 
@@ -26,11 +28,27 @@ const yamlOnly = (type, clusterScoped = false) => r => [
   { icon: 'file-code-2', label: 'YAML', cls: 'blue', fn: 'viewYaml', args: [type, clusterScoped ? null : r.namespace, r.name] },
 ]
 
+// "3/5" style readiness → true when fewer ready than desired.
+function notReady(ready) {
+  const [have, want] = String(ready ?? '').split('/').map(Number)
+  return Number.isFinite(have) && Number.isFinite(want) && have < want
+}
+
+const WORKLOAD_QUICK_FILTERS = [
+  { id: 'not-ready', label: 'No listos', test: r => notReady(r.ready) },
+  { id: 'scaled-zero', label: 'En 0 réplicas', test: r => r.replicas === 0 },
+]
+
 export const RESOURCES = {
   pods: {
     title: 'Pods',
     cols:  ['Name', 'Namespace', 'Status', 'Ready', 'Restarts', 'Ports', 'Env', 'Age', 'Node'],
     row:   r => [r.name, r.namespace, { badge: r.status }, r.ready, r.restarts, r.ports || '-', r.envCount ?? 0, age(r.age), r.nodeName],
+    quickFilters: [
+      { id: 'not-running', label: 'No Running', test: r => !['Running', 'Succeeded'].includes(r.status) },
+      { id: 'not-ready', label: 'No listos', test: r => r.status === 'Running' && notReady(r.ready) },
+      { id: 'restarts', label: 'Con reinicios', test: r => Number(r.restarts) > 0 },
+    ],
     actions: r => [
       ...(r.rawPorts?.length ? [{ icon: 'cable', label: 'Tunnel', cls: 'green', fn: 'openPortForward', args: [r.namespace, r.name, r.rawPorts, 'pods'] }] : []),
       { icon: 'scroll',     label: 'Logs',   cls: 'blue',  fn: 'viewLogs',   args: [r.namespace, r.name, r.containers] },
@@ -43,6 +61,7 @@ export const RESOURCES = {
     title: 'Deployments',
     cols:  ['Name', 'Namespace', 'Ready', 'Replicas', 'Containers', 'Ports', 'Env', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, r.replicas, r.containers?.join(', ') || '-', r.ports || '-', r.envCount ?? 0, age(r.age)],
+    quickFilters: WORKLOAD_QUICK_FILTERS,
     actions: r => [
       { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',       args: [r.namespace, r.name, r.containers, 'deployments'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',       args: ['deployments', r.namespace, r.name] },
@@ -55,6 +74,7 @@ export const RESOURCES = {
     title: 'StatefulSets',
     cols:  ['Name', 'Namespace', 'Ready', 'Replicas', 'Containers', 'Ports', 'Env', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, r.replicas, r.containers?.join(', ') || '-', r.ports || '-', r.envCount ?? 0, age(r.age)],
+    quickFilters: WORKLOAD_QUICK_FILTERS,
     actions: r => [
       { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',      args: [r.namespace, r.name, r.containers, 'statefulsets'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',      args: ['statefulsets', r.namespace, r.name] },
@@ -67,6 +87,7 @@ export const RESOURCES = {
     title: 'DaemonSets',
     cols:  ['Name', 'Namespace', 'Ready', 'Containers', 'Ports', 'Env', 'Age'],
     row:   r => [r.name, r.namespace, r.ready, r.containers?.join(', ') || '-', r.ports || '-', r.envCount ?? 0, age(r.age)],
+    quickFilters: [{ id: 'not-ready', label: 'No listos', test: r => r.ready < r.desired }],
     actions: r => [
       { icon: 'scroll',      label: 'Logs',    cls: 'blue',  fn: 'viewLogs',      args: [r.namespace, r.name, r.containers, 'daemonsets'] },
       { icon: 'rotate-ccw',  label: 'Restart', cls: 'green', fn: 'restart',      args: ['daemonsets', r.namespace, r.name] },
@@ -78,24 +99,42 @@ export const RESOURCES = {
     title: 'ReplicaSets',
     cols: ['Name', 'Namespace', 'Desired', 'Current', 'Ready', 'Owner', 'Age'],
     row: r => [r.name, r.namespace, r.desired, r.current, r.ready, r.owner, age(r.age)],
+    quickFilters: [
+      { id: 'inactive', label: 'Inactivas', test: r => Number(r.desired) === 0 },
+      { id: 'not-ready', label: 'No listas', test: r => Number(r.ready) < Number(r.desired) },
+    ],
     actions: yamlOnly('replicasets'),
   },
   jobs: {
     title: 'Jobs',
     cols: ['Name', 'Namespace', 'Completions', 'Active', 'Failed', 'Age'],
     row: r => [r.name, r.namespace, r.completions, r.active, r.failed, age(r.age)],
+    quickFilters: [
+      { id: 'failed', label: 'Con fallos', test: r => Number(r.failed) > 0 },
+      { id: 'active', label: 'Activos', test: r => Number(r.active) > 0 },
+      { id: 'complete', label: 'Completados', test: r => !Number(r.active) && !notReady(r.completions) },
+    ],
     actions: yamlOnly('jobs'),
   },
   cronjobs: {
     title: 'CronJobs',
     cols: ['Name', 'Namespace', 'Schedule', 'Suspend', 'Active', 'Last Schedule', 'Age'],
     row: r => [r.name, r.namespace, r.schedule, r.suspend, r.active, r.lastSchedule, age(r.age)],
+    quickFilters: [
+      { id: 'suspended', label: 'Suspendidos', test: r => r.suspend === 'Yes' },
+      { id: 'active', label: 'Ejecutando', test: r => Number(r.active) > 0 },
+      { id: 'never-ran', label: 'Nunca ejecutados', test: r => !r.lastSchedule || r.lastSchedule === '-' },
+    ],
     actions: yamlOnly('cronjobs'),
   },
   services: {
     title: 'Services',
     cols:  ['Name', 'Namespace', 'App', 'Type', 'Cluster IP', 'Backend IPs', 'Ports', 'Age'],
     row:   r => [r.name, r.namespace, r.app || '-', r.type, r.clusterIP, { truncate: r.backendIPs || '-', max: 48 }, r.ports, age(r.age)],
+    quickFilters: [
+      { id: 'no-backends', label: 'Sin backends', test: r => r.type !== 'ExternalName' && r.backendIPs === '-' },
+      { id: 'load-balancer', label: 'LoadBalancer', test: r => r.type === 'LoadBalancer' },
+    ],
     actions: r => [
       { icon: 'cable',       label: 'Forward', cls: 'green', fn: 'openPortForward', args: [r.namespace, r.name, r.rawPorts] },
       { icon: 'file-code-2', label: 'YAML',    cls: 'blue',  fn: 'viewYaml',        args: ['services', r.namespace, r.name] },
@@ -106,6 +145,10 @@ export const RESOURCES = {
     title: 'Ingresses',
     cols:  ['Name', 'Namespace', 'Class', 'Hosts', 'Paths', 'ELB', 'URL', 'Age'],
     row:   r => [r.name, r.namespace, r.class, { truncate: r.hosts, max: 42 }, { truncate: r.paths, max: 64 }, { truncate: r.address, max: 46 }, { link: r.url, text: r.url, max: 52 }, age(r.age)],
+    quickFilters: [
+      { id: 'no-address', label: 'Sin dirección', test: r => !r.address || r.address === '-' },
+      { id: 'no-class', label: 'Sin clase', test: r => !r.class || r.class === '-' },
+    ],
     actions: r => [
       ...(r.url && r.url !== '-' ? [{ icon: 'external-link', label: 'Open URL', cls: 'green', fn: 'openExternal', args: [r.url] }] : []),
       { icon: 'file-code-2', label: 'YAML',   cls: 'blue', fn: 'viewYaml',      args: ['ingresses', r.namespace, r.name] },
@@ -116,12 +159,14 @@ export const RESOURCES = {
     title: 'EndpointSlices',
     cols: ['Name', 'Namespace', 'Address Type', 'Endpoints', 'Ports', 'Age'],
     row: r => [r.name, r.namespace, r.addressType, r.endpoints, r.ports, age(r.age)],
+    quickFilters: [{ id: 'empty', label: 'Sin endpoints', test: r => Number(r.endpoints) === 0 }],
     actions: yamlOnly('endpointslices'),
   },
   endpoints: {
     title: 'Endpoints',
     cols: ['Name', 'Namespace', 'Endpoints', 'Ports', 'Age'],
     row: r => [r.name, r.namespace, r.endpoints, r.ports, age(r.age)],
+    quickFilters: [{ id: 'empty', label: 'Sin endpoints', test: r => Number(r.endpoints) === 0 }],
     actions: yamlOnly('endpoints'),
   },
   ingressclasses: {
@@ -134,12 +179,18 @@ export const RESOURCES = {
     title: 'NetworkPolicies',
     cols: ['Name', 'Namespace', 'Pod Selector', 'Types', 'Ingress', 'Egress', 'Age'],
     row: r => [r.name, r.namespace, { truncate: r.podSelector, max: 48 }, r.types, r.ingress, r.egress, age(r.age)],
+    quickFilters: [
+      { id: 'deny-ingress', label: 'Bloquea ingress', test: r => String(r.types).includes('Ingress') && Number(r.ingress) === 0 },
+      { id: 'deny-egress', label: 'Bloquea egress', test: r => String(r.types).includes('Egress') && Number(r.egress) === 0 },
+      { id: 'all-pods', label: 'Todo el namespace', test: r => !r.podSelector || r.podSelector === '-' || r.podSelector === '{}' },
+    ],
     actions: yamlOnly('networkpolicies'),
   },
   configmaps: {
     title: 'ConfigMaps',
     cols:  ['Name', 'Namespace', 'Keys', 'Age'],
     row:   r => [r.name, r.namespace, r.keys, age(r.age)],
+    quickFilters: [{ id: 'empty', label: 'Vacíos', test: r => Number(r.keys) === 0 }],
     actions: r => [
       { icon: 'file-code-2', label: 'YAML',   cls: 'blue', fn: 'viewYaml',      args: ['configmaps', r.namespace, r.name] },
       { icon: 'trash-2',     label: 'Delete', cls: 'red',  fn: 'confirmDelete', args: ['configmaps', r.namespace, r.name] },
@@ -149,6 +200,12 @@ export const RESOURCES = {
     title: 'Secrets',
     cols:  ['Name', 'Namespace', 'Type', 'Keys', 'Age'],
     row:   r => [r.name, r.namespace, r.type, r.keys, age(r.age)],
+    quickFilters: [
+      { id: 'tls', label: 'TLS', test: r => r.type === 'kubernetes.io/tls' },
+      { id: 'registry', label: 'Registry', test: r => String(r.type).startsWith('kubernetes.io/docker') },
+      { id: 'opaque', label: 'Opaque', test: r => r.type === 'Opaque' },
+      { id: 'empty', label: 'Vacíos', test: r => Number(r.keys) === 0 },
+    ],
     actions: r => [
       { icon: 'file-code-2', label: 'YAML',   cls: 'blue', fn: 'viewYaml',      args: ['secrets', r.namespace, r.name] },
       { icon: 'trash-2',     label: 'Delete', cls: 'red',  fn: 'confirmDelete', args: ['secrets', r.namespace, r.name] },
@@ -170,12 +227,17 @@ export const RESOURCES = {
     title: 'HorizontalPodAutoscalers',
     cols: ['Name', 'Namespace', 'Target', 'Min', 'Max', 'Current', 'Age'],
     row: r => [r.name, r.namespace, r.target, r.min, r.max, r.current, age(r.age)],
+    quickFilters: [
+      { id: 'at-max', label: 'En el máximo', test: r => Number.isFinite(Number(r.max)) && Number(r.current) >= Number(r.max) },
+      { id: 'at-min', label: 'En el mínimo', test: r => Number.isFinite(Number(r.min)) && Number(r.current) <= Number(r.min) },
+    ],
     actions: yamlOnly('hpas'),
   },
   pdbs: {
     title: 'PodDisruptionBudgets',
     cols: ['Name', 'Namespace', 'Min Available', 'Max Unavailable', 'Allowed', 'Age'],
     row: r => [r.name, r.namespace, r.minAvailable, r.maxUnavailable, r.allowed, age(r.age)],
+    quickFilters: [{ id: 'blocking', label: 'Bloquean desalojos', test: r => Number(r.allowed) === 0 }],
     actions: yamlOnly('pdbs'),
   },
   priorityclasses: {
@@ -194,6 +256,7 @@ export const RESOURCES = {
     title: 'Leases',
     cols: ['Name', 'Namespace', 'Holder', 'Renew Time', 'Age'],
     row: r => [r.name, r.namespace, { truncate: r.holder, max: 48 }, r.renewTime, age(r.age)],
+    quickFilters: [{ id: 'no-holder', label: 'Sin holder', test: r => !r.holder || r.holder === '-' }],
     actions: yamlOnly('leases'),
   },
   mutatingwebhookconfigurations: {
@@ -212,6 +275,7 @@ export const RESOURCES = {
     title: 'PersistentVolumeClaims',
     cols:  ['Name', 'Namespace', 'Status', 'Capacity', 'Storage Class', 'Age'],
     row:   r => [r.name, r.namespace, { badge: r.status }, r.capacity, r.storageClass, age(r.age)],
+    quickFilters: [{ id: 'not-bound', label: 'No Bound', test: r => r.status !== 'Bound' }],
     actions: r => [
       { icon: 'file-code-2', label: 'YAML',   cls: 'blue', fn: 'viewYaml',      args: ['pvcs', r.namespace, r.name] },
       { icon: 'trash-2',     label: 'Delete', cls: 'red',  fn: 'confirmDelete', args: ['pvcs', r.namespace, r.name] },
@@ -221,6 +285,10 @@ export const RESOURCES = {
     title: 'PersistentVolumes',
     cols: ['Name', 'Status', 'Capacity', 'Storage Class', 'Reclaim', 'Claim', 'Age'],
     row: r => [r.name, { badge: r.status }, r.capacity, r.storageClass, r.reclaimPolicy, r.claim, age(r.age)],
+    quickFilters: [
+      { id: 'not-bound', label: 'No Bound', test: r => r.status !== 'Bound' },
+      { id: 'released', label: 'Released', test: r => r.status === 'Released' },
+    ],
     actions: yamlOnly('pvs', true),
   },
   storageclasses: {
@@ -233,12 +301,17 @@ export const RESOURCES = {
     title: 'Namespaces',
     cols: ['Name', 'Status', 'Age'],
     row: r => [r.name, { badge: r.status }, age(r.age)],
+    quickFilters: [{ id: 'not-active', label: 'No Active', test: r => r.status !== 'Active' }],
     actions: yamlOnly('namespaces', true),
   },
   nodes: {
     title: 'Nodes',
     cols:  ['Name', 'Status', 'Roles', 'Version', 'OS', 'CPU', 'Memory', 'Age'],
     row:   r => [r.name, { badge: r.unschedulable ? 'Cordoned' : r.status }, r.roles, r.version, r.os, r.cpu, r.memory, age(r.age)],
+    quickFilters: [
+      { id: 'not-ready', label: 'No Ready', test: r => r.status !== 'Ready' },
+      { id: 'cordoned', label: 'Cordoned', test: r => !!r.unschedulable },
+    ],
     actions: r => [
       r.unschedulable
         ? { icon: 'unlock',           label: 'Uncordon', cls: 'green', fn: 'cordonNode', args: [r.name, false] }
