@@ -39,6 +39,7 @@ const { getStateHistory } = require('../lib/stateHistory');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
   estimate, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
+  validateLabels, hasLabelChanges,
 } = require('../lib/gcpResources');
 
 const router    = express.Router();
@@ -2473,6 +2474,102 @@ router.get('/kms/keyrings', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── LABELS (Compute VM, Cloud Run, Cloud SQL) ───────────────────────────────
+// PUT with the full desired user labels; system labels are preserved
+// (lib/gcpResources.validateLabels). Changes are audited and added to the
+// resource's state history.
+
+function recordLabelChange(profileId, projectId, resourceType, key, name, diff) {
+  auditLog.log({ category: 'gcp', action: 'Labels updated', resource: key, context: profileId, details: diff });
+  recordUserAction(profileId, projectId, resourceType, key, name, 'labels', diff);
+}
+
+/** Poll a Cloud SQL Admin operation until DONE (label patches take a few seconds). */
+async function waitSqlOperation(authCtx, projectId, operation, { timeoutMs = 60000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let op = operation;
+  while (op?.name && op.status !== 'DONE') {
+    if (Date.now() > deadline) return op;
+    await new Promise(r => setTimeout(r, 1500));
+    op = await gcpFetch(`https://sqladmin.googleapis.com/v1/projects/${projectId}/operations/${op.name}`, authCtx);
+  }
+  if (op?.error?.errors?.length) throw Object.assign(new Error(op.error.errors.map(e => e.message).join('; ')), { code: 400 });
+  return op;
+}
+
+// PUT /compute/vms/:zone/:name/labels { labels }
+router.put('/compute/vms/:zone/:name/labels', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { zone, name } = req.params;
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { InstancesClient } = require('@google-cloud/compute');
+    const client = new InstancesClient({ auth });
+    const [vm] = await client.get({ project: projectId, zone, instance: name });
+    const { labels, diff } = validateLabels(req.body?.labels, vm.labels || {});
+    if (hasLabelChanges(diff)) {
+      const [operation] = await client.setLabels({
+        project: projectId, zone, instance: name,
+        instancesSetLabelsRequestResource: { labels, labelFingerprint: vm.labelFingerprint },
+      });
+      await waitZoneOp(auth, projectId, zone, operation);
+      recordLabelChange(profileId, projectId, 'gcp-vm', `${zone}/${name}`, name, diff);
+    }
+    res.json({ success: true, labels, diff });
+  } catch (err) { handleErr(res, err); }
+});
+
+// PUT /cloudrun/:region/:service/labels { labels }
+router.put('/cloudrun/:region/:service/labels', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { region, service } = req.params;
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { ServicesClient } = require('@google-cloud/run').v2;
+    const client = new ServicesClient({ auth });
+    const fullName = `projects/${projectId}/locations/${region}/services/${service}`;
+    const [current] = await client.getService({ name: fullName });
+    const { labels, diff } = validateLabels(req.body?.labels, current.labels || {});
+    if (hasLabelChanges(diff)) {
+      const [operation] = await client.updateService({
+        service: { name: fullName, labels },
+        updateMask: { paths: ['labels'] },
+      });
+      await operation.promise();
+      recordLabelChange(profileId, projectId, 'gcp-cloud-run', `${region}/${service}`, service, diff);
+    }
+    res.json({ success: true, labels, diff });
+  } catch (err) { handleErr(res, err); }
+});
+
+// PUT /sql/:instance/labels { labels }
+router.put('/sql/:instance/labels', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { instance } = req.params;
+    if (!/^[a-zA-Z0-9\-_]+$/.test(instance)) return res.status(400).json({ error: 'Invalid instance name' });
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const url = `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${instance}`;
+    const current = await gcpFetch(url, authCtx);
+    const { labels, diff } = validateLabels(req.body?.labels, current.settings?.userLabels || {});
+    if (hasLabelChanges(diff)) {
+      // PATCH merges maps: removed keys must be sent as null (like gcloud --remove-user-labels)
+      const userLabels = { ...labels, ...Object.fromEntries(diff.removed.map(k => [k, null])) };
+      const operation = await gcpFetch(url, authCtx, 'PATCH', { settings: { userLabels } });
+      await waitSqlOperation(authCtx, projectId, operation);
+      recordLabelChange(profileId, projectId, 'gcp-sql', instance, instance, diff);
+    }
+    res.json({ success: true, labels, diff });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── STATE HISTORY & POLLING ──────────────────────────────────────────────────
 
 const { createGcpStatePoller, pollCallsPerDay } = require('../lib/gcpStatePoller');
