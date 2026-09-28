@@ -1034,7 +1034,7 @@ function toggleConsole() {
   cloudView.value = cloudView.value === 'console' ? null : 'console'
   nextTick(() => createIcons({ icons }))
 }
-function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.resource = r; store.loadResources() }
+function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.selectResource(r) }
 function setCloudView(view)   { cloudView.value = view }
 
 function selectKubeResource(type, row) {

@@ -12,7 +12,7 @@ const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
-const { KubeResponseCache } = require('./lib/kubeResponseCache');
+const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
@@ -800,7 +800,15 @@ function revalidateKubeList(originalUrl, key) {
 app.use('/api', (req, res, next) => {
   if (req.method !== 'GET') {
     res.on('finish', () => {
-      if (res.statusCode < 400) kubeResponseCache.clear();
+      if (res.statusCode >= 400) return;
+      const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
+      let kind;
+      if (pathname === '/api/apply') {
+        try { kind = yaml.load(req.body?.yamlContent || '')?.kind; } catch { /* clear everything */ }
+      }
+      const scope = kubeMutationScope(pathname, { kind });
+      if (scope) kubeResponseCache.invalidate(scope);
+      else kubeResponseCache.clear();
     });
     return next();
   }

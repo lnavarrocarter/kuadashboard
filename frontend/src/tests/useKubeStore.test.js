@@ -189,6 +189,103 @@ describe('useKubeStore', () => {
     })
   })
 
+  describe('selectResource()', () => {
+    function deferredApi() {
+      const calls = []
+      vi.spyOn(ApiModule, 'api').mockImplementation((method, path) => new Promise(resolve => calls.push({ path, resolve })))
+      return calls
+    }
+
+    it('shows the blocking loading state only for a resource never visited', async () => {
+      const calls = deferredApi()
+      const request = store.selectResource('deployments')
+      expect(store.loading).toBe(true)
+      calls[0].resolve([{ name: 'web' }])
+      await request
+      expect(store.loading).toBe(false)
+      expect(store.rows).toEqual([{ name: 'web' }])
+    })
+
+    it('does not show the previous resource rows while loading an unvisited one', async () => {
+      const calls = deferredApi()
+      const pods = store.selectResource('pods')
+      calls[0].resolve([{ name: 'pod-1' }])
+      await pods
+      const deployments = store.selectResource('deployments')
+      expect(store.rows).toEqual([])
+      expect(store.loading).toBe(true)
+      calls[1].resolve([{ name: 'web' }])
+      await deployments
+    })
+
+    it('paints cached rows instantly and revalidates without blocking', async () => {
+      const calls = deferredApi()
+      const first = store.selectResource('pods')
+      calls[0].resolve([{ name: 'pod-1' }])
+      await first
+      const second = store.selectResource('services')
+      calls[1].resolve([{ name: 'svc' }])
+      await second
+
+      const back = store.selectResource('pods')
+      expect(store.rows).toEqual([{ name: 'pod-1' }])
+      expect(store.loading).toBe(false)
+      expect(store.refreshing).toBe(true)
+      calls[2].resolve([{ name: 'pod-1' }, { name: 'pod-2' }])
+      await back
+      expect(store.rows).toEqual([{ name: 'pod-1' }, { name: 'pod-2' }])
+      expect(store.refreshing).toBe(false)
+    })
+
+    it('reuses cached row identity when the revalidated data is unchanged', async () => {
+      vi.spyOn(ApiModule, 'api').mockImplementation(async (_m, path) => path.endsWith('/pods') ? [{ name: 'pod-1' }] : [])
+      await store.selectResource('pods')
+      const podRows = store.rows
+      await store.selectResource('services')
+      await store.selectResource('pods')
+      expect(store.rows).toBe(podRows)
+    })
+
+    it('keeps cache entries separate per namespace', async () => {
+      vi.spyOn(ApiModule, 'api').mockImplementation(async (_m, path) => [{ name: path }])
+      await store.selectResource('pods')
+      store.namespace = 'kube-system'
+      const request = store.loadResources()
+      expect(store.rows).toEqual([])
+      expect(store.loading).toBe(true)
+      await request
+      expect(store.rows).toEqual([{ name: '/api/kube-system/pods' }])
+      store.namespace = 'default'
+      const back = store.loadResources()
+      expect(store.loading).toBe(false)
+      expect(store.rows).toEqual([{ name: '/api/default/pods' }])
+      await back
+    })
+
+    it('keeps cached rows when a silent revalidation fails', async () => {
+      const calls = []
+      vi.spyOn(ApiModule, 'api').mockImplementation(() => new Promise((resolve, reject) => calls.push({ resolve, reject })))
+      const first = store.selectResource('pods')
+      calls[0].resolve([{ name: 'pod-1' }])
+      await first
+      const second = store.selectResource('services')
+      calls[1].resolve([])
+      await second
+      const back = store.selectResource('pods')
+      calls[2].reject(new Error('timeout'))
+      await back
+      expect(store.rows).toEqual([{ name: 'pod-1' }])
+      expect(store.error).toBeNull()
+    })
+
+    it('surfaces the error when an unvisited resource fails to load', async () => {
+      vi.spyOn(ApiModule, 'api').mockRejectedValue(new Error('forbidden'))
+      await store.selectResource('secrets')
+      expect(store.error).toBe('forbidden')
+      expect(store.loading).toBe(false)
+    })
+  })
+
   describe('switchContext()', () => {
     it('updates currentContext and calls namespace + resource API endpoints', async () => {
       store.contexts = [{ name: 'prod', namespace: 'production' }]
