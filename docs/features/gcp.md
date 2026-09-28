@@ -10,8 +10,9 @@ KuaDashboard provides comprehensive Google Cloud Platform management accessed fr
 ## Compute
 
 ### Cloud Run
-- List all Cloud Run services with status, region, URL and revision
-- **Start / Stop** services (adjusts minimum instance count)
+- Table of services with status (including failed deploys), image, CPU/memory, min–max instances, ingress, serving revision (flags a newer revision not yet serving) and last update
+- **Start / Stop / Delete** inline in each row; **＋ New service** creates one (see [safe actions](#creating-starting-and-deleting-resources-safely))
+- **Start / Stop** adjusts the minimum instance count
 - Direct link to Cloud Console
 
 ### Cloud Run Jobs
@@ -24,14 +25,14 @@ KuaDashboard provides comprehensive Google Cloud Platform management accessed fr
 - Copy `kubectl` connection command to clipboard
 
 ### Compute Engine VMs
-- List all VM instances with zone, machine type, external IP and status
-- **Start / Stop** VM instances
+- Table of VMs with status, machine type (Spot/Preemptible flagged), internal and external IP, network/subnet, disk count and size, deletion protection and creation date
+- **Start / Stop / Delete** inline; **＋ New VM** creates one (see [safe actions](#creating-starting-and-deleting-resources-safely))
 
 ## Database
 
 ### Cloud SQL
-- List Cloud SQL instances with database version, tier and status
-- **Start / Stop** instances (activate / deactivate)
+- Table of instances with a clear status — **RUNNING**, **STOPPED** (Cloud SQL reports RUNNABLE while stopped, so KUA derives it from the activation policy), PENDING_CREATE, MAINTENANCE… — plus engine, tier/edition, zonal or HA, storage, backups, public/private IP and deletion protection
+- **Start / Stop / Delete** inline, enabled according to the status; **＋ New instance** creates one (see [safe actions](#creating-starting-and-deleting-resources-safely))
 
 ### Cloud Spanner
 - List Spanner instances with node count and processing units
@@ -134,6 +135,25 @@ KuaDashboard provides comprehensive Google Cloud Platform management accessed fr
 ### Cloud Logging
 - Interactive **log query panel** — enter an advanced filter, choose a time range (1–72 hours) and execute
 - Results show timestamp, severity (color-coded), resource type, log name and text payload
+
+## Creating, starting and deleting resources safely
+
+Cloud Run, Compute Engine VMs and Cloud SQL list their resources in a table with the actions inline (**Start**, **Stop**, **🗑 Delete**), and a **＋ New** button creates new ones. Clicking a row opens its detail below the table. Every action that costs money or cannot be undone asks for confirmation first:
+
+| Action | What you must confirm |
+|---|---|
+| **Start** | Shows the estimated monthly cost of keeping it running and requires *"I understand this generates costs"*. On Cloud Run, Start sets min instances to 1, which bills 24/7. |
+| **Stop** | Lists what keeps billing while stopped (disks, static IPs, SQL storage) and side effects (ephemeral IP changes, cold starts). |
+| **Delete** | Irreversible: you must type the resource name. The dialog lists what is lost (Cloud Run revisions and URL; VM auto-delete disks — disks without auto-delete are kept and keep billing; all Cloud SQL databases, users and automated backups). Resources with **deletion protection** cannot be deleted from KUA: disable it in the Google Cloud console first. |
+| **Create** | The form shows a live cost estimate. Before creating, a review screen summarizes the configuration, calls out risky choices (public Cloud Run service, VM with a public IP, SQL without backups or without deletion protection) and requires the typed name plus the cost acknowledgement. Estimates of **$100/month or more** need a second, explicit high-cost confirmation. |
+
+Safe defaults when creating: Cloud Run services are **private** unless you explicitly allow unauthenticated access; Cloud SQL instances get **automated backups** and **deletion protection** on; resources are labelled `created-by=kua`.
+
+The backend enforces the same rules: create and delete requests without the typed name or the required acknowledgements are rejected, so they cannot be skipped by calling the API directly. Every create and delete is recorded in the audit log with its estimated monthly cost.
+
+::: warning Cost estimates are approximate
+Estimates use on-demand list prices for us-central1 and exclude sustained/committed-use discounts, free tier, network egress, licences and taxes. Use them as a warning, not a quote — check the [Google Cloud pricing calculator](https://cloud.google.com/products/calculator) for exact figures.
+:::
 
 ## IAM
 

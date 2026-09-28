@@ -1,0 +1,270 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+
+vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
+
+import GcpConfirmModal from '../components/cloud/GcpConfirmModal.vue'
+import GcpCreateModal from '../components/cloud/GcpCreateModal.vue'
+import GcpView from '../components/cloud/GcpView.vue'
+import { gcpActionConfig } from '../components/cloud/gcpActions'
+import { useGcpStore } from '../stores/useGcpStore'
+
+const LOW_ESTIMATE = { known: true, monthlyUsd: 12.5, highCost: false, items: [{ label: 'VM e2-small', monthlyUsd: 12.5 }], warnings: ['Billing starts…'], disclaimer: 'Approximate' }
+const HIGH_ESTIMATE = { ...LOW_ESTIMATE, monthlyUsd: 480, highCost: true }
+
+const CLOUD_RUN = [{ name: 'api', region: 'us-central1', status: 'ready', image: 'gcr.io/p/api:1', cpu: '1', memory: '512Mi', minInstances: 1, maxInstances: 5, ingress: 'all', latestRevision: 'api-00002', revisionPending: true, updatedAt: '2026-01-01T00:00:00Z' }]
+const VMS = [
+  { name: 'web-1', zone: 'us-central1-a', status: 'RUNNING', machineType: 'e2-small', internalIp: '10.0.0.2', externalIp: '34.1.2.3', network: 'default', subnetwork: 'default', diskCount: 2, diskSizeGb: 120, keptDiskCount: 1, provisioningModel: 'SPOT', deletionProtection: false },
+  { name: 'locked', zone: 'us-central1-b', status: 'TERMINATED', machineType: 'n2-standard-2', internalIp: '10.0.0.3', externalIp: null, network: 'default', diskCount: 1, diskSizeGb: 10, keptDiskCount: 0, provisioningModel: 'STANDARD', deletionProtection: true },
+]
+const SQL = [{ name: 'db', database: 'POSTGRES_16', region: 'us-central1', zone: 'us-central1-c', state: 'RUNNABLE', status: 'STOPPED', activationPolicy: 'NEVER', tier: 'db-custom-2-7680', availabilityType: 'REGIONAL', storageGb: 50, storageType: 'PD_SSD', backupEnabled: true, publicIp: '34.9.9.9', privateIp: null, deletionProtection: false }]
+
+function stubFetch(estimate = LOW_ESTIMATE) {
+  const calls = []
+  const fetchMock = vi.fn(async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : undefined })
+    const body = url.includes('/estimate/') ? estimate : url.includes('/cloudrun') && opts.method === 'POST' ? { success: true } : opts.method === 'DELETE' ? { success: true } : []
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => body, text: async () => JSON.stringify(body) }
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return calls
+}
+
+// ── gcpActions ───────────────────────────────────────────────────────────────
+
+describe('gcpActionConfig (#74)', () => {
+  it('start asks for a cost acknowledgement with an estimate spec', () => {
+    const vm = gcpActionConfig('vm', 'start', VMS[0])
+    expect(vm.costAck).toBe(true)
+    expect(vm.estimateSpec).toEqual({ machineType: 'e2-small', diskSizeGb: 120, externalIp: true, spot: true })
+    const run = gcpActionConfig('cloudrun', 'start', CLOUD_RUN[0])
+    expect(run.estimateSpec.minInstances).toBe(1)
+    expect(run.lines[0]).toMatch(/24\/7/)
+    const sql = gcpActionConfig('sql', 'start', SQL[0])
+    expect(sql.estimateSpec).toEqual({ tier: 'db-custom-2-7680', storageGb: 50, storageType: 'PD_SSD', availabilityType: 'REGIONAL' })
+  })
+
+  it('stop is a plain confirmation that lists what keeps billing', () => {
+    const cfg = gcpActionConfig('vm', 'stop', VMS[0])
+    expect(cfg.costAck).toBeFalsy()
+    expect(cfg.requireName).toBeFalsy()
+    expect(cfg.lines.join(' ')).toMatch(/siguen facturando/)
+  })
+
+  it('delete requires the typed name and warns about kept disks', () => {
+    const cfg = gcpActionConfig('vm', 'delete', VMS[0])
+    expect(cfg.tone).toBe('danger')
+    expect(cfg.requireName).toBe('web-1')
+    expect(cfg.lines.join(' ')).toMatch(/1 disco\(s\) sin auto-delete/)
+    expect(gcpActionConfig('sql', 'delete', SQL[0]).lines.join(' ')).toMatch(/backups/)
+  })
+
+  it('delete is blocked when the resource has deletion protection', () => {
+    expect(gcpActionConfig('vm', 'delete', VMS[1]).blocked).toMatch(/protección contra eliminación/)
+    expect(gcpActionConfig('sql', 'delete', { ...SQL[0], deletionProtection: true }).blocked).toBeTruthy()
+    expect(gcpActionConfig('vm', 'delete', VMS[0]).blocked).toBe('')
+  })
+})
+
+// ── GcpConfirmModal ──────────────────────────────────────────────────────────
+
+describe('GcpConfirmModal (#74)', () => {
+  const confirmBtn = w => w.find('[data-test="confirm"]')
+
+  it('requires the exact typed name', async () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'Eliminar', requireName: 'prod-db', tone: 'danger' } })
+    expect(confirmBtn(w).attributes('disabled')).toBeDefined()
+    await w.find('[data-test="confirm-name"]').setValue('prod')
+    expect(confirmBtn(w).attributes('disabled')).toBeDefined()
+    await w.find('[data-test="confirm-name"]').setValue('prod-db')
+    expect(confirmBtn(w).attributes('disabled')).toBeUndefined()
+    await confirmBtn(w).trigger('click')
+    expect(w.emitted('confirm')[0][0]).toMatchObject({ confirmName: 'prod-db' })
+  })
+
+  it('requires the cost checkbox, and a second one for high-cost estimates', async () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'Crear', costAck: true, estimate: HIGH_ESTIMATE } })
+    expect(w.find('[data-test="estimate"]').text()).toContain('480.00')
+    await w.find('[data-test="cost-ack"]').setValue(true)
+    expect(confirmBtn(w).attributes('disabled')).toBeDefined()
+    await w.find('[data-test="high-cost-ack"]').setValue(true)
+    expect(confirmBtn(w).attributes('disabled')).toBeUndefined()
+    await confirmBtn(w).trigger('click')
+    expect(w.emitted('confirm')[0][0]).toMatchObject({ acknowledgeCost: true, acknowledgeHighCost: true })
+  })
+
+  it('cannot confirm while blocked', () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'Eliminar', requireName: 'x', blocked: 'Tiene protección' } })
+    expect(w.find('[data-test="blocked"]').text()).toBe('Tiene protección')
+    expect(w.find('[data-test="confirm-name"]').exists()).toBe(false)
+    expect(confirmBtn(w).attributes('disabled')).toBeDefined()
+  })
+
+  it('resets acknowledgements when reopened', async () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimate: LOW_ESTIMATE } })
+    await w.find('[data-test="cost-ack"]').setValue(true)
+    await w.setProps({ open: false })
+    await w.setProps({ open: true })
+    expect(w.find('[data-test="cost-ack"]').element.checked).toBe(false)
+  })
+})
+
+// ── GcpCreateModal ───────────────────────────────────────────────────────────
+
+describe('GcpCreateModal (#74)', () => {
+  let calls
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.useFakeTimers()
+    calls = stubFetch()
+    useGcpStore().activeProfileId = 'gcp-1'
+  })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  async function settle() {
+    await vi.advanceTimersByTimeAsync(350)
+    await flushPromises()
+  }
+
+  it('shows a live estimate for the form without sending the password', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'sql' } })
+    await w.find('[data-test="root-password"]').setValue('a-long-enough-password')
+    await settle()
+    const est = calls.filter(c => c.url === '/api/cloud/gcp/estimate/sql').at(-1)
+    expect(est.body.tier).toBe('db-f1-micro')
+    expect(est.body.rootPassword).toBeUndefined()
+    expect(w.find('[data-test="live-estimate"]').text()).toContain('12.50')
+  })
+
+  it('creates only after typed name and cost acknowledgement, sending both to the backend', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await w.find('[data-test="name"]').setValue('web-2')
+    await settle()
+    await w.find('[data-test="review"]').trigger('click')
+    await flushPromises()
+
+    const confirm = w.findComponent(GcpConfirmModal)
+    expect(confirm.props('open')).toBe(true)
+    expect(confirm.props('lines').join(' ')).toMatch(/IP pública/)
+    await confirm.find('[data-test="confirm-name"]').setValue('web-2')
+    expect(confirm.find('[data-test="confirm"]').attributes('disabled')).toBeDefined()
+    await confirm.find('[data-test="cost-ack"]').setValue(true)
+    await confirm.find('[data-test="confirm"]').trigger('click')
+    await flushPromises()
+
+    const create = calls.find(c => c.url === '/api/cloud/gcp/compute/vms' && c.method === 'POST')
+    expect(create.body).toMatchObject({ name: 'web-2', confirmName: 'web-2', acknowledgeCost: true, imageFamily: 'debian-12', imageProject: 'debian-cloud' })
+    expect(create.body.imageKey).toBeUndefined()
+    expect(w.emitted('created')[0][0]).toMatchObject({ kind: 'vm', name: 'web-2' })
+  })
+
+  it('flags a public Cloud Run service in the review', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'cloudrun' } })
+    await w.find('[data-test="name"]').setValue('api')
+    await w.find('input[type="checkbox"]').setValue(true)
+    await settle()
+    await w.find('[data-test="review"]').trigger('click')
+    expect(w.findComponent(GcpConfirmModal).props('lines').join(' ')).toMatch(/PÚBLICO/)
+  })
+
+  it('blocks review with an invalid name', async () => {
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await w.find('[data-test="name"]').setValue('Web_2')
+    expect(w.find('[data-test="review"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+// ── GcpView tables + inline actions ──────────────────────────────────────────
+
+describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
+  let calls, store
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    calls = stubFetch()
+    store = useGcpStore()
+    store.activeProfileId = 'gcp-1'
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  // GcpCreateModal also contains a (closed) GcpConfirmModal: pick the open one
+  const openConfirm = w => w.findAllComponents(GcpConfirmModal).find(c => c.props('open'))
+
+  async function mountTab(service) {
+    const w = mount(GcpView, { props: { activeService: service }, global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    store.tabs.cloudrun.data = CLOUD_RUN
+    store.tabs.vms.data = VMS
+    store.tabs.sql.data = SQL
+    await flushPromises()
+    return w
+  }
+
+  it('Cloud Run table shows container, scaling and revision columns with inline actions', async () => {
+    const w = await mountTab('cloudrun')
+    const row = w.find('[data-test="cloudrun-table"] tbody tr')
+    expect(row.text()).toContain('api:1')
+    expect(row.text()).toContain('1 / 512Mi')
+    expect(row.text()).toContain('1–5')
+    expect(row.text()).toContain('api-00002')
+    expect(row.find('[data-test="start"]').exists()).toBe(true)
+    expect(row.find('[data-test="delete"]').exists()).toBe(true)
+  })
+
+  it('VM table shows network, disks, Spot and protection; buttons follow the status', async () => {
+    const w = await mountTab('vms')
+    const rows = w.findAll('[data-test="vm-table"] tbody tr')
+    expect(rows[0].text()).toContain('Spot')
+    expect(rows[0].text()).toContain('2 · 120 GB')
+    expect(rows[0].find('[data-test="start"]').attributes('disabled')).toBeDefined()
+    expect(rows[0].find('[data-test="stop"]').attributes('disabled')).toBeUndefined()
+    expect(rows[1].text()).toContain('🔒')
+    expect(rows[1].find('[data-test="start"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('Cloud SQL table shows the derived status (STOPPED) and HA/backups', async () => {
+    const w = await mountTab('sql')
+    const row = w.find('[data-test="sql-table"] tbody tr')
+    expect(row.text()).toContain('STOPPED')
+    expect(row.text()).toContain('HA')
+    expect(row.text()).toContain('50 GB')
+    expect(row.find('[data-test="start"]').attributes('disabled')).toBeUndefined()
+    expect(row.find('[data-test="stop"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('inline Start asks for cost confirmation with an estimate before calling the API', async () => {
+    const w = await mountTab('sql')
+    await w.find('[data-test="sql-table"] [data-test="start"]').trigger('click')
+    await flushPromises()
+    const modal = openConfirm(w)
+    expect(modal.props('open')).toBe(true)
+    expect(modal.props('costAck')).toBe(true)
+    expect(calls.some(c => c.url === '/api/cloud/gcp/estimate/sql')).toBe(true)
+    expect(calls.some(c => c.url.endsWith('/sql/db/start'))).toBe(false)
+
+    await modal.find('[data-test="cost-ack"]').setValue(true)
+    await modal.find('[data-test="confirm"]').trigger('click')
+    await flushPromises()
+    expect(calls.some(c => c.url === '/api/cloud/gcp/sql/db/start' && c.method === 'POST')).toBe(true)
+  })
+
+  it('inline Delete sends the typed name to the DELETE endpoint', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] [data-test="delete"]').trigger('click')
+    const modal = openConfirm(w)
+    expect(modal.props('tone')).toBe('danger')
+    await modal.find('[data-test="confirm-name"]').setValue('api')
+    await modal.find('[data-test="confirm"]').trigger('click')
+    await flushPromises()
+    const del = calls.find(c => c.method === 'DELETE')
+    expect(del.url).toBe('/api/cloud/gcp/cloudrun/us-central1/api')
+    expect(del.body).toEqual({ confirmName: 'api' })
+  })
+
+  it('opens the create modal from the toolbar', async () => {
+    const w = await mountTab('vms')
+    await w.find('[data-test="create-vm"]').trigger('click')
+    expect(w.findComponent(GcpCreateModal).props()).toMatchObject({ open: true, kind: 'vm' })
+  })
+})

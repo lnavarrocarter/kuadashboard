@@ -41,26 +41,56 @@
 
       <!-- Cloud Run -->
       <div v-show="activeTab === 'cloudrun'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
+        <div class="gcp-list-toolbar">
+          <span class="text-dim">{{ filteredCloudRun.length }} servicio(s)</span>
+          <button class="btn sm primary" data-test="create-cloudrun" @click="openCreate('cloudrun')">＋ Nuevo servicio</button>
+        </div>
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Run services found.' }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
-          <!-- LEFT: service list -->
-          <div style="width:260px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
-            <div v-for="svc in filteredCloudRun" :key="svc.name"
-              :class="['sidebar-item', crPanel.resource?.name === svc.name ? 'active' : '']"
-              style="cursor:pointer" @click="selectCloudRun(svc)">
-              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ svc.name }}</div>
-              <div class="text-dim" style="font-size:10px">{{ svc.region }}</div>
-              <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
-                <span :class="statusClass(svc.status)" style="font-size:10px">{{ svc.status }}</span>
-                <span class="text-dim" style="font-size:10px">min: {{ svc.minInstances }} / max: {{ svc.maxInstances ?? '∞' }}</span>
-              </div>
-            </div>
+        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <!-- TOP: service table -->
+          <div :class="['gcp-list-table', { split: crPanel.resource }]">
+            <table class="cloud-table gcp-table" data-test="cloudrun-table">
+              <thead><tr>
+                <th>Servicio</th><th>Estado</th><th>Imagen</th><th>CPU / Mem</th><th>Instancias</th><th>Ingress</th><th>Revisión</th><th>Actualizado</th><th>Acciones</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="svc in filteredCloudRun" :key="`${svc.region}/${svc.name}`"
+                  :class="{ 'row-selected': crPanel.resource?.name === svc.name && crPanel.resource?.region === svc.region }"
+                  @click="selectCloudRun(svc)">
+                  <td>
+                    <div class="fw-medium">{{ svc.name }}</div>
+                    <div class="text-dim mono-xs">{{ svc.region }}</div>
+                  </td>
+                  <td>
+                    <span :class="statusClass(svc.status)">{{ svc.status }}</span>
+                    <div v-if="svc.statusMessage && svc.status === 'failed'" class="text-dim mono-xs gcp-ellipsis" :title="svc.statusMessage">{{ svc.statusMessage }}</div>
+                  </td>
+                  <td class="mono-xs text-dim gcp-ellipsis" :title="svc.image">{{ shortImage(svc.image) }}</td>
+                  <td class="text-dim">{{ svc.cpu || '—' }} / {{ svc.memory || '—' }}</td>
+                  <td>
+                    <span :class="svc.minInstances > 0 ? 'gcp-chip warm' : 'gcp-chip'" :title="svc.minInstances > 0 ? 'Instancias siempre encendidas: facturan 24/7' : 'Escala a cero'">{{ svc.minInstances }}–{{ svc.maxInstances ?? '∞' }}</span>
+                  </td>
+                  <td class="text-dim">{{ svc.ingress || '—' }}</td>
+                  <td class="mono-xs text-dim">
+                    {{ svc.latestRevision || '—' }}
+                    <span v-if="svc.revisionPending" class="status-warn" title="Hay una revisión más nueva que aún no recibe tráfico"> ●</span>
+                  </td>
+                  <td class="text-dim" style="white-space:nowrap">{{ svc.updatedAt ? new Date(svc.updatedAt).toLocaleString() : '—' }}</td>
+                  <td @click.stop>
+                    <div class="row-actions">
+                      <button class="btn sm" data-test="start" @click="requestAction('cloudrun', 'start', svc)" :title="'Fijar min instances = 1'">▶ Start</button>
+                      <button class="btn sm" data-test="stop" :disabled="svc.minInstances === 0" @click="requestAction('cloudrun', 'stop', svc)" :title="'Fijar min instances = 0'">■ Stop</button>
+                      <button class="btn sm danger" data-test="delete" @click="requestAction('cloudrun', 'delete', svc)">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <!-- RIGHT: detail -->
-          <div v-if="!crPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a service to see details</div>
-          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+          <!-- BOTTOM: detail -->
+          <div v-if="crPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <!-- Header -->
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -68,8 +98,10 @@
                 <span :class="statusClass(crPanel.resource.status)" style="font-size:11px">{{ crPanel.resource.status }}</span>
                 <a v-if="crPanel.resource.uri" :href="crPanel.resource.uri" target="_blank" class="link" style="font-size:11px">↗ Open URL</a>
                 <div style="margin-left:auto;display:flex;gap:6px">
-                  <button class="btn sm" @click="startCloudRun(crPanel.resource)">▶ Start</button>
-                  <button class="btn sm danger" @click="stopCloudRun(crPanel.resource)">■ Stop</button>
+                  <button class="btn sm" @click="requestAction('cloudrun', 'start', crPanel.resource)">▶ Start</button>
+                  <button class="btn sm" @click="requestAction('cloudrun', 'stop', crPanel.resource)">■ Stop</button>
+                  <button class="btn sm danger" @click="requestAction('cloudrun', 'delete', crPanel.resource)">🗑 Eliminar</button>
+                  <button class="btn sm" title="Cerrar detalle" @click="crPanel.resource = null">✕</button>
                 </div>
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }}</div>
@@ -233,33 +265,61 @@
 
       <!-- Compute VMs -->
       <div v-show="activeTab === 'vms'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
+        <div class="gcp-list-toolbar">
+          <span class="text-dim">{{ filteredVms.length }} VM(s)</span>
+          <button class="btn sm primary" data-test="create-vm" @click="openCreate('vm')">＋ Nueva VM</button>
+        </div>
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? 'No matches.' : 'No Compute Engine VMs found.' }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
-          <!-- LEFT -->
-          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
-            <div v-for="vm in filteredVms" :key="`${vm.zone}/${vm.name}`"
-              :class="['sidebar-item', vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone ? 'active' : '']"
-              style="cursor:pointer" @click="selectVm(vm)">
-              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ vm.name }}</div>
-              <div class="text-dim" style="font-size:10px">{{ vm.zone }}</div>
-              <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
-                <span :class="vmStatusClass(vm.status)" style="font-size:10px">{{ vm.status }}</span>
-                <span class="text-dim" style="font-size:10px">{{ vm.machineType }}</span>
-              </div>
-            </div>
+        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <!-- TOP: VM table -->
+          <div :class="['gcp-list-table', { split: vmPanel.resource }]">
+            <table class="cloud-table gcp-table" data-test="vm-table">
+              <thead><tr>
+                <th>VM</th><th>Estado</th><th>Tipo</th><th>IP interna</th><th>IP externa</th><th>Red</th><th>Discos</th><th>Protección</th><th>Creada</th><th>Acciones</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="vm in filteredVms" :key="`${vm.zone}/${vm.name}`"
+                  :class="{ 'row-selected': vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone }"
+                  @click="selectVm(vm)">
+                  <td>
+                    <div class="fw-medium">{{ vm.name }}</div>
+                    <div class="text-dim mono-xs">{{ vm.zone }}</div>
+                  </td>
+                  <td><span :class="vmStatusClass(vm.status)">{{ vm.status }}</span></td>
+                  <td>
+                    <span class="mono-xs">{{ vm.machineType }}</span>
+                    <span v-if="vm.provisioningModel === 'SPOT' || vm.provisioningModel === 'PREEMPTIBLE'" class="gcp-chip warm" title="Puede ser detenida por Google">{{ vm.provisioningModel === 'SPOT' ? 'Spot' : 'Preemptible' }}</span>
+                  </td>
+                  <td class="mono-xs">{{ vm.internalIp || '—' }}</td>
+                  <td class="mono-xs">{{ vm.externalIp || '—' }}</td>
+                  <td class="text-dim mono-xs">{{ vm.network || '—' }}<template v-if="vm.subnetwork && vm.subnetwork !== vm.network"> / {{ vm.subnetwork }}</template></td>
+                  <td class="text-dim">{{ vm.diskCount ?? '—' }}<template v-if="vm.diskSizeGb"> · {{ vm.diskSizeGb }} GB</template></td>
+                  <td><span v-if="vm.deletionProtection" class="gcp-chip ok" title="Protección contra eliminación">🔒</span><span v-else class="text-dim">—</span></td>
+                  <td class="text-dim" style="white-space:nowrap">{{ vm.createdAt ? new Date(vm.createdAt).toLocaleDateString() : '—' }}</td>
+                  <td @click.stop>
+                    <div class="row-actions">
+                      <button class="btn sm" data-test="start" :disabled="vm.status !== 'TERMINATED' && vm.status !== 'SUSPENDED'" @click="requestAction('vm', 'start', vm)">▶ Start</button>
+                      <button class="btn sm" data-test="stop" :disabled="vm.status !== 'RUNNING'" @click="requestAction('vm', 'stop', vm)">■ Stop</button>
+                      <button class="btn sm danger" data-test="delete" @click="requestAction('vm', 'delete', vm)">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <!-- RIGHT -->
-          <div v-if="!vmPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select a VM to see details</div>
-          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+          <!-- BOTTOM: detail -->
+          <div v-if="vmPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <div style="font-weight:700;font-size:15px">{{ vmPanel.resource.name }}</div>
                 <span :class="vmStatusClass(vmPanel.resource.status)" style="font-size:11px">{{ vmPanel.resource.status }}</span>
                 <div style="margin-left:auto;display:flex;gap:6px">
-                  <button class="btn sm" @click="startVM(vmPanel.resource)" :disabled="vmPanel.resource.status === 'RUNNING'">▶ Start</button>
-                  <button class="btn sm danger" @click="stopVM(vmPanel.resource)" :disabled="vmPanel.resource.status === 'TERMINATED'">■ Stop</button>
+                  <button class="btn sm" @click="requestAction('vm', 'start', vmPanel.resource)" :disabled="vmPanel.resource.status !== 'TERMINATED' && vmPanel.resource.status !== 'SUSPENDED'">▶ Start</button>
+                  <button class="btn sm" @click="requestAction('vm', 'stop', vmPanel.resource)" :disabled="vmPanel.resource.status !== 'RUNNING'">■ Stop</button>
+                  <button class="btn sm danger" @click="requestAction('vm', 'delete', vmPanel.resource)">🗑 Eliminar</button>
+                  <button class="btn sm" title="Cerrar detalle" @click="vmPanel.resource = null">✕</button>
                 </div>
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
@@ -372,33 +432,61 @@
 
       <!-- Cloud SQL -->
       <div v-show="activeTab === 'sql'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
+        <div class="gcp-list-toolbar">
+          <span class="text-dim">{{ filteredSql.length }} instancia(s)</span>
+          <button class="btn sm primary" data-test="create-sql" @click="openCreate('sql')">＋ Nueva instancia</button>
+        </div>
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud SQL instances found.' }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
-          <!-- LEFT -->
-          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
-            <div v-for="inst in filteredSql" :key="inst.name"
-              :class="['sidebar-item', sqlPanel.resource?.name === inst.name ? 'active' : '']"
-              style="cursor:pointer" @click="selectSql(inst)">
-              <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inst.name }}</div>
-              <div class="text-dim" style="font-size:10px">{{ inst.database }} · {{ inst.region }}</div>
-              <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
-                <span :class="sqlStatusClass(inst.state)" style="font-size:10px">{{ inst.state }}</span>
-                <span class="text-dim" style="font-size:10px">{{ inst.tier }}</span>
-              </div>
-            </div>
+        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <!-- TOP: instance table -->
+          <div :class="['gcp-list-table', { split: sqlPanel.resource }]">
+            <table class="cloud-table gcp-table" data-test="sql-table">
+              <thead><tr>
+                <th>Instancia</th><th>Estado</th><th>Motor</th><th>Tier</th><th>Disponibilidad</th><th>Almacenamiento</th><th>Backups</th><th>IP pública</th><th>IP privada</th><th>Acciones</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="inst in filteredSql" :key="inst.name"
+                  :class="{ 'row-selected': sqlPanel.resource?.name === inst.name }"
+                  @click="selectSql(inst)">
+                  <td>
+                    <div class="fw-medium">{{ inst.name }}</div>
+                    <div class="text-dim mono-xs">{{ inst.zone || inst.region }}</div>
+                  </td>
+                  <td>
+                    <span :class="sqlStatusClass(inst.status || inst.state)" :title="`state: ${inst.state} · activationPolicy: ${inst.activationPolicy || '—'}`">{{ inst.status || inst.state }}</span>
+                    <span v-if="inst.deletionProtection" class="gcp-chip ok" title="Protección contra eliminación">🔒</span>
+                  </td>
+                  <td class="mono-xs">{{ inst.database }}</td>
+                  <td class="mono-xs">{{ inst.tier }}<div v-if="inst.edition" class="text-dim">{{ inst.edition }}</div></td>
+                  <td><span :class="inst.availabilityType === 'REGIONAL' ? 'gcp-chip ok' : 'text-dim'">{{ inst.availabilityType === 'REGIONAL' ? 'HA' : (inst.availabilityType ? 'Zonal' : '—') }}</span></td>
+                  <td class="text-dim">{{ inst.storageGb ? `${inst.storageGb} GB` : '—' }} <span class="mono-xs">{{ inst.storageType || '' }}</span></td>
+                  <td><span :class="inst.backupEnabled ? 'status-ok' : 'status-warn'">{{ inst.backupEnabled ? 'Sí' : 'No' }}</span></td>
+                  <td class="mono-xs">{{ inst.publicIp || '—' }}</td>
+                  <td class="mono-xs">{{ inst.privateIp || '—' }}</td>
+                  <td @click.stop>
+                    <div class="row-actions">
+                      <button class="btn sm" data-test="start" :disabled="inst.status !== 'STOPPED'" @click="requestAction('sql', 'start', inst)">▶ Start</button>
+                      <button class="btn sm" data-test="stop" :disabled="inst.status !== 'RUNNING'" @click="requestAction('sql', 'stop', inst)">■ Stop</button>
+                      <button class="btn sm danger" data-test="delete" @click="requestAction('sql', 'delete', inst)">🗑</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <!-- RIGHT -->
-          <div v-if="!sqlPanel.resource" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">Select an instance to see details</div>
-          <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+          <!-- BOTTOM: detail -->
+          <div v-if="sqlPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <div style="font-weight:700;font-size:15px">{{ sqlPanel.resource.name }}</div>
-                <span :class="sqlStatusClass(sqlPanel.resource.state)" style="font-size:11px">{{ sqlPanel.resource.state }}</span>
+                <span :class="sqlStatusClass(sqlPanel.resource.status || sqlPanel.resource.state)" style="font-size:11px">{{ sqlPanel.resource.status || sqlPanel.resource.state }}</span>
                 <div style="margin-left:auto;display:flex;gap:6px">
-                  <button class="btn sm" @click="startSql(sqlPanel.resource)" :disabled="sqlPanel.resource.state === 'RUNNABLE'">▶ Start</button>
-                  <button class="btn sm danger" @click="stopSql(sqlPanel.resource)" :disabled="sqlPanel.resource.state !== 'RUNNABLE'">■ Stop</button>
+                  <button class="btn sm" @click="requestAction('sql', 'start', sqlPanel.resource)" :disabled="sqlPanel.resource.status !== 'STOPPED'">▶ Start</button>
+                  <button class="btn sm" @click="requestAction('sql', 'stop', sqlPanel.resource)" :disabled="sqlPanel.resource.status !== 'RUNNING'">■ Stop</button>
+                  <button class="btn sm danger" @click="requestAction('sql', 'delete', sqlPanel.resource)">🗑 Eliminar</button>
+                  <button class="btn sm" title="Cerrar detalle" @click="sqlPanel.resource = null">✕</button>
                 </div>
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
@@ -1330,6 +1418,16 @@
     </div>
   </Teleport>
 
+  <!-- ══ Create / confirm modals (Cloud Run, VM, Cloud SQL) ═══════════════════ -->
+  <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion"
+    @close="createModal.open = false" @created="onCreated" />
+  <GcpConfirmModal
+    :open="actionModal.open" :title="actionModal.title" :message="actionModal.message" :lines="actionModal.lines"
+    :tone="actionModal.tone" :confirm-label="actionModal.confirmLabel" :require-name="actionModal.requireName"
+    :cost-ack="actionModal.costAck" :estimate="actionModal.estimate" :estimate-loading="actionModal.estimateLoading"
+    :busy="actionModal.busy" :error="actionModal.error" :blocked="actionModal.blocked"
+    @cancel="actionModal.open = false" @confirm="runAction" />
+
   <!-- ══ Resource Logs Modal (cloudrun, gke, vms, sql, workflows) ═══════════ -->
   <Teleport to="body">
     <div v-if="resLogsOpen" class="gcp-modal-backdrop" @mousedown.self="resLogsOpen = false">
@@ -1885,6 +1983,9 @@ import { useGcpStore } from '../../stores/useGcpStore'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
 import GcsBrowser       from './GcsBrowser.vue'
+import GcpCreateModal   from './GcpCreateModal.vue'
+import GcpConfirmModal  from './GcpConfirmModal.vue'
+import { gcpActionConfig } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -2186,35 +2287,93 @@ async function openKmsKeys(k) {
 
 // ─── End Fase 4 ────────────────────────────────────────────────────────────────
 
-async function startCloudRun(svc) {
-  const res = await gcpStore.startCloudRunService(svc.region, svc.name)
-  if (res) { toast(`Started ${svc.name}`, 'success'); loaded.cloudrun = false; loadTab('cloudrun') }
-  else      toast(gcpStore.tabs.cloudrun.error || 'Error', 'error')
+// ── Start / stop / delete / create with confirmation (Cloud Run, VM, Cloud SQL) ──
+// Every action goes through GcpConfirmModal; see gcpActions.js for the warnings,
+// cost estimates and typed-name requirements per action.
+const TAB_BY_KIND = { cloudrun: 'cloudrun', vm: 'vms', sql: 'sql' }
+// Resolved lazily: the detail panels are declared further down in this script
+const panelFor = kind => ({ cloudrun: crPanel, vm: vmPanel, sql: sqlPanel })[kind]
+
+const actionModal = reactive({
+  open: false, kind: '', action: '', resource: null,
+  title: '', message: '', lines: [], tone: 'info', confirmLabel: 'Confirmar',
+  requireName: '', costAck: false, blocked: '',
+  estimate: null, estimateLoading: false, busy: false, error: '',
+})
+
+async function requestAction(kind, action, resource) {
+  const cfg = gcpActionConfig(kind, action, resource)
+  Object.assign(actionModal, {
+    open: true, kind, action, resource,
+    title: cfg.title, message: cfg.message || '', lines: cfg.lines || [], tone: cfg.tone,
+    confirmLabel: cfg.confirmLabel, requireName: cfg.requireName || '', costAck: !!cfg.costAck,
+    blocked: cfg.blocked || '', estimate: null, estimateLoading: !!cfg.estimateSpec, busy: false, error: '',
+  })
+  if (cfg.estimateSpec) {
+    try { actionModal.estimate = await gcpStore.estimateResource(cfg.estimateKind, cfg.estimateSpec) }
+    catch (e) { actionModal.estimate = null }
+    finally { actionModal.estimateLoading = false }
+  }
 }
-async function stopCloudRun(svc) {
-  const res = await gcpStore.stopCloudRunService(svc.region, svc.name)
-  if (res) { toast(`Stopped ${svc.name}`, 'success'); loaded.cloudrun = false; loadTab('cloudrun') }
-  else      toast(gcpStore.tabs.cloudrun.error || 'Error', 'error')
+
+const ACTION_CALLS = {
+  cloudrun: { start: r => gcpStore.startCloudRunService(r.region, r.name), stop: r => gcpStore.stopCloudRunService(r.region, r.name) },
+  vm:       { start: r => gcpStore.startVM(r.zone, r.name),                stop: r => gcpStore.stopVM(r.zone, r.name) },
+  sql:      { start: r => gcpStore.startSqlInstance(r.name),               stop: r => gcpStore.stopSqlInstance(r.name) },
 }
-async function startVM(vm) {
-  const res = await gcpStore.startVM(vm.zone, vm.name)
-  if (res) { toast(`Starting ${vm.name}`, 'success'); setTimeout(() => { loaded.vms = false; loadTab('vms') }, 3000) }
-  else      toast(gcpStore.tabs.vms.error || 'Error', 'error')
+
+async function runAction(acks) {
+  const { kind, action, resource } = actionModal
+  const tab = TAB_BY_KIND[kind]
+  actionModal.busy = true
+  actionModal.error = ''
+  try {
+    if (action === 'delete') {
+      await gcpStore.deleteResource(kind, resource, acks.confirmName)
+      const panel = panelFor(kind)
+      if (panel.resource?.name === resource.name) panel.resource = null
+      toast(kind === 'sql' ? `Eliminando ${resource.name}…` : `${resource.name} eliminado`, 'success')
+    } else {
+      const res = await ACTION_CALLS[kind][action](resource)
+      if (!res) throw new Error(gcpStore.tabs[tab].error || 'Error')
+      toast(`${action === 'start' ? 'Iniciando' : 'Deteniendo'} ${resource.name}`, 'success')
+    }
+    actionModal.open = false
+    refreshTab(tab, kind === 'vm' ? 3000 : 0)
+  } catch (e) {
+    actionModal.error = e.message
+  } finally {
+    actionModal.busy = false
+  }
 }
-async function stopVM(vm) {
-  const res = await gcpStore.stopVM(vm.zone, vm.name)
-  if (res) { toast(`Stopping ${vm.name}`, 'success'); setTimeout(() => { loaded.vms = false; loadTab('vms') }, 3000) }
-  else      toast(gcpStore.tabs.vms.error || 'Error', 'error')
+
+function refreshTab(tab, delay = 0) {
+  const run = () => { loaded[tab] = false; loadTab(tab) }
+  if (delay) setTimeout(run, delay)
+  else run()
 }
-async function startSql(inst) {
-  const res = await gcpStore.startSqlInstance(inst.name)
-  if (res) { toast(`Starting ${inst.name}`, 'success'); loaded.sql = false; loadTab('sql') }
-  else      toast(gcpStore.tabs.sql.error || 'Error', 'error')
+
+const createModal = reactive({ open: false, kind: 'cloudrun' })
+function openCreate(kind) {
+  createModal.kind = kind
+  createModal.open = true
 }
-async function stopSql(inst) {
-  const res = await gcpStore.stopSqlInstance(inst.name)
-  if (res) { toast(`Stopping ${inst.name}`, 'success'); loaded.sql = false; loadTab('sql') }
-  else      toast(gcpStore.tabs.sql.error || 'Error', 'error')
+function onCreated({ kind, name }) {
+  createModal.open = false
+  toast(kind === 'sql' ? `Creando ${name}… (tarda varios minutos)` : `${name} creado`, 'success')
+  refreshTab(TAB_BY_KIND[kind])
+}
+// Default region for create forms: the first region seen in the current lists
+const defaultGcpRegion = computed(() =>
+  gcpStore.tabs.cloudrun.data[0]?.region
+  || gcpStore.tabs.sql.data[0]?.region
+  || gcpStore.tabs.vms.data[0]?.zone?.replace(/-[a-z]$/, '')
+  || 'us-central1')
+
+function shortImage(image) {
+  if (!image) return '—'
+  const last = image.split('/').pop()
+  return last.length > 40 ? `${last.slice(0, 40)}…` : last
 }
 
 function statusClass(s) {
@@ -2258,7 +2417,10 @@ function vmStatusClass(s) {
 }
 function sqlStatusClass(s) {
   if (!s) return ''
-  return s === 'RUNNABLE' ? 'status-ok' : s === 'SUSPENDED' ? 'status-warn' : 'status-err'
+  if (s === 'RUNNABLE' || s === 'RUNNING') return 'status-ok'
+  if (s === 'STOPPED') return 'text-dim'
+  if (s === 'SUSPENDED' || s === 'PENDING_CREATE' || s === 'MAINTENANCE') return 'status-warn'
+  return 'status-err'
 }
 function fnStatusClass(s) {
   if (!s) return ''
@@ -3175,6 +3337,18 @@ async function openIamKeys(sa) {
 }</script>
 
 <style scoped>
+/* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */
+.gcp-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 12px; }
+.gcp-list-table { flex: 1; overflow: auto; min-height: 0; }
+.gcp-list-table.split { flex: 0 0 auto; max-height: 42%; border-bottom: 2px solid var(--border); }
+.gcp-table tbody tr { cursor: pointer; }
+.gcp-table tbody tr.row-selected td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.gcp-table td { vertical-align: top; }
+.gcp-ellipsis { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gcp-chip { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 10px; font-size: 11px; border: 1px solid var(--border); color: var(--text-dim); }
+.gcp-chip.warm { border-color: var(--yellow); color: var(--yellow); }
+.gcp-chip.ok { border-color: var(--green); color: var(--green); }
+.fw-medium { font-weight: 600; }
 .api-disabled-banner {
   display: flex;
   align-items: flex-start;

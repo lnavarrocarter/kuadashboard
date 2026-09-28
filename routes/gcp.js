@@ -34,6 +34,10 @@ const { exec }       = require('child_process');
 const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
+const {
+  mapCloudRunService, mapVm, mapSqlInstance,
+  estimate, assertDeleteConfirmed, validateCreate,
+} = require('../lib/gcpResources');
 
 const router    = express.Router();
 const execAsync = promisify(exec);
@@ -89,7 +93,7 @@ async function getGcloudAccessToken(configName) {
 
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
-  const status = err.code === 403 ? 403 : err.code === 404 ? 404 : 500;
+  const status = [400, 403, 404, 409].includes(err.code) ? err.code : 500;
   res.status(status).json({ error: err.message });
 }
 
@@ -389,14 +393,7 @@ router.get('/cloudrun', async (req, res) => {
     const { ServicesClient } = require('@google-cloud/run').v2;
     const client = new ServicesClient({ auth });
     const [services] = await client.listServices({ parent: `projects/${projectId}/locations/-` });
-    res.json((services || []).map(s => ({
-      name:     s.name?.split('/').pop(),
-      region:   s.name?.split('/')[3],
-      uri:      s.uri,
-      status:   s.reconciling ? 'reconciling' : 'ready',
-      minInstances: s.template?.scaling?.minInstanceCount ?? 0,
-      maxInstances: s.template?.scaling?.maxInstanceCount ?? null,
-    })));
+    res.json((services || []).map(mapCloudRunService));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -539,17 +536,7 @@ router.get('/compute/vms', async (req, res) => {
     // aggregatedList iterates all zones
     const aggList = client.aggregatedListAsync({ project: projectId });
     for await (const [_zone, zoneData] of aggList) {
-      for (const vm of (zoneData.instances || [])) {
-        vms.push({
-          name:       vm.name,
-          zone:       vm.zone?.split('/').pop(),
-          status:     vm.status,
-          machineType: vm.machineType?.split('/').pop(),
-          externalIp:  vm.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || null,
-          internalIp:  vm.networkInterfaces?.[0]?.networkIP || null,
-          createdAt:   vm.creationTimestamp,
-        });
-      }
+      for (const vm of (zoneData.instances || [])) vms.push(mapVm(vm));
     }
     res.json(vms);
   } catch (err) { handleErr(res, err); }
@@ -664,14 +651,7 @@ router.get('/sql', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances`,
       authCtx
     );
-    res.json((data.items || []).map(i => ({
-      name:        i.name,
-      database:    i.databaseVersion,
-      region:      i.region,
-      state:       i.state,
-      tier:        i.settings?.tier,
-      ipAddress:   i.ipAddresses?.[0]?.ipAddress || null,
-    })));
+    res.json((data.items || []).map(mapSqlInstance));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2444,6 +2424,201 @@ router.get('/kms/keyrings', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── CREATE / DELETE (Cloud Run, Compute VM, Cloud SQL) ───────────────────────
+// Every create needs the typed name plus a cost acknowledgement (and a second one
+// above the high-cost threshold); every delete needs the typed name. The UI asks
+// for the same, but it is enforced here so a direct request cannot skip it.
+
+const RESOURCE_LABELS = { 'created-by': 'kua' };
+
+// POST /estimate/:kind → approximate monthly cost for a create form (no side effects)
+router.post('/estimate/:kind', (req, res) => {
+  try {
+    res.json(estimate(req.params.kind, req.body || {}));
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /cloudrun → create a Cloud Run service
+router.post('/cloudrun', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { spec, estimate: cost } = validateCreate('cloudrun', req.body);
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { ServicesClient } = require('@google-cloud/run').v2;
+    const client = new ServicesClient({ auth });
+    const parent = `projects/${projectId}/locations/${spec.region}`;
+    const [operation] = await client.createService({
+      parent,
+      serviceId: spec.name,
+      service: {
+        labels: RESOURCE_LABELS,
+        template: {
+          containers: [{ image: spec.image, resources: { limits: { cpu: spec.cpu, memory: spec.memory } } }],
+          scaling: { minInstanceCount: spec.minInstances, maxInstanceCount: spec.maxInstances },
+        },
+      },
+    });
+    const [created] = await operation.promise();
+    if (spec.allowUnauthenticated) {
+      await client.setIamPolicy({
+        resource: `${parent}/services/${spec.name}`,
+        policy: { bindings: [{ role: 'roles/run.invoker', members: ['allUsers'] }] },
+      });
+    }
+    auditLog.log({
+      category: 'gcp', action: 'Cloud Run service created', resource: `${spec.region}/${spec.name}`,
+      level: 'warning', context: profileId,
+      details: { image: spec.image, minInstances: spec.minInstances, public: spec.allowUnauthenticated, estimatedMonthlyUsd: cost.monthlyUsd },
+    });
+    res.status(201).json({ success: true, service: mapCloudRunService(created), estimate: cost });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /cloudrun/:region/:service → delete a Cloud Run service (all revisions + URL)
+router.delete('/cloudrun/:region/:service', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { region, service } = req.params;
+    assertDeleteConfirmed(service, req.body);
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { ServicesClient } = require('@google-cloud/run').v2;
+    const client = new ServicesClient({ auth });
+    const [operation] = await client.deleteService({ name: `projects/${projectId}/locations/${region}/services/${service}` });
+    await operation.promise();
+    auditLog.log({ category: 'gcp', action: 'Cloud Run service deleted', resource: `${region}/${service}`, level: 'warning', context: profileId });
+    res.json({ success: true, service, region, action: 'delete' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /compute/vms → create a Compute Engine VM
+router.post('/compute/vms', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { spec, estimate: cost } = validateCreate('vm', req.body);
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { InstancesClient } = require('@google-cloud/compute');
+    const client = new InstancesClient({ auth });
+    const [operation] = await client.insert({
+      project: projectId,
+      zone: spec.zone,
+      instanceResource: {
+        name: spec.name,
+        machineType: `zones/${spec.zone}/machineTypes/${spec.machineType}`,
+        labels: RESOURCE_LABELS,
+        deletionProtection: spec.deletionProtection,
+        disks: [{
+          boot: true,
+          autoDelete: true,
+          initializeParams: {
+            sourceImage: `projects/${spec.imageProject}/global/images/family/${spec.imageFamily}`,
+            diskSizeGb: String(spec.diskSizeGb),
+            diskType: `zones/${spec.zone}/diskTypes/${spec.diskType}`,
+          },
+        }],
+        networkInterfaces: [{
+          network: 'global/networks/default',
+          accessConfigs: spec.externalIp ? [{ name: 'External NAT', type: 'ONE_TO_ONE_NAT' }] : [],
+        }],
+        ...(spec.spot ? { scheduling: { provisioningModel: 'SPOT', instanceTerminationAction: 'STOP' } } : {}),
+      },
+    });
+    await operation.promise();
+    auditLog.log({
+      category: 'gcp', action: 'Compute VM created', resource: `${spec.zone}/${spec.name}`,
+      level: 'warning', context: profileId,
+      details: { machineType: spec.machineType, diskSizeGb: spec.diskSizeGb, spot: spec.spot, estimatedMonthlyUsd: cost.monthlyUsd },
+    });
+    res.status(201).json({ success: true, instance: spec.name, zone: spec.zone, estimate: cost });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /compute/vms/:zone/:name → delete a VM (boot disk too when autoDelete)
+router.delete('/compute/vms/:zone/:name', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { zone, name } = req.params;
+    assertDeleteConfirmed(name, req.body);
+    const { auth, projectId } = await resolveGcpAuth(profileId);
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const { InstancesClient } = require('@google-cloud/compute');
+    const client = new InstancesClient({ auth });
+    const [vm] = await client.get({ project: projectId, zone, instance: name });
+    if (vm.deletionProtection) {
+      return res.status(409).json({ error: `VM ${name} has deletion protection enabled. Disable it in the Google Cloud console first.` });
+    }
+    const [operation] = await client.delete({ project: projectId, zone, instance: name });
+    await operation.promise();
+    auditLog.log({ category: 'gcp', action: 'Compute VM deleted', resource: `${zone}/${name}`, level: 'warning', context: profileId });
+    res.json({ success: true, instance: name, zone, action: 'delete' });
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /sql → create a Cloud SQL instance (takes several minutes: returns 202)
+router.post('/sql', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { spec, estimate: cost } = validateCreate('sql', req.body);
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const operation = await gcpFetch(
+      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances`,
+      authCtx, 'POST', {
+        name: spec.name,
+        region: spec.region,
+        databaseVersion: spec.databaseVersion,
+        rootPassword: spec.rootPassword,
+        settings: {
+          tier: spec.tier,
+          edition: 'ENTERPRISE',
+          dataDiskSizeGb: String(spec.storageGb),
+          dataDiskType: spec.storageType,
+          availabilityType: spec.availabilityType,
+          backupConfiguration: { enabled: spec.backupEnabled },
+          deletionProtectionEnabled: spec.deletionProtection,
+          userLabels: RESOURCE_LABELS,
+        },
+      }
+    );
+    auditLog.log({
+      category: 'gcp', action: 'Cloud SQL instance created', resource: spec.name,
+      level: 'warning', context: profileId,
+      details: { tier: spec.tier, databaseVersion: spec.databaseVersion, availabilityType: spec.availabilityType, estimatedMonthlyUsd: cost.monthlyUsd },
+    });
+    res.status(202).json({ success: true, instance: spec.name, operation: operation.name || null, estimate: cost });
+  } catch (err) { handleErr(res, err); }
+});
+
+// DELETE /sql/:instance → delete a Cloud SQL instance with its data and backups (202)
+router.delete('/sql/:instance', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { instance } = req.params;
+    if (!/^[a-zA-Z0-9\-_]+$/.test(instance)) return res.status(400).json({ error: 'Invalid instance name' });
+    assertDeleteConfirmed(instance, req.body);
+    const authCtx = await resolveGcpAuth(profileId);
+    const { projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const url = `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${instance}`;
+    const current = await gcpFetch(url, authCtx);
+    if (current.settings?.deletionProtectionEnabled) {
+      return res.status(409).json({ error: `Cloud SQL instance ${instance} has deletion protection enabled. Disable it in the Google Cloud console first.` });
+    }
+    const operation = await gcpFetch(url, authCtx, 'DELETE');
+    auditLog.log({ category: 'gcp', action: 'Cloud SQL instance deleted', resource: instance, level: 'warning', context: profileId });
+    res.status(202).json({ success: true, instance, action: 'delete', operation: operation.name || null });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── DETAIL ENDPOINTS (master-detail panels) ──────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
