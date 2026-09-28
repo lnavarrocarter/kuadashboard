@@ -7,6 +7,21 @@ description: Gestiona workloads, servicios, networking, almacenamiento, YAML, m�
 
 ![KuaDashboard — Panel de Kubernetes](/screenshots/dashboard-main.png)
 
+## Resumen del clúster
+
+**Resumen**, arriba en el menú lateral de Kubernetes, muestra la salud del contexto activo:
+
+- **Tarjetas principales**: pods (listos y running), pods con problemas y sus reinicios totales, nodos listos, workloads (Deployments, StatefulSets, DaemonSets) por debajo de sus réplicas deseadas y eventos Warning de la última hora.
+- **Uso del clúster**: CPU y memoria actuales frente a la capacidad asignable de los nodos, leídas de la Metrics API (metrics-server). Sin metrics-server la tarjeta lo indica y muestra la respuesta de la API. También indica si se detectó un servicio de Prometheus en el clúster.
+- **Pods por estado**: una barra y leyenda con los conteos de Running, Pending, Succeeded, Failed y Unknown, más chips con cada motivo de problema.
+- **Pods con problemas**: primero los peores (más reinicios), con el motivo que mostraría kubectl: `CrashLoopBackOff`, `ImagePullBackOff`, `OOMKilled`, `Unschedulable`, `Evicted`, o `NotReady` para pods en ejecución que fallan su readiness probe.
+- **Nodos**: estado Ready, cordon, condiciones de presión (memoria, disco, PID, red) y CPU/memoria por nodo cuando hay metrics-server.
+- **Workloads no listos** y **warnings recientes**.
+
+Pods, workloads y eventos siguen el selector de namespace (incluido *Todos los namespaces*); los nodos y el uso siempre cubren el clúster completo. Cada tarjeta, chip y fila abre la tabla correspondiente con el filtro ya aplicado; por ejemplo, *Pods con problemas* abre Pods con el filtro rápido **Con problemas** activo. Cada sección se degrada por separado: si tu rol RBAC no puede listar nodos, solo la sección de nodos muestra el error. La vista se actualiza con el intervalo de auto-refresh global.
+
+El Resumen no es un sistema de alertas: muestra el estado actual y nunca envía notificaciones.
+
 ## Explorador de Recursos
 
 Navega todos los recursos principales de Kubernetes con tablas ordenables y filtrables:
@@ -42,6 +57,13 @@ La tabla de Events colorea cada evento según su criticidad y permite filtrar po
 - **Normal** (gris) — eventos `Normal`.
 
 Usa los chips **Critical / Warning / Normal** de la barra de la tabla para mostrar solo esas severidades (cada chip indica cuántos eventos coinciden; puedes combinar varios y usar ✕ para ver todos). Los chips se combinan con el filtro de texto, y al hacer clic en el encabezado **Severity** los eventos críticos quedan primero.
+
+### Filtros, filtros rápidos e historial
+
+- **Vista por tabla**: cada tabla de recursos recuerda su filtro de texto, columna de orden y chips al ir a otra sección y volver, y también tras recargar la app.
+- **Filtros rápidos**: chips de un clic con conteos para las preguntas frecuentes, como Pods *Con problemas*, *No Running*, *No listos* y *Con reinicios*; Deployments *No listos* y *En 0 réplicas*; ReplicaSets *Inactivas*; Secrets *TLS* y *Registry*; HPAs *En el máximo*; PDBs *Bloquean desalojos*; Nodes *No Ready* y *Cordoned*. Los chips activos se combinan (una fila debe cumplirlos todos) y también con el filtro de texto.
+- **Historial de filtros**: al enfocar la caja de filtro aparecen los filtros **Guardados** y **Recientes** de esa tabla. Un filtro pasa a recientes al presionar Enter, salir de la caja o cambiar de tabla; la estrella (☆) lo guarda y ✕ lo olvida.
+- **Estado de los pods**: la columna Status muestra el motivo del problema (por ejemplo `CrashLoopBackOff` o `NotReady`) en lugar de la fase cuando un pod no está sano, y el filtro de texto lo encuentra.
 
 ## Auto-refresh
 

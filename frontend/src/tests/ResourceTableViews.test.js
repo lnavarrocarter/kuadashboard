@@ -99,12 +99,12 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
   it('narrows rows with quick filters and shows their counts', async () => {
     const wrapper = mount(ResourceTable)
     const chips = wrapper.findAll('.quick-chip')
-    expect(chips.map(c => c.text())).toEqual(['No Running 1', 'No listos 1', 'Con reinicios 1'])
+    expect(chips.map(c => c.text())).toEqual(['Con problemas 0', 'No Running 1', 'No listos 1', 'Con reinicios 1'])
 
-    await chips[0].trigger('click')
-    expect(names(wrapper)).toEqual(['api-2'])
-    await chips[0].trigger('click')
     await chips[1].trigger('click')
+    expect(names(wrapper)).toEqual(['api-2'])
+    await chips[1].trigger('click')
+    await chips[2].trigger('click')
     expect(names(wrapper)).toEqual(['web-1'])
 
     await switchTo('deployments', DEPLOYMENTS)

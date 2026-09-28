@@ -13,6 +13,7 @@ const k8s        = require('@kubernetes/client-node');
 const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
+const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
@@ -612,6 +613,21 @@ async function discoverPrometheusServices() {
     }));
 }
 
+// Discovery lists every Service in the cluster, so reuse it per context
+// instead of repeating it for each Prometheus query.
+const PROMETHEUS_DISCOVERY_TTL_MS = 5 * 60 * 1000;
+let prometheusDiscovery = null;
+
+async function cachedPrometheusServices({ refresh = false } = {}) {
+  const fresh = prometheusDiscovery
+    && prometheusDiscovery.context === currentContext
+    && Date.now() - prometheusDiscovery.at < PROMETHEUS_DISCOVERY_TTL_MS;
+  if (fresh && !refresh) return prometheusDiscovery.services;
+  const services = await discoverPrometheusServices();
+  prometheusDiscovery = { context: currentContext, at: Date.now(), services };
+  return services;
+}
+
 function serviceProxyCandidates(svc = {}) {
   const ports = svc.ports || [];
   const preferred = ports
@@ -647,7 +663,7 @@ async function kubeApiGet(pathname) {
 }
 
 async function prometheusQuery(query) {
-  const services = await discoverPrometheusServices();
+  const services = await cachedPrometheusServices();
   let lastErr = null;
   for (const svc of services) {
     for (const proxyName of serviceProxyCandidates(svc)) {
@@ -916,6 +932,41 @@ app.get('/api/namespaces/:name/yaml', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+// ─── Overview ─────────────────────────────────────────────────────────────────
+
+// Cluster health summary: pods of the selected namespace (or all), nodes and
+// usage of the whole cluster. Every source settles on its own so a missing
+// permission or Metrics API degrades one section instead of the whole view.
+app.get('/api/overview', async (req, res) => {
+  try {
+    const namespace = String(req.query.namespace || 'all');
+    const all = namespace === 'all';
+    const { core, apps, custom } = clients();
+    const settle = promise => promise.then(result => ({ ok: true, value: listItems(result) }), error => ({ ok: false, error }));
+    const [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics] = await Promise.all([
+      settle(all ? core.listPodForAllNamespaces() : core.listNamespacedPod(namespace)),
+      settle(core.listNode()),
+      settle(all ? apps.listDeploymentForAllNamespaces() : apps.listNamespacedDeployment(namespace)),
+      settle(all ? apps.listStatefulSetForAllNamespaces() : apps.listNamespacedStatefulSet(namespace)),
+      settle(all ? apps.listDaemonSetForAllNamespaces() : apps.listNamespacedDaemonSet(namespace)),
+      settle(all ? core.listEventForAllNamespaces() : core.listNamespacedEvent(namespace)),
+      settle(custom.listClusterCustomObject('metrics.k8s.io', 'v1beta1', 'nodes')),
+    ]);
+    let prometheus;
+    try {
+      const services = await cachedPrometheusServices();
+      prometheus = { available: services.length > 0, service: services[0] ? `${services[0].namespace}/${services[0].name}` : null };
+    } catch (err) {
+      prometheus = { available: false, error: err.body?.message || err.message };
+    }
+    res.json(buildOverview({
+      namespace,
+      sources: { pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics },
+      prometheus,
+    }));
+  } catch (err) { handleError(res, err); }
+});
+
 // ─── Pods ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/:namespace/pods', async (req, res) => {
@@ -932,6 +983,7 @@ app.get('/api/:namespace/pods', async (req, res) => {
       name:       pod.metadata.name,
       namespace:  pod.metadata.namespace,
       status:     pod.status.phase || 'Unknown',
+      reason:     podProblem(pod),
       ready:      `${pod.status.containerStatuses?.filter(c => c.ready).length ?? 0}/${pod.status.containerStatuses?.length ?? 0}`,
       restarts:   pod.status.containerStatuses?.reduce((s, c) => s + c.restartCount, 0) ?? 0,
       age:        pod.metadata.creationTimestamp,
@@ -1055,29 +1107,10 @@ app.get('/api/:namespace/:resourceType/:name/metrics', async (req, res) => {
 
 app.get('/api/monitoring/prometheus/status', async (_req, res) => {
   try {
-    const matches = await discoverPrometheusServices();
+    const matches = await cachedPrometheusServices({ refresh: true });
     res.json({ available: matches.length > 0, services: matches });
   } catch (err) { handleError(res, err); }
 });
-
-function parseCpu(value = '0') {
-  const raw = String(value);
-  const num = parseFloat(raw);
-  if (Number.isNaN(num)) return 0;
-  if (raw.endsWith('n')) return num;
-  if (raw.endsWith('u')) return num * 1000;
-  if (raw.endsWith('m')) return num * 1e6;
-  return num * 1e9;
-}
-
-function parseMemory(value = '0') {
-  const raw = String(value);
-  const num = parseFloat(raw);
-  if (Number.isNaN(num)) return 0;
-  const units = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1000, M: 1000 ** 2, G: 1000 ** 3, T: 1000 ** 4 };
-  const unit = raw.replace(String(num), '');
-  return num * (units[unit] || 1);
-}
 
 function formatCpu(nano) {
   if (nano < 1e6) return `${Math.round(nano / 1000)}u`;

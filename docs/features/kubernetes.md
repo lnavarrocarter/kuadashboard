@@ -7,6 +7,21 @@ description: Manage Kubernetes workloads, services, networking, storage, YAML, m
 
 ![KuaDashboard — Kubernetes dashboard](/screenshots/dashboard-main.png)
 
+## Cluster Overview
+
+**Overview** at the top of the Kubernetes sidebar summarizes the health of the active context:
+
+- **Headline tiles** — pods (ready and running), pods with problems and their total restarts, nodes ready, workloads (Deployments, StatefulSets, DaemonSets) below their desired replicas, and Warning events in the last hour.
+- **Cluster usage** — current CPU and memory against the nodes' allocatable capacity, read from the Metrics API (metrics-server). Without metrics-server the card says so and shows the API's answer. The card also shows whether a Prometheus service was detected in the cluster.
+- **Pods by status** — a bar and legend with Running, Pending, Succeeded, Failed and Unknown counts, plus chips for each problem reason.
+- **Pods with problems** — the worst pods first (most restarts), with the reason kubectl would show: `CrashLoopBackOff`, `ImagePullBackOff`, `OOMKilled`, `Unschedulable`, `Evicted`, or `NotReady` for running pods failing their readiness probe.
+- **Nodes** — readiness, cordon state, pressure conditions (memory, disk, PID, network) and per-node CPU/memory when metrics-server is available.
+- **Workloads not ready** and **recent warnings**.
+
+Pods, workloads and events follow the namespace selector (including *All namespaces*); nodes and usage always cover the whole cluster. Every tile, chip and row opens the matching table with the filter already applied, for example *Pods with problems* opens Pods with the **With problems** quick filter on. Each section degrades on its own: if your RBAC role cannot list nodes, only the node section shows the error. The view refreshes with the global auto-refresh interval.
+
+The Overview is not an alerting system: it shows the current state and never sends notifications.
+
 ## Resource Browser
 
 Browse all major Kubernetes resources with sortable, filterable tables:
@@ -42,6 +57,13 @@ The Events table colour-codes every event by criticality and lets you filter by 
 - **Normal** (grey) — `Normal` events.
 
 Use the **Critical / Warning / Normal** chips in the table toolbar to show only those severities (each chip shows how many events it matches; select several to combine them, ✕ to show all). The chips work together with the text filter, and clicking the **Severity** column header sorts critical events first.
+
+### Filters, quick filters and history
+
+- **Per-table view** — each resource table remembers its own text filter, sort column and filter chips when you move to another section and back, and after reloading the app.
+- **Quick filters** — one-click chips with counts for common questions, such as Pods *With problems*, *Not Running*, *Not ready* and *With restarts*; Deployments *Not ready* and *Scaled to 0*; ReplicaSets *Inactive*; Secrets *TLS* and *Registry*; HPAs *At max*; PDBs *Blocking evictions*; Nodes *Not Ready* and *Cordoned*. Active chips combine (a row must match all of them) and combine with the text filter.
+- **Filter history** — focus the filter box to see the table's **Saved** and **Recent** filters. A filter becomes recent when you press Enter, leave the box or switch tables; the star (☆) saves it and ✕ forgets it.
+- **Pod status** — the Status column shows the problem reason (for example `CrashLoopBackOff` or `NotReady`) instead of the phase when a pod is unhealthy, and the text filter matches it.
 
 ## Auto Refresh
 

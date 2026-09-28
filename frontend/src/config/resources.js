@@ -43,8 +43,9 @@ export const RESOURCES = {
   pods: {
     title: 'Pods',
     cols:  ['Name', 'Namespace', 'Status', 'Ready', 'Restarts', 'Ports', 'Env', 'Age', 'Node'],
-    row:   r => [r.name, r.namespace, { badge: r.status }, r.ready, r.restarts, r.ports || '-', r.envCount ?? 0, age(r.age), r.nodeName],
+    row:   r => [r.name, r.namespace, { badge: r.reason || r.status }, r.ready, r.restarts, r.ports || '-', r.envCount ?? 0, age(r.age), r.nodeName],
     quickFilters: [
+      { id: 'problems', label: 'Con problemas', test: r => !!r.reason },
       { id: 'not-running', label: 'No Running', test: r => !['Running', 'Succeeded'].includes(r.status) },
       { id: 'not-ready', label: 'No listos', test: r => r.status === 'Running' && notReady(r.ready) },
       { id: 'restarts', label: 'Con reinicios', test: r => Number(r.restarts) > 0 },

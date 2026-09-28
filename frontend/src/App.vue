@@ -129,6 +129,10 @@
         <!-- Kubernetes sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
+            <a :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
+               @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
+          </div>
+          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
@@ -357,6 +361,7 @@
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
           <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
+          <KubeOverview ref="kubeOverviewRef" v-else-if="cloudView === 'kube-overview' && activeProvider === 'kubernetes'" @navigate="openKubeFromOverview" />
           <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
@@ -510,6 +515,8 @@ import { useArchitectureContext } from './composables/useArchitectureContext'
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import HelmView         from './components/HelmView.vue'
+import KubeOverview     from './components/KubeOverview.vue'
+import { loadTableView, saveTableView } from './composables/useTableViews'
 import AuditLogView    from './components/AuditLogView.vue'
 import ConsoleWorkspaceView from './components/ConsoleWorkspaceView.vue'
 import EnvManagerView  from './components/cloud/EnvManagerView.vue'
@@ -633,6 +640,7 @@ const awsTab          = ref('ec2')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
 const kubeResourceFilter = ref('')
+const kubeOverviewRef = ref(null)
 const kubeDetailWidth = ref(Number(LS.get('kubeDetailWidth', '420')) || 420)
 const isKubeResizing = ref(false)
 const helmViewRef     = ref(null)
@@ -668,6 +676,10 @@ async function reloadActiveProvider() {
   try {
     if (cloudView.value === 'helm' || cloudView.value === 'helm-repos') {
       await helmViewRef.value?.reloadActiveTab?.()
+      return
+    }
+    if (cloudView.value === 'kube-overview') {
+      await kubeOverviewRef.value?.load?.({ background: true })
       return
     }
     if (cloudView.value) return
@@ -1036,6 +1048,14 @@ function toggleConsole() {
 }
 function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.selectResource(r) }
 function setCloudView(view)   { cloudView.value = view }
+
+// Overview drill-down: open the resource table with the matching filter/chips
+// preset, keeping the user's sort for that table.
+function openKubeFromOverview({ resource, filter = '', quick = [], facets = [] }) {
+  saveTableView(resource, { ...loadTableView(resource), filter, quick, facets })
+  kubeResourceFilter.value = ''
+  setResource(resource)
+}
 
 function selectKubeResource(type, row) {
   selectedKubeResource.value = { type, row }

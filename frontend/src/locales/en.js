@@ -35,6 +35,7 @@ export default {
   'observability.vercelDescription': 'Applications, projects and activity',
 
   // ── Sidebar sections ──────────────────────────────────────────────────────
+  'sidebar.overview':        'Overview',
   'sidebar.workloads':       'Workloads',
   'sidebar.network':         'Network',
   'sidebar.config':          'Config',

@@ -522,6 +522,11 @@ body.kube-resizing {
 .badge.running, .badge.active, .badge.bound, .badge.ready  { background: rgba(76,175,80,.2); color: #66bb6a; }
 .badge.pending, .badge.unknown                             { background: rgba(255,152,0,.2);  color: #ffa726; }
 .badge.failed, .badge.notready, .badge.lost, .badge.terminating { background: rgba(244,67,54,.2); color: #ef5350; }
+/* Pod problem reasons shown in place of the phase (kubectl-style) */
+.badge.crashloopbackoff, .badge.imagepullbackoff, .badge.errimagepull, .badge.oomkilled,
+.badge.error, .badge.evicted, .badge.unschedulable, .badge.createcontainerconfigerror,
+.badge.createcontainererror, .badge.invalidimagename, .badge.runcontainererror,
+.badge.containercannotrun, .badge.deadlineexceeded { background: rgba(244,67,54,.2); color: #ef5350; }
 .badge.succeeded                                           { background: rgba(78,201,176,.2); color: var(--teal); }
 .badge.cordoned                                            { background: rgba(255,152,0,.15); color: var(--yellow); }
 .badge.critical { background: color-mix(in srgb, var(--red) 22%, transparent);    color: var(--red); }
