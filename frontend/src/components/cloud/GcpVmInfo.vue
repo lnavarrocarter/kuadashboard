@@ -147,6 +147,9 @@ const notes = computed(() => {
   if ((v.security?.serviceAccounts || []).some(sa => sa.scopes.some(s => s.startsWith('cloud-platform')))) {
     out.push({ level: 'warn', text: 'La cuenta de servicio tiene el scope cloud-platform (acceso a todas las APIs según sus roles IAM).' })
   }
+  if ((v.security?.serviceAccounts || []).some(sa => /-compute@developer\.gserviceaccount\.com$/.test(sa.email))) {
+    out.push({ level: 'warn', text: 'Usa la cuenta de servicio por defecto de Compute (suele tener el rol Editor del proyecto).' })
+  }
   if (v.security && !v.security.secureBoot) out.push({ level: 'warn', text: 'Secure Boot desactivado.' })
   if (v.security && !v.security.deletionProtection) out.push({ level: 'warn', text: 'Sin protección contra eliminación.' })
   if (v.security?.serialPortEnabled) out.push({ level: 'err', text: 'El puerto serie interactivo está habilitado.' })

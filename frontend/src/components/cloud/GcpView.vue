@@ -51,9 +51,9 @@
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud Run services found.' }}</div>
-        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-          <!-- TOP: service table -->
-          <div :class="['gcp-list-table', { split: crPanel.resource }]">
+        <SplitPane v-else :split="!!crPanel.resource" storage-key="gcp-cloudrun">
+          <template #top>
+  <div class="gcp-list-table">
             <table class="cloud-table gcp-table" data-test="cloudrun-table">
               <thead><tr>
                 <th>Servicio</th><th>Estado</th><th>Imagen</th><th>CPU / Mem</th><th>Instancias</th><th>Ingress</th><th>Revisión</th><th>Actualizado</th><th>Acciones</th>
@@ -92,7 +92,9 @@
               </tbody>
             </table>
           </div>
-          <!-- BOTTOM: detail -->
+          </template>
+          <template #bottom>
+          <!-- detail -->
           <div v-if="crPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <!-- Header -->
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
@@ -168,7 +170,8 @@
               </div>
             </div>
           </div>
-        </div>
+          </template>
+        </SplitPane>
       </div>
 
       <!-- GKE -->
@@ -233,9 +236,9 @@
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? 'No matches.' : 'No Compute Engine VMs found.' }}</div>
-        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-          <!-- TOP: VM table -->
-          <div :class="['gcp-list-table', { split: vmPanel.resource }]">
+        <SplitPane v-else :split="!!vmPanel.resource" storage-key="gcp-vms">
+          <template #top>
+  <div class="gcp-list-table">
             <table class="cloud-table gcp-table" data-test="vm-table">
               <thead><tr>
                 <th>VM</th><th>Estado</th><th>Tipo</th><th>IP interna</th><th>IP externa</th><th>Red</th><th>Discos</th><th>Protección</th><th>Creada</th><th>Acciones</th>
@@ -271,7 +274,9 @@
               </tbody>
             </table>
           </div>
-          <!-- BOTTOM: detail -->
+          </template>
+          <template #bottom>
+          <!-- detail -->
           <div v-if="vmPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -345,7 +350,8 @@
               </div>
             </div>
           </div>
-        </div>
+          </template>
+        </SplitPane>
       </div>
 
       <!-- Cloud SQL -->
@@ -360,9 +366,9 @@
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">Loading...</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">API not available — see banner above.</div>
         <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? 'No matches.' : 'No Cloud SQL instances found.' }}</div>
-        <div v-else style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-          <!-- TOP: instance table -->
-          <div :class="['gcp-list-table', { split: sqlPanel.resource }]">
+        <SplitPane v-else :split="!!sqlPanel.resource" storage-key="gcp-sql">
+          <template #top>
+  <div class="gcp-list-table">
             <table class="cloud-table gcp-table" data-test="sql-table">
               <thead><tr>
                 <th>Instancia</th><th>Estado</th><th>Motor</th><th>Tier</th><th>Disponibilidad</th><th>Almacenamiento</th><th>Backups</th><th>IP pública</th><th>IP privada</th><th>Acciones</th>
@@ -397,7 +403,9 @@
               </tbody>
             </table>
           </div>
-          <!-- BOTTOM: detail -->
+          </template>
+          <template #bottom>
+          <!-- detail -->
           <div v-if="sqlPanel.resource" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -469,7 +477,8 @@
               </div>
             </div>
           </div>
-        </div>
+          </template>
+        </SplitPane>
       </div>
 
       <!-- Cloud Storage -->
@@ -1854,6 +1863,7 @@ import GcsBrowser       from './GcsBrowser.vue'
 import GcpCreateModal   from './GcpCreateModal.vue'
 import GcpConfirmModal  from './GcpConfirmModal.vue'
 import GcpVmInfo        from './GcpVmInfo.vue'
+import SplitPane        from '../SplitPane.vue'
 import GcpCloudRunInfo  from './GcpCloudRunInfo.vue'
 import GcpSqlInfo       from './GcpSqlInfo.vue'
 import GcpLabelsEditor  from './GcpLabelsEditor.vue'
@@ -3281,8 +3291,7 @@ async function openIamKeys(sa) {
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */
 .gcp-toolbar-actions { display: flex; gap: 6px; align-items: center; }
 .gcp-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 12px; }
-.gcp-list-table { flex: 1; overflow: auto; min-height: 0; }
-.gcp-list-table.split { flex: 0 0 auto; max-height: 42%; border-bottom: 2px solid var(--border); }
+.gcp-list-table { height: 100%; overflow: auto; }
 .gcp-table tbody tr { cursor: pointer; }
 .gcp-table tbody tr.row-selected td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .gcp-table td { vertical-align: top; }
