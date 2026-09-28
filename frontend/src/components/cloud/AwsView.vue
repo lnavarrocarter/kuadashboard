@@ -1870,6 +1870,34 @@
         </table>
       </div>
 
+      <div v-show="activeTab === 'cwdashboards'" class="tab-panel">
+        <div v-if="awsStore.loading" class="empty-row">{{ t('common.loading') }}</div>
+        <div v-else-if="!filteredCwDashboards.length" class="empty-row">{{ search.cwdashboards ? t('awsDashboards.noMatches') : t('awsDashboards.empty') }}</div>
+        <table v-else class="cloud-table">
+          <thead><tr>
+            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('awsDashboards.colName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('awsDashboards.colModified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th :class="thClass('size')"         @click="sortBy('size')">{{ t('awsDashboards.colSize') }} <span class="sort-icon">{{ sortIcon('size') }}</span></th>
+            <th>{{ t('awsDashboards.colActions') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="d in sortRows(filteredCwDashboards)" :key="d.arn || d.name">
+              <td><a class="cw-dash-name" href="#" @click.prevent="dashboardDetail = d.name">{{ d.name }}</a></td>
+              <td class="text-dim" style="white-space:nowrap">{{ d.lastModified ? formatDate(d.lastModified) : '-' }}</td>
+              <td class="text-dim" style="white-space:nowrap">{{ d.size != null ? `${(d.size / 1024).toFixed(1)} KB` : '-' }}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn sm" @click="dashboardDetail = d.name">{{ t('awsDashboards.details') }}</button>
+                  <a class="btn sm" :href="d.consoleUrl" target="_blank" rel="noopener noreferrer">{{ t('awsDashboards.openConsole') }}</a>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="text-dim" style="font-size:11px;margin:8px 2px 0">{{ t('awsDashboards.scopeNote') }}</p>
+        <CloudWatchDashboardDetail :show="!!dashboardDetail" :name="dashboardDetail || ''" @close="dashboardDetail = null" />
+      </div>
+
     </template>
 
     <!-- ── Create S3 Bucket Modal ─────────────────────────────────────────── -->
@@ -3718,7 +3746,9 @@ import {
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import AwsOverview from './AwsOverview.vue'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
+import CloudWatchDashboardDetail from './CloudWatchDashboardDetail.vue'
 import { useI18n } from '../../composables/useI18n'
+import { settings } from '../../composables/useSettings'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
@@ -3767,6 +3797,7 @@ const TABS = [
   { id: 'route53',      label: 'Route 53'       },
   { id: 'cognito',      label: 'Cognito'        },
   { id: 'secrets',      label: 'Secrets Manager'},
+  { id: 'cwdashboards', label: 'CloudWatch Dashboards' },
 ]
 
 const activeTab  = ref('overview')
@@ -3919,6 +3950,8 @@ const filteredCloudfront  = computed(() => filterRows(awsStore.cloudfrontDists, 
 const filteredRoute53     = computed(() => filterRows(awsStore.route53Zones,     search.route53))
 const filteredCognito     = computed(() => filterRows(awsStore.cognitoUserPools, search.cognito))
 const filteredSecrets     = computed(() => filterRows(awsStore.secrets,          search.secrets))
+const filteredCwDashboards = computed(() => filterRows(awsStore.cwDashboards,    search.cwdashboards))
+const dashboardDetail     = ref(null)
 
 const tabFilteredMap = {
   ec2: filteredEc2, ecs: filteredEcs, eks: filteredEks,
@@ -3929,6 +3962,7 @@ const tabFilteredMap = {
   bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,
   cloudfront: filteredCloudfront, route53: filteredRoute53,
   cognito: filteredCognito, secrets: filteredSecrets,
+  cwdashboards: filteredCwDashboards,
 }
 
 const activeRowCount = computed(() => tabFilteredMap[activeTab.value]?.value?.length ?? 0)
@@ -3947,6 +3981,7 @@ function tabCount(id) {
     cloudfront: awsStore.cloudfrontDists,
     route53: awsStore.route53Zones, cognito: awsStore.cognitoUserPools,
     secrets: awsStore.secrets,
+    cwdashboards: awsStore.cwDashboards,
   }
   return map[id]?.length ?? 0
 }
@@ -3977,6 +4012,7 @@ const fetchMap = {
   route53:      () => awsStore.fetchRoute53Zones(),
   cognito:      () => awsStore.fetchCognitoUserPools(),
   secrets:      () => awsStore.fetchSecrets(),
+  cwdashboards: () => awsStore.fetchCwDashboards(),
 }
 
 async function loadApmInventory() {
@@ -4149,10 +4185,12 @@ async function submitInvoke() {
   } finally { invokeModal.loading = false }
 }
 
+// Dates follow the app language, not the operating system's locale.
+const dateLocale = () => (settings.lang === 'es' ? 'es' : 'en-US')
 function formatDate(d) {
-  return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
+  return new Date(d).toLocaleDateString(dateLocale(), { year: 'numeric', month: 'short', day: '2-digit' })
 }
-function formatTs(ts) {  return new Date(ts).toLocaleString(undefined, {
+function formatTs(ts) {  return new Date(ts).toLocaleString(dateLocale(), {
     hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   })

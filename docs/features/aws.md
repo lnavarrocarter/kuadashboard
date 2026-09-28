@@ -73,6 +73,15 @@ Below the summary the Overview adds, loaded in the background so the rest never 
 
 Each source is read on its own: a missing permission only hides that source and offers **Request access**.
 
+## CloudWatch Dashboards
+
+**Monitoring → CloudWatch Dashboards** lists the account's existing CloudWatch dashboards (name, last change and size), with search and sorting. For each one:
+
+- **Open in AWS console** opens the dashboard in the CloudWatch console (in the desktop app it opens in your browser), in the profile's region and partition.
+- **Details** shows a summary of its widgets in reading order: type (metrics, logs, alarms, text…), title, what each shows (metrics and namespaces, Logs Insights log groups, alarms), view and region, plus the dashboard's JSON definition to copy.
+
+KUA does not redraw the widgets; the AWS console renders the dashboard. It needs `cloudwatch:ListDashboards` and `cloudwatch:GetDashboard`; without them the view offers **Request access**.
+
 ## Access requests
 
 When AWS denies a request, KUA explains what is missing instead of only showing the raw error. The error banner of the AWS view (and every *No permission* card in the Overview) offers **Request access**, which opens:

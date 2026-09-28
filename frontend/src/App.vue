@@ -231,6 +231,12 @@
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.monitoring') }}</div>
+            <a v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
         </nav>
 
         <!-- Vercel sidebar -->
@@ -582,6 +588,7 @@ const AWS_SIDEBAR = {
   integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }, { id: 'lex', label: 'Amazon Lex' }],
   ai:          [{ id: 'bedrock', label: 'Bedrock' }, { id: 'agentcorecfn', label: 'AgentCore CFN' }],
   security:    [{ id: 'cognito', label: 'Cognito' }, { id: 'secrets', label: 'Secrets Manager' }],
+  monitoring:  [{ id: 'cwdashboards', label: 'CloudWatch Dashboards' }],
 }
 
 const VERCEL_SIDEBAR = {

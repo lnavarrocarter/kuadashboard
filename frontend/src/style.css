@@ -1826,6 +1826,8 @@ kbd {
 .alert-error { background: rgba(244,67,54,.12); border: 1px solid var(--red); border-radius: 6px; padding: 10px 14px; color: var(--red); font-size: 12px; }
 .alert-error .aws-access-btn { margin-left: 10px; display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; }
 .alert-error .aws-access-btn svg { width: 12px; height: 12px; }
+.cw-dash-name { color: var(--accent); text-decoration: none; font-weight: 500; }
+.cw-dash-name:hover { text-decoration: underline; }
 
 /* Status inline badges (cloud views) */
 .status-ok   { color: var(--green); font-weight: 600; }

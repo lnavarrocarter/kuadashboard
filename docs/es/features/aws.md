@@ -73,6 +73,15 @@ Debajo del resumen, el Resumen agrega (cargado en segundo plano para no demorar 
 
 Cada fuente se lee por separado: si falta un permiso, solo se oculta esa fuente y se ofrece **Solicitar acceso**.
 
+## Dashboards de CloudWatch
+
+**Monitoreo → CloudWatch Dashboards** lista los dashboards de CloudWatch que ya existen en la cuenta (nombre, último cambio y tamaño), con búsqueda y orden. Para cada uno:
+
+- **Abrir en la consola de AWS** abre el dashboard en la consola de CloudWatch (en la app de escritorio se abre en el navegador), en la región y partición del perfil.
+- **Detalle** muestra un resumen de sus widgets en orden de lectura: tipo (métricas, logs, alarmas, texto…), título, qué muestra cada uno (métricas y namespaces, log groups de Logs Insights, alarmas), vista y región, más la definición JSON del dashboard para copiar.
+
+KUA no vuelve a dibujar los widgets; el dashboard lo dibuja la consola de AWS. Requiere `cloudwatch:ListDashboards` y `cloudwatch:GetDashboard`; sin ellos, la vista ofrece **Solicitar acceso**.
+
 ## Solicitudes de acceso
 
 Cuando AWS rechaza una solicitud, KUA explica qué falta en vez de mostrar solo el error crudo. El aviso de error de la vista de AWS (y cada tarjeta *Sin permiso* del Resumen) ofrece **Solicitar acceso**, que abre:

@@ -2,6 +2,12 @@
   "GET /regions": [
     "ec2:DescribeRegions"
   ],
+  "GET /cloudwatch/dashboards": [
+    "cloudwatch:ListDashboards"
+  ],
+  "GET /cloudwatch/dashboards/:name": [
+    "cloudwatch:GetDashboard"
+  ],
   "GET /eks": [
     "eks:DescribeCluster",
     "eks:ListClusters"

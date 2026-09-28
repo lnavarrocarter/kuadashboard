@@ -39,6 +39,7 @@ export const useAwsStore = defineStore('aws', () => {
   const route53Zones     = ref([])
   const cognitoUserPools = ref([])
   const secrets          = ref([])
+  const cwDashboards     = ref([])
   const dataPipelines    = ref([])
   const bedrockModels    = ref([])
   const lexBots          = ref([])
@@ -109,6 +110,7 @@ export const useAwsStore = defineStore('aws', () => {
     route53Zones.value     = []
     cognitoUserPools.value = []
     secrets.value          = []
+    cwDashboards.value     = []
     dataPipelines.value    = []
     bedrockModels.value    = []
     lexBots.value          = []
@@ -907,6 +909,17 @@ export const useAwsStore = defineStore('aws', () => {
 
   // ─── Secrets Manager ─────────────────────────────────────────────────────────
 
+  async function fetchCwDashboards() {
+    loading.value = true; error.value = null
+    try { cwDashboards.value = await apiFetch('/api/cloud/aws/cloudwatch/dashboards', { headers: headers() }) }
+    catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  // Definition and widget summary of one dashboard; errors go to the caller.
+  function fetchCwDashboard(name) {
+    return apiFetch(`/api/cloud/aws/cloudwatch/dashboards/${encodeURIComponent(name)}`, { headers: headers() })
+  }
+
   async function fetchSecrets() {
     loading.value = true; error.value = null
     try { secrets.value = await apiFetch('/api/cloud/aws/secrets', { headers: headers() }) }
@@ -1051,11 +1064,11 @@ export const useAwsStore = defineStore('aws', () => {
     activeProfileId, overview, overviewInsights, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
-    cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines,
+    cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards,
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchRegions, fetchEksClusters, fetchEksDetails,
+    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
     fetchLambdas, invokeLambda,

@@ -16,6 +16,8 @@
  *   GET  /regions                           → list all available AWS regions
  *   GET  /overview                          → account, identity, region and resources per service
  *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
+ *   GET  /cloudwatch/dashboards             → CloudWatch dashboards with console links
+ *   GET  /cloudwatch/dashboards/:name       → dashboard definition and widget summary
  *   GET  /eks                               → list EKS clusters
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
@@ -60,6 +62,7 @@ const { describeNodegroups, getEksDetails, summarizeClusters } = require('../lib
 const { buildAwsOverview } = require('../lib/awsOverview');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
+const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
 
 const router = express.Router();
 
@@ -347,6 +350,52 @@ router.get('/overview/insights', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     res.json(await buildAwsInsights(cfg, { cache: costCache, cacheKey: profileId, refreshCosts: req.query.refreshCosts === '1' }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── CloudWatch dashboards ────────────────────────────────────────────────────
+
+router.get('/cloudwatch/dashboards', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, ListDashboardsCommand } = require('@aws-sdk/client-cloudwatch');
+    const client = new CloudWatchClient(cfg);
+    const dashboards = [];
+    let token;
+    do {
+      const resp = await client.send(new ListDashboardsCommand({ NextToken: token }));
+      dashboards.push(...(resp.DashboardEntries || []));
+      token = resp.NextToken;
+    } while (token);
+    res.json(dashboards.map(d => ({
+      name: d.DashboardName,
+      arn: d.DashboardArn,
+      lastModified: d.LastModified,
+      size: d.Size,
+      consoleUrl: dashboardConsoleUrl(cfg.region, d.DashboardName),
+    })));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/dashboards/:name', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetDashboardCommand } = require('@aws-sdk/client-cloudwatch');
+    const resp = await new CloudWatchClient(cfg).send(new GetDashboardCommand({ DashboardName: req.params.name }));
+    let body = null;
+    try { body = JSON.parse(resp.DashboardBody || '{}'); } catch { /* keep the raw text */ }
+    res.json({
+      name: resp.DashboardName,
+      arn: resp.DashboardArn,
+      consoleUrl: dashboardConsoleUrl(cfg.region, resp.DashboardName),
+      body,
+      rawBody: body ? null : resp.DashboardBody,
+      summary: summarizeDashboard(resp.DashboardBody, { defaultRegion: cfg.region }),
+    });
   } catch (err) { handleErr(res, err); }
 });
 
