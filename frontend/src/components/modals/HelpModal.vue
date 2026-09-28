@@ -119,7 +119,7 @@
                 <div class="release-title">
                   <span class="release-ver">v{{ rel.version }}</span>
                   <span v-if="rel.version === VERSION" class="release-current">{{ t('help.current') }}</span>
-                  <span class="release-date text-dim">{{ rel.date }}</span>
+                  <span class="release-date text-dim">{{ localized(rel.date, settings.lang) }}</span>
                 </div>
                 <div class="release-summary" :aria-label="t('help.releaseSummary')">
                   <span v-for="summary in releaseSummary(rel)" :key="summary.type" :class="['release-summary-pill', `tag-${summary.type}`]">
@@ -130,7 +130,7 @@
               <ul class="change-list">
                 <li v-for="(item, i) in visibleReleaseItems(rel)" :key="i" class="change-item">
                   <span :class="['change-tag', `tag-${item.type}`]">{{ tagLabel(item.type) }}</span>
-                  <span>{{ item.text }}</span>
+                  <span>{{ localized(item.text, settings.lang) }}</span>
                 </li>
               </ul>
               <button v-if="hiddenReleaseCount(rel)" class="release-toggle" @click="toggleRelease(rel.version)">
@@ -354,7 +354,7 @@ import { settings, applySettings, SETTINGS_DEFAULTS } from '../../composables/us
 import PlatformStorage from '../PlatformStorage.vue'
 import { useI18n } from '../../composables/useI18n.js'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
-import { CHANGELOG, CHANGELOG_VERSION } from '../../composables/useChangelog.js'
+import { CHANGELOG, CHANGELOG_VERSION, localized } from '../../composables/useChangelog.js'
 
 const { t } = useI18n()
 const updateStore     = useUpdateStore()

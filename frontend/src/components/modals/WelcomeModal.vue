@@ -8,7 +8,7 @@
         <ul class="change-list">
           <li v-for="(item, i) in release.items" :key="i" class="change-item">
             <span :class="['change-tag', `tag-${item.type}`]">{{ tagLabel(item.type) }}</span>
-            <span>{{ item.text }}</span>
+            <span>{{ localized(item.text, settings.lang) }}</span>
           </li>
         </ul>
       </div>
@@ -24,7 +24,8 @@
 import { ref, onMounted } from 'vue'
 import BaseModal from '../BaseModal.vue'
 import { useI18n } from '../../composables/useI18n.js'
-import { CHANGELOG, CHANGELOG_VERSION } from '../../composables/useChangelog.js'
+import { settings } from '../../composables/useSettings.js'
+import { CHANGELOG, CHANGELOG_VERSION, localized } from '../../composables/useChangelog.js'
 
 const { t } = useI18n()
 

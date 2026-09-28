@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.17.0 (2026-09-28)
+
+Cloud Insights suma resúmenes, costos, actividad y salud para AWS y Kubernetes, agrega SQS, SNS y SES, dibuja los dashboards de CloudWatch dentro de KUA y hace que cada lectura automática indique cuánto cuesta.
 
 ### Arreglado
 - **Costos del auto-refresco de AWS:** El auto-refresco global (cada 5 s por defecto) volvía a leer la actividad de 24 h de Lambda y Step Functions y los KPIs del Resumen en cada ciclo. Esas lecturas usan `GetMetricData` de CloudWatch, que se cobra (USD 0.01 por cada 1.000 métricas, fuera de la capa gratuita): unos USD 0.006 por carga de la tabla de Lambda con ~600 métricas, o cerca de USD 4 por hora con la pestaña abierta. Ahora la actividad y los insights del Resumen se reutilizan durante 15 minutos y el resumen de recursos (gratis) durante 5; el botón de actualizar sigue forzando una lectura nueva.

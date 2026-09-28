@@ -2,11 +2,36 @@
  * composables/useChangelog.js
  * Single source of truth for the application changelog.
  * Used by both HelpModal (full history) and WelcomeModal (latest release only).
+ * `text` and `date` are either a string (older releases, Spanish) or { en, es }.
  */
 
-export const CHANGELOG_VERSION = '1.16.0'
+/** Text of a changelog field in the given language, falling back to English. */
+export function localized(value, lang = 'en') {
+  if (value == null || typeof value === 'string') return value
+  return value[lang] || value.en || ''
+}
+
+export const CHANGELOG_VERSION = '1.17.0'
 
 export const CHANGELOG = [
+  {
+    version: '1.17.0',
+    date: { en: 'September 2026', es: 'Septiembre 2026' },
+    items: [
+      { type: 'new', text: { en: 'AWS Overview: active account, identity, regions and resource counts per service, this month\'s cost with forecast (Cost Explorer, cached 12h), activity KPIs and services with resources outside KUA', es: 'Resumen de AWS: cuenta activa, identidad, regiones y recursos por servicio, costo del mes con proyección (Cost Explorer, en caché 12 h), KPIs de actividad y servicios con recursos fuera de KUA' } },
+      { type: 'new', text: { en: 'AWS SQS, SNS and SES: queues, topics and email identities with 24h activity, health status with reasons, Lambda consumers, subscription filters and DLQs, delivery status logs, suppression list and configuration set metrics', es: 'SQS, SNS y SES en AWS: colas, tópicos e identidades de correo con actividad de 24 h, estado de salud con motivos, consumidores Lambda, filtros y DLQ de suscripciones, logs de entrega, lista de supresión y métricas por configuration set' } },
+      { type: 'new', text: { en: 'Local metric history: metrics already read are kept, so details only request what is missing and 24h/7d/30d charts reuse them, cutting billed CloudWatch reads', es: 'Historial local de métricas: lo ya leído se guarda, así los detalles solo piden lo que falta y los gráficos de 24 h / 7 d / 30 d lo reutilizan, bajando las lecturas cobradas de CloudWatch' } },
+      { type: 'new', text: { en: 'CloudWatch dashboards drawn inside KUA: metric, Logs Insights (with a scan estimate before running), alarm and text widgets on their original layout', es: 'Dashboards de CloudWatch dibujados dentro de KUA: widgets de métricas, Logs Insights (con estimación de lectura antes de correr), alarmas y texto en su diseño original' } },
+      { type: 'new', text: { en: 'Lambda and Step Functions tables show 24h invocations/executions and whether each resource writes logs', es: 'Las tablas de Lambda y Step Functions muestran invocaciones/ejecuciones de 24 h y si cada recurso escribe logs' } },
+      { type: 'new', text: { en: 'AWS access requests: permission errors name the denied IAM action and suggest the policy for the whole screen', es: 'Solicitudes de acceso en AWS: los errores de permisos indican la acción IAM denegada y sugieren la policy de toda la pantalla' } },
+      { type: 'new', text: { en: 'Kubernetes Overview with pods by status, problems and Prometheus trends; tables remember filters, sort and quick-filter chips', es: 'Resumen de Kubernetes con pods por estado, problemas y tendencias de Prometheus; las tablas recuerdan filtros, orden y chips de filtro rápido' } },
+      { type: 'new', text: { en: 'Options: cache and refresh per provider with the cost of each automatic read, plus local storage usage (databases, tables, files)', es: 'Opciones: caché y actualización por proveedor con el costo de cada lectura automática, más el uso de almacenamiento local (bases, tablas, archivos)' } },
+      { type: 'new', text: { en: 'Console saved connections: save a session with a name and reopen it with one click; sessions can be renamed', es: 'Conexiones guardadas en la Consola: guarda una sesión con nombre y vuelve a abrirla con un clic; las sesiones se pueden renombrar' } },
+      { type: 'new', text: { en: 'GCP Cloud Run, VM and Cloud SQL details, labels, state history and VM SSH; Vercel project selector; EKS and VPC Info panels; Route 53 search and DNS tests', es: 'GCP: detalles de Cloud Run, VMs y Cloud SQL, labels, historial de estado y SSH a VMs; selector de proyecto en Vercel; paneles Info de EKS y VPC; búsqueda y pruebas DNS en Route 53' } },
+      { type: 'better', text: { en: 'English is now the base language, with the whole interface translated to English and Spanish', es: 'El inglés pasa a ser el idioma base, con toda la interfaz traducida a inglés y español' } },
+      { type: 'fix', text: { en: 'Auto-refresh no longer repeats billed CloudWatch reads every 5 s (about USD 4/h with the Lambda tab open); also fixes dashboard log widgets with ARN sources and stale Vercel data after switching projects', es: 'La auto-actualización ya no repite lecturas cobradas de CloudWatch cada 5 s (unos USD 4/h con la pestaña de Lambda abierta); también corrige widgets de logs con ARN y datos viejos de Vercel al cambiar de proyecto' } },
+    ],
+  },
   {
     version: '1.16.0',
     date: 'Septiembre 2026',

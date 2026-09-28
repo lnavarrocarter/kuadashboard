@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.17.0 (2026-09-28)
+
+Cloud Insights brings overviews, costs, activity and health to AWS and Kubernetes, adds SQS, SNS and SES, draws CloudWatch dashboards inside KUA, and makes every automatic read state what it costs.
 
 ### Fixed
 - **AWS auto-refresh costs:** The app-wide auto-refresh (every 5 s by default) re-read the Lambda and Step Functions 24h activity and the Overview KPIs on every tick. Those reads use CloudWatch `GetMetricData`, which is billed (USD 0.01 per 1,000 metrics, not in the free tier): about USD 0.006 per Lambda table load with ~600 metrics, or roughly USD 4 per hour with the tab open. Activity and Overview insights are now reused for 15 minutes and the free resource overview for 5 minutes; the refresh button still forces a new read.
