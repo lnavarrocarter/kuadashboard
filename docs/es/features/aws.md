@@ -80,7 +80,15 @@ Cada fuente se lee por separado: si falta un permiso, solo se oculta esa fuente 
 - **Abrir en la consola de AWS** abre el dashboard en la consola de CloudWatch (en la app de escritorio se abre en el navegador), en la región y partición del perfil.
 - **Detalle** muestra un resumen de sus widgets en orden de lectura: tipo (métricas, logs, alarmas, texto…), título, qué muestra cada uno (métricas y namespaces, log groups de Logs Insights, alarmas), vista y región, más la definición JSON del dashboard para copiar.
 
-KUA no vuelve a dibujar los widgets; el dashboard lo dibuja la consola de AWS. Requiere `cloudwatch:ListDashboards` y `cloudwatch:GetDashboard`; sin ellos, la vista ofrece **Solicitar acceso**.
+**Ver** (o el nombre del dashboard) dibuja el dashboard dentro de KUA, con la misma grilla de 24 columnas:
+
+- **Métricas**: series de tiempo (apiladas si así están configuradas), barras y valor único (con sparkline), incluyendo la notación `.`/`...`, expresiones matemáticas, SEARCH y SQL de Metrics Insights, stat, período, etiqueta, color y visibilidad por métrica, anotaciones horizontales y anotaciones de alarma (la métrica de la alarma con su umbral y estado). Un widget que usa los ejes Y izquierdo y derecho se dibuja como dos gráficos apilados en vez de un gráfico con dos escalas.
+- **Logs**: resultados de Logs Insights como tabla o como barras horizontales. Antes de consultar, KUA estima los datos a leer a partir del tamaño almacenado de los log groups (gratis); las consultas de menos de 1 GB aprox. corren solas y las más grandes muestran la estimación y un botón **Ejecutar consulta**. Debajo de cada widget se muestran los bytes efectivamente leídos.
+- Widgets de **texto** (Markdown; el HTML se muestra como texto) y de **estado de alarmas**. Los demás tipos enlazan a la consola.
+
+El rango de tiempo empieza en el del propio dashboard (por ejemplo, una semana) y se puede cambiar. **Auto-actualizar** vuelve a leer métricas y alarmas cada minuto; las consultas de logs solo se repiten al actualizar, porque Logs Insights se cobra por GB leído (USD 0,005/GB). Las métricas cuestan USD 0,01 por cada 1.000 consultadas.
+
+KUA arma cada consulta desde la definición del dashboard guardada en AWS; la app solo pide "el widget N del dashboard X". Listar y ver requiere `cloudwatch:ListDashboards`, `cloudwatch:GetDashboard`, `cloudwatch:GetMetricData` y `cloudwatch:DescribeAlarms`, más `logs:DescribeLogGroups`, `logs:StartQuery` y `logs:GetQueryResults` para los widgets de logs; sin ellos, la vista ofrece **Solicitar acceso**.
 
 ## Solicitudes de acceso
 

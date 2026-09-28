@@ -18,6 +18,11 @@
  *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
  *   GET  /cloudwatch/dashboards             → CloudWatch dashboards with console links
  *   GET  /cloudwatch/dashboards/:name       → dashboard definition and widget summary
+ *   GET  /cloudwatch/dashboards/:name/widgets/:index/metrics       → series of a metric widget
+ *   GET  /cloudwatch/dashboards/:name/widgets/:index/alarms        → states of an alarm widget
+ *   GET  /cloudwatch/dashboards/:name/widgets/:index/logs/estimate → bytes a log widget would scan
+ *   POST /cloudwatch/dashboards/:name/widgets/:index/logs/query    → start a log widget's Logs Insights query
+ *   GET  /cloudwatch/logs-query/:queryId                           → Logs Insights query status and results
  *   GET  /eks                               → list EKS clusters
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
@@ -63,6 +68,9 @@ const { buildAwsOverview } = require('../lib/awsOverview');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
+const {
+  dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, estimateLogScan, normalizeQueryResults,
+} = require('../lib/cloudwatchDashboardData');
 
 const router = express.Router();
 
@@ -394,8 +402,123 @@ router.get('/cloudwatch/dashboards/:name', async (req, res) => {
       consoleUrl: dashboardConsoleUrl(cfg.region, resp.DashboardName),
       body,
       rawBody: body ? null : resp.DashboardBody,
+      region: cfg.region,
+      defaultRangeSeconds: dashboardRangeSeconds(body || {}),
       summary: summarizeDashboard(resp.DashboardBody, { defaultRegion: cfg.region }),
     });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── Dashboard widget data ───────────────────────────────────────────────────
+// The client names a dashboard and a widget index; queries are always built
+// from the definition stored in AWS. Definitions are cached briefly because a
+// dashboard loads all its widgets at once.
+
+const DASHBOARD_CACHE_MS = 60 * 1000;
+const dashboardBodies = new Map();
+const MAX_RANGE_MS = 455 * 86400 * 1000; // CloudWatch keeps metrics for 15 months
+const REGION_RE = /^[a-z]{2}(-gov)?-[a-z]+-\d$/;
+
+async function dashboardWidget(profileId, cfg, name, index) {
+  const key = `${profileId}\u0000${name}`;
+  let entry = dashboardBodies.get(key);
+  if (!entry || Date.now() - entry.at > DASHBOARD_CACHE_MS) {
+    const { CloudWatchClient, GetDashboardCommand } = require('@aws-sdk/client-cloudwatch');
+    const resp = await new CloudWatchClient(cfg).send(new GetDashboardCommand({ DashboardName: name }));
+    entry = { at: Date.now(), body: JSON.parse(resp.DashboardBody || '{}') };
+    dashboardBodies.set(key, entry);
+  }
+  const widget = (entry.body.widgets || [])[Number(index)];
+  if (!widget) throw Object.assign(new Error(`Widget ${index} not found in dashboard ${name}`), { $metadata: { httpStatusCode: 404 } });
+  return widget;
+}
+
+function timeRange(source) {
+  const now = Date.now();
+  const end = Number(source.end) || now;
+  const start = Number(source.start) || end - 3 * 3600 * 1000;
+  if (!(end > start) || end - start > MAX_RANGE_MS || end > now + 3600 * 1000) {
+    throw Object.assign(new Error('Invalid time range'), { $metadata: { httpStatusCode: 400 } });
+  }
+  return { start, end };
+}
+
+const widgetRegion = (widget, cfg) => widget.properties?.region || cfg.region;
+
+router.get('/cloudwatch/dashboards/:name/widgets/:index/metrics', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const widget = await dashboardWidget(profileId, cfg, req.params.name, req.params.index);
+    const { start, end } = timeRange(req.query);
+    const { CloudWatchClient, GetMetricDataCommand, DescribeAlarmsCommand } = require('@aws-sdk/client-cloudwatch');
+    const client = new CloudWatchClient({ ...cfg, region: widgetRegion(widget, cfg) });
+    res.json(await fetchMetricWidget(widget, { client, commands: { GetMetricDataCommand, DescribeAlarmsCommand }, start, end }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/dashboards/:name/widgets/:index/alarms', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const widget = await dashboardWidget(profileId, cfg, req.params.name, req.params.index);
+    const { CloudWatchClient, DescribeAlarmsCommand } = require('@aws-sdk/client-cloudwatch');
+    const client = new CloudWatchClient({ ...cfg, region: widgetRegion(widget, cfg) });
+    res.json(await fetchAlarmWidget(widget, { client, commands: { DescribeAlarmsCommand } }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/dashboards/:name/widgets/:index/logs/estimate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const widget = await dashboardWidget(profileId, cfg, req.params.name, req.params.index);
+    const { start, end } = timeRange(req.query);
+    const { logGroups } = splitLogQuery(widget.properties?.query);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const client = new CloudWatchLogsClient({ ...cfg, region: widgetRegion(widget, cfg) });
+    const groups = await Promise.all(logGroups.map(async name => {
+      const resp = await client.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name, limit: 5 }));
+      const group = (resp.logGroups || []).find(g => g.logGroupName === name);
+      return group
+        ? { name, found: true, storedBytes: group.storedBytes, retentionInDays: group.retentionInDays, creationTime: group.creationTime }
+        : { name, found: false };
+    }));
+    res.json(estimateLogScan(groups, (end - start) / 1000));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/cloudwatch/dashboards/:name/widgets/:index/logs/query', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const widget = await dashboardWidget(profileId, cfg, req.params.name, req.params.index);
+    const { start, end } = timeRange(req.body || {});
+    const { logGroups, queryString } = splitLogQuery(widget.properties?.query);
+    if (!logGroups.length || !queryString) return res.status(400).json({ error: 'The widget has no Logs Insights query' });
+    const region = widgetRegion(widget, cfg);
+    const { CloudWatchLogsClient, StartQueryCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const resp = await new CloudWatchLogsClient({ ...cfg, region }).send(new StartQueryCommand({
+      logGroupNames: logGroups, queryString, startTime: Math.floor(start / 1000), endTime: Math.ceil(end / 1000),
+    }));
+    res.json({ queryId: resp.queryId, region });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/logs-query/:queryId', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const region = String(req.query.region || cfg.region);
+    if (!REGION_RE.test(region)) return res.status(400).json({ error: 'Invalid region' });
+    const { CloudWatchLogsClient, GetQueryResultsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const resp = await new CloudWatchLogsClient({ ...cfg, region }).send(new GetQueryResultsCommand({ queryId: req.params.queryId }));
+    res.json(normalizeQueryResults(resp));
   } catch (err) { handleErr(res, err); }
 });
 

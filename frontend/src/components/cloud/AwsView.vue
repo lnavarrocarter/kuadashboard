@@ -21,7 +21,7 @@
         @close="accessModalOpen = false"
       />
 
-      <div v-if="!SELF_LOADING_TABS.has(activeTab)" class="aws-toolbar">
+      <div v-if="!SELF_LOADING_TABS.has(activeTab) && !(activeTab === 'cwdashboards' && dashboardView)" class="aws-toolbar">
         <input
           v-model="search[activeTab]"
           class="ctrl-input aws-search"
@@ -1871,6 +1871,8 @@
       </div>
 
       <div v-show="activeTab === 'cwdashboards'" class="tab-panel">
+        <CloudWatchDashboardView v-if="dashboardView" :name="dashboardView" @back="dashboardView = null" />
+        <template v-else>
         <div v-if="awsStore.loading" class="empty-row">{{ t('common.loading') }}</div>
         <div v-else-if="!filteredCwDashboards.length" class="empty-row">{{ search.cwdashboards ? t('awsDashboards.noMatches') : t('awsDashboards.empty') }}</div>
         <table v-else class="cloud-table">
@@ -1882,11 +1884,12 @@
           </tr></thead>
           <tbody>
             <tr v-for="d in sortRows(filteredCwDashboards)" :key="d.arn || d.name">
-              <td><a class="cw-dash-name" href="#" @click.prevent="dashboardDetail = d.name">{{ d.name }}</a></td>
+              <td><a class="cw-dash-name" href="#" @click.prevent="dashboardView = d.name">{{ d.name }}</a></td>
               <td class="text-dim" style="white-space:nowrap">{{ d.lastModified ? formatDate(d.lastModified) : '-' }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ d.size != null ? `${(d.size / 1024).toFixed(1)} KB` : '-' }}</td>
               <td>
                 <div class="row-actions">
+                  <button class="btn sm primary" @click="dashboardView = d.name">{{ t('awsDashboards.view') }}</button>
                   <button class="btn sm" @click="dashboardDetail = d.name">{{ t('awsDashboards.details') }}</button>
                   <a class="btn sm" :href="d.consoleUrl" target="_blank" rel="noopener noreferrer">{{ t('awsDashboards.openConsole') }}</a>
                 </div>
@@ -1894,8 +1897,8 @@
             </tr>
           </tbody>
         </table>
-        <p class="text-dim" style="font-size:11px;margin:8px 2px 0">{{ t('awsDashboards.scopeNote') }}</p>
         <CloudWatchDashboardDetail :show="!!dashboardDetail" :name="dashboardDetail || ''" @close="dashboardDetail = null" />
+        </template>
       </div>
 
     </template>
@@ -3747,6 +3750,7 @@ import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import AwsOverview from './AwsOverview.vue'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 import CloudWatchDashboardDetail from './CloudWatchDashboardDetail.vue'
+import CloudWatchDashboardView from './dashboard/CloudWatchDashboardView.vue'
 import { useI18n } from '../../composables/useI18n'
 import { settings } from '../../composables/useSettings'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -3952,6 +3956,7 @@ const filteredCognito     = computed(() => filterRows(awsStore.cognitoUserPools,
 const filteredSecrets     = computed(() => filterRows(awsStore.secrets,          search.secrets))
 const filteredCwDashboards = computed(() => filterRows(awsStore.cwDashboards,    search.cwdashboards))
 const dashboardDetail     = ref(null)
+const dashboardView       = ref(null)
 
 const tabFilteredMap = {
   ec2: filteredEc2, ecs: filteredEcs, eks: filteredEks,

@@ -8,6 +8,22 @@
   "GET /cloudwatch/dashboards/:name": [
     "cloudwatch:GetDashboard"
   ],
+  "GET /cloudwatch/dashboards/:name/widgets/:index/metrics": [
+    "cloudwatch:DescribeAlarms",
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /cloudwatch/dashboards/:name/widgets/:index/alarms": [
+    "cloudwatch:DescribeAlarms"
+  ],
+  "GET /cloudwatch/dashboards/:name/widgets/:index/logs/estimate": [
+    "logs:DescribeLogGroups"
+  ],
+  "POST /cloudwatch/dashboards/:name/widgets/:index/logs/query": [
+    "logs:StartQuery"
+  ],
+  "GET /cloudwatch/logs-query/:queryId": [
+    "logs:GetQueryResults"
+  ],
   "GET /eks": [
     "eks:DescribeCluster",
     "eks:ListClusters"
@@ -132,6 +148,7 @@
     "states:ListExecutions"
   ],
   "GET /stepfunctions/versions": [
+    "states:DescribeStateMachine",
     "states:ListStateMachineVersions"
   ],
   "GET /stepfunctions/versions/definition": [
@@ -169,6 +186,16 @@
   "PUT /tags": [
     "ec2:CreateTags",
     "ec2:DeleteTags",
+    "ecr:TagResource",
+    "ecr:UntagResource",
+    "ecs:TagResource",
+    "ecs:UntagResource",
+    "eks:TagResource",
+    "eks:UntagResource",
+    "events:TagResource",
+    "events:UntagResource",
+    "lambda:TagResource",
+    "lambda:UntagResource",
     "s3:GetBucketTagging",
     "s3:PutBucketTagging",
     "states:TagResource",
@@ -176,6 +203,10 @@
   ],
   "GET /tags": [
     "ec2:DescribeTags",
+    "ecr:ListTagsForResource",
+    "ecs:ListTagsForResource",
+    "eks:ListTagsForResource",
+    "events:ListTagsForResource",
     "lambda:ListTags",
     "s3:GetBucketTagging",
     "states:ListTagsForResource"

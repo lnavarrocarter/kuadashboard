@@ -920,6 +920,28 @@ export const useAwsStore = defineStore('aws', () => {
     return apiFetch(`/api/cloud/aws/cloudwatch/dashboards/${encodeURIComponent(name)}`, { headers: headers() })
   }
 
+  // ── Dashboard rendering: data for one widget of a dashboard (by index) ──
+  function cwWidgetPath(name, index) {
+    return `/api/cloud/aws/cloudwatch/dashboards/${encodeURIComponent(name)}/widgets/${index}`
+  }
+  function fetchCwWidgetMetrics(name, index, { start, end }) {
+    return apiFetch(`${cwWidgetPath(name, index)}/metrics?start=${start}&end=${end}`, { headers: headers() })
+  }
+  function fetchCwWidgetAlarms(name, index) {
+    return apiFetch(`${cwWidgetPath(name, index)}/alarms`, { headers: headers() })
+  }
+  function estimateCwWidgetLogs(name, index, { start, end }) {
+    return apiFetch(`${cwWidgetPath(name, index)}/logs/estimate?start=${start}&end=${end}`, { headers: headers() })
+  }
+  function startCwWidgetLogs(name, index, { start, end }) {
+    return apiFetch(`${cwWidgetPath(name, index)}/logs/query`, {
+      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }),
+    })
+  }
+  function fetchCwLogsQuery(queryId, region) {
+    return apiFetch(`/api/cloud/aws/cloudwatch/logs-query/${encodeURIComponent(queryId)}?region=${encodeURIComponent(region)}`, { headers: headers() })
+  }
+
   async function fetchSecrets() {
     loading.value = true; error.value = null
     try { secrets.value = await apiFetch('/api/cloud/aws/secrets', { headers: headers() }) }
@@ -1068,7 +1090,8 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchEksClusters, fetchEksDetails,
+    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions,
+    fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,
     fetchLambdas, invokeLambda,

@@ -80,7 +80,15 @@ Each source is read on its own: a missing permission only hides that source and 
 - **Open in AWS console** opens the dashboard in the CloudWatch console (in the desktop app it opens in your browser), in the profile's region and partition.
 - **Details** shows a summary of its widgets in reading order: type (metrics, logs, alarms, text…), title, what each shows (metrics and namespaces, Logs Insights log groups, alarms), view and region, plus the dashboard's JSON definition to copy.
 
-KUA does not redraw the widgets; the AWS console renders the dashboard. It needs `cloudwatch:ListDashboards` and `cloudwatch:GetDashboard`; without them the view offers **Request access**.
+**View** (or the dashboard name) draws the dashboard inside KUA, on the same 24-column layout:
+
+- **Metrics** — time series (stacked when configured), bar and single value (with sparkline), including `.`/`...` shorthand, metric math, SEARCH and Metrics Insights SQL, per-metric stat, period, label, color and visibility, horizontal annotations and alarm annotations (the alarm's metric with its threshold and state). A widget using both left and right Y axes is drawn as two stacked charts instead of one chart with two scales.
+- **Logs** — Logs Insights results as a table or as horizontal bars. Before querying, KUA estimates the data to scan from the log groups' stored size (free); queries under about 1 GB run automatically, larger ones show the estimate and a **Run query** button. The bytes actually scanned are shown under each widget.
+- **Text** (Markdown, with any HTML shown as text) and **alarm** status widgets. Other widget types link to the console.
+
+The time range starts on the dashboard's own range (for example one week) and can be changed. **Auto-refresh** re-reads metrics and alarms every minute; log queries only run again when you refresh, because Logs Insights is billed per GB scanned (USD 0.005/GB). Metrics cost USD 0.01 per 1,000 requested.
+
+KUA builds every query from the dashboard definition stored in AWS; the app only asks for "widget N of dashboard X". Listing and viewing need `cloudwatch:ListDashboards`, `cloudwatch:GetDashboard`, `cloudwatch:GetMetricData` and `cloudwatch:DescribeAlarms`, plus `logs:DescribeLogGroups`, `logs:StartQuery` and `logs:GetQueryResults` for log widgets; without them the view offers **Request access**.
 
 ## Access requests
 
