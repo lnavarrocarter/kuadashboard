@@ -26,6 +26,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useApi } from '../../../composables/useApi'
+import { formatNumber } from '../../../composables/useI18n'
 
 const props = defineProps({
   provider: { type: String, default: 'aws' },
@@ -65,7 +66,7 @@ function latestValue(resourceId, key) {
   const points = resourceMetrics[resourceId]?.[key]?.points || []
   const point = points[points.length - 1]
   if (!point) return '—'
-  return Number(point.y).toLocaleString(undefined, { maximumFractionDigits: 2 })
+  return formatNumber(point.y, { maximumFractionDigits: 2 })
 }
 
 async function loadMetrics() {

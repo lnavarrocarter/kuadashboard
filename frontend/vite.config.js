@@ -2,7 +2,12 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(process.env.VITEST ? {
+    // Tests only: keep absolute public URLs such as <use href="/icons.svg#x"> as plain
+    // strings. As imports they resolve to "file:///icons.svg", which is not a valid
+    // path on Windows. Builds keep the default so Electron (base './') gets rebased URLs.
+    template: { transformAssetUrls: { includeAbsolute: false } },
+  } : {})],
   // In Electron production build, assets must use relative paths
   base: process.env.ELECTRON_BUILD ? './' : '/',
   build: {

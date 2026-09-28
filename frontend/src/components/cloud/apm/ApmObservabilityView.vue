@@ -489,7 +489,7 @@ import { createIcons, icons } from 'lucide'
 import BaseModal from '../../BaseModal.vue'
 import CloudMetricChart from '../CloudMetricChart.vue'
 import { useApmStore } from '../../../stores/useApmStore'
-import { useI18n } from '../../../composables/useI18n'
+import { formatNumber, useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
@@ -599,7 +599,7 @@ const kubernetesUsageUnavailable = computed(() => hasKubernetesResources.value &
 const usageLabel = computed(() => {
   const total = store.usage?.total || 0
   const limit = store.usage?.limit || 100000
-  return t('apm.awsReads', { total: total.toLocaleString(), limit: limit.toLocaleString() })
+  return t('apm.awsReads', { total: formatNumber(total), limit: formatNumber(limit) })
 })
 const healthLabel = computed(() => {
   const health = store.overview?.health
@@ -663,7 +663,7 @@ function kpiDetail(item) {
   if (!item.detailKey) return ''
   return item.detailValue == null
     ? t(item.detailKey)
-    : t(item.detailKey, { count: item.detailValue.toLocaleString() })
+    : t(item.detailKey, { count: formatNumber(item.detailValue) })
 }
 
 async function loadCharts() {
