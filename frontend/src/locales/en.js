@@ -1254,4 +1254,5 @@ export default {
   'console.deleteSaved': 'Delete saved connection',
   'console.deleteSavedConfirm': 'Delete the saved connection "{name}"?',
   'term.renameHint': 'double-click to rename',
+  'awsActivity.refreshHint': 'Refresh now. Automatic refreshes reuse metrics and costs for up to 15 minutes, since CloudWatch GetMetricData is billed (USD 0.01 per 1,000 metrics).',
 }

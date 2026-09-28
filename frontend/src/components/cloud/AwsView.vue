@@ -37,7 +37,7 @@
           <template v-if="awsStore.loading">Loading...</template>
           <template v-else>{{ activeRowCount }} result{{ activeRowCount !== 1 ? 's' : '' }}</template>
         </span>
-        <button class="btn sm" @click="reloadActiveTab" :disabled="tabLoading" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+        <button class="btn sm" @click="reloadActiveTab({ force: true })" :disabled="tabLoading" :title="t('awsActivity.refreshHint')"><i data-lucide="refresh-cw"></i></button>
       </div>
 
       <AwsOverview
@@ -3897,13 +3897,13 @@ const activityAccess = ref(null)
 const LOG_STATUS_RANK = { missing: 0, unknown: 1, empty: 2, ok: 3 }
 const LOGGING_RANK = { OFF: 0, FATAL: 1, ERROR: 2, ALL: 3 }
 
-async function loadLambdaActivity() {
+async function loadLambdaActivity(options = {}) {
   lambdaActivityLoading.value = true
-  try { await awsStore.fetchLambdaActivity() } finally { lambdaActivityLoading.value = false }
+  try { await awsStore.fetchLambdaActivity(options) } finally { lambdaActivityLoading.value = false }
 }
-async function loadStepFnActivity() {
+async function loadStepFnActivity(options = {}) {
   stepFnActivityLoading.value = true
-  try { await awsStore.fetchStepFnActivity() } finally { stepFnActivityLoading.value = false }
+  try { await awsStore.fetchStepFnActivity(options) } finally { stepFnActivityLoading.value = false }
 }
 
 const lambdaRows = computed(() => {
@@ -4093,18 +4093,19 @@ function tabCount(id) {
 
 const fetchMap = {
   // The overview mounts with the view; wait a tick so its ref exists on first load.
-  overview:     async () => { await nextTick(); return overviewRef.value?.load() },
+  overview:     async (o = {}) => { await nextTick(); return overviewRef.value?.load({ force: o.force }) },
   apm:          () => apmViewRef.value?.refreshLocal(),
   ec2:          () => awsStore.fetchEc2Instances(),
   ecs:          () => awsStore.fetchEcsServices(),
   eks:          () => awsStore.fetchEksClusters(),
-  lambda:       async () => { await awsStore.fetchLambdas(); loadLambdaActivity() },
+  // Activity (billed CloudWatch metrics) is cached; auto-refresh reuses it, manual refresh forces it.
+  lambda:       async (o = {}) => { await awsStore.fetchLambdas(); loadLambdaActivity({ force: o.force }) },
   apigw:        () => awsStore.fetchApiGateways(),
   s3:           () => awsStore.fetchS3Buckets(),
   ecr:          () => awsStore.fetchEcrRepos(),
   vpc:          () => awsStore.fetchVpcs(),
   eventbridge:  () => awsStore.fetchEventBridgeRules(),
-  stepfn:       async () => { await awsStore.fetchStepFunctions(); loadStepFnActivity() },
+  stepfn:       async (o = {}) => { await awsStore.fetchStepFunctions(); loadStepFnActivity({ force: o.force }) },
   dynamodb:     () => awsStore.fetchDynamoTables(),
   rds:          () => awsStore.fetchRdsClusters(),
   glue:         () => awsStore.fetchGlueJobs(),
@@ -4133,7 +4134,7 @@ async function loadTab(id, options = {}) {
   if (loaded[id]) return
   if (!options.background) tabLoading.value = true
   try {
-    const load = () => fetchMap[id]?.()
+    const load = () => fetchMap[id]?.(options)
     await (options.background ? awsStore.runInBackground(load) : load())
     loaded[id] = true
   } finally {

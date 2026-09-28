@@ -1253,4 +1253,5 @@ export default {
   'console.deleteSaved': 'Borrar conexión guardada',
   'console.deleteSavedConfirm': '¿Borrar la conexión guardada "{name}"?',
   'term.renameHint': 'doble clic para renombrar',
+  'awsActivity.refreshHint': 'Actualizar ahora. Las actualizaciones automáticas reutilizan métricas y costos hasta 15 minutos, porque GetMetricData de CloudWatch se cobra (USD 0.01 por cada 1.000 métricas).',
 }

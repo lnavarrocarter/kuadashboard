@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- **AWS auto-refresh costs:** The app-wide auto-refresh (every 5 s by default) re-read the Lambda and Step Functions 24h activity and the Overview KPIs on every tick. Those reads use CloudWatch `GetMetricData`, which is billed (USD 0.01 per 1,000 metrics, not in the free tier): about USD 0.006 per Lambda table load with ~600 metrics, or roughly USD 4 per hour with the tab open. Activity and Overview insights are now reused for 15 minutes and the free resource overview for 5 minutes; the refresh button still forces a new read.
 - **AWS dashboards:** Log widgets whose `SOURCE` is a log group ARN (for example `SOURCE "arn:aws:logs:…:log-group:/aws/lambda/…"`) failed with *Value at 'logGroupNamePrefix' failed to satisfy constraint*. The size estimate now uses the log group name and the query uses `logGroupIdentifiers`, which accepts names and ARNs; groups that cannot be sized (for example, from another account) never run automatically. Widgets with their own relative range (`start`/`end`) and hidden legends are now respected.
 - **Vercel view:** Fixed stale data from previous project persisting after rapid project switches. Implemented race-condition protection with request IDs and explicit context clearing when project or profile changes.
 - **AWS Lambda modal:** Fixed env var table cells not wrapping long values (ARNs, long strings). Made the Code tab layout responsive on mobile and tablet devices: file tree and code viewer now stack vertically on screens ≤768px.

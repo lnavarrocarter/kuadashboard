@@ -8,7 +8,7 @@
           <span v-if="data">· {{ t('overview.updated', { ago: updatedLabel }) }}</span>
         </div>
       </div>
-      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('action.refresh')" @click="load()">
+      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('awsActivity.refreshHint')" @click="load({ force: true })">
         <i data-lucide="refresh-cw"></i>
       </button>
     </div>
@@ -16,7 +16,7 @@
     <div v-if="!data && loading" class="loading-state">{{ t('awsOverview.loading') }}</div>
     <div v-else-if="!data && error" class="error-state">
       <i data-lucide="alert-triangle"></i><span>{{ error }}</span>
-      <button class="btn sm" @click="load()">{{ t('common.retry') }}</button>
+      <button class="btn sm" @click="load({ force: true })">{{ t('common.retry') }}</button>
     </div>
 
     <template v-else-if="data">
@@ -223,12 +223,12 @@ async function copy(value) {
 }
 
 // Costs and activity load next to the overview so they never delay it.
-async function loadInsights({ refreshCosts = false } = {}) {
+async function loadInsights({ refreshCosts = false, force = false } = {}) {
   const id = ++insightsRequestId
   insightsLoading.value = true
   if (refreshCosts) refreshingCosts.value = true
   try {
-    await awsStore.fetchOverviewInsights({ refreshCosts })
+    await awsStore.fetchOverviewInsights({ refreshCosts, force })
     if (id === insightsRequestId) insightsError.value = null
   } catch (e) {
     if (id === insightsRequestId) insightsError.value = e.message
@@ -241,12 +241,14 @@ async function loadInsights({ refreshCosts = false } = {}) {
   }
 }
 
-async function load() {
-  loadInsights()
+// Background refreshes reuse cached data (overview 5 min, costs/activity 15 min);
+// the refresh button forces a new read.
+async function load({ force = false } = {}) {
+  loadInsights({ force })
   const id = ++requestId
   loading.value = true
   try {
-    await awsStore.fetchOverview()
+    await awsStore.fetchOverview({ force })
     if (id === requestId) error.value = null
   } catch (e) {
     if (id === requestId) error.value = e.message

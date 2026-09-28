@@ -9,6 +9,13 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 
+// Background auto-refresh runs every few seconds. Data that is billed
+// (GetMetricData: USD 0.01 per 1,000 metrics, not in the free tier) or that
+// covers 24h windows is reused for a while; only a manual refresh forces it.
+export const OVERVIEW_TTL_MS = 5 * 60 * 1000
+export const INSIGHTS_TTL_MS = 15 * 60 * 1000
+export const ACTIVITY_TTL_MS = 15 * 60 * 1000
+
 export const useAwsStore = defineStore('aws', () => {
   const { apiFetch: request } = useApi()
   let backgroundRequests = 0
@@ -42,6 +49,15 @@ export const useAwsStore = defineStore('aws', () => {
   const cwDashboards     = ref([])
   const lambdaActivity   = ref(null)
   const stepFnActivity   = ref(null)
+  // When each cached block was fetched, and for which profile/resource set.
+  const fetchedAt = { overview: null, insights: null, lambda: null, stepfn: null }
+  function isFresh(kind, ttl, key) {
+    const entry = fetchedAt[kind]
+    return !!entry && entry.key === key && Date.now() - entry.at < ttl
+  }
+  function markFetched(kind, key) {
+    fetchedAt[kind] = { at: Date.now(), key }
+  }
   const dataPipelines    = ref([])
   const bedrockModels    = ref([])
   const lexBots          = ref([])
@@ -115,6 +131,7 @@ export const useAwsStore = defineStore('aws', () => {
     cwDashboards.value     = []
     lambdaActivity.value   = null
     stepFnActivity.value   = null
+    Object.keys(fetchedAt).forEach(kind => { fetchedAt[kind] = null })
     dataPipelines.value    = []
     bedrockModels.value    = []
     lexBots.value          = []
@@ -123,8 +140,11 @@ export const useAwsStore = defineStore('aws', () => {
 
   // Environment overview: identity, regions and resource counts per service.
   // Errors are thrown to the caller, which keeps the previous overview visible.
-  async function fetchOverview() {
+  async function fetchOverview({ force = false } = {}) {
+    const key = activeProfileId.value
+    if (!force && overview.value && isFresh('overview', OVERVIEW_TTL_MS, key)) return overview.value
     const data = await apiFetch('/api/cloud/aws/overview', { headers: headers() })
+    markFetched('overview', key)
     overview.value = data
     if (data?.regions?.available) regions.value = data.regions.items.map(name => ({ name }))
     return data
@@ -132,9 +152,12 @@ export const useAwsStore = defineStore('aws', () => {
 
   // Costs (cached 12h server-side; refreshCosts forces a billed Cost Explorer
   // call), Lambda activity and services outside KUA.
-  async function fetchOverviewInsights({ refreshCosts = false } = {}) {
+  async function fetchOverviewInsights({ refreshCosts = false, force = false } = {}) {
+    const key = activeProfileId.value
+    if (!force && !refreshCosts && overviewInsights.value && isFresh('insights', INSIGHTS_TTL_MS, key)) return overviewInsights.value
     const query = refreshCosts ? '?refreshCosts=1' : ''
     const data = await apiFetch(`/api/cloud/aws/overview/insights${query}`, { headers: headers() })
+    markFetched('insights', key)
     overviewInsights.value = data
     return data
   }
@@ -948,15 +971,20 @@ export const useAwsStore = defineStore('aws', () => {
 
   // 24h activity and log state for the Lambda / Step Functions tables. Loaded
   // after the table, never blocking it; failures stay inside the result.
-  async function fetchLambdaActivity() {
+  async function fetchLambdaActivity({ force = false } = {}) {
     if (!lambdas.value.length) { lambdaActivity.value = null; return null }
     const profile = activeProfileId.value
+    const key = `${profile}|${lambdas.value.map(fn => fn.name).join(',')}`
+    if (!force && lambdaActivity.value && !lambdaActivity.value.failed && isFresh('lambda', ACTIVITY_TTL_MS, key)) return lambdaActivity.value
     try {
       const data = await apiFetch('/api/cloud/aws/lambda/activity', {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ functions: lambdas.value.map(fn => ({ name: fn.name, logGroup: fn.logGroup })) }),
       })
-      if (profile === activeProfileId.value) lambdaActivity.value = data
+      if (profile === activeProfileId.value) {
+        lambdaActivity.value = data
+        markFetched('lambda', key)
+      }
       return data
     } catch (e) {
       if (profile === activeProfileId.value) lambdaActivity.value = { failed: e.message, access: e.details?.access || null }
@@ -964,15 +992,20 @@ export const useAwsStore = defineStore('aws', () => {
     }
   }
 
-  async function fetchStepFnActivity() {
+  async function fetchStepFnActivity({ force = false } = {}) {
     if (!stepFunctions.value.length) { stepFnActivity.value = null; return null }
     const profile = activeProfileId.value
+    const key = `${profile}|${stepFunctions.value.map(sm => sm.arn).join(',')}`
+    if (!force && stepFnActivity.value && !stepFnActivity.value.failed && isFresh('stepfn', ACTIVITY_TTL_MS, key)) return stepFnActivity.value
     try {
       const data = await apiFetch('/api/cloud/aws/stepfunctions/activity', {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ stateMachines: stepFunctions.value.map(sm => ({ arn: sm.arn })) }),
       })
-      if (profile === activeProfileId.value) stepFnActivity.value = data
+      if (profile === activeProfileId.value) {
+        stepFnActivity.value = data
+        markFetched('stepfn', key)
+      }
       return data
     } catch (e) {
       if (profile === activeProfileId.value) stepFnActivity.value = { failed: e.message, access: e.details?.access || null }
