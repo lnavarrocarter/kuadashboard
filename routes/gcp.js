@@ -37,7 +37,7 @@ const auditLog     = require('../lib/auditLog');
 const { createGcloudCli } = require('../lib/gcloudCli');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
-  estimate, createPresets, assertDeleteConfirmed, validateCreate,
+  estimate, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
 } = require('../lib/gcpResources');
 
 const router    = express.Router();
@@ -77,8 +77,16 @@ async function readGcloudConfigs() {
 
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
-  const status = [400, 403, 404, 409, 503].includes(err.code) ? err.code : 500;
+  // gRPC ALREADY_EXISTS (6) / REST "already exists" → 409 so the UI can say so clearly
+  const alreadyExists = err.code === 6 || /already exists/i.test(err.message || '');
+  const status = alreadyExists ? 409 : [400, 403, 404, 409, 503, 504].includes(err.code) ? err.code : 500;
   res.status(status).json({ error: err.message });
+}
+
+/** Wait for a Compute Engine zone operation (start/stop/insert/delete). */
+function waitZoneOp(auth, project, zone, operation) {
+  const { ZoneOperationsClient } = require('@google-cloud/compute');
+  return waitForZoneOperation(new ZoneOperationsClient({ auth }), { project, zone, operation });
 }
 
 /**
@@ -548,7 +556,7 @@ router.post('/compute/vms/:zone/:name/start', async (req, res) => {
     const { InstancesClient } = require('@google-cloud/compute');
     const client = new InstancesClient({ auth });
     const [operation] = await client.start({ project: projectId, zone, instance: name });
-    await operation.promise();
+    await waitZoneOp(auth, projectId, zone, operation);
     res.json({ success: true, instance: name, zone, action: 'start' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM started',
@@ -570,7 +578,7 @@ router.post('/compute/vms/:zone/:name/stop', async (req, res) => {
     const { InstancesClient } = require('@google-cloud/compute');
     const client = new InstancesClient({ auth });
     const [operation] = await client.stop({ project: projectId, zone, instance: name });
-    await operation.promise();
+    await waitZoneOp(auth, projectId, zone, operation);
     res.json({ success: true, instance: name, zone, action: 'stop' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM stopped',
@@ -2526,7 +2534,7 @@ router.post('/compute/vms', async (req, res) => {
         ...(spec.spot ? { scheduling: { provisioningModel: 'SPOT', instanceTerminationAction: 'STOP' } } : {}),
       },
     });
-    await operation.promise();
+    await waitZoneOp(auth, projectId, spec.zone, operation);
     auditLog.log({
       category: 'gcp', action: 'Compute VM created', resource: `${spec.zone}/${spec.name}`,
       level: 'warning', context: profileId,
@@ -2552,7 +2560,7 @@ router.delete('/compute/vms/:zone/:name', async (req, res) => {
       return res.status(409).json({ error: `VM ${name} has deletion protection enabled. Disable it in the Google Cloud console first.` });
     }
     const [operation] = await client.delete({ project: projectId, zone, instance: name });
-    await operation.promise();
+    await waitZoneOp(auth, projectId, zone, operation);
     auditLog.log({ category: 'gcp', action: 'Compute VM deleted', resource: `${zone}/${name}`, level: 'warning', context: profileId });
     res.json({ success: true, instance: name, zone, action: 'delete' });
   } catch (err) { handleErr(res, err); }
