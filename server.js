@@ -2821,16 +2821,20 @@ wssGcpSsh.on('connection', (ws, req) => {
         if (op?.error?.errors?.length) throw new Error(op.error.errors.map(e => e.message).join('; '));
       };
       try {
-        send({ type: 'status', data: `Preparing a temporary SSH key for ${name}…` });
+        send({ type: 'status', data: `Checking your KUA SSH key for ${name}…` });
         const prepared = await prepareGcpSsh({ authCtx, project, zone, name, addressType }, { fetchJson, waitZoneOperation });
         if (closed) return;
-        send({ type: 'status', data: prepared.mode === 'oslogin'
-          ? `Key added to your OS Login profile (expires in 30 min). Connecting to ${prepared.username}@${prepared.host}…`
-          : `Key added to the VM metadata (expires in 30 min). Connecting to ${prepared.username}@${prepared.host}…` });
-        auditLog.log({
-          category: 'gcp', action: 'VM SSH key authorized', resource: `${zone}/${name}`,
-          context: req.consoleSession.session.profileId, details: { mode: prepared.mode, user: prepared.username },
-        });
+        const where = prepared.mode === 'oslogin' ? 'your OS Login profile' : 'the VM metadata';
+        const until = new Date(prepared.expiresAt).toLocaleString();
+        send({ type: 'status', data: prepared.reused
+          ? `Reusing your KUA key already trusted by ${where} (valid until ${until}). Connecting to ${prepared.username}@${prepared.host}…`
+          : `KUA key added to ${where} (valid until ${until}). Connecting to ${prepared.username}@${prepared.host}…` });
+        if (!prepared.reused) {
+          auditLog.log({
+            category: 'gcp', action: 'VM SSH key authorized', resource: `${zone}/${name}`,
+            context: req.consoleSession.session.profileId, details: { mode: prepared.mode, user: prepared.username, expiresAt: new Date(prepared.expiresAt).toISOString() },
+          });
+        }
         connectWithRetry(prepared);
       } catch (err) {
         let text = err.message || 'SSH preparation failed';
