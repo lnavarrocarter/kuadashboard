@@ -156,6 +156,25 @@ El backend aplica las mismas reglas: las solicitudes de creación y eliminación
 Usan precios de lista on-demand de us-central1 y no incluyen descuentos por uso sostenido o comprometido, free tier, egress de red, licencias ni impuestos. Tómalas como advertencia, no como cotización; revisa la [calculadora de precios de Google Cloud](https://cloud.google.com/products/calculator) para cifras exactas.
 :::
 
+## Detalle, etiquetas e historial de estados
+
+Al hacer clic en un servicio Cloud Run, una VM o una instancia Cloud SQL, su detalle se abre debajo de la tabla:
+
+- **Resumen / Revisiones / Variables** (Cloud Run), **Resumen / Discos / Red** (VMs), **Resumen / Flags / Conexión** (Cloud SQL): tarjetas con la configuración del recurso — máquina y sistema, scheduling, Shielded VM, scopes de la cuenta de servicio, discos con tipo, imagen de origen y cifrado (VMs); contenedor, probes, escalado, concurrencia, timeout, acceso a VPC, acceso de invocación y tráfico por revisión (Cloud Run); almacenamiento, backups y PITR, ventana de mantenimiento, modo SSL y redes autorizadas (Cloud SQL).
+- Las **Observaciones** al inicio del resumen destacan lo que conviene revisar: acceso público, instancias mínimas 24/7, la cuenta de servicio por defecto de Compute, variables de entorno que parecen secretos en texto plano, backups desactivados, conexiones sin cifrar, redes autorizadas abiertas a `0.0.0.0/0`, falta de protección contra eliminación, discos sin auto-delete…
+- Los valores sensibles nunca se muestran: la metadata de la VM como `ssh-keys` o scripts de inicio muestra solo la clave, y las variables respaldadas por Secret Manager muestran la referencia al secreto.
+- **Etiquetas**: agrega, edita y quita etiquetas con las reglas de GCP validadas mientras escribes, y revisa los cambios antes de guardar. Las etiquetas del sistema (`goog-*`, `run.googleapis.com/…`) se muestran como solo lectura.
+- **Historial**: una línea de tiempo con los cambios de estado (por ejemplo `RUNNING → TERMINATED`) y tus acciones (start, stop, crear, eliminar, etiquetas, sesiones SSH), cada una marcada como *observado*, *sondeo* o *usuario*.
+
+### Sondeo en segundo plano
+
+Por defecto KUA registra los cambios de estado solo cuando se carga una lista y cuando actúas sobre un recurso. Desde **⏱ Historial** en la barra de Cloud Run, VMs o Cloud SQL puedes activar el **sondeo en segundo plano** para el perfil actual: KUA revisa periódicamente los tipos de recurso elegidos mientras está en ejecución, aunque la vista esté cerrada.
+
+- Intervalo desde 5 minutos hasta una vez al día, los tipos de recurso a sondear y cuánto tiempo conservar el historial (7–365 días).
+- El diálogo muestra cuántas lecturas de API por día hace la configuración (un listado por tipo de recurso en cada ciclo). Estas APIs de listado no se cobran por llamada, pero cuentan para la cuota del proyecto.
+- **Sondear ahora** ejecuta un ciclo al momento. Se muestran la última ejecución y el error, si lo hubo; un tipo de recurso que falla (por ejemplo, una API desactivada) no detiene a los demás.
+- El historial se guarda localmente en la base SQLite de KUA; activar o desactivar el sondeo queda en el registro de auditoría.
+
 ## IAM
 
 ### Cuentas de servicio IAM
