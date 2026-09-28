@@ -36,6 +36,7 @@ const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
 const { createGcloudCli } = require('../lib/gcloudCli');
 const { getStateHistory } = require('../lib/stateHistory');
+const { mapVmDetail, mapCloudRunDetail, mapSqlDetail } = require('../lib/gcpDetails');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
   estimate, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
@@ -2859,42 +2860,16 @@ router.get('/cloudrun/:region/:service/detail', async (req, res) => {
     const svcClient = new ServicesClient({ auth });
     const revClient = new RevisionsClient({ auth });
     const name = `projects/${projectId}/locations/${region}/services/${service}`;
-    const [svc] = await svcClient.getService({ name });
-    // List revisions
-    const [revs] = await revClient.listRevisions({ parent: name });
-    const trafficMap = {};
-    (svc.traffic || []).forEach(t => { trafficMap[t.revision] = t.percent; });
-    const revisions = (revs || []).slice(0, 20).map(r => ({
-      name:       r.name?.split('/').pop(),
-      created:    r.createTime?.seconds ? new Date(Number(r.createTime.seconds) * 1000).toISOString() : null,
-      containers: r.containers?.length || 0,
-      traffic:    trafficMap[r.name?.split('/').pop()] ?? null,
-      ready:      r.reconciling === false,
-    }));
-    // Env vars from latest template
-    const container = svc.template?.containers?.[0];
-    const envVars = (container?.env || []).map(e => ({
-      name:  e.name,
-      value: e.value || (e.valueSource ? '[secret]' : ''),
-    }));
-    res.json({
-      name:         svc.name?.split('/').pop(),
-      region,
-      uri:          svc.uri,
-      status:       svc.reconciling ? 'reconciling' : 'ready',
-      minInstances: svc.template?.scaling?.minInstanceCount ?? 0,
-      maxInstances: svc.template?.scaling?.maxInstanceCount ?? null,
-      image:        container?.image || null,
-      cpu:          container?.resources?.limits?.cpu || null,
-      memory:       container?.resources?.limits?.memory || null,
-      port:         container?.ports?.[0]?.containerPort || null,
-      created:      svc.createTime?.seconds ? new Date(Number(svc.createTime.seconds) * 1000).toISOString() : null,
-      updated:      svc.updateTime?.seconds ? new Date(Number(svc.updateTime.seconds) * 1000).toISOString() : null,
-      serviceAccount: svc.template?.serviceAccount || null,
-      ingressTraffic: svc.ingress || null,
-      revisions,
-      envVars,
-    });
+    const [[svc], [revs], policy] = await Promise.all([
+      svcClient.getService({ name }),
+      revClient.listRevisions({ parent: name }),
+      // Public = allUsers can invoke; unreadable policy → unknown (null)
+      svcClient.getIamPolicy({ resource: name }).then(([p]) => p, () => null),
+    ]);
+    const publicAccess = policy
+      ? (policy.bindings || []).some(b => b.role === 'roles/run.invoker' && (b.members || []).includes('allUsers'))
+      : null;
+    res.json(mapCloudRunDetail(svc, revs || [], { region, publicAccess }));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2909,44 +2884,18 @@ router.get('/compute/vms/:zone/:name/detail', async (req, res) => {
   try {
     const { auth, projectId } = await resolveGcpAuth(profileId);
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const { InstancesClient } = require('@google-cloud/compute');
+    const { InstancesClient, DisksClient } = require('@google-cloud/compute');
     const client = new InstancesClient({ auth });
     const [vm] = await client.get({ project: projectId, zone, instance: name });
-    const disks = (vm.disks || []).map(d => ({
-      deviceName: d.deviceName,
-      type:       d.type,
-      boot:       d.boot,
-      mode:       d.mode,
-      source:     d.source?.split('/').pop() || null,
-      autoDelete: d.autoDelete,
-      diskSizeGb: d.diskSizeGb || null,
+    // Disk resources add type, source image and encryption (usually 1-2 disks)
+    const diskClient = new DisksClient({ auth });
+    const diskEntries = await Promise.all((vm.disks || []).map(async d => {
+      const diskName = d.source?.split('/').pop();
+      if (!diskName) return null;
+      try { const [disk] = await diskClient.get({ project: projectId, zone, disk: diskName }); return [diskName, disk]; }
+      catch { return null; }
     }));
-    const networks = (vm.networkInterfaces || []).map(n => ({
-      name:       n.name,
-      network:    n.network?.split('/').pop(),
-      subnetwork: n.subnetwork?.split('/').pop(),
-      internalIp: n.networkIP,
-      externalIp: n.accessConfigs?.[0]?.natIP || null,
-      stackType:  n.stackType || null,
-    }));
-    const metadata = {};
-    (vm.metadata?.items || []).forEach(m => { metadata[m.key] = m.value; });
-    res.json({
-      name:         vm.name,
-      instanceId:   vm.id?.toString() || null,
-      zone,
-      status:       vm.status,
-      machineType:  vm.machineType?.split('/').pop(),
-      cpuPlatform:  vm.cpuPlatform,
-      created:      vm.creationTimestamp,
-      tags:         vm.tags?.items || [],
-      labels:       vm.labels || {},
-      serviceAccount: vm.serviceAccounts?.[0]?.email || null,
-      deletionProtection: vm.deletionProtection,
-      disks,
-      networks,
-      metadata,
-    });
+    res.json(mapVmDetail(vm, Object.fromEntries(diskEntries.filter(Boolean))));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -3002,28 +2951,7 @@ router.get('/sql/:instance/detail', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${instance}`,
       authCtx
     );
-    const s = data.settings || {};
-    res.json({
-      name:              data.name,
-      database:          data.databaseVersion,
-      region:            data.region,
-      zone:              data.gceZone,
-      state:             data.state,
-      tier:              s.tier,
-      storageType:       s.dataDiskType,
-      storageGb:         s.dataDiskSizeGb,
-      storageAutoResize: s.storageAutoResize,
-      backupEnabled:     s.backupConfiguration?.enabled,
-      backupTime:        s.backupConfiguration?.startTime,
-      maintenanceWindow: s.maintenanceWindow ? `day ${s.maintenanceWindow.day} hour ${s.maintenanceWindow.hour}` : null,
-      activationPolicy:  s.activationPolicy,
-      availabilityType:  s.availabilityType,
-      ipAddresses:       (data.ipAddresses || []).map(ip => ({ type: ip.type, address: ip.ipAddress })),
-      connectionName:    data.connectionName,
-      flags:             (s.databaseFlags || []).map(f => ({ name: f.name, value: f.value })),
-      created:           data.createTime,
-      selfLink:          data.selfLink,
-    });
+    res.json(mapSqlDetail(data));
   } catch (err) { handleErr(res, err); }
 });
 
