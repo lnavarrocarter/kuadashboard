@@ -35,6 +35,7 @@ const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
 const { createGcloudCli } = require('../lib/gcloudCli');
+const { getStateHistory } = require('../lib/stateHistory');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
   estimate, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
@@ -384,6 +385,57 @@ router.post('/gke/:location/:cluster/connect', async (req, res) => {
 
 // ─── GET /cloudrun ────────────────────────────────────────────────────────────
 
+// ─── Listers shared by the UI routes and the background state poller ─────────
+
+async function listCloudRunServices({ auth, projectId }) {
+  const { ServicesClient } = require('@google-cloud/run').v2;
+  const client = new ServicesClient({ auth });
+  const [services] = await client.listServices({ parent: `projects/${projectId}/locations/-` });
+  return (services || []).map(mapCloudRunService);
+}
+
+async function listVms({ auth, projectId }) {
+  const { InstancesClient } = require('@google-cloud/compute');
+  const client = new InstancesClient({ auth });
+  const vms = [];
+  // aggregatedList iterates all zones
+  for await (const [, zoneData] of client.aggregatedListAsync({ project: projectId })) {
+    for (const vm of (zoneData.instances || [])) vms.push(mapVm(vm));
+  }
+  return vms;
+}
+
+async function listSqlInstances(authCtx) {
+  const data = await gcpFetch(`https://sqladmin.googleapis.com/v1/projects/${authCtx.projectId}/instances`, authCtx);
+  return (data.items || []).map(mapSqlInstance);
+}
+
+// State history (lib/stateHistory.js): how each resource type is listed, keyed
+// and what counts as its state.
+const STATE_SOURCES = {
+  'gcp-cloud-run': { list: listCloudRunServices, key: s => `${s.region}/${s.name}`, state: s => String(s.status || '').toUpperCase() },
+  'gcp-vm':        { list: listVms,              key: v => `${v.zone}/${v.name}`,   state: v => v.status },
+  'gcp-sql':       { list: listSqlInstances,     key: i => i.name,                  state: i => i.status || i.state },
+};
+
+/** Record observed states from a full list; never breaks the caller. */
+function recordObservedStates(profileId, projectId, resourceType, rows, source = 'observed') {
+  try {
+    const { key, state } = STATE_SOURCES[resourceType];
+    getStateHistory().recordStates({
+      provider: 'gcp', profileId, project: projectId, resourceType, source, complete: true,
+      items: rows.map(r => ({ key: key(r), name: r.name, state: state(r) })),
+    });
+  } catch (err) { console.warn('[gcp] state history:', err.message); }
+}
+
+/** Record a user action in the resource's history; never breaks the caller. */
+function recordUserAction(profileId, projectId, resourceType, key, name, action, details = {}) {
+  try {
+    getStateHistory().recordAction({ provider: 'gcp', profileId, project: projectId, resourceType, key, name, action, details });
+  } catch (err) { console.warn('[gcp] state history:', err.message); }
+}
+
 router.get('/cloudrun', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
@@ -391,10 +443,9 @@ router.get('/cloudrun', async (req, res) => {
     const { auth, projectId } = await resolveGcpAuth(profileId);
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
 
-    const { ServicesClient } = require('@google-cloud/run').v2;
-    const client = new ServicesClient({ auth });
-    const [services] = await client.listServices({ parent: `projects/${projectId}/locations/-` });
-    res.json((services || []).map(mapCloudRunService));
+    const services = await listCloudRunServices({ auth, projectId });
+    recordObservedStates(profileId, projectId, 'gcp-cloud-run', services);
+    res.json(services);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -418,6 +469,7 @@ router.post('/cloudrun/:region/:service/start', async (req, res) => {
       updateMask: { paths: ['template.scaling.min_instance_count'] },
     });
     await operation.promise();
+    recordUserAction(profileId, projectId, 'gcp-cloud-run', `${region}/${service}`, service, 'start', { minInstances: 1 });
     res.json({ success: true, service, region, action: 'start', minInstances: 1 });
   } catch (err) { handleErr(res, err); }
 });
@@ -441,6 +493,7 @@ router.post('/cloudrun/:region/:service/stop', async (req, res) => {
       updateMask: { paths: ['template.scaling.min_instance_count'] },
     });
     await operation.promise();
+    recordUserAction(profileId, projectId, 'gcp-cloud-run', `${region}/${service}`, service, 'stop', { minInstances: 0 });
     res.json({ success: true, service, region, action: 'stop', minInstances: 0 });
   } catch (err) { handleErr(res, err); }
 });
@@ -530,15 +583,8 @@ router.get('/compute/vms', async (req, res) => {
     const { auth, projectId } = await resolveGcpAuth(profileId);
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
 
-    const { InstancesClient } = require('@google-cloud/compute');
-    const client = new InstancesClient({ auth });
-    const vms    = [];
-
-    // aggregatedList iterates all zones
-    const aggList = client.aggregatedListAsync({ project: projectId });
-    for await (const [_zone, zoneData] of aggList) {
-      for (const vm of (zoneData.instances || [])) vms.push(mapVm(vm));
-    }
+    const vms = await listVms({ auth, projectId });
+    recordObservedStates(profileId, projectId, 'gcp-vm', vms);
     res.json(vms);
   } catch (err) { handleErr(res, err); }
 });
@@ -557,6 +603,7 @@ router.post('/compute/vms/:zone/:name/start', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.start({ project: projectId, zone, instance: name });
     await waitZoneOp(auth, projectId, zone, operation);
+    recordUserAction(profileId, projectId, 'gcp-vm', `${zone}/${name}`, name, 'start');
     res.json({ success: true, instance: name, zone, action: 'start' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM started',
@@ -579,6 +626,7 @@ router.post('/compute/vms/:zone/:name/stop', async (req, res) => {
     const client = new InstancesClient({ auth });
     const [operation] = await client.stop({ project: projectId, zone, instance: name });
     await waitZoneOp(auth, projectId, zone, operation);
+    recordUserAction(profileId, projectId, 'gcp-vm', `${zone}/${name}`, name, 'stop');
     res.json({ success: true, instance: name, zone, action: 'stop' });
     auditLog.log({
       category: 'gcp', action: 'Compute VM stopped',
@@ -648,11 +696,9 @@ router.get('/sql', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances`,
-      authCtx
-    );
-    res.json((data.items || []).map(mapSqlInstance));
+    const instances = await listSqlInstances(authCtx);
+    recordObservedStates(profileId, projectId, 'gcp-sql', instances);
+    res.json(instances);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -669,6 +715,7 @@ router.post('/sql/:instance/start', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'ALWAYS' } }
     );
+    recordUserAction(profileId, projectId, 'gcp-sql', req.params.instance, req.params.instance, 'start');
     res.json({ success: true, instance: req.params.instance, action: 'start' });
     auditLog.log({
       category: 'gcp', action: 'Cloud SQL instance started',
@@ -690,6 +737,7 @@ router.post('/sql/:instance/stop', async (req, res) => {
       `https://sqladmin.googleapis.com/v1/projects/${projectId}/instances/${req.params.instance}`,
       authCtx, 'PATCH', { settings: { activationPolicy: 'NEVER' } }
     );
+    recordUserAction(profileId, projectId, 'gcp-sql', req.params.instance, req.params.instance, 'stop');
     res.json({ success: true, instance: req.params.instance, action: 'stop' });
     auditLog.log({
       category: 'gcp', action: 'Cloud SQL instance stopped',
@@ -2425,6 +2473,71 @@ router.get('/kms/keyrings', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── STATE HISTORY & POLLING ──────────────────────────────────────────────────
+
+const { createGcpStatePoller, pollCallsPerDay } = require('../lib/gcpStatePoller');
+let statePoller = null;
+function getStatePoller() {
+  statePoller ||= createGcpStatePoller({
+    history: getStateHistory(),
+    resolveAuth: resolveGcpAuth,
+    sources: STATE_SOURCES,
+    recordStates: recordObservedStates,
+  });
+  return statePoller;
+}
+
+function pollSettingsResponse(profileId) {
+  const settings = getStateHistory().getPollSettings('gcp', profileId);
+  return { ...settings, callsPerDay: pollCallsPerDay(settings) };
+}
+
+// GET /history?type=gcp-vm&key=us-central1-a/web[&limit=&before=] → state/action timeline
+router.get('/history', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { type, key, limit, before } = req.query;
+    if (!type || !key) return res.status(400).json({ error: 'type and key are required' });
+    res.json(getStateHistory().listEvents({ provider: 'gcp', profileId, resourceType: type, key, limit, before }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /history/polling → this profile's background polling settings (+ API reads/day)
+router.get('/history/polling', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try { res.json(pollSettingsResponse(profileId)); } catch (err) { handleErr(res, err); }
+});
+
+// PUT /history/polling { enabled, intervalMinutes, resourceTypes, retentionDays }
+router.put('/history/polling', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const before = getStateHistory().getPollSettings('gcp', profileId);
+    getStateHistory().updatePollSettings('gcp', profileId, req.body || {});
+    const after = pollSettingsResponse(profileId);
+    if (before.enabled !== after.enabled || before.intervalMinutes !== after.intervalMinutes) {
+      auditLog.log({
+        category: 'gcp', action: `State polling ${after.enabled ? 'enabled' : 'disabled'}`, resource: profileId,
+        context: profileId, details: { intervalMinutes: after.intervalMinutes, resourceTypes: after.resourceTypes },
+      });
+    }
+    res.json(after);
+  } catch (err) { handleErr(res, err); }
+});
+
+// POST /history/polling/run → poll this profile now (works even when disabled)
+router.post('/history/polling/run', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const result = await getStatePoller().runProfile(profileId);
+    res.json({ ...result, settings: pollSettingsResponse(profileId) });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── CREATE / DELETE (Cloud Run, Compute VM, Cloud SQL) ───────────────────────
 // Every create needs the typed name plus a cost acknowledgement (and a second one
 // above the high-cost threshold); every delete needs the typed name. The UI asks
@@ -2478,6 +2591,7 @@ router.post('/cloudrun', async (req, res) => {
       level: 'warning', context: profileId,
       details: { image: spec.image, minInstances: spec.minInstances, public: spec.allowUnauthenticated, estimatedMonthlyUsd: cost.monthlyUsd },
     });
+    recordUserAction(profileId, projectId, 'gcp-cloud-run', `${spec.region}/${spec.name}`, spec.name, 'create', { image: spec.image, estimatedMonthlyUsd: cost.monthlyUsd });
     res.status(201).json({ success: true, service: mapCloudRunService(created), estimate: cost });
   } catch (err) { handleErr(res, err); }
 });
@@ -2496,6 +2610,7 @@ router.delete('/cloudrun/:region/:service', async (req, res) => {
     const [operation] = await client.deleteService({ name: `projects/${projectId}/locations/${region}/services/${service}` });
     await operation.promise();
     auditLog.log({ category: 'gcp', action: 'Cloud Run service deleted', resource: `${region}/${service}`, level: 'warning', context: profileId });
+    recordUserAction(profileId, projectId, 'gcp-cloud-run', `${region}/${service}`, service, 'delete');
     res.json({ success: true, service, region, action: 'delete' });
   } catch (err) { handleErr(res, err); }
 });
@@ -2540,6 +2655,7 @@ router.post('/compute/vms', async (req, res) => {
       level: 'warning', context: profileId,
       details: { machineType: spec.machineType, diskSizeGb: spec.diskSizeGb, spot: spec.spot, estimatedMonthlyUsd: cost.monthlyUsd },
     });
+    recordUserAction(profileId, projectId, 'gcp-vm', `${spec.zone}/${spec.name}`, spec.name, 'create', { machineType: spec.machineType, estimatedMonthlyUsd: cost.monthlyUsd });
     res.status(201).json({ success: true, instance: spec.name, zone: spec.zone, estimate: cost });
   } catch (err) { handleErr(res, err); }
 });
@@ -2562,6 +2678,7 @@ router.delete('/compute/vms/:zone/:name', async (req, res) => {
     const [operation] = await client.delete({ project: projectId, zone, instance: name });
     await waitZoneOp(auth, projectId, zone, operation);
     auditLog.log({ category: 'gcp', action: 'Compute VM deleted', resource: `${zone}/${name}`, level: 'warning', context: profileId });
+    recordUserAction(profileId, projectId, 'gcp-vm', `${zone}/${name}`, name, 'delete');
     res.json({ success: true, instance: name, zone, action: 'delete' });
   } catch (err) { handleErr(res, err); }
 });
@@ -2599,6 +2716,7 @@ router.post('/sql', async (req, res) => {
       level: 'warning', context: profileId,
       details: { tier: spec.tier, databaseVersion: spec.databaseVersion, availabilityType: spec.availabilityType, estimatedMonthlyUsd: cost.monthlyUsd },
     });
+    recordUserAction(profileId, projectId, 'gcp-sql', spec.name, spec.name, 'create', { tier: spec.tier, estimatedMonthlyUsd: cost.monthlyUsd });
     res.status(202).json({ success: true, instance: spec.name, operation: operation.name || null, estimate: cost });
   } catch (err) { handleErr(res, err); }
 });
@@ -2621,6 +2739,7 @@ router.delete('/sql/:instance', async (req, res) => {
     }
     const operation = await gcpFetch(url, authCtx, 'DELETE');
     auditLog.log({ category: 'gcp', action: 'Cloud SQL instance deleted', resource: instance, level: 'warning', context: profileId });
+    recordUserAction(profileId, projectId, 'gcp-sql', instance, instance, 'delete');
     res.status(202).json({ success: true, instance, action: 'delete', operation: operation.name || null });
   } catch (err) { handleErr(res, err); }
 });
@@ -2888,3 +3007,8 @@ router.get('/kms/keyrings/:location/:keyring/keys', async (req, res) => {
 module.exports = router;
 module.exports.resolveGcpAuth = resolveGcpAuth;
 module.exports.gcpFetch = gcpFetch;
+module.exports.STATE_SOURCES = STATE_SOURCES;
+module.exports.recordObservedStates = recordObservedStates;
+module.exports.recordUserAction = recordUserAction;
+module.exports.startStatePoller = () => getStatePoller().start();
+module.exports.stopStatePoller = () => statePoller?.stop();
