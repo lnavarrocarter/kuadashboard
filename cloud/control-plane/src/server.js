@@ -85,6 +85,8 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
 
   function jsonError(res, error) {
     const status = error.statusCode || 500;
+    // Unexpected failures go to Cloud Logging with their stack; client errors (4xx) do not.
+    if (status >= 500) console.error('[kua-control-plane]', error.stack || error.message);
     res.status(status).json({ error: error.message || 'Internal server error' });
   }
 
