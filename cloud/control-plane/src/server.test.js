@@ -46,9 +46,11 @@ async function fixture({ googleClient, stripeClient, env = {} } = {}) {
 test('health is public and authenticated endpoints reject anonymous requests', async () => {
   const subject = await fixture();
   try {
-    const health = await subject.request('/healthz');
-    assert.equal(health.response.status, 200);
-    assert.deepEqual(health.body, { ok: true, service: 'kua-control-plane', version: '0.1.0' });
+    for (const path of ['/health', '/healthz']) {
+      const health = await subject.request(path);
+      assert.equal(health.response.status, 200);
+      assert.deepEqual(health.body, { ok: true, service: 'kua-control-plane', version: '0.1.0' });
+    }
     const me = await subject.request('/api/me');
     assert.equal(me.response.status, 401);
   } finally { await subject.close(); }

@@ -160,7 +160,10 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     }
   }
 
-  app.get('/healthz', (_req, res) => res.json({ ok: true, service: 'kua-control-plane', version: '0.1.0' }));
+  // Cloud Run reserves paths ending in "z" (Google answers /healthz itself), so /health is the one to probe.
+  const health = (_req, res) => res.json({ ok: true, service: 'kua-control-plane', version: '0.1.0' });
+  app.get('/health', health);
+  app.get('/healthz', health);
 
   app.get('/auth/google/start', (req, res) => {
     const missing = missingGoogleConfig(config);
