@@ -53,6 +53,21 @@ Variables:
 
 En GitHub llevan el prefijo `KUA_`: `KUA_BILLING_PROVIDER`, `KUA_POLAR_SERVER`, `KUA_POLAR_PRODUCT_*`, `KUA_POLAR_ACCESS_TOKEN` y `KUA_POLAR_WEBHOOK_SECRET`.
 
+**Estado (2026-09-29):** configurado en el **sandbox** de Polar. Hay cuatro productos, un webhook hacia `…run.app/webhooks/polar` con firma estándar y `BILLING_PROVIDER=polar`. Se verificó el circuito completo con un usuario de prueba:
+
+1. `POST /api/billing/checkout` devuelve el checkout de Polar.
+2. El pago con la tarjeta `4242 4242 4242 4242` dispara tres webhooks, todos con respuesta `200`, y `/api/entitlements` pasa a `pro`.
+3. El portal de cliente responde `200`.
+4. Al revocar la suscripción, el plan vuelve a `free`.
+
+**Para pasar a producción:**
+
+1. En polar.sh, verificar la identidad y conectar la cuenta de pagos.
+2. Crear un token de producción y correr la misma configuración con `production`. Crea los productos y el webhook, y actualiza `KUA_POLAR_*` y `KUA_POLAR_SERVER=production` en GitHub.
+3. Desplegar.
+
+Mientras no exista el dominio `api.kuadashboard.navarrocarter.com`, el webhook apunta a la URL `run.app`. Cuando exista, hay que actualizar la URL del webhook en Polar.
+
 ### Stripe
 
 Queda listo para cuando exista una empresa en un país que Stripe acepte (por ejemplo una LLC en EE.UU.); hoy está configurado en modo prueba.
