@@ -137,3 +137,52 @@ test('unconfigured OAuth and billing return actionable 503 responses', async () 
     assert.deepEqual(oauth.body.missing, ['googleClientId', 'googleClientSecret', 'googleRedirectUri', 'sessionSecret']);
   } finally { await subject.close(); }
 });
+
+test('portal plan changes follow the price, yearly checkout and the portal configuration', async () => {
+  const googleClient = {
+    generateAuthUrl: options => { googleClient.nonce = options.nonce; return `https://accounts.google.com/?state=${encodeURIComponent(options.state)}`; },
+    async getToken() { return { tokens: { id_token: 'id' } }; },
+    async verifyIdToken() { return { getPayload: () => ({ sub: 's2', email: 'a@b.c', email_verified: true, name: 'A', nonce: googleClient.nonce }) }; },
+  };
+  let checkoutInput;
+  let portalInput;
+  const stripeClient = {
+    customers: { async create() { return { id: 'cus_2' }; } },
+    checkout: { sessions: { async create(input) { checkoutInput = input; return { id: 'cs_2', url: 'https://checkout.stripe.com/cs_2' }; } } },
+    billingPortal: { sessions: { async create(input) { portalInput = input; return { url: 'https://billing.stripe.com/p' }; } } },
+    // A portal switch from Pro to Team yearly: checkout metadata still says "pro", API basil keeps the period on the item.
+    webhooks: { constructEvent() {
+      return { id: 'evt_switch', type: 'customer.subscription.updated', data: { object: {
+        id: 'sub_2', customer: 'cus_2', status: 'active', cancel_at_period_end: false,
+        metadata: { userId: 'google_s2', plan: 'pro' },
+        items: { data: [{ current_period_end: 1900000000, price: { id: 'price_team_year', metadata: { plan: 'team' } } }] },
+      } } };
+    } },
+  };
+  const subject = await fixture({ googleClient, stripeClient, env: {
+    STRIPE_PRICE_PRO_YEARLY: 'price_pro_year', STRIPE_PRICE_TEAM_YEARLY: 'price_team_year', STRIPE_PORTAL_CONFIGURATION: 'bpc_kua',
+  } });
+  try {
+    const start = await subject.request('/auth/google/start', { redirect: 'manual' });
+    const state = new URL(start.response.headers.get('location')).searchParams.get('state');
+    const callback = await subject.request(`/auth/google/callback?code=c&state=${encodeURIComponent(state)}`, { redirect: 'manual' });
+    const cookie = callback.response.headers.get('set-cookie').split(';')[0];
+
+    const yearly = await subject.request('/api/billing/checkout', { method: 'POST', cookie, body: { plan: 'pro', interval: 'year' } });
+    assert.equal(yearly.response.status, 201);
+    assert.equal(checkoutInput.line_items[0].price, 'price_pro_year');
+    const bad = await subject.request('/api/billing/checkout', { method: 'POST', cookie, body: { plan: 'pro', interval: 'week' } });
+    assert.equal(bad.response.status, 400);
+
+    await subject.request('/webhooks/stripe', { method: 'POST', rawBody: '{}', headers: { 'Stripe-Signature': 's' } });
+    const entitlements = await subject.request('/api/entitlements', { cookie });
+    assert.equal(entitlements.body.plan, 'team');
+    const stored = await subject.repository.getSubscriptionByUserId('google_s2');
+    assert.equal(stored.plan, 'team');
+    assert.equal(stored.currentPeriodEnd, new Date(1900000000 * 1000).toISOString());
+
+    const portal = await subject.request('/api/billing/portal', { method: 'POST', cookie });
+    assert.equal(portal.response.status, 200);
+    assert.equal(portalInput.configuration, 'bpc_kua');
+  } finally { await subject.close(); }
+});

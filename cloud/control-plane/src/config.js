@@ -22,10 +22,15 @@ function loadConfig(env = process.env) {
     sessionSecret: stringEnv(env, 'KUA_SESSION_SECRET'),
     stripeSecretKey: stringEnv(env, 'STRIPE_SECRET_KEY'),
     stripeWebhookSecret: stringEnv(env, 'STRIPE_WEBHOOK_SECRET'),
+    // Monthly prices are required for checkout; yearly ones are optional.
     stripePrices: Object.freeze({
       pro: stringEnv(env, 'STRIPE_PRICE_PRO'),
       team: stringEnv(env, 'STRIPE_PRICE_TEAM'),
+      proYearly: stringEnv(env, 'STRIPE_PRICE_PRO_YEARLY'),
+      teamYearly: stringEnv(env, 'STRIPE_PRICE_TEAM_YEARLY'),
     }),
+    // Customer portal configuration (bpc_...); Stripe's default one does not exist until saved in the Dashboard.
+    stripePortalConfiguration: stringEnv(env, 'STRIPE_PORTAL_CONFIGURATION'),
     googleCloudProject: stringEnv(env, 'GOOGLE_CLOUD_PROJECT'),
     databaseMode: stringEnv(env, 'GCP_DATABASE_MODE', 'datastore').toLowerCase(),
     secureCookies: nodeEnv === 'production',

@@ -6,7 +6,7 @@ const { OAuth2Client } = require('google-auth-library');
 const Stripe = require('stripe');
 const { loadConfig, missingGoogleConfig, missingStripeConfig } = require('./config');
 const { createCloudRepository } = require('./repository');
-const { entitlementsFor } = require('./entitlements');
+const { entitlementsFor, planForPrice } = require('./entitlements');
 
 const SESSION_COOKIE = 'kua_session';
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -124,8 +124,13 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       ? await repository.findUserById(userId)
       : await repository.findUserByStripeCustomerId(subscription.customer);
     if (!user) return false;
-    const priceId = subscription.items?.data?.[0]?.price?.id || subscription.metadata?.priceId || '';
-    const plan = subscription.metadata?.plan || (priceId === config.stripePrices.team ? 'team' : 'pro');
+    const item = subscription.items?.data?.[0] || {};
+    const priceId = item.price?.id || subscription.metadata?.priceId || '';
+    // Price metadata (set on every KUA price) or the configured price ids decide the plan;
+    // checkout metadata is only a fallback because portal plan changes do not update it.
+    const plan = item.price?.metadata?.plan || planForPrice(priceId, config.stripePrices) || subscription.metadata?.plan || 'pro';
+    // API 2025-03-31 (basil) moved the billing period to the subscription items.
+    const periodEnd = subscription.current_period_end || item.current_period_end || null;
     await repository.upsertSubscription(user.id, {
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: String(subscription.customer || user.stripeCustomerId || ''),
@@ -133,7 +138,7 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       plan,
       status: subscription.status,
       cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
-      currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       updatedAt: new Date(now()).toISOString(),
     });
     return true;
@@ -264,6 +269,10 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     try {
       const plan = String(req.body?.plan || '').toLowerCase();
       if (!PLAN_NAMES.has(plan)) return res.status(400).json({ error: 'plan must be pro or team' });
+      const interval = String(req.body?.interval || 'month').toLowerCase();
+      if (!['month', 'year'].includes(interval)) return res.status(400).json({ error: 'interval must be month or year' });
+      const priceId = interval === 'year' ? config.stripePrices[`${plan}Yearly`] : config.stripePrices[plan];
+      if (interval === 'year' && !priceId) return res.status(503).json({ error: 'Yearly billing is not configured', missing: [`stripePrices.${plan}Yearly`] });
       const missing = missingStripeConfig(config, plan);
       if (missing.length || !stripe) return res.status(503).json({ error: 'Stripe billing is not configured', missing });
       let user = req.user;
@@ -275,11 +284,11 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
         mode: 'subscription',
         customer: user.stripeCustomerId,
         client_reference_id: user.id,
-        line_items: [{ price: config.stripePrices[plan], quantity: 1 }],
+        line_items: [{ price: priceId, quantity: 1 }],
         success_url: `${config.frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${config.frontendUrl}/billing/cancelled`,
-        metadata: { userId: user.id, plan },
-        subscription_data: { metadata: { userId: user.id, plan, priceId: config.stripePrices[plan] } },
+        metadata: { userId: user.id, plan, interval },
+        subscription_data: { metadata: { userId: user.id, plan, priceId } },
       });
       res.status(201).json({ url: session.url, sessionId: session.id });
     } catch (error) { jsonError(res, error); }
@@ -289,7 +298,11 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     try {
       if (!stripe || !config.stripeSecretKey) return res.status(503).json({ error: 'Stripe billing is not configured' });
       if (!req.user.stripeCustomerId) return res.status(400).json({ error: 'No Stripe customer exists for this account' });
-      const session = await stripe.billingPortal.sessions.create({ customer: req.user.stripeCustomerId, return_url: config.frontendUrl });
+      const session = await stripe.billingPortal.sessions.create({
+        customer: req.user.stripeCustomerId,
+        return_url: config.frontendUrl,
+        ...(config.stripePortalConfiguration ? { configuration: config.stripePortalConfiguration } : {}),
+      });
       res.json({ url: session.url });
     } catch (error) { jsonError(res, error); }
   });

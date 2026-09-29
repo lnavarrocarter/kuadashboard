@@ -93,13 +93,20 @@ jobs:
           KUA_GOOGLE_CLIENT_ID: ${{ vars.KUA_GOOGLE_CLIENT_ID }}
           KUA_STRIPE_PRICE_PRO: ${{ vars.KUA_STRIPE_PRICE_PRO }}
           KUA_STRIPE_PRICE_TEAM: ${{ vars.KUA_STRIPE_PRICE_TEAM }}
+          KUA_STRIPE_PRICE_PRO_YEARLY: ${{ vars.KUA_STRIPE_PRICE_PRO_YEARLY }}
+          KUA_STRIPE_PRICE_TEAM_YEARLY: ${{ vars.KUA_STRIPE_PRICE_TEAM_YEARLY }}
+          KUA_STRIPE_PORTAL_CONFIGURATION: ${{ vars.KUA_STRIPE_PORTAL_CONFIGURATION }}
           SECRET_REFS: ${{ steps.secrets.outputs.refs }}
         run: |
           set -euo pipefail
           env_vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID"
-          [ -n "$KUA_GOOGLE_CLIENT_ID" ] && env_vars="$env_vars,GOOGLE_CLIENT_ID=$KUA_GOOGLE_CLIENT_ID"
-          [ -n "$KUA_STRIPE_PRICE_PRO" ] && env_vars="$env_vars,STRIPE_PRICE_PRO=$KUA_STRIPE_PRICE_PRO"
-          [ -n "$KUA_STRIPE_PRICE_TEAM" ] && env_vars="$env_vars,STRIPE_PRICE_TEAM=$KUA_STRIPE_PRICE_TEAM"
+          # Optional values: only passed when the GitHub variable is set.
+          for pair in KUA_GOOGLE_CLIENT_ID:GOOGLE_CLIENT_ID KUA_STRIPE_PRICE_PRO:STRIPE_PRICE_PRO KUA_STRIPE_PRICE_TEAM:STRIPE_PRICE_TEAM \
+                      KUA_STRIPE_PRICE_PRO_YEARLY:STRIPE_PRICE_PRO_YEARLY KUA_STRIPE_PRICE_TEAM_YEARLY:STRIPE_PRICE_TEAM_YEARLY \
+                      KUA_STRIPE_PORTAL_CONFIGURATION:STRIPE_PORTAL_CONFIGURATION; do
+            name="${pair%%:*}"; value="${!name}"
+            if [ -n "$value" ]; then env_vars="$env_vars,${pair##*:}=$value"; fi
+          done
           secrets_args=()
           if [ -n "$SECRET_REFS" ]; then secrets_args=(--set-secrets="$SECRET_REFS"); else secrets_args=(--clear-secrets); fi
           gcloud run deploy "$SERVICE" \

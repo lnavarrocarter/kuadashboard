@@ -18,10 +18,20 @@ const PLANS = Object.freeze({
   }),
 });
 
+/** Plan of a Stripe price id among the configured monthly and yearly prices. */
+function planForPrice(priceId, stripePrices = {}) {
+  if (!priceId) return null;
+  if (priceId === stripePrices.team || priceId === stripePrices.teamYearly) return 'team';
+  if (priceId === stripePrices.pro || priceId === stripePrices.proYearly) return 'pro';
+  return null;
+}
+
 function activePlan(subscription, stripePrices = {}) {
   if (!subscription || !['active', 'trialing'].includes(subscription.status)) return 'free';
-  if (subscription.plan === 'pro' || subscription.priceId === stripePrices.pro) return 'pro';
-  if (subscription.plan === 'team' || subscription.priceId === stripePrices.team) return 'team';
+  // The price decides: plan changes from the customer portal keep the old checkout metadata.
+  const byPrice = planForPrice(subscription.priceId, stripePrices);
+  if (byPrice) return byPrice;
+  if (subscription.plan === 'pro' || subscription.plan === 'team') return subscription.plan;
   return 'free';
 }
 
@@ -30,4 +40,4 @@ function entitlementsFor(subscription, stripePrices) {
   return { ...PLANS[plan], source: subscription ? 'subscription' : 'default' };
 }
 
-module.exports = { PLANS, activePlan, entitlementsFor };
+module.exports = { PLANS, planForPrice, activePlan, entitlementsFor };
