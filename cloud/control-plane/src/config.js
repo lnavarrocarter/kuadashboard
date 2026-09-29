@@ -33,6 +33,8 @@ function loadConfig(env = process.env) {
     stripePortalConfiguration: stringEnv(env, 'STRIPE_PORTAL_CONFIGURATION'),
     googleCloudProject: stringEnv(env, 'GOOGLE_CLOUD_PROJECT'),
     databaseMode: stringEnv(env, 'GCP_DATABASE_MODE', 'datastore').toLowerCase(),
+    // Named database (e.g. kua-control-plane); empty uses the project's (default) database.
+    databaseId: stringEnv(env, 'GCP_DATABASE_ID'),
     secureCookies: nodeEnv === 'production',
   });
 }

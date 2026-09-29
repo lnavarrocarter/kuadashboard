@@ -99,7 +99,7 @@ jobs:
           SECRET_REFS: ${{ steps.secrets.outputs.refs }}
         run: |
           set -euo pipefail
-          env_vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID"
+          env_vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,GCP_DATABASE_ID=kua-control-plane,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID"
           # Optional values: only passed when the GitHub variable is set.
           for pair in KUA_GOOGLE_CLIENT_ID:GOOGLE_CLIENT_ID KUA_STRIPE_PRICE_PRO:STRIPE_PRICE_PRO KUA_STRIPE_PRICE_TEAM:STRIPE_PRICE_TEAM \
                       KUA_STRIPE_PRICE_PRO_YEARLY:STRIPE_PRICE_PRO_YEARLY KUA_STRIPE_PRICE_TEAM_YEARLY:STRIPE_PRICE_TEAM_YEARLY \

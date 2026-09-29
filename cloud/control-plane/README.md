@@ -43,9 +43,11 @@ El webhook debe conservar el body crudo para verificar `Stripe-Signature`. Los e
 
 ## Persistencia y Cloud Run
 
-Por defecto el servicio usa `GCP_DATABASE_MODE=datastore`, compatible con la base `(default)` Datastore que ya existe en `ncaicloud`. Si se crea una base Firestore Native separada, se puede cambiar a `GCP_DATABASE_MODE=firestore`.
+El servicio usa `GCP_DATABASE_MODE=datastore` con una base propia: `GCP_DATABASE_ID=kua-control-plane` (modo Datastore, `us-central1`, protección contra borrado, sin integración con App Engine). Sin `GCP_DATABASE_ID` usa la base `(default)` del proyecto. Con una base Firestore Native, `GCP_DATABASE_MODE=firestore`.
 
-Para Datastore, el service account de Cloud Run necesita `roles/datastore.user`. Para Firestore Native, usa el rol equivalente de acceso a datos de Firestore.
+Para Datastore, el service account de Cloud Run necesita `roles/datastore.user` (a nivel de proyecto cubre todas las bases). Para Firestore Native, usa el rol equivalente de acceso a datos de Firestore.
+
+**Por qué no la base `(default)`** (investigado el 2026-09-29): la base `(default)` de `ncaicloud` es de 2022, está integrada con App Engine y **no acepta escrituras de nadie** (ni siquiera del dueño del proyecto): lecturas, consultas y `beginTransaction` funcionan, pero todo `commit` responde `403 PERMISSION_DENIED: Not authorized.`. Probablemente tiene activado el antiguo *Disable writes* de Datastore, que no se ve ni se cambia por API. Estaba vacía, así que el control plane pasó a su propia base. Costo: la capa gratuita de Firestore/Datastore solo aplica a `(default)`; con el tráfico del control plane son centavos al mes (≈ USD 0.18 por GB guardado y ≈ USD 0.1 por 100.000 escrituras).
 
 La ejecución prevista es `us-central1`, con escala a cero y máximo de tres instancias:
 
@@ -61,3 +63,18 @@ El workflow `.github/workflows/control-plane.yml` despliega en cada push a `main
 Lo que no esté configurado se omite y el servicio arranca sin esa función. Cuentas: el build corre como `kua-control-plane-deployer` (con `roles/logging.logWriter`, Artifact Registry y el bucket `ncaicloud-kua-control-plane-build`) y el servicio como `kua-control-plane-run` (`roles/datastore.user` y `roles/secretmanager.secretAccessor`).
 
 El servicio debe quedar público a nivel Cloud Run para recibir OAuth y Stripe; la protección de datos la hacen las sesiones, autorización de aplicación y validación de webhooks.
+
+## Problemas conocidos y cómo se resolvieron
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `gcloud builds submit` → `caller does not have permission to act as service account …/103280455503495732157` | Sin `serviceAccount` en `cloudbuild.yaml`, Cloud Build usa la cuenta de Compute por defecto (`306971032277-compute@…`), sobre la que el deployer no tiene `actAs` (y que tiene acceso de Editor). | `cloudbuild.yaml` corre el build como `kua-control-plane-deployer`, que tiene `roles/logging.logWriter` y `roles/iam.serviceAccountUser` sobre sí misma. |
+| `The user is forbidden from accessing the bucket [ncaicloud_cloudbuild]` | `gcloud builds submit` sube el código al bucket por defecto. | `--gcs-source-staging-dir=gs://ncaicloud-kua-control-plane-build/source`. |
+| Subida de 52 MiB / 5.581 archivos | Se enviaba `node_modules` (instalado por el job para los tests). | `.gcloudignore` (quedan 12 archivos). |
+| `/healthz` devuelve el 404 de Google | Cloud Run responde por su cuenta las rutas que terminan en `z`. | `/health`. |
+| Webhook de Stripe → 500 `7 PERMISSION_DENIED: Not authorized.` | La base `(default)` no acepta escrituras (ver arriba). | Base propia `kua-control-plane` y `GCP_DATABASE_ID`. Los 500 ahora quedan en Cloud Logging con su stack. |
+| `--set-secrets` con versiones `:1` inexistentes | Seis secretos se crearon vacíos. | La configuración vive en GitHub y el workflow sincroniza Secret Manager (ver arriba). |
+
+Permisos de la cuenta de despliegue: `roles/run.admin`, `roles/artifactregistry.writer`, `roles/cloudbuild.builds.editor`, `roles/serviceusage.serviceUsageConsumer`, `roles/logging.logWriter`, `roles/storage.admin` sobre el bucket de staging, `roles/iam.serviceAccountUser` sobre sí misma y sobre `kua-control-plane-run`, y `roles/secretmanager.secretAccessor` + `roles/secretmanager.secretVersionManager` solo sobre los cuatro secretos sensibles.
+
+Pendiente: el dominio `api.kuadashboard.navarrocarter.com` todavía no tiene DNS ni domain mapping; hasta entonces el servicio responde en `https://kua-control-plane-306971032277.us-central1.run.app` (el webhook de Stripe apunta ahí) y el login con Google no funcionará, porque `CONTROL_PLANE_URL` usa el dominio.

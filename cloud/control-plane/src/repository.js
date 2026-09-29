@@ -178,23 +178,32 @@ class DatastoreRepository {
 
 DatastoreRepository.ID_FIELD = '__kuaId';
 
-function createFirestoreRepository({ projectId } = {}) {
+// Client options: project and, for a named database, its id ('' = the (default) database).
+function clientOptions({ projectId, databaseId } = {}) {
+  const options = {};
+  if (projectId) options.projectId = projectId;
+  if (databaseId) options.databaseId = databaseId;
+  return Object.keys(options).length ? options : undefined;
+}
+
+function createFirestoreRepository(options = {}) {
   const { Firestore } = require('@google-cloud/firestore');
-  return new FirestoreRepository(new Firestore(projectId ? { projectId } : undefined));
+  return new FirestoreRepository(new Firestore(clientOptions(options)));
 }
 
-function createDatastoreRepository({ projectId } = {}) {
+function createDatastoreRepository(options = {}) {
   const { Datastore } = require('@google-cloud/datastore');
-  return new DatastoreRepository(new Datastore(projectId ? { projectId } : undefined));
+  return new DatastoreRepository(new Datastore(clientOptions(options)));
 }
 
-function createCloudRepository({ projectId, mode = 'datastore' } = {}) {
-  if (mode === 'firestore') return createFirestoreRepository({ projectId });
-  if (mode === 'datastore') return createDatastoreRepository({ projectId });
+function createCloudRepository({ projectId, databaseId, mode = 'datastore' } = {}) {
+  if (mode === 'firestore') return createFirestoreRepository({ projectId, databaseId });
+  if (mode === 'datastore') return createDatastoreRepository({ projectId, databaseId });
   throw new Error(`Unsupported cloud database mode: ${mode}`);
 }
 
 module.exports = {
+  clientOptions,
   DatastoreRepository,
   FirestoreRepository,
   MemoryRepository,

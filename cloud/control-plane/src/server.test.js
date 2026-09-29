@@ -5,7 +5,7 @@ const http = require('node:http');
 const test = require('node:test');
 const { createApp } = require('./server');
 const { loadConfig } = require('./config');
-const { MemoryRepository } = require('./repository');
+const { MemoryRepository, clientOptions } = require('./repository');
 
 async function fixture({ googleClient, stripeClient, env = {} } = {}) {
   const config = loadConfig({
@@ -185,4 +185,11 @@ test('portal plan changes follow the price, yearly checkout and the portal confi
     assert.equal(portal.response.status, 200);
     assert.equal(portalInput.configuration, 'bpc_kua');
   } finally { await subject.close(); }
+});
+
+test('the cloud repository targets a named database when GCP_DATABASE_ID is set', () => {
+  assert.deepEqual(clientOptions({ projectId: 'ncaicloud', databaseId: 'kua-control-plane' }), { projectId: 'ncaicloud', databaseId: 'kua-control-plane' });
+  assert.deepEqual(clientOptions({ projectId: 'ncaicloud', databaseId: '' }), { projectId: 'ncaicloud' });
+  assert.equal(clientOptions({}), undefined);
+  assert.equal(loadConfig({ GCP_DATABASE_ID: ' kua-control-plane ' }).databaseId, 'kua-control-plane');
 });

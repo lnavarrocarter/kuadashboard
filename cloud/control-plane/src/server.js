@@ -314,7 +314,7 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
 
 async function start() {
   const config = loadConfig();
-  const repository = createCloudRepository({ projectId: config.googleCloudProject, mode: config.databaseMode });
+  const repository = createCloudRepository({ projectId: config.googleCloudProject, databaseId: config.databaseId, mode: config.databaseMode });
   const app = createApp({ config, repository });
   return app.listen(config.port, () => console.log(`[kua-control-plane] listening on ${config.port}`));
 }
