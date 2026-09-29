@@ -46,17 +46,71 @@ jobs:
             --config=cloudbuild.yaml \
             --substitutions="_TAG=${GITHUB_SHA}"
 
-      - name: Deploy Cloud Run service
+      # Configuration lives in GitHub:
+      #   vars    (not sensitive): KUA_GOOGLE_CLIENT_ID, KUA_STRIPE_PRICE_PRO, KUA_STRIPE_PRICE_TEAM
+      #   secrets (sensitive):     KUA_GOOGLE_CLIENT_SECRET, KUA_SESSION_SECRET,
+      #                            KUA_STRIPE_SECRET_KEY, KUA_STRIPE_WEBHOOK_SECRET
+      # Sensitive values are copied to Secret Manager (only when they change) so
+      # Cloud Run reads them from there instead of plain env vars. Anything not
+      # configured is left out: the service starts without that feature.
+      - name: Sync secrets to Secret Manager
+        id: secrets
+        env:
+          KUA_GOOGLE_CLIENT_SECRET: ${{ secrets.KUA_GOOGLE_CLIENT_SECRET }}
+          KUA_SESSION_SECRET: ${{ secrets.KUA_SESSION_SECRET }}
+          KUA_STRIPE_SECRET_KEY: ${{ secrets.KUA_STRIPE_SECRET_KEY }}
+          KUA_STRIPE_WEBHOOK_SECRET: ${{ secrets.KUA_STRIPE_WEBHOOK_SECRET }}
         run: |
+          set -euo pipefail
+          refs=()
+          # secret name in GitHub/Secret Manager -> env var the service reads
+          for pair in KUA_GOOGLE_CLIENT_SECRET:GOOGLE_CLIENT_SECRET KUA_SESSION_SECRET:KUA_SESSION_SECRET \
+                      KUA_STRIPE_SECRET_KEY:STRIPE_SECRET_KEY KUA_STRIPE_WEBHOOK_SECRET:STRIPE_WEBHOOK_SECRET; do
+            name="${pair%%:*}"; target="${pair##*:}"; value="${!name}"
+            current="$(gcloud secrets versions access latest --secret="$name" --project="$GCP_PROJECT_ID" 2>/dev/null || true)"
+            if [ -z "$value" ]; then
+              # Not in GitHub: keep a value already stored in Secret Manager, otherwise leave it out.
+              if [ -n "$current" ]; then refs+=("$target=$name:latest"); echo "$name: using the value in Secret Manager"
+              else echo "::notice::$name is not set in GitHub secrets; skipped"; fi
+              continue
+            fi
+            if [ "$value" != "$current" ]; then
+              printf '%s' "$value" | gcloud secrets versions add "$name" --project="$GCP_PROJECT_ID" --data-file=- >/dev/null
+              # Keep only the newest version (each active version is billed).
+              gcloud secrets versions list "$name" --project="$GCP_PROJECT_ID" --filter="state!=DESTROYED" \
+                --sort-by="~createTime" --format="value(name.basename())" | tail -n +2 | while read -r version; do
+                gcloud secrets versions destroy "$version" --secret="$name" --project="$GCP_PROJECT_ID" --quiet >/dev/null
+              done
+              echo "$name updated"
+            fi
+            refs+=("$target=$name:latest")
+          done
+          echo "refs=$(IFS=,; echo "${refs[*]}")" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Cloud Run service
+        env:
+          KUA_GOOGLE_CLIENT_ID: ${{ vars.KUA_GOOGLE_CLIENT_ID }}
+          KUA_STRIPE_PRICE_PRO: ${{ vars.KUA_STRIPE_PRICE_PRO }}
+          KUA_STRIPE_PRICE_TEAM: ${{ vars.KUA_STRIPE_PRICE_TEAM }}
+          SECRET_REFS: ${{ steps.secrets.outputs.refs }}
+        run: |
+          set -euo pipefail
+          env_vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID"
+          [ -n "$KUA_GOOGLE_CLIENT_ID" ] && env_vars="$env_vars,GOOGLE_CLIENT_ID=$KUA_GOOGLE_CLIENT_ID"
+          [ -n "$KUA_STRIPE_PRICE_PRO" ] && env_vars="$env_vars,STRIPE_PRICE_PRO=$KUA_STRIPE_PRICE_PRO"
+          [ -n "$KUA_STRIPE_PRICE_TEAM" ] && env_vars="$env_vars,STRIPE_PRICE_TEAM=$KUA_STRIPE_PRICE_TEAM"
+          secrets_args=()
+          if [ -n "$SECRET_REFS" ]; then secrets_args=(--set-secrets="$SECRET_REFS"); else secrets_args=(--clear-secrets); fi
           gcloud run deploy "$SERVICE" \
             --project="$GCP_PROJECT_ID" \
             --region="$GCP_REGION" \
             --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/kua-control-plane/$SERVICE:$GITHUB_SHA" \
             --platform=managed \
+            --service-account="kua-control-plane-run@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
             --allow-unauthenticated \
             --min=0 \
             --max=3 \
             --memory=256Mi \
             --cpu=1 \
-            --set-env-vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID" \
-            --set-secrets="GOOGLE_CLIENT_ID=KUA_GOOGLE_CLIENT_ID:1,GOOGLE_CLIENT_SECRET=KUA_GOOGLE_CLIENT_SECRET:1,KUA_SESSION_SECRET=KUA_SESSION_SECRET:1,STRIPE_SECRET_KEY=KUA_STRIPE_SECRET_KEY:1,STRIPE_WEBHOOK_SECRET=KUA_STRIPE_WEBHOOK_SECRET:1,STRIPE_PRICE_PRO=KUA_STRIPE_PRICE_PRO:1,STRIPE_PRICE_TEAM=KUA_STRIPE_PRICE_TEAM:1"
+            --set-env-vars="$env_vars" \
+            "${secrets_args[@]}"
