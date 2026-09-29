@@ -48,8 +48,11 @@ jobs:
             --substitutions="_TAG=${GITHUB_SHA}"
 
       # Configuration lives in GitHub:
-      #   vars    (not sensitive): KUA_GOOGLE_CLIENT_ID, KUA_STRIPE_PRICE_PRO, KUA_STRIPE_PRICE_TEAM
+      #   vars    (not sensitive): KUA_GOOGLE_CLIENT_ID, KUA_BILLING_PROVIDER (polar|stripe),
+      #                            KUA_POLAR_SERVER (sandbox|production), KUA_POLAR_PRODUCT_{PRO,TEAM}[_YEARLY],
+      #                            KUA_STRIPE_PRICE_{PRO,TEAM}[_YEARLY], KUA_STRIPE_PORTAL_CONFIGURATION
       #   secrets (sensitive):     KUA_GOOGLE_CLIENT_SECRET, KUA_SESSION_SECRET,
+      #                            KUA_POLAR_ACCESS_TOKEN, KUA_POLAR_WEBHOOK_SECRET,
       #                            KUA_STRIPE_SECRET_KEY, KUA_STRIPE_WEBHOOK_SECRET
       # Sensitive values are copied to Secret Manager (only when they change) so
       # Cloud Run reads them from there instead of plain env vars. Anything not
@@ -61,12 +64,15 @@ jobs:
           KUA_SESSION_SECRET: ${{ secrets.KUA_SESSION_SECRET }}
           KUA_STRIPE_SECRET_KEY: ${{ secrets.KUA_STRIPE_SECRET_KEY }}
           KUA_STRIPE_WEBHOOK_SECRET: ${{ secrets.KUA_STRIPE_WEBHOOK_SECRET }}
+          KUA_POLAR_ACCESS_TOKEN: ${{ secrets.KUA_POLAR_ACCESS_TOKEN }}
+          KUA_POLAR_WEBHOOK_SECRET: ${{ secrets.KUA_POLAR_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           refs=()
           # secret name in GitHub/Secret Manager -> env var the service reads
           for pair in KUA_GOOGLE_CLIENT_SECRET:GOOGLE_CLIENT_SECRET KUA_SESSION_SECRET:KUA_SESSION_SECRET \
-                      KUA_STRIPE_SECRET_KEY:STRIPE_SECRET_KEY KUA_STRIPE_WEBHOOK_SECRET:STRIPE_WEBHOOK_SECRET; do
+                      KUA_STRIPE_SECRET_KEY:STRIPE_SECRET_KEY KUA_STRIPE_WEBHOOK_SECRET:STRIPE_WEBHOOK_SECRET \
+                      KUA_POLAR_ACCESS_TOKEN:POLAR_ACCESS_TOKEN KUA_POLAR_WEBHOOK_SECRET:POLAR_WEBHOOK_SECRET; do
             name="${pair%%:*}"; target="${pair##*:}"; value="${!name}"
             current="$(gcloud secrets versions access latest --secret="$name" --project="$GCP_PROJECT_ID" 2>/dev/null || true)"
             if [ -z "$value" ]; then
@@ -96,6 +102,12 @@ jobs:
           KUA_STRIPE_PRICE_PRO_YEARLY: ${{ vars.KUA_STRIPE_PRICE_PRO_YEARLY }}
           KUA_STRIPE_PRICE_TEAM_YEARLY: ${{ vars.KUA_STRIPE_PRICE_TEAM_YEARLY }}
           KUA_STRIPE_PORTAL_CONFIGURATION: ${{ vars.KUA_STRIPE_PORTAL_CONFIGURATION }}
+          KUA_BILLING_PROVIDER: ${{ vars.KUA_BILLING_PROVIDER }}
+          KUA_POLAR_SERVER: ${{ vars.KUA_POLAR_SERVER }}
+          KUA_POLAR_PRODUCT_PRO: ${{ vars.KUA_POLAR_PRODUCT_PRO }}
+          KUA_POLAR_PRODUCT_TEAM: ${{ vars.KUA_POLAR_PRODUCT_TEAM }}
+          KUA_POLAR_PRODUCT_PRO_YEARLY: ${{ vars.KUA_POLAR_PRODUCT_PRO_YEARLY }}
+          KUA_POLAR_PRODUCT_TEAM_YEARLY: ${{ vars.KUA_POLAR_PRODUCT_TEAM_YEARLY }}
           SECRET_REFS: ${{ steps.secrets.outputs.refs }}
         run: |
           set -euo pipefail
@@ -103,7 +115,9 @@ jobs:
           # Optional values: only passed when the GitHub variable is set.
           for pair in KUA_GOOGLE_CLIENT_ID:GOOGLE_CLIENT_ID KUA_STRIPE_PRICE_PRO:STRIPE_PRICE_PRO KUA_STRIPE_PRICE_TEAM:STRIPE_PRICE_TEAM \
                       KUA_STRIPE_PRICE_PRO_YEARLY:STRIPE_PRICE_PRO_YEARLY KUA_STRIPE_PRICE_TEAM_YEARLY:STRIPE_PRICE_TEAM_YEARLY \
-                      KUA_STRIPE_PORTAL_CONFIGURATION:STRIPE_PORTAL_CONFIGURATION; do
+                      KUA_STRIPE_PORTAL_CONFIGURATION:STRIPE_PORTAL_CONFIGURATION KUA_BILLING_PROVIDER:BILLING_PROVIDER \
+                      KUA_POLAR_SERVER:POLAR_SERVER KUA_POLAR_PRODUCT_PRO:POLAR_PRODUCT_PRO KUA_POLAR_PRODUCT_TEAM:POLAR_PRODUCT_TEAM \
+                      KUA_POLAR_PRODUCT_PRO_YEARLY:POLAR_PRODUCT_PRO_YEARLY KUA_POLAR_PRODUCT_TEAM_YEARLY:POLAR_PRODUCT_TEAM_YEARLY; do
             name="${pair%%:*}"; value="${!name}"
             if [ -n "$value" ]; then env_vars="$env_vars,${pair##*:}=$value"; fi
           done

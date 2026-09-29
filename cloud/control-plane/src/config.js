@@ -31,6 +31,18 @@ function loadConfig(env = process.env) {
     }),
     // Customer portal configuration (bpc_...); Stripe's default one does not exist until saved in the Dashboard.
     stripePortalConfiguration: stringEnv(env, 'STRIPE_PORTAL_CONFIGURATION'),
+    // Polar (merchant of record): one product per plan and interval.
+    polarAccessToken: stringEnv(env, 'POLAR_ACCESS_TOKEN'),
+    polarWebhookSecret: stringEnv(env, 'POLAR_WEBHOOK_SECRET'),
+    polarServer: stringEnv(env, 'POLAR_SERVER', 'sandbox').toLowerCase(),
+    polarProducts: Object.freeze({
+      pro: stringEnv(env, 'POLAR_PRODUCT_PRO'),
+      team: stringEnv(env, 'POLAR_PRODUCT_TEAM'),
+      proYearly: stringEnv(env, 'POLAR_PRODUCT_PRO_YEARLY'),
+      teamYearly: stringEnv(env, 'POLAR_PRODUCT_TEAM_YEARLY'),
+    }),
+    // 'polar' or 'stripe'; by default Polar when its token is configured.
+    billingProvider: stringEnv(env, 'BILLING_PROVIDER', stringEnv(env, 'POLAR_ACCESS_TOKEN') ? 'polar' : 'stripe').toLowerCase(),
     googleCloudProject: stringEnv(env, 'GOOGLE_CLOUD_PROJECT'),
     databaseMode: stringEnv(env, 'GCP_DATABASE_MODE', 'datastore').toLowerCase(),
     // Named database (e.g. kua-control-plane); empty uses the project's (default) database.
@@ -52,4 +64,13 @@ function missingStripeConfig(config, plan) {
   return missing;
 }
 
-module.exports = { loadConfig, missingGoogleConfig, missingStripeConfig };
+function missingPolarConfig(config, plan, interval = 'month') {
+  const missing = [];
+  if (!config.polarAccessToken) missing.push('polarAccessToken');
+  if (!config.polarWebhookSecret) missing.push('polarWebhookSecret');
+  const key = interval === 'year' ? `${plan}Yearly` : plan;
+  if (!config.polarProducts[key]) missing.push(`polarProducts.${key}`);
+  return missing;
+}
+
+module.exports = { loadConfig, missingGoogleConfig, missingStripeConfig, missingPolarConfig };

@@ -6,6 +6,7 @@
 - **Control plane deployment:** The Cloud Run control plane (`cloud/control-plane`) now builds and deploys. Cloud Build runs as the deploy account instead of the default Compute Engine account (which the deployer could not act as), stages source in its own bucket and no longer uploads `node_modules`; the service runs as `kua-control-plane-run`. Configuration moves to GitHub vars and secrets, with sensitive values synced to Secret Manager. Stripe webhooks failed with `PERMISSION_DENIED` because the project's `(default)` Datastore database rejects every write; the service now uses its own `kua-control-plane` database. `/health` replaces `/healthz` (reserved by Cloud Run) and 500 errors are logged.
 
 ### Added
+- **Polar billing (merchant of record):** Stripe does not accept accounts from Chile, so the control plane gets a pluggable billing provider with Polar as the main one: checkout and customer portal through the Polar REST API, customers linked by external id, Standard Webhooks verification, and subscription events that grant or revoke Pro/Team. Same plans and prices; Stripe stays available for a future foreign company.
 - **Stripe plans (test mode):** KUA Pro (USD 9/month, 90/year) and KUA Team (USD 29/month, 290/year, up to 10 members), a customer portal to change plan, card or cancel, and yearly checkout. The plan is taken from the subscription price, so portal plan changes apply.
 
 ## v1.17.0 (2026-09-28)

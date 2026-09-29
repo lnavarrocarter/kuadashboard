@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const Stripe = require('stripe');
-const { loadConfig, missingGoogleConfig, missingStripeConfig } = require('./config');
+const { loadConfig, missingGoogleConfig, missingStripeConfig, missingPolarConfig } = require('./config');
+const { createPolarClient, verifyWebhook: verifyPolarWebhook, subscriptionChange } = require('./polar');
 const { createCloudRepository } = require('./repository');
 const { entitlementsFor, planForPrice } = require('./entitlements');
 
@@ -62,13 +63,15 @@ function publicUser(user) {
   return { id: user.id, email: user.email, name: user.name, picture: user.picture || null };
 }
 
-function createApp({ config = loadConfig(), repository, googleClient, stripeClient, now = () => Date.now() } = {}) {
+function createApp({ config = loadConfig(), repository, googleClient, stripeClient, polarClient, now = () => Date.now() } = {}) {
   if (!repository) throw new Error('repository is required');
   const app = express();
   const oauth = googleClient || (config.googleClientId && config.googleClientSecret
     ? new OAuth2Client(config.googleClientId, config.googleClientSecret, config.googleRedirectUri)
     : null);
   const stripe = stripeClient || (config.stripeSecretKey ? new Stripe(config.stripeSecretKey) : null);
+  const polar = polarClient || (config.polarAccessToken ? createPolarClient({ accessToken: config.polarAccessToken, server: config.polarServer }) : null);
+  const usePolar = config.billingProvider === 'polar';
 
   app.use((req, res, next) => {
     const origin = req.get('Origin');
@@ -257,6 +260,29 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     } catch (error) { jsonError(res, error); }
   });
 
+  // Polar signs with Standard Webhooks over the raw body; subscriptions are linked by external_customer_id.
+  app.post('/webhooks/polar', express.raw({ type: '*/*' }), async (req, res) => {
+    try {
+      if (!config.polarWebhookSecret) return res.status(503).json({ error: 'Polar webhooks are not configured' });
+      const { id, event } = verifyPolarWebhook(req.body, {
+        'webhook-id': req.get('webhook-id'), 'webhook-timestamp': req.get('webhook-timestamp'), 'webhook-signature': req.get('webhook-signature'),
+      }, config.polarWebhookSecret, Math.floor(now() / 1000));
+      const claimed = await repository.claimWebhookEvent(`polar_${id}`, event.type, new Date(now()).toISOString());
+      if (claimed) {
+        try {
+          const change = subscriptionChange(event, config.polarProducts);
+          const user = change && await repository.findUserById(change.userId);
+          if (user && change.remove) await repository.deleteSubscription(user.id);
+          else if (user) await repository.upsertSubscription(user.id, { ...change.subscription, updatedAt: new Date(now()).toISOString() });
+        } catch (error) {
+          await repository.releaseWebhookEvent(`polar_${id}`);
+          throw error;
+        }
+      }
+      res.json({ received: true, duplicate: !claimed });
+    } catch (error) { jsonError(res, error); }
+  });
+
   app.use(express.json({ limit: '1mb' }));
   app.get('/api/me', requireUser, async (req, res) => {
     const subscription = await repository.getSubscriptionByUserId(req.user.id);
@@ -273,6 +299,19 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       if (!PLAN_NAMES.has(plan)) return res.status(400).json({ error: 'plan must be pro or team' });
       const interval = String(req.body?.interval || 'month').toLowerCase();
       if (!['month', 'year'].includes(interval)) return res.status(400).json({ error: 'interval must be month or year' });
+      if (usePolar) {
+        const missing = missingPolarConfig(config, plan, interval);
+        if (missing.length || !polar) return res.status(503).json({ error: 'Polar billing is not configured', missing });
+        const productId = config.polarProducts[interval === 'year' ? `${plan}Yearly` : plan];
+        const checkout = await polar.createCheckout({
+          products: [productId],
+          external_customer_id: req.user.id,
+          customer_email: req.user.email,
+          success_url: `${config.frontendUrl}/billing/success?checkout_id={CHECKOUT_ID}`,
+          metadata: { userId: req.user.id, plan, interval },
+        });
+        return res.status(201).json({ url: checkout.url, sessionId: checkout.id, provider: 'polar' });
+      }
       const priceId = interval === 'year' ? config.stripePrices[`${plan}Yearly`] : config.stripePrices[plan];
       if (interval === 'year' && !priceId) return res.status(503).json({ error: 'Yearly billing is not configured', missing: [`stripePrices.${plan}Yearly`] });
       const missing = missingStripeConfig(config, plan);
@@ -298,6 +337,17 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
 
   app.post('/api/billing/portal', requireUser, async (req, res) => {
     try {
+      if (usePolar) {
+        if (!polar) return res.status(503).json({ error: 'Polar billing is not configured' });
+        try {
+          const session = await polar.createCustomerSession({ external_customer_id: req.user.id, return_url: config.frontendUrl });
+          return res.json({ url: session.customer_portal_url, provider: 'polar' });
+        } catch (error) {
+          // The Polar customer only exists after the first checkout.
+          if (error.statusCode === 404) return res.status(400).json({ error: 'No billing customer exists for this account yet' });
+          throw error;
+        }
+      }
       if (!stripe || !config.stripeSecretKey) return res.status(503).json({ error: 'Stripe billing is not configured' });
       if (!req.user.stripeCustomerId) return res.status(400).json({ error: 'No Stripe customer exists for this account' });
       const session = await stripe.billingPortal.sessions.create({

@@ -31,7 +31,30 @@ Crear un OAuth Client de tipo Web y registrar:
 
 El servicio solicita únicamente `openid`, `email` y `profile`. No almacena access tokens de Google; solo el identificador OIDC y datos mínimos de cuenta.
 
-## Stripe
+## Proveedor de cobro
+
+`BILLING_PROVIDER` elige el proveedor: `polar` o `stripe`. Por defecto usa Polar si hay `POLAR_ACCESS_TOKEN`, y si no, Stripe. Los planes (`free`, `pro`, `team`), lo que incluye cada uno y las rutas `/api/billing/*` son los mismos con ambos proveedores.
+
+### Polar (proveedor principal)
+
+Stripe no acepta cuentas de Chile. Polar actúa como *merchant of record*: cobra a los clientes, liquida el IVA y los impuestos de cada país, y paga al vendedor en Chile vía Stripe Connect Express (comisión aproximada de 5% + USD 0,50 por transacción). No hace falta constituir una empresa en el extranjero.
+
+- **Productos:** uno por plan e intervalo, porque en Polar cada producto tiene un solo `recurring_interval`. KUA Pro cuesta USD 9 al mes o USD 90 al año, y KUA Team USD 29 al mes o USD 290 al año. Cada producto lleva la metadata `plan: pro|team`, que es la que decide el plan.
+- **Checkout:** `POST /v1/checkouts/` con `external_customer_id` igual al id del usuario de KUA, así no hay que guardar el id de cliente de Polar.
+- **Portal:** `POST /v1/customer-sessions/`. Un usuario que todavía no compró recibe un `400`.
+- **Webhooks:** `POST /webhooks/polar`, verificados con Standard Webhooks sobre el body crudo. Se aceptan los secretos nuevos (`whsec_` en base64) y los antiguos de Polar. Eventos: `subscription.created|updated|active|canceled|uncanceled|revoked`. Una cancelación al fin del periodo mantiene el acceso hasta que llega `revoked`.
+- **Integración sin SDK:** se usa la API REST con `fetch`, porque el SDK v1 de Polar solo trae módulos ES y este servicio es CommonJS.
+
+Variables:
+- `POLAR_SERVER`: `sandbox` o `production`.
+- `POLAR_PRODUCT_PRO`, `POLAR_PRODUCT_TEAM`, `POLAR_PRODUCT_PRO_YEARLY` y `POLAR_PRODUCT_TEAM_YEARLY`.
+- Secretos: `POLAR_ACCESS_TOKEN` (Organization Access Token con `products:write`, `checkouts:write`, `customer_sessions:write`, `webhooks:write` y `subscriptions:read`) y `POLAR_WEBHOOK_SECRET`.
+
+En GitHub llevan el prefijo `KUA_`: `KUA_BILLING_PROVIDER`, `KUA_POLAR_SERVER`, `KUA_POLAR_PRODUCT_*`, `KUA_POLAR_ACCESS_TOKEN` y `KUA_POLAR_WEBHOOK_SECRET`.
+
+### Stripe
+
+Queda listo para cuando exista una empresa en un país que Stripe acepte (por ejemplo una LLC en EE.UU.); hoy está configurado en modo prueba.
 
 Planes (modo prueba creado el 2026-09-29): **KUA Pro** USD 9/mes o USD 90/año y **KUA Team** USD 29/mes o USD 290/año (hasta 10 miembros). Cada precio tiene `lookup_key` (`kua_pro_monthly`, `kua_team_yearly`, …) y metadata `plan: pro|team`: el plan de una suscripción sale del precio, así un cambio de plan desde el portal se refleja aunque la metadata del checkout diga otra cosa.
 
