@@ -46,6 +46,7 @@ Stripe no acepta cuentas de Chile. Polar actúa como *merchant of record*: cobra
 - **Integración sin SDK:** se usa la API REST con `fetch`, porque el SDK v1 de Polar solo trae módulos ES y este servicio es CommonJS.
 
 Variables:
+
 - `POLAR_SERVER`: `sandbox` o `production`.
 - `POLAR_PRODUCT_PRO`, `POLAR_PRODUCT_TEAM`, `POLAR_PRODUCT_PRO_YEARLY` y `POLAR_PRODUCT_TEAM_YEARLY`.
 - Secretos: `POLAR_ACCESS_TOKEN` (Organization Access Token con `products:write`, `checkouts:write`, `customer_sessions:write`, `webhooks:write` y `subscriptions:read`) y `POLAR_WEBHOOK_SECRET`.
