@@ -67,7 +67,7 @@ El servicio debe quedar público a nivel Cloud Run para recibir OAuth y Stripe; 
 ## Problemas conocidos y cómo se resolvieron
 
 | Síntoma | Causa | Solución |
-|---|---|---|
+| --- | --- | --- |
 | `gcloud builds submit` → `caller does not have permission to act as service account …/103280455503495732157` | Sin `serviceAccount` en `cloudbuild.yaml`, Cloud Build usa la cuenta de Compute por defecto (`306971032277-compute@…`), sobre la que el deployer no tiene `actAs` (y que tiene acceso de Editor). | `cloudbuild.yaml` corre el build como `kua-control-plane-deployer`, que tiene `roles/logging.logWriter` y `roles/iam.serviceAccountUser` sobre sí misma. |
 | `The user is forbidden from accessing the bucket [ncaicloud_cloudbuild]` | `gcloud builds submit` sube el código al bucket por defecto. | `--gcs-source-staging-dir=gs://ncaicloud-kua-control-plane-build/source`. |
 | Subida de 52 MiB / 5.581 archivos | Se enviaba `node_modules` (instalado por el job para los tests). | `.gcloudignore` (quedan 12 archivos). |

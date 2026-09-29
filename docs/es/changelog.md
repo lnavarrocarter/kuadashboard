@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Arreglado
+- **Despliegue del control plane:** El control plane en Cloud Run (`cloud/control-plane`) ya se construye y despliega. Cloud Build corre con la cuenta de despliegue en vez de la de Compute por defecto (sobre la que el deployer no podía actuar), sube el código a su propio bucket y ya no sube `node_modules`; el servicio corre como `kua-control-plane-run`. La configuración pasa a variables y secretos de GitHub, y los valores sensibles se sincronizan con Secret Manager. Los webhooks de Stripe fallaban con `PERMISSION_DENIED` porque la base `(default)` de Datastore del proyecto rechaza toda escritura; el servicio ahora usa su propia base `kua-control-plane`. `/health` reemplaza a `/healthz` (reservada por Cloud Run) y los errores 500 quedan registrados.
+
+### Añadido
+- **Planes de Stripe (modo prueba):** KUA Pro (USD 9/mes, 90/año) y KUA Team (USD 29/mes, 290/año, hasta 10 miembros), un portal de cliente para cambiar de plan, tarjeta o cancelar, y checkout anual. El plan sale del precio de la suscripción, así que los cambios de plan desde el portal se aplican.
+
 ## v1.17.0 (2026-09-28)
 
 Cloud Insights suma resúmenes, costos, actividad y salud para AWS y Kubernetes, agrega SQS, SNS y SES, dibuja los dashboards de CloudWatch dentro de KUA y hace que cada lectura automática indique cuánto cuesta.
