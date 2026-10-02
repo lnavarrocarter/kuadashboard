@@ -284,8 +284,8 @@
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in CR_TABS" :key="t.id"
-                :class="['aws-tab-btn', crPanel.tab === t.id ? 'active' : '']" @click="crSwitchTab(t.id)">{{ t.label }}</button>
+              <button v-for="tabItem in CR_TABS" :key="tabItem.id"
+                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" @click="crSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','revisions','variables'].includes(crPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -464,8 +464,8 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in VM_TABS" :key="t.id"
-                :class="['aws-tab-btn', vmPanel.tab === t.id ? 'active' : '']" @click="vmSwitchTab(t.id)">{{ t.label }}</button>
+              <button v-for="tabItem in VM_TABS" :key="tabItem.id"
+                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" @click="vmSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','disks','network'].includes(vmPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -592,8 +592,8 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in SQL_TABS" :key="t.id"
-                :class="['aws-tab-btn', sqlPanel.tab === t.id ? 'active' : '']" @click="sqlSwitchTab(t.id)">{{ t.label }}</button>
+              <button v-for="tabItem in SQL_TABS" :key="tabItem.id"
+                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" @click="sqlSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','config','connection'].includes(sqlPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -711,8 +711,8 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="t.id"
-                :class="['aws-tab-btn', fnPanel.tab === t.id ? 'active' : '']" @click="fnSwitchTab(t.id)">{{ t.label }}</button>
+              <button v-for="tabItem in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" @click="fnSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
@@ -821,9 +821,9 @@
         <table v-else class="cloud-table">
           <thead><tr><th>Topic Name</th><th>Labels</th></tr></thead>
           <tbody>
-            <tr v-for="t in filteredPubSub" :key="t.name">
-              <td>{{ t.name }}</td>
-              <td class="text-dim">{{ t.labels || '--' }}</td>
+            <tr v-for="topicItem in filteredPubSub" :key="topicItem.name">
+              <td>{{ topicItem.name }}</td>
+              <td class="text-dim">{{ topicItem.labels || '--' }}</td>
             </tr>
           </tbody>
         </table>
@@ -891,8 +891,8 @@
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="t in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="t.id"
-                :class="['aws-tab-btn', arPanel.tab === t.id ? 'active' : '']" @click="arSwitchTab(t.id)">{{ t.label }}</button>
+              <button v-for="tabItem in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" @click="arSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- PACKAGES & TAGS -->
             <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
@@ -1585,12 +1585,12 @@
           <table v-else class="cloud-table">
             <thead><tr><th>Table ID</th><th>Type</th><th>Rows</th><th>Size</th><th>Created</th></tr></thead>
             <tbody>
-              <tr v-for="t in bqTablesList" :key="t.id">
-                <td>{{ t.id }}</td>
-                <td class="text-dim">{{ t.type }}</td>
-                <td class="text-dim">{{ t.rowCount != null ? Number(t.rowCount).toLocaleString() : '--' }}</td>
-                <td class="text-dim">{{ bqFormatSize(t.sizeBytes) }}</td>
-                <td class="text-dim">{{ t.created ? new Date(t.created).toLocaleDateString() : '--' }}</td>
+              <tr v-for="tableItem in bqTablesList" :key="tableItem.id">
+                <td>{{ tableItem.id }}</td>
+                <td class="text-dim">{{ tableItem.type }}</td>
+                <td class="text-dim">{{ tableItem.rowCount != null ? Number(tableItem.rowCount).toLocaleString() : '--' }}</td>
+                <td class="text-dim">{{ bqFormatSize(tableItem.sizeBytes) }}</td>
+                <td class="text-dim">{{ tableItem.created ? new Date(tableItem.created).toLocaleDateString() : '--' }}</td>
               </tr>
             </tbody>
           </table>
@@ -1860,12 +1860,12 @@
           <table v-else class="cloud-table">
             <thead><tr><th>Task ID</th><th>Scheduled</th><th>Created</th><th>Dispatches</th><th>Responses</th></tr></thead>
             <tbody>
-              <tr v-for="t in tasksList" :key="t.name">
-                <td class="font-mono" style="font-size:11px">{{ t.name }}</td>
-                <td class="text-dim">{{ t.scheduleTime ? new Date(t.scheduleTime).toLocaleString() : '--' }}</td>
-                <td class="text-dim">{{ t.createTime  ? new Date(t.createTime).toLocaleString()  : '--' }}</td>
-                <td class="text-dim">{{ t.dispatchCount ?? 0 }}</td>
-                <td class="text-dim">{{ t.responseCount ?? 0 }}</td>
+              <tr v-for="taskItem in tasksList" :key="taskItem.name">
+                <td class="font-mono" style="font-size:11px">{{ taskItem.name }}</td>
+                <td class="text-dim">{{ taskItem.scheduleTime ? new Date(taskItem.scheduleTime).toLocaleString() : '--' }}</td>
+                <td class="text-dim">{{ taskItem.createTime  ? new Date(taskItem.createTime).toLocaleString()  : '--' }}</td>
+                <td class="text-dim">{{ taskItem.dispatchCount ?? 0 }}</td>
+                <td class="text-dim">{{ taskItem.responseCount ?? 0 }}</td>
               </tr>
             </tbody>
           </table>

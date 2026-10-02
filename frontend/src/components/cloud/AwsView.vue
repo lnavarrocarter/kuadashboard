@@ -90,8 +90,8 @@
               <td class="text-dim" style="white-space:nowrap">{{ i.launchTime ? formatDate(i.launchTime) : '-' }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (i.tags || []).filter(t => t.Key !== 'Name')"
-                    :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                  <span v-for="tagEntry in (i.tags || []).filter(tagEntry => tagEntry.Key !== 'Name')"
+                    :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -151,7 +151,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ svc.createdAt ? formatDate(svc.createdAt) : '-' }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (svc.tags || [])" :key="t.key || t.Key" class="tag-chip">{{ t.key || t.Key }}={{ t.value || t.Value }}</span>
+                  <span v-for="tagEntry in (svc.tags || [])" :key="tagEntry.key || tagEntry.Key" class="tag-chip">{{ tagEntry.key || tagEntry.Key }}={{ tagEntry.value || tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -341,7 +341,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(b.creationDate) }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (b.tags || [])" :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                  <span v-for="tagEntry in (b.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -389,7 +389,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ r.createdAt ? formatDate(r.createdAt) : '-' }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (r.tags || [])" :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                  <span v-for="tagEntry in (r.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -428,8 +428,8 @@
               <td class="text-dim">{{ v.subnets.length }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (v.tags || []).filter(t => t.Key !== 'Name')"
-                    :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                  <span v-for="tagEntry in (v.tags || []).filter(tagEntry => tagEntry.Key !== 'Name')"
+                    :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -466,7 +466,7 @@
               <td class="text-dim mono-xs">{{ r.scheduleExpr || (r.eventPattern ? 'pattern' : '-') }}</td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (r.tags || [])" :key="t.Key" class="tag-chip">{{ t.Key }}={{ t.Value }}</span>
+                  <span v-for="tagEntry in (r.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
                 </div>
               </td>
               <td>
@@ -533,7 +533,7 @@
               </td>
               <td>
                 <div class="tag-chips">
-                  <span v-for="t in (sm.tags || [])" :key="t.key" class="tag-chip">{{ t.key }}={{ t.value }}</span>
+                  <span v-for="tagEntry in (sm.tags || [])" :key="tagEntry.key" class="tag-chip">{{ tagEntry.key }}={{ tagEntry.value }}</span>
                 </div>
               </td>
               <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="sm.arn">{{ sm.arn }}</td>
@@ -578,21 +578,21 @@
             <th>Actions</th>
           </tr></thead>
           <tbody>
-            <tr v-for="t in sortRows(filteredDynamo)" :key="t.name">
+            <tr v-for="tableItem in sortRows(filteredDynamo)" :key="tableItem.name">
               <td>
-                <div>{{ t.name }}</div>
-                <div class="text-dim mono-xs">{{ (t.keySchema || []).map(k => `${k.name} (${k.type})`).join(', ') }}</div>
+                <div>{{ tableItem.name }}</div>
+                <div class="text-dim mono-xs">{{ (tableItem.keySchema || []).map(k => `${k.name} (${k.type})`).join(', ') }}</div>
               </td>
-              <td><span :class="t.status === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ t.status }}</span></td>
-              <td class="text-dim">{{ t.billingMode }}</td>
-              <td>{{ t.itemCount?.toLocaleString() ?? '-' }}</td>
-              <td class="text-dim">{{ t.sizeBytes ? formatBytes(t.sizeBytes) : '-' }}</td>
-              <td class="text-dim" style="white-space:nowrap">{{ t.creationDateTime ? formatDate(t.creationDateTime) : '-' }}</td>
+              <td><span :class="tableItem.status === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ tableItem.status }}</span></td>
+              <td class="text-dim">{{ tableItem.billingMode }}</td>
+              <td>{{ tableItem.itemCount?.toLocaleString() ?? '-' }}</td>
+              <td class="text-dim">{{ tableItem.sizeBytes ? formatBytes(tableItem.sizeBytes) : '-' }}</td>
+              <td class="text-dim" style="white-space:nowrap">{{ tableItem.creationDateTime ? formatDate(tableItem.creationDateTime) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openDynamoInfo(t)">ℹ Info</button>
-                  <button class="btn sm" @click="openDynamoBrowse(t)">Browse</button>
-                  <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${t.name}`, t, { table: t.name })">Config</button>
+                  <button class="btn sm" @click="openDynamoInfo(tableItem)">ℹ Info</button>
+                  <button class="btn sm" @click="openDynamoBrowse(tableItem)">Browse</button>
+                  <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${tableItem.name}`, tableItem, { table: tableItem.name })">Config</button>
                 </div>
               </td>
             </tr>
@@ -687,10 +687,10 @@
 
         <!-- ── Sub-nav ──────────────────────────────────────────────────── -->
         <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);padding:0 10px;flex-shrink:0;background:var(--bg-panel,inherit)">
-          <button v-for="t in athenaSubTabs" :key="t.id"
-            :class="['aws-tab-btn', { active: athenaSubTab === t.id }]"
+          <button v-for="tabItem in athenaSubTabs" :key="tabItem.id"
+            :class="['aws-tab-btn', { active: athenaSubTab === tabItem.id }]"
             style="margin-right:4px"
-            @click="athenaSubTab = t.id">{{ t.label }}</button>
+            @click="athenaSubTab = tabItem.id">{{ tabItem.label }}</button>
           <div style="flex:1"/>
           <input v-if="athenaSubTab !== 'editor'"
             v-model="search.athena" type="text"
@@ -1684,15 +1684,15 @@
                     </td>
                     <td style="min-width:150px;max-width:280px">
                       <span v-if="!route53TestsFor(r).length" class="text-dim" style="font-size:.75rem">—</span>
-                      <div v-for="t in route53TestsFor(r)" :key="t.id" style="margin:2px 0">
-                        <span v-if="route53State.testing[route53TestKey(r, t)]" style="font-size:.78rem;color:#8b949e">{{ t.label }}: testing…</span>
-                        <template v-else-if="route53State.testResults[route53TestKey(r, t)]">
-                          <button :title="route53ResultTitle(t, route53State.testResults[route53TestKey(r, t)])"
-                            :style="{ padding: '1px 7px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem', fontWeight: 600, ...route53StatusStyle(route53State.testResults[route53TestKey(r, t)].status) }"
-                            @click="testRoute53Record(r, t)">{{ t.label }}: {{ route53State.testResults[route53TestKey(r, t)].status }} ↺</button>
-                          <div style="font-size:.72rem;color:#8b949e;margin-top:2px;word-break:break-word">{{ route53State.testResults[route53TestKey(r, t)].message }}</div>
+                      <div v-for="testItem in route53TestsFor(r)" :key="testItem.id" style="margin:2px 0">
+                        <span v-if="route53State.testing[route53TestKey(r, testItem)]" style="font-size:.78rem;color:#8b949e">{{ testItem.label }}: testing…</span>
+                        <template v-else-if="route53State.testResults[route53TestKey(r, testItem)]">
+                          <button :title="route53ResultTitle(testItem, route53State.testResults[route53TestKey(r, testItem)])"
+                            :style="{ padding: '1px 7px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem', fontWeight: 600, ...route53StatusStyle(route53State.testResults[route53TestKey(r, testItem)].status) }"
+                            @click="testRoute53Record(r, testItem)">{{ testItem.label }}: {{ route53State.testResults[route53TestKey(r, testItem)].status }} ↺</button>
+                          <div style="font-size:.72rem;color:#8b949e;margin-top:2px;word-break:break-word">{{ route53State.testResults[route53TestKey(r, testItem)].message }}</div>
                         </template>
-                        <button v-else @click="testRoute53Record(r, t)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.78rem;color:#58a6ff">Test {{ t.label }}</button>
+                        <button v-else @click="testRoute53Record(r, testItem)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.78rem;color:#58a6ff">Test {{ testItem.label }}</button>
                       </div>
                     </td>
                   </tr>
@@ -1728,10 +1728,10 @@
             <template v-else>
               <!-- Inner tab bar -->
               <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 12px;flex-shrink:0;align-items:center">
-                <button v-for="t in cognitoInnerTabs" :key="t.id"
-                  :class="['aws-tab-btn', { active: cognitoState.innerTab === t.id }]"
+                <button v-for="tabItem in cognitoInnerTabs" :key="tabItem.id"
+                  :class="['aws-tab-btn', { active: cognitoState.innerTab === tabItem.id }]"
                   style="margin-right:4px"
-                  @click="cognitoState.innerTab = t.id">{{ t.label }}</button>
+                  @click="cognitoState.innerTab = tabItem.id">{{ tabItem.label }}</button>
                 <div style="flex:1"/>
                 <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoUser">+ Create User</button>
               </div>
@@ -2651,9 +2651,9 @@
           <div v-if="secretConfigModal.data.tags?.length" class="config-section">
             <div class="config-title">Tags ({{ secretConfigModal.data.tags.length }})</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
-              <span v-for="t in secretConfigModal.data.tags" :key="t.Key"
+              <span v-for="tagEntry in secretConfigModal.data.tags" :key="tagEntry.Key"
                 style="font-size:10px;padding:1px 8px;border-radius:4px;background:var(--bg-row);border:1px solid var(--border)">
-                {{ t.Key }}: <span style="color:var(--accent)">{{ t.Value }}</span>
+                {{ tagEntry.Key }}: <span style="color:var(--accent)">{{ tagEntry.Value }}</span>
               </span>
             </div>
           </div>
@@ -3274,12 +3274,12 @@
         <div v-else-if="rdsInfoModal.data" style="padding:12px;display:flex;flex-direction:column;gap:12px;overflow:hidden;flex:1">
           <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex-wrap:wrap">
             <button
-              v-for="t in rdsInfoTabs"
-              :key="t.id"
+              v-for="tabItem in rdsInfoTabs"
+              :key="tabItem.id"
               class="btn sm"
-              :style="rdsInfoTab === t.id ? 'background:var(--accent);border-color:var(--accent);color:#fff' : ''"
-              @click="rdsInfoTab = t.id"
-            >{{ t.label }}</button>
+              :style="rdsInfoTab === tabItem.id ? 'background:var(--accent);border-color:var(--accent);color:#fff' : ''"
+              @click="rdsInfoTab = tabItem.id"
+            >{{ tabItem.label }}</button>
           </div>
 
           <div style="overflow:auto;display:flex;flex-direction:column;gap:12px;flex:1;padding-right:2px">
