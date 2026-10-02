@@ -7,6 +7,7 @@ import es from '../locales/es'
 // Components already moved to i18n keys. Add a component here once its
 // hard-coded text is migrated, so new hard-coded Spanish cannot slip back in.
 const MIGRATED = [
+  'components/advisor/AdvisorPanel.vue',
   'components/cloud/Ec2Detail.vue',
   'components/cloud/LambdaDetail.vue',
   'components/cloud/EksDetail.vue',

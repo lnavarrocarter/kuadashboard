@@ -396,6 +396,8 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
   })
 
   it('renders the enriched overview with health, attention signals and historical deltas', async () => {
+    // Currency formatting follows the app language; this test reads the English format.
+    settings.lang = 'en'
     const w = mount(GcpView, { props: { activeService: 'overview' }, global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } } })
     await flushPromises()
     store.overview = {
