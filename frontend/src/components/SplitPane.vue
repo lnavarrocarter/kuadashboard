@@ -13,7 +13,7 @@
         aria-valuemin="0"
         aria-valuemax="100"
         tabindex="0"
-        title="Arrastra para ajustar · doble clic para alternar"
+        :title="t('split.handle')"
         data-test="split-handle"
         @pointerdown="startDrag"
         @dblclick="toggleCollapse"
@@ -21,8 +21,8 @@
       >
         <span class="split-grip"></span>
         <span class="split-actions" @pointerdown.stop @dblclick.stop>
-          <button v-if="!collapsed" class="split-btn" title="Dar todo el espacio al detalle" data-test="split-collapse" @click="setCollapsed(true)">⤒ Expandir detalle</button>
-          <button v-else class="split-btn" title="Volver a mostrar la lista" data-test="split-restore" @click="setCollapsed(false)">⤓ Mostrar lista</button>
+          <button v-if="!collapsed" class="split-btn" :title="t('split.collapseHint')" data-test="split-collapse" @click="setCollapsed(true)">{{ t('split.collapse') }}</button>
+          <button v-else class="split-btn" :title="t('split.restoreHint')" data-test="split-restore" @click="setCollapsed(false)">{{ t('split.restore') }}</button>
         </span>
       </div>
       <div class="split-bottom" data-test="split-bottom">
@@ -38,6 +38,9 @@
 // storageKey and applied to the current height, so the layout adapts when the
 // available space changes (e.g. the console panel opens), keeping minimum sizes.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   split:        { type: Boolean, default: false },   // false → top takes all the space

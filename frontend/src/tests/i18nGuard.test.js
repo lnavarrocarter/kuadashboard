@@ -41,10 +41,32 @@ const MIGRATED = [
   'components/cloud/GcsBrowser.vue',
   'components/cloud/EksObservabilityDashboard.vue',
   'components/FileViewerModal.vue',
+  'components/StepFnExecution.vue',
+  'components/StepFnDiagram.vue',
+  'components/cloud/GcpPollingSettings.vue',
+  'components/cloud/GcpStateTimeline.vue',
+  'components/cloud/GcpLabelsEditor.vue',
+  'components/cloud/GcpConfirmModal.vue',
+  'components/cloud/gcpActions.js',
+  'components/modals/YamlModal.vue',
+  'components/SplitPane.vue',
+  'components/UpdateNotice.vue',
+  'components/AwsSessionAlert.vue',
+  'components/modals/DonationModal.vue',
+  'components/modals/PortForwardModal.vue',
+  'components/cloud/EnvManagerView.vue',
+  'lib/stepFnExecution.js',
 ]
 
 // Characters that only appear in Spanish text.
 const SPANISH = /[áéíóúñ¿¡]/i
+// Common Spanish words, to catch text written without accents. Only checked
+// inside text nodes and string literals, so identifiers never match.
+const SPANISH_WORDS = /\b(para|del|los|las|una|que|est[aá]|hay|nunca|aqu[ií]|cargando|guardar|guardando|eliminar|seleccionar|selecciona|buscar|cerrar|volver|agregar|actualizar|historial|desconocido|ning[uú]n|ninguna|todav[ií]a|tambi[eé]n|despu[eé]s|disponible|ejecuci[oó]n|definici[oó]n|pudo|pudieron)\b/i
+
+function texts(line) {
+  return [...line.matchAll(/>([^<>{}]+)<|'([^'\n]*)'|"([^"\n]*)"|`([^`\n]*)`/g)].map(match => match[1] ?? match[2] ?? match[3] ?? match[4])
+}
 
 function strip(source) {
   return source
@@ -58,7 +80,8 @@ function strip(source) {
 describe('i18n guard', () => {
   it.each(MIGRATED)('%s has no hard-coded Spanish text', file => {
     const source = strip(readFileSync(resolve(__dirname, '..', file), 'utf8'))
-    const offending = source.split('\n').filter(line => SPANISH.test(line))
+    const offending = source.split('\n')
+      .filter(line => SPANISH.test(line) || texts(line).some(text => SPANISH_WORDS.test(text)))
     expect(offending).toEqual([])
   })
 

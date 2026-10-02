@@ -1,3 +1,7 @@
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
+
 export function executionScopes(definition) {
   let root
   try { root = typeof definition === 'string' ? JSON.parse(definition) : definition } catch { return [] }
@@ -7,11 +11,11 @@ export function executionScopes(definition) {
     scopes.push({ id, label, definition: JSON.stringify(machine), states: machine.States, parentState })
     for (const [name, state] of Object.entries(machine.States)) {
       const key = JSON.stringify([id, name])
-      state.Branches?.forEach((branch, index) => collect(branch, `${key}:branch:${index}`, `${label} / ${name} / Rama ${index + 1}`, key))
+      state.Branches?.forEach((branch, index) => collect(branch, `${key}:branch:${index}`, `${label} / ${name} / ${t('sfx.branchN', { n: index + 1 })}`, key))
       if (state.ItemProcessor || state.Iterator) collect(state.ItemProcessor || state.Iterator, `${key}:map`, `${label} / ${name}`, key)
     }
   }
-  collect(root, 'root', 'Principal')
+  collect(root, 'root', t('sfx.main'))
   return scopes
 }
 

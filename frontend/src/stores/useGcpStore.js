@@ -1,6 +1,9 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 export const useGcpStore = defineStore('gcp', () => {
   const { apiFetch: request } = useApi()
@@ -31,7 +34,7 @@ export const useGcpStore = defineStore('gcp', () => {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
   function headers() {
-    if (!activeProfileId.value) throw new Error('No GCP profile selected')
+    if (!activeProfileId.value) throw new Error(t('store.noGcpProfile'))
     return { 'X-Profile-Id': activeProfileId.value }
   }
 

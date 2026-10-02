@@ -1,20 +1,20 @@
 <template>
   <Teleport to="body">
     <div v-if="visibleProfiles.length" class="sso-alert">
-      <div class="sso-alert-title">⚠ Sesiones temporales de AWS</div>
+      <div class="sso-alert-title">{{ t('ssoa.title') }}</div>
       <div v-for="p in visibleProfiles" :key="p.id" class="sso-alert-row">
         <div style="min-width:0">
           <div class="sso-alert-name">{{ p.name }}</div>
           <div class="sso-alert-status" :class="{ expired: isExpired(p) }">
-            {{ isExpired(p) ? 'Sesión expirada' : `Expira en ${remainingLabel(p)}` }}
+            {{ isExpired(p) ? t('ssoa.expired') : t('ssoa.expiresIn', { time: remainingLabel(p) }) }}
           </div>
         </div>
         <button class="btn sm primary" :disabled="renewingId === p.id" @click="renew(p)">
-          {{ renewingId === p.id ? 'Esperando login…' : '↻ Renovar sesión' }}
+          {{ renewingId === p.id ? t('ssoa.waiting') : t('ssoa.renew') }}
         </button>
       </div>
       <div v-if="error" class="sso-alert-error">{{ error }}</div>
-      <button class="sso-alert-snooze" @click="snooze">Recordar en 30 min</button>
+      <button class="sso-alert-snooze" @click="snooze">{{ t('ssoa.snooze') }}</button>
     </div>
   </Teleport>
 </template>
@@ -23,6 +23,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useEnvStore } from '../stores/useEnvStore'
 import { useAwsSso }   from '../composables/useAwsSso.js'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const WARN_MS    = 15 * 60 * 1000   // alert when less than 15 minutes remain
 const SNOOZE_MS  = 30 * 60 * 1000

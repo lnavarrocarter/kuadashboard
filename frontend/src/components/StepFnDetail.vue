@@ -62,7 +62,7 @@
                     <dt>Role ARN</dt>
                     <dd class="mono wrap copyable">{{ data.roleArn || '—' }}<button v-if="data.roleArn" class="copy-btn" @click.stop="copyField(data.roleArn,'role')" :title="copiedKey==='role' ? t('res.copied') : t('action.copy')">{{ copiedKey==='role' ? '✓' : '⧉' }}</button></dd>
                     <dt>{{ t('apm.tracingProcess') }}</dt>
-                    <dd>{{ data.tracingEnabled ? '✅ Habilitado' : '—' }}</dd>
+                    <dd>{{ data.tracingEnabled ? t('sfd.enabled') : '—' }}</dd>
                   </dl>
                 </div>
 
@@ -146,7 +146,7 @@
                 <div v-else-if="!events.length" class="sfnd-empty">{{ t('sfnd.noEventsFound') }}</div>
                 <StepFnExecution v-else :key="selectedExecution.executionArn" :events="events"
                   :definition="executionDefinition || data.definition || ''"
-                  :definition-warning="executionDefinition ? '' : 'Definicion de la ejecucion no disponible. Se muestra la definicion actual; puede diferir del historial.'" />
+                  :definition-warning="executionDefinition ? '' : t('sfd.definitionWarning')" />
               </template>
             </div>
 
@@ -182,7 +182,7 @@
                   <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
                     <span style="font-size:12px;color:#888">{{ t('sfnd.version') }} <span class="mono-xs" style="color:#ccc">{{ selectedVersion.stateMachineVersionArn?.split(':').pop() }}</span></span>
                     <div style="display:flex;gap:6px">
-                      <button v-if="versionDef" class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(versionDef,'vdef')">{{ copiedKey==='vdef' ? '✓ Copiado' : '⧉ Copiar' }}</button>
+                      <button v-if="versionDef" class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(versionDef,'vdef')">{{ copiedKey==='vdef' ? t('sfd.copied') : t('sfd.copy') }}</button>
                     </div>
                   </div>
                   <div v-if="versionDefLoading" class="sfnd-spinner-wrap" style="padding:20px 0">

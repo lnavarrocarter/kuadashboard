@@ -9,6 +9,9 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import { settings } from '../composables/useSettings'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 // Background auto-refresh runs every few seconds. Data that is billed
 // (GetMetricData: USD 0.01 per 1,000 metrics, not in the free tier) or that
@@ -85,7 +88,7 @@ export const useAwsStore = defineStore('aws', () => {
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   function headers() {
-    if (!activeProfileId.value) throw new Error('No AWS profile selected')
+    if (!activeProfileId.value) throw new Error(t('store.noAwsProfile'))
     return { 'X-Profile-Id': activeProfileId.value }
   }
 

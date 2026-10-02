@@ -3,20 +3,20 @@
     <template v-if="!error">
       <span>
         <i data-lucide="download"></i>
-        Nueva versión <strong>{{ version }}</strong> lista para instalar.
+        {{ t('updn.newVersion') }} <strong>{{ version }}</strong> {{ t('updn.ready') }}
       </span>
       <button class="btn sm primary" :disabled="installing" @click="install">
-        {{ installing ? 'Instalando…' : 'Reiniciar y actualizar' }}
+        {{ installing ? t('updn.installing') : t('updn.restart') }}
       </button>
-      <button class="btn sm" @click="dismiss">Después</button>
+      <button class="btn sm" @click="dismiss">{{ t('updn.later') }}</button>
     </template>
     <template v-else>
       <span style="flex:1">
         <i data-lucide="alert-triangle"></i>
-        Error al actualizar: {{ error }}
+        {{ t('updn.error', { error }) }}
       </span>
-      <button class="btn sm primary" @click="openReleases">Descargar manualmente</button>
-      <button class="btn sm" @click="dismiss">Cerrar</button>
+      <button class="btn sm primary" @click="openReleases">{{ t('updn.manual') }}</button>
+      <button class="btn sm" @click="dismiss">{{ t('action.close') }}</button>
     </template>
   </div>
 </template>
@@ -25,6 +25,9 @@
 import { computed, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useUpdateStore } from '../stores/useUpdateStore'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const updateStore = useUpdateStore()
 const updateReady = computed(() => updateStore.updateDownloaded)

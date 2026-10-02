@@ -2,65 +2,63 @@
   <div v-if="open" class="modal-overlay" @click.self="!saving && $emit('close')">
     <div class="modal gps-modal" role="dialog" aria-modal="true" aria-labelledby="gps-title">
       <div class="modal-header gps-header">
-        <span id="gps-title" style="font-weight:600">⏱ Sondeo de estados (historial)</span>
+        <span id="gps-title" style="font-weight:600">{{ t('gps.title') }}</span>
         <button class="btn sm" :disabled="saving" @click="$emit('close')">✕</button>
       </div>
 
       <div class="gps-body">
         <p class="gps-intro">
-          Sin sondeo, KUA registra cambios de estado solo cuando abres las listas y cuando haces acciones.
-          Con el sondeo activo, revisa los recursos periódicamente aunque no tengas la vista abierta,
-          mientras KUA esté en ejecución. Aplica al perfil <strong class="gi-mono">{{ profileId }}</strong>.
+          {{ t('gps.introPre') }} <strong class="gi-mono">{{ profileId }}</strong>.
         </p>
 
         <div v-if="loadError" class="alert-error">{{ loadError }}</div>
         <template v-else-if="form">
           <label class="gps-toggle">
             <input v-model="form.enabled" type="checkbox" data-test="poll-enabled" />
-            <span>Sondeo en segundo plano {{ form.enabled ? 'activado' : 'desactivado' }}</span>
+            <span>{{ form.enabled ? t('gps.enabled') : t('gps.disabled') }}</span>
           </label>
 
           <div class="gps-grid">
-            <label class="gps-field"><span>Intervalo</span>
+            <label class="gps-field"><span>{{ t('gps.interval') }}</span>
               <select v-model.number="form.intervalMinutes" class="gps-input" :disabled="!form.enabled" data-test="poll-interval">
                 <option v-for="m in INTERVALS" :key="m" :value="m">{{ intervalLabel(m) }}</option>
               </select>
             </label>
-            <label class="gps-field"><span>Retención del historial</span>
+            <label class="gps-field"><span>{{ t('gps.retention') }}</span>
               <select v-model.number="form.retentionDays" class="gps-input" data-test="poll-retention">
-                <option v-for="d in RETENTION" :key="d" :value="d">{{ d }} días</option>
+                <option v-for="d in RETENTION" :key="d" :value="d">{{ t('gps.days', { n: d }) }}</option>
               </select>
             </label>
           </div>
 
           <fieldset class="gps-types" :disabled="!form.enabled">
-            <legend>Recursos a sondear</legend>
-            <label v-for="t in TYPES" :key="t.value"><input v-model="form.resourceTypes" type="checkbox" :value="t.value" /> {{ t.label }}</label>
+            <legend>{{ t('gps.resources') }}</legend>
+            <label v-for="type in TYPES" :key="type.value"><input v-model="form.resourceTypes" type="checkbox" :value="type.value" /> {{ t(type.label) }}</label>
           </fieldset>
 
           <div class="gps-cost" data-test="poll-cost">
-            <strong>{{ callsPerDay.toLocaleString() }}</strong> lecturas de API por día
-            <span class="gi-dim">({{ form.resourceTypes.length }} listado(s) por ciclo). Las APIs de listado de Compute, Cloud Run y Cloud SQL no se cobran por llamada, pero cuentan para la cuota del proyecto.</span>
+            <strong>{{ callsPerDay.toLocaleString() }}</strong> {{ t('gps.callsPerDay') }}
+            <span class="gi-dim">{{ t('gps.costHint', { n: form.resourceTypes.length }) }}</span>
           </div>
 
           <div class="gps-status gi-dim">
-            Última ejecución: {{ settings?.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : 'nunca' }}
-            <span v-if="settings?.lastError" class="gps-error"> · error: {{ settings.lastError }}</span>
+            {{ t('gps.lastRun', { when: settings?.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : t('gps.never') }) }}
+            <span v-if="settings?.lastError" class="gps-error"> · {{ t('gps.error', { error: settings.lastError }) }}</span>
           </div>
           <div v-if="runResult" class="gps-status" data-test="poll-run-result">
-            Sondeo manual: {{ runResult.types?.map(t => t.error ? `${t.type}: error` : `${t.type}: ${t.count}`).join(' · ') || '—' }}
+            {{ t('gps.manualRun', { result: runResult.types?.map(item => item.error ? `${item.type}: error` : `${item.type}: ${item.count}`).join(' · ') || '—' }) }}
           </div>
         </template>
-        <div v-else class="gi-empty">Cargando…</div>
+        <div v-else class="gi-empty">{{ t('gps.loading') }}</div>
 
         <div v-if="saveError" class="alert-error">{{ saveError }}</div>
       </div>
 
       <div class="modal-footer gps-footer">
-        <button class="btn sm" :disabled="running || saving || !form" data-test="poll-run" @click="runNow">{{ running ? 'Sondeando…' : 'Sondear ahora' }}</button>
+        <button class="btn sm" :disabled="running || saving || !form" data-test="poll-run" @click="runNow">{{ running ? t('gps.running') : t('gps.runNow') }}</button>
         <span style="flex:1"></span>
-        <button class="btn sm" :disabled="saving" @click="$emit('close')">Cancelar</button>
-        <button class="btn sm primary" :disabled="saving || !form || (form.enabled && !form.resourceTypes.length)" data-test="poll-save" @click="save">{{ saving ? 'Guardando…' : 'Guardar' }}</button>
+        <button class="btn sm" :disabled="saving" @click="$emit('close')">{{ t('gps.cancel') }}</button>
+        <button class="btn sm primary" :disabled="saving || !form || (form.enabled && !form.resourceTypes.length)" data-test="poll-save" @click="save">{{ saving ? t('gps.saving') : t('gps.save') }}</button>
       </div>
     </div>
   </div>
@@ -69,6 +67,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useGcpStore } from '../../stores/useGcpStore'
+import { useI18n } from '../../composables/useI18n'
 import './gcpInfo.css'
 
 const props = defineProps({
@@ -80,11 +79,12 @@ const emit = defineEmits(['close', 'saved'])
 const INTERVALS = [5, 10, 15, 30, 60, 180, 360, 720, 1440]
 const RETENTION = [7, 30, 90, 180, 365]
 const TYPES = [
-  { value: 'gcp-vm', label: 'VMs de Compute Engine' },
-  { value: 'gcp-cloud-run', label: 'Servicios Cloud Run' },
-  { value: 'gcp-sql', label: 'Instancias Cloud SQL' },
+  { value: 'gcp-vm', label: 'gps.type.vm' },
+  { value: 'gcp-cloud-run', label: 'gps.type.run' },
+  { value: 'gcp-sql', label: 'gps.type.sql' },
 ]
 
+const { t } = useI18n()
 const gcpStore = useGcpStore()
 const settings = ref(null)
 const form = ref(null)
@@ -119,10 +119,10 @@ const callsPerDay = computed(() => (form.value?.enabled
   : 0))
 
 function intervalLabel(m) {
-  if (m < 60) return `Cada ${m} minutos`
-  if (m === 60) return 'Cada hora'
-  if (m < 1440) return `Cada ${m / 60} horas`
-  return 'Una vez al día'
+  if (m < 60) return t('gps.everyMinutes', { n: m })
+  if (m === 60) return t('gps.everyHour')
+  if (m < 1440) return t('gps.everyHours', { n: m / 60 })
+  return t('gps.daily')
 }
 
 async function save() {

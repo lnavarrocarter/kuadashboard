@@ -9,16 +9,16 @@
             ref="searchInputRef"
             v-model="searchDraft"
             class="ctrl-input yaml-search-input"
-            placeholder="Buscar en YAML..."
+            :placeholder="t('yamlm.searchPlaceholder')"
             @keydown.enter.exact.prevent="applySearch()"
             @keydown.shift.enter.prevent="applySearch('previous')"
           />
           <button class="btn sm" :disabled="!searchDraft" @click="applySearch()">
-            <i data-lucide="search"></i> Buscar
+            <i data-lucide="search"></i> {{ t('yamlm.search') }}
           </button>
           <span class="yaml-search-count">{{ searchStatus }}</span>
-          <button class="btn btn-icon" title="Anterior" :disabled="!matchCount" @click="findPrevious"><i data-lucide="chevron-up"></i></button>
-          <button class="btn btn-icon" title="Siguiente" :disabled="!matchCount" @click="findNext"><i data-lucide="chevron-down"></i></button>
+          <button class="btn btn-icon" :title="t('yamlm.previous')" :disabled="!matchCount" @click="findPrevious"><i data-lucide="chevron-up"></i></button>
+          <button class="btn btn-icon" :title="t('yamlm.next')" :disabled="!matchCount" @click="findNext"><i data-lucide="chevron-down"></i></button>
         </div>
         <div :class="['yaml-lint-status', lintState]">
           <i :data-lucide="lintState === 'ok' ? 'check-circle-2' : lintState === 'error' ? 'alert-triangle' : 'circle-dashed'"></i>
@@ -51,17 +51,17 @@
           @mousedown.prevent="applySuggestion(item)"
         >
           <span class="yaml-suggestion-label">{{ item.label }}</span>
-          <span class="yaml-suggestion-detail">{{ item.detail }}</span>
+          <span class="yaml-suggestion-detail">{{ t(item.detailKey) }}</span>
         </button>
-        <div v-if="!filteredSuggestions.length" class="yaml-suggestion-empty">Sin sugerencias</div>
+        <div v-if="!filteredSuggestions.length" class="yaml-suggestion-empty">{{ t('yamlm.noSuggestions') }}</div>
       </div>
 
       <div class="yaml-editor-status">
         <span class="yaml-section" :title="currentSection"><i data-lucide="map"></i> {{ currentSection }}</span>
         <span>Ln {{ cursorLine }}, Col {{ cursorCol }}</span>
-        <span>{{ totalLines }} lineas</span>
+        <span>{{ t('yamlm.lines', { n: totalLines }) }}</span>
         <button class="btn sm" title="Ctrl+Space" @click="triggerAutocomplete">
-          <i data-lucide="sparkles"></i> Autocompletar
+          <i data-lucide="sparkles"></i> {{ t('yamlm.autocomplete') }}
         </button>
       </div>
 
@@ -71,16 +71,16 @@
       </div>
       <div v-else-if="lintState === 'ok'" class="yaml-validation ok">
         <i data-lucide="check-circle-2"></i>
-        <span>YAML valido</span>
+        <span>{{ t('yamlm.valid') }}</span>
       </div>
       <p v-if="error" class="kubeconfig-error">{{ error }}</p>
     </div>
     <template #footer>
-      <button class="btn" @click="validateYaml(true)"><i data-lucide="check-circle-2"></i> Validar</button>
+      <button class="btn" @click="validateYaml(true)"><i data-lucide="check-circle-2"></i> {{ t('yamlm.validate') }}</button>
       <button class="btn primary" :disabled="loading || saving || !!lintError" @click="saveYaml">
-        <i data-lucide="save"></i> {{ saving ? 'Guardando...' : 'Guardar' }}
+        <i data-lucide="save"></i> {{ saving ? t('yamlm.saving') : t('yamlm.save') }}
       </button>
-      <button class="btn"         @click="$emit('close')">Close</button>
+      <button class="btn"         @click="$emit('close')">{{ t('action.close') }}</button>
     </template>
   </BaseModal>
 </template>
@@ -92,11 +92,13 @@ import yaml from 'js-yaml'
 import BaseModal from '../BaseModal.vue'
 import { api } from '../../composables/useApi'
 import { useToast } from '../../composables/useToast'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({ show: Boolean, title: String, resourceType: String, namespace: String, name: String })
 const emit  = defineEmits(['close'])
 
 const { toast } = useToast()
+const { t } = useI18n()
 const CLUSTER_RESOURCES = new Set([
   'nodes', 'namespaces', 'pvs', 'storageclasses', 'ingressclasses',
   'priorityclasses', 'runtimeclasses', 'mutatingwebhookconfigurations',
@@ -117,35 +119,35 @@ const editorRef = ref(null)
 const searchInputRef = ref(null)
 
 const YAML_COMPLETIONS = [
-  { label: 'apiVersion', insert: 'apiVersion: ', detail: 'Version de API' },
-  { label: 'kind', insert: 'kind: ', detail: 'Tipo de recurso' },
-  { label: 'metadata', insert: 'metadata:', detail: 'Metadatos' },
-  { label: 'name', insert: 'name: ', detail: 'Nombre' },
-  { label: 'namespace', insert: 'namespace: ', detail: 'Namespace' },
-  { label: 'labels', insert: 'labels:', detail: 'Etiquetas' },
-  { label: 'annotations', insert: 'annotations:', detail: 'Anotaciones' },
-  { label: 'spec', insert: 'spec:', detail: 'Especificacion' },
-  { label: 'replicas', insert: 'replicas: ', detail: 'Replicas' },
-  { label: 'selector', insert: 'selector:', detail: 'Selector' },
-  { label: 'matchLabels', insert: 'matchLabels:', detail: 'Selector por labels' },
-  { label: 'template', insert: 'template:', detail: 'Pod template' },
-  { label: 'containers', insert: 'containers:', detail: 'Contenedores' },
-  { label: 'image', insert: 'image: ', detail: 'Imagen' },
-  { label: 'ports', insert: 'ports:', detail: 'Puertos' },
-  { label: 'containerPort', insert: 'containerPort: ', detail: 'Puerto del contenedor' },
-  { label: 'env', insert: 'env:', detail: 'Variables de entorno' },
-  { label: 'resources', insert: 'resources:', detail: 'Recursos' },
-  { label: 'requests', insert: 'requests:', detail: 'Requests' },
-  { label: 'limits', insert: 'limits:', detail: 'Limits' },
-  { label: 'volumeMounts', insert: 'volumeMounts:', detail: 'Montajes' },
-  { label: 'volumes', insert: 'volumes:', detail: 'Volumenes' },
-  { label: 'serviceAccountName', insert: 'serviceAccountName: ', detail: 'Service account' },
-  { label: 'nodeSelector', insert: 'nodeSelector:', detail: 'Node selector' },
-  { label: 'tolerations', insert: 'tolerations:', detail: 'Tolerations' },
-  { label: 'affinity', insert: 'affinity:', detail: 'Affinity' },
-  { label: 'data', insert: 'data:', detail: 'Datos' },
-  { label: 'stringData', insert: 'stringData:', detail: 'Secret stringData' },
-  { label: 'type', insert: 'type: ', detail: 'Tipo' },
+  { label: 'apiVersion', insert: 'apiVersion: ', detailKey: 'yamlm.field.apiVersion' },
+  { label: 'kind', insert: 'kind: ', detailKey: 'yamlm.field.kind' },
+  { label: 'metadata', insert: 'metadata:', detailKey: 'yamlm.field.metadata' },
+  { label: 'name', insert: 'name: ', detailKey: 'yamlm.field.name' },
+  { label: 'namespace', insert: 'namespace: ', detailKey: 'yamlm.field.namespace' },
+  { label: 'labels', insert: 'labels:', detailKey: 'yamlm.field.labels' },
+  { label: 'annotations', insert: 'annotations:', detailKey: 'yamlm.field.annotations' },
+  { label: 'spec', insert: 'spec:', detailKey: 'yamlm.field.spec' },
+  { label: 'replicas', insert: 'replicas: ', detailKey: 'yamlm.field.replicas' },
+  { label: 'selector', insert: 'selector:', detailKey: 'yamlm.field.selector' },
+  { label: 'matchLabels', insert: 'matchLabels:', detailKey: 'yamlm.field.matchLabels' },
+  { label: 'template', insert: 'template:', detailKey: 'yamlm.field.template' },
+  { label: 'containers', insert: 'containers:', detailKey: 'yamlm.field.containers' },
+  { label: 'image', insert: 'image: ', detailKey: 'yamlm.field.image' },
+  { label: 'ports', insert: 'ports:', detailKey: 'yamlm.field.ports' },
+  { label: 'containerPort', insert: 'containerPort: ', detailKey: 'yamlm.field.containerPort' },
+  { label: 'env', insert: 'env:', detailKey: 'yamlm.field.env' },
+  { label: 'resources', insert: 'resources:', detailKey: 'yamlm.field.resources' },
+  { label: 'requests', insert: 'requests:', detailKey: 'yamlm.field.requests' },
+  { label: 'limits', insert: 'limits:', detailKey: 'yamlm.field.limits' },
+  { label: 'volumeMounts', insert: 'volumeMounts:', detailKey: 'yamlm.field.volumeMounts' },
+  { label: 'volumes', insert: 'volumes:', detailKey: 'yamlm.field.volumes' },
+  { label: 'serviceAccountName', insert: 'serviceAccountName: ', detailKey: 'yamlm.field.serviceAccountName' },
+  { label: 'nodeSelector', insert: 'nodeSelector:', detailKey: 'yamlm.field.nodeSelector' },
+  { label: 'tolerations', insert: 'tolerations:', detailKey: 'yamlm.field.tolerations' },
+  { label: 'affinity', insert: 'affinity:', detailKey: 'yamlm.field.affinity' },
+  { label: 'data', insert: 'data:', detailKey: 'yamlm.field.data' },
+  { label: 'stringData', insert: 'stringData:', detailKey: 'yamlm.field.stringData' },
+  { label: 'type', insert: 'type: ', detailKey: 'yamlm.field.type' },
 ]
 
 const matches = computed(() => {
@@ -163,7 +165,7 @@ const matches = computed(() => {
 
 const matchCount = computed(() => matches.value.length)
 const searchStatus = computed(() => {
-  if (searchDraft.value && searchDraft.value !== searchQuery.value) return 'Pendiente'
+  if (searchDraft.value && searchDraft.value !== searchQuery.value) return t('yamlm.pending')
   if (!searchQuery.value) return ''
   if (!matchCount.value) return '0/0'
   return `${activeMatch.value + 1}/${matchCount.value}`
@@ -173,9 +175,9 @@ const lintState = computed(() => {
   return lintError.value ? 'error' : 'ok'
 })
 const lintMessage = computed(() => {
-  if (loading.value) return 'Cargando YAML'
-  if (lintError.value) return 'YAML con errores'
-  return 'YAML valido'
+  if (loading.value) return t('yamlm.loading')
+  if (lintError.value) return t('yamlm.invalid')
+  return t('yamlm.valid')
 })
 const totalLines = computed(() => content.value ? content.value.split('\n').length : 0)
 const cursorLine = computed(() => content.value.slice(0, cursorIndex.value).split('\n').length)
@@ -183,7 +185,7 @@ const cursorCol = computed(() => {
   const lineStart = content.value.lastIndexOf('\n', Math.max(cursorIndex.value - 1, 0)) + 1
   return cursorIndex.value - lineStart + 1
 })
-const currentSection = computed(() => yamlPathAtCursor() || 'Documento')
+const currentSection = computed(() => yamlPathAtCursor() || t('yamlm.document'))
 const currentWord = computed(() => getCurrentWordRange().word)
 const filteredSuggestions = computed(() => {
   const prefix = currentWord.value.toLowerCase()
@@ -236,17 +238,17 @@ function validateYaml(showToast = false) {
   parsedYaml.value = null
   try {
     const parsed = yaml.load(content.value)
-    if (!parsed || typeof parsed !== 'object') throw new Error('El YAML debe contener un objeto Kubernetes.')
-    if (!parsed.kind) throw new Error('Falta el campo requerido: kind')
-    if (!parsed.metadata?.name) throw new Error('Falta el campo requerido: metadata.name')
+    if (!parsed || typeof parsed !== 'object') throw new Error(t('yamlm.needObject'))
+    if (!parsed.kind) throw new Error(t('yamlm.missingField', { field: 'kind' }))
+    if (!parsed.metadata?.name) throw new Error(t('yamlm.missingField', { field: 'metadata.name' }))
     parsedYaml.value = parsed
-    if (showToast) toast('YAML valido', 'success')
+    if (showToast) toast(t('yamlm.valid'), 'success')
     nextTick(() => createIcons({ icons }))
     return true
   } catch (e) {
     const mark = e.mark ? `Linea ${e.mark.line + 1}, columna ${e.mark.column + 1}: ` : ''
     lintError.value = `${mark}${e.reason || e.message}`
-    if (showToast) toast('YAML con errores', 'error')
+    if (showToast) toast(t('yamlm.invalid'), 'error')
     nextTick(() => createIcons({ icons }))
     return false
   }
@@ -359,7 +361,7 @@ async function saveYaml() {
   saving.value = true
   try {
     await api('PUT', '/api/apply', { yamlContent: content.value })
-    toast('YAML guardado correctamente', 'success')
+    toast(t('yamlm.saved'), 'success')
     emit('close')
   } catch (e) {
     error.value = e.message

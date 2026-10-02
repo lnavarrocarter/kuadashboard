@@ -21,6 +21,12 @@ describe('bilingual changelog', () => {
     expect(CHANGELOG[0].items.every(item => item.text.en && item.text.es)).toBe(true)
   })
 
+  it('every release has its date and items in English and Spanish', () => {
+    const missing = CHANGELOG.filter(release =>
+      !release.date?.en || !release.date?.es || release.items.some(item => !item.text?.en || !item.text?.es))
+    expect(missing.map(release => release.version)).toEqual([])
+  })
+
   it('the release history follows the interface language', async () => {
     settings.lang = 'en'
     const wrapper = mount(HelpModal, { props: { show: true }, global: { stubs: { BaseModal: BaseModalStub } } })

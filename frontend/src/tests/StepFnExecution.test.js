@@ -17,9 +17,9 @@ describe('Step Functions execution history', () => {
     const wrapper = mount(StepFnExecution, { props: { definition, events: [
       enter(1, 0, 'Work'), exit(2, 1, 'Work'), enter(3, 2, 'Work'), event(4, 3, 'TaskFailed'),
     ] } })
-    expect(wrapper.find('[aria-label="Visita del paso"]').element.value).toBe('3')
-    await wrapper.find('[aria-label="Visita del paso"]').setValue('1')
-    expect(wrapper.find('.sfnx-heading').text()).toContain('Completado')
+    expect(wrapper.find('[aria-label="Step visit"]').element.value).toBe('3')
+    await wrapper.find('[aria-label="Step visit"]').setValue('1')
+    expect(wrapper.find('.sfnx-heading').text()).toContain('Succeeded')
     expect(wrapper.find('.sfnx-step-events').text()).not.toContain('TaskFailed')
     expect(wrapper.findComponent(StepFnDiagram).props('nodeStatuses').Work).toBe('SUCCEEDED')
     wrapper.unmount()
@@ -80,8 +80,8 @@ describe('Step Functions execution history', () => {
     const diagram = wrapper.findComponent(StepFnDiagram)
     expect(diagram.props('nodeStatuses')).toEqual({ Work: 'FAILED' })
     await diagram.findAll('.sfn-node')[1].trigger('keydown', { key: 'Enter' })
-    expect(wrapper.find('.sfnx-empty').text()).toContain('no tiene visitas')
-    await wrapper.find('[aria-label="Paso y visita"]').setValue('1')
+    expect(wrapper.find('.sfnx-empty').text()).toContain('has no visits')
+    await wrapper.find('[aria-label="Step and visit"]').setValue('1')
     expect(wrapper.find('h3').text()).toBe('Work')
     await wrapper.findAll('[role="tab"]')[1].trigger('click')
     expect(wrapper.findAll('.sfnx-history details')).toHaveLength(3)

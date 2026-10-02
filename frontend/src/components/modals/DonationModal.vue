@@ -1,19 +1,18 @@
 <template>
   <BaseModal :show="visible" @close="dismiss">
-    <template #title>💛 Apoya KUA</template>
+    <template #title>{{ t('donate.title') }}</template>
 
     <p style="margin-bottom: .8rem; line-height: 1.5;">
-      KUA (Know Unified Administration) es un proyecto open source construido con dedicación.
-      Si te resulta útil para gestionar tu infraestructura, considera apoyar su desarrollo.
+      {{ t('donate.body') }}
     </p>
     <p style="margin-bottom: .4rem; color: var(--text-secondary); font-size: .85rem;">
-      Tu contribución impulsa nuevas integraciones, la visión AI-driven y el soporte a la comunidad.
+      {{ t('donate.impact') }}
     </p>
 
     <template #footer>
-      <button class="btn" @click="dismiss">Quizás después</button>
+      <button class="btn" @click="dismiss">{{ t('donate.later') }}</button>
       <button class="btn primary" @click="openSponsor">
-        <i data-lucide="heart"></i> Donar en GitHub
+        <i data-lucide="heart"></i> {{ t('donate.github') }}
       </button>
     </template>
   </BaseModal>
@@ -23,6 +22,9 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
+import { useI18n } from '../../composables/useI18n'
+
+const { t } = useI18n()
 
 const STORAGE_KEY = 'kuadashboard_donation_shown'
 const SPONSOR_URL = 'https://github.com/sponsors/lnavarrocarter/'
