@@ -14,15 +14,24 @@
     >
       <i data-lucide="file-down"></i>
     </button>
+    <button
+      :class="['btn', compact ? 'btn-icon' : 'sm']"
+      :title="t('agentConnect.open')" :aria-label="t('agentConnect.open')"
+      data-test="agent-connect-open" @click="connectOpen = true"
+    >
+      <i data-lucide="plug"></i>
+    </button>
+    <AgentConnectModal :show="connectOpen" @close="connectOpen = false" />
   </span>
 </template>
 
 <script setup>
-import { nextTick, onMounted } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import { briefFileName } from '../../shared/agentBrief.mjs'
+import AgentConnectModal from './AgentConnectModal.vue'
 
 const props = defineProps({
   // Returns the Markdown brief; called on click so it reflects the latest data.
@@ -35,6 +44,7 @@ const props = defineProps({
 
 const { t } = useI18n()
 const { toast } = useToast()
+const connectOpen = ref(false)
 
 async function copyBrief() {
   try {

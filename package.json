@@ -103,7 +103,12 @@
     "productName": "KuaDashboard",
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**"
+      "node_modules/better-sqlite3/**",
+      "mcp/**",
+      "lib/mcp/**",
+      "frontend/src/shared/agentBrief.mjs",
+      "frontend/src/locales/**",
+      "frontend/package.json"
     ],
     "npmRebuild": true,
     "afterSign": "electron/notarize.js",
@@ -113,6 +118,9 @@
       "routes/**",
       "lib/**",
       "frontend/src/shared/**",
+      "frontend/src/locales/**",
+      "frontend/package.json",
+      "mcp/**",
       "config/**",
       "public/**",
       "assets/icon.ico",

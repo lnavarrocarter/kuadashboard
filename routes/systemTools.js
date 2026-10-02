@@ -178,4 +178,17 @@ router.get('/storage', (_req, res) => {
   }
 });
 
+// ─── GET /mcp ─────────────────────────────────────────────────────────────────
+// How MCP clients (Claude Code, Codex…) start the KUA MCP server here.
+
+router.get('/mcp', (_req, res) => {
+  const { mcpLaunch } = require('../lib/mcp/launch');
+  res.json(mcpLaunch({
+    execPath: process.execPath,
+    electron: process.versions.electron,
+    rootDir: require('path').join(__dirname, '..'),
+    port: process.env.PORT || 7190,
+  }));
+});
+
 module.exports = router;

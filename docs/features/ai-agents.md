@@ -43,7 +43,13 @@ All tools are read-only.
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a profile id or name and can be omitted when there is only one profile of that provider.
 
-### Requirements
+### Setup from the app
+
+Click the **plug** icon next to "Copy for AI agent" (in any Advisor or in the log recommendations) to open **Connect AI agents**. It shows the exact setup for Claude Code, Codex CLI, JSON clients (`.mcp.json`, Cursor, VS Code) and Codex `config.toml`, with the paths of your installation, ready to copy.
+
+With the installed app, the server runs with the KuaDashboard executable in Node mode (`ELECTRON_RUN_AS_NODE=1`), so Node.js is not needed. After moving or reinstalling KUA, copy the setup again. The sections below show the setup from a copy of the repository.
+
+### Requirements (from the repository)
 
 - Node.js 18 or later.
 - A copy of the KUA repository (the server is `mcp/server.mjs`; it has no dependencies to install).

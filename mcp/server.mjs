@@ -15,7 +15,14 @@ import { readFileSync } from 'node:fs'
 import { createKuaMcp, httpRequest } from '../lib/mcp/kuaMcp.mjs'
 
 const baseUrl = process.env.KUA_URL || 'http://localhost:7190'
-const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+// The installed app runs this from app.asar.unpacked, next to (not inside) app.asar.
+function readVersion() {
+  for (const candidate of ['../package.json', '../../app.asar/package.json']) {
+    try { return JSON.parse(readFileSync(new URL(candidate, import.meta.url), 'utf8')).version } catch { /* try the next one */ }
+  }
+  return '0.0.0'
+}
+const version = readVersion()
 const server = createKuaMcp({ request: httpRequest(baseUrl), version })
 
 function send(message) {

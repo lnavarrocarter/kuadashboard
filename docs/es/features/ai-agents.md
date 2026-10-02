@@ -43,7 +43,13 @@ Todas son de solo lectura.
 
 Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto, o `json` para los datos crudos) y `lang` (`en` o `es`). `profile` acepta el id o el nombre del perfil y se puede omitir cuando hay un solo perfil de ese proveedor.
 
-### Requisitos
+### Configuración desde la app
+
+Haz clic en el ícono de **enchufe** junto a "Copiar para agente IA" (en cualquier Advisor o en las recomendaciones de logs) para abrir **Conectar agentes IA**. Muestra la configuración exacta para Claude Code, Codex CLI, clientes JSON (`.mcp.json`, Cursor, VS Code) y el `config.toml` de Codex, con las rutas de tu instalación, lista para copiar.
+
+Con la app instalada, el servidor corre con el ejecutable de KuaDashboard en modo Node (`ELECTRON_RUN_AS_NODE=1`), así que no necesitas Node.js. Si mueves o reinstalas KUA, vuelve a copiar la configuración. Las secciones siguientes muestran la configuración desde una copia del repositorio.
+
+### Requisitos (desde el repositorio)
 
 - Node.js 18 o superior.
 - Una copia del repositorio de KUA (el servidor es `mcp/server.mjs`; no tiene dependencias que instalar).
