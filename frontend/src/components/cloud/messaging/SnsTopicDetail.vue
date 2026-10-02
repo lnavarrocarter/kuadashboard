@@ -67,7 +67,7 @@
             <button :class="['btn', 'sm', { active: logStatus === 'all' }]" @click="setLogStatus('all')">{{ t('sns.logsAll') }}</button>
             <button :class="['btn', 'sm', { active: logStatus === 'failure' }]" @click="setLogStatus('failure')">{{ t('sns.logsFailures') }}</button>
           </div>
-          <button class="btn sm" :disabled="logsLoading" @click="loadLogs">{{ logs ? t('action.refresh') : t('sns.loadLogs') }}</button>
+          <button class="btn sm" :disabled="logsLoading" @click="loadLogs(!!logs)">{{ logs ? t('action.refresh') : t('sns.loadLogs') }}</button>
           <span class="text-dim msg-hint">{{ t('sns.logsCost') }}</span>
         </template>
       </div>
@@ -159,11 +159,11 @@ function filterSummary(sub) {
   return `${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '…' : ''}${sub.filterScope === 'MessageBody' ? ' (body)' : ''}`
 }
 
-async function loadLogs() {
+async function loadLogs(force = false) {
   logsLoading.value = true
   logsError.value = null
   try {
-    logs.value = await awsStore.fetchSnsDeliveryLogs(props.topic, { status: logStatus.value })
+    logs.value = await awsStore.fetchSnsDeliveryLogs(props.topic, { status: logStatus.value, force })
   } catch (e) {
     logsError.value = { text: e.message, access: e.details?.access || null }
   } finally {

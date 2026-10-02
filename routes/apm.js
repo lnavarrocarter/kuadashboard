@@ -6,6 +6,7 @@ const { createAwsDeploymentReader } = require('../lib/apm/awsDeploymentReader');
 const { createEksWorkloadReader } = require('../lib/apm/eksWorkloadReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
+const { buildLogEvidence } = require('../lib/logIntelligenceEvidence');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
@@ -26,6 +27,7 @@ function createApmRouter({
   eksWorkloadReader = createEksWorkloadReader(),
   topologyReader = createAwsTopologyReader(),
   processTracer = createAwsProcessTracer(),
+  logCache = () => require('../lib/awsLogCache').getLogCache(),
 }) {
   if (!database || !scheduler) throw new Error('database and scheduler are required');
   const router = express.Router();
@@ -239,6 +241,61 @@ function createApmRouter({
       res.json(await eksWorkloadReader.listWorkloads({ provider, contexts }));
     } catch (error) { handleError(res, error); }
   }
+
+  // ── CloudFormation stack ↔ KUA Application ──
+  // Stack resources are read with the same deployment reader as the setup flow,
+  // so a linked stack yields the same resource keys as adding them by hand.
+
+  async function stackResourceKeys(profile, region, stackName) {
+    const preview = await deploymentReader.preview({ profileId: profile, region, stackNames: [stackName] });
+    return preview.resources || [];
+  }
+
+  // Applications of this profile that already contain resources of the stack.
+  router.get('/stack-applications', async (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    const stackName = String(req.query.stackName || '');
+    const region = String(req.query.region || 'us-east-1');
+    if (!/^[A-Za-z][A-Za-z0-9-]{0,127}$/.test(stackName)) return res.status(400).json({ error: 'Invalid stack name' });
+    try {
+      const stackResources = await stackResourceKeys(profile, region, stackName);
+      const keys = new Set(stackResources.map(resource => resource.key));
+      const applications = database.listApplications({ profileId: profile })
+        .map(application => {
+          const resources = database.listResources(application.id);
+          const matched = resources.filter(resource => keys.has(resource.key)).length;
+          return { applicationId: application.id, name: application.name, environment: application.environment || '', region: application.region, matched, total: resources.length };
+        })
+        .filter(item => item.matched > 0);
+      res.json({ stackName, linkable: stackResources.length, applications });
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Adds the stack's supported resources to an application (skips those already in it).
+  router.post('/applications/:applicationId/link-stack', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    const stackName = String(req.body?.stackName || '');
+    if (!/^[A-Za-z][A-Za-z0-9-]{0,127}$/.test(stackName)) return res.status(400).json({ error: 'Invalid stack name' });
+    try {
+      const stackResources = await stackResourceKeys(application.profileId, req.body?.region || application.region, stackName);
+      const existing = new Set(database.listResources(application.id).map(resource => resource.key));
+      const added = [];
+      for (const resource of stackResources) {
+        if (existing.has(resource.key)) continue;
+        added.push(database.addResource(application.id, {
+          type: resource.type, key: resource.key, arn: resource.arn, name: resource.name, service: resource.service,
+          kind: resource.kind, logGroup: resource.type === 'lambda' ? `/aws/lambda/${resource.name}` : null,
+          associationSource: 'deployment',
+        }));
+        existing.add(resource.key);
+      }
+      if (added.length) reconcileRegistry(database.getApplication(application.id));
+      log('CloudFormation stack linked', stackName, application.profileId, { application: application.name, added: added.length });
+      res.json({ added: added.length, alreadyLinked: stackResources.length - added.length, resources: added });
+    } catch (error) { handleError(res, error); }
+  });
 
   router.get('/kubernetes-workloads', listKubernetesWorkloads);
   router.get('/eks-workloads', listKubernetesWorkloads);
@@ -508,7 +565,20 @@ function createApmRouter({
     res.status(204).end();
   });
 
-  router.get('/applications/:applicationId/topology', (req, res) => {
+  // Observed evidence from cached log groups of the application's profile/region
+  // (local reads only). A failure here never blocks the structural assessment.
+  async function logEvidenceFor(application, resources, edges) {
+    if (!application.profileId || !application.region) return null;
+    try {
+      const intelligenceByGroup = await logCache().intelligenceForScope({ profileId: application.profileId, region: application.region });
+      return buildLogEvidence({ application, resources, edges, intelligenceByGroup });
+    } catch (error) {
+      console.warn('[apm] log evidence:', error.message);
+      return null;
+    }
+  }
+
+  router.get('/applications/:applicationId/topology', async (req, res) => {
     const application = scopedApplication(req, res);
     if (!application) return;
     const resources = database.listResources(application.id);
@@ -517,7 +587,7 @@ function createApmRouter({
       application,
       resources,
       edges,
-      analysis: analyzeTopology(application, resources, edges),
+      analysis: analyzeTopology(application, resources, edges, {}, await logEvidenceFor(application, resources, edges)),
     });
   });
 
@@ -533,7 +603,7 @@ function createApmRouter({
       const cloudEdges = edges.filter(edge => cloudResourceIds.has(edge.sourceResourceId) && cloudResourceIds.has(edge.targetResourceId));
       const evidence = await topologyReader.analyze({ application, resources: cloudResources, edges: cloudEdges });
       log('Cloud topology analyzed', application.name, application.profileId, { requests: evidence.requests });
-      res.json({ application, resources, edges, analysis: analyzeTopology(application, resources, edges, evidence) });
+      res.json({ application, resources, edges, analysis: analyzeTopology(application, resources, edges, evidence, await logEvidenceFor(application, resources, edges)) });
     } catch (error) { handleError(res, error); }
   });
 

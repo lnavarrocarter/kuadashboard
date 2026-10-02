@@ -305,22 +305,22 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchStepFunctions() {
+  async function fetchStepFunctions({ force = false } = {}) {
     loading.value = true; error.value = null
     try {
-      stepFunctions.value = await apiFetch('/api/cloud/aws/stepfunctions', { headers: headers() })
+      stepFunctions.value = await apiFetch(`/api/cloud/aws/stepfunctions${force ? '?force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchStepFnDiagram(arn) {
+  async function fetchStepFnDiagram(arn, { force = false } = {}) {
     try {
-      return await apiFetch(`/api/cloud/aws/stepfunctions/config?arn=${encodeURIComponent(arn)}`, { headers: headers() })
+      return await apiFetch(`/api/cloud/aws/stepfunctions/config?arn=${encodeURIComponent(arn)}${force ? '&force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e); return null }
   }
 
-  async function fetchStepFnExecutionEvents(executionArn) {
+  async function fetchStepFnExecutionEvents(executionArn, { force = false } = {}) {
     try {
-      return await apiFetch(`/api/cloud/aws/stepfunctions/execution/events?executionArn=${encodeURIComponent(executionArn)}`, { headers: headers() })
+      return await apiFetch(`/api/cloud/aws/stepfunctions/execution/events?executionArn=${encodeURIComponent(executionArn)}${force ? '&force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e); return null }
   }
 
@@ -1129,8 +1129,9 @@ export const useAwsStore = defineStore('aws', () => {
   function fetchSnsTopicDetails(topic) {
     return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/details?arn=${encodeURIComponent(topic.arn)}`, { headers: headers() })
   }
-  function fetchSnsDeliveryLogs(topic, { hours = 24, status = 'all' } = {}) {
+  function fetchSnsDeliveryLogs(topic, { hours = 24, status = 'all', force = false } = {}) {
     const params = new URLSearchParams({ arn: topic.arn, hours: String(hours), status })
+    if (force) params.set('force', '1')
     return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/logs?${params}`, { headers: headers() })
   }
   function fetchSesSuppression() {
@@ -1218,12 +1219,19 @@ export const useAwsStore = defineStore('aws', () => {
     catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchLexIntents(botId) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/intents`, { headers: headers() })
+  async function fetchLexIntents(botId, { botVersion = 'DRAFT', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ botVersion })
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/intents?${params}`, { headers: headers() })
   }
 
-  async function fetchLexLogs(botId, hours = 24, limit = 100) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/logs?hours=${hours}&limit=${limit}`, { headers: headers() })
+  async function fetchLexLogs(botId, hours = 24, limit = 100, { aliasId = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours), limit: String(limit) })
+    if (aliasId) params.set('aliasId', aliasId)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/logs?${params}`, { headers: headers() })
   }
 
   async function fetchLexTestSets(botId) {
@@ -1242,8 +1250,11 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexSlotTypes(botId) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types`, { headers: headers() })
+  async function fetchLexSlotTypes(botId, { botVersion = 'DRAFT', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ botVersion })
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types?${params}`, { headers: headers() })
   }
 
   async function lexChat(botId, text, aliasId, localeId, sessionId) {
@@ -1254,8 +1265,12 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexMissedUtterances(botId, hours = 24) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/missed-utterances?hours=${hours}`, { headers: headers() })
+  async function fetchLexMissedUtterances(botId, hours = 24, { aliasId = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours) })
+    if (aliasId) params.set('aliasId', aliasId)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/missed-utterances?${params}`, { headers: headers() })
   }
 
   async function buildLexBot(botId, localeId) {
@@ -1266,8 +1281,14 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexMetrics(botId, hours = 24) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/metrics?hours=${hours}`, { headers: headers() })
+  async function fetchLexMetrics(botId, hours = 24, { botName = '', aliasId = '', aliasName = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours) })
+    if (botName) params.set('botName', botName)
+    if (aliasId) params.set('aliasId', aliasId)
+    if (aliasName) params.set('aliasName', aliasName)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/metrics?${params}`, { headers: headers() })
   }
 
   // ─── CloudFormation (AgentCore) ────────────────────────────────────────────
