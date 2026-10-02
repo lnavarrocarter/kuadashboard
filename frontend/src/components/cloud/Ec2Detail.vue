@@ -22,8 +22,8 @@
             {{ tab.label }}
           </button>
           <div class="ec2d-tabs-right">
-            <button v-if="!loaded && !loading" class="btn sm" @click="load">Cargar detalles</button>
-            <button v-else-if="loaded" class="btn sm" @click="load" :disabled="loading" title="Refrescar">↺</button>
+            <button v-if="!loaded && !loading" class="btn sm" @click="load">{{ t('res.loadDetails') }}</button>
+            <button v-else-if="loaded" class="btn sm" @click="load" :disabled="loading" :title="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -33,7 +33,7 @@
           <!-- Loading / Error -->
           <div v-if="loading" class="ec2d-spinner-wrap">
             <div class="ec2d-spinner"></div>
-            <span>Cargando detalles...</span>
+            <span>{{ t('res.loadingDetails') }}</span>
           </div>
           <div v-else-if="error" class="ec2d-error">{{ error }}</div>
 
@@ -43,60 +43,60 @@
             <div v-show="activeTab === 'details'" class="ec2d-section">
               <div class="ec2d-grid">
                 <div class="ec2d-card">
-                  <div class="ec2d-card-title">Instancia</div>
+                  <div class="ec2d-card-title">{{ t('ec2d.instance') }}</div>
                   <dl>
-                    <dt>ID</dt>             <dd class="mono copyable">{{ data.details.id }}<button class="copy-btn" @click.stop="copyField(data.details.id,'id')" :title="copiedKey==='id'?'¡Copiado!':'Copiar'">{{ copiedKey==='id' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Nombre</dt>         <dd>{{ data.details.name }}</dd>
-                    <dt>Tipo</dt>           <dd class="mono">{{ data.details.type }}</dd>
-                    <dt>Estado</dt>
+                    <dt>ID</dt>             <dd class="mono copyable">{{ data.details.id }}<button class="copy-btn" @click.stop="copyField(data.details.id,'id')" :title="copiedKey==='id' ? t('res.copied') : t('action.copy')">{{ copiedKey==='id' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('res.name') }}</dt>         <dd>{{ data.details.name }}</dd>
+                    <dt>{{ t('res.type') }}</dt>           <dd class="mono">{{ data.details.type }}</dd>
+                    <dt>{{ t('res.state') }}</dt>
                     <dd><span :class="['ec2d-state', data.details.state]">{{ data.details.state }}</span>
                       <span v-if="data.details.stateReason" class="text-dim" style="font-size:.75rem;margin-left:6px">{{ data.details.stateReason }}</span>
                     </dd>
-                    <dt>Lanzamiento</dt>    <dd>{{ fmtDate(data.details.launchTime) }}</dd>
-                    <dt>Zona</dt>           <dd class="mono">{{ data.details.az }}</dd>
-                    <dt>Tenencia</dt>       <dd>{{ data.details.tenancy }}</dd>
+                    <dt>{{ t('ec2d.launched') }}</dt>    <dd>{{ fmtDate(data.details.launchTime) }}</dd>
+                    <dt>{{ t('res.zone') }}</dt>           <dd class="mono">{{ data.details.az }}</dd>
+                    <dt>{{ t('ec2d.tenancy') }}</dt>       <dd>{{ data.details.tenancy }}</dd>
                   </dl>
                 </div>
 
                 <div class="ec2d-card">
-                  <div class="ec2d-card-title">Imagen y Plataforma</div>
+                  <div class="ec2d-card-title">{{ t('ec2d.imagePlatform') }}</div>
                   <dl>
-                    <dt>AMI</dt>            <dd class="mono copyable">{{ data.details.ami }}<button class="copy-btn" @click.stop="copyField(data.details.ami,'ami')" :title="copiedKey==='ami'?'¡Copiado!':'Copiar'">{{ copiedKey==='ami' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Plataforma</dt>     <dd>{{ data.details.platform }}</dd>
-                    <dt>Arquitectura</dt>   <dd class="mono">{{ data.details.architecture }}</dd>
-                    <dt>Virtualización</dt> <dd>{{ data.details.virtualizationType }}</dd>
+                    <dt>AMI</dt>            <dd class="mono copyable">{{ data.details.ami }}<button class="copy-btn" @click.stop="copyField(data.details.ami,'ami')" :title="copiedKey==='ami' ? t('res.copied') : t('action.copy')">{{ copiedKey==='ami' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.platform') }}</dt>     <dd>{{ data.details.platform }}</dd>
+                    <dt>{{ t('ec2d.architecture') }}</dt>   <dd class="mono">{{ data.details.architecture }}</dd>
+                    <dt>{{ t('ec2d.virtualization') }}</dt> <dd>{{ data.details.virtualizationType }}</dd>
                     <dt>Hypervisor</dt>     <dd>{{ data.details.hypervisor }}</dd>
-                    <dt>Disp. raíz</dt>     <dd class="mono">{{ data.details.rootDeviceName }} ({{ data.details.rootDeviceType }})</dd>
+                    <dt>{{ t('ec2d.rootDevice') }}</dt>     <dd class="mono">{{ data.details.rootDeviceName }} ({{ data.details.rootDeviceType }})</dd>
                   </dl>
                 </div>
 
                 <div class="ec2d-card">
-                  <div class="ec2d-card-title">Red y DNS</div>
+                  <div class="ec2d-card-title">{{ t('ec2d.networkDns') }}</div>
                   <dl>
-                    <dt>IP Pública</dt>     <dd class="mono copyable">{{ data.details.publicIp || '—' }}<button v-if="data.details.publicIp" class="copy-btn" @click.stop="copyField(data.details.publicIp,'pubip')" :title="copiedKey==='pubip'?'¡Copiado!':'Copiar'">{{ copiedKey==='pubip' ? '✓' : '⧉' }}</button></dd>
-                    <dt>IP Privada</dt>     <dd class="mono copyable">{{ data.details.privateIp || '—' }}<button v-if="data.details.privateIp" class="copy-btn" @click.stop="copyField(data.details.privateIp,'privip')" :title="copiedKey==='privip'?'¡Copiado!':'Copiar'">{{ copiedKey==='privip' ? '✓' : '⧉' }}</button></dd>
-                    <dt>DNS Público</dt>    <dd class="mono wrap copyable">{{ data.details.publicDns || '—' }}<button v-if="data.details.publicDns" class="copy-btn" @click.stop="copyField(data.details.publicDns,'pubdns')" :title="copiedKey==='pubdns'?'¡Copiado!':'Copiar'">{{ copiedKey==='pubdns' ? '✓' : '⧉' }}</button></dd>
-                    <dt>DNS Privado</dt>    <dd class="mono wrap copyable">{{ data.details.privateDns || '—' }}<button v-if="data.details.privateDns" class="copy-btn" @click.stop="copyField(data.details.privateDns,'privdns')" :title="copiedKey==='privdns'?'¡Copiado!':'Copiar'">{{ copiedKey==='privdns' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.publicIp') }}</dt>     <dd class="mono copyable">{{ data.details.publicIp || '—' }}<button v-if="data.details.publicIp" class="copy-btn" @click.stop="copyField(data.details.publicIp,'pubip')" :title="copiedKey==='pubip' ? t('res.copied') : t('action.copy')">{{ copiedKey==='pubip' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.privateIp') }}</dt>     <dd class="mono copyable">{{ data.details.privateIp || '—' }}<button v-if="data.details.privateIp" class="copy-btn" @click.stop="copyField(data.details.privateIp,'privip')" :title="copiedKey==='privip' ? t('res.copied') : t('action.copy')">{{ copiedKey==='privip' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.publicDns') }}</dt>    <dd class="mono wrap copyable">{{ data.details.publicDns || '—' }}<button v-if="data.details.publicDns" class="copy-btn" @click.stop="copyField(data.details.publicDns,'pubdns')" :title="copiedKey==='pubdns' ? t('res.copied') : t('action.copy')">{{ copiedKey==='pubdns' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.privateDns') }}</dt>    <dd class="mono wrap copyable">{{ data.details.privateDns || '—' }}<button v-if="data.details.privateDns" class="copy-btn" @click.stop="copyField(data.details.privateDns,'privdns')" :title="copiedKey==='privdns' ? t('res.copied') : t('action.copy')">{{ copiedKey==='privdns' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="ec2d-card">
-                  <div class="ec2d-card-title">IAM y acceso</div>
+                  <div class="ec2d-card-title">{{ t('ec2d.iamAccess') }}</div>
                   <dl>
-                    <dt>Key Pair</dt>       <dd class="mono copyable">{{ data.details.keyPair || '—' }}<button v-if="data.details.keyPair" class="copy-btn" @click.stop="copyField(data.details.keyPair,'keypair')" :title="copiedKey==='keypair'?'¡Copiado!':'Copiar'">{{ copiedKey==='keypair' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Perfil IAM</dt>     <dd class="mono wrap copyable">{{ data.details.iamProfile || '—' }}<button v-if="data.details.iamProfile" class="copy-btn" @click.stop="copyField(data.details.iamProfile,'iam')" :title="copiedKey==='iam'?'¡Copiado!':'Copiar'">{{ copiedKey==='iam' ? '✓' : '⧉' }}</button></dd>
-                    <dt>EBS Optimizado</dt> <dd>{{ data.details.ebsOptimized ? 'Sí' : 'No' }}</dd>
-                    <dt>ENA</dt>            <dd>{{ data.details.enaSupport ? 'Habilitado' : 'Deshabilitado' }}</dd>
-                    <dt>Monitoreo CW</dt>   <dd>{{ data.details.monitoring || '—' }}</dd>
+                    <dt>Key Pair</dt>       <dd class="mono copyable">{{ data.details.keyPair || '—' }}<button v-if="data.details.keyPair" class="copy-btn" @click.stop="copyField(data.details.keyPair,'keypair')" :title="copiedKey==='keypair' ? t('res.copied') : t('action.copy')">{{ copiedKey==='keypair' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.iamProfile') }}</dt>     <dd class="mono wrap copyable">{{ data.details.iamProfile || '—' }}<button v-if="data.details.iamProfile" class="copy-btn" @click.stop="copyField(data.details.iamProfile,'iam')" :title="copiedKey==='iam' ? t('res.copied') : t('action.copy')">{{ copiedKey==='iam' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('ec2d.ebsOptimized') }}</dt> <dd>{{ yesNo(data.details.ebsOptimized) }}</dd>
+                    <dt>ENA</dt>            <dd>{{ enabled(data.details.enaSupport) }}</dd>
+                    <dt>{{ t('ec2d.cwMonitoring') }}</dt>   <dd>{{ data.details.monitoring || '—' }}</dd>
                   </dl>
                 </div>
 
                 <div class="ec2d-card">
                   <div class="ec2d-card-title">Status Checks</div>
                   <dl>
-                    <dt>Sistema</dt>
+                    <dt>{{ t('ec2d.system') }}</dt>
                     <dd><span :class="statusCheckClass(data.details.systemStatus)">{{ data.details.systemStatus }}</span></dd>
-                    <dt>Instancia</dt>
+                    <dt>{{ t('ec2d.instance') }}</dt>
                     <dd><span :class="statusCheckClass(data.details.instanceStatus)">{{ data.details.instanceStatus }}</span></dd>
                   </dl>
                 </div>
@@ -104,25 +104,24 @@
 
               <!-- Tags -->
               <div class="ec2d-card" style="margin-top:12px">
-                <div class="ec2d-card-title">Tags ({{ data.details.tags.length }})</div>
+                <div class="ec2d-card-title">{{ t('res.tagsCount', { n: data.details.tags.length }) }}</div>
                 <table class="ec2d-table" v-if="data.details.tags.length">
-                  <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                  <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                   <tbody>
-                    <tr v-for="t in data.details.tags" :key="t.Key">
-                      <td class="mono">{{ t.Key }}</td>
-                      <td class="mono">{{ t.Value }}</td>
+                    <tr v-for="tag in data.details.tags" :key="tag.Key">
+                      <td class="mono">{{ tag.Key }}</td>
+                      <td class="mono">{{ tag.Value }}</td>
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('res.noTags') }}</div>
               </div>
             </div>
 
             <!-- ══ MONITOREO ════════════════════════════════════════════════ -->
             <div v-show="activeTab === 'monitoring'" class="ec2d-section">
               <div class="ec2d-notice" v-if="!data.monitoring.cwEnabled">
-                <strong>ℹ</strong> Monitoreo detallado de CloudWatch no está habilitado en esta instancia.
-                Los datos mostrados son del monitoreo básico (resolución 5 min).
+                <strong>ℹ</strong> {{ t('ec2d.basicMonitoring') }}
               </div>
               <div class="ec2d-metrics-grid">
                 <div v-for="m in metricCards" :key="m.key" class="ec2d-metric-card">
@@ -135,11 +134,11 @@
                       <polyline v-if="sparkPoints(m.key)" :points="sparkPoints(m.key)" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
                     </svg>
                   </div>
-                  <div class="ec2d-metric-range">Últimas 3 h</div>
+                  <div class="ec2d-metric-range">{{ t('ec2d.last3h') }}</div>
                 </div>
               </div>
               <div v-if="!hasAnyMetric" class="text-dim" style="text-align:center;padding:32px">
-                Sin datos de CloudWatch en las últimas 3 horas (puede que la instancia esté detenida).
+                {{ t('ec2d.noMetrics') }}
               </div>
             </div>
 
@@ -155,13 +154,13 @@
                       {{ data.security.metadataOptions.httpTokens || '—' }}
                     </span>
                     <span v-if="data.security.metadataOptions.httpTokens !== 'required'" class="text-dim" style="font-size:.75rem;margin-left:6px">
-                      (IMDSv1 habilitado — considere IMDSv2)
+                      {{ t('ec2d.imdsv1') }}
                     </span>
                   </dd>
                   <dt>Endpoint</dt>     <dd>{{ data.security.metadataOptions.httpEndpoint }}</dd>
                   <dt>Hop limit</dt>    <dd>{{ data.security.metadataOptions.httpPutHopLimit }}</dd>
-                  <dt>Tags en IMDS</dt> <dd>{{ data.security.metadataOptions.instanceMetadataTags || '—' }}</dd>
-                  <dt>Perfil IAM</dt>   <dd class="mono wrap">{{ data.security.iamProfile || '—' }}</dd>
+                  <dt>{{ t('ec2d.imdsTags') }}</dt> <dd>{{ data.security.metadataOptions.instanceMetadataTags || '—' }}</dd>
+                  <dt>{{ t('ec2d.iamProfile') }}</dt>   <dd class="mono wrap">{{ data.security.iamProfile || '—' }}</dd>
                 </dl>
               </div>
 
@@ -174,9 +173,9 @@
                 </div>
 
                 <div class="ec2d-sg-section">
-                  <div class="ec2d-sg-label">Entrada ({{ sg.inbound.length }})</div>
+                  <div class="ec2d-sg-label">{{ t('ec2d.inbound', { n: sg.inbound.length }) }}</div>
                   <table class="ec2d-table" v-if="sg.inbound.length">
-                    <thead><tr><th>Protocolo</th><th>Puertos</th><th>Origen</th></tr></thead>
+                    <thead><tr><th>{{ t('ec2d.protocol') }}</th><th>{{ t('ec2d.ports') }}</th><th>{{ t('ec2d.source') }}</th></tr></thead>
                     <tbody>
                       <tr v-for="(r, ri) in sg.inbound" :key="ri">
                         <td class="mono">{{ r.protocol }}</td>
@@ -189,13 +188,13 @@
                       </tr>
                     </tbody>
                   </table>
-                  <div v-else class="text-dim" style="font-size:.8rem">Sin reglas de entrada.</div>
+                  <div v-else class="text-dim" style="font-size:.8rem">{{ t('ec2d.noInbound') }}</div>
                 </div>
 
                 <div class="ec2d-sg-section" style="margin-top:10px">
-                  <div class="ec2d-sg-label">Salida ({{ sg.outbound.length }})</div>
+                  <div class="ec2d-sg-label">{{ t('ec2d.outbound', { n: sg.outbound.length }) }}</div>
                   <table class="ec2d-table" v-if="sg.outbound.length">
-                    <thead><tr><th>Protocolo</th><th>Puertos</th><th>Destino</th></tr></thead>
+                    <thead><tr><th>{{ t('ec2d.protocol') }}</th><th>{{ t('ec2d.ports') }}</th><th>{{ t('ec2d.destination') }}</th></tr></thead>
                     <tbody>
                       <tr v-for="(r, ri) in sg.outbound" :key="ri">
                         <td class="mono">{{ r.protocol }}</td>
@@ -208,42 +207,42 @@
                       </tr>
                     </tbody>
                   </table>
-                  <div v-else class="text-dim" style="font-size:.8rem">Sin reglas de salida.</div>
+                  <div v-else class="text-dim" style="font-size:.8rem">{{ t('ec2d.noOutbound') }}</div>
                 </div>
               </div>
 
               <div v-if="!data.security.securityGroups.length" class="text-dim" style="text-align:center;padding:24px">
-                Sin security groups asociados.
+                {{ t('ec2d.noSecurityGroups') }}
               </div>
             </div>
 
             <!-- ══ REDES ════════════════════════════════════════════════════ -->
             <div v-show="activeTab === 'networking'" class="ec2d-section">
               <div class="ec2d-card" style="margin-bottom:12px">
-                <div class="ec2d-card-title">VPC y Subnet</div>
+                <div class="ec2d-card-title">{{ t('ec2d.vpcSubnet') }}</div>
                 <dl>
                   <dt>VPC</dt>         <dd class="mono">{{ data.networking.vpcId || '—' }}</dd>
                   <dt>Subnet</dt>      <dd class="mono">{{ data.networking.subnetId || '—' }}</dd>
-                  <dt>Source/Dest</dt> <dd>{{ data.networking.sourceDestCheck ? 'Habilitado' : 'Deshabilitado' }}</dd>
+                  <dt>Source/Dest</dt> <dd>{{ enabled(data.networking.sourceDestCheck) }}</dd>
                 </dl>
               </div>
 
               <div v-for="ni in data.networking.interfaces" :key="ni.id" class="ec2d-card" style="margin-bottom:12px">
                 <div class="ec2d-card-title">
-                  🌐 Interfaz {{ ni.id }}
+                  🌐 {{ t('ec2d.interface', { id: ni.id }) }}
                   <span class="text-dim mono-xs" style="margin-left:6px">{{ ni.macAddress }}</span>
                   <span :class="['ec2d-ni-status', ni.status === 'in-use' ? 'ok' : 'dim']">{{ ni.status }}</span>
                 </div>
                 <dl>
-                  <dt>IP Privada</dt>  <dd class="mono">{{ ni.privateIp }}</dd>
-                  <dt>DNS Privado</dt> <dd class="mono wrap">{{ ni.privateDns || '—' }}</dd>
-                  <dt>IP Pública</dt>  <dd class="mono">{{ ni.publicIp || '—' }}</dd>
-                  <dt>DNS Público</dt> <dd class="mono wrap">{{ ni.publicDns || '—' }}</dd>
+                  <dt>{{ t('ec2d.privateIp') }}</dt>  <dd class="mono">{{ ni.privateIp }}</dd>
+                  <dt>{{ t('ec2d.privateDns') }}</dt> <dd class="mono wrap">{{ ni.privateDns || '—' }}</dd>
+                  <dt>{{ t('ec2d.publicIp') }}</dt>  <dd class="mono">{{ ni.publicIp || '—' }}</dd>
+                  <dt>{{ t('ec2d.publicDns') }}</dt> <dd class="mono wrap">{{ ni.publicDns || '—' }}</dd>
                   <dt>Subnet</dt>      <dd class="mono">{{ ni.subnetId }}</dd>
                   <dt>VPC</dt>         <dd class="mono">{{ ni.vpcId }}</dd>
-                  <dt>Descripción</dt> <dd>{{ ni.description || '—' }}</dd>
-                  <dt>Src/Dest</dt>    <dd>{{ ni.sourceDest ? 'Habilitado' : 'Deshabilitado' }}</dd>
-                  <dt>Groups</dt>
+                  <dt>{{ t('res.description') }}</dt> <dd>{{ ni.description || '—' }}</dd>
+                  <dt>Src/Dest</dt>    <dd>{{ enabled(ni.sourceDest) }}</dd>
+                  <dt>{{ t('ec2d.groups') }}</dt>
                   <dd>
                     <span v-for="g in ni.groups" :key="g.id" class="ec2d-src-chip">{{ g.name }} <span class="text-dim">({{ g.id }})</span></span>
                   </dd>
@@ -251,14 +250,14 @@
               </div>
 
               <div v-if="!data.networking.interfaces.length" class="text-dim" style="text-align:center;padding:24px">
-                Sin interfaces de red.
+                {{ t('ec2d.noInterfaces') }}
               </div>
             </div>
 
             <!-- ══ ALMACENAMIENTO ══════════════════════════════════════════ -->
             <div v-show="activeTab === 'storage'" class="ec2d-section">
               <div class="ec2d-card" style="margin-bottom:8px">
-                <div class="ec2d-card-title">Dispositivo raíz: <span class="mono">{{ data.storage.rootDevice }}</span></div>
+                <div class="ec2d-card-title">{{ t('ec2d.rootDeviceLabel') }} <span class="mono">{{ data.storage.rootDevice }}</span></div>
               </div>
               <div v-for="vol in data.storage.volumes" :key="vol.id" class="ec2d-card" style="margin-bottom:12px">
                 <div class="ec2d-card-title">
@@ -267,22 +266,22 @@
                   <span :class="['ec2d-vol-state', vol.state]">{{ vol.state }}</span>
                 </div>
                 <dl>
-                  <dt>Tamaño</dt>       <dd>{{ vol.size }} GiB</dd>
-                  <dt>Tipo</dt>         <dd class="mono">{{ vol.type }}</dd>
+                  <dt>{{ t('ec2d.size') }}</dt>       <dd>{{ vol.size }} GiB</dd>
+                  <dt>{{ t('res.type') }}</dt>         <dd class="mono">{{ vol.type }}</dd>
                   <dt>IOPS</dt>         <dd>{{ vol.iops ?? '—' }}</dd>
                   <dt>Throughput</dt>   <dd>{{ vol.throughput ? vol.throughput + ' MB/s' : '—' }}</dd>
-                  <dt>Cifrado</dt>      <dd>{{ vol.encrypted ? '✓ Sí' : '✗ No' }}</dd>
+                  <dt>{{ t('ec2d.encrypted') }}</dt>      <dd>{{ vol.encrypted ? `✓ ${t('common.yes')}` : `✗ ${t('common.no')}` }}</dd>
                   <dt>KMS Key</dt>      <dd class="mono wrap">{{ vol.kmsKeyId || '—' }}</dd>
                   <dt>Snapshot</dt>     <dd class="mono">{{ vol.snapshotId || '—' }}</dd>
-                  <dt>Zona</dt>         <dd class="mono">{{ vol.az }}</dd>
-                  <dt>Multi-Attach</dt> <dd>{{ vol.multiAttach ? 'Sí' : 'No' }}</dd>
-                  <dt>Delete-on-term</dt><dd>{{ vol.deleteOnTermination ? 'Sí' : 'No' }}</dd>
-                  <dt>Creado</dt>       <dd>{{ fmtDate(vol.createTime) }}</dd>
+                  <dt>{{ t('res.zone') }}</dt>         <dd class="mono">{{ vol.az }}</dd>
+                  <dt>Multi-Attach</dt> <dd>{{ yesNo(vol.multiAttach) }}</dd>
+                  <dt>Delete-on-term</dt><dd>{{ yesNo(vol.deleteOnTermination) }}</dd>
+                  <dt>{{ t('res.created') }}</dt>       <dd>{{ fmtDate(vol.createTime) }}</dd>
                 </dl>
               </div>
 
               <div v-if="!data.storage.volumes.length" class="text-dim" style="text-align:center;padding:24px">
-                Sin volúmenes adjuntos.
+                {{ t('ec2d.noVolumes') }}
               </div>
             </div>
 
@@ -290,7 +289,7 @@
 
           <!-- Empty state -->
           <div v-else class="ec2d-empty">
-            Haz clic en <strong>Cargar detalles</strong> para obtener la información completa de la instancia.
+            {{ t('ec2d.emptyHint') }}
           </div>
 
         </div>
@@ -301,6 +300,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
+import { settings } from '../../composables/useSettings'
 
 const props = defineProps({
   open:     { type: Boolean, default: false },
@@ -309,13 +310,18 @@ const props = defineProps({
 })
 defineEmits(['close'])
 
-const TABS = [
-  { id: 'details',    label: '📋 Detalles'       },
-  { id: 'monitoring', label: '📊 Monitoreo'      },
-  { id: 'security',   label: '🔒 Seguridad'      },
-  { id: 'networking', label: '🌐 Redes'           },
-  { id: 'storage',    label: '💾 Almacenamiento'  },
-]
+const { t } = useI18n()
+
+const TABS = computed(() => [
+  { id: 'details',    label: `📋 ${t('ec2d.tabDetails')}` },
+  { id: 'monitoring', label: `📊 ${t('ec2d.tabMonitoring')}` },
+  { id: 'security',   label: `🔒 ${t('ec2d.tabSecurity')}` },
+  { id: 'networking', label: `🌐 ${t('ec2d.tabNetworking')}` },
+  { id: 'storage',    label: `💾 ${t('ec2d.tabStorage')}` },
+])
+
+const yesNo = value => t(value ? 'common.yes' : 'common.no')
+const enabled = value => t(value ? 'res.enabled' : 'res.disabled')
 
 const activeTab = ref('details')
 const data      = ref(null)
@@ -360,11 +366,11 @@ async function load() {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(d).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function fmtPortRange(r) {
-  if (r.protocol === 'All' || r.fromPort == null) return 'Todos'
+  if (r.protocol === 'All' || r.fromPort == null) return t('ec2d.allPorts')
   if (r.fromPort === r.toPort) return String(r.fromPort)
   return `${r.fromPort}–${r.toPort}`
 }
@@ -374,14 +380,14 @@ function statusCheckClass(s) {
 }
 
 // ── Metrics helpers ──────────────────────────────────────────────────────────
-const metricCards = [
-  { key: 'CPUUtilization', label: 'CPU',          unit: '%'  },
-  { key: 'NetworkIn',      label: 'Red Entrada',  unit: 'B'  },
-  { key: 'NetworkOut',     label: 'Red Salida',   unit: 'B'  },
-  { key: 'DiskReadBytes',  label: 'Disco Lectura',unit: 'B'  },
-  { key: 'DiskWriteBytes', label: 'Disco Escritura', unit: 'B' },
-  { key: 'StatusCheckFailed', label: 'Status Checks', unit: '' },
-]
+const metricCards = computed(() => [
+  { key: 'CPUUtilization',    label: 'CPU',                    unit: '%' },
+  { key: 'NetworkIn',         label: t('ec2d.networkIn'),      unit: 'B' },
+  { key: 'NetworkOut',        label: t('ec2d.networkOut'),     unit: 'B' },
+  { key: 'DiskReadBytes',     label: t('ec2d.diskRead'),       unit: 'B' },
+  { key: 'DiskWriteBytes',    label: t('ec2d.diskWrite'),      unit: 'B' },
+  { key: 'StatusCheckFailed', label: 'Status Checks',          unit: '' },
+])
 
 function lastVal(key) {
   const pts = data.value?.monitoring?.metrics?.[key]
