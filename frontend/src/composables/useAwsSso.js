@@ -11,6 +11,9 @@
  * Used by ProfileModal (initial setup) and AwsSessionAlert (one-click renewal).
  */
 import { ref } from 'vue'
+import { useI18n } from './useI18n'
+
+const { t } = useI18n()
 
 export function useAwsSso() {
   const phase           = ref('idle')   // idle | starting | waiting | authorized | denied | expired | error
@@ -38,7 +41,7 @@ export function useAwsSso() {
       ...opts,
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `SSO request failed (${res.status})`)
+    if (!res.ok) throw new Error(data.error || t('sso.requestFailed', { status: res.status }))
     return data
   }
 
@@ -70,8 +73,8 @@ export function useAwsSso() {
           try {
             const d = await api('poll', { method: 'POST', body: JSON.stringify({ sessionId }) })
             if (d.status === 'authorized') { phase.value = 'authorized'; return resolve() }
-            if (d.status === 'denied')     { phase.value = 'denied';  return reject(new Error('Acceso denegado en AWS')) }
-            if (d.status === 'expired')    { phase.value = 'expired'; return reject(new Error('La solicitud de login expiró — inténtalo de nuevo')) }
+            if (d.status === 'denied')     { phase.value = 'denied';  return reject(new Error(t('sso.denied'))) }
+            if (d.status === 'expired')    { phase.value = 'expired'; return reject(new Error(t('sso.expired'))) }
             pollTimer = setTimeout(poll, intervalMs)
           } catch (e) { phase.value = 'error'; message.value = e.message; reject(e) }
         }

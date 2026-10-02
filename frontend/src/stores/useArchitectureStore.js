@@ -1,6 +1,9 @@
 import { computed, ref } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useApi } from '../composables/useApi'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 export const useArchitectureStore = defineStore('architecture', () => {
   const { apiFetch } = useApi()
@@ -37,7 +40,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     projects.value.find(project => project.id === selectedProjectId.value) || null)
 
   function headers(json = false) {
-    if (!activeProfileId.value) throw new Error('No application profile selected')
+    if (!activeProfileId.value) throw new Error(t('store.noApplicationProfile'))
     return {
       'X-Profile-Id': activeProfileId.value,
       ...(json ? { 'Content-Type': 'application/json' } : {}),

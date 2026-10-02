@@ -161,6 +161,7 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch, useId } from 'vue'
 import { createIcons, icons } from 'lucide'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   definition: { type: String, default: '' },
@@ -175,14 +176,15 @@ defineEmits(['nodeClick'])
 const wrap   = ref(null)
 const canvas = ref(null)
 const diagramId = useId()
-const EXECUTION_STATUS = {
-  SUCCEEDED: { label: 'Completado', color: '#4ade80', mark: 'OK' },
-  FAILED: { label: 'Fallido', color: '#f87171', mark: '!' },
-  TIMED_OUT: { label: 'Tiempo agotado', color: '#fbbf24', mark: '!' },
-  RUNNING: { label: 'En curso', color: '#60a5fa', mark: '...' },
-  ABORTED: { label: 'Interrumpido', color: '#a1a1aa', mark: 'X' },
-  UNVISITED: { label: 'No visitado', color: '#71717a', mark: '-' },
-}
+const { t } = useI18n()
+const EXECUTION_STATUS = computed(() => ({
+  SUCCEEDED: { label: t('sfx.status.SUCCEEDED'), color: '#4ade80', mark: 'OK' },
+  FAILED: { label: t('sfx.status.FAILED'), color: '#f87171', mark: '!' },
+  TIMED_OUT: { label: t('sfx.status.TIMED_OUT'), color: '#fbbf24', mark: '!' },
+  RUNNING: { label: t('sfx.status.RUNNING'), color: '#60a5fa', mark: '...' },
+  ABORTED: { label: t('sfx.status.ABORTED'), color: '#a1a1aa', mark: 'X' },
+  UNVISITED: { label: t('sfx.status.UNVISITED'), color: '#71717a', mark: '-' },
+}))
 function edgeExecuted(edge) {
   return props.transitions.some(transition => transition.from === edge.from && transition.to === edge.to)
 }

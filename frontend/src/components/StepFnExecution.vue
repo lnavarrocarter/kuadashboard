@@ -1,12 +1,12 @@
 <template>
   <div class="sfnx">
     <div class="sfnx-toolbar">
-      <div class="sfnx-tabs" role="tablist" aria-label="Vista de eventos">
-        <button role="tab" :aria-selected="mode === 'diagram'" @click="mode = 'diagram'">Diagrama</button>
-        <button role="tab" :aria-selected="mode === 'history'" @click="mode = 'history'">Historial ({{ events.length }})</button>
+      <div class="sfnx-tabs" role="tablist" :aria-label="t('sfx.viewLabel')">
+        <button role="tab" :aria-selected="mode === 'diagram'" @click="mode = 'diagram'">{{ t('sfx.diagram') }}</button>
+        <button role="tab" :aria-selected="mode === 'history'" @click="mode = 'history'">{{ t('sfx.history', { n: events.length }) }}</button>
       </div>
-      <label v-if="mode === 'diagram' && model.scopes.length > 1" class="sfnx-scope">Rama
-        <select v-model="scopeId" @change="selectedId = null; selectedName = ''" aria-label="Rama del diagrama">
+      <label v-if="mode === 'diagram' && model.scopes.length > 1" class="sfnx-scope">{{ t('sfx.branch') }}
+        <select v-model="scopeId" @change="selectedId = null; selectedName = ''" :aria-label="t('sfx.branchLabel')">
           <option v-for="scope in model.scopes" :key="scope.id" :value="scope.id">{{ scope.label }}</option>
         </select>
       </label>
@@ -14,41 +14,41 @@
     <div v-if="definitionWarning" class="sfnx-warning" role="status">{{ definitionWarning }}</div>
     <div v-if="mode === 'diagram'" class="sfnx-layout">
       <StepFnDiagram :definition="scope?.definition || ''" execution :node-statuses="nodeStatuses" :selected-name="selected && !selected.scopeId ? '' : selectedName" :transitions="transitions" @node-click="selectNode" />
-      <aside class="sfnx-inspector" aria-label="Detalle del paso">
-        <label class="sfnx-select">Paso / visita
-          <select :value="selectedId ?? ''" @change="selectVisit(Number($event.target.value))" aria-label="Paso y visita">
-            <option value="" disabled>Seleccionar</option>
-            <option v-for="visit in model.visits" :key="visit.id" :value="visit.id">#{{ visit.id }} {{ visit.name }}{{ visit.iteration !== undefined ? ` / Iteracion ${visit.iteration}` : '' }} / {{ statusLabel(visit.status) }}</option>
+      <aside class="sfnx-inspector" :aria-label="t('sfx.stepDetail')">
+        <label class="sfnx-select">{{ t('sfx.stepVisit') }}
+          <select :value="selectedId ?? ''" @change="selectVisit(Number($event.target.value))" :aria-label="t('sfx.stepVisitLabel')">
+            <option value="" disabled>{{ t('sfx.select') }}</option>
+            <option v-for="visit in model.visits" :key="visit.id" :value="visit.id">#{{ visit.id }} {{ visit.name }}{{ visit.iteration !== undefined ? ` / ${t('sfx.iteration', { n: visit.iteration })}` : '' }} / {{ statusLabel(visit.status) }}</option>
           </select>
         </label>
         <template v-if="selected">
-          <p v-if="!selected.scopeId" class="sfnx-warning">No se pudo asociar esta visita a una rama unica de la definicion. Los detalles corresponden al evento #{{ selected.id }}.</p>
+          <p v-if="!selected.scopeId" class="sfnx-warning">{{ t('sfx.unmatchedBranch', { id: selected.id }) }}</p>
           <div class="sfnx-heading"><h3>{{ selected.name }}</h3><span :class="['sfnx-status', selected.status]">{{ statusLabel(selected.status) }}</span></div>
           <dl class="sfnx-summary">
-            <dt>Tipo</dt><dd>{{ selected.type }}</dd>
-            <dt>Inicio</dt><dd>{{ date(selected.start) }}</dd>
-            <dt>Duracion</dt><dd>{{ duration(selected) }}</dd>
-            <template v-if="selected.iteration !== undefined"><dt>Iteracion</dt><dd>{{ selected.iteration }}</dd></template>
-            <template v-if="selected.parent"><dt>Contenedor</dt><dd><button class="sfnx-link" @click="selectVisit(selected.parent.id)">{{ selected.parent.name }} #{{ selected.parent.id }}</button></dd></template>
+            <dt>{{ t('sfx.type') }}</dt><dd>{{ selected.type }}</dd>
+            <dt>{{ t('sfx.start') }}</dt><dd>{{ date(selected.start) }}</dd>
+            <dt>{{ t('sfx.duration') }}</dt><dd>{{ duration(selected) }}</dd>
+            <template v-if="selected.iteration !== undefined"><dt>{{ t('sfx.iterationLabel') }}</dt><dd>{{ selected.iteration }}</dd></template>
+            <template v-if="selected.parent"><dt>{{ t('sfx.container') }}</dt><dd><button class="sfnx-link" @click="selectVisit(selected.parent.id)">{{ selected.parent.name }} #{{ selected.parent.id }}</button></dd></template>
           </dl>
           <div v-if="visitsForNode.length > 1" class="sfnx-visits">
-            <label>Visita de este paso
-              <select :value="selected.id" @change="selectVisit(Number($event.target.value))" aria-label="Visita del paso">
-                <option v-for="(visit, index) in visitsForNode" :key="visit.id" :value="visit.id">{{ index + 1 }} / #{{ visit.id }} / {{ statusLabel(visit.status) }}{{ visit.iteration !== undefined ? ` / Iteracion ${visit.iteration}` : '' }}</option>
+            <label>{{ t('sfx.thisStepVisit') }}
+              <select :value="selected.id" @change="selectVisit(Number($event.target.value))" :aria-label="t('sfx.stepVisitSelect')">
+                <option v-for="(visit, index) in visitsForNode" :key="visit.id" :value="visit.id">{{ index + 1 }} / #{{ visit.id }} / {{ statusLabel(visit.status) }}{{ visit.iteration !== undefined ? ` / ${t('sfx.iteration', { n: visit.iteration })}` : '' }}</option>
               </select>
             </label>
           </div>
-          <details v-if="failures.length" open class="sfnx-failure"><summary>Errores ({{ failures.length }})</summary><pre>{{ formatExecutionJson(failures) }}</pre></details>
+          <details v-if="failures.length" open class="sfnx-failure"><summary>{{ t('sfx.errors', { n: failures.length }) }}</summary><pre>{{ formatExecutionJson(failures) }}</pre></details>
           <details v-for="field in ['input', 'output']" :key="`${selected.id}-${field}`" open class="sfnx-payload">
-            <summary>{{ field === 'input' ? 'Entrada' : 'Salida' }}</summary>
+            <summary>{{ field === 'input' ? t('sfx.input') : t('sfx.output') }}</summary>
             <pre v-if="selected[field] !== undefined">{{ formatExecutionJson(selected[field]) }}</pre>
-            <p v-else class="sfnx-muted">No disponible</p>
+            <p v-else class="sfnx-muted">{{ t('sfx.notAvailable') }}</p>
           </details>
-          <section class="sfnx-step-events"><h4>Eventos del paso ({{ selected.events.length }})</h4>
+          <section class="sfnx-step-events"><h4>{{ t('sfx.stepEvents', { n: selected.events.length }) }}</h4>
             <details v-for="item in selected.events" :key="item.id" class="sfnx-event"><summary><span>#{{ item.id }} {{ item.type }}</span><time>{{ date(item.timestamp) }}</time></summary><pre>{{ formatExecutionJson(item) }}</pre></details>
           </section>
         </template>
-        <div v-else class="sfnx-muted sfnx-empty"><h3>{{ selectedName || 'Sin paso seleccionado' }}</h3>{{ selectedName ? 'Este paso no tiene visitas en el historial.' : 'No hay estados asociados a los eventos disponibles.' }}</div>
+        <div v-else class="sfnx-muted sfnx-empty"><h3>{{ selectedName || t('sfx.noStep') }}</h3>{{ selectedName ? t('sfx.noVisits') : t('sfx.noStates') }}</div>
       </aside>
     </div>
     <div v-else class="sfnx-history">
@@ -61,12 +61,14 @@
 import { computed, ref, watch } from 'vue'
 import StepFnDiagram from './StepFnDiagram.vue'
 import { buildExecution, formatExecutionJson } from '../lib/stepFnExecution'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   events: { type: Array, default: () => [] },
   definition: { type: String, default: '' },
   definitionWarning: { type: String, default: '' },
 })
+const { t } = useI18n()
 const mode = ref('diagram')
 const scopeId = ref('root')
 const selectedId = ref(null)
@@ -83,7 +85,7 @@ const nodeStatuses = computed(() => {
 })
 const failures = computed(() => selected.value?.events.filter(item => /Failed|TimedOut|Aborted$/.test(item.type)) || [])
 function statusLabel(status) {
-  return { SUCCEEDED: 'Completado', FAILED: 'Fallido', TIMED_OUT: 'Tiempo agotado', RUNNING: 'En curso', ABORTED: 'Interrumpido' }[status] || status
+  return ['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'RUNNING', 'ABORTED'].includes(status) ? t(`sfx.status.${status}`) : status
 }
 function selectVisit(id) {
   const visit = model.value.visits.find(item => item.id === id)
@@ -101,7 +103,7 @@ function selectNode(node) {
 function date(value) { return value == null ? '-' : new Date(value).toLocaleString() }
 function duration(visit) {
   if (visit.start == null) return '-'
-  if (!visit.end && visit.status === 'RUNNING') return 'En curso'
+  if (!visit.end && visit.status === 'RUNNING') return t('sfx.status.RUNNING')
   const milliseconds = new Date(visit.end) - new Date(visit.start)
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return '-'
   return milliseconds < 1000 ? `${milliseconds} ms` : `${(milliseconds / 1000).toFixed(2)} s`

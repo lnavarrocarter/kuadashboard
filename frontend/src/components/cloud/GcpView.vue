@@ -2617,7 +2617,7 @@ const pollingBadge = computed(() => {
   if (!s) return '—'
   return s.enabled ? `cada ${s.intervalMinutes < 60 ? `${s.intervalMinutes} min` : `${s.intervalMinutes / 60} h`}` : 'sin sondeo'
 })
-const pollingTitle = computed(() => 'Historial de estados: configurar el sondeo en segundo plano')
+const pollingTitle = computed(() => t('gcpv.pollingTitle'))
 watch(selectedProfileId, id => { if (id) loadPollingSettings() }, { immediate: true })
 
 const createModal = reactive({ open: false, kind: 'cloudrun' })

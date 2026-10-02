@@ -8,6 +8,9 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 export const useVercelStore = defineStore('vercel', () => {
   const { apiFetch: request } = useApi()
@@ -46,7 +49,7 @@ export const useVercelStore = defineStore('vercel', () => {
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
   function headers() {
-    if (!activeProfileId.value) throw new Error('No Vercel profile selected')
+    if (!activeProfileId.value) throw new Error(t('store.noVercelProfile'))
     return { 'X-Profile-Id': activeProfileId.value }
   }
 
