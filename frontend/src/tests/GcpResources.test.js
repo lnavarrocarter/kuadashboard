@@ -394,4 +394,53 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     await w.find('[data-test="create-vm"]').trigger('click')
     expect(w.findComponent(GcpCreateModal).props()).toMatchObject({ open: true, kind: 'vm' })
   })
+
+  it('renders the enriched overview with health, attention signals and historical deltas', async () => {
+    const w = mount(GcpView, { props: { activeService: 'overview' }, global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    store.overview = {
+      projectId: 'demo-project',
+      region: 'us-central1',
+      identity: { account: 'operator@example.com' },
+      summary: { total: 4, active: 2, empty: 0, unavailable: 1, critical: 1, warning: 1, attention: 3, health: 'critical', services: 4, availableServices: 3 },
+      costs: {
+        status: 'partial', source: 'resource-baseline-estimate', estimated: true, currency: 'USD',
+        monthlyEstimate: 123.45, modeledResources: 3, unknownResources: 1,
+        byService: [
+          { id: 'vms', label: 'Compute VMs', tab: 'vms', count: 2, modeled: 1, unknown: 1, monthlyUsd: 80 },
+          { id: 'sql', label: 'Cloud SQL', tab: 'sql', count: 1, modeled: 1, unknown: 0, monthlyUsd: 43.45 },
+        ],
+        unpricedResources: [{ service: 'Compute VMs', name: 'a3-megagpu-8g' }],
+        unmodeledServices: ['BigQuery'],
+        unavailableServices: ['Cloud Scheduler'],
+        disclaimer: 'Approximate baseline only.',
+      },
+      services: [
+        { id: 'vms', label: 'Compute VMs', tab: 'vms', group: 'compute', status: 'available', health: 'healthy', count: 2, active: 1, inactive: 1, issueCount: 0, critical: 0, warning: 0, signals: [] },
+        { id: 'sql', label: 'Cloud SQL', tab: 'sql', group: 'data', status: 'unavailable', health: 'unavailable', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [], error: { message: 'Permission denied' } },
+        { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', group: 'integration', status: 'available', health: 'warning', count: 2, active: 1, inactive: 1, issueCount: 1, critical: 0, warning: 1, signals: [{ level: 'warning', code: 'paused', name: 'nightly-job' }] },
+        { id: 'storage', label: 'Storage', tab: 'storage', group: 'data', status: 'available', health: 'healthy', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [] },
+      ],
+    }
+    store.overviewHistory = [
+      { capturedAt: 1700000000000, payload: { summary: { total: 3, active: 2, unavailable: 0 } } },
+      { capturedAt: 1700003600000, payload: { summary: { total: 4, active: 2, unavailable: 1 } } },
+    ]
+    await flushPromises()
+
+    expect(w.find('.gcp-overview-health-banner').text()).toContain('Critical')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('3/4 services responding')
+    expect(w.find('.gcp-overview-groups').text()).toContain('Compute')
+    expect(w.find('.gcp-overview-attention-list').text()).toContain('nightly-job')
+    expect(w.find('.gcp-overview-table').text()).toContain('API unavailable')
+    expect(w.find('.gcp-overview-trend-summary').text()).toContain('+1')
+    expect(w.findAll('.gcp-overview-attention')).toHaveLength(2)
+    const costs = w.find('[data-test="overview-costs"]')
+    expect(costs.text()).toContain('Estimated costs')
+    expect(costs.text()).toContain('$123.45')
+    expect(costs.text()).toContain('Partial')
+    expect(costs.text()).toContain('a3-megagpu-8g')
+    expect(costs.text()).toContain('BigQuery')
+    expect(costs.text()).toContain('Cloud Scheduler')
+  })
 })

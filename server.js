@@ -14,6 +14,7 @@ const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
 const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
+const { adviseKubernetes } = require('./lib/advisor/kubernetes');
 const {
   isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries,
   parseMatrix, nodeMetricsFromPrometheus, summarizeSeries,
@@ -1007,9 +1008,10 @@ app.get('/api/overview', async (req, res) => {
   try {
     const namespace = String(req.query.namespace || 'all');
     const all = namespace === 'all';
-    const { core, apps, custom } = clients();
+    const { core, apps, custom, networking, policy, autoscaling } = clients();
     const settle = promise => promise.then(result => ({ ok: true, value: listItems(result) }), error => ({ ok: false, error }));
-    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics] = await Promise.all([
+    // NetworkPolicies, PDBs and HPAs only feed the Advisor.
+    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics, networkPolicies, pdbs, hpas] = await Promise.all([
       settle(all ? core.listPodForAllNamespaces() : core.listNamespacedPod(namespace)),
       settle(core.listNode()),
       settle(all ? apps.listDeploymentForAllNamespaces() : apps.listNamespacedDeployment(namespace)),
@@ -1017,6 +1019,9 @@ app.get('/api/overview', async (req, res) => {
       settle(all ? apps.listDaemonSetForAllNamespaces() : apps.listNamespacedDaemonSet(namespace)),
       settle(all ? core.listEventForAllNamespaces() : core.listNamespacedEvent(namespace)),
       settle(custom.listClusterCustomObject('metrics.k8s.io', 'v1beta1', 'nodes')),
+      settle(all ? networking.listNetworkPolicyForAllNamespaces() : networking.listNamespacedNetworkPolicy(namespace)),
+      settle(all ? policy.listPodDisruptionBudgetForAllNamespaces() : policy.listNamespacedPodDisruptionBudget(namespace)),
+      settle(all ? autoscaling.listHorizontalPodAutoscalerForAllNamespaces() : autoscaling.listNamespacedHorizontalPodAutoscaler(namespace)),
     ]);
     let prometheus;
     try {
@@ -1038,12 +1043,23 @@ app.get('/api/overview', async (req, res) => {
         }
       } catch { /* keep the metrics-server error */ }
     }
-    res.json(buildOverview({
+    const overview = buildOverview({
       namespace,
       sources: { pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics },
       metricsSource,
       prometheus,
-    }));
+    });
+    let advisor;
+    try {
+      advisor = adviseKubernetes({
+        namespace,
+        sources: { pods, nodes, deployments, statefulsets, daemonsets, networkPolicies, pdbs, hpas },
+        usage: overview.nodes?.usage || null,
+      });
+    } catch (err) {
+      advisor = { error: err.message };
+    }
+    res.json({ ...overview, advisor });
   } catch (err) { handleError(res, err); }
 });
 

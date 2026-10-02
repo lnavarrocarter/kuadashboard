@@ -1,7 +1,7 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
 > **Versión actual:** v1.17.0
-> **Última actualización:** 2026-09-28
+> **Última actualización:** 2026-10-01
 
 ---
 
@@ -29,6 +29,12 @@ El plan técnico completo está en [KUA Unified Management Plan](./architecture/
 ### Avance v1.14.1 — compatibilidad serverless heredada
 
 - La reconciliación Architecture/APM tolera nodos AWS históricos sin `provider` y deriva cuenta/región desde ARN para mantener una identidad compartida sin duplicados.
+
+### Avance sin publicar — Logs, CloudFormation y Advisor
+
+- **CloudWatch Logs con inteligencia (Fase 18):** caché local cifrada, consultas con sintaxis de Logs Insights, categorías, firmas recurrentes, datos sensibles y recomendaciones con evidencia que alimentan la topología inteligente. Próximos pasos: #89 (Kubernetes), #90 (tasas históricas), #91 (sync programado), #92 (GCP y Vercel), #93 (diagnóstico asistido).
+- **CloudFormation:** stacks, drift, change sets con riesgo y operaciones con guardas y auditoría; es el primer slice del centro de control (#51).
+- **Advisor (Fase 19):** cada resumen (Kubernetes, AWS, GCP) recomienda buenas prácticas de seguridad, infraestructura, arquitectura y desarrollo; KUApps tiene la mirada de producto por aplicación. Reglas deterministas, sin IA ni llamadas facturadas. Próximos pasos: #94 (aceptar y silenciar, historial), #95 (más cobertura), #96 (producto v2: error budget y DORA).
 
 ---
 

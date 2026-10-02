@@ -227,6 +227,17 @@ Exit criteria: KUA can create a small AWS app stack through reviewed steps, then
 
 Exit criteria: the same AWS MVP stack can be created through generated IaC rather than direct API calls.
 
+### First delivered slice: CloudFormation operations (AWS)
+
+The AWS → Management → CloudFormation tab applies these rules to existing stacks before the full control center exists:
+
+- **Preview before mutation.** Parameter updates create a change set on the current template (`UsePreviousTemplate`); its changes are classified by risk (low: add/modify in place; medium: removals or replacements; high: data-bearing resources removed or replaced). Deletion has its own preview: resources deleted vs kept by `DeletionPolicy`, data-bearing resources removed, nested stacks, and blockers (termination protection, exports imported by other stacks, nested stack, operation in progress).
+- **Server-side guards.** Routes re-read the preview instead of trusting the UI: executing a medium/high-risk change set, turning termination protection off and deleting a stack require typing the stack name; deletion also requires a reason and is refused while blockers exist.
+- **Audit.** Every operation (change set created, executed, deleted; protection on/off; deletion requested) is written to the audit log with `details.kind = cloudformation`, the stack, the risk summary and the reason, and the stack shows its operation history.
+- **Application link.** A stack can be linked to a KUA Application: its supported resources are added through the same deployment reader as the APM setup (no duplicates; registry reconciled), and the stack shows which applications already use it.
+
+Next: reuse the same preview/guard/audit contract for resource-level controls (Phase 21, #51), and drift results as reviewable Architecture changes (#54). The Advisor (unified plan, Phase 19) already lists missing operational controls (backups, Multi-AZ/HA, deletion protection) that the control center should be able to fix through this same contract.
+
 ### Phase 21: Control center and guarded delete
 
 - Normalize live controls across AWS and Kubernetes first.

@@ -17,6 +17,7 @@ import { settings } from '../composables/useSettings'
 export const OVERVIEW_TTL_MS = 5 * 60 * 1000
 export const INSIGHTS_TTL_MS = 15 * 60 * 1000
 export const ACTIVITY_TTL_MS = 15 * 60 * 1000
+export const ADVISOR_TTL_MS = 15 * 60 * 1000
 const DEFAULT_COST_CACHE_HOURS = 12
 const ttlMs = (minutes, fallback) => (Number(minutes) > 0 ? Number(minutes) * 60 * 1000 : fallback)
 
@@ -28,6 +29,7 @@ export const useAwsStore = defineStore('aws', () => {
   const activeProfileId  = ref(null)
   const overview         = ref(null)
   const overviewInsights = ref(null)
+  const overviewAdvisor  = ref(null)
   const regions          = ref([])
   const eksClusters      = ref([])
   const ecsServices      = ref([])
@@ -62,7 +64,7 @@ export const useAwsStore = defineStore('aws', () => {
   const snsActivity      = ref(null)
   const sesData          = ref(null)
   const sesMetrics       = ref(null)
-  const fetchedAt = { overview: null, insights: null, lambda: null, stepfn: null, sqs: null, sns: null, ses: null }
+  const fetchedAt = { overview: null, insights: null, advisor: null, lambda: null, stepfn: null, sqs: null, sns: null, ses: null }
   function isFresh(kind, ttl, key) {
     const entry = fetchedAt[kind]
     return !!entry && entry.key === key && Date.now() - entry.at < ttl
@@ -119,6 +121,7 @@ export const useAwsStore = defineStore('aws', () => {
     activeProfileId.value  = id
     overview.value         = null
     overviewInsights.value = null
+    overviewAdvisor.value  = null
     regions.value          = []
     eksClusters.value      = []
     ecsServices.value      = []
@@ -181,6 +184,18 @@ export const useAwsStore = defineStore('aws', () => {
     const data = await apiFetch(`/api/cloud/aws/overview/insights${query}`, { headers: headers() })
     markFetched('insights', key)
     overviewInsights.value = data
+    return data
+  }
+
+  // Good-practice checks (free control-plane APIs, cached 15 min server-side);
+  // refresh forces a new scan.
+  async function fetchOverviewAdvisor({ refresh = false } = {}) {
+    const key = activeProfileId.value
+    if (!refresh && overviewAdvisor.value && isFresh('advisor', ADVISOR_TTL_MS, key)) return overviewAdvisor.value
+    const data = await apiFetch(`/api/cloud/aws/overview/advisor${refresh ? '?refresh=1' : ''}`, { headers: headers() })
+    if (key !== activeProfileId.value) return data
+    markFetched('advisor', key)
+    overviewAdvisor.value = data
     return data
   }
 
@@ -305,22 +320,22 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchStepFunctions() {
+  async function fetchStepFunctions({ force = false } = {}) {
     loading.value = true; error.value = null
     try {
-      stepFunctions.value = await apiFetch('/api/cloud/aws/stepfunctions', { headers: headers() })
+      stepFunctions.value = await apiFetch(`/api/cloud/aws/stepfunctions${force ? '?force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchStepFnDiagram(arn) {
+  async function fetchStepFnDiagram(arn, { force = false } = {}) {
     try {
-      return await apiFetch(`/api/cloud/aws/stepfunctions/config?arn=${encodeURIComponent(arn)}`, { headers: headers() })
+      return await apiFetch(`/api/cloud/aws/stepfunctions/config?arn=${encodeURIComponent(arn)}${force ? '&force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e); return null }
   }
 
-  async function fetchStepFnExecutionEvents(executionArn) {
+  async function fetchStepFnExecutionEvents(executionArn, { force = false } = {}) {
     try {
-      return await apiFetch(`/api/cloud/aws/stepfunctions/execution/events?executionArn=${encodeURIComponent(executionArn)}`, { headers: headers() })
+      return await apiFetch(`/api/cloud/aws/stepfunctions/execution/events?executionArn=${encodeURIComponent(executionArn)}${force ? '&force=1' : ''}`, { headers: headers() })
     } catch (e) { setError(e); return null }
   }
 
@@ -1129,8 +1144,9 @@ export const useAwsStore = defineStore('aws', () => {
   function fetchSnsTopicDetails(topic) {
     return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/details?arn=${encodeURIComponent(topic.arn)}`, { headers: headers() })
   }
-  function fetchSnsDeliveryLogs(topic, { hours = 24, status = 'all' } = {}) {
+  function fetchSnsDeliveryLogs(topic, { hours = 24, status = 'all', force = false } = {}) {
     const params = new URLSearchParams({ arn: topic.arn, hours: String(hours), status })
+    if (force) params.set('force', '1')
     return apiFetch(`/api/cloud/aws/sns/${encodeURIComponent(topic.name)}/logs?${params}`, { headers: headers() })
   }
   function fetchSesSuppression() {
@@ -1218,12 +1234,19 @@ export const useAwsStore = defineStore('aws', () => {
     catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  async function fetchLexIntents(botId) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/intents`, { headers: headers() })
+  async function fetchLexIntents(botId, { botVersion = 'DRAFT', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ botVersion })
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/intents?${params}`, { headers: headers() })
   }
 
-  async function fetchLexLogs(botId, hours = 24, limit = 100) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/logs?hours=${hours}&limit=${limit}`, { headers: headers() })
+  async function fetchLexLogs(botId, hours = 24, limit = 100, { aliasId = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours), limit: String(limit) })
+    if (aliasId) params.set('aliasId', aliasId)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/logs?${params}`, { headers: headers() })
   }
 
   async function fetchLexTestSets(botId) {
@@ -1242,8 +1265,11 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexSlotTypes(botId) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types`, { headers: headers() })
+  async function fetchLexSlotTypes(botId, { botVersion = 'DRAFT', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ botVersion })
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/slot-types?${params}`, { headers: headers() })
   }
 
   async function lexChat(botId, text, aliasId, localeId, sessionId) {
@@ -1254,8 +1280,12 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexMissedUtterances(botId, hours = 24) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/missed-utterances?hours=${hours}`, { headers: headers() })
+  async function fetchLexMissedUtterances(botId, hours = 24, { aliasId = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours) })
+    if (aliasId) params.set('aliasId', aliasId)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/missed-utterances?${params}`, { headers: headers() })
   }
 
   async function buildLexBot(botId, localeId) {
@@ -1266,8 +1296,14 @@ export const useAwsStore = defineStore('aws', () => {
     })
   }
 
-  async function fetchLexMetrics(botId, hours = 24) {
-    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/metrics?hours=${hours}`, { headers: headers() })
+  async function fetchLexMetrics(botId, hours = 24, { botName = '', aliasId = '', aliasName = '', localeId = '', force = false } = {}) {
+    const params = new URLSearchParams({ hours: String(hours) })
+    if (botName) params.set('botName', botName)
+    if (aliasId) params.set('aliasId', aliasId)
+    if (aliasName) params.set('aliasName', aliasName)
+    if (localeId) params.set('localeId', localeId)
+    if (force) params.set('force', '1')
+    return await apiFetch(`/api/cloud/aws/lex/${encodeURIComponent(botId)}/metrics?${params}`, { headers: headers() })
   }
 
   // ─── CloudFormation (AgentCore) ────────────────────────────────────────────
@@ -1282,7 +1318,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, overview, overviewInsights, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, overview, overviewInsights, overviewAdvisor, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
@@ -1292,7 +1328,7 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
+    fetchOverview, fetchOverviewInsights, fetchOverviewAdvisor, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
     fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,

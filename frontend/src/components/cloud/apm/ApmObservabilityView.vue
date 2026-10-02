@@ -209,6 +209,7 @@
             @confirm-all-dependencies="confirmAllDependencies"
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
+            @open-lambda-logs="emit('open-lambda-logs', $event)"
           />
 
           <ApmApplicationLogs

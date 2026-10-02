@@ -16,6 +16,9 @@
  *   GET  /regions                           → list all available AWS regions
  *   GET  /overview                          → account, identity, region and resources per service
  *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
+ *   GET  /cloudwatch/log-scans               → background scans (≤ 5 days) into the local log cache
+ *   POST /cloudwatch/log-scans               → start a scan; /:id/pause|resume|cancel, DELETE /:id
+ *   GET  /overview/advisor                  → good-practice checks (security, infra, architecture, development)
  *   GET  /cloudwatch/dashboards             → CloudWatch dashboards with console links
  *   GET  /cloudwatch/dashboards/:name       → dashboard definition and widget summary
  *   GET  /cloudwatch/dashboards/:name/widgets/:index/metrics       → series of a metric widget
@@ -64,6 +67,108 @@
  */
 
 const express      = require('express');
+function lexLogGroupName(value) {
+  const raw = String(value || '');
+  const marker = ':log-group:';
+  const markerIndex = raw.indexOf(marker);
+  const name = markerIndex >= 0 ? raw.slice(markerIndex + marker.length).replace(/:\*$/, '') : raw;
+  return name.startsWith('/') ? name : null;
+}
+
+function requestedLexBotVersion(value) {
+  const version = String(value || 'DRAFT');
+  return /^(?:DRAFT|[0-9]+)$/.test(version) ? version : null;
+}
+
+async function lexConversationLogGroups(client, commands, botId, aliasId, { logClient, DescribeLogGroupsCommand } = {}) {
+  const groups = new Map();
+  const add = (arn, alias = {}) => {
+    const name = lexLogGroupName(arn);
+    if (!name) return;
+    const current = groups.get(name) || { name, aliasId: null, aliasName: null, botVersion: null };
+    groups.set(name, {
+      ...current,
+      aliasId: alias.aliasId || current.aliasId,
+      aliasName: alias.aliasName || current.aliasName,
+      botVersion: alias.botVersion || current.botVersion,
+    });
+  };
+
+  const aliases = [];
+  if (aliasId && aliasId !== 'TSTALIASID') {
+    aliases.push({ botAliasId: aliasId });
+  } else {
+    let nextToken;
+    do {
+      const response = await client.send(new commands.ListBotAliasesCommand({ botId, maxResults: 100, nextToken }));
+      aliases.push(...(response.botAliasSummaries || []));
+      nextToken = response.nextToken;
+    } while (nextToken);
+  }
+
+  await Promise.all(aliases.map(async alias => {
+    try {
+      const detail = await client.send(new commands.DescribeBotAliasCommand({ botId, botAliasId: alias.botAliasId }));
+      const settings = detail.conversationLogSettings?.textLogSettings || [];
+      settings.forEach(setting => add(setting.destination?.cloudWatch?.logGroupArn, {
+        aliasId: alias.botAliasId,
+        aliasName: detail.botAliasName || alias.botAliasName,
+        botVersion: detail.botVersion || alias.botVersion,
+      }));
+    } catch (_) { /* an unavailable alias should not hide other aliases */ }
+  }));
+
+  if (!groups.size && logClient && DescribeLogGroupsCommand) {
+    let nextToken;
+    let pages = 0;
+    do {
+      const response = await logClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lex/', nextToken }));
+      for (const group of response.logGroups || []) {
+        if (group.logGroupName?.includes(botId)) add(group.logGroupName);
+      }
+      nextToken = response.nextToken;
+      pages += 1;
+    } while (nextToken && pages < 10);
+  }
+  return [...groups.values()];
+}
+
+async function collectLexLogEvents(client, FilterLogEventsCommand, groups, { startTime, limit, filterPattern } = {}) {
+  const results = await Promise.all(groups.map(async group => {
+    const events = [];
+    let nextToken;
+    let previousToken;
+    do {
+      const response = await client.send(new FilterLogEventsCommand({
+        logGroupName: group.name,
+        startTime,
+        endTime: Date.now(),
+        limit: Math.min(limit, 10000),
+        nextToken,
+        ...(filterPattern ? { filterPattern } : {}),
+      }));
+      for (const event of response.events || []) {
+        let parsed = null;
+        try { parsed = JSON.parse(event.message); } catch (_) {}
+        events.push({
+          timestamp: event.timestamp,
+          stream: event.logStreamName,
+          logGroup: group.name,
+          aliasId: group.aliasId || null,
+          aliasName: group.aliasName || null,
+          botVersion: group.botVersion || null,
+          message: event.message,
+          parsed,
+        });
+      }
+      previousToken = nextToken;
+      nextToken = response.nextToken;
+    } while (nextToken && nextToken !== previousToken && events.length < limit);
+    return events;
+  }));
+  return results.flat().sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, limit);
+}
+
 const fs           = require('fs');
 const path         = require('path');
 const os           = require('os');
@@ -90,8 +195,10 @@ const {
 } = require('../lib/awsMessaging');
 const { sesHealth } = require('../lib/awsMessagingCatalog');
 const { getMetricHistory } = require('../lib/metricHistory');
+const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
+const { buildAwsAdvisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
 const {
   dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, logGroupIdentifier, logGroupName,
@@ -124,6 +231,36 @@ function handleErr(res, err) {
     }
   }
   res.status(status).json({ error: message });
+}
+
+function cloudHistory() {
+  try { return getCloudHistory(); } catch (err) { console.warn('[cloud-history]', err.message); return null; }
+}
+
+function awsRegionFromArn(arn) {
+  const match = String(arn || '').match(/^arn:[^:]+:[^:]+:([^:]*):/);
+  return match?.[1] || '';
+}
+
+function readCloudSnapshot({ profileId, region = '', resourceKey, kind, allowExpired = false }) {
+  const history = cloudHistory();
+  return history?.readLatest({ provider: 'aws', profileId, region, resourceKey, kind, allowExpired }) || null;
+}
+
+function readCloudRange({ profileId, region = '', resourceKey, kind, from, to, limit = 500 }) {
+  const history = cloudHistory();
+  return history?.readRange({ provider: 'aws', profileId, region, resourceKey, kind, from, to, limit }) || [];
+}
+
+function writeCloudSnapshot({ profileId, region = '', resourceKey, kind, payload, metadata = {}, ttlMs }) {
+  const history = cloudHistory();
+  if (!history) return null;
+  try {
+    return history.putSnapshot({ provider: 'aws', profileId, region, resourceKey, kind, payload, metadata, ttlMs });
+  } catch (err) {
+    console.warn('[cloud-history] write:', err.message);
+    return null;
+  }
 }
 
 // ─── GET /local-profiles ──────────────────────────────────────────────────────
@@ -391,6 +528,30 @@ router.get('/overview/insights', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /overview/advisor ────────────────────────────────────────────────────
+// Good-practice checks from free control-plane APIs (IAM credential report,
+// CloudTrail, EC2/RDS/EKS Describe, Lambda List). Cached 15 min per profile
+// and region to keep the overview fast; ?refresh=1 forces a new scan.
+
+const ADVISOR_TTL_MS = 15 * 60 * 1000;
+const advisorCache = new Map();
+
+router.get('/overview/advisor', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const key = `${profileId}|${cfg.region || ''}`;
+    const cached = advisorCache.get(key);
+    if (cached && req.query.refresh !== '1' && Date.now() - cached.at < ADVISOR_TTL_MS) {
+      return res.json({ ...cached.report, fromCache: true });
+    }
+    const report = await buildAwsAdvisor(cfg);
+    advisorCache.set(key, { at: Date.now(), report });
+    res.json(report);
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── CloudWatch dashboards ────────────────────────────────────────────────────
 
 router.get('/cloudwatch/dashboards', async (req, res) => {
@@ -552,7 +713,20 @@ router.get('/cloudwatch/logs-query/:queryId', async (req, res) => {
     if (!REGION_RE.test(region)) return res.status(400).json({ error: 'Invalid region' });
     const { CloudWatchLogsClient, GetQueryResultsCommand } = require('@aws-sdk/client-cloudwatch-logs');
     const resp = await new CloudWatchLogsClient({ ...cfg, region }).send(new GetQueryResultsCommand({ queryId: req.params.queryId }));
-    res.json(normalizeQueryResults(resp));
+    const results = normalizeQueryResults(resp);
+    // Optional: a finished query over one cached log group also feeds that group's cache
+    // (rows need @timestamp, @logStream and @message; duplicates are skipped).
+    let storedInCache = 0;
+    const group = String(req.query.group || '');
+    if (group && results.status === 'Complete' && region === cfg.region && /^[\w\-./#]{1,512}$/.test(group)) {
+      try {
+        const { getLogCache } = require('../lib/awsLogCache');
+        const { insightsRowsToEvents } = require('../lib/awsLogFetch');
+        const cache = getLogCache();
+        if (cache.isCached(profileId, region, group)) storedInCache = await cache.ingest({ profileId, region, logGroup: group, events: insightsRowsToEvents(results.rows) });
+      } catch (cacheErr) { console.warn('[log-cache]', cacheErr.message); }
+    }
+    res.json({ ...results, storedInCache });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1159,7 +1333,7 @@ router.get('/logs/lambda/:name', async (req, res) => {
   if (!profileId) return;
   try {
     const cfg = await resolveAwsConfig(profileId);
-    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
     const { LambdaClient, GetFunctionConfigurationCommand } = require('@aws-sdk/client-lambda');
     const client       = new CloudWatchLogsClient(cfg);
     const limit        = Math.min(parseInt(req.query.limit) || 200, 500);
@@ -1924,12 +2098,60 @@ router.get('/sns/:name/logs', async (req, res) => {
     const arn = String(req.query.arn || '');
     const hours = validHours(req.query.hours);
     const status = req.query.status === 'failure' ? 'failure' : 'all';
+    const limit = Math.min(parseInt(req.query.limit) || 50, 500);
     if (!TOPIC_ARN_RE.test(arn) || !arn.endsWith(`:${req.params.name}`) || !hours) return res.status(400).json({ error: 'Invalid topic or range' });
-    const cfg = await resolveAwsConfig(profileId);
+    const force = req.query.force === '1';
+    const arnRegion = awsRegionFromArn(arn);
+    let cfg;
+    try { cfg = await resolveAwsConfig(profileId); } catch (err) {
+      const cached = readCloudSnapshot({ profileId, region: arnRegion, resourceKey: `${arn}:${status}:${hours}:${limit}`, kind: 'sns-delivery', allowExpired: true });
+      if (cached) return res.json(cached.payload);
+      throw err;
+    }
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: `${arn}:${status}:${hours}:${limit}`, kind: 'sns-delivery' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
     const sdk = () => ({ CloudWatchLogsClient, FilterLogEventsCommand });
-    res.json(await snsDeliveryLogs(cfg, arn, { sdk, hours, status, limit: req.query.limit }));
-  } catch (err) { handleErr(res, err); }
+    const data = await snsDeliveryLogs(cfg, arn, { sdk, hours, status, limit });
+    const now = Date.now();
+    const eventKind = 'sns-delivery-event';
+    for (const event of data.events || []) {
+      writeCloudSnapshot({
+        profileId, region: cfg.region, resourceKey: arn, kind: eventKind,
+        payload: event, capturedAt: Number.isFinite(Number(event.timestamp)) ? Number(event.timestamp) : now,
+        ttlMs: cacheTtlMs(req), metadata: { topicArn: arn },
+      });
+    }
+    const historic = readCloudRange({
+      profileId, region: cfg.region, resourceKey: arn, kind: eventKind,
+      from: now - hours * 3600000, to: now + 1, limit: 5000,
+    }).map(row => row.payload).filter(event => status !== 'failure' || event?.status !== 'SUCCESS');
+    const seen = new Set();
+    const events = [...historic, ...(data.events || [])]
+      .filter(event => {
+        const id = `${event?.timestamp || ''}|${event?.kind || ''}|${event?.messageId || ''}|${event?.destination || ''}|${event?.statusCode || ''}`;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+      .slice(0, limit);
+    const payload = {
+      ...data,
+      events,
+      counts: { success: events.filter(e => e.status === 'SUCCESS').length, failure: events.filter(e => e.status !== 'SUCCESS').length },
+    };
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req), metadata: { topicArn: arn } });
+    res.json(payload);
+  } catch (err) {
+    const arn = String(req.query.arn || '');
+    const cached = readCloudSnapshot({ profileId, region: awsRegionFromArn(arn), resourceKey: `${arn}:${status}:${hours}:${limit}`, kind: 'sns-delivery', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── SES (v2) ─────────────────────────────────────────────────────────────────
@@ -2044,8 +2266,14 @@ router.get('/metrics/history', (req, res) => {
 router.get('/stepfunctions', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
+  const force = req.query.force === '1';
   try {
     const cfg = await resolveAwsConfig(profileId);
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: 'catalog', kind: 'stepfunctions-catalog' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { SFNClient, ListStateMachinesCommand } = require('@aws-sdk/client-sfn');
     const client = new SFNClient(cfg);
     const all = [];
@@ -2055,13 +2283,20 @@ router.get('/stepfunctions', async (req, res) => {
       all.push(...(resp.stateMachines || []));
       nextToken = resp.nextToken;
     } while (nextToken);
-    res.json(all.map(sm => ({
+    const payload = all.map(sm => ({
       name:         sm.name,
       arn:          sm.stateMachineArn,
       type:         sm.type,
       creationDate: sm.creationDate,
-    })));
-  } catch (err) { handleErr(res, err); }
+    }));
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req) });
+    res.json(payload);
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey: 'catalog', kind: 'stepfunctions-catalog', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /stepfunctions/config ────────────────────────────────────────────────
@@ -2071,19 +2306,32 @@ router.get('/stepfunctions/config', async (req, res) => {
   if (!profileId) return;
   const { arn } = req.query;
   if (!arn) return res.status(400).json({ error: 'arn query param required' });
+  const force = req.query.force === '1';
   try {
     const cfg = await resolveAwsConfig(profileId);
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: arn, kind: 'stepfunctions-config' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { SFNClient, DescribeStateMachineCommand, ListExecutionsCommand } = require('@aws-sdk/client-sfn');
     const client = new SFNClient(cfg);
     const [detail, executions] = await Promise.allSettled([
       client.send(new DescribeStateMachineCommand({ stateMachineArn: arn })),
       client.send(new ListExecutionsCommand({ stateMachineArn: arn, maxResults: 10 })),
     ]);
-    res.json({
+    const payload = {
       stateMachine:     detail.status     === 'fulfilled' ? detail.value : null,
       recentExecutions: executions.status === 'fulfilled' ? (executions.value.executions ?? []) : [],
-    });
-  } catch (err) { handleErr(res, err); }
+    };
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req) });
+    res.json(payload);
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey: arn, kind: 'stepfunctions-config', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /stepfunctions/execution/events ─────────────────────────────────────
@@ -2093,10 +2341,19 @@ router.get('/stepfunctions/execution/events', async (req, res) => {
   if (!profileId) return;
   const { executionArn } = req.query;
   if (!executionArn) return res.status(400).json({ error: 'executionArn query param required' });
+  const force = req.query.force === '1';
   try {
     const cfg = await resolveAwsConfig(profileId);
-    const { SFNClient, GetExecutionHistoryCommand } = require('@aws-sdk/client-sfn');
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: executionArn, kind: 'stepfunctions-execution-events' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
+    const { SFNClient, GetExecutionHistoryCommand, DescribeStateMachineForExecutionCommand } = require('@aws-sdk/client-sfn');
     const client = new SFNClient(cfg);
+    const definition = client.send(new DescribeStateMachineForExecutionCommand({ executionArn }))
+      .then(detail => detail.definition || null)
+      .catch(() => null);
     const all = [];
     let nextToken;
     do {
@@ -2106,8 +2363,15 @@ router.get('/stepfunctions/execution/events', async (req, res) => {
       all.push(...(resp.events || []));
       nextToken = resp.nextToken;
     } while (nextToken);
-    res.json({ events: all });
-  } catch (err) { handleErr(res, err); }
+    const payload = { events: all, definition: await definition };
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req) });
+    res.json(payload);
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey: executionArn, kind: 'stepfunctions-execution-events', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /stepfunctions/executions/count ─────────────────────────────────────
@@ -5029,15 +5293,23 @@ router.get('/lex/:botId/intents', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   const { botId } = req.params;
+  const botVersion = requestedLexBotVersion(req.query.botVersion);
+  const localeFilter = String(req.query.localeId || '');
+  if (!botVersion) return res.status(400).json({ error: 'botVersion must be DRAFT or a numeric version' });
   try {
     const cfg = await resolveAwsConfig(profileId);
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: `${botId}:${botVersion}:${localeFilter || 'all'}`, kind: 'lex-intents' };
+    if (req.query.force !== '1') {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const {
       LexModelsV2Client, ListBotLocalesCommand, ListIntentsCommand, ListSlotsCommand
     } = require('@aws-sdk/client-lex-models-v2');
     const client = new LexModelsV2Client(cfg);
 
-    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion: 'DRAFT' }));
-    const locales = localesResp.botLocaleSummaries || [];
+    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion }));
+    const locales = (localesResp.botLocaleSummaries || []).filter(locale => !localeFilter || locale.localeId === localeFilter);
 
     const result = [];
     for (const locale of locales) {
@@ -5045,7 +5317,7 @@ router.get('/lex/:botId/intents', async (req, res) => {
       const intents = [];
       let nextToken;
       do {
-        const resp = await client.send(new ListIntentsCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 50, nextToken }));
+        const resp = await client.send(new ListIntentsCommand({ botId, botVersion, localeId, maxResults: 50, nextToken }));
         intents.push(...(resp.intentSummaries || []));
         nextToken = resp.nextToken;
       } while (nextToken);
@@ -5054,7 +5326,7 @@ router.get('/lex/:botId/intents', async (req, res) => {
         const slots = [];
         let sNext;
         do {
-          const sr = await client.send(new ListSlotsCommand({ botId, botVersion: 'DRAFT', localeId, intentId: intent.intentId, maxResults: 50, nextToken: sNext }));
+          const sr = await client.send(new ListSlotsCommand({ botId, botVersion, localeId, intentId: intent.intentId, maxResults: 50, nextToken: sNext }));
           slots.push(...(sr.slotSummaries || []));
           sNext = sr.nextToken;
         } while (sNext);
@@ -5080,8 +5352,14 @@ router.get('/lex/:botId/intents', async (req, res) => {
         intents:    intentsWithSlots
       });
     }
+    writeCloudSnapshot({ ...snapshotKey, payload: result, ttlMs: cacheTtlMs(req), metadata: { botId, botVersion, localeId: localeFilter || null } });
     res.json(result);
-  } catch (err) { handleErr(res, err); }
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey: `${botId}:${botVersion}:${localeFilter || 'all'}`, kind: 'lex-intents', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /lex/:botId/logs ─────────────────────────────────────────────────────
@@ -5092,38 +5370,70 @@ router.get('/lex/:botId/logs', async (req, res) => {
   const { botId } = req.params;
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
   const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  const aliasId = String(req.query.aliasId || '');
+  const localeId = String(req.query.localeId || '');
+  const force = req.query.force === '1';
+  const resourceKey = `${botId}:${aliasId || 'all'}:${localeId || 'all'}:${hours}:${limit}`;
   try {
     const cfg = await resolveAwsConfig(profileId);
-    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
-    const cw = new CloudWatchLogsClient(cfg);
-
-    const lgResp = await cw.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lex/' }));
-    const allGroups = lgResp.logGroups || [];
-    const groups = allGroups.filter(g => g.logGroupName.includes(botId));
-
-    if (!groups.length) {
-      return res.json({ configured: false, groups: [], events: [] });
+    const snapshotKey = { profileId, region: cfg.region, resourceKey, kind: 'lex-logs' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
     }
-
-    const logGroupName = groups[0].logGroupName;
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { LexModelsV2Client, ListBotAliasesCommand, DescribeBotAliasCommand } = require('@aws-sdk/client-lex-models-v2');
+    const cw = new CloudWatchLogsClient(cfg);
     const startTime = Date.now() - hours * 60 * 60 * 1000;
-    const evResp = await cw.send(new FilterLogEventsCommand({ logGroupName, startTime, limit }));
-
-    res.json({
-      configured: true,
-      groups: groups.map(g => g.logGroupName),
-      events: (evResp.events || []).map(e => {
-        let parsed = null;
-        try { parsed = JSON.parse(e.message); } catch (_) {}
-        return {
-          timestamp:  e.timestamp,
-          stream:     e.logStreamName,
-          message:    e.message,
-          parsed,
-        };
-      })
+    const lex = new LexModelsV2Client(cfg);
+    const groups = await lexConversationLogGroups(lex, {
+      ListBotAliasesCommand, DescribeBotAliasCommand,
+    }, botId, aliasId, { logClient: cw, DescribeLogGroupsCommand });
+    const currentEvents = (await collectLexLogEvents(cw, FilterLogEventsCommand, groups, { startTime, limit }))
+      .filter(event => !localeId || !event.parsed?.localeId || event.parsed.localeId === localeId);
+    const historicEvents = readCloudRange({
+      profileId, region: cfg.region, resourceKey: botId, kind: 'lex-log-event',
+      from: startTime, to: Date.now() + 1, limit: 5000,
+    }).map(row => row.payload).filter(event => {
+      if (aliasId && event?.aliasId && event.aliasId !== aliasId) return false;
+      if (localeId && event?.parsed?.localeId && event.parsed.localeId !== localeId) return false;
+      return true;
     });
-  } catch (err) { handleErr(res, err); }
+    for (const event of currentEvents) {
+      writeCloudSnapshot({
+        profileId, region: cfg.region, resourceKey: botId, kind: 'lex-log-event',
+        payload: event, capturedAt: Number.isFinite(Number(event.timestamp)) ? Number(event.timestamp) : Date.now(),
+        ttlMs: cacheTtlMs(req), metadata: { botId, aliasId: event.aliasId || null },
+      });
+    }
+    const seen = new Set();
+    const events = [...historicEvents, ...currentEvents]
+      .filter(event => {
+        const id = `${event?.timestamp || ''}|${event?.stream || ''}|${event?.message || ''}`;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+      .slice(0, limit);
+    const groupNames = [...new Set([
+      ...groups.map(group => group.name),
+      ...historicEvents.map(event => event.logGroup).filter(Boolean),
+    ])];
+    const payload = {
+      configured: groupNames.length > 0 || events.length > 0,
+      groups: groupNames,
+      aliases: groups.filter(group => group.aliasId).map(group => ({ aliasId: group.aliasId, aliasName: group.aliasName, botVersion: group.botVersion, logGroup: group.name })),
+      events,
+    };
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req), metadata: { botId, aliasId: aliasId || null, localeId: localeId || null } });
+    res.json(payload);
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey, kind: 'lex-logs', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /lex/:botId/testsets ─────────────────────────────────────────────────
@@ -5255,13 +5565,21 @@ router.get('/lex/:botId/slot-types', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   const { botId } = req.params;
+  const botVersion = requestedLexBotVersion(req.query.botVersion);
+  const localeFilter = String(req.query.localeId || '');
+  if (!botVersion) return res.status(400).json({ error: 'botVersion must be DRAFT or a numeric version' });
   try {
     const cfg = await resolveAwsConfig(profileId);
+    const snapshotKey = { profileId, region: cfg.region, resourceKey: `${botId}:${botVersion}:${localeFilter || 'all'}`, kind: 'lex-slot-types' };
+    if (req.query.force !== '1') {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { LexModelsV2Client, ListBotLocalesCommand, ListSlotTypesCommand, DescribeSlotTypeCommand } = require('@aws-sdk/client-lex-models-v2');
     const client = new LexModelsV2Client(cfg);
 
-    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion: 'DRAFT' }));
-    const locales = localesResp.botLocaleSummaries || [];
+    const localesResp = await client.send(new ListBotLocalesCommand({ botId, botVersion }));
+    const locales = (localesResp.botLocaleSummaries || []).filter(locale => !localeFilter || locale.localeId === localeFilter);
     const result = [];
 
     for (const locale of locales) {
@@ -5269,7 +5587,7 @@ router.get('/lex/:botId/slot-types', async (req, res) => {
       const types = [];
       let nextToken;
       do {
-        const resp = await client.send(new ListSlotTypesCommand({ botId, botVersion: 'DRAFT', localeId, maxResults: 50, nextToken }));
+        const resp = await client.send(new ListSlotTypesCommand({ botId, botVersion, localeId, maxResults: 50, nextToken }));
         types.push(...(resp.slotTypeSummaries || []));
         nextToken = resp.nextToken;
       } while (nextToken);
@@ -5277,7 +5595,7 @@ router.get('/lex/:botId/slot-types', async (req, res) => {
       const detailed = await Promise.all(
         types.filter(t => !t.slotTypeName?.startsWith('AMAZON.')).map(async (t) => {
           try {
-            const d = await client.send(new DescribeSlotTypeCommand({ botId, botVersion: 'DRAFT', localeId, slotTypeId: t.slotTypeId }));
+            const d = await client.send(new DescribeSlotTypeCommand({ botId, botVersion, localeId, slotTypeId: t.slotTypeId }));
             return {
               id:       t.slotTypeId,
               name:     t.slotTypeName,
@@ -5294,8 +5612,14 @@ router.get('/lex/:botId/slot-types', async (req, res) => {
       );
       if (detailed.length) result.push({ localeId, localeName: locale.localeName || localeId, types: detailed });
     }
+    writeCloudSnapshot({ ...snapshotKey, payload: result, ttlMs: cacheTtlMs(req), metadata: { botId, botVersion, localeId: localeFilter || null } });
     res.json(result);
-  } catch (err) { handleErr(res, err); }
+  } catch (err) {
+    const cfg = await resolveAwsConfig(profileId).catch(() => null);
+    const cached = cfg && readCloudSnapshot({ profileId, region: cfg.region, resourceKey: `${botId}:${botVersion}:${localeFilter || 'all'}`, kind: 'lex-slot-types', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── POST /lex/:botId/chat ────────────────────────────────────────────────────
@@ -5345,34 +5669,75 @@ router.get('/lex/:botId/missed-utterances', async (req, res) => {
   const { botId } = req.params;
   const hours = Math.min(parseInt(req.query.hours) || 24, 168);
   const limit  = Math.min(parseInt(req.query.limit) || 200, 1000);
+  const aliasId = String(req.query.aliasId || '');
+  const localeId = String(req.query.localeId || '');
+  const force = req.query.force === '1';
+  const resourceKey = `${botId}:${aliasId || 'all'}:${localeId || 'all'}:${hours}:${limit}`;
+  let cfg;
   try {
-    const cfg = await resolveAwsConfig(profileId);
+    cfg = await resolveAwsConfig(profileId);
+    const snapshotKey = { profileId, region: cfg.region, resourceKey, kind: 'lex-missed-utterances' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { LexModelsV2Client, ListBotAliasesCommand, DescribeBotAliasCommand } = require('@aws-sdk/client-lex-models-v2');
     const cw = new CloudWatchLogsClient(cfg);
-
-    const lgResp = await cw.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lex/' }));
-    const groups = (lgResp.logGroups || []).filter(g => g.logGroupName.includes(botId));
-    if (!groups.length) return res.json({ configured: false, utterances: [] });
-
-    const logGroupName = groups[0].logGroupName;
     const startTime = Date.now() - hours * 3600000;
-    const evResp = await cw.send(new FilterLogEventsCommand({
-      logGroupName, startTime, limit,
-      filterPattern: '{ $.missedUtterance IS TRUE }',
-    }));
-
-    const utterances = (evResp.events || []).map(e => {
-      let p = null; try { p = JSON.parse(e.message); } catch (_) {}
-      return {
-        timestamp:       e.timestamp,
-        text:            p?.inputTranscript || p?.inputText || e.message.slice(0, 120),
-        sessionId:       p?.sessionId || null,
-        localeId:        p?.localeId || null,
-        missedUtterance: p?.missedUtterance ?? true,
-      };
+    const lex = new LexModelsV2Client(cfg);
+    const groups = await lexConversationLogGroups(lex, {
+      ListBotAliasesCommand, DescribeBotAliasCommand,
+    }, botId, aliasId, { logClient: cw, DescribeLogGroupsCommand });
+    const currentEvents = (await collectLexLogEvents(cw, FilterLogEventsCommand, groups, {
+      startTime, limit, filterPattern: '{ $.missedUtterance IS TRUE }',
+    })).filter(event => !localeId || !event.parsed?.localeId || event.parsed.localeId === localeId);
+    const historicEvents = readCloudRange({
+      profileId, region: cfg.region, resourceKey: botId, kind: 'lex-log-event',
+      from: startTime, to: Date.now() + 1, limit: 5000,
+    }).map(row => row.payload).filter(event => {
+      if (aliasId && event?.aliasId && event.aliasId !== aliasId) return false;
+      if (localeId && event?.parsed?.localeId && event.parsed.localeId !== localeId) return false;
+      return event?.parsed?.missedUtterance === true || event?.parsed?.missedUtterance === 'true';
     });
-    res.json({ configured: true, logGroupName, utterances });
-  } catch (err) { handleErr(res, err); }
+    for (const event of currentEvents) {
+      writeCloudSnapshot({
+        profileId, region: cfg.region, resourceKey: botId, kind: 'lex-log-event',
+        payload: event, capturedAt: Number.isFinite(Number(event.timestamp)) ? Number(event.timestamp) : Date.now(),
+        ttlMs: cacheTtlMs(req), metadata: { botId, aliasId: event.aliasId || null, missedUtterance: true },
+      });
+    }
+    const seen = new Set();
+    const events = [...historicEvents, ...currentEvents].filter(event => {
+      const id = `${event?.timestamp || ''}|${event?.stream || ''}|${event?.message || ''}`;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }).sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)).slice(0, limit);
+    const groupNames = [...new Set([
+      ...groups.map(group => group.name),
+      ...events.map(event => event.logGroup).filter(Boolean),
+    ])];
+    const payload = {
+      configured: groupNames.length > 0 || events.length > 0,
+      logGroupName: groupNames.join(', '),
+      groups: groupNames,
+      aliases: groups.filter(group => group.aliasId).map(group => ({ aliasId: group.aliasId, aliasName: group.aliasName, botVersion: group.botVersion, logGroup: group.name })),
+      utterances: events.map(event => ({
+        timestamp: event.timestamp,
+        text: event.parsed?.inputTranscript || event.parsed?.inputText || String(event.message || '').slice(0, 120),
+        sessionId: event.parsed?.sessionId || null,
+        localeId: event.parsed?.localeId || null,
+        missedUtterance: event.parsed?.missedUtterance ?? true,
+      })),
+    };
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req), metadata: { botId, aliasId: aliasId || null, localeId: localeId || null } });
+    res.json(payload);
+  } catch (err) {
+    const cached = readCloudSnapshot({ profileId, region: cfg?.region || '', resourceKey, kind: 'lex-missed-utterances', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── POST /lex/:botId/build ───────────────────────────────────────────────────
@@ -5410,15 +5775,43 @@ router.get('/lex/:botId/metrics', async (req, res) => {
   if (!profileId) return;
   const { botId } = req.params;
   const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  const requestedBotName = String(req.query.botName || '');
+  const aliasId = String(req.query.aliasId || '');
+  const aliasName = String(req.query.aliasName || '');
+  const localeId = String(req.query.localeId || '');
+  const force = req.query.force === '1';
+  let cfg;
+  let resolvedBotName = requestedBotName;
   try {
-    const cfg = await resolveAwsConfig(profileId);
+    cfg = await resolveAwsConfig(profileId);
+    let botName = requestedBotName;
+    if (!botName) {
+      const { LexModelsV2Client, ListBotsCommand } = require('@aws-sdk/client-lex-models-v2');
+      const client = new LexModelsV2Client(cfg);
+      let nextToken;
+      do {
+        const response = await client.send(new ListBotsCommand({ maxResults: 50, nextToken }));
+        const bot = (response.botSummaries || []).find(item => item.botId === botId);
+        if (bot) { botName = bot.botName || ''; break; }
+        nextToken = response.nextToken;
+      } while (nextToken && !botName);
+    }
+    resolvedBotName = botName;
+    const resourceKey = `${botId}:${botName || 'unknown'}:${aliasId || 'all'}:${localeId || 'all'}:${hours}`;
+    const snapshotKey = { profileId, region: cfg.region, resourceKey, kind: 'lex-metrics' };
+    if (!force) {
+      const cached = readCloudSnapshot(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
     const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
     const cw = new CloudWatchClient(cfg);
     const endTime = new Date();
     const startTime = new Date(Date.now() - hours * 3600000);
     const period = hours <= 6 ? 300 : hours <= 48 ? 3600 : 86400;
 
-    const dims = [{ Name: 'BotName', Value: botId }];
+    const dims = [{ Name: 'BotName', Value: botName || botId }];
+    if (aliasName) dims.push({ Name: 'BotAlias', Value: aliasName });
+    if (localeId) dims.push({ Name: 'LocaleId', Value: localeId });
     const metricNames = ['RuntimeRequestCount', 'RuntimeSuccessfulRequestLatency', 'MissedUtteranceCount', 'RuntimePollyErrors'];
     const queries = metricNames.map((m, i) => ({
       Id: `m${i}`, Label: m,
@@ -5431,8 +5824,27 @@ router.get('/lex/:botId/metrics', async (req, res) => {
       out[r.Label] = r.Timestamps.map((t, i) => ({ t: new Date(t).toISOString(), v: r.Values[i] }))
         .sort((a, b) => a.t.localeCompare(b.t));
     }
-    res.json({ period, hours, metrics: out });
-  } catch (err) { handleErr(res, err); }
+    const payload = { period, hours, botName: botName || botId, aliasId: aliasId || null, localeId: localeId || null, metrics: out };
+    const history = metricHistory();
+    if (history) {
+      const from = startTime.getTime();
+      const to = endTime.getTime();
+      for (const [metric, points] of Object.entries(out)) {
+        try {
+          history.write({ provider: 'aws', profileId, region: cfg.region, resourceId: `AWS::Lex::Bot:${botId}`, metric, periodS: period }, {
+            from, to, points: points.map(point => ({ t: new Date(point.t).getTime(), v: point.v })),
+          });
+        } catch (historyError) { console.warn('[metric-history] Lex:', historyError.message); }
+      }
+    }
+    writeCloudSnapshot({ ...snapshotKey, payload, ttlMs: cacheTtlMs(req), metadata: { botId, botName: botName || botId, aliasId: aliasId || null, localeId: localeId || null } });
+    res.json(payload);
+  } catch (err) {
+    const requestedResourceKey = `${botId}:${resolvedBotName || 'unknown'}:${aliasId || 'all'}:${localeId || 'all'}:${hours}`;
+    const cached = readCloudSnapshot({ profileId, region: cfg?.region || '', resourceKey: requestedResourceKey, kind: 'lex-metrics', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
 });
 
 // ─── GET /cloudformation/stacks ──────────────────────────────────────────────
@@ -5480,6 +5892,843 @@ router.get('/cloudformation/stacks', async (req, res) => {
     });
 
     res.json(agentCoreOnly ? mapped.filter(s => s.isAgentCore) : mapped);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── CloudWatch Logs: inventory, local cache and S3 backup ───────────────────
+// Describe/Filter calls only (no Logs Insights per-GB scans). The local cache
+// keeps chosen groups for up to 7 days, less when their volume would not fit
+// the budget (lib/awsLogCache.js).
+
+const LOG_GROUP_NAME_RE = /^[\w\-./#]{1,512}$/;
+
+function requireLogGroup(value, res) {
+  const name = String(value || '');
+  if (!LOG_GROUP_NAME_RE.test(name)) { res.status(400).json({ error: 'Invalid log group name' }); return null; }
+  return name;
+}
+
+function logCache() {
+  return require('../lib/awsLogCache').getLogCache();
+}
+
+router.get('/cloudwatch/log-groups', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { listLogGroups } = require('../lib/awsLogGroups');
+    const { groups, truncated } = await listLogGroups(new CloudWatchLogsClient(cfg), { DescribeLogGroupsCommand });
+    const cached = new Map(logCache().summary({ profileId, region: cfg.region }).groups.map(g => [g.logGroup, g]));
+    res.json({
+      region: cfg.region,
+      truncated,
+      groups: groups.map(group => ({ ...group, cache: cached.get(group.name) || null })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/log-groups/streams', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogStreamsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { listLogStreams } = require('../lib/awsLogGroups');
+    res.json(await listLogStreams(new CloudWatchLogsClient(cfg), { DescribeLogStreamsCommand }, group));
+  } catch (err) { handleErr(res, err); }
+});
+
+// source=cache reads the local cache only; source=live calls FilterLogEvents and,
+// when the group is cached, stores what it read.
+router.get('/cloudwatch/log-groups/events', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const minutes = Math.min(Math.max(parseInt(req.query.minutes, 10) || 60, 1), 7 * 1440);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 2000);
+    // An explicit window (from/to, e.g. a zoomed chart bar) wins over "last N minutes".
+    const endTime = Math.min(Number(req.query.to) || Date.now(), Date.now());
+    const startTime = Number(req.query.from) && Number(req.query.from) < endTime ? Number(req.query.from) : endTime - minutes * 60 * 1000;
+    const filter = String(req.query.filter || '').slice(0, 512);
+    const stream = String(req.query.stream || '').slice(0, 512);
+    const cache = logCache();
+    if (req.query.source === 'cache') {
+      const cachedGroup = cache.describeGroup(profileId, cfg.region, group);
+      return res.json({
+        source: 'cache',
+        events: await cache.query({ profileId, region: cfg.region, logGroup: group, from: startTime, to: endTime, pattern: filter, stream, limit }),
+        coverage: cachedGroup && { oldest: cachedGroup.oldest, newest: cachedGroup.newest, syncedUntil: cachedGroup.syncedUntil, lastSyncAt: cachedGroup.lastSyncAt, backfillPending: cachedGroup.backfillPending },
+      });
+    }
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { fetchNewest } = require('../lib/awsLogFetch');
+    const client = new CloudWatchLogsClient(cfg);
+    let events;
+    let nextToken;
+    try {
+      // Newest events of the range, like the cache (FilterLogEvents alone returns the oldest).
+      const result = await fetchNewest({
+        client, FilterLogEventsCommand, logGroupName: group, startTime, endTime, limit,
+        filterPattern: filter || undefined, logStreamNames: stream ? [stream] : undefined,
+      });
+      events = result.events;
+      nextToken = result.more;
+    } catch (err) {
+      if (err.name === 'ResourceNotFoundException') return res.json({ source: 'live', status: 'missing', events: [] });
+      throw err;
+    }
+    let storedInCache = 0;
+    // Every search of a cached group feeds it (deduplicated); filtered searches add what they found.
+    if (cache.isCached(profileId, cfg.region, group)) {
+      try { storedInCache = await cache.ingest({ profileId, region: cfg.region, logGroup: group, events }); } catch (cacheErr) { console.warn('[log-cache]', cacheErr.message); }
+    }
+    res.json({
+      source: 'live',
+      more: !!nextToken,
+      storedInCache,
+      events: events.sort((a, b) => b.timestamp - a.timestamp).map(e => ({ timestamp: e.timestamp, message: e.message, logStreamName: e.logStreamName })),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/log-cache', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    await logCache().ready();
+    res.json({ region: cfg.region, ...logCache().summary({ profileId, region: cfg.region }) });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Adds a group to the cache and runs its first sync.
+router.post('/cloudwatch/log-cache', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const client = new CloudWatchLogsClient(cfg);
+    const described = await client.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: group, limit: 5 }));
+    const info = (described.logGroups || []).find(g => g.logGroupName === group);
+    if (!info) return res.status(404).json({ error: 'Log group not found' });
+    const cache = logCache();
+    const historyHours = req.body?.historyHours;
+    cache.enable({
+      profileId, region: cfg.region, logGroup: group, storedBytes: info.storedBytes ?? null, retentionInDays: info.retentionInDays ?? null, creationTime: info.creationTime ?? null,
+      ...(historyHours === undefined ? {} : { historyMs: historyHours === null ? null : Math.max(0, Number(historyHours) || 0) * 3600000 }),
+    });
+    res.json(await cache.syncGroup({ profileId, region: cfg.region, logGroup: group, client, FilterLogEventsCommand }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Syncs one cached group (body.group) or every cached group of the profile and region.
+router.post('/cloudwatch/log-cache/sync', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const client = new CloudWatchLogsClient(cfg);
+    const cache = logCache();
+    let groups = cache.summary({ profileId, region: cfg.region }).groups.map(g => g.logGroup);
+    if (req.body?.group) {
+      const group = requireLogGroup(req.body.group, res);
+      if (!group) return;
+      groups = groups.filter(g => g === group);
+      if (!groups.length) return res.status(404).json({ error: 'Log group is not cached' });
+    }
+    // backfillPages lets the user fill history now (each page ≤ 1 MB / 10,000 events).
+    const maxPages = Math.min(Math.max(parseInt(req.body?.backfillPages, 10) || 10, 1), 50);
+    const results = [];
+    for (const logGroup of groups) {
+      try {
+        results.push({ logGroup, ...(await cache.syncGroup({ profileId, region: cfg.region, logGroup, client, FilterLogEventsCommand, maxPages })) });
+      } catch (err) {
+        if (classifyAwsError(err).kind === 'denied') throw err;
+        results.push({ logGroup, status: 'error', error: err.message });
+      }
+    }
+    res.json({ results, ...cache.summary({ profileId, region: cfg.region }) });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.delete('/cloudwatch/log-cache', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    logCache().disable({ profileId, region: cfg.region, logGroup: group });
+    res.json({ ok: true, ...logCache().summary({ profileId, region: cfg.region }) });
+  } catch (err) { handleErr(res, err); }
+});
+
+// How far back a cached group is filled: historyHours null = whole window, 0 = only new events.
+router.patch('/cloudwatch/log-cache', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  const hours = req.body?.historyHours;
+  if (hours !== null && !(Number(hours) >= 0)) return res.status(400).json({ error: 'historyHours must be null or a number of hours' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const cache = logCache();
+    if (!cache.isCached(profileId, cfg.region, group)) return res.status(404).json({ error: 'Log group is not cached' });
+    res.json(cache.setHistory({ profileId, region: cfg.region, logGroup: group, historyMs: hours === null ? null : Number(hours) * 3600000 }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── Background log scans ─────────────────────────────────────────────────────
+// Read up to 5 days of a log group into the local cache while the user keeps
+// working (lib/awsLogScans.js). FilterLogEvents has no per-request charge;
+// the download counts as AWS data transfer out (first 100 GB/month free).
+
+let logScanRunner = null;
+function logScans() {
+  if (!logScanRunner) {
+    const { createScanRunner } = require('../lib/awsLogScans');
+    logScanRunner = createScanRunner({ cache: logCache(), configFor: resolveAwsConfig });
+    logScanRunner.init();
+  }
+  return logScanRunner;
+}
+
+function scanDays(value) {
+  const days = Number(value);
+  return Number.isFinite(days) && days > 0 ? Math.min(days, 5) : null;
+}
+
+router.get('/cloudwatch/log-scans', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const runner = logScans();
+    res.json({ region: cfg.region, maxDays: 5, scans: runner.list({ profileId, region: cfg.region }), active: runner.activeCount(), usage: logCache().usage() });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/log-scans/estimate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  const days = scanDays(req.query.days);
+  if (!days) return res.status(400).json({ error: 'days must be between 1 hour and 5 days' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { estimateScan, describeLogGroup } = require('../lib/awsLogScans');
+    const info = await describeLogGroup(new CloudWatchLogsClient(cfg), DescribeLogGroupsCommand, group);
+    if (!info) return res.status(404).json({ error: 'Log group not found' });
+    res.json({
+      group,
+      cached: logCache().isCached(profileId, cfg.region, group),
+      ...estimateScan({ group: { storedBytes: info.storedBytes, retentionInDays: info.retentionInDays, creationTime: info.creationTime }, days, usage: logCache().usage() }),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Starts a scan of the last `days` (≤ 5); caches the group first when needed.
+router.post('/cloudwatch/log-scans', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  const days = scanDays(req.body?.days);
+  if (!days) return res.status(400).json({ error: 'days must be between 1 hour and 5 days' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    // FilterLogEvents is sent by the background runner (lib/awsLogScans.js) for this scan.
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { estimateScan, describeLogGroup } = require('../lib/awsLogScans');
+    const info = await describeLogGroup(new CloudWatchLogsClient(cfg), DescribeLogGroupsCommand, group);
+    if (!info) return res.status(404).json({ error: 'Log group not found' });
+    const cache = logCache();
+    await cache.ready();
+    if (!cache.isCached(profileId, cfg.region, group)) {
+      cache.enable({ profileId, region: cfg.region, logGroup: group, storedBytes: info.storedBytes ?? null, retentionInDays: info.retentionInDays ?? null, creationTime: info.creationTime ?? null });
+    }
+    const estimate = estimateScan({ group: { storedBytes: info.storedBytes, retentionInDays: info.retentionInDays, creationTime: info.creationTime }, days, usage: cache.usage() });
+    const scan = logScans().start({ profileId, region: cfg.region, logGroup: group, from: estimate.from, to: estimate.to });
+    res.status(201).json({ scan, estimate, group: cache.describeGroup(profileId, cfg.region, group) });
+  } catch (err) { handleErr(res, err); }
+});
+
+function scopedScan(req, res, profileId) {
+  const scan = logScans().get(Number(req.params.id));
+  if (!scan || scan.profileId !== profileId) {
+    res.status(404).json({ error: 'Scan not found' });
+    return null;
+  }
+  return scan;
+}
+
+router.post('/cloudwatch/log-scans/:id/:action', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const actions = { pause: 'pause', resume: 'resume', cancel: 'cancel' };
+  const action = actions[req.params.action];
+  if (!action) return res.status(400).json({ error: 'Unknown action' });
+  try {
+    const scan = scopedScan(req, res, profileId);
+    if (!scan) return;
+    res.json(logScans()[action](scan.id));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.delete('/cloudwatch/log-scans/:id', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const scan = scopedScan(req, res, profileId);
+    if (!scan) return;
+    logScans().remove(scan.id);
+    res.status(204).end();
+  } catch (err) { handleErr(res, err); }
+});
+
+// Events per time bin (seconds to days, adapted to the range) and level, from the cache.
+router.get('/cloudwatch/log-intelligence/histogram', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  const category = String(req.query.category || '');
+  const level = String(req.query.level || '');
+  if (category && !/^[a-z_]{2,40}$/.test(category)) return res.status(400).json({ error: 'Invalid category' });
+  if (level && !['error', 'warn', 'info'].includes(level)) return res.status(400).json({ error: 'Invalid level' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const cache = logCache();
+    if (!cache.isCached(profileId, cfg.region, group)) return res.status(404).json({ error: 'Log group is not cached' });
+    const to = Number(req.query.to) || Date.now();
+    const from = Number(req.query.from) || to - 24 * 3600000;
+    if (!(from < to) || to - from > 8 * 24 * 3600000) return res.status(400).json({ error: 'Invalid range' });
+    res.json(await cache.histogram({
+      profileId, region: cfg.region, logGroup: group, from, to, binMs: Number(req.query.binMs) || undefined,
+      category, level, pattern: String(req.query.pattern || '').slice(0, 512),
+    }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Log intelligence of a cached group: aggregated, sanitized signals (rates,
+// recurring signatures, failure keywords, references). Local only, no AWS call.
+router.get('/cloudwatch/log-intelligence', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const intelligence = await logCache().intelligenceFor({ profileId, region: cfg.region, logGroup: group });
+    if (!intelligence) return res.status(404).json({ error: 'Log group is not cached' });
+    const { linkedApmResources } = require('../lib/logIntelligenceEvidence');
+    res.json({ ...intelligence, apm: linkedApmResources({ database: getApmDatabase(), profileId, region: cfg.region, logGroup: group }) });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Cached events of a category, level or signature (decrypted locally, no AWS call).
+router.get('/cloudwatch/log-intelligence/events', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  const category = String(req.query.category || '');
+  const level = String(req.query.level || '');
+  if (category && !/^[a-z_]{2,40}$/.test(category)) return res.status(400).json({ error: 'Invalid category' });
+  if (level && !['error', 'warn', 'info'].includes(level)) return res.status(400).json({ error: 'Invalid level' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const cache = logCache();
+    if (!cache.isCached(profileId, cfg.region, group)) return res.status(404).json({ error: 'Log group is not cached' });
+    const minutes = Math.min(Math.max(parseInt(req.query.minutes, 10) || 7 * 1440, 1), 7 * 1440);
+    const to = Number(req.query.to) || null;
+    const from = Number(req.query.from) || (to || Date.now()) - minutes * 60000;
+    res.json(await cache.filterEvents({
+      profileId, region: cfg.region, logGroup: group, from, to,
+      category, level, signature: String(req.query.signature || '').slice(0, 200), pattern: String(req.query.pattern || '').slice(0, 512), limit: req.query.limit,
+    }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Backup view: which groups have a copy in S3 (subscription to Firehose/Kinesis or
+// export tasks) and which other services write logs straight to S3.
+router.get('/cloudwatch/log-backup', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeExportTasksCommand, DescribeSubscriptionFiltersCommand,
+    } = require('@aws-sdk/client-cloudwatch-logs');
+    const { CloudTrailClient, DescribeTrailsCommand } = require('@aws-sdk/client-cloudtrail');
+    const { EC2Client, DescribeFlowLogsCommand } = require('@aws-sdk/client-ec2');
+    const { listLogGroups, listExportTasks, listSubscriptions, buildBackupCoverage, listS3LogSources } = require('../lib/awsLogGroups');
+    const client = new CloudWatchLogsClient(cfg);
+    const { groups, truncated } = await listLogGroups(client, { DescribeLogGroupsCommand });
+    const errors = [];
+    let exportTasks = [];
+    try { exportTasks = await listExportTasks(client, { DescribeExportTasksCommand }); } catch (err) { errors.push({ source: 'exports', error: err.message, name: err.name }); }
+    // One call per group: capped so large accounts stay responsive.
+    const subscriptionGroups = groups.slice(0, 300).map(g => g.name);
+    const subscriptions = await listSubscriptions(client, { DescribeSubscriptionFiltersCommand }, subscriptionGroups);
+    const sdk = pkg => ({
+      'client-cloudtrail': { CloudTrailClient, DescribeTrailsCommand },
+      'client-ec2': { EC2Client, DescribeFlowLogsCommand },
+    })[pkg];
+    const s3 = await listS3LogSources(cfg, { sdk });
+    res.json({
+      region: cfg.region,
+      truncated,
+      subscriptionsChecked: subscriptionGroups.length,
+      coverage: buildBackupCoverage(groups, { exportTasks, subscriptions }),
+      exportTasks,
+      s3Sources: s3.sources,
+      errors: [...errors, ...s3.errors],
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Reads an archived log object (gzip is decompressed; up to 2 MB of text).
+router.get('/cloudwatch/log-archive/object', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const bucket = String(req.query.bucket || '');
+  const key = String(req.query.key || '');
+  if (!/^[a-z0-9][a-z0-9.-]{1,62}$/.test(bucket) || !key) return res.status(400).json({ error: 'bucket and key are required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+    const { decodeArchive, MAX_ARCHIVE_BYTES } = require('../lib/awsLogGroups');
+    const response = await new S3Client(cfg).send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: `bytes=0-${MAX_ARCHIVE_BYTES - 1}` }));
+    const chunks = [];
+    for await (const chunk of response.Body) chunks.push(chunk);
+    const buffer = Buffer.concat(chunks);
+    const total = Number(String(response.ContentRange || '').split('/')[1]) || buffer.length;
+    const decoded = await decodeArchive(buffer, key);
+    res.json({ bucket, key, size: total, partial: total > buffer.length, lastModified: response.LastModified || null, ...decoded });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── Logs queries (Logs Insights syntax) ─────────────────────────────────────
+// source=cache: over the local cache. source=live: over up to 10 pages of
+// FilterLogEvents (no per-GB charge). Both run the shared engine in
+// frontend/src/shared/logsQuery.mjs. /insights runs the real Logs Insights
+// (billed per GB scanned; the UI shows /insights/estimate first).
+
+const logsQueryEngine = () => import('../frontend/src/shared/logsQuery.mjs');
+const LIVE_QUERY_PAGES = 10;
+
+function queryRange(body = {}) {
+  const minutes = Math.min(Math.max(parseInt(body.minutes, 10) || 60, 1), 7 * 1440);
+  const end = Date.now();
+  return { minutes, start: end - minutes * 60 * 1000, end };
+}
+
+router.post('/cloudwatch/log-groups/query', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  let engine;
+  try {
+    engine = await logsQueryEngine();
+    const query = String(req.body?.query || '').slice(0, 10000);
+    const check = engine.validateQuery(query);
+    if (!check.ok) return res.status(400).json({ error: check.error.message, queryError: check.error });
+    const cfg = await resolveAwsConfig(profileId);
+    const { start, end } = queryRange(req.body);
+    const cache = logCache();
+    let events;
+    let coverage;
+    let storedInCache = 0;
+    if (req.body?.source === 'cache') {
+      const scanned = await cache.scan({ profileId, region: cfg.region, logGroup: group, from: start, to: end });
+      events = scanned.events;
+      coverage = { truncated: scanned.truncated, from: events.length ? events[events.length - 1].timestamp : null, to: events.length ? events[0].timestamp : null };
+    } else {
+      const { CloudWatchLogsClient, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+      const { fetchNewest } = require('../lib/awsLogFetch');
+      const client = new CloudWatchLogsClient(cfg);
+      let sample;
+      try {
+        // The newest events of the range (same set the cache would use), up to the page budget.
+        sample = await fetchNewest({ client, FilterLogEventsCommand, logGroupName: group, startTime: start, endTime: end, limit: 50000, maxPages: LIVE_QUERY_PAGES });
+      } catch (err) {
+        if (err.name === 'ResourceNotFoundException') return res.status(404).json({ error: 'Log group not found' });
+        throw err;
+      }
+      events = sample.events;
+      coverage = { truncated: sample.more, from: sample.more ? sample.from : start, to: end };
+      if (cache.isCached(profileId, cfg.region, group)) {
+        try { storedInCache = await cache.ingest({ profileId, region: cfg.region, logGroup: group, events }); } catch (cacheErr) { console.warn('[log-cache]', cacheErr.message); }
+      }
+    }
+    const result = engine.runQuery(query, events, { logGroup: group });
+    res.json({ source: req.body?.source === 'cache' ? 'cache' : 'live', ...result, storedInCache, coverage: { events: events.length, ...coverage } });
+  } catch (err) {
+    // runQuery can still fail at run time (e.g. an aggregate outside stats).
+    if (engine && err instanceof engine.QueryError) {
+      return res.status(400).json({ error: err.message, queryError: { code: err.code, params: err.params, message: err.message } });
+    }
+    handleErr(res, err);
+  }
+});
+
+router.get('/cloudwatch/log-groups/insights/estimate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { minutes } = queryRange(req.query);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const described = await new CloudWatchLogsClient(cfg).send(new DescribeLogGroupsCommand({ logGroupNamePrefix: group, limit: 5 }));
+    const info = (described.logGroups || []).find(g => g.logGroupName === group);
+    res.json(estimateLogScan([{ name: group, found: !!info, storedBytes: info?.storedBytes, retentionInDays: info?.retentionInDays, creationTime: info?.creationTime }], minutes * 60));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/cloudwatch/log-groups/insights', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  const queryString = String(req.body?.query || '').trim().slice(0, 10000);
+  if (!queryString) return res.status(400).json({ error: 'query is required' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { start, end } = queryRange(req.body);
+    const { CloudWatchLogsClient, StartQueryCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const resp = await new CloudWatchLogsClient(cfg).send(new StartQueryCommand({
+      logGroupNames: [group], queryString, startTime: Math.floor(start / 1000), endTime: Math.ceil(end / 1000), limit: 10000,
+    }));
+    res.json({ queryId: resp.queryId, region: cfg.region });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Total events per bin of any log group (cached or not) from AWS/Logs IncomingLogEvents.
+// GetMetricData: about USD 0.00001 per call; windows read recently come from the local history.
+router.get('/cloudwatch/log-groups/volume', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  try {
+    const to = Math.min(Number(req.query.to) || Date.now(), Date.now());
+    const from = Number(req.query.from) || to - 24 * 3600000;
+    if (!(from < to) || to - from > 31 * 24 * 3600000) return res.status(400).json({ error: 'Invalid range' });
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchClient, GetMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+    const { logGroupVolume } = require('../lib/awsLogVolume');
+    const { pickBinMs } = require('../lib/awsLogCache');
+    res.json(await logGroupVolume({
+      client: new CloudWatchClient(cfg), GetMetricDataCommand, history: metricHistory(),
+      profileId, region: cfg.region, logGroup: group, from, to, binMs: pickBinMs(to - from), ttlMs: cacheTtlMs(req),
+    }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── CloudFormation (read-only) ───────────────────────────────────────────────
+// Stacks, resources, events (with the root cause of the last failure), template
+// and on-demand drift detection. CloudFormation read APIs have no charge.
+
+function requireStackRef(value, res) {
+  const { STACK_REF_RE } = require('../lib/awsCloudFormation');
+  const ref = String(value || '');
+  if (!STACK_REF_RE.test(ref)) { res.status(400).json({ error: 'Invalid stack name or ARN' }); return null; }
+  return ref;
+}
+
+router.get('/cloudformation/stack-list', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStacksCommand } = require('@aws-sdk/client-cloudformation');
+    const { listStacks } = require('../lib/awsCloudFormation');
+    res.json({ region: cfg.region, ...(await listStacks(new CloudFormationClient(cfg), { DescribeStacksCommand })) });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStacksCommand, ListStackResourcesCommand } = require('@aws-sdk/client-cloudformation');
+    const { stackDetail } = require('../lib/awsCloudFormation');
+    res.json(await stackDetail(new CloudFormationClient(cfg), { DescribeStacksCommand, ListStackResourcesCommand }, stack));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack/events', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStackEventsCommand } = require('@aws-sdk/client-cloudformation');
+    const { stackEvents } = require('../lib/awsCloudFormation');
+    const name = String(req.query.name || stack.split('/')[1] || stack);
+    res.json(await stackEvents(new CloudFormationClient(cfg), { DescribeStackEventsCommand }, stack, { stackName: name }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack/template', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, GetTemplateCommand } = require('@aws-sdk/client-cloudformation');
+    const { stackTemplate } = require('../lib/awsCloudFormation');
+    res.json(await stackTemplate(new CloudFormationClient(cfg), { GetTemplateCommand }, stack));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Starts drift detection (read-only for the stack; no charge).
+router.post('/cloudformation/stack/drift', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.body?.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DetectStackDriftCommand } = require('@aws-sdk/client-cloudformation');
+    const { startDriftDetection } = require('../lib/awsCloudFormation');
+    res.json(await startDriftDetection(new CloudFormationClient(cfg), { DetectStackDriftCommand }, stack));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack/drift', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  const detectionId = String(req.query.detectionId || '');
+  if (!/^[0-9a-f-]{36}$/.test(detectionId)) return res.status(400).json({ error: 'Invalid detection id' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStackDriftDetectionStatusCommand, DescribeStackResourceDriftsCommand } = require('@aws-sdk/client-cloudformation');
+    const { driftResult } = require('../lib/awsCloudFormation');
+    res.json(await driftResult(new CloudFormationClient(cfg), { DescribeStackDriftDetectionStatusCommand, DescribeStackResourceDriftsCommand }, stack, detectionId));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── CloudFormation: exports, change sets and audited operations ─────────────
+// Every mutation has a preview first and is re-checked here, not trusted from the UI:
+// destructive actions require typing the stack name, and everything is audit-logged.
+
+const CHANGE_SET_RE = /^(?:[A-Za-z][A-Za-z0-9-]{0,127}|arn:aws[a-z-]*:cloudformation:[a-z0-9-]+:\d{12}:changeSet\/[A-Za-z][A-Za-z0-9-]{0,127}\/[0-9a-f-]{36})$/;
+
+function cfnAudit({ action, stack, profileId, level = 'info', details = {} }) {
+  auditLog.log({ category: 'aws', action, resource: stack, level, context: profileId, details: { kind: 'cloudformation', stack, ...details } });
+}
+
+function requireChangeSet(value, res) {
+  const ref = String(value || '');
+  if (!CHANGE_SET_RE.test(ref)) { res.status(400).json({ error: 'Invalid change set' }); return null; }
+  return ref;
+}
+
+// The typed confirmation must be the stack name (not its ARN).
+function confirmed(body, stackName) {
+  return String(body?.confirm || '') === stackName;
+}
+
+router.get('/cloudformation/exports', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, ListExportsCommand, ListImportsCommand } = require('@aws-sdk/client-cloudformation');
+    const { listExports } = require('../lib/awsCloudFormation');
+    res.json(await listExports(new CloudFormationClient(cfg), { ListExportsCommand, ListImportsCommand }));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack/change-sets', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, ListChangeSetsCommand } = require('@aws-sdk/client-cloudformation');
+    const { listChangeSets } = require('../lib/awsCloudFormation');
+    res.json({ changeSets: await listChangeSets(new CloudFormationClient(cfg), { ListChangeSetsCommand }, stack) });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/change-set', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  const changeSet = requireChangeSet(req.query.changeSet, res);
+  if (!changeSet) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeChangeSetCommand } = require('@aws-sdk/client-cloudformation');
+    const { describeChangeSet } = require('../lib/awsCloudFormation');
+    res.json(await describeChangeSet(new CloudFormationClient(cfg), { DescribeChangeSetCommand }, stack, changeSet));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Preview of a parameter update (creates a change set; nothing changes until it is executed).
+router.post('/cloudformation/stack/parameter-change-set', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.body?.stack, res);
+  if (!stack) return;
+  const parameters = req.body?.parameters;
+  if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters) || !Object.keys(parameters).length) return res.status(400).json({ error: 'parameters must be an object with at least one value' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStacksCommand, CreateChangeSetCommand } = require('@aws-sdk/client-cloudformation');
+    const { createParameterChangeSet } = require('../lib/awsCloudFormation');
+    const result = await createParameterChangeSet(new CloudFormationClient(cfg), { DescribeStacksCommand, CreateChangeSetCommand }, stack, parameters);
+    cfnAudit({ action: 'CloudFormation change set created (preview)', stack: String(result.stackId).split('/')[1] || stack, profileId, details: { changeSet: result.changeSetName, parameters: Object.keys(parameters) } });
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+router.post('/cloudformation/change-set/execute', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.body?.stack, res);
+  if (!stack) return;
+  const changeSet = requireChangeSet(req.body?.changeSet, res);
+  if (!changeSet) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeChangeSetCommand, ExecuteChangeSetCommand, DescribeStacksCommand } = require('@aws-sdk/client-cloudformation');
+    const { describeChangeSet, executeChangeSet } = require('../lib/awsCloudFormation');
+    const client = new CloudFormationClient(cfg);
+    // Re-read the preview server-side: the decision never depends on what the UI sent.
+    const preview = await describeChangeSet(client, { DescribeChangeSetCommand }, stack, changeSet);
+    if (preview.status !== 'CREATE_COMPLETE' || preview.executionStatus !== 'AVAILABLE') {
+      return res.status(409).json({ error: `The change set cannot be executed (${preview.status} / ${preview.executionStatus})` });
+    }
+    const described = await client.send(new DescribeStacksCommand({ StackName: stack }));
+    const stackName = described.Stacks?.[0]?.StackName || stack;
+    if (preview.risk.level !== 'low' && !confirmed(req.body, stackName)) {
+      return res.status(400).json({ error: 'This change set removes or replaces resources: type the stack name to confirm', code: 'ConfirmationRequired', risk: preview.risk });
+    }
+    await executeChangeSet(client, { ExecuteChangeSetCommand }, stack, changeSet);
+    cfnAudit({
+      action: 'CloudFormation change set executed', stack: stackName, profileId, level: preview.risk.level === 'high' ? 'warning' : 'info',
+      details: { changeSet: preview.name, risk: preview.risk, reason: String(req.body?.reason || '').slice(0, 500) },
+    });
+    res.json({ executed: true, risk: preview.risk });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.delete('/cloudformation/change-set', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  const changeSet = requireChangeSet(req.query.changeSet, res);
+  if (!changeSet) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DeleteChangeSetCommand } = require('@aws-sdk/client-cloudformation');
+    const { deleteChangeSet } = require('../lib/awsCloudFormation');
+    await deleteChangeSet(new CloudFormationClient(cfg), { DeleteChangeSetCommand }, stack, changeSet);
+    cfnAudit({ action: 'CloudFormation change set deleted', stack: String(stack).split('/')[1] || stack, profileId, details: { changeSet } });
+    res.json({ deleted: true });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Turning protection OFF needs the typed stack name; turning it on does not.
+router.post('/cloudformation/stack/termination-protection', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.body?.stack, res);
+  if (!stack) return;
+  const enabled = req.body?.enabled === true;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, UpdateTerminationProtectionCommand, DescribeStacksCommand } = require('@aws-sdk/client-cloudformation');
+    const { setTerminationProtection } = require('../lib/awsCloudFormation');
+    const client = new CloudFormationClient(cfg);
+    const described = await client.send(new DescribeStacksCommand({ StackName: stack }));
+    const stackName = described.Stacks?.[0]?.StackName || stack;
+    if (!enabled && !confirmed(req.body, stackName)) return res.status(400).json({ error: 'Type the stack name to turn termination protection off', code: 'ConfirmationRequired' });
+    const result = await setTerminationProtection(client, { UpdateTerminationProtectionCommand }, stack, enabled);
+    cfnAudit({ action: `CloudFormation termination protection ${enabled ? 'enabled' : 'disabled'}`, stack: stackName, profileId, level: enabled ? 'info' : 'warning' });
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudformation/stack/delete-preview', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.query.stack, res);
+  if (!stack) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStacksCommand, ListStackResourcesCommand, GetTemplateCommand, ListImportsCommand } = require('@aws-sdk/client-cloudformation');
+    const { deletePreview } = require('../lib/awsCloudFormation');
+    res.json(await deletePreview(new CloudFormationClient(cfg), { DescribeStacksCommand, ListStackResourcesCommand, GetTemplateCommand, ListImportsCommand }, stack));
+  } catch (err) { handleErr(res, err); }
+});
+
+// Guarded delete: recomputes the preview, refuses with blockers, requires the typed name and a reason.
+router.post('/cloudformation/stack/delete', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const stack = requireStackRef(req.body?.stack, res);
+  if (!stack) return;
+  const reason = String(req.body?.reason || '').trim();
+  if (reason.length < 3) return res.status(400).json({ error: 'A reason is required to delete a stack' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudFormationClient, DescribeStacksCommand, ListStackResourcesCommand, GetTemplateCommand, ListImportsCommand, DeleteStackCommand } = require('@aws-sdk/client-cloudformation');
+    const { deletePreview, deleteStack } = require('../lib/awsCloudFormation');
+    const client = new CloudFormationClient(cfg);
+    const preview = await deletePreview(client, { DescribeStacksCommand, ListStackResourcesCommand, GetTemplateCommand, ListImportsCommand }, stack);
+    if (preview.blockers.length) return res.status(409).json({ error: `The stack cannot be deleted: ${preview.blockers.join(', ')}`, code: 'DeleteBlocked', blockers: preview.blockers });
+    if (!confirmed(req.body, preview.stack.name)) return res.status(400).json({ error: 'Type the stack name to confirm the deletion', code: 'ConfirmationRequired' });
+    await deleteStack(client, { DeleteStackCommand }, preview.stack.id);
+    cfnAudit({
+      action: 'CloudFormation stack deletion requested', stack: preview.stack.name, profileId, level: 'warning',
+      details: { reason: reason.slice(0, 500), summary: preview.summary, risk: preview.risk },
+    });
+    res.json({ deleting: true, summary: preview.summary });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Operation history of a stack, from the local audit log.
+router.get('/cloudformation/stack/history', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const name = String(req.query.name || '');
+  if (!/^[A-Za-z][A-Za-z0-9-]{0,127}$/.test(name)) return res.status(400).json({ error: 'Invalid stack name' });
+  try {
+    const entries = auditLog.getLogs({ category: 'aws', search: name, limit: 500 })
+      .filter(entry => entry.details?.kind === 'cloudformation' && entry.details?.stack === name);
+    res.json({ entries });
   } catch (err) { handleErr(res, err); }
 });
 

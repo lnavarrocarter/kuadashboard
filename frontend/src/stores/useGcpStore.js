@@ -8,6 +8,10 @@ export const useGcpStore = defineStore('gcp', () => {
 
   // ─── State ──────────────────────────────────────────────────────────────────
   const activeProfileId = ref(null)
+  const overview = ref(null)
+  const overviewHistory = ref([])
+  const overviewLoading = ref(false)
+  const overviewError = ref(null)
 
   function createTab() {
     return { data: [], loading: false, error: null, enableUrl: null, nextPageToken: null, loadingMore: false }
@@ -98,6 +102,10 @@ export const useGcpStore = defineStore('gcp', () => {
   // ─── setActiveProfile ────────────────────────────────────────────────────────
   function setActiveProfile(id) {
     activeProfileId.value = id
+    overview.value = null
+    overviewHistory.value = []
+    overviewLoading.value = false
+    overviewError.value = null
     Object.values(tabs.value).forEach(t => {
       t.data = []
       t.loading = false
@@ -109,6 +117,36 @@ export const useGcpStore = defineStore('gcp', () => {
   }
 
   // ─── Base fetch functions ────────────────────────────────────────────────────
+  async function fetchOverview({ force = false, region = '' } = {}) {
+    overviewLoading.value = true
+    overviewError.value = null
+    const params = new URLSearchParams()
+    if (force) params.set('force', '1')
+    if (region) params.set('region', region)
+    try {
+      overview.value = await apiFetch(`/api/cloud/gcp/overview${params.toString() ? `?${params}` : ''}`, { headers: headers() })
+      return overview.value
+    } catch (e) {
+      overviewError.value = e.message || String(e)
+      throw e
+    } finally {
+      overviewLoading.value = false
+    }
+  }
+
+  async function fetchOverviewHistory({ days = 7, region = '' } = {}) {
+    const params = new URLSearchParams({ days: String(days) })
+    if (region) params.set('region', region)
+    try {
+      const response = await apiFetch(`/api/cloud/gcp/overview/history?${params}`, { headers: headers() })
+      overviewHistory.value = response.snapshots || []
+      return overviewHistory.value
+    } catch (e) {
+      overviewError.value = e.message || String(e)
+      throw e
+    }
+  }
+
   async function fetchCloudRunServices()    { return fetchTab('cloudrun',    '/api/cloud/gcp/cloudrun') }
   async function fetchGkeClusters()         { return fetchTab('gke',         '/api/cloud/gcp/gke') }
   async function fetchVMs()                 { return fetchTab('vms',         '/api/cloud/gcp/compute/vms') }
@@ -471,9 +509,10 @@ export const useGcpStore = defineStore('gcp', () => {
   return {
     estimateResource, createResource, deleteResource, fetchPresets,
     updateLabels, fetchHistory, fetchPollSettings, updatePollSettings, runPollNow,
-    activeProfileId, tabs,
+    activeProfileId, tabs, overview, overviewHistory, overviewLoading, overviewError,
     cloudRunServices, gkeClusters, vms,
     setActiveProfile, runInBackground,
+    fetchOverview, fetchOverviewHistory,
     fetchCloudRunServices, fetchGkeClusters, fetchVMs,
     fetchSqlInstances, fetchBuckets, fetchFunctions, fetchPubSubTopics,
     fetchSecrets, fetchArtifactRegistry,

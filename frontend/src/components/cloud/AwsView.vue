@@ -1029,6 +1029,13 @@
               <div v-if="lexIntentsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading intents...</div>
               <div v-else-if="lexIntentsModal.error" class="alert-error" style="margin:12px">{{ lexIntentsModal.error }}</div>
               <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+                <div style="display:flex;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+                  <span class="text-dim" style="font-size:11px">Version</span>
+                  <select v-model="lexIntentsModal.botVersion" @change="reloadLexIntents()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                    <option v-for="version in lexVersionOptions" :key="version" :value="version">{{ version }}</option>
+                  </select>
+                  <button class="btn sm" @click="reloadLexIntents(true)" :disabled="lexIntentsModal.loading">Refresh</button>
+                </div>
                 <div v-if="lexIntentsModal.locales.length > 1" style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--border);flex-shrink:0">
                   <button v-for="loc in lexIntentsModal.locales" :key="loc.localeId"
                     :class="['btn','xs', lexIntentsModal.activeLocale === loc.localeId ? 'active' : '']"
@@ -1220,6 +1227,13 @@
               <div v-if="lexSlotTypesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading slot types...</div>
               <div v-else-if="lexSlotTypesModal.error" class="alert-error" style="margin:12px">{{ lexSlotTypesModal.error }}</div>
               <div v-else>
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                  <span class="text-dim" style="font-size:11px">Version</span>
+                  <select v-model="lexSlotTypesModal.botVersion" @change="reloadLexSlotTypes()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                    <option v-for="version in lexVersionOptions" :key="version" :value="version">{{ version }}</option>
+                  </select>
+                  <button class="btn sm" @click="reloadLexSlotTypes(true)" :disabled="lexSlotTypesModal.loading">Refresh</button>
+                </div>
                 <div v-if="lexSlotTypesModal.locales.length > 1" style="display:flex;gap:4px;margin-bottom:10px">
                   <button v-for="loc in lexSlotTypesModal.locales" :key="loc.localeId"
                     :class="['btn','xs', lexSlotTypesModal.activeLocale === loc.localeId ? 'active' : '']"
@@ -1295,7 +1309,7 @@
             </div>
             <!-- ── LOGS tab ────────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
-              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <select v-model="lexLogsModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
                   <option :value="1">Last 1h</option>
                   <option :value="6">Last 6h</option>
@@ -1303,7 +1317,15 @@
                   <option :value="72">Last 3d</option>
                   <option :value="168">Last 7d</option>
                 </select>
-                <button class="btn sm" @click="reloadLexLogs" :disabled="lexLogsModal.loading">{{ lexLogsModal.loading ? 'Loading...' : 'Refresh' }}</button>
+                <select v-model="lexLogsModal.aliasId" @change="reloadLexLogs()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option value="">All aliases</option>
+                  <option v-for="alias in lexLogsModal.aliases" :key="alias.aliasId" :value="alias.aliasId">{{ alias.aliasName || alias.aliasId }} ({{ alias.botVersion }})</option>
+                </select>
+                <select v-model="lexLogsModal.localeId" @change="reloadLexLogs()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option value="">All locales</option>
+                  <option v-for="locale in lexLogLocales" :key="locale" :value="locale">{{ locale }}</option>
+                </select>
+                <button class="btn sm" @click="reloadLexLogs(true)" :disabled="lexLogsModal.loading">{{ lexLogsModal.loading ? 'Loading...' : 'Refresh' }}</button>
               </div>
               <div v-if="lexLogsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
               <div v-else-if="lexLogsModal.error" class="alert-error" style="margin:12px">{{ lexLogsModal.error }}</div>
@@ -1337,14 +1359,22 @@
             </div>
             <!-- ── MISSED tab ──────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'missed'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
-              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
+              <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <select v-model="lexMissedModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
                   <option :value="6">Last 6h</option>
                   <option :value="24">Last 24h</option>
                   <option :value="72">Last 3d</option>
                   <option :value="168">Last 7d</option>
                 </select>
-                <button class="btn sm" @click="reloadLexMissed" :disabled="lexMissedModal.loading">{{ lexMissedModal.loading ? 'Loading...' : 'Refresh' }}</button>
+                <select v-model="lexMissedModal.aliasId" @change="reloadLexMissed()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option value="">All aliases</option>
+                  <option v-for="alias in lexMissedModal.aliases" :key="alias.aliasId" :value="alias.aliasId">{{ alias.aliasName || alias.aliasId }} ({{ alias.botVersion }})</option>
+                </select>
+                <select v-model="lexMissedModal.localeId" @change="reloadLexMissed()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                  <option value="">All locales</option>
+                  <option v-for="locale in lexMissedLocales" :key="locale" :value="locale">{{ locale }}</option>
+                </select>
+                <button class="btn sm" @click="reloadLexMissed(true)" :disabled="lexMissedModal.loading">{{ lexMissedModal.loading ? 'Loading...' : 'Refresh' }}</button>
               </div>
               <div v-if="lexMissedModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading...</div>
               <div v-else-if="lexMissedModal.error" class="alert-error" style="margin:12px">{{ lexMissedModal.error }}</div>
@@ -1385,7 +1415,11 @@
                     <option :value="72">Last 3d</option>
                     <option :value="168">Last 7d</option>
                   </select>
-                  <button class="btn sm" @click="reloadLexMetrics" :disabled="lexMetricsModal.loading">Refresh</button>
+                  <select v-model="lexMetricsModal.localeId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
+                    <option value="">All locales</option>
+                    <option v-for="locale in lexMetricsModal.locales" :key="locale.localeId" :value="locale.localeId">{{ locale.localeName || locale.localeId }}</option>
+                  </select>
+                  <button class="btn sm" @click="reloadLexMetrics(true)" :disabled="lexMetricsModal.loading">Refresh</button>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                   <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
@@ -1924,6 +1958,14 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-if="activeTab === 'cloudformation'" class="tab-panel">
+        <AwsCfnTab :key="selectedProfileId" :profile-id="selectedProfileId" @request-access="activityAccess = $event" @open-resource="openResourceFromStack" @open-application="emit('open-observability', $event)" />
+      </div>
+
+      <div v-if="activeTab === 'cwlogs'" class="tab-panel">
+        <AwsLogsTab :key="selectedProfileId" :profile-id="selectedProfileId" @request-access="activityAccess = $event" />
       </div>
 
       <div v-show="activeTab === 'cwdashboards'" class="tab-panel">
@@ -3812,6 +3854,8 @@ import AwsOverview from './AwsOverview.vue'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 import CloudWatchDashboardDetail from './CloudWatchDashboardDetail.vue'
 import CloudWatchDashboardView from './dashboard/CloudWatchDashboardView.vue'
+import AwsLogsTab from './logs/AwsLogsTab.vue'
+import AwsCfnTab from './cfn/AwsCfnTab.vue'
 import { useI18n } from '../../composables/useI18n'
 import { settings } from '../../composables/useSettings'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -3822,7 +3866,7 @@ const props = defineProps({
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
 })
-const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab'])
+const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab', 'open-observability'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
@@ -3866,6 +3910,8 @@ const TABS = [
   { id: 'cognito',      label: 'Cognito'        },
   { id: 'secrets',      label: 'Secrets Manager'},
   { id: 'cwdashboards', label: 'CloudWatch Dashboards' },
+  { id: 'cwlogs',       label: 'CloudWatch Logs' },
+  { id: 'cloudformation', label: 'CloudFormation' },
 ]
 
 const activeTab  = ref('overview')
@@ -3874,7 +3920,7 @@ const overviewRef = ref(null)
 const accessModalOpen = ref(false)
 const { t } = useI18n()
 // Tabs that render their own header, loading and error states.
-const SELF_LOADING_TABS = new Set(['apm', 'overview'])
+const SELF_LOADING_TABS = new Set(['apm', 'overview', 'cwlogs', 'cloudformation'])
 
 const selectedProfileName = computed(() => {
   const id = selectedProfileId.value
@@ -3883,6 +3929,12 @@ const selectedProfileName = computed(() => {
 })
 
 // Overview cards open the service tab; the parent keeps the sidebar in sync.
+// A CloudFormation resource opens its own tab, filtered by its name.
+function openResourceFromStack({ tab, name }) {
+  focusResourceByName(tab, name)
+  emit('navigate-tab', tab)
+}
+
 function openTabFromOverview(tab) {
   switchTab(tab)
   emit('navigate-tab', tab)
@@ -3994,6 +4046,7 @@ const lexInnerTabs = [
   { id: 'metrics',  label: 'Metrics'   },
   { id: 'testset',  label: 'Test Set'  },
 ]
+const lexVersionOptions = ref(['DRAFT'])
 
 function selectLexBot(bot) {
   const sameBot = lexPanel.bot?.id === bot.id
@@ -4009,11 +4062,10 @@ async function lexPanelSwitchTab(tab) {
   const id = bot.id
   if (tab === 'intents') {
     if (lexIntentsModal.botId === id && lexIntentsModal.locales.length) return
-    Object.assign(lexIntentsModal, { loading: true, error: null, botId: id, botName: bot.name, locales: [], activeLocale: null, activeIntent: null, activeView: 'list' })
+    Object.assign(lexIntentsModal, { loading: true, error: null, botId: id, botName: bot.name, botVersion: 'DRAFT', locales: [], activeLocale: null, activeIntent: null, activeView: 'list' })
     try {
-      const data = await awsStore.fetchLexIntents(id)
-      lexIntentsModal.locales = data
-      if (data.length) lexIntentsModal.activeLocale = data[0].localeId
+      await loadLexVersionOptions(id)
+      await reloadLexIntents()
     } catch (e) { lexIntentsModal.error = e?.message || 'Error loading intents' }
     finally { lexIntentsModal.loading = false }
   } else if (tab === 'aliases') {
@@ -4027,11 +4079,10 @@ async function lexPanelSwitchTab(tab) {
     finally { lexAliasesModal.loading = false }
   } else if (tab === 'slottypes') {
     if (lexSlotTypesModal.botId === id && lexSlotTypesModal.locales.length) return
-    Object.assign(lexSlotTypesModal, { loading: true, error: null, botId: id, botName: bot.name, locales: [], activeLocale: null })
+    Object.assign(lexSlotTypesModal, { loading: true, error: null, botId: id, botName: bot.name, botVersion: 'DRAFT', locales: [], activeLocale: null })
     try {
-      const data = await awsStore.fetchLexSlotTypes(id)
-      lexSlotTypesModal.locales = data
-      if (data.length) lexSlotTypesModal.activeLocale = data[0].localeId
+      await loadLexVersionOptions(id)
+      await reloadLexSlotTypes()
     } catch (e) { lexSlotTypesModal.error = e?.message || 'Error loading slot types' }
     finally { lexSlotTypesModal.loading = false }
   } else if (tab === 'chat') {
@@ -4049,15 +4100,15 @@ async function lexPanelSwitchTab(tab) {
     } catch (_) {}
   } else if (tab === 'logs') {
     if (lexLogsModal.botId === id) return
-    Object.assign(lexLogsModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, configured: false, groups: [], events: [] })
+    Object.assign(lexLogsModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, groups: [], events: [] })
     await reloadLexLogs()
   } else if (tab === 'missed') {
     if (lexMissedModal.botId === id) return
-    Object.assign(lexMissedModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, configured: false, logGroupName: '', utterances: [] })
+    Object.assign(lexMissedModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, logGroupName: '', utterances: [] })
     await reloadLexMissed()
   } else if (tab === 'metrics') {
     if (lexMetricsModal.botId === id) return
-    Object.assign(lexMetricsModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, metrics: {}, locales: [], buildLocale: null, building: false, buildResult: null })
+    Object.assign(lexMetricsModal, { loading: true, error: null, botId: id, botName: bot.name, hours: 24, localeId: '', metrics: {}, locales: [], buildLocale: null, building: false, buildResult: null })
     try {
       const intents = await awsStore.fetchLexIntents(id)
       lexMetricsModal.locales = intents.map(l => ({ localeId: l.localeId, localeName: l.localeName }))
@@ -4134,7 +4185,7 @@ const fetchMap = {
   ecr:          () => awsStore.fetchEcrRepos(),
   vpc:          () => awsStore.fetchVpcs(),
   eventbridge:  () => awsStore.fetchEventBridgeRules(),
-  stepfn:       async (o = {}) => { await awsStore.fetchStepFunctions(); loadStepFnActivity({ force: o.force }) },
+  stepfn:       async (o = {}) => { await awsStore.fetchStepFunctions({ force: o.force }); loadStepFnActivity({ force: o.force }) },
   // SQS listing is billed per request; activity and SES metrics are cached (GetMetricData).
   sqs:          async (o = {}) => { await awsStore.fetchSqsQueues(); withFlag(sqsActivityLoading, () => awsStore.fetchSqsActivity({ force: o.force })) },
   sns:          async (o = {}) => { await awsStore.fetchSnsTopics(); withFlag(snsActivityLoading, () => awsStore.fetchSnsActivity({ force: o.force })) },
@@ -4661,7 +4712,7 @@ async function doApplyEcrToK8s() {
 
 const lexIntentsModal = reactive({
   open: false, loading: false, error: null,
-  botId: '', botName: '',
+  botId: '', botName: '', botVersion: 'DRAFT',
   locales: [], activeLocale: null, activeIntent: null, activeView: 'list',
 })
 
@@ -4672,13 +4723,41 @@ const lexCurrentLocale = computed(() =>
 async function openLexIntents(bot) {
   Object.assign(lexIntentsModal, {
     open: true, loading: true, error: null,
-    botId: bot.id, botName: bot.name,
+    botId: bot.id, botName: bot.name, botVersion: 'DRAFT',
     locales: [], activeLocale: null, activeIntent: null, activeView: 'list',
   })
   try {
-    const data = await awsStore.fetchLexIntents(bot.id)
+    await loadLexVersionOptions(bot.id)
+    await reloadLexIntents()
+  } catch (e) {
+    lexIntentsModal.error = e?.message || 'Error loading intents'
+  } finally {
+    lexIntentsModal.loading = false
+  }
+}
+
+async function loadLexVersionOptions(botId) {
+  try {
+    const raw = await awsStore.fetchLexAliases(botId)
+    const aliases = raw.aliases || raw || []
+    lexVersionOptions.value = ['DRAFT', ...new Set(aliases.map(alias => alias.botVersion).filter(Boolean).filter(version => version !== 'DRAFT'))]
+  } catch (_) {
+    lexVersionOptions.value = ['DRAFT']
+  }
+}
+
+async function reloadLexIntents(force = false) {
+  if (!lexIntentsModal.botId) return
+  lexIntentsModal.loading = true
+  lexIntentsModal.error = null
+  try {
+    const data = await awsStore.fetchLexIntents(lexIntentsModal.botId, {
+      botVersion: lexIntentsModal.botVersion,
+      force,
+    })
     lexIntentsModal.locales = data
-    if (data.length) lexIntentsModal.activeLocale = data[0].localeId
+    if (!data.some(locale => locale.localeId === lexIntentsModal.activeLocale)) lexIntentsModal.activeLocale = data[0]?.localeId || null
+    lexIntentsModal.activeIntent = null
   } catch (e) {
     lexIntentsModal.error = e?.message || 'Error loading intents'
   } finally {
@@ -4691,24 +4770,28 @@ async function openLexIntents(bot) {
 const lexLogsModal = reactive({
   open: false, loading: false, error: null,
   botId: '', botName: '',
-  hours: 24, configured: false, groups: [], events: [],
+  hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, groups: [], events: [],
 })
+const lexLogLocales = computed(() => [...new Set(lexLogsModal.events.map(event => event.parsed?.localeId).filter(Boolean))].sort())
 
 async function openLexLogs(bot) {
   Object.assign(lexLogsModal, {
     open: true, loading: true, error: null,
     botId: bot.id, botName: bot.name,
-    hours: 24, configured: false, groups: [], events: [],
+    hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, groups: [], events: [],
   })
   await reloadLexLogs()
 }
 
-async function reloadLexLogs() {
+async function reloadLexLogs(force = false) {
   lexLogsModal.loading = true; lexLogsModal.error = null
   try {
-    const data = await awsStore.fetchLexLogs(lexLogsModal.botId, lexLogsModal.hours)
+    const data = await awsStore.fetchLexLogs(lexLogsModal.botId, lexLogsModal.hours, 100, {
+      aliasId: lexLogsModal.aliasId, localeId: lexLogsModal.localeId, force,
+    })
     lexLogsModal.configured = data.configured
     lexLogsModal.groups     = data.groups || []
+    lexLogsModal.aliases    = data.aliases || []
     lexLogsModal.events     = (data.events || []).map(e => ({ ...e, _expanded: false }))
   } catch (e) {
     lexLogsModal.error = e?.message || 'Error loading logs'
@@ -4872,24 +4955,28 @@ async function lexChatSend() {
 const lexMissedModal = reactive({
   open: false, loading: false, error: null,
   botId: '', botName: '',
-  hours: 24, configured: false, logGroupName: '', utterances: [],
+  hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, logGroupName: '', utterances: [],
 })
+const lexMissedLocales = computed(() => [...new Set(lexMissedModal.utterances.map(utterance => utterance.localeId).filter(Boolean))].sort())
 
 async function openLexMissed(bot) {
   Object.assign(lexMissedModal, {
     open: true, loading: true, error: null,
     botId: bot.id, botName: bot.name,
-    hours: 24, configured: false, logGroupName: '', utterances: [],
+    hours: 24, aliasId: '', localeId: '', aliases: [], configured: false, logGroupName: '', utterances: [],
   })
   await reloadLexMissed()
 }
 
-async function reloadLexMissed() {
+async function reloadLexMissed(force = false) {
   lexMissedModal.loading = true; lexMissedModal.error = null
   try {
-    const data = await awsStore.fetchLexMissedUtterances(lexMissedModal.botId, lexMissedModal.hours)
+    const data = await awsStore.fetchLexMissedUtterances(lexMissedModal.botId, lexMissedModal.hours, {
+      aliasId: lexMissedModal.aliasId, localeId: lexMissedModal.localeId, force,
+    })
     lexMissedModal.configured   = data.configured
     lexMissedModal.logGroupName = data.logGroupName || ''
+    lexMissedModal.aliases      = data.aliases || []
     lexMissedModal.utterances   = data.utterances || []
   } catch (e) {
     lexMissedModal.error = e?.message || 'Error loading missed utterances'
@@ -4948,20 +5035,37 @@ function openLexBuildFromAlias(bot, alias) {
 
 const lexSlotTypesModal = reactive({
   open: false, loading: false, error: null,
-  botId: '', botName: '',
+  botId: '', botName: '', botVersion: 'DRAFT',
   locales: [], activeLocale: null,
 })
 
 async function openLexSlotTypes(bot) {
   Object.assign(lexSlotTypesModal, {
     open: true, loading: true, error: null,
-    botId: bot.id, botName: bot.name,
+    botId: bot.id, botName: bot.name, botVersion: 'DRAFT',
     locales: [], activeLocale: null,
   })
   try {
-    const data = await awsStore.fetchLexSlotTypes(bot.id)
+    await loadLexVersionOptions(bot.id)
+    await reloadLexSlotTypes()
+  } catch (e) {
+    lexSlotTypesModal.error = e?.message || 'Error loading slot types'
+  } finally {
+    lexSlotTypesModal.loading = false
+  }
+}
+
+async function reloadLexSlotTypes(force = false) {
+  if (!lexSlotTypesModal.botId) return
+  lexSlotTypesModal.loading = true
+  lexSlotTypesModal.error = null
+  try {
+    const data = await awsStore.fetchLexSlotTypes(lexSlotTypesModal.botId, {
+      botVersion: lexSlotTypesModal.botVersion,
+      force,
+    })
     lexSlotTypesModal.locales = data
-    if (data.length) lexSlotTypesModal.activeLocale = data[0].localeId
+    if (!data.some(locale => locale.localeId === lexSlotTypesModal.activeLocale)) lexSlotTypesModal.activeLocale = data[0]?.localeId || null
   } catch (e) {
     lexSlotTypesModal.error = e?.message || 'Error loading slot types'
   } finally {
@@ -4974,7 +5078,7 @@ async function openLexSlotTypes(bot) {
 const lexMetricsModal = reactive({
   open: false, loading: false, error: null,
   botId: '', botName: '',
-  hours: 24, metrics: {},
+  hours: 24, localeId: '', metrics: {},
   locales: [], buildLocale: null, building: false, buildResult: null,
 })
 
@@ -4982,22 +5086,26 @@ async function openLexMetrics(bot) {
   Object.assign(lexMetricsModal, {
     open: true, loading: true, error: null,
     botId: bot.id, botName: bot.name,
-    hours: 24, metrics: {},
+    hours: 24, localeId: '', metrics: {},
     locales: [], buildLocale: null, building: false, buildResult: null,
   })
   // Load locales for the build selector
   try {
     const intents = await awsStore.fetchLexIntents(bot.id)
     lexMetricsModal.locales = intents.map(l => ({ localeId: l.localeId, localeName: l.localeName }))
-    if (lexMetricsModal.locales.length) lexMetricsModal.buildLocale = lexMetricsModal.locales[0].localeId
+    if (lexMetricsModal.locales.length) {
+      lexMetricsModal.buildLocale = lexMetricsModal.locales[0].localeId
+    }
   } catch (_) {}
   await reloadLexMetrics()
 }
 
-async function reloadLexMetrics() {
+async function reloadLexMetrics(force = false) {
   lexMetricsModal.loading = true; lexMetricsModal.error = null
   try {
-    const data = await awsStore.fetchLexMetrics(lexMetricsModal.botId, lexMetricsModal.hours)
+    const data = await awsStore.fetchLexMetrics(lexMetricsModal.botId, lexMetricsModal.hours, {
+      botName: lexMetricsModal.botName, localeId: lexMetricsModal.localeId, force,
+    })
     lexMetricsModal.metrics = data.metrics || {}
   } catch (e) {
     lexMetricsModal.error = e?.message || 'Error loading metrics'
