@@ -909,3 +909,24 @@ test('a CloudFormation stack links to an application once and is found from the 
     await subject.close();
   }
 });
+
+test('API returns the product advisor of an application, scoped by profile', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/applications', {
+      method: 'POST',
+      body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
+    });
+    const advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(advisor.status, 200);
+    assert.deepEqual(advisor.body.categories, ['product']);
+    const ids = advisor.body.findings.map(finding => finding.id);
+    for (const id of ['product.no_owner', 'product.no_staging', 'product.no_resources', 'product.default_slos', 'product.no_architecture']) {
+      assert.ok(ids.includes(id), `expected ${id}`);
+    }
+    const otherProfile = await subject.architectureRequest(`/applications/${created.body.id}/advisor`, { profile: 'local:other' });
+    assert.equal(otherProfile.status, 404);
+  } finally {
+    await subject.close();
+  }
+});

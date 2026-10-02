@@ -17,6 +17,7 @@ import { settings } from '../composables/useSettings'
 export const OVERVIEW_TTL_MS = 5 * 60 * 1000
 export const INSIGHTS_TTL_MS = 15 * 60 * 1000
 export const ACTIVITY_TTL_MS = 15 * 60 * 1000
+export const ADVISOR_TTL_MS = 15 * 60 * 1000
 const DEFAULT_COST_CACHE_HOURS = 12
 const ttlMs = (minutes, fallback) => (Number(minutes) > 0 ? Number(minutes) * 60 * 1000 : fallback)
 
@@ -28,6 +29,7 @@ export const useAwsStore = defineStore('aws', () => {
   const activeProfileId  = ref(null)
   const overview         = ref(null)
   const overviewInsights = ref(null)
+  const overviewAdvisor  = ref(null)
   const regions          = ref([])
   const eksClusters      = ref([])
   const ecsServices      = ref([])
@@ -62,7 +64,7 @@ export const useAwsStore = defineStore('aws', () => {
   const snsActivity      = ref(null)
   const sesData          = ref(null)
   const sesMetrics       = ref(null)
-  const fetchedAt = { overview: null, insights: null, lambda: null, stepfn: null, sqs: null, sns: null, ses: null }
+  const fetchedAt = { overview: null, insights: null, advisor: null, lambda: null, stepfn: null, sqs: null, sns: null, ses: null }
   function isFresh(kind, ttl, key) {
     const entry = fetchedAt[kind]
     return !!entry && entry.key === key && Date.now() - entry.at < ttl
@@ -119,6 +121,7 @@ export const useAwsStore = defineStore('aws', () => {
     activeProfileId.value  = id
     overview.value         = null
     overviewInsights.value = null
+    overviewAdvisor.value  = null
     regions.value          = []
     eksClusters.value      = []
     ecsServices.value      = []
@@ -181,6 +184,18 @@ export const useAwsStore = defineStore('aws', () => {
     const data = await apiFetch(`/api/cloud/aws/overview/insights${query}`, { headers: headers() })
     markFetched('insights', key)
     overviewInsights.value = data
+    return data
+  }
+
+  // Good-practice checks (free control-plane APIs, cached 15 min server-side);
+  // refresh forces a new scan.
+  async function fetchOverviewAdvisor({ refresh = false } = {}) {
+    const key = activeProfileId.value
+    if (!refresh && overviewAdvisor.value && isFresh('advisor', ADVISOR_TTL_MS, key)) return overviewAdvisor.value
+    const data = await apiFetch(`/api/cloud/aws/overview/advisor${refresh ? '?refresh=1' : ''}`, { headers: headers() })
+    if (key !== activeProfileId.value) return data
+    markFetched('advisor', key)
+    overviewAdvisor.value = data
     return data
   }
 
@@ -1303,7 +1318,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, overview, overviewInsights, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, overview, overviewInsights, overviewAdvisor, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
@@ -1313,7 +1328,7 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
+    fetchOverview, fetchOverviewInsights, fetchOverviewAdvisor, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
     fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,

@@ -16,6 +16,7 @@
  *   GET  /regions                           → list all available AWS regions
  *   GET  /overview                          → account, identity, region and resources per service
  *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
+ *   GET  /overview/advisor                  → good-practice checks (security, infra, architecture, development)
  *   GET  /cloudwatch/dashboards             → CloudWatch dashboards with console links
  *   GET  /cloudwatch/dashboards/:name       → dashboard definition and widget summary
  *   GET  /cloudwatch/dashboards/:name/widgets/:index/metrics       → series of a metric widget
@@ -195,6 +196,7 @@ const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
+const { buildAwsAdvisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
 const {
   dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, logGroupIdentifier, logGroupName,
@@ -521,6 +523,30 @@ router.get('/overview/insights', async (req, res) => {
     const hours = Number(req.query.costCacheHours);
     const costTtlMs = Number.isFinite(hours) && hours >= 1 && hours <= 168 ? hours * 3600 * 1000 : undefined;
     res.json(await buildAwsInsights(cfg, { cache: costCache, cacheKey: profileId, refreshCosts: req.query.refreshCosts === '1', costTtlMs }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /overview/advisor ────────────────────────────────────────────────────
+// Good-practice checks from free control-plane APIs (IAM credential report,
+// CloudTrail, EC2/RDS/EKS Describe, Lambda List). Cached 15 min per profile
+// and region to keep the overview fast; ?refresh=1 forces a new scan.
+
+const ADVISOR_TTL_MS = 15 * 60 * 1000;
+const advisorCache = new Map();
+
+router.get('/overview/advisor', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const key = `${profileId}|${cfg.region || ''}`;
+    const cached = advisorCache.get(key);
+    if (cached && req.query.refresh !== '1' && Date.now() - cached.at < ADVISOR_TTL_MS) {
+      return res.json({ ...cached.report, fromCache: true });
+    }
+    const report = await buildAwsAdvisor(cfg);
+    advisorCache.set(key, { at: Date.now(), report });
+    res.json(report);
   } catch (err) { handleErr(res, err); }
 });
 

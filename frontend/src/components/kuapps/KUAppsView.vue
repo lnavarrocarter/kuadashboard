@@ -79,6 +79,19 @@
             </div>
           </div>
 
+          <div v-if="selectedApplication" class="kuapps-advisor">
+            <AdvisorPanel
+              lens="product"
+              :report="productAdvisor"
+              :loading="productAdvisorLoading"
+              :error="productAdvisorError"
+              refreshable
+              default-collapsed
+              storage-key="advisor.kuapps"
+              @refresh="loadProductAdvisor"
+            />
+          </div>
+
           <ArchitectureView
             v-if="activeView === 'architecture'"
             ref="architectureRef"
@@ -120,6 +133,8 @@ import { createIcons, icons } from 'lucide'
 import ArchitectureView from '../architecture/ArchitectureView.vue'
 import ApmObservabilityView from '../cloud/apm/ApmObservabilityView.vue'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useApi } from '../../composables/useApi'
+import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 
 const props = defineProps({
   activeView: { type: String, default: 'architecture' },
@@ -153,6 +168,30 @@ const apmProvider = computed(() => ['aws', 'gcp', 'vercel', 'generic'].includes(
   ? props.observabilityProvider
   : 'generic')
 const apmProfileId = computed(() => props.observabilityProfileId || (apmProvider.value === 'generic' ? 'local' : ''))
+
+// Product lens of the Advisor (the technical one lives in each provider overview).
+const { apiFetch } = useApi()
+const productAdvisor = ref(null)
+const productAdvisorLoading = ref(false)
+const productAdvisorError = ref('')
+let productAdvisorRequest = 0
+
+async function loadProductAdvisor() {
+  const application = selectedApplication.value
+  const id = ++productAdvisorRequest
+  if (!application) { productAdvisor.value = null; return }
+  productAdvisorLoading.value = true
+  try {
+    const report = await apiFetch(`/api/architecture/applications/${encodeURIComponent(application.id)}/advisor`, {
+      headers: { 'X-Profile-Id': application.profileId },
+    })
+    if (id === productAdvisorRequest) { productAdvisor.value = report; productAdvisorError.value = '' }
+  } catch (error) {
+    if (id === productAdvisorRequest) { productAdvisor.value = null; productAdvisorError.value = error.message }
+  } finally {
+    if (id === productAdvisorRequest) productAdvisorLoading.value = false
+  }
+}
 
 function selectView(view) {
   emit('update-view', view)
@@ -197,11 +236,13 @@ function forwardApplicationContext(application) {
 }
 
 async function reloadActiveTab(options = {}) {
+  loadProductAdvisor()
   if (activeView.value === 'observability') return observabilityRef.value?.refreshLocal?.(options)
   return architectureRef.value?.refreshWorkspace?.(options)
 }
 
 watch(() => props.applicationId, value => { localApplicationId.value = value || '' })
+watch(() => selectedApplication.value?.id, () => { productAdvisor.value = null; loadProductAdvisor() }, { immediate: true })
 watch(() => [props.activeView, props.observabilityProvider], () => nextTick(() => createIcons({ icons })))
 onMounted(async () => { await loadCatalog(); createIcons({ icons }) })
 
@@ -253,6 +294,7 @@ defineExpose({ reloadActiveTab, openObservabilitySetup })
 .kuapps-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-dim); text-align: center; }
 .kuapps-empty-state svg { width: 34px; color: var(--accent); }
 .kuapps-empty-state strong { color: var(--text); }
+.kuapps-advisor { flex: none; max-height: 42vh; overflow: auto; padding: 10px 18px 0; }
 .kuapps-workspace > :deep(.architecture-view), .kuapps-workspace > :deep(.apm-view) { flex: 1; min-height: 0; }
 @media (max-width: 700px) { .kuapps-tabs { overflow-x: auto; }.kuapps-tab { min-width: 165px; } }
 @media (max-width: 760px) { .kuapps-application-shell { grid-template-columns: 175px minmax(0, 1fr); }.kuapps-application-header { align-items: flex-start; flex-direction: column; }.kuapps-associations { width: 100%; justify-content: space-between; }.kuapps-associations span { align-items: flex-start; } }

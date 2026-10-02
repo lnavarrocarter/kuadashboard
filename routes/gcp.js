@@ -43,6 +43,7 @@ const {
   estimate, estimateOverviewCosts, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
   validateLabels, hasLabelChanges,
 } = require('../lib/gcpResources');
+const { adviseGcp } = require('../lib/advisor/gcp');
 
 const router    = express.Router();
 const execAsync = promisify(exec);
@@ -624,6 +625,13 @@ async function gcpOverview(req, res) {
       },
       costs,
       services,
+      advisor: (() => {
+        try {
+          return adviseGcp({ rows: collectedRows, unavailable: unavailable.map(service => service.id), projectId });
+        } catch (err) {
+          return { error: err.message };
+        }
+      })(),
     };
     try { history?.putSnapshot({ ...snapshotKey, payload, ttlMs: cloudCacheTtlMs(req), metadata: { projectId } }); } catch (err) { console.warn('[gcp-cloud-history] write:', err.message); }
     res.json(payload);

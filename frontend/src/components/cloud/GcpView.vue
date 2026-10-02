@@ -78,6 +78,8 @@
             <div class="gcp-overview-metric"><span class="text-dim">Service coverage</span><strong>{{ overviewCoverage }}%</strong><small>{{ gcpStore.overview?.summary?.availableServices ?? 0 }} of {{ gcpStore.overview?.summary?.services ?? 0 }} responding</small></div>
           </div>
 
+          <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" />
+
           <section class="gcp-overview-section gcp-overview-costs" data-test="overview-costs">
             <div class="gcp-overview-section-title gcp-overview-costs-title">
               <span>Estimated costs</span>
@@ -2026,6 +2028,7 @@ import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
+import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
 import { settings as appSettings } from '../../composables/useSettings'

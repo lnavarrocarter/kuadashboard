@@ -49,6 +49,8 @@
         </button>
       </div>
 
+      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" />
+
       <div class="kov-grid">
         <!-- Cluster usage -->
         <section class="kov-card">
@@ -211,6 +213,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
+import AdvisorPanel from './advisor/AdvisorPanel.vue'
 import { settings } from '../composables/useSettings'
 import { createRefreshGate } from '../composables/refreshGate'
 import { useKubeStore } from '../stores/useKubeStore'
