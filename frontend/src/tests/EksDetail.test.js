@@ -188,4 +188,15 @@ describe('AwsView EKS table (#69)', () => {
     expect(cells[1][ngIdx]).toBe('—')
     expect(cells[1][ngIdx + 1]).toBe('0')
   })
+
+  it('follows the app language', async () => {
+    settings.lang = 'es'
+    const table = await mountEksTable([{ ...CLUSTER_ROW, tags: {}, nodegroups: [], instanceCount: 0 }])
+    const headers = table.findAll('thead th').map(th => th.text()).join(' ')
+    expect(headers).toContain('Estado')
+    expect(headers).toContain('Acciones')
+    settings.lang = 'en'
+    await flushPromises()
+    expect(table.findAll('thead th').map(th => th.text()).join(' ')).toContain('Actions')
+  })
 })

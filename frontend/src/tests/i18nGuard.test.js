@@ -9,6 +9,7 @@ import es from '../locales/es'
 const MIGRATED = [
   'components/advisor/AdvisorPanel.vue',
   'components/cloud/AwsView.vue',
+  'components/cloud/GcpView.vue',
   'components/cloud/Ec2Detail.vue',
   'components/cloud/LambdaDetail.vue',
   'components/cloud/EksDetail.vue',
