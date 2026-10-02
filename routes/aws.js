@@ -16,6 +16,8 @@
  *   GET  /regions                           → list all available AWS regions
  *   GET  /overview                          → account, identity, region and resources per service
  *   GET  /overview/insights                 → costs (cached 12h), Lambda activity, services outside KUA
+ *   GET  /cloudwatch/log-scans               → background scans (≤ 5 days) into the local log cache
+ *   POST /cloudwatch/log-scans               → start a scan; /:id/pause|resume|cancel, DELETE /:id
  *   GET  /overview/advisor                  → good-practice checks (security, infra, architecture, development)
  *   GET  /cloudwatch/dashboards             → CloudWatch dashboards with console links
  *   GET  /cloudwatch/dashboards/:name       → dashboard definition and widget summary
@@ -6085,6 +6087,116 @@ router.patch('/cloudwatch/log-cache', async (req, res) => {
     const cache = logCache();
     if (!cache.isCached(profileId, cfg.region, group)) return res.status(404).json({ error: 'Log group is not cached' });
     res.json(cache.setHistory({ profileId, region: cfg.region, logGroup: group, historyMs: hours === null ? null : Number(hours) * 3600000 }));
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── Background log scans ─────────────────────────────────────────────────────
+// Read up to 5 days of a log group into the local cache while the user keeps
+// working (lib/awsLogScans.js). FilterLogEvents has no per-request charge;
+// the download counts as AWS data transfer out (first 100 GB/month free).
+
+let logScanRunner = null;
+function logScans() {
+  if (!logScanRunner) {
+    const { createScanRunner } = require('../lib/awsLogScans');
+    logScanRunner = createScanRunner({ cache: logCache(), configFor: resolveAwsConfig });
+    logScanRunner.init();
+  }
+  return logScanRunner;
+}
+
+function scanDays(value) {
+  const days = Number(value);
+  return Number.isFinite(days) && days > 0 ? Math.min(days, 5) : null;
+}
+
+router.get('/cloudwatch/log-scans', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const runner = logScans();
+    res.json({ region: cfg.region, maxDays: 5, scans: runner.list({ profileId, region: cfg.region }), active: runner.activeCount(), usage: logCache().usage() });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/cloudwatch/log-scans/estimate', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.query.group, res);
+  if (!group) return;
+  const days = scanDays(req.query.days);
+  if (!days) return res.status(400).json({ error: 'days must be between 1 hour and 5 days' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { estimateScan, describeLogGroup } = require('../lib/awsLogScans');
+    const info = await describeLogGroup(new CloudWatchLogsClient(cfg), DescribeLogGroupsCommand, group);
+    if (!info) return res.status(404).json({ error: 'Log group not found' });
+    res.json({
+      group,
+      cached: logCache().isCached(profileId, cfg.region, group),
+      ...estimateScan({ group: { storedBytes: info.storedBytes, retentionInDays: info.retentionInDays, creationTime: info.creationTime }, days, usage: logCache().usage() }),
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+// Starts a scan of the last `days` (≤ 5); caches the group first when needed.
+router.post('/cloudwatch/log-scans', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const group = requireLogGroup(req.body?.group, res);
+  if (!group) return;
+  const days = scanDays(req.body?.days);
+  if (!days) return res.status(400).json({ error: 'days must be between 1 hour and 5 days' });
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    // FilterLogEvents is sent by the background runner (lib/awsLogScans.js) for this scan.
+    const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+    const { estimateScan, describeLogGroup } = require('../lib/awsLogScans');
+    const info = await describeLogGroup(new CloudWatchLogsClient(cfg), DescribeLogGroupsCommand, group);
+    if (!info) return res.status(404).json({ error: 'Log group not found' });
+    const cache = logCache();
+    await cache.ready();
+    if (!cache.isCached(profileId, cfg.region, group)) {
+      cache.enable({ profileId, region: cfg.region, logGroup: group, storedBytes: info.storedBytes ?? null, retentionInDays: info.retentionInDays ?? null, creationTime: info.creationTime ?? null });
+    }
+    const estimate = estimateScan({ group: { storedBytes: info.storedBytes, retentionInDays: info.retentionInDays, creationTime: info.creationTime }, days, usage: cache.usage() });
+    const scan = logScans().start({ profileId, region: cfg.region, logGroup: group, from: estimate.from, to: estimate.to });
+    res.status(201).json({ scan, estimate, group: cache.describeGroup(profileId, cfg.region, group) });
+  } catch (err) { handleErr(res, err); }
+});
+
+function scopedScan(req, res, profileId) {
+  const scan = logScans().get(Number(req.params.id));
+  if (!scan || scan.profileId !== profileId) {
+    res.status(404).json({ error: 'Scan not found' });
+    return null;
+  }
+  return scan;
+}
+
+router.post('/cloudwatch/log-scans/:id/:action', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const actions = { pause: 'pause', resume: 'resume', cancel: 'cancel' };
+  const action = actions[req.params.action];
+  if (!action) return res.status(400).json({ error: 'Unknown action' });
+  try {
+    const scan = scopedScan(req, res, profileId);
+    if (!scan) return;
+    res.json(logScans()[action](scan.id));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.delete('/cloudwatch/log-scans/:id', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const scan = scopedScan(req, res, profileId);
+    if (!scan) return;
+    logScans().remove(scan.id);
+    res.status(204).end();
   } catch (err) { handleErr(res, err); }
 });
 

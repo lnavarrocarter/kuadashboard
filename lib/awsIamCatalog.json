@@ -586,6 +586,13 @@
   "POST /cloudwatch/log-cache/sync": [
     "logs:FilterLogEvents"
   ],
+  "GET /cloudwatch/log-scans/estimate": [
+    "logs:DescribeLogGroups"
+  ],
+  "POST /cloudwatch/log-scans": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
   "GET /cloudwatch/log-backup": [
     "cloudtrail:DescribeTrails",
     "ec2:DescribeFlowLogs",

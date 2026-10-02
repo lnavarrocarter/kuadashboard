@@ -4,6 +4,7 @@
       <div class="cwl-views" role="tablist">
         <button v-for="v in VIEWS" :key="v" class="btn sm" :class="{ primary: view === v }" role="tab" :aria-selected="view === v" @click="setView(v)">
           {{ t(`awsLogs.view_${v}`) }}<span v-if="v === 'cache' && cache?.groups.length" class="cwl-count">{{ cache.groups.length }}</span>
+          <span v-if="v === 'cache' && activeScans" class="cwl-count cwl-scanning" :title="t('awsLogs.scan.activeHint', { n: activeScans })" data-test="active-scans">⟳ {{ activeScans }}</span>
         </button>
       </div>
       <span class="cwl-hint">{{ t(`awsLogs.costHint_${view}`) }}</span>
@@ -13,6 +14,16 @@
       <span>{{ notice.text }}</span>
       <button v-if="notice.access" class="btn sm" @click="emit('request-access', notice)">{{ t('awsAccess.requestAccess') }}</button>
     </div>
+
+    <LogScansPanel
+      v-show="view === 'cache'"
+      :profile-id="profileId"
+      :group-names="groupNames"
+      :prefill="scanPrefill"
+      @open="openScan"
+      @changed="onScanChanged"
+      @active="n => { activeScans = n }"
+    />
 
     <!-- ── Log groups ─────────────────────────────────────────────── -->
     <template v-if="view === 'groups'">
@@ -196,7 +207,10 @@
               <td class="activity-cell" :title="t('awsLogs.blocksHint', { blocks: c.blocks, hot: c.hotBlocks, raw: formatBytes(c.rawBytes) })">
                 {{ formatBytes(c.bytes) }}<span v-if="c.compressionRatio" class="text-dim"> · {{ c.compressionRatio }}×</span>
               </td>
-              <td class="text-dim cwl-range">{{ formatTime(c.oldest, settings.lang) }} → {{ formatTime(c.newest, settings.lang) }}</td>
+              <td class="text-dim cwl-range">
+                {{ formatTime(c.oldest, settings.lang) }} → {{ formatTime(c.newest, settings.lang) }}
+                <span v-if="c.pinnedFrom" class="msg-chip" :title="t('awsLogs.scan.pinnedHint')">{{ t('awsLogs.scan.pinned') }}</span>
+              </td>
               <td>
                 <span :class="c.lastSyncStatus === 'error' || c.lastSyncStatus === 'missing' ? 'status-err' : 'text-dim'" :title="c.lastError || ''">
                   {{ formatTime(c.lastSyncAt, settings.lang) }}<template v-if="c.lastSyncStatus && c.lastSyncStatus !== 'ok'"> · {{ t(`awsLogs.sync_${c.lastSyncStatus}`) }}</template>
@@ -205,6 +219,7 @@
               <td class="cwl-actions">
                 <button class="btn sm" :class="{ accent: intelOpen === c.logGroup }" :aria-expanded="intelOpen === c.logGroup" @click="intelOpen = intelOpen === c.logGroup ? null : c.logGroup">{{ t('awsLogs.intel.button') }}</button>
                 <button class="btn sm" :disabled="busy[c.logGroup]" @click="syncOne(c.logGroup)">{{ t('awsLogs.sync') }}</button>
+                <button class="btn sm" :title="t('awsLogs.scan.rowHint')" @click="scanPrefill = { group: c.logGroup, at: Date.now() }">{{ t('awsLogs.scan.button') }}</button>
                 <button class="btn sm" @click="openCached(c.logGroup)">{{ t('awsLogs.viewLogs') }}</button>
                 <button class="btn sm danger" :disabled="busy[c.logGroup]" @click="disableCache(c.logGroup)">{{ t('awsLogs.remove') }}</button>
               </td>
@@ -349,6 +364,7 @@ import {
 import LogsQueryEditor from './LogsQueryEditor.vue'
 import LogIntelligencePanel from './LogIntelligencePanel.vue'
 import LogActivityChart from './LogActivityChart.vue'
+import LogScansPanel from './LogScansPanel.vue'
 
 const props = defineProps({ profileId: { type: String, default: '' } })
 const emit = defineEmits(['request-access'])
@@ -377,6 +393,9 @@ const events = ref(null)
 const busy = reactive({})
 const loading = reactive({ groups: false, cache: false, backup: false, events: false, sync: false })
 const activityChart = ref(null)
+const activeScans = ref(0)
+const scanPrefill = ref(null)
+const groupNames = computed(() => (groupsData.value?.groups || []).map(g => g.name))
 
 // Searches of a cached group feed its cache and per-minute index: refresh the chart.
 function onIngested(count) {
@@ -542,13 +561,30 @@ async function setHistory(name, key) {
   } catch (err) { fail(err) } finally { busy[name] = false }
 }
 
-async function openCached(name) {
+// Opens a cached group in the groups view; with a range, lists its cached events of that range.
+async function openCached(name, range = null) {
   view.value = 'groups'
   if (!groupsData.value) await loadGroups()
   search.value = name
   kind.value = 'all'
   const group = groupsData.value?.groups.find(g => g.name === name)
-  if (group && selected.value !== name) toggle(group)
+  if (!group) return
+  if (selected.value !== name) await toggle(group)
+  if (range) {
+    Object.assign(eventsQuery, { source: 'cache', from: range.from, to: range.to })
+    detailMode.value = 'events'
+    loadEvents(group)
+  }
+}
+
+function openScan(scan) {
+  return openCached(scan.logGroup, { from: scan.from, to: scan.to })
+}
+
+// A scan started (it may have cached a new group) or finished: refresh the cache summary.
+async function onScanChanged() {
+  await loadCache()
+  for (const g of cache.value?.groups || []) updateGroupCache(g.logGroup, g)
 }
 
 async function browse(bucket, prefix = '') {
@@ -585,6 +621,7 @@ onMounted(() => {
 .cwl-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cwl-views { display: flex; gap: 4px; }
 .cwl-count { margin-left: 6px; font-size: 10px; opacity: .8; }
+.cwl-scanning { color: var(--accent); opacity: 1; }
 .cwl-hint { font-size: 11px; color: var(--text-dim); }
 .cwl-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cwl-search { min-width: 220px; flex: 1 1 220px; max-width: 420px; }
