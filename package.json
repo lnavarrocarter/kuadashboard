@@ -13,6 +13,7 @@
     "pretest": "npm run native:node",
     "test": "node --test \"lib/**/*.test.js\" \"routes/**/*.test.js\" \"scripts/**/*.test.js\"",
     "start": "cross-env PORT=7190 node server.js",
+    "mcp": "node mcp/server.mjs",
     "predev": "npm run native:node",
     "dev": "cross-env PORT=7192 nodemon server.js",
     "predev:full": "npm run native:node",
