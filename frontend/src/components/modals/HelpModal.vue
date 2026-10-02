@@ -47,7 +47,7 @@
           <div v-else-if="updateStore.updateError" class="update-card update-error">
             <i data-lucide="alert-triangle"></i>
             <div class="update-card-body">
-              <div class="update-card-title">Error al descargar actualización</div>
+              <div class="update-card-title">{{ t('help.updateDownloadFailed') }}</div>
               <div class="update-card-sub">{{ updateStore.updateError }}</div>
             </div>
           </div>

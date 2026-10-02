@@ -2,19 +2,19 @@
   <div class="gi-root">
     <div class="gst-toolbar">
       <span class="gi-dim">
-        Cambios de estado y acciones registrados por KUA.
-        <template v-if="polling">Sondeo: <strong :class="polling.enabled ? 'gst-on' : ''">{{ polling.enabled ? `cada ${polling.intervalMinutes} min` : 'desactivado' }}</strong></template>
+        {{ t('gst.intro') }}
+        <template v-if="polling">{{ t('gst.polling') }} <strong :class="polling.enabled ? 'gst-on' : ''">{{ polling.enabled ? t('gst.every', { n: polling.intervalMinutes }) : t('gst.off') }}</strong></template>
       </span>
       <div class="gst-actions">
         <button class="btn sm" :disabled="loading" data-test="timeline-refresh" @click="load(true)">↺</button>
-        <button class="btn sm" data-test="timeline-configure" @click="$emit('configure')">⏱ Configurar sondeo</button>
+        <button class="btn sm" data-test="timeline-configure" @click="$emit('configure')">{{ t('gst.configure') }}</button>
       </div>
     </div>
 
     <div v-if="error" class="alert-error" style="margin:0">{{ error }}</div>
-    <div v-else-if="loading && !events.length" class="gi-empty">Cargando historial…</div>
+    <div v-else-if="loading && !events.length" class="gi-empty">{{ t('gst.loading') }}</div>
     <div v-else-if="!events.length" class="gi-empty" data-test="timeline-empty">
-      Aún no hay registros. KUA guarda un evento cada vez que detecta un cambio de estado al cargar la lista o durante el sondeo, y cada acción que hagas (start, stop, etiquetas, SSH…).
+      {{ t('gst.empty') }}
     </div>
 
     <ol v-else class="gst-list" data-test="timeline">
@@ -31,20 +31,21 @@
               <strong>{{ actionLabel(e.action) }}</strong>
               <span class="gi-dim">{{ actionDetail(e) }}</span>
             </template>
-            <span class="gst-source">{{ SOURCE[e.source] || e.source }}</span>
+            <span class="gst-source">{{ SOURCES.includes(e.source) ? t(`gst.source.${e.source}`) : e.source }}</span>
           </div>
           <div class="gi-dim gst-time" :title="new Date(e.observedAt).toLocaleString()">{{ new Date(e.observedAt).toLocaleString() }} · {{ relative(e.observedAt) }}</div>
         </div>
       </li>
     </ol>
 
-    <button v-if="hasMore" class="btn sm" :disabled="loading" data-test="timeline-more" @click="load(false)">Cargar más</button>
+    <button v-if="hasMore" class="btn sm" :disabled="loading" data-test="timeline-more" @click="load(false)">{{ t('gst.more') }}</button>
   </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import { useGcpStore } from '../../stores/useGcpStore'
+import { useI18n } from '../../composables/useI18n'
 import './gcpInfo.css'
 
 const props = defineProps({
@@ -55,10 +56,11 @@ const props = defineProps({
 })
 defineEmits(['configure'])
 
+const { t } = useI18n()
 const gcpStore = useGcpStore()
 const PAGE = 50
-const SOURCE = { observed: 'observado', poll: 'sondeo', user: 'usuario' }
-const ACTIONS = { start: 'Iniciado', stop: 'Detenido', create: 'Creado', delete: 'Eliminado', labels: 'Etiquetas modificadas', ssh: 'Sesión SSH' }
+const SOURCES = ['observed', 'poll', 'user']
+const ACTIONS = ['start', 'stop', 'create', 'delete', 'labels', 'ssh']
 
 const events = ref([])
 const loading = ref(false)
@@ -99,7 +101,7 @@ function tone(e) {
   if (['TERMINATED', 'STOPPED'].includes(s)) return ''
   return 'warn'
 }
-function actionLabel(a) { return ACTIONS[a] || a }
+function actionLabel(a) { return ACTIONS.includes(a) ? t(`gst.action.${a}`) : a }
 function actionDetail(e) {
   const d = e.details || {}
   if (e.action === 'labels') {
@@ -110,17 +112,17 @@ function actionDetail(e) {
     ]
     return parts.join(', ')
   }
-  if (e.action === 'ssh') return `${d.user || ''}${d.keyRenewed ? ' · llave renovada' : ''}`
+  if (e.action === 'ssh') return `${d.user || ''}${d.keyRenewed ? t('gst.keyRenewed') : ''}`
   if (d.minInstances != null) return `min instances = ${d.minInstances}`
-  if (d.estimatedMonthlyUsd != null) return `~$${Number(d.estimatedMonthlyUsd).toFixed(2)}/mes`
+  if (d.estimatedMonthlyUsd != null) return t('gst.perMonth', { usd: Number(d.estimatedMonthlyUsd).toFixed(2) })
   return ''
 }
 function relative(iso) {
   const s = Math.round((Date.now() - Date.parse(iso)) / 1000)
-  if (s < 60) return 'hace instantes'
-  if (s < 3600) return `hace ${Math.round(s / 60)} min`
-  if (s < 86400) return `hace ${Math.round(s / 3600)} h`
-  return `hace ${Math.round(s / 86400)} d`
+  if (s < 60) return t('gst.justNow')
+  if (s < 3600) return t('gst.minutesAgo', { n: Math.round(s / 60) })
+  if (s < 86400) return t('gst.hoursAgo', { n: Math.round(s / 3600) })
+  return t('gst.daysAgo', { n: Math.round(s / 86400) })
 }
 </script>
 

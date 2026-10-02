@@ -14,11 +14,11 @@
 
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <div style="flex:1">
-        <label class="form-label">Remote port</label>
+        <label class="form-label">{{ t('pfm.remotePort') }}</label>
         <input class="input" type="number" v-model.number="form.remotePort" />
       </div>
       <div style="flex:1">
-        <label class="form-label">Local port</label>
+        <label class="form-label">{{ t('pfm.localPort') }}</label>
         <input class="input" type="number" v-model.number="form.localPort" />
       </div>
     </div>
@@ -26,8 +26,8 @@
     <p v-if="error" class="kubeconfig-error">{{ error }}</p>
 
     <template #footer>
-      <button class="btn primary" @click="confirm">Forward</button>
-      <button class="btn"         @click="$emit('close')">Cancel</button>
+      <button class="btn primary" @click="confirm">{{ t('pfm.forward') }}</button>
+      <button class="btn"         @click="$emit('close')">{{ t('action.cancel') }}</button>
     </template>
   </BaseModal>
 </template>
@@ -38,6 +38,9 @@ import BaseModal from '../BaseModal.vue'
 import { usePortForwardStore } from '../../stores/usePortForwardStore'
 import { useToast } from '../../composables/useToast'
 import { useKubeStore } from '../../stores/useKubeStore'
+import { useI18n } from '../../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   show: Boolean,
@@ -78,11 +81,11 @@ async function confirm() {
   const svc = form.value.service
   const lp  = parseInt(form.value.localPort,  10)
   const rp  = parseInt(form.value.remotePort, 10)
-  if (!ns || !svc) { error.value = 'Namespace y recurso son requeridos.'; return }
-  if (!lp || !rp)  { error.value = 'Ambos puertos son requeridos.'; return }
+  if (!ns || !svc) { error.value = t('pfm.needResource'); return }
+  if (!lp || !rp)  { error.value = t('pfm.needPorts'); return }
   try {
     const r = await pfStore.start(ns, svc, lp, rp, form.value.resourceType)
-    toast(`Port-forward activo: localhost:${r.localPort} → ${r.remotePort}`, 'success')
+    toast(t('pfm.active', { local: r.localPort, remote: r.remotePort }), 'success')
     emit('close')
     emit('started')
   } catch (e) {

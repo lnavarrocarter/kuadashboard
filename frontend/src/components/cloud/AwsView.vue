@@ -6021,7 +6021,7 @@ async function addCognitoUserGroup() {
       cognitoUserDetail.selectedGroup = ''
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo asignar el grupo', 'error')
+      toast(awsStore.error || t('awsv.lit.groupAddFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingGroup = false }
 }
@@ -6036,7 +6036,7 @@ async function removeCognitoUserGroup(groupName) {
       toast(t('awsv.toastGroupRemoved'), 'success')
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo quitar el grupo', 'error')
+      toast(awsStore.error || t('awsv.lit.groupRemoveFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingGroup = false }
 }

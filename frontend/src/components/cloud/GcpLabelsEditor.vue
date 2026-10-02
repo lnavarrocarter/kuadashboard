@@ -1,10 +1,10 @@
 <template>
   <div class="gi-root">
     <div class="gi-card">
-      <div class="gi-card-title">Etiquetas ({{ rows.length }})</div>
+      <div class="gi-card-title">{{ t('gle.title', { n: rows.length }) }}</div>
 
       <table v-if="rows.length" class="gi-table gle-table" data-test="label-rows">
-        <thead><tr><th>Clave</th><th>Valor</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('gle.key') }}</th><th>{{ t('gle.value') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="(row, i) in rows" :key="row.id">
             <td>
@@ -15,25 +15,25 @@
               <input v-model.trim="row.value" class="gle-input" :class="{ invalid: valueError(row) }" placeholder="prod" data-test="label-value" :disabled="busy" />
               <div v-if="valueError(row)" class="gle-error">{{ valueError(row) }}</div>
             </td>
-            <td><button class="btn sm" title="Quitar" :disabled="busy" data-test="label-remove" @click="rows.splice(i, 1)">✕</button></td>
+            <td><button class="btn sm" :title="t('gle.remove')" :disabled="busy" data-test="label-remove" @click="rows.splice(i, 1)">✕</button></td>
           </tr>
         </tbody>
       </table>
-      <div v-else class="gi-empty">Sin etiquetas.</div>
+      <div v-else class="gi-empty">{{ t('gle.empty') }}</div>
 
       <div class="gle-actions">
-        <button class="btn sm" :disabled="busy || rows.length >= maxUser" data-test="label-add" @click="addRow">＋ Agregar etiqueta</button>
-        <span class="gi-dim gle-hint">Minúsculas, números, "_" y "-"; la clave empieza con letra; máx. 63 caracteres.</span>
+        <button class="btn sm" :disabled="busy || rows.length >= maxUser" data-test="label-add" @click="addRow">{{ t('gle.add') }}</button>
+        <span class="gi-dim gle-hint">{{ t('gle.hint') }}</span>
       </div>
 
       <div v-if="systemLabels.length" class="gle-system">
-        <div class="gi-dim">Etiquetas del sistema (solo lectura):</div>
+        <div class="gi-dim">{{ t('gle.system') }}</div>
         <span v-for="[k, v] in systemLabels" :key="k" class="gi-chip">{{ k }}={{ v }}</span>
       </div>
     </div>
 
     <div v-if="dirty" class="gi-card" data-test="label-diff">
-      <div class="gi-card-title">Cambios</div>
+      <div class="gi-card-title">{{ t('gle.changes') }}</div>
       <div v-for="(v, k) in diff.added" :key="`a-${k}`" class="gle-diff added">＋ {{ k }}={{ v }}</div>
       <div v-for="(c, k) in diff.changed" :key="`c-${k}`" class="gle-diff changed">✎ {{ k }}: {{ c.from }} → {{ c.to }}</div>
       <div v-for="k in diff.removed" :key="`r-${k}`" class="gle-diff removed">－ {{ k }}</div>
@@ -42,8 +42,8 @@
     <div v-if="error" class="alert-error" style="margin:0">{{ error }}</div>
 
     <div class="gle-footer">
-      <button class="btn sm" :disabled="!dirty || busy" @click="reset">Descartar</button>
-      <button class="btn sm primary" :disabled="!dirty || !valid || busy" data-test="label-save" @click="save">{{ busy ? 'Guardando…' : 'Guardar etiquetas' }}</button>
+      <button class="btn sm" :disabled="!dirty || busy" @click="reset">{{ t('gle.discard') }}</button>
+      <button class="btn sm primary" :disabled="!dirty || !valid || busy" data-test="label-save" @click="save">{{ busy ? t('gle.saving') : t('gle.save') }}</button>
     </div>
   </div>
 </template>
@@ -52,6 +52,7 @@
 // Edit GCP labels: same rules as the backend (lib/gcpResources.validateLabels);
 // system labels (goog-*, domain-prefixed) are shown read-only and never sent.
 import { computed, ref, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
 import './gcpInfo.css'
 
 const props = defineProps({
@@ -60,6 +61,7 @@ const props = defineProps({
   error:  { type: String, default: '' },
 })
 const emit = defineEmits(['save'])
+const { t } = useI18n()
 
 const KEY = /^[a-z][a-z0-9_-]{0,62}$/
 const VALUE = /^[a-z0-9_-]{0,63}$/
@@ -80,13 +82,13 @@ watch(() => props.labels, reset, { immediate: true, deep: true })
 function addRow() { rows.value.push({ id: ++seq, key: '', value: '' }) }
 
 function keyError(row, index) {
-  if (!row.key) return 'Requerida'
-  if (isSystem(row.key)) return 'Clave reservada del sistema'
-  if (!KEY.test(row.key)) return 'Formato inválido'
-  if (rows.value.findIndex(r => r.key === row.key) !== index) return 'Clave duplicada'
+  if (!row.key) return t('gle.required')
+  if (isSystem(row.key)) return t('gle.reserved')
+  if (!KEY.test(row.key)) return t('gle.invalid')
+  if (rows.value.findIndex(r => r.key === row.key) !== index) return t('gle.duplicate')
   return ''
 }
-function valueError(row) { return VALUE.test(row.value || '') ? '' : 'Formato inválido' }
+function valueError(row) { return VALUE.test(row.value || '') ? '' : t('gle.invalid') }
 
 const valid = computed(() => rows.value.every((r, i) => !keyError(r, i) && !valueError(r)))
 const desired = computed(() => Object.fromEntries(rows.value.map(r => [r.key, r.value || ''])))
