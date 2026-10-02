@@ -30,6 +30,12 @@ const MIGRATED = [
   'components/architecture/ArchitectureKubernetesDiscoveryPanel.vue',
   'components/architecture/ArchitectureResources.vue',
   'components/architecture/ArchitectureManualResourcePanel.vue',
+  'components/HelmView.vue',
+  'components/modals/ProfileModal.vue',
+  'components/EventBridgeDetail.vue',
+  'components/EventBridgeLogs.vue',
+  'components/cloud/apm/ApmObservabilityView.vue',
+  'components/cloud/apm/ApmApplicationLogs.vue',
 ]
 
 // Characters that only appear in Spanish text.

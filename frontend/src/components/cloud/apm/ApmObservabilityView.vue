@@ -75,11 +75,11 @@
                 <i data-lucide="sliders-horizontal"></i>
               </button>
               <button class="btn sm" @click="openArchitectureLink">
-                <i data-lucide="network"></i> {{ hasArchitectureLink ? 'Open architecture' : 'Link architecture' }}
+                <i data-lucide="network"></i> {{ hasArchitectureLink ? t('apmv.openArchitecture') : t('apmv.linkArchitecture') }}
               </button>
               <button class="btn sm" :disabled="store.loadingKubernetesContexts" @click="openKubernetesPreview">
                 <i :data-lucide="store.loadingKubernetesContexts ? 'loader-2' : 'boxes'"></i>
-                {{ store.loadingKubernetesContexts ? 'Loading clusters…' : 'Kubernetes preview' }}
+                {{ store.loadingKubernetesContexts ? t('apmv.loadingClusters') : t('apmv.kubernetesPreview') }}
               </button>
               <button class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
                 <i :data-lucide="store.collecting ? 'loader-2' : 'cloud-download'"></i>
@@ -90,7 +90,7 @@
 
           <section v-if="focusedResource" class="apm-resource-focus">
             <i data-lucide="focus"></i>
-            <span><strong>Resource focus</strong><small>Metrics filtered to {{ focusedResource.name }}</small></span>
+            <span><strong>{{ t('apmv.resourceFocus') }}</strong><small>{{ t('apmv.filteredTo', { name: focusedResource.name }) }}</small></span>
           </section>
 
           <section class="apm-status-strip">
@@ -98,22 +98,22 @@
             <span><i data-lucide="layers-3"></i> {{ t('apm.resourcesCount', { count: store.topology.resources.length }) }}</span>
             <span><i data-lucide="gauge"></i> {{ usageLabel }}</span>
             <span :class="{ partial: store.overview?.health?.status === 'degraded' }"><i data-lucide="heart-pulse"></i> {{ healthLabel }}</span>
-            <span v-if="store.kubernetesPreview?.applicationId === store.selectedApplicationId"><i data-lucide="boxes"></i> Kubernetes preview updated</span>
-            <span v-if="store.selectedApplication.architectureProjectIds?.length || store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> {{ store.selectedApplication.architectureProjectIds?.length || 1 }} Architecture{{ (store.selectedApplication.architectureProjectIds?.length || 1) === 1 ? '' : 's' }} linked</span>
+            <span v-if="store.kubernetesPreview?.applicationId === store.selectedApplicationId"><i data-lucide="boxes"></i> {{ t('apmv.previewUpdated') }}</span>
+            <span v-if="store.selectedApplication.architectureProjectIds?.length || store.selectedApplication.architectureProjectId"><i data-lucide="network"></i> {{ t('apmv.architecturesLinked', { n: store.selectedApplication.architectureProjectIds?.length || 1 }) }}</span>
             <span v-if="qualityPartial" class="partial"><i data-lucide="triangle-alert"></i> {{ t('apm.partialData') }}</span>
             <span v-if="kubernetesUsageUnavailable" class="partial"><i data-lucide="circle-alert"></i> {{ t('apm.kubernetesUsageUnavailable') }}</span>
             <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
           </section>
 
           <section v-if="hasArchitectureLink" class="registry-sync-status">
-            <span class="registry-sync-title"><i data-lucide="git-merge"></i> Shared registry sync</span>
+            <span class="registry-sync-title"><i data-lucide="git-merge"></i> {{ t('apmv.registrySync') }}</span>
             <span v-if="store.syncStatus?.lastSuccessAt" class="registry-sync-item">
-              <i data-lucide="check-circle-2"></i> Last sync {{ new Date(store.syncStatus.lastSuccessAt).toLocaleString() }}
+              <i data-lucide="check-circle-2"></i> {{ t('apmv.lastSync', { date: new Date(store.syncStatus.lastSuccessAt).toLocaleString() }) }}
               <template v-if="store.syncStatus.lastDurationMs != null"> ({{ store.syncStatus.lastDurationMs }} ms)</template>
             </span>
-            <span v-else class="registry-sync-item partial"><i data-lucide="circle-alert"></i> Never synced yet</span>
+            <span v-else class="registry-sync-item partial"><i data-lucide="circle-alert"></i> {{ t('apmv.neverSynced') }}</span>
             <span v-if="store.syncStatus?.lastError" class="registry-sync-item partial" :title="store.syncStatus.lastError">
-              <i data-lucide="triangle-alert"></i> Last error {{ new Date(store.syncStatus.lastErrorAt).toLocaleString() }}
+              <i data-lucide="triangle-alert"></i> {{ t('apmv.lastError', { date: new Date(store.syncStatus.lastErrorAt).toLocaleString() }) }}
             </span>
             <button v-if="store.syncStatus?.divergentResourceCount" class="registry-sync-item pending-review" @click="openRegistryResources">
               <i data-lucide="alert-triangle"></i> {{ t('apm.divergentResources', { count: store.syncStatus.divergentResourceCount }) }}
@@ -128,13 +128,13 @@
             </button>
             <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
               <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'refresh-cw'"></i>
-              {{ store.reconcilingRegistry ? 'Reconciling…' : 'Retry sync' }}
+              {{ store.reconcilingRegistry ? t('apmv.reconciling') : t('apmv.retrySync') }}
             </button>
           </section>
 
           <div class="apm-view-tabs">
-            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> Metrics</button>
-            <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> Logs</button>
+            <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> {{ t('apmv.metrics') }}</button>
+            <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
             <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
             <button :class="{ active: activeView === 'resources' }" @click="openRegistryResources">{{ t('apm.resources') }}</button>
@@ -397,40 +397,40 @@
     </BaseModal>
 
     <BaseModal :show="architectureLinkOpen" @close="architectureLinkOpen = false">
-      <template #title><i data-lucide="network"></i> Architecture</template>
+      <template #title><i data-lucide="network"></i> {{ t('apmv.architecture') }}</template>
       <div class="architecture-link-editor">
       <template v-if="store.architectureLink?.linked">
           <div v-for="project in linkedArchitectureProjects" :key="project.id" class="architecture-linked-project">
-            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+            <span><strong>{{ project.name }}</strong><small>{{ project.description || t('apmv.defaultArchitectureDescription') }}</small></span>
             <button class="btn sm danger" :disabled="store.linkingArchitecture" @click="unlinkArchitectureProject(project.id)">
-              <i data-lucide="unlink"></i> Unlink
+              <i data-lucide="unlink"></i> {{ t('apmv.unlink') }}
             </button>
           </div>
-          <small>{{ store.architectureLink.resources.matched.length }} matched resources · {{ store.architectureLink.resources.unmatched.length }} unmatched across linked architectures</small>
+          <small>{{ t('apmv.matchedResources', { matched: store.architectureLink.resources.matched.length, unmatched: store.architectureLink.resources.unmatched.length }) }}</small>
           <small v-if="store.architectureLink.resources.duplicateIdentityWarnings.length" class="architecture-link-warning">
-            {{ store.architectureLink.resources.duplicateIdentityWarnings.length }} duplicate identity warnings
+            {{ t('apmv.duplicateWarnings', { n: store.architectureLink.resources.duplicateIdentityWarnings.length }) }}
           </small>
           <button class="btn sm" :disabled="store.reconcilingRegistry" @click="reconcileSharedRegistry">
             <i :data-lucide="store.reconcilingRegistry ? 'loader-2' : 'git-merge'"></i>
-            {{ store.reconcilingRegistry ? 'Reconciling registry' : 'Reconcile shared registry' }}
+            {{ store.reconcilingRegistry ? t('apmv.reconcilingRegistry') : t('apmv.reconcileRegistry') }}
           </button>
           <small v-if="store.registry">
-            {{ store.registry.resources.length }} shared resources · {{ store.registry.relationships.length }} shared relationships
+            {{ t('apmv.sharedCounts', { resources: store.registry.resources.length, relationships: store.registry.relationships.length }) }}
           </small>
-          <label>New architecture
-            <input v-model.trim="newArchitectureName" class="ctrl-input" placeholder="e.g. Production topology" />
+          <label>{{ t('apmv.newArchitecture') }}
+            <input v-model.trim="newArchitectureName" class="ctrl-input" :placeholder="t('apmv.newArchitecturePlaceholder')" />
           </label>
           <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
-            <i data-lucide="plus"></i> Create another architecture
+            <i data-lucide="plus"></i> {{ t('apmv.createAnother') }}
           </button>
         </template>
         <template v-else>
           <button class="btn sm primary" :disabled="store.linkingArchitecture" @click="createArchitectureProjectLink">
-            <i data-lucide="plus"></i> Create architecture view
+            <i data-lucide="plus"></i> {{ t('apmv.createView') }}
           </button>
-          <label>Existing project
+          <label>{{ t('apmv.existingProject') }}
             <select v-model="architectureProjectId" class="ctrl-input">
-              <option value="">Select a project</option>
+              <option value="">{{ t('apmv.selectProject') }}</option>
               <option v-for="project in store.architectureProjects" :key="project.id" :value="project.id">{{ project.name }}</option>
             </select>
           </label>
@@ -439,37 +439,37 @@
       <template #footer>
         <button class="btn" @click="architectureLinkOpen = false">{{ t('action.cancel') }}</button>
         <button v-if="!store.architectureLink?.linked" class="btn primary" :disabled="store.linkingArchitecture || !architectureProjectId" @click="linkArchitectureProject">
-          <i data-lucide="link"></i> Link project
+          <i data-lucide="link"></i> {{ t('apmv.linkProject') }}
         </button>
       </template>
     </BaseModal>
 
     <BaseModal :show="kubernetesPreviewOpen" @close="kubernetesPreviewOpen = false">
-      <template #title><i data-lucide="boxes"></i> Kubernetes topology preview</template>
+      <template #title><i data-lucide="boxes"></i> {{ t('apmv.topologyPreview') }}</template>
       <div class="kubernetes-preview">
         <template v-if="!store.kubernetesPreview">
-          <label>Cluster
+          <label>{{ t('apmv.cluster') }}
             <select v-model="kubernetesContextId" class="ctrl-input" :disabled="store.loadingKubernetesContexts || store.previewingKubernetes">
-              <option value="">Select an EKS cluster</option>
+              <option value="">{{ t('apmv.selectCluster') }}</option>
               <option v-for="context in store.kubernetesContexts" :key="context.id" :value="context.id">{{ context.name }}</option>
             </select>
           </label>
-          <small v-if="store.loadingKubernetesContexts">Loading available clusters…</small>
-          <small v-else-if="!store.kubernetesContexts.length">No compatible Kubernetes clusters were found.</small>
-          <small v-else>Select one cluster before loading workloads, Services, Ingress and events.</small>
+          <small v-if="store.loadingKubernetesContexts">{{ t('apmv.loadingAvailableClusters') }}</small>
+          <small v-else-if="!store.kubernetesContexts.length">{{ t('apmv.noClusters') }}</small>
+          <small v-else>{{ t('apmv.selectClusterHint') }}</small>
         </template>
         <template v-else>
         <div class="kubernetes-preview-stats">
-          <span><strong>{{ store.kubernetesPreview?.nodes.length || 0 }}</strong> resources</span>
-          <span><strong>{{ store.kubernetesPreview?.relationships.length || 0 }}</strong> relationships</span>
-          <span><strong>{{ store.kubernetesPreview?.health.filter(item => item.status === 'degraded').length || 0 }}</strong> degraded contexts</span>
+          <span><strong>{{ store.kubernetesPreview?.nodes.length || 0 }}</strong> {{ t('apmv.resources') }}</span>
+          <span><strong>{{ store.kubernetesPreview?.relationships.length || 0 }}</strong> {{ t('apmv.relationships') }}</span>
+          <span><strong>{{ store.kubernetesPreview?.health.filter(item => item.status === 'degraded').length || 0 }}</strong> {{ t('apmv.degradedContexts') }}</span>
         </div>
         <div v-for="capability in store.kubernetesPreview?.capabilities || []" :key="capability.context" class="kubernetes-preview-context">
           <strong>{{ capability.context }}</strong>
-          <small>{{ capability.stableIdentity ? 'UID identity' : 'No stable identity' }} · {{ capability.relationshipEvidence ? 'relationship evidence' : 'limited relationships' }} · {{ capability.events ? 'events' : 'events unavailable' }}</small>
+          <small>{{ capability.stableIdentity ? t('apmv.uidIdentity') : t('apmv.noStableIdentity') }} · {{ capability.relationshipEvidence ? t('apmv.relationshipEvidence') : t('apmv.limitedRelationships') }} · {{ capability.events ? t('apmv.events') : t('apmv.eventsUnavailable') }}</small>
         </div>
         <div v-if="store.kubernetesPreview?.failures.length" class="architecture-link-warning">
-          {{ store.kubernetesPreview.failures.map(item => item.context).join(', ') }} could not be reached.
+          {{ t('apmv.unreachable', { contexts: store.kubernetesPreview.failures.map(item => item.context).join(', ') }) }}
         </div>
         </template>
       </div>
@@ -477,7 +477,7 @@
         <button class="btn" @click="kubernetesPreviewOpen = false">{{ t('action.cancel') }}</button>
         <button v-if="!store.kubernetesPreview" class="btn primary" :disabled="!kubernetesContextId || store.previewingKubernetes" @click="previewKubernetesTopology">
           <i :data-lucide="store.previewingKubernetes ? 'loader-2' : 'scan-search'"></i>
-          {{ store.previewingKubernetes ? 'Loading workloads…' : 'Load preview' }}
+          {{ store.previewingKubernetes ? t('apmv.loadingWorkloads') : t('apmv.loadPreview') }}
         </button>
       </template>
     </BaseModal>

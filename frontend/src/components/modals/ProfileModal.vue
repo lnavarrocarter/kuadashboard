@@ -11,13 +11,13 @@
           <!-- Name -->
           <label class="field-label">
             {{ t('profile.nameLabel') }}
-            <input v-model="form.name" class="ctrl-input" placeholder="e.g. my-gcp-prod" />
+            <input v-model="form.name" class="ctrl-input" :placeholder="t('profm.namePlaceholder')" />
           </label>
 
           <!-- Category -->
           <label class="field-label">
             {{ t('profile.categoryLabel') }} <span class="text-dim" style="font-weight:normal">{{ t('profile.categoryHint') }}</span>
-            <input v-model="form.category" class="ctrl-input" placeholder="e.g. backend, infra, staging…" />
+            <input v-model="form.category" class="ctrl-input" :placeholder="t('profm.categoryPlaceholder')" />
           </label>
 
           <!-- Provider -->
@@ -27,7 +27,7 @@
               <option value="gcp">Google Cloud (GCP)</option>
               <option value="aws">Amazon Web Services (AWS)</option>
               <option value="vercel">Vercel</option>
-              <option value="generic">Generic / Other</option>
+              <option value="generic">{{ t('profm.generic') }}</option>
             </select>
           </label>
           <button class="btn sm credential-guide-link" type="button" @click="openCredentialGuide">
@@ -44,7 +44,7 @@
               <button
                 :class="['auth-mode-tab', { active: gcpAuthMode === 'gcloud' }]"
                 @click="gcpAuthMode = 'gcloud'; loadGcloudConfigs(); loadGcloudAccounts()"
-              >gcloud CLI (auto-auth)</button>
+              >{{ t('profm.gcloudCli') }}</button>
             </div>
           </template>
 
@@ -54,11 +54,11 @@
               <button
                 :class="['auth-mode-tab', { active: awsAuthMode === 'manual' }]"
                 @click="awsAuthMode = 'manual'"
-              >Ingresar manualmente</button>
+              >{{ t('profm.awsManual') }}</button>
               <button
                 :class="['auth-mode-tab', { active: awsAuthMode === 'sso' }]"
                 @click="switchToAwsSso"
-              >Iniciar sesión temporal (SSO)</button>
+              >{{ t('profm.awsSso') }}</button>
             </div>
           </template>
 
@@ -68,8 +68,8 @@
             <!-- GCP → Service Account -->
             <template v-if="form.provider === 'gcp' && (isEdit || gcpAuthMode === 'sa')">
               <div class="field-label" style="margin-bottom:4px">
-                Keys
-                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+                {{ t('profm.keys') }}
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? t('profm.keepExisting') : t('profm.required') }})</span>
               </div>
               <label class="field-label">
                 GCP_PROJECT_ID
@@ -78,7 +78,7 @@
               <label class="field-label">
                 GCP_SERVICE_ACCOUNT_JSON
                 <textarea v-model="form.keys.GCP_SERVICE_ACCOUNT_JSON" class="ctrl-input code-input"
-                  rows="6" placeholder='Paste full Service Account JSON here...' />
+                  rows="6" :placeholder="t('profm.saJsonPlaceholder')" />
               </label>
             </template>
 
@@ -86,17 +86,16 @@
             <template v-else-if="form.provider === 'gcp' && gcpAuthMode === 'gcloud'">
               <!-- Info banner -->
               <div class="gcloud-info-box">
-                <strong>gcloud CLI authentication</strong><br/>
-                This creates a local gcloud configuration linked to your Google account.
-                No credentials are stored in KuaDashboard — the app uses
-                <code>gcloud auth print-access-token</code> each time.
+                <strong>{{ t('profm.gcloudAuthTitle') }}</strong><br/>
+                {{ t('profm.gcloudAuthBody') }}
+                <code>gcloud auth print-access-token</code> {{ t('profm.gcloudAuthEach') }}
               </div>
 
               <!-- Existing configs list -->
-              <div class="field-label" style="margin-bottom:2px">Existing gcloud configurations</div>
-              <div v-if="gcloudConfigsLoading" class="text-dim" style="font-size:12px;padding:4px 0">Loading…</div>
+              <div class="field-label" style="margin-bottom:2px">{{ t('profm.existingConfigs') }}</div>
+              <div v-if="gcloudConfigsLoading" class="text-dim" style="font-size:12px;padding:4px 0">{{ t('common.loading') }}</div>
               <div v-else-if="!gcloudConfigs.length" class="text-dim" style="font-size:12px;padding:4px 0">
-                No configurations found — authenticate below to create one.
+                {{ t('profm.noConfigs') }}
               </div>
               <div v-else class="gcloud-config-list">
                 <div
@@ -107,10 +106,10 @@
                 >
                   <div class="gcloud-config-name">
                     {{ c.name }}
-                    <span v-if="c.isActive" class="gcloud-badge">active</span>
+                    <span v-if="c.isActive" class="gcloud-badge">{{ t('profm.active') }}</span>
                   </div>
                   <div class="gcloud-config-meta text-dim">
-                    {{ c.account || 'no account' }}
+                    {{ c.account || t('profm.noAccount') }}
                     {{ c.project ? ` · ${c.project}` : '' }}
                   </div>
                 </div>
@@ -118,15 +117,15 @@
 
               <!-- Refresh configs -->
               <button class="btn sm" @click="loadGcloudConfigs" :disabled="gcloudConfigsLoading">
-                ↻ Refresh list
+                {{ t('profm.refreshList') }}
               </button>
 
               <!-- New config section -->
-              <div class="field-label" style="margin-top:6px">Crear nueva configuración</div>
+              <div class="field-label" style="margin-top:6px">{{ t('profm.newConfig') }}</div>
               <div style="display:flex;gap:8px">
                 <label class="field-label" style="flex:1;margin:0">
-                  Nombre de config
-                  <input v-model="gcpNewConfigName" class="ctrl-input" placeholder="e.g. my-project-prod" />
+                  {{ t('profm.configName') }}
+                  <input v-model="gcpNewConfigName" class="ctrl-input" :placeholder="t('profm.configNamePlaceholder')" />
                 </label>
                 <label class="field-label" style="flex:1;margin:0">
                   Project ID
@@ -136,15 +135,15 @@
 
               <!-- Account selector (already-authenticated accounts) -->
               <label class="field-label" style="margin:0">
-                Cuenta Google
+                {{ t('profm.googleAccount') }}
                 <div style="display:flex;gap:6px;align-items:center">
                   <select v-model="gcpNewConfigAccount" class="ctrl-select" style="flex:1">
-                    <option value="">— nueva cuenta (abre navegador) —</option>
+                    <option value="">{{ t('profm.newAccount') }}</option>
                     <option v-for="a in gcloudAccounts" :key="a.account" :value="a.account">
                       {{ a.account }}{{ a.status === 'ACTIVE' ? ' ★' : '' }}
                     </option>
                   </select>
-                  <button class="btn sm" :disabled="gcloudConfigsLoading" @click="loadGcloudAccounts" title="Refrescar cuentas">↻</button>
+                  <button class="btn sm" :disabled="gcloudConfigsLoading" @click="loadGcloudAccounts" :title="t('profm.refreshAccounts')">↻</button>
                 </div>
               </label>
 
@@ -155,15 +154,15 @@
                   :disabled="!gcpNewConfigName.trim() || gcpCreatePending"
                   @click="createGcloudConfig"
                 >
-                  {{ gcpCreatePending ? 'Creando…' : '+ Crear configuración' }}
+                  {{ gcpCreatePending ? t('profm.creating') : t('profm.createConfig') }}
                 </button>
-                <span class="text-dim" style="font-size:11px">o</span>
+                <span class="text-dim" style="font-size:11px">{{ t('profm.or') }}</span>
                 <button
                   class="btn"
                   :disabled="gcloudLoginPending"
                   @click="launchGcloudLogin"
                 >
-                  {{ gcloudLoginPending ? 'Abriendo navegador…' : '🔑 Auth con nueva cuenta' }}
+                  {{ gcloudLoginPending ? t('profm.openingBrowser') : t('profm.authNewAccount') }}
                 </button>
               </div>
               <span v-if="gcloudLoginMsg" :class="gcloudLoginErr ? 'text-red' : 'text-dim'" style="font-size:12px">
@@ -173,9 +172,9 @@
               <!-- Select config to use -->
               <div v-if="gcloudConfigs.length" style="margin-top:4px">
                 <label class="field-label">
-                  Usar configuración
+                  {{ t('profm.useConfig') }}
                   <select v-model="gcpSelectedConfig" class="ctrl-select">
-                    <option value="">— seleccionar —</option>
+                    <option value="">{{ t('profm.select') }}</option>
                     <option v-for="c in gcloudConfigs" :key="c.name" :value="c.name">
                       {{ c.name }}{{ c.account ? ` (${c.account})` : '' }}{{ c.project ? ` · ${c.project}` : '' }}
                     </option>
@@ -196,18 +195,18 @@
                 >
                   <!-- Vercel triangle logo -->
                   <svg width="14" height="12" viewBox="0 0 76 65" fill="currentColor"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
-                  {{ oauthPending ? 'Waiting for authorization…' : 'Connect with Vercel' }}
+                  {{ oauthPending ? t('profm.waitingAuth') : t('profm.connectVercel') }}
                 </button>
                 <span v-if="oauthErrorMsg" class="text-red" style="font-size:12px">{{ oauthErrorMsg }}</span>
                 <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
                   <hr style="flex:1;border-color:var(--border)" />
-                  or enter token manually
+                  {{ t('profm.orManual') }}
                   <hr style="flex:1;border-color:var(--border)" />
                 </div>
               </div>
               <div class="field-label" style="margin-bottom:4px">
-                Keys
-                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+                {{ t('profm.keys') }}
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? t('profm.keepExisting') : t('profm.required') }})</span>
               </div>
               <label class="field-label">
                 VERCEL_API_TOKEN
@@ -224,7 +223,7 @@
               </label>
               <label class="field-label">
                 VERCEL_TEAM_ID
-                <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — for team accounts)</span>
+                <span class="text-dim" style="font-weight:normal;font-size:11px"> {{ t('profm.teamOptional') }}</span>
                 <input v-model="form.keys.VERCEL_TEAM_ID" class="ctrl-input" placeholder="team_XXXXXXXXXXXX" />
               </label>
             </template>
@@ -232,8 +231,8 @@
             <!-- AWS → manual keys -->
             <template v-else-if="form.provider === 'aws' && awsAuthMode === 'manual'">
               <div class="field-label" style="margin-bottom:4px">
-                Keys
-                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? 'leave blank to keep existing value' : 'required' }})</span>
+                {{ t('profm.keys') }}
+                <span class="text-dim" style="font-weight:normal"> ({{ isEdit ? t('profm.keepExisting') : t('profm.required') }})</span>
               </div>
               <label class="field-label">
                 AWS_ACCESS_KEY_ID
@@ -245,9 +244,9 @@
               </label>
               <label class="field-label">
                 AWS_SESSION_TOKEN
-                <span class="text-dim" style="font-weight:normal;font-size:11px"> (optional — for temporary credentials: STS / IAM Identity Center / SSO)</span>
+                <span class="text-dim" style="font-weight:normal;font-size:11px"> {{ t('profm.sessionTokenOptional') }}</span>
                 <textarea v-model="form.keys.AWS_SESSION_TOKEN" class="ctrl-input code-input" rows="3"
-                  placeholder="IQoJb3JpZ2luX2VjE... (leave empty for permanent keys)"></textarea>
+                  :placeholder="t('profm.sessionTokenPlaceholder')"></textarea>
               </label>
               <label class="field-label">
                 AWS_DEFAULT_REGION
@@ -258,35 +257,33 @@
             <!-- AWS → SSO temporary session (IAM Identity Center) -->
             <template v-else-if="form.provider === 'aws' && awsAuthMode === 'sso'">
               <div class="gcloud-info-box">
-                <strong>Sesión temporal con IAM Identity Center (SSO)</strong><br/>
-                Se abre el login de AWS en tu navegador; al aprobar, las credenciales temporales
-                (access key, secret y session token) se capturan y guardan automáticamente.
-                Cuando la sesión expire podrás renovarla con un clic.
+                <strong>{{ t('profm.ssoTitle') }}</strong><br/>
+                {{ t('profm.ssoBody') }}
               </div>
 
               <!-- Detected SSO profiles from ~/.aws/config -->
               <label class="field-label" style="margin:0">
-                Perfil SSO detectado (~/.aws/config)
+                {{ t('profm.ssoDetected') }}
                 <div style="display:flex;gap:6px;align-items:center">
                   <select v-model="ssoSelectedLocal" class="ctrl-select" style="flex:1" :disabled="ssoBusy">
-                    <option value="">— configurar manualmente —</option>
+                    <option value="">{{ t('profm.configureManually') }}</option>
                     <option v-for="p in ssoLocalProfiles" :key="p.name" :value="p.name">
                       {{ p.name }}{{ p.accountId ? ` · ${p.accountId}` : '' }}{{ p.roleName ? ` (${p.roleName})` : '' }}
                     </option>
                   </select>
-                  <button class="btn sm" :disabled="ssoBusy" @click="loadSsoLocalProfiles" title="Refrescar perfiles">↻</button>
+                  <button class="btn sm" :disabled="ssoBusy" @click="loadSsoLocalProfiles" :title="t('profm.refreshProfiles')">↻</button>
                 </div>
               </label>
 
               <!-- Manual start URL (when no detected profile selected) -->
               <template v-if="!ssoSelectedLocal">
                 <label class="field-label" style="margin:0">
-                  URL de inicio de SSO
+                  {{ t('profm.ssoStartUrl') }}
                   <input v-model="ssoStartUrl" class="ctrl-input" :disabled="ssoBusy"
-                    placeholder="https://identitycenter.amazonaws.com/ssoins-... o https://mi-org.awsapps.com/start" />
+                    :placeholder="t('profm.ssoStartUrlPlaceholder')" />
                 </label>
                 <label class="field-label" style="margin:0">
-                  Región de SSO
+                  {{ t('profm.ssoRegion') }}
                   <input v-model="ssoRegionInput" class="ctrl-input" :disabled="ssoBusy" placeholder="us-east-1" />
                 </label>
               </template>
@@ -294,47 +291,47 @@
               <!-- Login button + status -->
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <button class="btn primary" :disabled="ssoBusy || sso.phase.value === 'waiting'" @click="runSsoLogin">
-                  {{ sso.phase.value === 'waiting' ? 'Esperando aprobación en el navegador…' : '🔑 Iniciar sesión en AWS' }}
+                  {{ sso.phase.value === 'waiting' ? t('profm.waitingApproval') : t('profm.signInAws') }}
                 </button>
                 <a v-if="sso.phase.value === 'waiting' && sso.verificationUrl.value"
                    :href="sso.verificationUrl.value" target="_blank"
-                   style="font-size:11px;color:var(--accent)">reabrir página de login</a>
+                   style="font-size:11px;color:var(--accent)">{{ t('profm.reopenLogin') }}</a>
               </div>
               <span v-if="sso.phase.value === 'waiting' && sso.userCode.value" class="text-dim" style="font-size:12px">
-                Código de verificación: <code>{{ sso.userCode.value }}</code>
+                {{ t('profm.verificationCode') }} <code>{{ sso.userCode.value }}</code>
               </span>
               <span v-if="ssoError" class="text-red" style="font-size:12px">{{ ssoError }}</span>
 
               <!-- Account / role pickers (manual start URL without preconfigured account) -->
               <template v-if="ssoAccounts.length">
                 <label class="field-label" style="margin:0">
-                  Cuenta AWS
+                  {{ t('profm.awsAccount') }}
                   <select v-model="ssoAccountId" class="ctrl-select" :disabled="ssoBusy">
-                    <option value="">— seleccionar cuenta —</option>
+                    <option value="">{{ t('profm.selectAccount') }}</option>
                     <option v-for="a in ssoAccounts" :key="a.accountId" :value="a.accountId">
                       {{ a.accountName }} ({{ a.accountId }})
                     </option>
                   </select>
                 </label>
                 <label class="field-label" style="margin:0">
-                  Rol
+                  {{ t('profm.role') }}
                   <select v-model="ssoRoleName" class="ctrl-select" :disabled="ssoBusy || !ssoAccountId">
-                    <option value="">— seleccionar rol —</option>
+                    <option value="">{{ t('profm.selectRole') }}</option>
                     <option v-for="r in ssoSelectedAccountRoles" :key="r" :value="r">{{ r }}</option>
                   </select>
                 </label>
                 <button class="btn primary" style="align-self:flex-start"
                         :disabled="ssoBusy || !ssoAccountId || !ssoRoleName"
                         @click="captureSsoCredentials(ssoAccountId, ssoRoleName)">
-                  {{ ssoBusy ? 'Obteniendo credenciales…' : 'Obtener credenciales' }}
+                  {{ ssoBusy ? t('profm.gettingCredentials') : t('profm.getCredentials') }}
                 </button>
               </template>
 
               <!-- Captured credentials summary -->
               <div v-if="ssoCaptured" class="gcloud-info-box" style="border-left-color:var(--green,#3fbf6f)">
-                ✅ <strong>Credenciales capturadas</strong> — cuenta {{ ssoMeta.accountId }} · rol {{ ssoMeta.roleName }}<br/>
-                La sesión expira {{ formatSsoExpiry(ssoCaptured.expiresAt) }}.
-                Guarda el perfil para terminar.
+                ✅ <strong>{{ t('profm.credentialsCaptured') }}</strong> — {{ t('profm.capturedDetail', { account: ssoMeta.accountId, role: ssoMeta.roleName }) }}<br/>
+                {{ t('profm.sessionExpires', { when: formatSsoExpiry(ssoCaptured.expiresAt) }) }}
+                {{ t('profm.saveToFinish') }}
               </div>
 
               <!-- Region (editable, prefilled from the SSO profile) -->
@@ -353,7 +350,7 @@
               >
                 <div style="display:flex;gap:8px;align-items:center">
                   <input v-model="pair.key"   class="ctrl-input" style="flex:1" placeholder="KEY_NAME" />
-                  <input v-model="pair.value" class="ctrl-input" style="flex:2" placeholder="value" />
+                  <input v-model="pair.value" class="ctrl-input" style="flex:2" :placeholder="t('profm.valuePlaceholder')" />
                   <button class="btn sm" style="color:var(--red)" @click="removePair(idx)">✕</button>
                 </div>
                 <!-- Tags for this key -->
@@ -370,13 +367,13 @@
                     v-model="pair.newTag"
                     class="ctrl-input"
                     style="font-size:11px;padding:1px 6px;height:22px;width:90px"
-                    placeholder="+ tag"
+                    :placeholder="t('profm.tagPlaceholder')"
                     @keydown.enter.prevent="addTag(idx)"
                   />
-                  <button class="btn sm" style="padding:0 6px;height:22px;font-size:11px" @click="addTag(idx)">Add</button>
+                  <button class="btn sm" style="padding:0 6px;height:22px;font-size:11px" @click="addTag(idx)">{{ t('profm.add') }}</button>
                 </div>
               </div>
-              <button class="btn sm" @click="addPair" style="align-self:flex-start">+ Add Key</button>
+              <button class="btn sm" @click="addPair" style="align-self:flex-start">{{ t('profm.addKey') }}</button>
             </template>
           </div>
         </div>
@@ -389,7 +386,7 @@
               class="btn primary"
               :disabled="!gcpSelectedConfig"
               @click="submitGcloud"
-            >Use Selected Config</button>
+            >{{ t('profm.useSelected') }}</button>
           </template>
           <template v-else>
             <button
@@ -499,7 +496,7 @@ async function runSsoLogin() {
     roleName      = localProf.roleName
     defaultRegion = localProf.region
   }
-  if (!startUrl) { ssoError.value = 'Selecciona un perfil o ingresa la URL de inicio de SSO'; return }
+  if (!startUrl) { ssoError.value = t('profm.ssoNeedStart'); return }
 
   ssoBusy.value = true
   ssoActive     = { startUrl, ssoRegion: region, defaultRegion }
@@ -551,11 +548,11 @@ async function captureSsoCredentials(accountId, roleName) {
 }
 
 function formatSsoExpiry(epochMs) {
-  if (!epochMs) return 'pronto'
+  if (!epochMs) return t('profm.soon')
   const d    = new Date(epochMs)
   const mins = Math.max(0, Math.round((epochMs - Date.now()) / 60000))
   const rel  = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`
-  return `a las ${d.toLocaleTimeString()} (en ${rel})`
+  return t('profm.expiryAt', { time: d.toLocaleTimeString(), rel })
 }
 
 async function loadGcloudConfigs() {
@@ -595,8 +592,8 @@ async function createGcloudConfig() {
       body: JSON.stringify({ name, project: project || undefined, account: account || undefined }),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al crear configuración')
-    gcloudLoginMsg.value = `Configuración "${name}" creada. Selecciónala abajo.`
+    if (!res.ok) throw new Error(data.error || t('profm.createConfigFailed'))
+    gcloudLoginMsg.value = t('profm.configCreated', { name })
     await loadGcloudConfigs()
     gcpSelectedConfig.value = name
   } catch (e) {
@@ -620,8 +617,8 @@ async function launchGcloudLogin() {
       body: JSON.stringify(body),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'gcloud login failed')
-    gcloudLoginMsg.value = data.message || 'Navegador abierto — completa el OAuth y haz clic en Refresh.'
+    if (!res.ok) throw new Error(data.error || t('profm.gcloudLoginFailed'))
+    gcloudLoginMsg.value = data.message || t('profm.browserOpened')
     setTimeout(() => { loadGcloudConfigs(); loadGcloudAccounts() }, 4000)
   } catch (e) {
     gcloudLoginMsg.value = e.message
@@ -790,7 +787,7 @@ onMounted(() => {
 
   const errorHandler = window.kuaElectron.onVercelOAuthError?.((msg) => {
     oauthPending.value = false
-    oauthErrorMsg.value = msg || 'Vercel OAuth failed'
+    oauthErrorMsg.value = msg || t('profm.vercelOauthFailed')
   })
 
   if (successHandler) oauthHandlers.push(['vercel:oauth-complete', successHandler])

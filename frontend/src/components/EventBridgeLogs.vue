@@ -1,17 +1,17 @@
 <template>
   <div class="ebl-root">
-    <div v-if="loading" class="empty-row">Loading metrics &amp; logs...</div>
+    <div v-if="loading" class="empty-row">{{ t('ebl.loading') }}</div>
     <div v-else-if="error" class="alert-error">{{ error }}</div>
     <template v-else>
 
       <!-- Metric cards -->
       <section class="ebl-section">
-        <div class="ebl-section-title">CloudWatch Metrics ({{ rangeLabel }})</div>
+        <div class="ebl-section-title">{{ t('ebl.metricsTitle', { range: rangeLabel }) }}</div>
         <div class="ebl-metrics-row">
           <div v-for="m in metricCards" :key="m.key" class="ebl-metric-card" :style="{ borderTopColor: m.color }">
             <div class="ebl-metric-label">{{ m.label }}</div>
             <div class="ebl-metric-value" :style="{ color: m.color }">{{ m.total }}</div>
-            <div class="ebl-metric-sub">events</div>
+            <div class="ebl-metric-sub">{{ t('ebl.events') }}</div>
           </div>
         </div>
 
@@ -33,26 +33,26 @@
                 :fill="m.color"
               />
             </svg>
-            <div v-else class="ebl-sparkline-empty">No data</div>
+            <div v-else class="ebl-sparkline-empty">{{ t('ebl.noData') }}</div>
           </div>
         </div>
-        <div v-else class="text-dim" style="font-size:11px;margin-top:4px">No metric datapoints in selected range.</div>
+        <div v-else class="text-dim" style="font-size:11px;margin-top:4px">{{ t('ebl.noDatapoints') }}</div>
       </section>
 
       <!-- Log events -->
       <section class="ebl-section">
         <div class="ebl-section-title" style="display:flex;align-items:center;gap:8px">
-          <span>Log Events</span>
+          <span>{{ t('ebl.logEvents') }}</span>
           <span v-if="logGroupName" class="ebl-log-group-badge">{{ logGroupName }}</span>
-          <span v-else class="text-dim" style="font-size:10px">(no CloudWatch Logs target configured)</span>
+          <span v-else class="text-dim" style="font-size:10px">{{ t('ebl.noLogsTarget') }}</span>
         </div>
 
         <div v-if="!logGroupName" class="ebl-log-hint">
-          <p>To capture event payloads as logs, add a <strong>CloudWatch Logs</strong> target to this rule pointing to a log group.</p>
-          <p style="margin-top:4px">Example log group name: <code>/aws/events/{{ busName }}</code></p>
+          <p>{{ t('ebl.hintPre') }} <strong>CloudWatch Logs</strong> {{ t('ebl.hintPost') }}</p>
+          <p style="margin-top:4px">{{ t('ebl.exampleGroup') }} <code>/aws/events/{{ busName }}</code></p>
         </div>
 
-        <div v-else-if="!logEvents.length" class="empty-row">No log events found in selected range.</div>
+        <div v-else-if="!logEvents.length" class="empty-row">{{ t('ebl.noLogEvents') }}</div>
 
         <div v-else class="ebl-log-list">
           <div v-for="(ev, i) in logEvents" :key="i" class="ebl-log-entry">
@@ -69,6 +69,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   data:      { type: Object,  default: null },
@@ -79,26 +80,28 @@ const props = defineProps({
   ruleName:  { type: String,  default: '' },
 })
 
+const { t } = useI18n()
 const sparkW = 240
 
 const METRIC_META = [
-  { key: 'MatchedEvents',     label: 'Matched Events',     color: '#60a5fa' },
-  { key: 'TriggeredRules',    label: 'Triggered Rules',    color: '#34d399' },
-  { key: 'FailedInvocations', label: 'Failed Invocations', color: '#f87171' },
-  { key: 'ThrottledRules',    label: 'Throttled Rules',    color: '#fb923c' },
+  { key: 'MatchedEvents',     label: 'ebl.metric.matched',   color: '#60a5fa' },
+  { key: 'TriggeredRules',    label: 'ebl.metric.triggered', color: '#34d399' },
+  { key: 'FailedInvocations', label: 'ebl.metric.failed',    color: '#f87171' },
+  { key: 'ThrottledRules',    label: 'ebl.metric.throttled', color: '#fb923c' },
 ]
 
 const rangeLabel = computed(() => {
   const m = props.minutes
-  if (m <= 60)   return `last ${m} min`
-  if (m <= 1440) return `last ${Math.round(m / 60)} h`
-  return `last ${Math.round(m / 1440)} d`
+  if (m <= 60)   return t('ebl.lastMin', { n: m })
+  if (m <= 1440) return t('ebl.lastHours', { n: Math.round(m / 60) })
+  return t('ebl.lastDays', { n: Math.round(m / 1440) })
 })
 
 const metricCards = computed(() => {
   if (!props.data?.metrics) return []
   return METRIC_META.map(m => ({
     ...m,
+    label:  t(m.label),
     points: props.data.metrics[m.key] || [],
     total:  props.data.totals?.[m.key] ?? 0,
   }))
