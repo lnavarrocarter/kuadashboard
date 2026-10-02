@@ -790,6 +790,35 @@ export default {
   'common.yes': 'Sí',
   'common.no': 'No',
 
+  // ── Step Functions detail (script) ──
+  'sfnd.tabVersions': 'Versiones',
+  'sfnd.errVersions': 'Error cargando versiones',
+  'sfnd.errNoDefinition': 'No se encontró la definición de esta versión.',
+  'sfnd.errDefinition': 'Error cargando la definición',
+  'sfnd.errNoResponse': 'No se recibió respuesta de la API',
+  'sfnd.errDetails': 'Error cargando los detalles',
+  'sfnd.errHistory': 'No se pudo obtener el historial. Revisá los permisos de AWS y volvé a intentar.',
+  'sfnd.errEvents': 'Error cargando eventos',
+
+  // ── Step Functions detail ──
+  'sfnd.iamAndTracing': 'IAM y trazado',
+  'sfnd.level': 'Nivel',
+  'sfnd.inclExecutionData': 'Incl. datos de ejecución',
+  'sfnd.cwDestination': 'Destino CW',
+  'sfnd.aslDefinition': 'Definición ASL',
+  'sfnd.noRecentExecutionsFound': 'No se encontraron ejecuciones recientes.',
+  'sfnd.start': 'Inicio',
+  'sfnd.events': 'Eventos',
+  'sfnd.inspect': 'Inspeccionar',
+  'sfnd.selectAnExecutionInTheExecutions': 'Seleccioná una ejecución en la pestaña Ejecuciones para ver sus eventos.',
+  'sfnd.execution': 'Ejecución:',
+  'sfnd.refresh': '↺ Refrescar',
+  'sfnd.loadingEvents': 'Cargando eventos…',
+  'sfnd.noEventsFound': 'No se encontraron eventos.',
+  'sfnd.versions': 'Versiones ({p0})',
+  'sfnd.selectAVersionToSeeIts': 'Seleccioná una versión para ver su definición.',
+  'sfnd.version': 'Versión:',
+
   // ── GCP view (labels, button states and toasts) ──
   'gcpv.lit.custom': 'Personalizado',
   'gcpv.lit.deploying': 'Desplegando…',

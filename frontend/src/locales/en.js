@@ -791,6 +791,35 @@ export default {
   'common.yes': 'Yes',
   'common.no': 'No',
 
+  // ── Step Functions detail (script) ──
+  'sfnd.tabVersions': 'Versions',
+  'sfnd.errVersions': 'Error loading versions',
+  'sfnd.errNoDefinition': 'The definition of this version was not found.',
+  'sfnd.errDefinition': 'Error loading the definition',
+  'sfnd.errNoResponse': 'The API returned no response',
+  'sfnd.errDetails': 'Error loading the details',
+  'sfnd.errHistory': 'Could not get the history. Check the AWS permissions and try again.',
+  'sfnd.errEvents': 'Error loading events',
+
+  // ── Step Functions detail ──
+  'sfnd.iamAndTracing': 'IAM and tracing',
+  'sfnd.level': 'Level',
+  'sfnd.inclExecutionData': 'Incl. execution data',
+  'sfnd.cwDestination': 'CW destination',
+  'sfnd.aslDefinition': 'ASL definition',
+  'sfnd.noRecentExecutionsFound': 'No recent executions found.',
+  'sfnd.start': 'Start',
+  'sfnd.events': 'Events',
+  'sfnd.inspect': 'Inspect',
+  'sfnd.selectAnExecutionInTheExecutions': 'Select an execution in the Executions tab to see its events.',
+  'sfnd.execution': 'Execution:',
+  'sfnd.refresh': '↺ Refresh',
+  'sfnd.loadingEvents': 'Loading events…',
+  'sfnd.noEventsFound': 'No events found.',
+  'sfnd.versions': 'Versions ({p0})',
+  'sfnd.selectAVersionToSeeIts': 'Select a version to see its definition.',
+  'sfnd.version': 'Version:',
+
   // ── GCP view (labels, button states and toasts) ──
   'gcpv.lit.custom': 'Custom',
   'gcpv.lit.deploying': 'Deploying…',

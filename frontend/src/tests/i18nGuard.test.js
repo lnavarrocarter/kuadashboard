@@ -22,6 +22,7 @@ const MIGRATED = [
   'components/cloud/Ec2RdpInfo.vue',
   'components/cloud/Ec2Shell.vue',
   'components/TerminalPanel.vue',
+  'components/StepFnDetail.vue',
 ]
 
 // Characters that only appear in Spanish text.
