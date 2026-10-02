@@ -2,8 +2,8 @@
   <div class="cloud-view">
 
     <div v-if="!selectedProfileId" class="empty-state">
-      Select an AWS credential profile in the top header to load resources.<br />
-      <span class="text-dim">No profile? Use the <strong>Env Manager</strong> button (key icon) to create one.</span>
+      {{ t('awsv.selectAnAwsCredentialProfileIn') }}<br />
+      <span class="text-dim">{{ t('awsv.noProfileUseThe') }} <strong>{{ t('nav.envManager') }}</strong> {{ t('awsv.buttonKeyIconToCreateOne') }}</span>
     </div>
 
     <template v-else>
@@ -34,8 +34,8 @@
           class="ctrl-input aws-search"
         />
         <span class="text-dim" style="font-size:12px">
-          <template v-if="awsStore.loading">Loading...</template>
-          <template v-else>{{ activeRowCount }} result{{ activeRowCount !== 1 ? 's' : '' }}</template>
+          <template v-if="awsStore.loading">{{ t('state.loading') }}</template>
+          <template v-else>{{ t('awsv.results', { n: activeRowCount }) }}</template>
         </span>
         <button class="btn sm" @click="reloadActiveTab({ force: true })" :disabled="tabLoading" :title="t('awsActivity.refreshHint')"><i data-lucide="refresh-cw"></i></button>
       </div>
@@ -65,17 +65,17 @@
       />
 
       <div v-show="activeTab === 'ec2'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredEc2.length" class="empty-row">{{ search.ec2 ? 'No matches.' : 'No EC2 instances found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredEc2.length" class="empty-row">{{ search.ec2 ? t('awsv.lit.noMatches') : t('awsv.lit.noEc2') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"       @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"       @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-            <th :class="thClass('state')"      @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('publicIp')"   @click="sortBy('publicIp')">Public IP <span class="sort-icon">{{ sortIcon('publicIp') }}</span></th>
+            <th :class="thClass('name')"       @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"       @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th :class="thClass('state')"      @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('publicIp')"   @click="sortBy('publicIp')">{{ t('ec2d.publicIp') }} <span class="sort-icon">{{ sortIcon('publicIp') }}</span></th>
             <th :class="thClass('az')"         @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
-            <th :class="thClass('launchTime')" @click="sortBy('launchTime')">Launched <span class="sort-icon">{{ sortIcon('launchTime') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('launchTime')" @click="sortBy('launchTime')">{{ t('eksd.launched') }} <span class="sort-icon">{{ sortIcon('launchTime') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="i in sortRows(filteredEc2)" :key="i.id">
@@ -97,10 +97,10 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openEc2Detail(i)">ℹ Info</button>
-                  <button class="btn sm" @click="startEc2(i)" :disabled="i.state === 'running'">Start</button>
-                  <button class="btn sm danger" @click="stopEc2(i)" :disabled="i.state === 'stopped'">Stop</button>
-                  <button class="btn sm" @click="openTags('ec2', `EC2: ${i.name}`, i.id, i.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('ec2', `EC2: ${i.name}`, i, { id: i.id })">Config</button>
+                  <button class="btn sm" @click="startEc2(i)" :disabled="i.state === 'running'">{{ t('action.start') }}</button>
+                  <button class="btn sm danger" @click="stopEc2(i)" :disabled="i.state === 'stopped'">{{ t('action.stop') }}</button>
+                  <button class="btn sm" @click="openTags('ec2', `EC2: ${i.name}`, i.id, i.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('ec2', `EC2: ${i.name}`, i, { id: i.id })">{{ t('sidebar.config') }}</button>
                   <!-- Linux → SSH, Windows → RDP -->
                   <template v-if="i.platform !== 'windows'">
                     <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e"
@@ -126,17 +126,17 @@
       </div>
 
       <div v-show="activeTab === 'ecs'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredEcs.length" class="empty-row">{{ search.ecs ? 'No matches.' : 'No ECS services found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredEcs.length" class="empty-row">{{ search.ecs ? t('awsv.lit.noMatches') : t('awsv.lit.noEcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">Service <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('cluster')"   @click="sortBy('cluster')">Cluster <span class="sort-icon">{{ sortIcon('cluster') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('desired')"   @click="sortBy('desired')">Desired <span class="sort-icon">{{ sortIcon('desired') }}</span></th>
-            <th :class="thClass('running')"   @click="sortBy('running')">Running <span class="sort-icon">{{ sortIcon('running') }}</span></th>
-            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('pf.service') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('cluster')"   @click="sortBy('cluster')">{{ t('sidebar.cluster') }} <span class="sort-icon">{{ sortIcon('cluster') }}</span></th>
+            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('desired')"   @click="sortBy('desired')">{{ t('detail.desired') }} <span class="sort-icon">{{ sortIcon('desired') }}</span></th>
+            <th :class="thClass('running')"   @click="sortBy('running')">{{ t('apm.status.running') }} <span class="sort-icon">{{ sortIcon('running') }}</span></th>
+            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="svc in sortRows(filteredEcs)" :key="`${svc.cluster}/${svc.name}`">
@@ -156,11 +156,11 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="startEcs(svc)">Start</button>
-                  <button class="btn sm danger" @click="stopEcs(svc)">Stop</button>
-                  <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">Logs</button>
+                  <button class="btn sm" @click="startEcs(svc)">{{ t('action.start') }}</button>
+                  <button class="btn sm danger" @click="stopEcs(svc)">{{ t('action.stop') }}</button>
+                  <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('action.logs') }}</button>
                   <button class="btn sm" @click="openLogging('ecs', svc)">CW Logs</button>
-                  <button class="btn sm" @click="openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name })">Config</button>
+                  <button class="btn sm" @click="openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name })">{{ t('sidebar.config') }}</button>
                 </div>
               </td>
             </tr>
@@ -169,18 +169,18 @@
       </div>
 
       <div v-show="activeTab === 'eks'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredEks.length" class="empty-row">{{ search.eks ? 'No matches.' : 'No EKS clusters found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredEks.length" class="empty-row">{{ search.eks ? t('awsv.lit.noMatches') : t('awsv.lit.noEks') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('region')"    @click="sortBy('region')">Region <span class="sort-icon">{{ sortIcon('region') }}</span></th>
-            <th :class="thClass('version')"   @click="sortBy('version')">Version <span class="sort-icon">{{ sortIcon('version') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th>Node groups</th>
-            <th :class="thClass('instanceCount')" @click="sortBy('instanceCount')" title="EC2 instances running as nodes of this cluster">EC2 <span class="sort-icon">{{ sortIcon('instanceCount') }}</span></th>
-            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('region')"    @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon">{{ sortIcon('region') }}</span></th>
+            <th :class="thClass('version')"   @click="sortBy('version')">{{ t('th.version') }} <span class="sort-icon">{{ sortIcon('version') }}</span></th>
+            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th>{{ t('eksd.sectionNodegroups') }}</th>
+            <th :class="thClass('instanceCount')" @click="sortBy('instanceCount')" :title="t('awsv.ec2InstancesRunningAsNodesOf')">EC2 <span class="sort-icon">{{ sortIcon('instanceCount') }}</span></th>
+            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="c in sortRows(filteredEks)" :key="c.name">
@@ -192,14 +192,14 @@
               <td><span class="tag-chip">v{{ c.version }}</span></td>
               <td><span :class="eksStatusClass(c.status)">{{ c.status }}</span></td>
               <td>
-                <span v-if="c.nodegroups == null" class="text-dim" title="Could not list node groups (check eks:ListNodegroups)">?</span>
-                <span v-else-if="!c.nodegroups.length" class="text-dim" title="No managed node groups (Fargate, Karpenter or self-managed)">—</span>
+                <span v-if="c.nodegroups == null" class="text-dim" :title="t('awsv.couldNotListNodeGroupsCheck')">?</span>
+                <span v-else-if="!c.nodegroups.length" class="text-dim" :title="t('awsv.noManagedNodeGroupsFargateKarpenter')">—</span>
                 <div v-else class="tag-chips">
                   <span v-for="ng in c.nodegroups" :key="ng" class="tag-chip">{{ ng }}</span>
                 </div>
               </td>
               <td>
-                <span v-if="c.instanceCount == null" class="text-dim" title="Could not list EC2 instances (check ec2:DescribeInstances)">?</span>
+                <span v-if="c.instanceCount == null" class="text-dim" :title="t('awsv.couldNotListEc2InstancesCheck')">?</span>
                 <span v-else :class="c.instanceCount ? '' : 'text-dim'" style="font-weight:600">{{ c.instanceCount }}</span>
               </td>
               <td class="text-dim" style="white-space:nowrap">{{ c.createdAt ? formatDate(c.createdAt) : '-' }}</td>
@@ -210,13 +210,13 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" title="AWS infrastructure: network, node groups, EC2 nodes, add-ons" @click="openEksDetail(c)">ℹ Info</button>
-                  <button class="btn sm" title="Open Container Insights dashboard" @click="openEksObservability(c)">
-                    <i data-lucide="chart-no-axes-combined"></i> Metrics
+                  <button class="btn sm" :title="t('awsv.awsInfrastructureNetworkNodeGroupsEc2')" @click="openEksDetail(c)">ℹ Info</button>
+                  <button class="btn sm" :title="t('awsv.openContainerInsightsDashboard')" @click="openEksObservability(c)">
+                    <i data-lucide="chart-no-axes-combined"></i> {{ t('detail.tabMetrics') }}
                   </button>
-                  <button class="btn sm" @click="openConfig('eks', `EKS: ${c.name}`, c, { name: c.name })">Config</button>
+                  <button class="btn sm" @click="openConfig('eks', `EKS: ${c.name}`, c, { name: c.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" style="background:rgba(63,185,80,.18);border-color:#3fb950;color:#3fb950"
-                    @click="addEksToKubeconfig(c)" :disabled="c.status !== 'ACTIVE'">Add to Dashboard</button>
+                    @click="addEksToKubeconfig(c)" :disabled="c.status !== 'ACTIVE'">{{ t('awsv.addToDashboard') }}</button>
                 </div>
               </td>
             </tr>
@@ -229,19 +229,19 @@
           <span>{{ lambdaActivityNotice.text }}</span>
           <button v-if="lambdaActivityNotice.access" class="btn sm" @click="activityAccess = lambdaActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
         </div>
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? 'No matches.' : 'No Lambda functions found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? t('awsv.lit.noMatches') : t('awsv.lit.noLambda') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th :class="thClass('runtime')"      @click="sortBy('runtime')">Runtime <span class="sort-icon">{{ sortIcon('runtime') }}</span></th>
-            <th :class="thClass('memory')"       @click="sortBy('memory')">Memory <span class="sort-icon">{{ sortIcon('memory') }}</span></th>
+            <th :class="thClass('memory')"       @click="sortBy('memory')">{{ t('lmd.memory') }} <span class="sort-icon">{{ sortIcon('memory') }}</span></th>
             <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
-            <th :class="thClass('state')"        @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">Modified <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th :class="thClass('state')"        @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
             <th :class="thClass('invocations24h')" @click="sortBy('invocations24h')" :title="t('awsActivity.invocationsHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('invocations24h') }}</span></th>
             <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')">{{ t('awsActivity.logs') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="fn in sortRows(lambdaRows)" :key="fn.name">
@@ -275,11 +275,11 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openInvoke(fn)">Invoke</button>
-                  <button class="btn sm" @click="openLogs('lambda', fn.name)">Logs</button>
+                  <button class="btn sm" @click="openInvoke(fn)">{{ t('gcp.invoke') }}</button>
+                  <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('action.logs') }}</button>
                   <button class="btn sm" @click="openLogging('lambda', fn)">CW Logs</button>
-                  <button class="btn sm" @click="openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name })">Config</button>
+                  <button class="btn sm" @click="openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" @click="openLambdaDetail(fn)">ℹ Info</button>
                 </div>
               </td>
@@ -289,15 +289,15 @@
       </div>
 
       <div v-show="activeTab === 'apigw'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredApigw.length" class="empty-row">{{ search.apigw ? 'No matches.' : 'No APIs found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredApigw.length" class="empty-row">{{ search.apigw ? t('awsv.lit.noMatches') : t('awsv.lit.noApis') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"        @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-            <th>Endpoint</th>
-            <th :class="thClass('createdDate')" @click="sortBy('createdDate')">Created <span class="sort-icon">{{ sortIcon('createdDate') }}</span></th>
-            <th>Actions</th>
+            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"        @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th>{{ t('sns.endpoint') }}</th>
+            <th :class="thClass('createdDate')" @click="sortBy('createdDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdDate') }}</span></th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="api in sortRows(filteredApigw)" :key="api.id">
@@ -312,9 +312,9 @@
               </td>
               <td class="text-dim" style="white-space:nowrap">{{ api.createdDate ? formatDate(api.createdDate) : '-' }}</td>
               <td>
-                <button class="btn sm" @click="openConfig('apigateway', `API: ${api.name}`, api, { id: api.id, type: api.type })">Config</button>
+                <button class="btn sm" @click="openConfig('apigateway', `API: ${api.name}`, api, { id: api.id, type: api.type })">{{ t('sidebar.config') }}</button>
                 <button class="btn sm" style="background:rgba(163,113,247,.18);border-color:#a371f7;color:#a371f7"
-                  @click="openApigwRoutes(api)">Routes</button>
+                  @click="openApigwRoutes(api)">{{ t('awsv.routes') }}</button>
               </td>
             </tr>
           </tbody>
@@ -323,16 +323,16 @@
 
       <div v-show="activeTab === 's3'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;padding:6px 8px 4px;flex-shrink:0">
-          <button class="btn sm" style="background:rgba(80,200,120,.18);border-color:#50c878;color:#50c878" @click="openCreateS3Modal">+ Create Bucket</button>
+          <button class="btn sm" style="background:rgba(80,200,120,.18);border-color:#50c878;color:#50c878" @click="openCreateS3Modal">{{ t('awsv.createBucket') }}</button>
         </div>
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? 'No matches.' : 'No S3 buckets found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? t('awsv.lit.noMatches') : t('awsv.lit.noS3') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')"         @click="sortBy('name')">Bucket <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('region')"       @click="sortBy('region')">Region <span class="sort-icon">{{ sortIcon('region') }}</span></th>
-            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('region')"       @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon">{{ sortIcon('region') }}</span></th>
+            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="b in sortRows(filteredS3)" :key="b.name">
@@ -346,10 +346,10 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('s3', `S3: ${b.name}`, b.name, b.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('s3', `S3: ${b.name}`, b, { bucket: b.name })">Config</button>
+                  <button class="btn sm" @click="openTags('s3', `S3: ${b.name}`, b.name, b.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('s3', `S3: ${b.name}`, b, { bucket: b.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" style="background:rgba(88,166,255,.18);border-color:#58a6ff;color:#58a6ff"
-                    @click="openS3Browser(b)">Browse</button>
+                    @click="openS3Browser(b)">{{ t('awsv.browse') }}</button>
                   <button class="btn sm" :disabled="s3TestState[b.name]?.loading"
                     @click="testS3Bucket(b.name)"
                     :style="s3TestState[b.name]?.ok === true ? 'border-color:#50c878;color:#50c878' : s3TestState[b.name]?.ok === false ? 'border-color:#f85149;color:#f85149' : ''"
@@ -362,16 +362,16 @@
       </div>
 
       <div v-show="activeTab === 'ecr'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredEcr.length" class="empty-row">{{ search.ecr ? 'No matches.' : 'No ECR repositories found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredEcr.length" class="empty-row">{{ search.ecr ? t('awsv.lit.noMatches') : t('awsv.lit.noEcr') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"               @click="sortBy('name')">Repository <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('name')"               @click="sortBy('name')">{{ t('awsv.repository') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th>URI</th>
-            <th :class="thClass('imageTagMutability')" @click="sortBy('imageTagMutability')">Mutability <span class="sort-icon">{{ sortIcon('imageTagMutability') }}</span></th>
-            <th :class="thClass('scanOnPush')"         @click="sortBy('scanOnPush')">Scan <span class="sort-icon">{{ sortIcon('scanOnPush') }}</span></th>
-            <th :class="thClass('createdAt')"          @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('imageTagMutability')" @click="sortBy('imageTagMutability')">{{ t('awsv.mutability') }} <span class="sort-icon">{{ sortIcon('imageTagMutability') }}</span></th>
+            <th :class="thClass('scanOnPush')"         @click="sortBy('scanOnPush')">{{ t('awsLogs.scan.button') }} <span class="sort-icon">{{ sortIcon('scanOnPush') }}</span></th>
+            <th :class="thClass('createdAt')"          @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="r in sortRows(filteredEcr)" :key="r.name">
@@ -385,7 +385,7 @@
                   {{ r.imageTagMutability }}
                 </span>
               </td>
-              <td><span :class="r.scanOnPush ? 'status-ok' : 'status-err'">{{ r.scanOnPush ? 'Yes' : 'No' }}</span></td>
+              <td><span :class="r.scanOnPush ? 'status-ok' : 'status-err'">{{ r.scanOnPush ? t('common.yes') : t('common.no') }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ r.createdAt ? formatDate(r.createdAt) : '-' }}</td>
               <td>
                 <div class="tag-chips">
@@ -394,10 +394,10 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('ecr', `ECR: ${r.name}`, r.arn, r.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('ecr', `ECR: ${r.name}`, r, { repo: r.name })">Config</button>
+                  <button class="btn sm" @click="openTags('ecr', `ECR: ${r.name}`, r.arn, r.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('ecr', `ECR: ${r.name}`, r, { repo: r.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" style="background:rgba(124,158,248,.18);border-color:#7c9ef8;color:#7c9ef8"
-                    @click="openEcrDeploy(r)">Deploy to K8s</button>
+                    @click="openEcrDeploy(r)">{{ t('awsv.deployToK8s') }}</button>
                 </div>
               </td>
             </tr>
@@ -406,15 +406,15 @@
       </div>
 
       <div v-show="activeTab === 'vpc'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredVpc.length" class="empty-row">{{ search.vpc ? 'No matches.' : 'No VPCs found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredVpc.length" class="empty-row">{{ search.vpc ? t('awsv.lit.noMatches') : t('awsv.lit.noVpcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"    @click="sortBy('name')">Name / ID <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('name')"    @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th :class="thClass('cidr')"    @click="sortBy('cidr')">CIDR <span class="sort-icon">{{ sortIcon('cidr') }}</span></th>
-            <th :class="thClass('state')"   @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('default')" @click="sortBy('default')">Default <span class="sort-icon">{{ sortIcon('default') }}</span></th>
-            <th>Subnets</th><th>Tags</th><th>Actions</th>
+            <th :class="thClass('state')"   @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('default')" @click="sortBy('default')">{{ t('gri.defaultValue') }} <span class="sort-icon">{{ sortIcon('default') }}</span></th>
+            <th>{{ t('eksd.sectionSubnets') }}</th><th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="v in sortRows(filteredVpc)" :key="v.id">
@@ -424,7 +424,7 @@
               </td>
               <td class="text-dim">{{ v.cidr }}</td>
               <td><span :class="v.state === 'available' ? 'status-ok' : 'status-warn'">{{ v.state }}</span></td>
-              <td><span :class="v.default ? 'status-warn' : 'text-dim'">{{ v.default ? 'Yes' : 'No' }}</span></td>
+              <td><span :class="v.default ? 'status-warn' : 'text-dim'">{{ v.default ? t('common.yes') : t('common.no') }}</span></td>
               <td class="text-dim">{{ v.subnets.length }}</td>
               <td>
                 <div class="tag-chips">
@@ -434,8 +434,8 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('vpc', `VPC: ${v.name}`, v.id, v.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('vpc', `VPC: ${v.name}`, v, { id: v.id })">Config</button>
+                  <button class="btn sm" @click="openTags('vpc', `VPC: ${v.name}`, v.id, v.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('vpc', `VPC: ${v.name}`, v, { id: v.id })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" @click="openVpcDetail(v)">ℹ Info</button>
                 </div>
               </td>
@@ -445,15 +445,15 @@
       </div>
 
       <div v-show="activeTab === 'eventbridge'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredEventBridge.length" class="empty-row">{{ search.eventbridge ? 'No matches.' : 'No EventBridge rules found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredEventBridge.length" class="empty-row">{{ search.eventbridge ? t('awsv.lit.noMatches') : t('awsv.lit.noEventBridge') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">Rule Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('awsv.ruleName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th :class="thClass('busName')"       @click="sortBy('busName')">Bus <span class="sort-icon">{{ sortIcon('busName') }}</span></th>
-            <th :class="thClass('state')"         @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('scheduleExpr')"  @click="sortBy('scheduleExpr')">Schedule / Pattern <span class="sort-icon">{{ sortIcon('scheduleExpr') }}</span></th>
-            <th>Tags</th><th>Actions</th>
+            <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('scheduleExpr')"  @click="sortBy('scheduleExpr')">{{ t('awsv.schedulePattern') }} <span class="sort-icon">{{ sortIcon('scheduleExpr') }}</span></th>
+            <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="r in sortRows(filteredEventBridge)" :key="`${r.busName}/${r.name}`">
@@ -471,10 +471,10 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('eventbridge', `Rule: ${r.name}`, r.arn, r.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('eventbridge', `Rule: ${r.name}`, r, { bus: r.busName, name: r.name })">Config</button>
-                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openEbDetails(r)">Details</button>
-                  <button class="btn sm" @click="openEbLogs(r)">Logs</button>
+                  <button class="btn sm" @click="openTags('eventbridge', `Rule: ${r.name}`, r.arn, r.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('eventbridge', `Rule: ${r.name}`, r, { bus: r.busName, name: r.name })">{{ t('sidebar.config') }}</button>
+                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openEbDetails(r)">{{ t('audit.colDetails') }}</button>
+                  <button class="btn sm" @click="openEbLogs(r)">{{ t('action.logs') }}</button>
                 </div>
               </td>
             </tr>
@@ -487,17 +487,17 @@
           <span>{{ stepFnActivityNotice.text }}</span>
           <button v-if="stepFnActivityNotice.access" class="btn sm" @click="activityAccess = stepFnActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
         </div>
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? 'No matches.' : 'No Step Functions found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? t('awsv.lit.noMatches') : t('awsv.lit.noStepFunctions') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"         @click="sortBy('type')">Type <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">Created <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
-            <th>Executions</th>
+            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('type')"         @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th>{{ t('awsInsights.executions') }}</th>
             <th :class="thClass('started24h')" @click="sortBy('started24h')" :title="t('awsActivity.sfnHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('started24h') }}</span></th>
             <th :class="thClass('loggingRank')" @click="sortBy('loggingRank')">{{ t('awsActivity.logging') }} <span class="sort-icon">{{ sortIcon('loggingRank') }}</span></th>
-            <th>Tags</th><th>ARN</th><th>Actions</th>
+            <th>{{ t('th.tags') }}</th><th>ARN</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="sm in sortRows(stepFnRows)" :key="sm.arn">
@@ -539,9 +539,9 @@
               <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="sm.arn">{{ sm.arn }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">Tags</button>
-                  <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">Config</button>
-                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">Diagram</button>
+                  <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">{{ t('th.tags') }}</button>
+                  <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">{{ t('sidebar.config') }}</button>
+                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">{{ t('awsv.diagram') }}</button>
                   <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">Info</button>
                 </div>
               </td>
@@ -563,19 +563,19 @@
 
       <div v-show="activeTab === 'dynamodb'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-          <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openDynamoCreate">+ Create Table</button>
+          <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openDynamoCreate">{{ t('awsv.createTable') }}</button>
         </div>
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredDynamo.length" class="empty-row">{{ search.dynamodb ? 'No matches.' : 'No DynamoDB tables found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredDynamo.length" class="empty-row">{{ search.dynamodb ? t('awsv.lit.noMatches') : t('awsv.lit.noDynamo') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">Table <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('billingMode')" @click="sortBy('billingMode')">Billing <span class="sort-icon">{{ sortIcon('billingMode') }}</span></th>
-            <th :class="thClass('itemCount')" @click="sortBy('itemCount')">Items <span class="sort-icon">{{ sortIcon('itemCount') }}</span></th>
-            <th :class="thClass('sizeBytes')" @click="sortBy('sizeBytes')">Size <span class="sort-icon">{{ sortIcon('sizeBytes') }}</span></th>
-            <th :class="thClass('creationDateTime')" @click="sortBy('creationDateTime')">Created <span class="sort-icon">{{ sortIcon('creationDateTime') }}</span></th>
-            <th>Actions</th>
+            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('storage.table') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('billingMode')" @click="sortBy('billingMode')">{{ t('awsv.billing') }} <span class="sort-icon">{{ sortIcon('billingMode') }}</span></th>
+            <th :class="thClass('itemCount')" @click="sortBy('itemCount')">{{ t('vercel.edgeConfig.itemCount') }} <span class="sort-icon">{{ sortIcon('itemCount') }}</span></th>
+            <th :class="thClass('sizeBytes')" @click="sortBy('sizeBytes')">{{ t('th.size') }} <span class="sort-icon">{{ sortIcon('sizeBytes') }}</span></th>
+            <th :class="thClass('creationDateTime')" @click="sortBy('creationDateTime')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDateTime') }}</span></th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="tableItem in sortRows(filteredDynamo)" :key="tableItem.name">
@@ -591,8 +591,8 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openDynamoInfo(tableItem)">ℹ Info</button>
-                  <button class="btn sm" @click="openDynamoBrowse(tableItem)">Browse</button>
-                  <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${tableItem.name}`, tableItem, { table: tableItem.name })">Config</button>
+                  <button class="btn sm" @click="openDynamoBrowse(tableItem)">{{ t('awsv.browse') }}</button>
+                  <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${tableItem.name}`, tableItem, { table: tableItem.name })">{{ t('sidebar.config') }}</button>
                 </div>
               </td>
             </tr>
@@ -602,19 +602,19 @@
 
       <!-- ══ RDS ═══════════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'rds'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredRds.length" class="empty-row">{{ search.rds ? 'No matches.' : 'No RDS instances found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredRds.length" class="empty-row">{{ search.rds ? t('awsv.lit.noMatches') : t('awsv.lit.noRds') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('id')"            @click="sortBy('id')">Instance <span class="sort-icon">{{ sortIcon('id') }}</span></th>
-            <th :class="thClass('engine')"        @click="sortBy('engine')">Engine <span class="sort-icon">{{ sortIcon('engine') }}</span></th>
-            <th :class="thClass('class')"         @click="sortBy('class')">Class <span class="sort-icon">{{ sortIcon('class') }}</span></th>
-            <th :class="thClass('status')"        @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('endpoint')"      @click="sortBy('endpoint')">Endpoint <span class="sort-icon">{{ sortIcon('endpoint') }}</span></th>
+            <th :class="thClass('id')"            @click="sortBy('id')">{{ t('ec2d.instance') }} <span class="sort-icon">{{ sortIcon('id') }}</span></th>
+            <th :class="thClass('engine')"        @click="sortBy('engine')">{{ t('gsi.engine') }} <span class="sort-icon">{{ sortIcon('engine') }}</span></th>
+            <th :class="thClass('class')"         @click="sortBy('class')">{{ t('detail.class') }} <span class="sort-icon">{{ sortIcon('class') }}</span></th>
+            <th :class="thClass('status')"        @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('endpoint')"      @click="sortBy('endpoint')">{{ t('sns.endpoint') }} <span class="sort-icon">{{ sortIcon('endpoint') }}</span></th>
             <th :class="thClass('az')"            @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
-            <th :class="thClass('storageGb')"     @click="sortBy('storageGb')">Storage <span class="sort-icon">{{ sortIcon('storageGb') }}</span></th>
-            <th :class="thClass('createdAt')"     @click="sortBy('createdAt')">Created <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
-            <th>Actions</th>
+            <th :class="thClass('storageGb')"     @click="sortBy('storageGb')">{{ t('sidebar.storage') }} <span class="sort-icon">{{ sortIcon('storageGb') }}</span></th>
+            <th :class="thClass('createdAt')"     @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="db in sortRows(filteredRds)" :key="db.id">
@@ -634,9 +634,9 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openRdsInfo(db)">ℹ Info</button>
-                  <button class="btn sm" @click="openConfig('rds', `RDS: ${db.id}`, db, { id: db.id })">Config</button>
-                  <button class="btn sm" @click="openRdsConnect(db)">Connect</button>
-                  <button class="btn sm" @click="openRdsResetPwd(db)">Reset Pwd</button>
+                  <button class="btn sm" @click="openConfig('rds', `RDS: ${db.id}`, db, { id: db.id })">{{ t('sidebar.config') }}</button>
+                  <button class="btn sm" @click="openRdsConnect(db)">{{ t('console.connect') }}</button>
+                  <button class="btn sm" @click="openRdsResetPwd(db)">{{ t('awsv.resetPwd') }}</button>
                 </div>
               </td>
             </tr>
@@ -646,17 +646,17 @@
 
       <!-- ══ Glue ══════════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'glue'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredGlue.length" class="empty-row">{{ search.glue ? 'No matches.' : 'No Glue jobs found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredGlue.length" class="empty-row">{{ search.glue ? t('awsv.lit.noMatches') : t('awsv.lit.noGlue') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">Job Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('command')"     @click="sortBy('command')">Type <span class="sort-icon">{{ sortIcon('command') }}</span></th>
-            <th :class="thClass('glueVersion')" @click="sortBy('glueVersion')">Glue Ver <span class="sort-icon">{{ sortIcon('glueVersion') }}</span></th>
+            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('awsv.jobName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('command')"     @click="sortBy('command')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('command') }}</span></th>
+            <th :class="thClass('glueVersion')" @click="sortBy('glueVersion')">{{ t('awsv.glueVer') }} <span class="sort-icon">{{ sortIcon('glueVersion') }}</span></th>
             <th :class="thClass('workerType')"  @click="sortBy('workerType')">Worker <span class="sort-icon">{{ sortIcon('workerType') }}</span></th>
             <th :class="thClass('numWorkers')"  @click="sortBy('numWorkers')">Workers</th>
-            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">Modified <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
-            <th>Actions</th>
+            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="j in sortRows(filteredGlue)" :key="j.name">
@@ -672,9 +672,9 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openGlueInfo(j)">ℹ Info</button>
-                  <button class="btn sm" @click="runGlueJob(j)">Run</button>
-                  <button class="btn sm" @click="openGlueRuns(j)">Runs</button>
-                  <button class="btn sm" @click="openGlueJobConfig(j)">Config</button>
+                  <button class="btn sm" @click="runGlueJob(j)">{{ t('awsLogs.q.run') }}</button>
+                  <button class="btn sm" @click="openGlueRuns(j)">{{ t('awsv.runs') }}</button>
+                  <button class="btn sm" @click="openGlueJobConfig(j)">{{ t('sidebar.config') }}</button>
                 </div>
               </td>
             </tr>
@@ -694,30 +694,30 @@
           <div style="flex:1"/>
           <input v-if="athenaSubTab !== 'editor'"
             v-model="search.athena" type="text"
-            placeholder="Search…" class="search-input"
+            :placeholder="t('aws.search')" class="search-input"
             style="width:180px;font-size:12px;margin:4px 0" />
-          <button class="btn sm" style="margin:4px 0 4px 6px" @click="reloadActiveTab" title="Reload">↺</button>
+          <button class="btn sm" style="margin:4px 0 4px 6px" @click="reloadActiveTab" :title="t('awsLogs.refresh')">↺</button>
           <button v-if="athenaSubTab !== 'editor'" class="btn sm"
             style="margin:4px 0 4px 6px;background:rgba(88,166,255,.15);border-color:#58a6ff;color:#58a6ff"
-            @click="athenaSubTab = 'editor'">⚡ Query Editor</button>
+            @click="athenaSubTab = 'editor'">{{ t('awsv.queryEditor') }}</button>
         </div>
 
         <!-- ── Workgroups sub-tab ──────────────────────────────────────── -->
         <div v-show="athenaSubTab === 'workgroups'" style="flex:1;overflow:auto">
-          <div v-if="awsStore.loading" class="empty-row">Loading...</div>
+          <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
           <div v-else-if="!filteredAthena.length" class="empty-row">
-            {{ search.athena ? 'No matches.' : 'No Athena workgroups found.' }}
+            {{ search.athena ? t('awsv.lit.noMatches') : t('awsv.lit.noAthena') }}
           </div>
           <table v-else class="cloud-table">
             <thead><tr>
               <th :class="thClass('name')"          @click="sortBy('name')">Workgroup <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-              <th :class="thClass('state')"         @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-              <th>Engine Version</th>
-              <th>Output Location</th>
-              <th :class="thClass('bytesScanned')"  @click="sortBy('bytesScanned')">Bytes Scanned <span class="sort-icon">{{ sortIcon('bytesScanned') }}</span></th>
-              <th :class="thClass('queriesRun')"    @click="sortBy('queriesRun')">Queries Run <span class="sort-icon">{{ sortIcon('queriesRun') }}</span></th>
-              <th>Description</th>
-              <th>Actions</th>
+              <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+              <th>{{ t('awsv.engineVersion') }}</th>
+              <th>{{ t('awsv.outputLocation') }}</th>
+              <th :class="thClass('bytesScanned')"  @click="sortBy('bytesScanned')">{{ t('awsv.bytesScanned') }} <span class="sort-icon">{{ sortIcon('bytesScanned') }}</span></th>
+              <th :class="thClass('queriesRun')"    @click="sortBy('queriesRun')">{{ t('awsv.queriesRun') }} <span class="sort-icon">{{ sortIcon('queriesRun') }}</span></th>
+              <th>{{ t('th.description') }}</th>
+              <th>{{ t('th.actions') }}</th>
             </tr></thead>
             <tbody>
               <tr v-for="wg in sortRows(filteredAthena)" :key="wg.name">
@@ -730,8 +730,8 @@
                 <td class="text-dim" style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wg.description || '—' }}</td>
                 <td>
                   <div class="action-group">
-                    <button class="btn sm" @click="openAthenaWgInfo(wg)" title="Configuration details">ℹ Config</button>
-                    <button class="btn sm" @click="openAthenaWgQuery(wg)" title="Run a query with this workgroup">▶ Query</button>
+                    <button class="btn sm" @click="openAthenaWgInfo(wg)" :title="t('awsv.configurationDetails')">ℹ Config</button>
+                    <button class="btn sm" @click="openAthenaWgQuery(wg)" :title="t('awsv.runAQueryWithThisWorkgroup')">{{ t('awsLogs.q.modeQuery') }}</button>
                   </div>
                 </td>
               </tr>
@@ -741,15 +741,15 @@
 
         <!-- ── Data Sources sub-tab ───────────────────────────────────── -->
         <div v-show="athenaSubTab === 'datasources'" style="flex:1;overflow:auto">
-          <div v-if="athenaEditor.catalogsLoading" class="empty-row">Loading...</div>
-          <div v-else-if="!athenaEditor.catalogs.length" class="empty-row">No data sources found.</div>
+          <div v-if="athenaEditor.catalogsLoading" class="empty-row">{{ t('state.loading') }}</div>
+          <div v-else-if="!athenaEditor.catalogs.length" class="empty-row">{{ t('awsv.noDataSourcesFound') }}</div>
           <table v-else class="cloud-table">
             <thead><tr>
-              <th>Catalog / Data Source</th>
-              <th>Type</th>
-              <th>Description</th>
-              <th>Databases</th>
-              <th>Actions</th>
+              <th>{{ t('awsv.catalogDataSource') }}</th>
+              <th>{{ t('th.type') }}</th>
+              <th>{{ t('th.description') }}</th>
+              <th>{{ t('awsv.databases') }}</th>
+              <th>{{ t('th.actions') }}</th>
             </tr></thead>
             <tbody v-for="cat in athenaEditor.catalogs" :key="cat.name">
                 <!-- Catalog row -->
@@ -763,8 +763,8 @@
                   <td class="text-dim">{{ (cat.databases || []).length }}</td>
                   <td>
                     <div class="action-group">
-                      <button class="btn sm" @click.stop="openAthenaCatalogInfo(cat)" title="Catalog details">ℹ Info</button>
-                      <button class="btn sm" @click.stop="athenaSubTab = 'editor'; athenaEditor.selectedCatalog = cat.name" title="Open in Query Editor">⚡ Editor</button>
+                      <button class="btn sm" @click.stop="openAthenaCatalogInfo(cat)" :title="t('awsv.catalogDetails')">ℹ Info</button>
+                      <button class="btn sm" @click.stop="athenaSubTab = 'editor'; athenaEditor.selectedCatalog = cat.name" :title="t('awsv.openInQueryEditor')">⚡ Editor</button>
                     </div>
                   </td>
                 </tr>
@@ -775,13 +775,13 @@
                     <td style="padding-left:32px;display:flex;align-items:center;gap:6px">
                       <span style="font-size:10px">📁</span> {{ db.name }}
                     </td>
-                    <td class="text-dim" style="font-size:11px">Database</td>
+                    <td class="text-dim" style="font-size:11px">{{ t('sidebar.database') }}</td>
                     <td class="text-dim" style="font-size:11px">{{ db.description || '—' }}</td>
-                    <td class="text-dim" style="font-size:11px">{{ db.tables?.length ?? '—' }} tables loaded</td>
+                    <td class="text-dim" style="font-size:11px">{{ t('awsv.tablesLoaded', { p0: db.tables?.length ?? '—' }) }}</td>
                     <td>
                       <div class="action-group">
-                        <button class="btn sm" @click="athenaSubTab = 'editor'; selectAthenaDb(cat, db)" title="Query this database">⚡ Editor</button>
-                        <button class="btn sm" @click="loadAthenaDatabaseTables(cat, db)" :disabled="db._loadingTables" title="Load tables">{{ db._loadingTables ? '...' : '⊞ Tables' }}</button>
+                        <button class="btn sm" @click="athenaSubTab = 'editor'; selectAthenaDb(cat, db)" :title="t('awsv.queryThisDatabase')">⚡ Editor</button>
+                        <button class="btn sm" @click="loadAthenaDatabaseTables(cat, db)" :disabled="db._loadingTables" :title="t('awsv.loadTables')">{{ db._loadingTables ? '...' : t('awsv.lit.tablesButton') }}</button>
                       </div>
                     </td>
                   </tr>
@@ -796,10 +796,10 @@
           <div class="athena-sidebar">
             <div class="athena-sidebar-header">
               <span>Data Sources</span>
-              <button class="btn sm" @click="loadAthenaCatalogs" :disabled="athenaEditor.catalogsLoading" title="Refresh">↺</button>
+              <button class="btn sm" @click="loadAthenaCatalogs" :disabled="athenaEditor.catalogsLoading" :title="t('action.refresh')">↺</button>
             </div>
-            <div v-if="athenaEditor.catalogsLoading" class="empty-row" style="font-size:11px">Loading...</div>
-            <div v-else-if="!athenaEditor.catalogs.length" class="empty-row" style="font-size:11px">No catalogs found.</div>
+            <div v-if="athenaEditor.catalogsLoading" class="empty-row" style="font-size:11px">{{ t('state.loading') }}</div>
+            <div v-else-if="!athenaEditor.catalogs.length" class="empty-row" style="font-size:11px">{{ t('awsv.noCatalogsFound') }}</div>
             <div v-else class="athena-tree">
               <div v-for="cat in athenaEditor.catalogs" :key="cat.name" class="athena-tree-catalog">
                 <div class="athena-tree-node catalog-node" @click="cat._open = !cat._open">
@@ -816,8 +816,8 @@
                       <span class="tree-label" :class="{ active: athenaEditor.selectedCatalog === cat.name && athenaEditor.selectedDb === db.name }" @click.stop="selectAthenaDb(cat, db)">{{ db.name }}</span>
                     </div>
                     <div v-if="db._open" class="athena-tree-tables">
-                      <div v-if="db._loadingTables" class="tree-loading">Loading tables...</div>
-                      <div v-else-if="!(db.tables || []).length" class="tree-loading">No tables</div>
+                      <div v-if="db._loadingTables" class="tree-loading">{{ t('awsv.loadingTables') }}</div>
+                      <div v-else-if="!(db.tables || []).length" class="tree-loading">{{ t('awsv.noTables') }}</div>
                       <div v-for="tbl in (db.tables || [])" :key="tbl.name"
                         class="athena-tree-node table-node"
                         :class="{ active: athenaEditor.selectedTable === tbl.name }"
@@ -843,13 +843,13 @@
               </select>
               <span v-if="athenaEditor.selectedDb" class="text-dim" style="font-size:11px">{{ athenaEditor.selectedCatalog }}.{{ athenaEditor.selectedDb }}</span>
               <input v-if="!athenaSelectedWgOutputLocation" v-model="athenaEditor.outputLocation" class="ctrl-input" type="text"
-                placeholder="s3://bucket/path — output location (workgroup has none configured)"
-                style="font-size:11px;min-width:280px" title="This workgroup has no query result location configured in AWS. Provide an S3 path to use for this query." />
+                :placeholder="t('awsv.s3BucketPathOutputLocationWorkgroup')"
+                style="font-size:11px;min-width:280px" :title="t('awsv.thisWorkgroupHasNoQueryResult')" />
               <div style="flex:1"></div>
-              <button class="btn sm" @click="loadAthenaHistory" title="Query history">📋 History</button>
+              <button class="btn sm" @click="loadAthenaHistory" :title="t('awsv.queryHistory')">{{ t('awsLogs.history.column') }}</button>
               <button class="btn" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e;font-size:12px"
                 @click="runAthenaEditorQuery" :disabled="athenaEditor.running || !athenaEditor.sql.trim()">
-                {{ athenaEditor.running ? '⏳ Running…' : '▶ Run' }}
+                {{ athenaEditor.running ? t('awsv.lit.runningQuery') : t('awsv.lit.runButton') }}
               </button>
             </div>
 
@@ -866,10 +866,10 @@
 
             <!-- Status bar -->
             <div v-if="athenaEditor.queryId || athenaEditor.error" class="athena-status-bar">
-              <span v-if="athenaEditor.running" class="status-warn">Running…</span>
-              <span v-else-if="athenaEditor.status === 'SUCCEEDED'" class="status-ok">✓ Succeeded</span>
-              <span v-else-if="athenaEditor.status === 'FAILED'" class="status-err">✗ Failed</span>
-              <span v-else-if="athenaEditor.status === 'CANCELLED'" class="status-err">✗ Cancelled</span>
+              <span v-if="athenaEditor.running" class="status-warn">{{ t('apm.status.running') }}</span>
+              <span v-else-if="athenaEditor.status === 'SUCCEEDED'" class="status-ok">{{ t('awsInsights.succeeded') }}</span>
+              <span v-else-if="athenaEditor.status === 'FAILED'" class="status-err">{{ t('apm.status.failed') }}</span>
+              <span v-else-if="athenaEditor.status === 'CANCELLED'" class="status-err">{{ t('awsLogs.scan.status_cancelled') }}</span>
               <span v-if="athenaEditor.queryId" class="text-dim mono-xs">ID: {{ athenaEditor.queryId }}</span>
               <span v-if="athenaEditor.execTimeMs" class="text-dim" style="font-size:11px">{{ (athenaEditor.execTimeMs/1000).toFixed(1) }}s · {{ athenaEditor.bytesScanned ? formatBytes(athenaEditor.bytesScanned) + ' scanned' : '' }}</span>
               <span v-if="athenaEditor.error" class="status-err" style="font-size:11px">{{ athenaEditor.error }}</span>
@@ -878,8 +878,8 @@
             <!-- Results -->
             <div class="athena-results" v-if="athenaEditor.results">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;flex-shrink:0;font-size:11px;color:var(--text-dim)">
-                <span>{{ (athenaEditor.results.Rows || []).length - 1 }} rows</span>
-                <button class="btn sm" @click="exportAthenaResults">⬇ Export CSV</button>
+                <span>{{ t('awsv.rows', { p0: (athenaEditor.results.Rows || []).length - 1 }) }}</span>
+                <button class="btn sm" @click="exportAthenaResults">{{ t('awsv.exportCsv') }}</button>
               </div>
               <div style="overflow:auto;flex:1">
                 <table class="cloud-table" style="font-size:11px">
@@ -900,11 +900,11 @@
             <!-- History panel -->
             <div v-if="athenaEditor.showHistory" class="athena-history-panel">
               <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
-                <span style="font-size:12px;font-weight:600">Recent Queries</span>
+                <span style="font-size:12px;font-weight:600">{{ t('awsv.recentQueries') }}</span>
                 <button class="btn sm" @click="athenaEditor.showHistory = false">✕</button>
               </div>
-              <div v-if="athenaEditor.historyLoading" class="empty-row">Loading...</div>
-              <div v-else-if="!athenaEditor.history.length" class="empty-row" style="font-size:12px">No history found.</div>
+              <div v-if="athenaEditor.historyLoading" class="empty-row">{{ t('state.loading') }}</div>
+              <div v-else-if="!athenaEditor.history.length" class="empty-row" style="font-size:12px">{{ t('awsv.noHistoryFound') }}</div>
               <div v-else style="overflow-y:auto;flex:1">
                 <div v-for="h in athenaEditor.history" :key="h.id"
                   class="athena-history-item"
@@ -924,15 +924,15 @@
 
       <!-- ══ Data Pipeline ══════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'datapipeline'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredPipelines.length" class="empty-row">{{ search.datapipeline ? 'No matches.' : 'No Data Pipelines found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredPipelines.length" class="empty-row">{{ search.datapipeline ? t('awsv.lit.noMatches') : t('awsv.lit.noDataPipelines') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')"          @click="sortBy('name')">Pipeline <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('state')"         @click="sortBy('state')">State <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('latestRunTime')" @click="sortBy('latestRunTime')">Last Run <span class="sort-icon">{{ sortIcon('latestRunTime') }}</span></th>
-            <th :class="thClass('nextRunTime')"   @click="sortBy('nextRunTime')">Next Run <span class="sort-icon">{{ sortIcon('nextRunTime') }}</span></th>
-            <th>Actions</th>
+            <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+            <th :class="thClass('latestRunTime')" @click="sortBy('latestRunTime')">{{ t('awsv.lastRun') }} <span class="sort-icon">{{ sortIcon('latestRunTime') }}</span></th>
+            <th :class="thClass('nextRunTime')"   @click="sortBy('nextRunTime')">{{ t('awsv.nextRun') }} <span class="sort-icon">{{ sortIcon('nextRunTime') }}</span></th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="p in sortRows(filteredPipelines)" :key="p.id">
@@ -945,8 +945,8 @@
               <td class="text-dim" style="white-space:nowrap">{{ p.nextRunTime ? formatDate(p.nextRunTime) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="activatePipeline(p)" :disabled="p.state === 'SCHEDULED'">Activate</button>
-                  <button class="btn sm danger" @click="deactivatePipeline(p)" :disabled="p.state === 'PAUSED'">Pause</button>
+                  <button class="btn sm" @click="activatePipeline(p)" :disabled="p.state === 'SCHEDULED'">{{ t('awsv.activate') }}</button>
+                  <button class="btn sm danger" @click="deactivatePipeline(p)" :disabled="p.state === 'PAUSED'">{{ t('awsLogs.scan.pause') }}</button>
                 </div>
               </td>
             </tr>
@@ -956,16 +956,16 @@
 
       <!-- ══ Bedrock ═══════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'bedrock'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredBedrock.length" class="empty-row">{{ search.bedrock ? 'No matches.' : 'No Bedrock foundation models found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredBedrock.length" class="empty-row">{{ search.bedrock ? t('awsv.lit.noMatches') : t('awsv.lit.noBedrock') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('modelName')"        @click="sortBy('modelName')">Model <span class="sort-icon">{{ sortIcon('modelName') }}</span></th>
-            <th :class="thClass('providerName')"     @click="sortBy('providerName')">Provider <span class="sort-icon">{{ sortIcon('providerName') }}</span></th>
-            <th :class="thClass('inputModalities')"  @click="sortBy('inputModalities')">Input</th>
-            <th :class="thClass('outputModalities')" @click="sortBy('outputModalities')">Output</th>
+            <th :class="thClass('modelName')"        @click="sortBy('modelName')">{{ t('gvi.model') }} <span class="sort-icon">{{ sortIcon('modelName') }}</span></th>
+            <th :class="thClass('providerName')"     @click="sortBy('providerName')">{{ t('profile.providerLabel') }} <span class="sort-icon">{{ sortIcon('providerName') }}</span></th>
+            <th :class="thClass('inputModalities')"  @click="sortBy('inputModalities')">{{ t('awsv.input') }}</th>
+            <th :class="thClass('outputModalities')" @click="sortBy('outputModalities')">{{ t('awsv.output') }}</th>
             <th :class="thClass('responseStreamingSupported')" @click="sortBy('responseStreamingSupported')">Streaming</th>
-            <th :class="thClass('lifecycleStatus')"  @click="sortBy('lifecycleStatus')">Lifecycle <span class="sort-icon">{{ sortIcon('lifecycleStatus') }}</span></th>
+            <th :class="thClass('lifecycleStatus')"  @click="sortBy('lifecycleStatus')">{{ t('eksd.lifecycle') }} <span class="sort-icon">{{ sortIcon('lifecycleStatus') }}</span></th>
           </tr></thead>
           <tbody>
             <tr v-for="m in sortRows(filteredBedrock)" :key="m.modelId">
@@ -976,7 +976,7 @@
               <td class="text-dim">{{ m.providerName || '-' }}</td>
               <td class="text-dim">{{ (m.inputModalities || []).join(', ') || '-' }}</td>
               <td class="text-dim">{{ (m.outputModalities || []).join(', ') || '-' }}</td>
-              <td><span :class="m.responseStreamingSupported ? 'status-ok' : 'text-dim'">{{ m.responseStreamingSupported ? 'Yes' : 'No' }}</span></td>
+              <td><span :class="m.responseStreamingSupported ? 'status-ok' : 'text-dim'">{{ m.responseStreamingSupported ? t('common.yes') : t('common.no') }}</span></td>
               <td><span :class="m.lifecycleStatus === 'ACTIVE' ? 'status-ok' : 'status-warn'">{{ m.lifecycleStatus || '-' }}</span></td>
             </tr>
           </tbody>
@@ -985,8 +985,8 @@
 
       <!-- ══ Amazon Lex ════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'lex'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredLex.length" class="empty-row">{{ search.lex ? 'No matches.' : 'No Lex bots found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredLex.length" class="empty-row">{{ search.lex ? t('awsv.lit.noMatches') : t('awsv.lit.noLex') }}</div>
         <div v-else style="display:flex;flex:1;overflow:hidden">
           <!-- LEFT: bot list -->
           <div style="width:260px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
@@ -1005,7 +1005,7 @@
           </div>
           <!-- RIGHT: detail panel -->
           <div v-if="!lexPanel.bot" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:14px">
-            Select a bot to see details
+            {{ t('awsv.selectABotToSeeDetails') }}
           </div>
           <div v-else style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             <!-- Bot header -->
@@ -1026,15 +1026,15 @@
             </div>
             <!-- ── INTENTS tab ─────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'intents'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
-              <div v-if="lexIntentsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading intents...</div>
+              <div v-if="lexIntentsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('awsv.loadingIntents') }}</div>
               <div v-else-if="lexIntentsModal.error" class="alert-error" style="margin:12px">{{ lexIntentsModal.error }}</div>
               <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
                 <div style="display:flex;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-                  <span class="text-dim" style="font-size:11px">Version</span>
+                  <span class="text-dim" style="font-size:11px">{{ t('th.version') }}</span>
                   <select v-model="lexIntentsModal.botVersion" @change="reloadLexIntents()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
                     <option v-for="version in lexVersionOptions" :key="version" :value="version">{{ version }}</option>
                   </select>
-                  <button class="btn sm" @click="reloadLexIntents(true)" :disabled="lexIntentsModal.loading">Refresh</button>
+                  <button class="btn sm" @click="reloadLexIntents(true)" :disabled="lexIntentsModal.loading">{{ t('action.refresh') }}</button>
                 </div>
                 <div v-if="lexIntentsModal.locales.length > 1" style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--border);flex-shrink:0">
                   <button v-for="loc in lexIntentsModal.locales" :key="loc.localeId"
@@ -1045,28 +1045,28 @@
                 </div>
                 <div style="display:flex;gap:4px;padding:8px 12px 0;flex-shrink:0">
                   <button :class="['btn','xs', lexIntentsModal.activeView === 'list' ? 'active' : '']"
-                    @click="lexIntentsModal.activeView = 'list'; lexIntentsModal.activeIntent = null">Intent List</button>
+                    @click="lexIntentsModal.activeView = 'list'; lexIntentsModal.activeIntent = null">{{ t('awsv.intentList') }}</button>
                   <button :class="['btn','xs', lexIntentsModal.activeView === 'flow' ? 'active' : '']"
-                    @click="lexIntentsModal.activeView = 'flow'">Conversation Flow</button>
+                    @click="lexIntentsModal.activeView = 'flow'">{{ t('awsv.conversationFlow') }}</button>
                 </div>
                 <div style="flex:1;overflow:auto;padding:12px">
                   <div v-if="lexIntentsModal.activeView === 'list'">
-                    <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">No intents found for this locale.</div>
+                    <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">{{ t('awsv.noIntentsFoundForThisLocale') }}</div>
                     <div v-else>
                       <div v-for="intent in lexCurrentLocale.intents" :key="intent.id"
                         style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">
                         <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--surface)"
                           @click="lexIntentsModal.activeIntent = lexIntentsModal.activeIntent === intent.id ? null : intent.id">
                           <span style="font-weight:600;flex:1">{{ intent.name }}</span>
-                          <span class="text-dim" style="font-size:11px">{{ intent.slots.length }} slot{{ intent.slots.length !== 1 ? 's' : '' }}</span>
-                          <span class="text-dim" style="font-size:11px">{{ intent.sampleUtterances.length }} utterance{{ intent.sampleUtterances.length !== 1 ? 's' : '' }}</span>
+                          <span class="text-dim" style="font-size:11px">{{ t('awsv.slotCount', { n: intent.slots.length }) }}</span>
+                          <span class="text-dim" style="font-size:11px">{{ t('awsv.utteranceCount', { n: intent.sampleUtterances.length }) }}</span>
                           <span style="font-size:11px;color:var(--text-dim)">{{ lexIntentsModal.activeIntent === intent.id ? '▲' : '▼' }}</span>
                         </div>
                         <div v-if="lexIntentsModal.activeIntent === intent.id" style="padding:12px;border-top:1px solid var(--border)">
                           <div v-if="intent.description" class="text-dim" style="font-size:12px;margin-bottom:8px">{{ intent.description }}</div>
                           <div style="margin-bottom:12px">
-                            <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Sample Utterances</div>
-                            <div v-if="!intent.sampleUtterances.length" class="text-dim" style="font-size:12px">None defined.</div>
+                            <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">{{ t('awsv.sampleUtterances') }}</div>
+                            <div v-if="!intent.sampleUtterances.length" class="text-dim" style="font-size:12px">{{ t('awsv.noneDefined') }}</div>
                             <div style="display:flex;flex-wrap:wrap;gap:4px">
                               <span v-for="(u, i) in intent.sampleUtterances" :key="i"
                                 style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:2px 8px;font-size:11px">{{ u }}</span>
@@ -1074,14 +1074,14 @@
                           </div>
                           <div>
                             <div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Slots</div>
-                            <div v-if="!intent.slots.length" class="text-dim" style="font-size:12px">No slots defined.</div>
+                            <div v-if="!intent.slots.length" class="text-dim" style="font-size:12px">{{ t('awsv.noSlotsDefined') }}</div>
                             <table v-else class="cloud-table" style="font-size:12px">
-                              <thead><tr><th>Slot Name</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                              <thead><tr><th>{{ t('awsv.slotName') }}</th><th>{{ t('th.type') }}</th><th>{{ t('awsv.required') }}</th><th>{{ t('th.description') }}</th></tr></thead>
                               <tbody>
                                 <tr v-for="s in intent.slots" :key="s.id">
                                   <td style="font-weight:600">{{ s.name }}</td>
                                   <td class="mono-xs">{{ s.typeName || '-' }}</td>
-                                  <td><span :class="s.required ? 'status-ok' : 'status-warn'">{{ s.required ? 'Required' : 'Optional' }}</span></td>
+                                  <td><span :class="s.required ? 'status-ok' : 'status-warn'">{{ s.required ? t('awsv.required') : t('awsv.optional') }}</span></td>
                                   <td class="text-dim">{{ s.description || '-' }}</td>
                                 </tr>
                               </tbody>
@@ -1092,7 +1092,7 @@
                     </div>
                   </div>
                   <div v-if="lexIntentsModal.activeView === 'flow'">
-                    <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">No intents to render flow.</div>
+                    <div v-if="!lexCurrentLocale || !lexCurrentLocale.intents.length" class="text-dim" style="padding:16px">{{ t('awsv.noIntentsToRenderFlow') }}</div>
                     <div v-else style="display:flex;flex-wrap:wrap;gap:16px">
                       <div v-for="intent in lexCurrentLocale.intents" :key="intent.id"
                         style="border:1px solid rgba(139,92,246,.4);border-radius:8px;min-width:220px;max-width:300px;overflow:hidden;background:var(--surface)">
@@ -1105,11 +1105,11 @@
                           <div style="display:flex;flex-direction:column;gap:2px">
                             <div v-for="(u, i) in intent.sampleUtterances.slice(0,3)" :key="i"
                               style="font-size:11px;color:var(--text-dim);font-style:italic">"{{ u }}"</div>
-                            <div v-if="intent.sampleUtterances.length > 3" class="text-dim" style="font-size:10px">+{{ intent.sampleUtterances.length - 3 }} more</div>
+                            <div v-if="intent.sampleUtterances.length > 3" class="text-dim" style="font-size:10px">{{ t('awsv.more', { p0: intent.sampleUtterances.length - 3 }) }}</div>
                           </div>
                         </div>
                         <div v-if="intent.slots.length" style="padding:8px 12px">
-                          <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Slot Collection</div>
+                          <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">{{ t('awsv.slotCollection') }}</div>
                           <div style="display:flex;flex-direction:column;gap:4px">
                             <div v-for="(s, si) in intent.slots" :key="s.id" style="display:flex;align-items:center;gap:6px">
                               <div style="width:16px;text-align:center;font-size:10px;color:var(--text-dim)">{{ si + 1 }}</div>
@@ -1121,7 +1121,7 @@
                             </div>
                           </div>
                         </div>
-                        <div v-else style="padding:8px 12px;color:var(--text-dim);font-size:11px">No slots — immediate fulfillment</div>
+                        <div v-else style="padding:8px 12px;color:var(--text-dim);font-size:11px">{{ t('awsv.noSlotsImmediateFulfillment') }}</div>
                         <div style="background:rgba(34,197,94,.1);padding:6px 12px;border-top:1px solid var(--border);font-size:11px;color:#22c55e;text-align:center">✓ Fulfillment</div>
                       </div>
                     </div>
@@ -1134,28 +1134,28 @@
               <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center">
                 <button class="btn sm" style="background:rgba(20,184,166,.15);border-color:#14b8a6;color:#14b8a6"
                   @click="lexAliasesModal.showCreate = !lexAliasesModal.showCreate">
-                  {{ lexAliasesModal.showCreate ? '✕ Cancel' : '＋ New Alias' }}
+                  {{ lexAliasesModal.showCreate ? t('awsv.lit.cancelButton') : t('awsv.lit.newAlias') }}
                 </button>
                 <div v-if="lexAliasesModal.botArn" class="mono-xs text-dim" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" :title="lexAliasesModal.botArn">
                   ARN: {{ lexAliasesModal.botArn }}
                 </div>
               </div>
               <div v-if="lexAliasesModal.showCreate" style="padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(20,184,166,.05);flex-shrink:0">
-                <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:#2dd4bf">Create New Alias</div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:#2dd4bf">{{ t('awsv.createNewAlias') }}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
                   <div>
-                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Name *</label>
+                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">{{ t('awsv.name') }}</label>
                     <input v-model="lexAliasesModal.createForm.name" type="text" placeholder="my-alias"
                       style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
                   </div>
                   <div>
-                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Bot Version *</label>
+                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">{{ t('awsv.botVersion') }}</label>
                     <input v-model="lexAliasesModal.createForm.botVersion" type="text" placeholder="1, 2, DRAFT…"
                       style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
                   </div>
                   <div>
-                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">Description</label>
-                    <input v-model="lexAliasesModal.createForm.description" type="text" placeholder="Optional"
+                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px">{{ t('th.description') }}</label>
+                    <input v-model="lexAliasesModal.createForm.description" type="text" :placeholder="t('awsv.optional')"
                       style="width:100%;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text)" />
                   </div>
                 </div>
@@ -1163,15 +1163,15 @@
                   <button class="btn sm" style="background:rgba(20,184,166,.2);border-color:#14b8a6;color:#2dd4bf"
                     :disabled="lexAliasesModal.creating || !lexAliasesModal.createForm.name || !lexAliasesModal.createForm.botVersion"
                     @click="doCreateLexAlias">
-                    {{ lexAliasesModal.creating ? 'Creating...' : 'Create Alias' }}
+                    {{ lexAliasesModal.creating ? t('awsv.lit.creating') : t('awsv.lit.createAlias') }}
                   </button>
                   <span v-if="lexAliasesModal.createError" style="font-size:12px;color:#f87171">{{ lexAliasesModal.createError }}</span>
                 </div>
               </div>
-              <div v-if="lexAliasesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading aliases...</div>
+              <div v-if="lexAliasesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('awsv.loadingAliases') }}</div>
               <div v-else-if="lexAliasesModal.error" class="alert-error" style="margin:12px">{{ lexAliasesModal.error }}</div>
               <div v-else style="flex:1;overflow:auto;padding:12px">
-                <div v-if="!lexAliasesModal.aliases.length" class="text-dim" style="text-align:center;padding:32px">No aliases found.</div>
+                <div v-if="!lexAliasesModal.aliases.length" class="text-dim" style="text-align:center;padding:32px">{{ t('vercel.aliases.none') }}</div>
                 <div v-for="alias in lexAliasesModal.aliases" :key="alias.id"
                   style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
                   <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--surface)">
@@ -1189,26 +1189,26 @@
                   <div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-top:1px solid var(--border)">
                     <div>
                       <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Fulfillment Lambdas</div>
-                      <div v-if="!alias.lambdaArns.length" class="text-dim" style="font-size:12px">None configured</div>
+                      <div v-if="!alias.lambdaArns.length" class="text-dim" style="font-size:12px">{{ t('awsv.noneConfigured') }}</div>
                       <div v-for="l in alias.lambdaArns" :key="l.localeId" style="font-size:11px;margin-bottom:2px">
                         <span class="mono-xs" style="background:rgba(245,158,11,.1);border-radius:3px;padding:0 3px;color:#fbbf24">{{ l.localeId }}</span>
                         <span class="mono-xs text-dim" :title="l.arn" style="margin-left:4px">{{ l.arn.split(':').pop() }}</span>
                       </div>
                     </div>
                     <div>
-                      <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Conversation Logs</div>
+                      <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">{{ t('awsv.conversationLogs') }}</div>
                       <div style="display:flex;flex-direction:column;gap:3px">
-                        <span v-if="alias.textLogs" style="font-size:11px;color:#4ade80">✓ Text logs</span>
-                        <span v-else style="font-size:11px;color:var(--text-dim)">✗ Text logs</span>
-                        <span v-if="alias.audioLogs" style="font-size:11px;color:#4ade80">✓ Audio logs</span>
-                        <span v-else style="font-size:11px;color:var(--text-dim)">✗ Audio logs</span>
+                        <span v-if="alias.textLogs" style="font-size:11px;color:#4ade80">{{ t('awsv.textLogs') }}</span>
+                        <span v-else style="font-size:11px;color:var(--text-dim)">{{ t('awsv.textLogs2') }}</span>
+                        <span v-if="alias.audioLogs" style="font-size:11px;color:#4ade80">{{ t('awsv.audioLogs') }}</span>
+                        <span v-else style="font-size:11px;color:var(--text-dim)">{{ t('awsv.audioLogs2') }}</span>
                         <span v-if="alias.logsGroup" class="mono-xs text-dim" style="font-size:10px" :title="alias.logsGroup">{{ alias.logsGroup.split(':').pop() }}</span>
                       </div>
                     </div>
                     <div>
-                      <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Dates</div>
-                      <div v-if="alias.createdDate" style="font-size:11px;color:var(--text-dim)">Created: {{ new Date(alias.createdDate).toLocaleString() }}</div>
-                      <div v-if="alias.updatedDate" style="font-size:11px;color:var(--text-dim)">Updated: {{ new Date(alias.updatedDate).toLocaleString() }}</div>
+                      <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">{{ t('awsv.dates') }}</div>
+                      <div v-if="alias.createdDate" style="font-size:11px;color:var(--text-dim)">{{ t('awsv.created', { p0: new Date(alias.createdDate).toLocaleString() }) }}</div>
+                      <div v-if="alias.updatedDate" style="font-size:11px;color:var(--text-dim)">{{ t('awsv.updated', { p0: new Date(alias.updatedDate).toLocaleString() }) }}</div>
                     </div>
                   </div>
                   <div style="padding:8px 14px 10px;display:flex;gap:6px;border-top:1px solid var(--border)">
@@ -1217,22 +1217,22 @@
                     <button class="btn xs" style="background:rgba(99,102,241,.15);border-color:#6366f1;color:#6366f1"
                       @click="openLexBuildFromAlias(lexPanel.bot, alias)">⚒ Build</button>
                     <button class="btn xs" style="background:rgba(15,23,42,.3);border-color:var(--border);color:var(--text-dim)"
-                      :title="alias.arn || alias.id" @click="navigator.clipboard.writeText(alias.arn || alias.id)">📋 Copy ARN</button>
+                      :title="alias.arn || alias.id" @click="navigator.clipboard.writeText(alias.arn || alias.id)">{{ t('awsv.copyArn') }}</button>
                   </div>
                 </div>
               </div>
             </div>
             <!-- ── SLOT TYPES tab ──────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'slottypes'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="lexSlotTypesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading slot types...</div>
+              <div v-if="lexSlotTypesModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('awsv.loadingSlotTypes') }}</div>
               <div v-else-if="lexSlotTypesModal.error" class="alert-error" style="margin:12px">{{ lexSlotTypesModal.error }}</div>
               <div v-else>
                 <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
-                  <span class="text-dim" style="font-size:11px">Version</span>
+                  <span class="text-dim" style="font-size:11px">{{ t('th.version') }}</span>
                   <select v-model="lexSlotTypesModal.botVersion" @change="reloadLexSlotTypes()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
                     <option v-for="version in lexVersionOptions" :key="version" :value="version">{{ version }}</option>
                   </select>
-                  <button class="btn sm" @click="reloadLexSlotTypes(true)" :disabled="lexSlotTypesModal.loading">Refresh</button>
+                  <button class="btn sm" @click="reloadLexSlotTypes(true)" :disabled="lexSlotTypesModal.loading">{{ t('action.refresh') }}</button>
                 </div>
                 <div v-if="lexSlotTypesModal.locales.length > 1" style="display:flex;gap:4px;margin-bottom:10px">
                   <button v-for="loc in lexSlotTypesModal.locales" :key="loc.localeId"
@@ -1240,7 +1240,7 @@
                     @click="lexSlotTypesModal.activeLocale = loc.localeId">{{ loc.localeName }}</button>
                 </div>
                 <div v-for="locale in lexSlotTypesModal.locales.filter(l => l.localeId === lexSlotTypesModal.activeLocale)" :key="locale.localeId">
-                  <div v-if="!locale.types.length" class="text-dim" style="text-align:center;padding:32px">No custom slot types defined for this locale.</div>
+                  <div v-if="!locale.types.length" class="text-dim" style="text-align:center;padding:32px">{{ t('awsv.noCustomSlotTypesDefinedFor') }}</div>
                   <div v-for="st in locale.types" :key="st.id"
                     style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
                     <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface)">
@@ -1249,7 +1249,7 @@
                         <span class="mono-xs text-dim" style="font-size:10px;margin-left:6px">{{ st.id }}</span>
                       </div>
                       <span style="font-size:11px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:10px;padding:1px 7px;color:#c084fc">{{ st.strategy }}</span>
-                      <span class="text-dim" style="font-size:11px">{{ st.values.length }} value{{ st.values.length !== 1 ? 's' : '' }}</span>
+                      <span class="text-dim" style="font-size:11px">{{ t('awsv.valueCount', { n: st.values.length }) }}</span>
                     </div>
                     <div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px">
                       <div v-for="val in st.values" :key="val.value"
@@ -1260,7 +1260,7 @@
                     </div>
                   </div>
                 </div>
-                <div v-if="!lexSlotTypesModal.locales.length" class="text-dim" style="text-align:center;padding:32px">No custom slot types found.</div>
+                <div v-if="!lexSlotTypesModal.locales.length" class="text-dim" style="text-align:center;padding:32px">{{ t('awsv.noCustomSlotTypesFound') }}</div>
               </div>
             </div>
             <!-- ── CHAT tab ────────────────────────────────────────────── -->
@@ -1271,14 +1271,14 @@
                   <option v-for="a in lexChatModal.aliases" :key="a.id" :value="a.id">{{ a.name }} ({{ a.botVersion }})</option>
                 </select>
                 <select v-model="lexChatModal.localeId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option v-if="!lexChatModal.locales.length" value="">Loading...</option>
+                  <option v-if="!lexChatModal.locales.length" value="">{{ t('state.loading') }}</option>
                   <option v-for="loc in lexChatModal.locales" :key="loc.localeId" :value="loc.localeId">{{ loc.localeName || loc.localeId }}</option>
                 </select>
-                <button class="btn sm" @click="lexChatReset">↺ Reset</button>
+                <button class="btn sm" @click="lexChatReset">{{ t('cfn.ops.reset') }}</button>
               </div>
               <div ref="lexChatScrollRef" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
                 <div v-if="!lexChatModal.messages.length" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:13px">
-                  Escribe un mensaje para iniciar la conversación con el bot
+                  {{ t('awsv.typeAMessageToStartThe') }}
                 </div>
                 <div v-for="(msg, i) in lexChatModal.messages" :key="i"
                   :style="`display:flex;flex-direction:column;align-items:${msg.role === 'user' ? 'flex-end' : 'flex-start'};gap:4px`">
@@ -1291,7 +1291,7 @@
                     <span v-for="(v, k) in msg.slots" :key="k" style="font-size:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:1px 6px;color:#fbbf24">{{ k }}: {{ v }}</span>
                   </div>
                   <details v-if="msg.role === 'bot' && msg.interpretations && msg.interpretations.length > 1" style="font-size:10px;color:var(--text-dim);margin-top:2px">
-                    <summary style="cursor:pointer">All interpretations</summary>
+                    <summary style="cursor:pointer">{{ t('awsv.allInterpretations') }}</summary>
                     <div v-for="int in msg.interpretations" :key="int.intent" style="padding:1px 4px">{{ int.intent }}: {{ int.confidence != null ? (int.confidence*100).toFixed(0)+'%' : '' }}</div>
                   </details>
                 </div>
@@ -1300,46 +1300,46 @@
                 </div>
               </div>
               <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
-                <input v-model="lexChatModal.input" type="text" placeholder="Escribe un mensaje..."
+                <input v-model="lexChatModal.input" type="text" :placeholder="t('awsv.typeAMessage')"
                   style="flex:1;font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text)"
                   @keydown.enter="lexChatSend" :disabled="lexChatModal.sending" />
                 <button class="btn sm" style="background:rgba(99,102,241,.2);border-color:#6366f1;color:#6366f1"
-                  @click="lexChatSend" :disabled="!lexChatModal.input.trim() || lexChatModal.sending">Send</button>
+                  @click="lexChatSend" :disabled="!lexChatModal.input.trim() || lexChatModal.sending">{{ t('awsv.send') }}</button>
               </div>
             </div>
             <!-- ── LOGS tab ────────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'logs'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
               <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <select v-model="lexLogsModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option :value="1">Last 1h</option>
-                  <option :value="6">Last 6h</option>
-                  <option :value="24">Last 24h</option>
-                  <option :value="72">Last 3d</option>
-                  <option :value="168">Last 7d</option>
+                  <option :value="1">{{ t('awsv.last1h') }}</option>
+                  <option :value="6">{{ t('awsv.last6h') }}</option>
+                  <option :value="24">{{ t('awsv.last24h') }}</option>
+                  <option :value="72">{{ t('awsv.last3d') }}</option>
+                  <option :value="168">{{ t('awsv.last7d') }}</option>
                 </select>
                 <select v-model="lexLogsModal.aliasId" @change="reloadLexLogs()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option value="">All aliases</option>
+                  <option value="">{{ t('awsv.allAliases') }}</option>
                   <option v-for="alias in lexLogsModal.aliases" :key="alias.aliasId" :value="alias.aliasId">{{ alias.aliasName || alias.aliasId }} ({{ alias.botVersion }})</option>
                 </select>
                 <select v-model="lexLogsModal.localeId" @change="reloadLexLogs()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option value="">All locales</option>
+                  <option value="">{{ t('awsv.allLocales') }}</option>
                   <option v-for="locale in lexLogLocales" :key="locale" :value="locale">{{ locale }}</option>
                 </select>
-                <button class="btn sm" @click="reloadLexLogs(true)" :disabled="lexLogsModal.loading">{{ lexLogsModal.loading ? 'Loading...' : 'Refresh' }}</button>
+                <button class="btn sm" @click="reloadLexLogs(true)" :disabled="lexLogsModal.loading">{{ lexLogsModal.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="lexLogsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading logs...</div>
+              <div v-if="lexLogsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('awsv.loadingLogs') }}</div>
               <div v-else-if="lexLogsModal.error" class="alert-error" style="margin:12px">{{ lexLogsModal.error }}</div>
               <div v-else-if="!lexLogsModal.configured" style="padding:24px;text-align:center">
                 <div style="font-size:32px;margin-bottom:8px">📋</div>
-                <div style="font-weight:600;margin-bottom:4px">Conversation logs not configured</div>
-                <div class="text-dim" style="font-size:12px">No CloudWatch log group found for this bot. Enable conversation logs in the bot's alias settings.</div>
+                <div style="font-weight:600;margin-bottom:4px">{{ t('awsv.conversationLogsNotConfigured') }}</div>
+                <div class="text-dim" style="font-size:12px">{{ t('awsv.noCloudwatchLogGroupFoundFor') }}</div>
               </div>
               <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
                 <div style="padding:6px 12px;font-size:11px;color:var(--text-dim);flex-shrink:0;border-bottom:1px solid var(--border)">
                   Log group: <span class="mono-xs">{{ (lexLogsModal.groups || []).join(', ') }}</span>
-                  &nbsp;·&nbsp; {{ lexLogsModal.events.length }} events
+                  {{ t('awsv.events', { p0: lexLogsModal.events.length }) }}
                 </div>
-                <div v-if="!lexLogsModal.events.length" class="empty-row">No log events in this time range.</div>
+                <div v-if="!lexLogsModal.events.length" class="empty-row">{{ t('awsv.noLogEventsInThisTime') }}</div>
                 <div v-else style="flex:1;overflow:auto;padding:8px">
                   <div v-for="(ev, idx) in lexLogsModal.events" :key="idx"
                     style="border:1px solid var(--border);border-radius:4px;margin-bottom:6px;overflow:hidden">
@@ -1361,36 +1361,36 @@
             <div v-show="lexPanel.innerTab === 'missed'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
               <div style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <select v-model="lexMissedModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option :value="6">Last 6h</option>
-                  <option :value="24">Last 24h</option>
-                  <option :value="72">Last 3d</option>
-                  <option :value="168">Last 7d</option>
+                  <option :value="6">{{ t('awsv.last6h') }}</option>
+                  <option :value="24">{{ t('awsv.last24h') }}</option>
+                  <option :value="72">{{ t('awsv.last3d') }}</option>
+                  <option :value="168">{{ t('awsv.last7d') }}</option>
                 </select>
                 <select v-model="lexMissedModal.aliasId" @change="reloadLexMissed()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option value="">All aliases</option>
+                  <option value="">{{ t('awsv.allAliases') }}</option>
                   <option v-for="alias in lexMissedModal.aliases" :key="alias.aliasId" :value="alias.aliasId">{{ alias.aliasName || alias.aliasId }} ({{ alias.botVersion }})</option>
                 </select>
                 <select v-model="lexMissedModal.localeId" @change="reloadLexMissed()" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                  <option value="">All locales</option>
+                  <option value="">{{ t('awsv.allLocales') }}</option>
                   <option v-for="locale in lexMissedLocales" :key="locale" :value="locale">{{ locale }}</option>
                 </select>
-                <button class="btn sm" @click="reloadLexMissed(true)" :disabled="lexMissedModal.loading">{{ lexMissedModal.loading ? 'Loading...' : 'Refresh' }}</button>
+                <button class="btn sm" @click="reloadLexMissed(true)" :disabled="lexMissedModal.loading">{{ lexMissedModal.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="lexMissedModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading...</div>
+              <div v-if="lexMissedModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('state.loading') }}</div>
               <div v-else-if="lexMissedModal.error" class="alert-error" style="margin:12px">{{ lexMissedModal.error }}</div>
               <div v-else-if="!lexMissedModal.configured" style="padding:32px;text-align:center">
                 <div style="font-size:28px;margin-bottom:8px">🔇</div>
-                <div style="font-weight:600;margin-bottom:4px">Conversation logs not configured</div>
-                <div class="text-dim" style="font-size:12px">Enable conversation logs in the bot's alias settings to track missed utterances.</div>
+                <div style="font-weight:600;margin-bottom:4px">{{ t('awsv.conversationLogsNotConfigured') }}</div>
+                <div class="text-dim" style="font-size:12px">{{ t('awsv.enableConversationLogsInTheBot') }}</div>
               </div>
               <div v-else style="flex:1;overflow:hidden;display:flex;flex-direction:column">
                 <div style="padding:6px 12px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);flex-shrink:0">
-                  <span class="mono-xs">{{ lexMissedModal.logGroupName }}</span> · {{ lexMissedModal.utterances.length }} missed utterance{{ lexMissedModal.utterances.length !== 1 ? 's' : '' }}
+                  <span class="mono-xs">{{ lexMissedModal.logGroupName }}</span> {{ t('awsv.missedCount', { n: lexMissedModal.utterances.length }) }}
                 </div>
-                <div v-if="!lexMissedModal.utterances.length" class="empty-row">No missed utterances in this time range. 🎉</div>
+                <div v-if="!lexMissedModal.utterances.length" class="empty-row">{{ t('awsv.noMissedUtterancesInThisTime') }}</div>
                 <div v-else style="flex:1;overflow:auto">
                   <table class="cloud-table">
-                    <thead><tr><th>Time</th><th>Utterance</th><th>Session</th><th>Locale</th></tr></thead>
+                    <thead><tr><th>{{ t('awsLogs.chart.time') }}</th><th>Utterance</th><th>{{ t('awsv.session') }}</th><th>Locale</th></tr></thead>
                     <tbody>
                       <tr v-for="(u, i) in lexMissedModal.utterances" :key="i">
                         <td class="text-dim mono-xs" style="white-space:nowrap">{{ new Date(u.timestamp).toLocaleString() }}</td>
@@ -1405,26 +1405,26 @@
             </div>
             <!-- ── METRICS tab ─────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'metrics'" style="flex:1;overflow:auto;padding:12px">
-              <div v-if="lexMetricsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading metrics...</div>
+              <div v-if="lexMetricsModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
               <div v-else-if="lexMetricsModal.error" class="alert-error" style="margin:12px">{{ lexMetricsModal.error }}</div>
               <div v-else>
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
                   <select v-model="lexMetricsModal.hours" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                    <option :value="6">Last 6h</option>
-                    <option :value="24">Last 24h</option>
-                    <option :value="72">Last 3d</option>
-                    <option :value="168">Last 7d</option>
+                    <option :value="6">{{ t('awsv.last6h') }}</option>
+                    <option :value="24">{{ t('awsv.last24h') }}</option>
+                    <option :value="72">{{ t('awsv.last3d') }}</option>
+                    <option :value="168">{{ t('awsv.last7d') }}</option>
                   </select>
                   <select v-model="lexMetricsModal.localeId" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text)">
-                    <option value="">All locales</option>
+                    <option value="">{{ t('awsv.allLocales') }}</option>
                     <option v-for="locale in lexMetricsModal.locales" :key="locale.localeId" :value="locale.localeId">{{ locale.localeName || locale.localeId }}</option>
                   </select>
-                  <button class="btn sm" @click="reloadLexMetrics(true)" :disabled="lexMetricsModal.loading">Refresh</button>
+                  <button class="btn sm" @click="reloadLexMetrics(true)" :disabled="lexMetricsModal.loading">{{ t('action.refresh') }}</button>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                   <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Runtime Requests</div>
-                    <div v-if="!lexMetricsModal.metrics.RuntimeRequestCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('awsv.runtimeRequests') }}</div>
+                    <div v-if="!lexMetricsModal.metrics.RuntimeRequestCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">{{ t('state.empty') }}</div>
                     <div v-else>
                       <div style="font-size:28px;font-weight:700;margin-bottom:4px">{{ lexMetricsTotal('RuntimeRequestCount') }}</div>
                       <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
@@ -1434,8 +1434,8 @@
                     </div>
                   </div>
                   <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Missed Utterances</div>
-                    <div v-if="!lexMetricsModal.metrics.MissedUtteranceCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('awsv.missedUtterances') }}</div>
+                    <div v-if="!lexMetricsModal.metrics.MissedUtteranceCount?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">{{ t('state.empty') }}</div>
                     <div v-else>
                       <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#f87171">{{ lexMetricsTotal('MissedUtteranceCount') }}</div>
                       <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
@@ -1445,8 +1445,8 @@
                     </div>
                   </div>
                   <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Avg Latency (ms)</div>
-                    <div v-if="!lexMetricsModal.metrics.RuntimeSuccessfulRequestLatency?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('awsv.avgLatencyMs') }}</div>
+                    <div v-if="!lexMetricsModal.metrics.RuntimeSuccessfulRequestLatency?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">{{ t('state.empty') }}</div>
                     <div v-else>
                       <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#4ade80">{{ lexMetricsAvg('RuntimeSuccessfulRequestLatency') }}ms</div>
                       <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
@@ -1456,8 +1456,8 @@
                     </div>
                   </div>
                   <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Polly TTS Errors</div>
-                    <div v-if="!lexMetricsModal.metrics.RuntimePollyErrors?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">No data</div>
+                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('awsv.pollyTtsErrors') }}</div>
+                    <div v-if="!lexMetricsModal.metrics.RuntimePollyErrors?.length" class="text-dim" style="text-align:center;padding:16px;font-size:12px">{{ t('state.empty') }}</div>
                     <div v-else>
                       <div style="font-size:28px;font-weight:700;margin-bottom:4px;color:#fb923c">{{ lexMetricsTotal('RuntimePollyErrors') }}</div>
                       <div style="display:flex;align-items:flex-end;gap:2px;height:60px">
@@ -1468,14 +1468,14 @@
                   </div>
                 </div>
                 <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px">
-                  <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Build Bot</div>
+                  <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('awsv.buildBot') }}</div>
                   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                     <select v-model="lexMetricsModal.buildLocale" style="font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text)">
                       <option v-for="loc in lexMetricsModal.locales" :key="loc.localeId" :value="loc.localeId">{{ loc.localeName || loc.localeId }}</option>
                     </select>
                     <button class="btn sm" style="background:rgba(99,102,241,.18);border-color:#6366f1;color:#6366f1"
                       :disabled="lexMetricsModal.building || !lexMetricsModal.buildLocale"
-                      @click="doBuildLexBot">{{ lexMetricsModal.building ? 'Building...' : '⚒ Build' }}</button>
+                      @click="doBuildLexBot">{{ lexMetricsModal.building ? t('awsv.lit.building') : t('awsv.lit.buildButton') }}</button>
                     <span v-if="lexMetricsModal.buildResult" :class="lexMetricsModal.buildResult.status === 'Built' ? 'status-ok' : 'status-err'">
                       {{ lexMetricsModal.buildResult.status }}
                       <span v-if="lexMetricsModal.buildResult.failureReasons?.length" class="text-dim" style="font-size:11px"> — {{ lexMetricsModal.buildResult.failureReasons.join('; ') }}</span>
@@ -1487,20 +1487,20 @@
             <!-- ── TEST SET tab ────────────────────────────────────────── -->
             <div v-show="lexPanel.innerTab === 'testset'" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
               <div style="display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-                <button :class="['btn','xs', lexTestSetModal.activeView === 'existing' ? 'active' : '']" @click="lexTestSetModal.activeView = 'existing'">Existing Test Sets</button>
-                <button :class="['btn','xs', lexTestSetModal.activeView === 'generate' ? 'active' : '']" @click="lexTestSetModal.activeView = 'generate'">Generate from Intents</button>
+                <button :class="['btn','xs', lexTestSetModal.activeView === 'existing' ? 'active' : '']" @click="lexTestSetModal.activeView = 'existing'">{{ t('awsv.existingTestSets') }}</button>
+                <button :class="['btn','xs', lexTestSetModal.activeView === 'generate' ? 'active' : '']" @click="lexTestSetModal.activeView = 'generate'">{{ t('awsv.generateFromIntents') }}</button>
               </div>
-              <div v-if="lexTestSetModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">Loading...</div>
+              <div v-if="lexTestSetModal.loading" style="padding:24px;text-align:center;color:var(--text-dim)">{{ t('state.loading') }}</div>
               <div v-else-if="lexTestSetModal.error" class="alert-error" style="margin:12px">{{ lexTestSetModal.error }}</div>
               <div v-else style="flex:1;overflow:auto;padding:12px">
                 <div v-if="lexTestSetModal.activeView === 'existing'">
                   <div v-if="!lexTestSetModal.testSets.length" style="text-align:center;padding:32px;color:var(--text-dim)">
                     <div style="font-size:28px;margin-bottom:8px">📂</div>
-                    <div>No test sets found for this account.</div>
-                    <div style="font-size:12px;margin-top:4px">Use the "Generate from Intents" tab to create one.</div>
+                    <div>{{ t('awsv.noTestSetsFoundForThis') }}</div>
+                    <div style="font-size:12px;margin-top:4px">{{ t('awsv.useTheGenerateFromIntentsTab') }}</div>
                   </div>
                   <table v-else class="cloud-table">
-                    <thead><tr><th>Name</th><th>Status</th><th>Turns</th><th>Modality</th><th>Last Updated</th></tr></thead>
+                    <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('th.status') }}</th><th>Turns</th><th>{{ t('awsv.modality') }}</th><th>{{ t('awsv.lastUpdated') }}</th></tr></thead>
                     <tbody>
                       <tr v-for="ts in lexTestSetModal.testSets" :key="ts.id">
                         <td>
@@ -1520,17 +1520,17 @@
                   <div v-if="!lexTestSetModal.intentsLoaded" style="text-align:center;padding:24px">
                     <button class="btn sm" style="background:rgba(139,92,246,.18);border-color:#8b5cf6;color:#8b5cf6"
                       @click="lexLoadIntentsForTestSet" :disabled="lexTestSetModal.loadingIntents">
-                      {{ lexTestSetModal.loadingIntents ? 'Loading intents...' : 'Load Intents to Generate Tests' }}
+                      {{ lexTestSetModal.loadingIntents ? t('awsv.loadingIntents') : t('awsv.lit.loadIntentsForTests') }}
                     </button>
                   </div>
                   <div v-else>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-                      <span style="font-size:12px;color:var(--text-dim)">{{ lexTestSetModal.generatedCases.length }} test cases generated</span>
-                      <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="downloadLexTestSetCsv">⬇ Download CSV</button>
-                      <button class="btn xs" style="background:rgba(59,130,246,.18);border-color:#3b82f6;color:#3b82f6" @click="downloadLexTestSetJson">⬇ Download JSON</button>
+                      <span style="font-size:12px;color:var(--text-dim)">{{ t('awsv.testCasesGenerated', { p0: lexTestSetModal.generatedCases.length }) }}</span>
+                      <button class="btn xs" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="downloadLexTestSetCsv">{{ t('awsv.downloadCsv') }}</button>
+                      <button class="btn xs" style="background:rgba(59,130,246,.18);border-color:#3b82f6;color:#3b82f6" @click="downloadLexTestSetJson">{{ t('awsv.downloadJson') }}</button>
                     </div>
                     <table class="cloud-table" style="font-size:12px">
-                      <thead><tr><th>#</th><th>Intent</th><th>Utterance</th><th>Expected Slots</th></tr></thead>
+                      <thead><tr><th>#</th><th>Intent</th><th>Utterance</th><th>{{ t('awsv.expectedSlots') }}</th></tr></thead>
                       <tbody>
                         <tr v-for="(tc, i) in lexTestSetModal.generatedCases" :key="i">
                           <td class="text-dim">{{ i + 1 }}</td>
@@ -1555,14 +1555,14 @@
 
       <!-- ══ AgentCore CloudFormation ══════════════════════════════════════ -->
       <div v-show="activeTab === 'agentcorecfn'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredAgentCoreCfn.length" class="empty-row">{{ search.agentcorecfn ? 'No matches.' : 'No AgentCore CloudFormation stacks found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredAgentCoreCfn.length" class="empty-row">{{ search.agentcorecfn ? t('awsv.lit.noMatches') : t('awsv.lit.noAgentCore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">Stack <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('status')"      @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('createdTime')" @click="sortBy('createdTime')">Created <span class="sort-icon">{{ sortIcon('createdTime') }}</span></th>
-            <th :class="thClass('updatedTime')" @click="sortBy('updatedTime')">Updated <span class="sort-icon">{{ sortIcon('updatedTime') }}</span></th>
+            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('cfn.colStack') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('status')"      @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('createdTime')" @click="sortBy('createdTime')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdTime') }}</span></th>
+            <th :class="thClass('updatedTime')" @click="sortBy('updatedTime')">{{ t('th.updated') }} <span class="sort-icon">{{ sortIcon('updatedTime') }}</span></th>
             <th>Stack ID</th>
           </tr></thead>
           <tbody>
@@ -1583,19 +1583,19 @@
       <!-- ══ CloudFront ═════════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'cloudfront'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
-          <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="cfCreateModal.open = true; cfCreateModal.result = null; cfCreateModal.error = null">+ Create from S3</button>
+          <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="cfCreateModal.open = true; cfCreateModal.result = null; cfCreateModal.error = null">{{ t('awsv.createFromS3') }}</button>
         </div>
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredCloudfront.length" class="empty-row">{{ search.cloudfront ? 'No matches.' : 'No CloudFront distributions found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredCloudfront.length" class="empty-row">{{ search.cloudfront ? t('awsv.lit.noMatches') : t('awsv.lit.noCloudfront') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('domainName')" @click="sortBy('domainName')">Domain <span class="sort-icon">{{ sortIcon('domainName') }}</span></th>
-            <th :class="thClass('status')"     @click="sortBy('status')">Status <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('enabled')"    @click="sortBy('enabled')">Enabled</th>
+            <th :class="thClass('domainName')" @click="sortBy('domainName')">{{ t('vercel.col.domain') }} <span class="sort-icon">{{ sortIcon('domainName') }}</span></th>
+            <th :class="thClass('status')"     @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('enabled')"    @click="sortBy('enabled')">{{ t('apm.enabled') }}</th>
             <th :class="thClass('priceClass')" @click="sortBy('priceClass')">Price Class <span class="sort-icon">{{ sortIcon('priceClass') }}</span></th>
             <th>Aliases</th>
-            <th>Origins</th>
-            <th>Actions</th>
+            <th>{{ t('awsv.origins') }}</th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="d in sortRows(filteredCloudfront)" :key="d.id">
@@ -1604,7 +1604,7 @@
                 <div v-if="d.comment" class="text-dim" style="font-size:11px">{{ d.comment }}</div>
               </td>
               <td><span :class="d.status === 'Deployed' ? 'status-ok' : 'status-warn'">{{ d.status }}</span></td>
-              <td><span :class="d.enabled ? 'status-ok' : 'status-err'">{{ d.enabled ? 'Yes' : 'No' }}</span></td>
+              <td><span :class="d.enabled ? 'status-ok' : 'status-err'">{{ d.enabled ? t('common.yes') : t('common.no') }}</span></td>
               <td class="text-dim">{{ d.priceClass }}</td>
               <td>
                 <div class="tag-chips">
@@ -1617,10 +1617,10 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openInvalidateModal(d)">Invalidate</button>
-                  <button class="btn sm" @click="openConfig('cloudfront', `CF: ${d.domainName}`, d, { id: d.id })">Config</button>
-                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openCfStats(d)">Stats</button>
-                  <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openSiteUrl('https://' + (d.aliases?.[0] || d.domainName))" title="Open site">Visit Site</button>
+                  <button class="btn sm" @click="openInvalidateModal(d)">{{ t('awsv.invalidate') }}</button>
+                  <button class="btn sm" @click="openConfig('cloudfront', `CF: ${d.domainName}`, d, { id: d.id })">{{ t('sidebar.config') }}</button>
+                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openCfStats(d)">{{ t('awsv.stats') }}</button>
+                  <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="openSiteUrl('https://' + (d.aliases?.[0] || d.domainName))" :title="t('awsv.openSite')">{{ t('aws.visitSite') }}</button>
                 </div>
               </td>
             </tr>
@@ -1634,40 +1634,40 @@
           <!-- Zones list -->
           <div style="width:320px;flex-shrink:0;overflow:auto;border-right:1px solid var(--border)">
             <div class="text-dim" style="padding:6px 10px;font-size:11px;font-weight:600;text-transform:uppercase">Hosted Zones</div>
-            <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-            <div v-else-if="!filteredRoute53.length" class="empty-row">No zones.</div>
+            <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+            <div v-else-if="!filteredRoute53.length" class="empty-row">{{ t('awsv.noZones') }}</div>
             <div v-for="z in filteredRoute53" :key="z.id"
               :class="['sidebar-item', { active: route53State.selectedZoneId === z.id }]"
               style="cursor:pointer;padding:6px 12px"
               @click="loadRoute53Records(z)">
               <div>{{ z.name }}</div>
-              <div class="text-dim mono-xs">{{ z.recordCount }} records · {{ z.private ? 'Private' : 'Public' }}</div>
+              <div class="text-dim mono-xs">{{ t('awsv.zoneRecords', { n: z.recordCount, kind: z.private ? t('awsv.zonePrivate') : t('awsv.zonePublic') }) }}</div>
             </div>
           </div>
           <!-- Records -->
           <div style="flex:1;overflow:auto;display:flex;flex-direction:column">
             <!-- Toolbar: Search + Filter + Export -->
             <div v-if="route53State.selectedZoneId && route53State.records.length" style="flex-shrink:0;padding:8px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <input v-model="route53State.search" type="text" placeholder="Search by name or value..." style="flex:1;min-width:180px;padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:inherit;font-size:.85rem" />
+              <input v-model="route53State.search" type="text" :placeholder="t('awsv.searchByNameOrValue')" style="flex:1;min-width:180px;padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:inherit;font-size:.85rem" />
               <select v-model="route53State.selectedRecordType" style="padding:4px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;color:inherit;font-size:.85rem">
-                <option :value="null">All Types</option>
+                <option :value="null">{{ t('awsv.allTypes') }}</option>
                 <option v-for="type in route53RecordTypes" :key="type" :value="type">{{ type }}</option>
               </select>
-              <button v-if="filteredRoute53Records.length" @click="selectAllVisibleRecords" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" title="Select all visible">✓ Select All</button>
-              <button v-if="route53State.selectedRecords.size" @click="clearRecordSelection" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" title="Clear selection">✕ Clear</button>
-              <button v-if="route53State.selectedRecords.size || filteredRoute53Records.length" @click="exportRoute53Records" style="padding:4px 10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:4px;cursor:pointer;font-size:.85rem;color:#58a6ff" title="Export selected records as CSV">⬇ Export</button>
-              <span v-if="route53State.selectedRecords.size" style="font-size:.8rem;color:#8b949e">{{ route53State.selectedRecords.size }} selected</span>
+              <button v-if="filteredRoute53Records.length" @click="selectAllVisibleRecords" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" :title="t('awsv.selectAllVisible')">{{ t('awsv.selectAll') }}</button>
+              <button v-if="route53State.selectedRecords.size" @click="clearRecordSelection" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:.85rem" :title="t('table.clearSelection')">{{ t('term.clear') }}</button>
+              <button v-if="route53State.selectedRecords.size || filteredRoute53Records.length" @click="exportRoute53Records" style="padding:4px 10px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);border-radius:4px;cursor:pointer;font-size:.85rem;color:#58a6ff" :title="t('awsv.exportSelectedRecordsAsCsv')">{{ t('action.export') }}</button>
+              <span v-if="route53State.selectedRecords.size" style="font-size:.8rem;color:#8b949e">{{ t('awsv.selected', { p0: route53State.selectedRecords.size }) }}</span>
             </div>
             <!-- Records Table -->
             <div style="flex:1;overflow:auto">
-              <div v-if="route53State.loadingRecords" class="empty-row">Loading records...</div>
-              <div v-else-if="!route53State.selectedZoneId" class="empty-row">Select a zone to view its records.</div>
-              <div v-else-if="!route53State.records.length" class="empty-row">No records in this zone.</div>
-              <div v-else-if="!filteredRoute53Records.length" class="empty-row">No records match the search or filter.</div>
+              <div v-if="route53State.loadingRecords" class="empty-row">{{ t('awsv.loadingRecords') }}</div>
+              <div v-else-if="!route53State.selectedZoneId" class="empty-row">{{ t('awsv.selectAZoneToViewIts') }}</div>
+              <div v-else-if="!route53State.records.length" class="empty-row">{{ t('awsv.noRecordsInThisZone') }}</div>
+              <div v-else-if="!filteredRoute53Records.length" class="empty-row">{{ t('awsv.noRecordsMatchTheSearchOr') }}</div>
               <table v-else class="cloud-table">
                 <thead><tr>
-                  <th style="width:30px"><input type="checkbox" title="Select all visible" :checked="allVisibleRoute53Selected" @change="e => e.target.checked ? selectAllVisibleRecords() : clearVisibleRecordSelection()"></th>
-                  <th>Name</th><th>Type</th><th>TTL</th><th>Value / Alias</th><th>DNS test</th>
+                  <th style="width:30px"><input type="checkbox" :title="t('awsv.selectAllVisible')" :checked="allVisibleRoute53Selected" @change="e => e.target.checked ? selectAllVisibleRecords() : clearVisibleRecordSelection()"></th>
+                  <th>{{ t('th.name') }}</th><th>{{ t('th.type') }}</th><th>TTL</th><th>{{ t('awsv.valueAlias') }}</th><th>{{ t('awsv.dnsTest') }}</th>
                 </tr></thead>
                 <tbody>
                   <tr v-for="r in filteredRoute53Records" :key="route53RecordKey(r)">
@@ -1685,14 +1685,14 @@
                     <td style="min-width:150px;max-width:280px">
                       <span v-if="!route53TestsFor(r).length" class="text-dim" style="font-size:.75rem">—</span>
                       <div v-for="testItem in route53TestsFor(r)" :key="testItem.id" style="margin:2px 0">
-                        <span v-if="route53State.testing[route53TestKey(r, testItem)]" style="font-size:.78rem;color:#8b949e">{{ testItem.label }}: testing…</span>
+                        <span v-if="route53State.testing[route53TestKey(r, testItem)]" style="font-size:.78rem;color:#8b949e">{{ t('awsv.testing', { p0: testItem.label }) }}</span>
                         <template v-else-if="route53State.testResults[route53TestKey(r, testItem)]">
                           <button :title="route53ResultTitle(testItem, route53State.testResults[route53TestKey(r, testItem)])"
                             :style="{ padding: '1px 7px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem', fontWeight: 600, ...route53StatusStyle(route53State.testResults[route53TestKey(r, testItem)].status) }"
                             @click="testRoute53Record(r, testItem)">{{ testItem.label }}: {{ route53State.testResults[route53TestKey(r, testItem)].status }} ↺</button>
                           <div style="font-size:.72rem;color:#8b949e;margin-top:2px;word-break:break-word">{{ route53State.testResults[route53TestKey(r, testItem)].message }}</div>
                         </template>
-                        <button v-else @click="testRoute53Record(r, testItem)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.78rem;color:#58a6ff">Test {{ testItem.label }}</button>
+                        <button v-else @click="testRoute53Record(r, testItem)" style="padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:.78rem;color:#58a6ff">{{ t('awsv.test', { p0: testItem.label }) }}</button>
                       </div>
                     </td>
                   </tr>
@@ -1711,20 +1711,20 @@
             <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
               <span class="text-dim" style="font-size:11px;font-weight:600;text-transform:uppercase">User Pools</span>
             </div>
-            <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-            <div v-else-if="!filteredCognito.length" class="empty-row">No user pools.</div>
+            <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+            <div v-else-if="!filteredCognito.length" class="empty-row">{{ t('awsv.noUserPools') }}</div>
             <div v-for="p in filteredCognito" :key="p.id"
               :class="['sidebar-item', { active: cognitoState.selectedPool?.id === p.id }]"
               style="cursor:pointer;padding:8px 12px"
               @click="loadCognitoPool(p)">
               <div style="font-weight:500">{{ p.name }}</div>
-              <div class="text-dim mono-xs">{{ p.userCount?.toLocaleString() ?? '?' }} users · MFA: {{ p.mfaConfig }}</div>
+              <div class="text-dim mono-xs">{{ t('awsv.usersMfa', { p0: p.userCount?.toLocaleString() ?? '?', p1: p.mfaConfig }) }}</div>
               <div class="text-dim mono-xs" style="font-size:10px">{{ p.id }}</div>
             </div>
           </div>
           <!-- Right panel: tabbed detail for selected pool -->
           <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
-            <div v-if="!cognitoState.selectedPool" class="empty-row" style="align-self:center;margin-top:60px">Select a user pool</div>
+            <div v-if="!cognitoState.selectedPool" class="empty-row" style="align-self:center;margin-top:60px">{{ t('awsv.selectAUserPool') }}</div>
             <template v-else>
               <!-- Inner tab bar -->
               <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 12px;flex-shrink:0;align-items:center">
@@ -1733,23 +1733,23 @@
                   style="margin-right:4px"
                   @click="cognitoState.innerTab = tabItem.id">{{ tabItem.label }}</button>
                 <div style="flex:1"/>
-                <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoUser">+ Create User</button>
+                <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoUser">{{ t('awsv.createUser') }}</button>
               </div>
               <!-- ── Users tab ─────────────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'users'" style="flex:1;overflow:auto;padding:8px">
                 <!-- Search + filter bar -->
                 <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
                   <input class="search-input" v-model="cognitoState.userFilter"
-                    placeholder="Filter by email / username…" style="flex:1"
+                    :placeholder="t('awsv.filterByEmailUsername')" style="flex:1"
                     @keydown.enter="applyUserFilter" />
-                  <button class="btn sm" @click="applyUserFilter">Search</button>
-                  <button class="btn sm" v-if="cognitoState.userFilter" @click="clearUserFilter">Clear</button>
+                  <button class="btn sm" @click="applyUserFilter">{{ t('aws.search') }}</button>
+                  <button class="btn sm" v-if="cognitoState.userFilter" @click="clearUserFilter">{{ t('term.clear') }}</button>
                 </div>
-                <div v-if="cognitoState.loadingUsers" class="empty-row">Loading users...</div>
-                <div v-else-if="!cognitoState.users.length" class="empty-row">No users found.</div>
+                <div v-if="cognitoState.loadingUsers" class="empty-row">{{ t('awsv.loadingUsers') }}</div>
+                <div v-else-if="!cognitoState.users.length" class="empty-row">{{ t('awsv.noUsersFound') }}</div>
                 <table v-else class="cloud-table">
                   <thead><tr>
-                    <th>Username</th><th>Email</th><th>Status</th><th>MFA</th><th>Enabled</th><th>Created</th><th>Actions</th>
+                    <th>{{ t('awsv.username') }}</th><th>{{ t('ses.type_email') }}</th><th>{{ t('th.status') }}</th><th>MFA</th><th>{{ t('apm.enabled') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th>
                   </tr></thead>
                   <tbody>
                     <tr v-for="u in cognitoState.users" :key="u.username">
@@ -1761,14 +1761,14 @@
                       <td>
                         <span :class="u.mfaEnabled ? 'status-ok' : 'text-dim'">{{ u.mfaEnabled ? 'ON' : 'off' }}</span>
                       </td>
-                      <td><span :class="u.enabled ? 'status-ok' : 'status-err'">{{ u.enabled ? 'Yes' : 'No' }}</span></td>
+                      <td><span :class="u.enabled ? 'status-ok' : 'status-err'">{{ u.enabled ? t('common.yes') : t('common.no') }}</span></td>
                       <td class="text-dim" style="white-space:nowrap">{{ u.created ? formatDate(u.created) : '-' }}</td>
                       <td>
                         <div class="row-actions">
-                          <button class="btn sm" @click="openUserDetail(u)" title="View">Detail</button>
-                          <button class="btn sm" @click="doCognitoResetPassword(u)" title="Send reset email">Reset pwd</button>
-                          <button class="btn sm" v-if="u.enabled" @click="doCognitoDisable(u)">Disable</button>
-                          <button class="btn sm" v-else @click="doCognitoEnable(u)">Enable</button>
+                          <button class="btn sm" @click="openUserDetail(u)" :title="t('action.view')">{{ t('awsv.detail') }}</button>
+                          <button class="btn sm" @click="doCognitoResetPassword(u)" :title="t('awsv.sendResetEmail')">{{ t('awsv.resetPwd2') }}</button>
+                          <button class="btn sm" v-if="u.enabled" @click="doCognitoDisable(u)">{{ t('awsv.disable') }}</button>
+                          <button class="btn sm" v-else @click="doCognitoEnable(u)">{{ t('awsv.enable') }}</button>
                         </div>
                       </td>
                     </tr>
@@ -1776,18 +1776,18 @@
                 </table>
                 <!-- Pagination -->
                 <div v-if="cognitoState.paginationToken || cognitoState.prevTokens?.length" style="display:flex;gap:8px;margin-top:8px;justify-content:center">
-                  <button class="btn sm" :disabled="!cognitoState.prevTokens?.length" @click="cognitoPrevPage">‹ Prev</button>
-                  <span class="text-dim" style="line-height:28px;font-size:12px">Page {{ (cognitoState.prevTokens?.length || 0) + 1 }}</span>
-                  <button class="btn sm" :disabled="!cognitoState.paginationToken" @click="cognitoNextPage">Next ›</button>
+                  <button class="btn sm" :disabled="!cognitoState.prevTokens?.length" @click="cognitoPrevPage">{{ t('awsv.prev') }}</button>
+                  <span class="text-dim" style="line-height:28px;font-size:12px">{{ t('awsv.page', { p0: (cognitoState.prevTokens?.length || 0) + 1 }) }}</span>
+                  <button class="btn sm" :disabled="!cognitoState.paginationToken" @click="cognitoNextPage">{{ t('awsv.next') }}</button>
                 </div>
               </div>
               <!-- ── App Clients tab ───────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'clients'" style="flex:1;overflow:auto;padding:8px">
-                <div v-if="cognitoState.loadingClients" class="empty-row">Loading clients...</div>
-                <div v-else-if="!cognitoState.clients.length" class="empty-row">No app clients.</div>
+                <div v-if="cognitoState.loadingClients" class="empty-row">{{ t('awsv.loadingClients') }}</div>
+                <div v-else-if="!cognitoState.clients.length" class="empty-row">{{ t('awsv.noAppClients') }}</div>
                 <table v-else class="cloud-table">
                   <thead><tr>
-                    <th>Client Name</th><th>Client ID</th><th>Auth Flows</th><th>OAuth Flows</th><th>Callback URLs</th><th>Token Validity</th><th>Secret</th>
+                    <th>{{ t('awsv.clientName') }}</th><th>Client ID</th><th>Auth Flows</th><th>OAuth Flows</th><th>Callback URLs</th><th>{{ t('awsv.tokenValidity') }}</th><th>{{ t('detail.secret') }}</th>
                   </tr></thead>
                   <tbody>
                     <tr v-for="c in cognitoState.clients" :key="c.clientId">
@@ -1797,21 +1797,21 @@
                       <td class="text-dim" style="font-size:11px">{{ (c.allowedOAuthFlows || []).join(', ') || '-' }}</td>
                       <td class="text-dim" style="font-size:11px;max-width:200px;word-break:break-all">{{ (c.callbackURLs || []).join(', ') || '-' }}</td>
                       <td class="text-dim" style="font-size:11px">
-                        <div v-if="c.accessTokenValidity">Access: {{ c.accessTokenValidity }}h</div>
-                        <div v-if="c.refreshTokenValidity">Refresh: {{ c.refreshTokenValidity }}d</div>
+                        <div v-if="c.accessTokenValidity">{{ t('awsv.accessH', { p0: c.accessTokenValidity }) }}</div>
+                        <div v-if="c.refreshTokenValidity">{{ t('awsv.refreshD', { p0: c.refreshTokenValidity }) }}</div>
                       </td>
-                      <td><span :class="c.hasSecret ? 'status-warn' : 'text-dim'">{{ c.hasSecret ? 'Yes' : 'No' }}</span></td>
+                      <td><span :class="c.hasSecret ? 'status-warn' : 'text-dim'">{{ c.hasSecret ? t('common.yes') : t('common.no') }}</span></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
               <!-- ── Identity Providers tab ───────────────────── -->
               <div v-show="cognitoState.innerTab === 'idps'" style="flex:1;overflow:auto;padding:8px">
-                <div v-if="cognitoState.loadingIdps" class="empty-row">Loading identity providers...</div>
-                <div v-else-if="!cognitoState.idps.length" class="empty-row">No federated identity providers configured.</div>
+                <div v-if="cognitoState.loadingIdps" class="empty-row">{{ t('awsv.loadingIdentityProviders') }}</div>
+                <div v-else-if="!cognitoState.idps.length" class="empty-row">{{ t('awsv.noFederatedIdentityProvidersConfigured') }}</div>
                 <table v-else class="cloud-table">
                   <thead><tr>
-                    <th>Provider Name</th><th>Type</th><th>Issuer / Metadata</th><th>Attribute Mapping</th><th>Last Modified</th>
+                    <th>{{ t('awsv.providerName') }}</th><th>{{ t('th.type') }}</th><th>{{ t('awsv.issuerMetadata') }}</th><th>{{ t('awsv.attributeMapping') }}</th><th>{{ t('awsDashboards.colModified') }}</th>
                   </tr></thead>
                   <tbody>
                     <tr v-for="p in cognitoState.idps" :key="p.providerName">
@@ -1827,13 +1827,13 @@
               <!-- ── Groups tab ──────────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'groups'" style="flex:1;overflow:auto;padding:8px">
                 <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-                  <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoGroup">+ Create Group</button>
+                  <button class="btn sm" style="margin:4px 0" @click="openCreateCognitoGroup">{{ t('awsv.createGroup') }}</button>
                 </div>
-                <div v-if="cognitoState.loadingGroups" class="empty-row">Loading groups...</div>
-                <div v-else-if="!cognitoState.groups.length" class="empty-row">No groups in this user pool.</div>
+                <div v-if="cognitoState.loadingGroups" class="empty-row">{{ t('awsv.loadingGroups') }}</div>
+                <div v-else-if="!cognitoState.groups.length" class="empty-row">{{ t('awsv.noGroupsInThisUserPool') }}</div>
                 <table v-else class="cloud-table">
                   <thead><tr>
-                    <th>Group Name</th><th>Description</th><th>Precedence</th><th>Role ARN</th><th>Last Modified</th>
+                    <th>{{ t('awsv.groupName') }}</th><th>{{ t('th.description') }}</th><th>{{ t('awsv.precedence') }}</th><th>Role ARN</th><th>{{ t('awsDashboards.colModified') }}</th>
                   </tr></thead>
                   <tbody>
                     <tr v-for="g in cognitoState.groups" :key="g.name">
@@ -1848,8 +1848,8 @@
               </div>
               <!-- ── Pool Config tab ─────────────────────────── -->
               <div v-show="cognitoState.innerTab === 'config'" style="flex:1;overflow:auto;padding:12px">
-                <div v-if="cognitoState.loadingConfig" class="empty-row">Loading configuration...</div>
-                <div v-else-if="!cognitoState.poolConfig" class="empty-row">No configuration loaded.</div>
+                <div v-if="cognitoState.loadingConfig" class="empty-row">{{ t('awsv.loadingConfiguration') }}</div>
+                <div v-else-if="!cognitoState.poolConfig" class="empty-row">{{ t('awsv.noConfigurationLoaded') }}</div>
                 <div v-else style="display:flex;flex-direction:column;gap:14px">
 
                   <!-- Header badges -->
@@ -1858,21 +1858,21 @@
                     <span class="mono-xs text-dim" style="font-size:10px">{{ cognitoState.poolConfig.Id }}</span>
                     <span :class="cognitoState.poolConfig.Status === 'Active' ? 'status-ok' : 'status-warn'" style="font-size:11px">{{ cognitoState.poolConfig.Status }}</span>
                     <span style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);color:var(--text-dim)">MFA: {{ cognitoState.poolConfig.MfaConfiguration }}</span>
-                    <span style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);color:var(--text-dim)">{{ cognitoState.poolConfig.EstimatedNumberOfUsers?.toLocaleString() }} users</span>
-                    <span v-if="cognitoState.poolConfig.Domain" style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(124,158,248,.12);color:var(--accent)">domain: {{ cognitoState.poolConfig.Domain }}</span>
+                    <span style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);color:var(--text-dim)">{{ t('awsv.users', { p0: cognitoState.poolConfig.EstimatedNumberOfUsers?.toLocaleString() }) }}</span>
+                    <span v-if="cognitoState.poolConfig.Domain" style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(124,158,248,.12);color:var(--accent)">{{ t('awsv.domain', { p0: cognitoState.poolConfig.Domain }) }}</span>
                   </div>
 
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                     <!-- Password Policy -->
                     <div class="config-section">
-                      <div class="config-title">Política de Contraseñas</div>
+                      <div class="config-title">{{ t('awsv.passwordPolicy') }}</div>
                       <template v-if="cognitoState.poolConfig.Policies?.PasswordPolicy">
                         <div class="config-row">
-                          <span>Longitud mínima</span>
+                          <span>{{ t('awsv.minimumLength') }}</span>
                           <span style="font-weight:600">{{ cognitoState.poolConfig.Policies.PasswordPolicy.MinimumLength }}</span>
                         </div>
                         <div class="config-row">
-                          <span>Requisitos</span>
+                          <span>{{ t('awsv.requirements') }}</span>
                           <div style="display:flex;gap:4px;flex-wrap:wrap">
                             <span v-if="cognitoState.poolConfig.Policies.PasswordPolicy.RequireUppercase" style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(124,158,248,.15);color:var(--accent)">A-Z</span>
                             <span v-if="cognitoState.poolConfig.Policies.PasswordPolicy.RequireLowercase" style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(124,158,248,.15);color:var(--accent)">a-z</span>
@@ -1880,28 +1880,28 @@
                             <span v-if="cognitoState.poolConfig.Policies.PasswordPolicy.RequireSymbols" style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(124,158,248,.15);color:var(--accent)">!@#</span>
                           </div>
                         </div>
-                        <div class="config-row"><span>Temp. pwd válida (días)</span><span>{{ cognitoState.poolConfig.Policies.PasswordPolicy.TemporaryPasswordValidityDays }}</span></div>
+                        <div class="config-row"><span>{{ t('awsv.temporaryPasswordValidDays') }}</span><span>{{ cognitoState.poolConfig.Policies.PasswordPolicy.TemporaryPasswordValidityDays }}</span></div>
                       </template>
                     </div>
 
                     <!-- Auto-verified + Dates -->
                     <div class="config-section">
-                      <div class="config-title">Verificación &amp; Fechas</div>
-                      <div class="config-row"><span>Atributos verificados</span><span class="text-dim">{{ (cognitoState.poolConfig.AutoVerifiedAttributes || []).join(', ') || 'none' }}</span></div>
-                      <div class="config-row"><span>Alias permitidos</span><span class="text-dim">{{ (cognitoState.poolConfig.AliasAttributes || []).join(', ') || '-' }}</span></div>
-                      <div class="config-row"><span>Creado</span><span class="text-dim">{{ cognitoState.poolConfig.CreationDate ? formatDate(cognitoState.poolConfig.CreationDate) : '-' }}</span></div>
-                      <div class="config-row"><span>Modificado</span><span class="text-dim">{{ cognitoState.poolConfig.LastModifiedDate ? formatDate(cognitoState.poolConfig.LastModifiedDate) : '-' }}</span></div>
+                      <div class="config-title">{{ t('awsv.verificationDates') }}</div>
+                      <div class="config-row"><span>{{ t('awsv.verifiedAttributes') }}</span><span class="text-dim">{{ (cognitoState.poolConfig.AutoVerifiedAttributes || []).join(', ') || 'none' }}</span></div>
+                      <div class="config-row"><span>{{ t('awsv.allowedAliases') }}</span><span class="text-dim">{{ (cognitoState.poolConfig.AliasAttributes || []).join(', ') || '-' }}</span></div>
+                      <div class="config-row"><span>{{ t('res.created') }}</span><span class="text-dim">{{ cognitoState.poolConfig.CreationDate ? formatDate(cognitoState.poolConfig.CreationDate) : '-' }}</span></div>
+                      <div class="config-row"><span>{{ t('lmd.modified') }}</span><span class="text-dim">{{ cognitoState.poolConfig.LastModifiedDate ? formatDate(cognitoState.poolConfig.LastModifiedDate) : '-' }}</span></div>
                     </div>
                   </div>
 
                   <!-- Schema Attributes -->
                   <div class="config-section">
-                    <div class="config-title">Schema Attributes ({{ (cognitoState.poolConfig.SchemaAttributes || []).length }})</div>
+                    <div class="config-title">{{ t('awsv.schemaAttributes', { p0: (cognitoState.poolConfig.SchemaAttributes || []).length }) }}</div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:4px">
                       <div v-for="attr in (cognitoState.poolConfig.SchemaAttributes || [])" :key="attr.Name"
                         style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:11px">
                         <div style="font-weight:600;margin-bottom:2px">{{ attr.Name }}</div>
-                        <div class="text-dim" style="font-size:10px">{{ attr.AttributeDataType }}{{ attr.Required ? ' · required' : '' }}{{ attr.Mutable === false ? ' · immutable' : '' }}</div>
+                        <div class="text-dim" style="font-size:10px">{{ attr.AttributeDataType }}{{ attr.Required ? t('awsv.lit.requiredSuffix') : '' }}{{ attr.Mutable === false ? t('awsv.lit.immutableSuffix') : '' }}</div>
                       </div>
                     </div>
                   </div>
@@ -1909,7 +1909,7 @@
                   <!-- Lambda Triggers -->
                   <div class="config-section">
                     <div class="config-title">Lambda Triggers</div>
-                    <div v-if="!cognitoState.poolConfig.LambdaConfig || !Object.keys(cognitoState.poolConfig.LambdaConfig).length" class="text-dim" style="padding:4px 0;font-size:12px">No hay triggers configurados.</div>
+                    <div v-if="!cognitoState.poolConfig.LambdaConfig || !Object.keys(cognitoState.poolConfig.LambdaConfig).length" class="text-dim" style="padding:4px 0;font-size:12px">{{ t('awsv.noTriggersConfigured') }}</div>
                     <div v-else style="display:flex;flex-direction:column;gap:4px">
                       <div v-for="(arn, trigger) in cognitoState.poolConfig.LambdaConfig" :key="trigger"
                         style="display:flex;gap:10px;align-items:center;padding:4px 6px;border-radius:4px;background:var(--bg-row)">
@@ -1927,15 +1927,15 @@
 
       <!-- ══ Secrets Manager ════════════════════════════════════════════════ -->
       <div v-show="activeTab === 'secrets'" class="tab-panel">
-        <div v-if="awsStore.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ search.secrets ? 'No matches.' : 'No secrets found.' }}</div>
+        <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ search.secrets ? t('awsv.lit.noMatches') : t('awsv.lit.noSecrets') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"            @click="sortBy('name')">Secret Name <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('rotationEnabled')" @click="sortBy('rotationEnabled')">Rotation</th>
-            <th :class="thClass('lastChanged')"     @click="sortBy('lastChanged')">Last Changed <span class="sort-icon">{{ sortIcon('lastChanged') }}</span></th>
+            <th :class="thClass('name')"            @click="sortBy('name')">{{ t('awsv.secretName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('rotationEnabled')" @click="sortBy('rotationEnabled')">{{ t('awsv.rotation') }}</th>
+            <th :class="thClass('lastChanged')"     @click="sortBy('lastChanged')">{{ t('awsv.lastChanged') }} <span class="sort-icon">{{ sortIcon('lastChanged') }}</span></th>
             <th>ARN</th>
-            <th>Actions</th>
+            <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="s in sortRows(filteredSecrets)" :key="s.arn">
@@ -1944,15 +1944,15 @@
                 <div v-if="s.name.includes('/')" class="text-dim mono-xs" style="font-size:10px">{{ s.name }}</div>
                 <div v-if="s.description" class="text-dim" style="font-size:11px;margin-top:1px">{{ s.description }}</div>
               </td>
-              <td><span :class="s.rotationEnabled ? 'status-ok' : 'text-dim'">{{ s.rotationEnabled ? 'Enabled' : 'Off' }}</span></td>
+              <td><span :class="s.rotationEnabled ? 'status-ok' : 'text-dim'">{{ s.rotationEnabled ? t('res.enabled') : t('awsv.lit.off') }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ s.lastChanged ? formatDate(s.lastChanged) : '-' }}</td>
               <td class="mono-xs text-dim" style="font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="s.arn">{{ s.arn }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openSecretConfig(s)">Config</button>
-                  <button class="btn sm" @click="openSecretIntegration(s)">Integrar</button>
+                  <button class="btn sm" @click="openSecretConfig(s)">{{ t('sidebar.config') }}</button>
+                  <button class="btn sm" @click="openSecretIntegration(s)">{{ t('awsv.integrate') }}</button>
                   <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e"
-                    @click="openImportSecret(s)">Import to Env</button>
+                    @click="openImportSecret(s)">{{ t('awsv.importToEnv') }}</button>
                 </div>
               </td>
             </tr>
@@ -2005,48 +2005,48 @@
     <div v-if="createS3Modal.open" class="modal-overlay" @click.self="createS3Modal.open = false">
       <div class="modal" style="width:480px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Create S3 Bucket</span>
+          <span style="font-weight:600">{{ t('awsv.createS3Bucket') }}</span>
           <button class="btn sm" @click="createS3Modal.open = false">✕</button>
         </div>
         <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Bucket Name <span style="color:#f85149">*</span></label>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.bucketName') }} <span style="color:#f85149">*</span></label>
             <input v-model="createS3Modal.name" type="text" placeholder="my-bucket-name"
               style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box" />
-            <div style="font-size:11px;color:var(--text-dim);margin-top:3px">3-63 chars · lowercase · letters, numbers, hyphens, dots</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:3px">{{ t('awsv.363CharsLowercaseLettersNumbers') }}</div>
           </div>
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Region</label>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('th.region') }}</label>
             <select v-model="createS3Modal.region"
               style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px">
               <option value="us-east-1">us-east-1 (N. Virginia)</option>
               <option value="us-east-2">us-east-2 (Ohio)</option>
               <option value="us-west-1">us-west-1 (N. California)</option>
               <option value="us-west-2">us-west-2 (Oregon)</option>
-              <option value="eu-west-1">eu-west-1 (Ireland)</option>
-              <option value="eu-west-2">eu-west-2 (London)</option>
-              <option value="eu-west-3">eu-west-3 (Paris)</option>
+              <option value="eu-west-1">{{ t('awsv.euWest1Ireland') }}</option>
+              <option value="eu-west-2">{{ t('awsv.euWest2London') }}</option>
+              <option value="eu-west-3">{{ t('awsv.euWest3Paris') }}</option>
               <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
-              <option value="eu-north-1">eu-north-1 (Stockholm)</option>
-              <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-              <option value="ap-southeast-2">ap-southeast-2 (Sydney)</option>
-              <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
-              <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+              <option value="eu-north-1">{{ t('awsv.euNorth1Stockholm') }}</option>
+              <option value="ap-southeast-1">{{ t('awsv.apSoutheast1Singapore') }}</option>
+              <option value="ap-southeast-2">{{ t('awsv.apSoutheast2Sydney') }}</option>
+              <option value="ap-northeast-1">{{ t('awsv.apNortheast1Tokyo') }}</option>
+              <option value="ap-northeast-2">{{ t('awsv.apNortheast2Seoul') }}</option>
               <option value="ap-south-1">ap-south-1 (Mumbai)</option>
               <option value="sa-east-1">sa-east-1 (São Paulo)</option>
-              <option value="ca-central-1">ca-central-1 (Canada)</option>
+              <option value="ca-central-1">{{ t('awsv.caCentral1Canada') }}</option>
             </select>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <input type="checkbox" id="s3BlockPublic" v-model="createS3Modal.blockPublicAccess" />
-            <label for="s3BlockPublic" style="font-size:12px;cursor:pointer">Block all public access <span style="color:var(--text-dim)">(recommended)</span></label>
+            <label for="s3BlockPublic" style="font-size:12px;cursor:pointer">{{ t('awsv.blockAllPublicAccess') }} <span style="color:var(--text-dim)">{{ t('awsv.recommended') }}</span></label>
           </div>
           <div v-if="createS3Modal.error" class="alert-error" style="margin:0">{{ createS3Modal.error }}</div>
           <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
-            <button class="btn sm" @click="createS3Modal.open = false">Cancel</button>
+            <button class="btn sm" @click="createS3Modal.open = false">{{ t('action.cancel') }}</button>
             <button class="btn sm" :disabled="createS3Modal.loading || !createS3Modal.name.trim()"
               style="background:rgba(80,200,120,.2);border-color:#50c878;color:#50c878"
-              @click="doCreateS3Bucket">{{ createS3Modal.loading ? 'Creating...' : 'Create Bucket' }}</button>
+              @click="doCreateS3Bucket">{{ createS3Modal.loading ? t('awsv.lit.creating') : t('awsv.lit.createBucket') }}</button>
           </div>
         </div>
       </div>
@@ -2056,17 +2056,17 @@
     <div v-if="ecrDeployModal.open" class="modal-overlay" @click.self="ecrDeployModal.open = false">
       <div class="modal" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Deploy to Kubernetes — {{ ecrDeployModal.repoName }}</span>
+          <span style="font-weight:600">{{ t('awsv.deployToKubernetes', { p0: ecrDeployModal.repoName }) }}</span>
           <button class="btn sm" @click="ecrDeployModal.open = false">✕</button>
         </div>
         <div style="padding:12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px">
           <!-- Image tag selector -->
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Image Tag</label>
-            <div v-if="ecrDeployModal.loadingImages" style="font-size:12px;color:var(--text-dim)">Loading images...</div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.imageTag') }}</label>
+            <div v-if="ecrDeployModal.loadingImages" style="font-size:12px;color:var(--text-dim)">{{ t('awsv.loadingImages') }}</div>
             <select v-else v-model="ecrDeployModal.selectedTag"
               style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:13px">
-              <option value="">-- select a tag --</option>
+              <option value="">{{ t('awsv.selectATag') }}</option>
               <optgroup v-for="img in ecrDeployModal.images" :key="img.digest" :label="img.digest.slice(7,19)">
                 <option v-for="tag in (img.tags.length ? img.tags : ['<untagged>'])" :key="tag" :value="tag === '<untagged>' ? img.digest : tag">
                   {{ tag }} {{ img.pushedAt ? `· ${formatDate(img.pushedAt)}` : '' }}
@@ -2077,32 +2077,32 @@
           <!-- Deployment params -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">App Name <span style="color:#f85149">*</span></label>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.appName') }} <span style="color:#f85149">*</span></label>
               <input v-model="ecrDeployModal.appName" type="text" placeholder="my-app"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Namespace</label>
-              <input v-model="ecrDeployModal.namespace" type="text" placeholder="default"
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('th.namespace') }}</label>
+              <input v-model="ecrDeployModal.namespace" type="text" :placeholder="t('gri.defaultValue')"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Replicas</label>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('th.replicas') }}</label>
               <input v-model.number="ecrDeployModal.replicas" type="number" min="1" max="20"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Container Port</label>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.containerPort') }}</label>
               <input v-model.number="ecrDeployModal.port" type="number" min="1" max="65535" placeholder="8080"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">K8s Context <span style="color:var(--text-dim)">(optional)</span></label>
-              <input v-model="ecrDeployModal.context" type="text" placeholder="use current context"
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.k8sContext') }} <span style="color:var(--text-dim)">{{ t('conn.optional') }}</span></label>
+              <input v-model="ecrDeployModal.context" type="text" :placeholder="t('awsv.useCurrentContext')"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
             <div>
-              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Image Pull Secret <span style="color:var(--text-dim)">(optional)</span></label>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Image Pull Secret <span style="color:var(--text-dim)">{{ t('conn.optional') }}</span></label>
               <input v-model="ecrDeployModal.pullSecret" type="text" placeholder="ecr-secret"
                 style="width:100%;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box" />
             </div>
@@ -2111,34 +2111,34 @@
           <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:6px">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text,#ccc);user-select:none">
               <input type="checkbox" v-model="ecrDeployModal.createService" style="cursor:pointer" />
-              También crear un <strong>Service</strong>
+              {{ t('awsv.alsoCreateA') }} <strong>{{ t('pf.service') }}</strong>
             </label>
             <template v-if="ecrDeployModal.createService">
-              <span style="font-size:12px;color:var(--text-dim)">Tipo:</span>
+              <span style="font-size:12px;color:var(--text-dim)">{{ t('awsv.type') }}</span>
               <select v-model="ecrDeployModal.serviceType"
                 style="background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:4px 8px;font-size:12px">
                 <option>ClusterIP</option>
                 <option>NodePort</option>
-                <option>LoadBalancer</option>
+                <option>{{ t('quick.loadBalancer') }}</option>
               </select>
-              <span v-if="!ecrDeployModal.port" style="font-size:11px;color:#f85149">⚠ Requiere un Container Port</span>
+              <span v-if="!ecrDeployModal.port" style="font-size:11px;color:#f85149">{{ t('awsv.requiresAContainerPort') }}</span>
             </template>
           </div>
           <!-- YAML Preview -->
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:12px;color:var(--text-dim)">Generated Manifest</label>
-              <button class="btn sm" @click="copyEcrManifest">Copy YAML</button>
+              <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.generatedManifest') }}</label>
+              <button class="btn sm" @click="copyEcrManifest">{{ t('awsv.copyYaml') }}</button>
             </div>
             <pre style="background:var(--bg-input,#161b22);border:1px solid var(--border,#444);border-radius:4px;padding:10px;font-size:11px;overflow:auto;max-height:220px;margin:0;white-space:pre;color:var(--text,#ccc)">{{ ecrDeployYaml }}</pre>
           </div>
           <!-- Apply result -->
           <div v-if="ecrDeployModal.applyResult" :class="ecrDeployModal.applyResult.success ? 'alert-success' : 'alert-error'" style="margin:0;white-space:pre-wrap;font-size:11px;font-family:monospace">{{ ecrDeployModal.applyResult.stdout || ecrDeployModal.applyResult.stderr }}</div>
           <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
-            <button class="btn sm" @click="ecrDeployModal.open = false">Close</button>
+            <button class="btn sm" @click="ecrDeployModal.open = false">{{ t('action.close') }}</button>
             <button class="btn sm" :disabled="!ecrDeployModal.appName || !ecrDeployModal.selectedTag || ecrDeployModal.applying"
               style="background:rgba(124,158,248,.2);border-color:#7c9ef8;color:#7c9ef8"
-              @click="doApplyEcrToK8s">{{ ecrDeployModal.applying ? 'Applying...' : 'Apply to K8s' }}</button>
+              @click="doApplyEcrToK8s">{{ ecrDeployModal.applying ? t('awsv.lit.applying') : t('awsv.lit.applyToK8s') }}</button>
           </div>
         </div>
       </div>
@@ -2157,9 +2157,9 @@
               <button :class="['btn','sm', configModal.view === 'yaml' ? 'active' : '']" @click="configModal.view = 'yaml'">YAML</button>
             </div>
             <button class="btn sm" @click="fetchFullConfig" :disabled="configModal.loading">
-              {{ configModal.fullLoaded ? 'Re-fetch' : 'Full Config' }}
+              {{ configModal.fullLoaded ? t('awsv.lit.refetch') : t('awsv.lit.fullConfig') }}
             </button>
-            <button class="btn sm" @click="copyConfig">Copy</button>
+            <button class="btn sm" @click="copyConfig">{{ t('action.copy') }}</button>
           </div>
         </div>
         <div v-if="configModal.error" class="alert-error" style="margin:0;flex-shrink:0">{{ configModal.error }}</div>
@@ -2175,17 +2175,17 @@
           </span>
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
             <select v-model="logsModal.minutes" class="ctrl-select" @change="reloadLogs" style="font-size:12px;padding:2px 6px">
-              <option :value="15">Last 15 min</option>
-              <option :value="60">Last 1 h</option>
-              <option :value="360">Last 6 h</option>
-              <option :value="1440">Last 24 h</option>
+              <option :value="15">{{ t('awsv.last15Min') }}</option>
+              <option :value="60">{{ t('awsv.last1H') }}</option>
+              <option :value="360">{{ t('awsLogs.history.6h') }}</option>
+              <option :value="1440">{{ t('awsLogs.history.24h') }}</option>
             </select>
-            <button class="btn sm" @click="reloadLogs">Refresh</button>
+            <button class="btn sm" @click="reloadLogs">{{ t('action.refresh') }}</button>
           </div>
         </div>
-        <div v-if="logsModal.loading" class="empty-row">Loading logs...</div>
+        <div v-if="logsModal.loading" class="empty-row">{{ t('awsv.loadingLogs') }}</div>
         <div v-else-if="logsModal.error" class="alert-error">{{ logsModal.error }}</div>
-        <div v-else-if="!logsModal.events.length" class="empty-row">No log events in selected range.</div>
+        <div v-else-if="!logsModal.events.length" class="empty-row">{{ t('awsv.noLogEventsInSelectedRange') }}</div>
         <div v-else class="logs-viewer">
           <div v-for="(ev, idx) in logsModal.events" :key="idx" class="log-line">
             <span class="log-ts">{{ formatTs(ev.timestamp) }}</span>
@@ -2200,7 +2200,7 @@
         <div class="modal-header" style="display:flex;justify-content:space-between">
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <label style="font-size:12px;color:var(--text-dim)">JSON Payload (optional)</label>
+          <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
           <textarea v-model="invokeModal.payload" rows="6"
             style="font-family:monospace;font-size:12px;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:8px;resize:vertical"
             placeholder="{}"></textarea>
@@ -2213,7 +2213,7 @@
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn" @click="submitInvoke" :disabled="invokeModal.loading">
             </button>
-            <button class="btn sm" @click="invokeModal.open = false">Cancel</button>
+            <button class="btn sm" @click="invokeModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -2224,19 +2224,19 @@
       <div class="modal" style="width:min(840px,96vw);max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
-            Logs &amp; Metrics &mdash; {{ ebLogsModal.ruleName }}
+            {{ t('awsv.logsMetrics', { p0: ebLogsModal.ruleName }) }}
           </span>
           <div style="display:flex;gap:6px;align-items:center">
             <select v-model.number="ebLogsModal.minutes" class="ctrl-select" style="font-size:12px" @change="reloadEbLogs">
-              <option :value="15">Last 15 min</option>
-              <option :value="60">Last 1 h</option>
-              <option :value="360">Last 6 h</option>
-              <option :value="1440">Last 24 h</option>
-              <option :value="4320">Last 3 d</option>
-              <option :value="10080">Last 7 d</option>
+              <option :value="15">{{ t('awsv.last15Min') }}</option>
+              <option :value="60">{{ t('awsv.last1H') }}</option>
+              <option :value="360">{{ t('awsLogs.history.6h') }}</option>
+              <option :value="1440">{{ t('awsLogs.history.24h') }}</option>
+              <option :value="4320">{{ t('awsv.last3D') }}</option>
+              <option :value="10080">{{ t('awsv.last7D') }}</option>
             </select>
-            <button class="btn sm" @click="reloadEbLogs" :disabled="ebLogsModal.loading">Refresh</button>
-            <button class="btn sm" @click="ebLogsModal.open = false">Close</button>
+            <button class="btn sm" @click="reloadEbLogs" :disabled="ebLogsModal.loading">{{ t('action.refresh') }}</button>
+            <button class="btn sm" @click="ebLogsModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;padding:14px">
@@ -2261,7 +2261,7 @@
           </span>
           <div style="display:flex;gap:6px;align-items:center">
             <span v-if="ebDetailsModal.state" :class="ebDetailsModal.state === 'ENABLED' ? 'status-ok' : 'status-err'" style="font-size:11px;font-weight:600">{{ ebDetailsModal.state }}</span>
-            <button class="btn sm" @click="ebDetailsModal.open = false">Close</button>
+            <button class="btn sm" @click="ebDetailsModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;padding:14px">
@@ -2280,15 +2280,15 @@
       <div class="modal" style="width:min(900px,96vw);height:min(680px,90vh);display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
-            Step Function Diagram &mdash; {{ diagramModal.name }}
+            {{ t('awsv.stepFunctionDiagram', { p0: diagramModal.name }) }}
           </span>
           <div style="display:flex;gap:6px;align-items:center">
             <span v-if="diagramModal.type" class="tag-chip" style="font-size:11px;padding:2px 8px">{{ diagramModal.type }}</span>
-            <button class="btn sm" @click="diagramModal.open = false">Close</button>
+            <button class="btn sm" @click="diagramModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
         <div style="flex:1;min-height:0;padding:10px;display:flex;flex-direction:column">
-          <div v-if="diagramModal.loading" class="empty-row">Loading definition...</div>
+          <div v-if="diagramModal.loading" class="empty-row">{{ t('awsv.loadingDefinition') }}</div>
           <div v-else-if="diagramModal.error" class="alert-error">{{ diagramModal.error }}</div>
           <StepFnDiagram v-else :definition="diagramModal.definition" style="flex:1;min-height:0" />
         </div>
@@ -2310,7 +2310,7 @@
         <span class="remote-session-dot"></span>
         <span class="remote-session-kind">{{ session.type.toUpperCase() }}</span>
         <span class="remote-session-name">{{ session.instance?.name || session.instance?.id }}</span>
-        <button class="remote-session-close" title="Cerrar conexion" @click.stop="removeRemoteSession(session.id)">x</button>
+        <button class="remote-session-close" :title="t('awsv.closeConnection')" @click.stop="removeRemoteSession(session.id)">x</button>
       </div>
     </div>
 
@@ -2362,13 +2362,13 @@
       <div class="modal" style="width:620px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">Tags — {{ tagsModal.title }}</span>
-          <button class="btn sm" @click="tagsModal.open = false">Close</button>
+          <button class="btn sm" @click="tagsModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <div v-if="tagsModal.loading" class="empty-row">Loading...</div>
+          <div v-if="tagsModal.loading" class="empty-row">{{ t('state.loading') }}</div>
           <div v-else>
             <table class="cloud-table" style="margin-bottom:8px">
-              <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
+              <thead><tr><th>{{ t('vercel.col.key') }}</th><th>{{ t('vercel.col.value') }}</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="(tag, idx) in tagsModal.tags" :key="idx">
                   <td><input v-model="tag.Key" class="ctrl-input" style="width:100%;font-size:12px" /></td>
@@ -2379,12 +2379,12 @@
                 </tr>
               </tbody>
             </table>
-            <button class="btn sm" @click="addTagRow">+ Add tag</button>
+            <button class="btn sm" @click="addTagRow">{{ t('awsv.addTag') }}</button>
           </div>
           <div v-if="tagsModal.error" class="alert-error">{{ tagsModal.error }}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn" @click="saveTags" :disabled="tagsModal.saving">Save tags</button>
-            <button class="btn sm" @click="tagsModal.open = false">Cancel</button>
+            <button class="btn" @click="saveTags" :disabled="tagsModal.saving">{{ t('awsv.saveTags') }}</button>
+            <button class="btn sm" @click="tagsModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -2394,15 +2394,15 @@
     <div v-if="loggingModal.open" class="modal-overlay" @click.self="loggingModal.open = false">
       <div class="modal" style="width:500px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Enable CloudWatch Logs — {{ loggingModal.title }}</span>
-          <button class="btn sm" @click="loggingModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.enableCloudwatchLogs', { p0: loggingModal.title }) }}</span>
+          <button class="btn sm" @click="loggingModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:12px">
           <div v-if="loggingModal.service === 'lambda'" style="display:flex;flex-direction:column;gap:8px">
-            <label style="font-size:12px;color:var(--text-dim)">Log Format</label>
+            <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.logFormat') }}</label>
             <div class="btn-toggle-group">
               <button :class="['btn','sm', loggingModal.logFormat === 'Text' ? 'active' : '']"
-                @click="loggingModal.logFormat = 'Text'">Text</button>
+                @click="loggingModal.logFormat = 'Text'">{{ t('awsDashboards.typeText') }}</button>
               <button :class="['btn','sm', loggingModal.logFormat === 'JSON' ? 'active' : '']"
                 @click="loggingModal.logFormat = 'JSON'">JSON</button>
             </div>
@@ -2411,34 +2411,34 @@
             </div>
           </div>
           <div v-if="loggingModal.service === 'ecs'" style="display:flex;flex-direction:column;gap:8px">
-            <label style="font-size:12px;color:var(--text-dim)">Log Prefix (container stream prefix)</label>
+            <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.logPrefixContainerStreamPrefix') }}</label>
             <input v-model="loggingModal.logPrefix" class="ctrl-input" style="font-size:12px" />
             <div class="text-dim mono-xs">Log group: /ecs/{{ loggingModal.cluster }}/{{ loggingModal.logPrefix }}</div>
             <div class="alert-error" style="font-size:11px;margin:0">
-              This will register a new task definition revision with <strong>awslogs</strong> driver and update the service.
+              {{ t('awsv.thisWillRegisterANewTask') }} <strong>awslogs</strong> {{ t('awsv.driverAndUpdateTheService') }}
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="font-size:12px;color:var(--text-dim)">Log retention (days)</label>
+            <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.logRetentionDays') }}</label>
             <select v-model.number="loggingModal.retentionDays" class="ctrl-select" style="font-size:12px">
-              <option :value="7">7 days</option>
-              <option :value="14">14 days</option>
-              <option :value="30">30 days</option>
-              <option :value="60">60 days</option>
-              <option :value="90">90 days</option>
-              <option :value="180">180 days</option>
-              <option :value="365">1 year</option>
+              <option :value="7">{{ t('awsv.7Days') }}</option>
+              <option :value="14">{{ t('awsv.14Days') }}</option>
+              <option :value="30">{{ t('awsv.30Days') }}</option>
+              <option :value="60">{{ t('awsv.60Days') }}</option>
+              <option :value="90">{{ t('awsv.90Days') }}</option>
+              <option :value="180">{{ t('awsv.180Days') }}</option>
+              <option :value="365">{{ t('awsv.1Year') }}</option>
             </select>
           </div>
           <div v-if="loggingModal.error" class="alert-error">{{ loggingModal.error }}</div>
           <div v-if="loggingModal.result" class="alert-success">
-            Logging enabled! Log group: <span class="mono-xs">{{ loggingModal.result.logGroup }}</span>
+            {{ t('awsv.loggingEnabledLogGroup') }} <span class="mono-xs">{{ loggingModal.result.logGroup }}</span>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn" @click="submitLogging" :disabled="loggingModal.loading">
-              {{ loggingModal.loading ? 'Enabling...' : 'Enable Logging' }}
+              {{ loggingModal.loading ? t('awsv.lit.enabling') : t('awsv.lit.enableLogging') }}
             </button>
-            <button class="btn sm" @click="loggingModal.open = false">Cancel</button>
+            <button class="btn sm" @click="loggingModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -2448,13 +2448,13 @@
     <div v-if="glueRunsModal.open" class="modal-overlay" @click.self="glueRunsModal.open = false">
       <div class="modal" style="width:720px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Recent Runs — {{ glueRunsModal.job?.name }}</span>
-          <button class="btn sm" @click="glueRunsModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.recentRuns', { p0: glueRunsModal.job?.name }) }}</span>
+          <button class="btn sm" @click="glueRunsModal.open = false">{{ t('action.close') }}</button>
         </div>
-        <div v-if="glueRunsModal.loading" class="empty-row">Loading...</div>
-        <div v-else-if="!glueRunsModal.runs.length" class="empty-row">No recent runs found.</div>
+        <div v-if="glueRunsModal.loading" class="empty-row">{{ t('state.loading') }}</div>
+        <div v-else-if="!glueRunsModal.runs.length" class="empty-row">{{ t('awsv.noRecentRunsFound') }}</div>
         <table v-else class="cloud-table" style="overflow:auto;flex:1">
-          <thead><tr><th>Run ID</th><th>Status</th><th>Started</th><th>Completed</th><th>Duration (s)</th><th>Error</th></tr></thead>
+          <thead><tr><th>Run ID</th><th>{{ t('th.status') }}</th><th>{{ t('awsv.started') }}</th><th>{{ t('vercel.col.completedAt') }}</th><th>{{ t('awsv.durationS') }}</th><th>{{ t('awsLogs.sync_error') }}</th></tr></thead>
           <tbody>
             <tr v-for="r in glueRunsModal.runs" :key="r.id">
               <td class="mono-xs">{{ r.id }}</td>
@@ -2473,20 +2473,20 @@
     <div v-if="invalidateModal.open" class="modal-overlay" @click.self="invalidateModal.open = false">
       <div class="modal" style="width:500px;max-width:96vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Create Invalidation — {{ invalidateModal.dist?.domainName }}</span>
-          <button class="btn sm" @click="invalidateModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.createInvalidation', { p0: invalidateModal.dist?.domainName }) }}</span>
+          <button class="btn sm" @click="invalidateModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <label style="font-size:12px;color:var(--text-dim)">Paths to invalidate (one per line)</label>
+          <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.pathsToInvalidateOnePerLine') }}</label>
           <textarea v-model="invalidateModal.paths" rows="4" class="ctrl-input"
             style="font-family:monospace;font-size:12px" placeholder="/*" />
           <div v-if="invalidateModal.error" class="alert-error">{{ invalidateModal.error }}</div>
           <div v-if="invalidateModal.result" class="alert-success">{{ invalidateModal.result }}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn" @click="submitInvalidation" :disabled="invalidateModal.loading">
-              {{ invalidateModal.loading ? 'Creating...' : 'Invalidate' }}
+              {{ invalidateModal.loading ? t('awsv.lit.creating') : t('awsv.invalidate') }}
             </button>
-            <button class="btn sm" @click="invalidateModal.open = false">Cancel</button>
+            <button class="btn sm" @click="invalidateModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -2496,19 +2496,19 @@
     <div v-if="cfStatsModal.open" class="modal-overlay" @click.self="cfStatsModal.open = false">
       <div class="modal" style="width:min(740px,96vw);max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-          <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">CloudFront Stats — {{ cfStatsModal.domainName }}</span>
-          <button class="btn sm" @click="cfStatsModal.open = false">Close</button>
+          <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">{{ t('awsv.cloudfrontStats', { p0: cfStatsModal.domainName }) }}</span>
+          <button class="btn sm" @click="cfStatsModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="flex:1;min-height:0;overflow-y:auto;padding:14px">
-          <div v-if="cfStatsModal.loading" class="empty-row">Loading stats from CloudWatch...</div>
+          <div v-if="cfStatsModal.loading" class="empty-row">{{ t('awsv.loadingStatsFromCloudwatch') }}</div>
           <div v-else-if="cfStatsModal.error" class="alert-error">{{ cfStatsModal.error }}</div>
           <div v-else-if="cfStatsModal.data" style="display:flex;flex-direction:column;gap:16px">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">Requests (last 7 days)</div>
-                <div v-if="!cfStatsModal.data.requests.length" class="text-dim" style="font-size:12px;padding:8px">No data</div>
+                <div class="config-title">{{ t('awsv.requestsLast7Days') }}</div>
+                <div v-if="!cfStatsModal.data.requests.length" class="text-dim" style="font-size:12px;padding:8px">{{ t('state.empty') }}</div>
                 <table v-else class="cloud-table">
-                  <thead><tr><th>Date</th><th>Requests</th></tr></thead>
+                  <thead><tr><th>{{ t('awsv.date') }}</th><th>{{ t('awsInsights.requests') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="pt in cfStatsModal.data.requests" :key="pt.date">
                       <td class="text-dim mono-xs">{{ formatDate(pt.date) }}</td>
@@ -2518,10 +2518,10 @@
                 </table>
               </div>
               <div class="config-section">
-                <div class="config-title">Bytes Downloaded (last 7 days)</div>
-                <div v-if="!cfStatsModal.data.bytesDownloaded.length" class="text-dim" style="font-size:12px;padding:8px">No data</div>
+                <div class="config-title">{{ t('awsv.bytesDownloadedLast7Days') }}</div>
+                <div v-if="!cfStatsModal.data.bytesDownloaded.length" class="text-dim" style="font-size:12px;padding:8px">{{ t('state.empty') }}</div>
                 <table v-else class="cloud-table">
-                  <thead><tr><th>Date</th><th>Bytes</th></tr></thead>
+                  <thead><tr><th>{{ t('awsv.date') }}</th><th>Bytes</th></tr></thead>
                   <tbody>
                     <tr v-for="pt in cfStatsModal.data.bytesDownloaded" :key="pt.date">
                       <td class="text-dim mono-xs">{{ formatDate(pt.date) }}</td>
@@ -2533,10 +2533,10 @@
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">4xx Error Rate (%)</div>
-                <div v-if="!cfStatsModal.data.errorRate4xx.length" class="text-dim" style="font-size:12px;padding:8px">No data</div>
+                <div class="config-title">{{ t('awsv.4xxErrorRate') }}</div>
+                <div v-if="!cfStatsModal.data.errorRate4xx.length" class="text-dim" style="font-size:12px;padding:8px">{{ t('state.empty') }}</div>
                 <table v-else class="cloud-table">
-                  <thead><tr><th>Date</th><th>Rate</th></tr></thead>
+                  <thead><tr><th>{{ t('awsv.date') }}</th><th>{{ t('awsv.rate') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="pt in cfStatsModal.data.errorRate4xx" :key="pt.date">
                       <td class="text-dim mono-xs">{{ formatDate(pt.date) }}</td>
@@ -2546,10 +2546,10 @@
                 </table>
               </div>
               <div class="config-section">
-                <div class="config-title">5xx Error Rate (%)</div>
-                <div v-if="!cfStatsModal.data.errorRate5xx.length" class="text-dim" style="font-size:12px;padding:8px">No data</div>
+                <div class="config-title">{{ t('awsv.5xxErrorRate') }}</div>
+                <div v-if="!cfStatsModal.data.errorRate5xx.length" class="text-dim" style="font-size:12px;padding:8px">{{ t('state.empty') }}</div>
                 <table v-else class="cloud-table">
-                  <thead><tr><th>Date</th><th>Rate</th></tr></thead>
+                  <thead><tr><th>{{ t('awsv.date') }}</th><th>{{ t('awsv.rate') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="pt in cfStatsModal.data.errorRate5xx" :key="pt.date">
                       <td class="text-dim mono-xs">{{ formatDate(pt.date) }}</td>
@@ -2560,7 +2560,7 @@
               </div>
             </div>
           </div>
-          <div v-else class="text-dim" style="padding:16px">No stats available.</div>
+          <div v-else class="text-dim" style="padding:16px">{{ t('awsv.noStatsAvailable') }}</div>
         </div>
       </div>
     </div>
@@ -2569,47 +2569,47 @@
     <div v-if="cfCreateModal.open" class="modal-overlay" @click.self="cfCreateModal.open = false">
       <div class="modal" style="width:540px;max-width:96vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">Create CloudFront Distribution from S3</span>
-          <button class="btn sm" @click="cfCreateModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.createCloudfrontDistributionFromS3') }}</span>
+          <button class="btn sm" @click="cfCreateModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">S3 Bucket</label>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.s3Bucket') }}</label>
             <select v-model="cfCreateModal.bucketName" class="ctrl-select" style="width:100%">
-              <option value="">— select bucket —</option>
+              <option value="">{{ t('awsv.selectBucket') }}</option>
               <option v-for="b in awsStore.s3Buckets" :key="b.name" :value="b.name">{{ b.name }} ({{ b.region }})</option>
             </select>
           </div>
           <div v-if="cfCreateModal.bucketName">
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Bucket Region</label>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.bucketRegion') }}</label>
             <input v-model="cfCreateModal.region" class="ctrl-input" style="width:100%" placeholder="us-east-1" />
           </div>
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Comment (optional)</label>
-            <input v-model="cfCreateModal.comment" class="ctrl-input" style="width:100%" placeholder="My distribution" />
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.commentOptional') }}</label>
+            <input v-model="cfCreateModal.comment" class="ctrl-input" style="width:100%" :placeholder="t('awsv.myDistribution')" />
           </div>
           <div>
             <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Price Class</label>
             <select v-model="cfCreateModal.priceClass" class="ctrl-select" style="width:100%">
               <option value="PriceClass_100">PriceClass_100 (US, CA, EU)</option>
-              <option value="PriceClass_200">PriceClass_200 (+ Asia, Africa, ME)</option>
-              <option value="PriceClass_All">PriceClass_All (All edge locations)</option>
+              <option value="PriceClass_200">{{ t('awsv.priceclass200AsiaAfricaMe') }}</option>
+              <option value="PriceClass_All">{{ t('awsv.priceclassAllAllEdgeLocations') }}</option>
             </select>
           </div>
           <div>
-            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Custom Aliases (one per line, optional)</label>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.customAliasesOnePerLineOptional') }}</label>
             <textarea v-model="cfCreateModal.aliases" rows="3" class="ctrl-input"
               style="font-family:monospace;font-size:12px;width:100%" placeholder="www.example.com" />
           </div>
           <div v-if="cfCreateModal.error" class="alert-error">{{ cfCreateModal.error }}</div>
           <div v-if="cfCreateModal.result" class="alert-success">
-            Created! Domain: <span class="mono-xs">{{ cfCreateModal.result.domainName }}</span>
+            {{ t('awsv.createdDomain') }} <span class="mono-xs">{{ cfCreateModal.result.domainName }}</span>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn" @click="submitCfCreate" :disabled="cfCreateModal.loading || !cfCreateModal.bucketName">
-              {{ cfCreateModal.loading ? 'Creating...' : 'Create Distribution' }}
+              {{ cfCreateModal.loading ? t('awsv.lit.creating') : t('awsv.lit.createDistribution') }}
             </button>
-            <button class="btn sm" @click="cfCreateModal.open = false">Cancel</button>
+            <button class="btn sm" @click="cfCreateModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -2623,29 +2623,29 @@
             <div style="font-weight:600;font-size:14px">{{ secretConfigModal.secret?.name?.split('/').pop() }}</div>
             <div class="text-dim mono-xs" style="font-size:10px">{{ secretConfigModal.secret?.name }}</div>
           </div>
-          <button class="btn sm" @click="secretConfigModal.open = false">Cerrar</button>
+          <button class="btn sm" @click="secretConfigModal.open = false">{{ t('action.close') }}</button>
         </div>
-        <div v-if="secretConfigModal.loading" class="empty-row">Loading...</div>
+        <div v-if="secretConfigModal.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="secretConfigModal.error" class="alert-error">{{ secretConfigModal.error }}</div>
         <div v-else-if="secretConfigModal.data" style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div class="config-section">
-              <div class="config-title">General</div>
-              <div class="config-row"><span>Rotation</span>
-                <span :class="secretConfigModal.data.rotationEnabled ? 'status-ok' : 'text-dim'">{{ secretConfigModal.data.rotationEnabled ? 'Habilitada' : 'Off' }}</span>
+              <div class="config-title">{{ t('observability.general') }}</div>
+              <div class="config-row"><span>{{ t('awsv.rotation') }}</span>
+                <span :class="secretConfigModal.data.rotationEnabled ? 'status-ok' : 'text-dim'">{{ secretConfigModal.data.rotationEnabled ? t('res.enabled') : t('awsv.lit.off') }}</span>
               </div>
-              <div class="config-row"><span>KMS Key</span><span class="mono-xs text-dim" style="font-size:10px;word-break:break-all">{{ secretConfigModal.data.kmsKeyId || 'Default (aws/secretsmanager)' }}</span></div>
-              <div class="config-row"><span>Última rotación</span><span class="text-dim">{{ secretConfigModal.data.lastRotatedDate ? formatDate(secretConfigModal.data.lastRotatedDate) : '-' }}</span></div>
-              <div class="config-row"><span>Último cambio</span><span class="text-dim">{{ secretConfigModal.data.lastChangedDate ? formatDate(secretConfigModal.data.lastChangedDate) : '-' }}</span></div>
+              <div class="config-row"><span>KMS Key</span><span class="mono-xs text-dim" style="font-size:10px;word-break:break-all">{{ secretConfigModal.data.kmsKeyId || t('awsv.lit.defaultSecretsKey') }}</span></div>
+              <div class="config-row"><span>{{ t('awsv.lastRotation') }}</span><span class="text-dim">{{ secretConfigModal.data.lastRotatedDate ? formatDate(secretConfigModal.data.lastRotatedDate) : '-' }}</span></div>
+              <div class="config-row"><span>{{ t('awsv.lastChange') }}</span><span class="text-dim">{{ secretConfigModal.data.lastChangedDate ? formatDate(secretConfigModal.data.lastChangedDate) : '-' }}</span></div>
             </div>
             <div class="config-section">
-              <div class="config-title">Versiones ({{ (secretConfigModal.data.versionIds || []).length }})</div>
+              <div class="config-title">{{ t('awsv.versions', { p0: (secretConfigModal.data.versionIds || []).length }) }}</div>
               <div v-for="v in (secretConfigModal.data.versionIds || []).slice(0, 8)" :key="v"
                 class="mono-xs text-dim" style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">{{ v }}</div>
             </div>
           </div>
           <div v-if="secretConfigModal.data.rotationLambdaArn" class="config-section">
-            <div class="config-title">Lambda de Rotación</div>
+            <div class="config-title">{{ t('awsv.rotationLambda') }}</div>
             <div class="config-row"><span>ARN</span><span class="mono-xs text-dim" style="font-size:10px;word-break:break-all">{{ secretConfigModal.data.rotationLambdaArn }}</span></div>
           </div>
           <div v-if="secretConfigModal.data.tags?.length" class="config-section">
@@ -2658,10 +2658,10 @@
             </div>
           </div>
           <div class="config-section">
-            <div class="config-title">ARN completo</div>
+            <div class="config-title">{{ t('awsv.fullArn') }}</div>
             <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
               <span class="mono-xs text-dim" style="font-size:10px;word-break:break-all;flex:1">{{ secretConfigModal.data.arn }}</span>
-              <button class="btn sm" @click="copyText(secretConfigModal.data.arn)">Copy</button>
+              <button class="btn sm" @click="copyText(secretConfigModal.data.arn)">{{ t('action.copy') }}</button>
             </div>
           </div>
         </div>
@@ -2673,10 +2673,10 @@
       <div class="modal-box" style="width:780px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
-            <div style="font-weight:600;font-size:14px">Ejemplos de Integración</div>
+            <div style="font-weight:600;font-size:14px">{{ t('awsv.integrationExamples') }}</div>
             <div class="text-dim" style="font-size:11px">{{ secretIntegrationModal.secret?.name }}</div>
           </div>
-          <button class="btn sm" @click="secretIntegrationModal.open = false">Cerrar</button>
+          <button class="btn sm" @click="secretIntegrationModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
           <!-- Tabs -->
@@ -2690,19 +2690,19 @@
 
           <!-- Python boto3 -->
           <template v-if="secretIntegrationModal.tab === 'boto3'">
-            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">Recuperar el secreto en Python:</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">{{ t('awsv.getTheSecretInPython') }}</div>
             <div style="position:relative">
               <pre class="code-block" style="font-size:11px">{{ secretIntegrationModal.examples.boto3 }}</pre>
-              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.boto3)">Copy</button>
+              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.boto3)">{{ t('action.copy') }}</button>
             </div>
           </template>
 
           <!-- Node.js -->
           <template v-if="secretIntegrationModal.tab === 'nodejs'">
-            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">AWS SDK v3 para Node.js:</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">{{ t('awsv.awsSdkV3ForNodeJs') }}</div>
             <div style="position:relative">
               <pre class="code-block" style="font-size:11px">{{ secretIntegrationModal.examples.nodejs }}</pre>
-              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.nodejs)">Copy</button>
+              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.nodejs)">{{ t('action.copy') }}</button>
             </div>
           </template>
 
@@ -2711,23 +2711,23 @@
             <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">AWS CLI:</div>
             <div style="position:relative">
               <pre class="code-block" style="font-size:11px">{{ secretIntegrationModal.examples.cli }}</pre>
-              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.cli)">Copy</button>
+              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.cli)">{{ t('action.copy') }}</button>
             </div>
           </template>
 
           <!-- .env / Docker -->
           <template v-if="secretIntegrationModal.tab === 'env'">
-            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">Inyectar como variables de entorno (Docker / ECS task definition):</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:-6px">{{ t('awsv.injectAsEnvironmentVariablesDockerEcs') }}</div>
             <div style="position:relative">
               <pre class="code-block" style="font-size:11px">{{ secretIntegrationModal.examples.env }}</pre>
-              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.env)">Copy</button>
+              <button class="btn sm" style="position:absolute;top:6px;right:6px" @click="copyText(secretIntegrationModal.examples.env)">{{ t('action.copy') }}</button>
             </div>
           </template>
 
           <!-- Nota de IAM -->
           <div style="border-left:3px solid var(--accent);padding:8px 12px;background:rgba(124,158,248,.07);border-radius:0 4px 4px 0;font-size:11px;color:var(--text-dim)">
-            <div style="font-weight:600;margin-bottom:4px;color:var(--text)">Permisos IAM necesarios</div>
-            <div>La entidad que acceda debe tener: <code style="color:var(--accent)">secretsmanager:GetSecretValue</code> sobre el ARN del secreto.</div>
+            <div style="font-weight:600;margin-bottom:4px;color:var(--text)">{{ t('awsv.requiredIamPermissions') }}</div>
+            <div>{{ t('awsv.theAccessingIdentityNeeds') }} <code style="color:var(--accent)">secretsmanager:GetSecretValue</code> {{ t('awsv.onTheSecretArn') }}</div>
             <div style="margin-top:4px;font-size:10px;word-break:break-all">ARN: {{ secretIntegrationModal.secret?.arn }}</div>
           </div>
         </div>
@@ -2739,29 +2739,29 @@
       <div class="modal-box" style="width:600px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
-            <div style="font-weight:600;font-size:13px">Import to Env Manager</div>
+            <div style="font-weight:600;font-size:13px">{{ t('awsv.importToEnvManager') }}</div>
             <div class="text-dim" style="font-size:11px">{{ importSecretModal.secret?.name }}</div>
           </div>
-          <button class="btn sm" @click="importSecretModal.open = false">Cerrar</button>
+          <button class="btn sm" @click="importSecretModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px">
 
           <!-- Step 1: destino -->
           <div class="config-section" style="margin:0">
-            <div class="config-title">Destino en Env Manager</div>
+            <div class="config-title">{{ t('awsv.envManagerDestination') }}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px">
-              <button :class="['btn','sm', importSecretModal.mode === 'new' ? 'active' : '']" @click="importSecretModal.mode = 'new'">Nuevo perfil</button>
-              <button :class="['btn','sm', importSecretModal.mode === 'existing' ? 'active' : '']" @click="importSecretModal.mode = 'existing'">Perfil existente</button>
+              <button :class="['btn','sm', importSecretModal.mode === 'new' ? 'active' : '']" @click="importSecretModal.mode = 'new'">{{ t('awsv.newProfile') }}</button>
+              <button :class="['btn','sm', importSecretModal.mode === 'existing' ? 'active' : '']" @click="importSecretModal.mode = 'existing'">{{ t('awsv.existingProfile') }}</button>
             </div>
             <div v-if="importSecretModal.mode === 'new'">
-              <label class="field-label">Nombre del perfil
-                <input v-model="importSecretModal.profileName" class="ctrl-input" placeholder="Mi perfil" />
+              <label class="field-label">{{ t('awsv.profileName') }}
+                <input v-model="importSecretModal.profileName" class="ctrl-input" :placeholder="t('awsv.myProfile')" />
               </label>
             </div>
             <div v-else>
-              <label class="field-label">Perfil destino
+              <label class="field-label">{{ t('awsv.targetProfile') }}
                 <select v-model="importSecretModal.targetProfileId" class="ctrl-input ctrl-select">
-                  <option value="">-- seleccionar perfil --</option>
+                  <option value="">{{ t('awsv.selectAProfile') }}</option>
                   <option v-for="p in envProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
               </label>
@@ -2771,15 +2771,15 @@
           <!-- Step 2: selección de variables -->
           <div class="config-section" style="margin:0">
             <div class="config-title" style="display:flex;align-items:center;justify-content:space-between">
-              <span>Variables del secreto</span>
+              <span>{{ t('awsv.secretVariables') }}</span>
               <div style="display:flex;gap:4px">
-                <button class="btn sm" @click="importSecretModal.selectedKeys = [...(importSecretModal.previewKeys || [])]" style="font-size:10px">Seleccionar todas</button>
-                <button class="btn sm" @click="importSecretModal.selectedKeys = []" style="font-size:10px">Ninguna</button>
+                <button class="btn sm" @click="importSecretModal.selectedKeys = [...(importSecretModal.previewKeys || [])]" style="font-size:10px">{{ t('awsv.selectAll2') }}</button>
+                <button class="btn sm" @click="importSecretModal.selectedKeys = []" style="font-size:10px">{{ t('awsv.none') }}</button>
               </div>
             </div>
-            <div v-if="importSecretModal.loadingKeys" class="empty-row" style="border:none;border-radius:0">Cargando variables...</div>
+            <div v-if="importSecretModal.loadingKeys" class="empty-row" style="border:none;border-radius:0">{{ t('awsv.loadingVariables') }}</div>
             <div v-else-if="importSecretModal.keysError" class="alert-error" style="margin-top:6px">{{ importSecretModal.keysError }}</div>
-            <div v-else-if="!(importSecretModal.previewKeys || []).length" class="text-dim" style="font-size:12px;padding:6px 0">No se encontraron variables en este secreto.</div>
+            <div v-else-if="!(importSecretModal.previewKeys || []).length" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.noVariablesFoundInThisSecret') }}</div>
             <div v-else style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
               <div v-for="k in importSecretModal.previewKeys" :key="k.original"
                 :style="{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '5px', border: '1px solid var(--border)', background: importSecretModal.selectedKeys.some(s => s.original === k.original) ? 'rgba(124,158,248,.08)' : 'transparent', cursor: 'pointer' }"
@@ -2798,11 +2798,11 @@
           <div v-if="importSecretModal.result" style="color:#a6e3a1;font-size:12px;padding:8px;border-radius:4px;background:rgba(166,227,161,.1)">{{ importSecretModal.result }}</div>
 
           <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px">
-            <button class="btn sm" @click="importSecretModal.open = false">Cancelar</button>
+            <button class="btn sm" @click="importSecretModal.open = false">{{ t('action.cancel') }}</button>
             <button class="btn sm"
               :disabled="importSecretModal.loading || !importSecretModal.selectedKeys.length"
               @click="() => submitImportSecret()">
-              {{ importSecretModal.loading ? 'Importando...' : `Importar ${importSecretModal.selectedKeys.length} variable(s)` }}
+              {{ importSecretModal.loading ? t('awsv.lit.importing') : `Importar ${importSecretModal.selectedKeys.length} variable(s)` }}
             </button>
           </div>
         </div>
@@ -2815,62 +2815,62 @@
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">Athena Workgroup — {{ athenaWgInfo.wg?.name }}</span>
           <div style="display:flex;gap:6px">
-            <button class="btn sm" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e" @click="athenaWgInfo.open=false; openAthenaWgQuery(athenaWgInfo.wg)">▶ Query</button>
-            <button class="btn sm" @click="athenaWgInfo.open = false">Close</button>
+            <button class="btn sm" style="background:rgba(34,197,94,.2);border-color:#22c55e;color:#22c55e" @click="athenaWgInfo.open=false; openAthenaWgQuery(athenaWgInfo.wg)">{{ t('awsLogs.q.modeQuery') }}</button>
+            <button class="btn sm" @click="athenaWgInfo.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
-        <div v-if="athenaWgInfo.loading" class="empty-row">Loading...</div>
+        <div v-if="athenaWgInfo.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="athenaWgInfo.error" class="alert-error">{{ athenaWgInfo.error }}</div>
         <div v-else-if="athenaWgInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
           <!-- Status & engine -->
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
             <div class="config-section">
-              <div class="config-title">Estado</div>
+              <div class="config-title">{{ t('res.state') }}</div>
               <span :class="athenaWgInfo.data.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ athenaWgInfo.data.state }}</span>
             </div>
             <div class="config-section">
-              <div class="config-title">Engine Version</div>
+              <div class="config-title">{{ t('awsv.engineVersion') }}</div>
               <span class="text-dim">{{ athenaWgInfo.data.effectiveEngineVersion || athenaWgInfo.data.selectedEngineVersion || '—' }}</span>
             </div>
             <div class="config-section">
-              <div class="config-title">Creado</div>
+              <div class="config-title">{{ t('res.created') }}</div>
               <span class="text-dim" style="font-size:11px">{{ athenaWgInfo.data.creationTime ? formatDate(athenaWgInfo.data.creationTime) : '—' }}</span>
             </div>
           </div>
           <!-- Stats -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="config-section">
-              <div class="config-title">Estadísticas de Uso</div>
-              <div class="config-row"><span>Total Queries</span><span class="mono-xs">{{ (athenaWgInfo.data.totalQueryCount || 0).toLocaleString() }}</span></div>
-              <div class="config-row"><span>Total Bytes Escaneados</span><span class="mono-xs">{{ athenaWgInfo.data.totalBytesScanned ? formatBytes(athenaWgInfo.data.totalBytesScanned) : '—' }}</span></div>
+              <div class="config-title">{{ t('awsv.usageStatistics') }}</div>
+              <div class="config-row"><span>{{ t('awsv.totalQueries') }}</span><span class="mono-xs">{{ (athenaWgInfo.data.totalQueryCount || 0).toLocaleString() }}</span></div>
+              <div class="config-row"><span>{{ t('awsv.totalBytesScanned') }}</span><span class="mono-xs">{{ athenaWgInfo.data.totalBytesScanned ? formatBytes(athenaWgInfo.data.totalBytesScanned) : '—' }}</span></div>
             </div>
             <div class="config-section">
-              <div class="config-title">Límites</div>
-              <div class="config-row"><span>Bytes Scanned Cutoff</span><span class="mono-xs">{{ athenaWgInfo.data.bytesScannedCutoff ? formatBytes(athenaWgInfo.data.bytesScannedCutoff) : 'Sin límite' }}</span></div>
-              <div class="config-row"><span>Requester Pays</span><span :class="athenaWgInfo.data.requesterPays ? 'status-warn' : 'text-dim'">{{ athenaWgInfo.data.requesterPays ? 'Sí' : 'No' }}</span></div>
+              <div class="config-title">{{ t('awsv.limits') }}</div>
+              <div class="config-row"><span>{{ t('awsv.bytesScannedCutoff') }}</span><span class="mono-xs">{{ athenaWgInfo.data.bytesScannedCutoff ? formatBytes(athenaWgInfo.data.bytesScannedCutoff) : t('lmd.unlimited') }}</span></div>
+              <div class="config-row"><span>Requester Pays</span><span :class="athenaWgInfo.data.requesterPays ? 'status-warn' : 'text-dim'">{{ athenaWgInfo.data.requesterPays ? t('common.yes') : t('common.no') }}</span></div>
             </div>
           </div>
           <!-- Output / Encryption -->
           <div class="config-section">
-            <div class="config-title">Resultados & Cifrado</div>
-            <div class="config-row"><span>Output Location (S3)</span><span class="mono-xs" style="font-size:11px;word-break:break-all">{{ athenaWgInfo.data.outputLocation || '—' }}</span></div>
-            <div class="config-row"><span>Encryption</span><span class="mono-xs">{{ athenaWgInfo.data.encryptionOption || 'SSE_S3 (default)' }}</span></div>
+            <div class="config-title">{{ t('awsv.resultsEncryption') }}</div>
+            <div class="config-row"><span>{{ t('awsv.outputLocationS3') }}</span><span class="mono-xs" style="font-size:11px;word-break:break-all">{{ athenaWgInfo.data.outputLocation || '—' }}</span></div>
+            <div class="config-row"><span>{{ t('sqs.encryption') }}</span><span class="mono-xs">{{ athenaWgInfo.data.encryptionOption || t('awsv.lit.sseS3Default') }}</span></div>
             <div v-if="athenaWgInfo.data.kmsKey" class="config-row"><span>KMS Key</span><span class="mono-xs" style="font-size:10px;word-break:break-all">{{ athenaWgInfo.data.kmsKey }}</span></div>
           </div>
           <!-- Policies -->
           <div class="config-section">
-            <div class="config-title">Políticas</div>
-            <div class="config-row"><span>Enforce Workgroup Config</span><span :class="athenaWgInfo.data.enforceWorkGroupConfig ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.enforceWorkGroupConfig ? 'Sí' : 'No' }}</span></div>
-            <div class="config-row"><span>Publish CloudWatch Metrics</span><span :class="athenaWgInfo.data.publishCloudWatchMetrics ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.publishCloudWatchMetrics ? 'Sí' : 'No' }}</span></div>
+            <div class="config-title">{{ t('awsv.policies') }}</div>
+            <div class="config-row"><span>{{ t('awsv.enforceWorkgroupConfig') }}</span><span :class="athenaWgInfo.data.enforceWorkGroupConfig ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.enforceWorkGroupConfig ? t('common.yes') : t('common.no') }}</span></div>
+            <div class="config-row"><span>{{ t('awsv.publishCloudwatchMetrics') }}</span><span :class="athenaWgInfo.data.publishCloudWatchMetrics ? 'status-ok' : 'text-dim'">{{ athenaWgInfo.data.publishCloudWatchMetrics ? t('common.yes') : t('common.no') }}</span></div>
           </div>
           <!-- Execution Role -->
           <div v-if="athenaWgInfo.data.executionRole" class="config-section">
-            <div class="config-title">IAM Execution Role</div>
+            <div class="config-title">{{ t('awsv.iamExecutionRole') }}</div>
             <span class="mono-xs" style="font-size:11px;word-break:break-all">{{ athenaWgInfo.data.executionRole }}</span>
           </div>
           <!-- Description -->
           <div v-if="athenaWgInfo.data.description" class="config-section">
-            <div class="config-title">Descripción</div>
+            <div class="config-title">{{ t('res.description') }}</div>
             <span class="text-dim">{{ athenaWgInfo.data.description }}</span>
           </div>
         </div>
@@ -2881,10 +2881,10 @@
     <div v-if="athenaModal.open" class="modal-overlay" @click.self="athenaModal.open = false">
       <div class="modal" style="width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-          <span style="font-weight:600">Query — Workgroup: {{ athenaModal.workgroup?.name }}</span>
+          <span style="font-weight:600">{{ t('awsv.queryWorkgroup', { p0: athenaModal.workgroup?.name }) }}</span>
           <div style="display:flex;gap:6px">
-            <button class="btn sm" @click="athenaModal.open=false; athenaSubTab='editor'; if(athenaModal.workgroup) athenaEditor.selectedWorkgroup = athenaModal.workgroup.name">⚡ Open in Editor</button>
-            <button class="btn sm" @click="athenaModal.open = false">Close</button>
+            <button class="btn sm" @click="athenaModal.open=false; athenaSubTab='editor'; if(athenaModal.workgroup) athenaEditor.selectedWorkgroup = athenaModal.workgroup.name">{{ t('awsv.openInEditor') }}</button>
+            <button class="btn sm" @click="athenaModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px;flex:1;overflow:hidden">
@@ -2892,11 +2892,11 @@
             style="font-family:monospace;font-size:12px;resize:vertical"
             placeholder="SELECT * FROM my_database.my_table LIMIT 10;"></textarea>
           <input v-if="!athenaModal.workgroup?.outputLocation" v-model="athenaModal.outputLocation" class="ctrl-input" type="text"
-            placeholder="s3://bucket/path — output location (workgroup has none configured)"
-            title="This workgroup has no query result location configured in AWS. Provide an S3 path to use for this query." />
+            :placeholder="t('awsv.s3BucketPathOutputLocationWorkgroup')"
+            :title="t('awsv.thisWorkgroupHasNoQueryResult')" />
           <div style="display:flex;align-items:center;gap:8px">
             <button class="btn" @click="submitAthenaQuery" :disabled="athenaModal.loading || !athenaModal.query.trim()">
-              {{ athenaModal.loading ? 'Running...' : '▶ Run Query' }}
+              {{ athenaModal.loading ? t('awsv.lit.running') : t('awsv.lit.runQuery') }}
             </button>
             <span v-if="athenaModal.status" :class="athenaModal.status === 'SUCCEEDED' ? 'status-ok' : athenaModal.status === 'FAILED' ? 'status-err' : 'status-warn'">
               {{ athenaModal.status }}
@@ -2928,31 +2928,31 @@
           <div style="display:flex;gap:6px">
             <button class="btn sm" style="background:rgba(88,166,255,.15);border-color:#58a6ff;color:#58a6ff"
               @click="athenaCatInfo.open=false; athenaSubTab='editor'; athenaEditor.selectedCatalog = athenaCatInfo.cat?.name || ''">⚡ Editor</button>
-            <button class="btn sm" @click="athenaCatInfo.open = false">Close</button>
+            <button class="btn sm" @click="athenaCatInfo.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
-        <div v-if="athenaCatInfo.loading" class="empty-row">Loading...</div>
+        <div v-if="athenaCatInfo.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="athenaCatInfo.error" class="alert-error">{{ athenaCatInfo.error }}</div>
         <div v-else-if="athenaCatInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="config-section">
-              <div class="config-title">Tipo</div>
+              <div class="config-title">{{ t('res.type') }}</div>
               <span class="tag-chip">{{ athenaCatInfo.data.type }}</span>
             </div>
             <div class="config-section">
-              <div class="config-title">Descripción</div>
+              <div class="config-title">{{ t('res.description') }}</div>
               <span class="text-dim">{{ athenaCatInfo.data.description || '—' }}</span>
             </div>
           </div>
           <div v-if="Object.keys(athenaCatInfo.data.parameters || {}).length" class="config-section">
-            <div class="config-title">Parámetros de Conexión</div>
+            <div class="config-title">{{ t('awsv.connectionParameters') }}</div>
             <div v-for="(v, k) in athenaCatInfo.data.parameters" :key="k" class="config-row">
               <span class="mono-xs" style="color:var(--text-dim)">{{ k }}</span>
               <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ v }}</span>
             </div>
           </div>
           <div class="config-section">
-            <div class="config-title">Bases de Datos</div>
+            <div class="config-title">{{ t('awsv.databases') }}</div>
             <div v-if="!athenaCatInfo.cat?.databases?.length" class="text-dim" style="font-size:11px">—</div>
             <div v-for="db in (athenaCatInfo.cat?.databases || [])" :key="db.name" class="config-row">
               <span class="mono-xs">📁 {{ db.name }}</span>
@@ -2967,12 +2967,12 @@
     <div v-if="dynamoCreate.open" class="modal-overlay" @click.self="dynamoCreate.open = false">
       <div class="modal-box" style="width:560px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Create DynamoDB Table</span>
-          <button class="btn sm" @click="dynamoCreate.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.createDynamodbTable') }}</span>
+          <button class="btn sm" @click="dynamoCreate.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
           <div>
-            <label class="ctrl-label">Table Name</label>
+            <label class="ctrl-label">{{ t('awsv.tableName') }}</label>
             <input v-model="dynamoCreate.tableName" class="ctrl-input" placeholder="my-table" />
           </div>
           <div style="display:grid;grid-template-columns:1fr 100px;gap:8px">
@@ -2981,7 +2981,7 @@
               <input v-model="dynamoCreate.partitionKey" class="ctrl-input" placeholder="pk" />
             </div>
             <div>
-              <label class="ctrl-label">Type</label>
+              <label class="ctrl-label">{{ t('th.type') }}</label>
               <select v-model="dynamoCreate.partitionKeyType" class="ctrl-select">
                 <option value="S">S</option>
                 <option value="N">N</option>
@@ -2991,11 +2991,11 @@
           </div>
           <div style="display:grid;grid-template-columns:1fr 100px;gap:8px">
             <div>
-              <label class="ctrl-label">Sort Key (optional)</label>
+              <label class="ctrl-label">{{ t('awsv.sortKeyOptional') }}</label>
               <input v-model="dynamoCreate.sortKey" class="ctrl-input" placeholder="sk" />
             </div>
             <div>
-              <label class="ctrl-label">Type</label>
+              <label class="ctrl-label">{{ t('th.type') }}</label>
               <select v-model="dynamoCreate.sortKeyType" class="ctrl-select" style="width:70px">
                 <option value="S">S (String)</option>
                 <option value="N">N (Number)</option>
@@ -3004,7 +3004,7 @@
             </div>
           </div>
           <div>
-            <label class="ctrl-label">Billing Mode</label>
+            <label class="ctrl-label">{{ t('awsv.billingMode') }}</label>
             <select v-model="dynamoCreate.billingMode" class="ctrl-select">
               <option value="PAY_PER_REQUEST">PAY_PER_REQUEST (On-demand)</option>
               <option value="PROVISIONED">PROVISIONED</option>
@@ -3012,19 +3012,19 @@
           </div>
           <div v-if="dynamoCreate.billingMode === 'PROVISIONED'" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div>
-              <label class="ctrl-label">Read Capacity Units</label>
+              <label class="ctrl-label">{{ t('awsv.readCapacityUnits') }}</label>
               <input v-model.number="dynamoCreate.readCapacity" class="ctrl-input" type="number" min="1" />
             </div>
             <div>
-              <label class="ctrl-label">Write Capacity Units</label>
+              <label class="ctrl-label">{{ t('awsv.writeCapacityUnits') }}</label>
               <input v-model.number="dynamoCreate.writeCapacity" class="ctrl-input" type="number" min="1" />
             </div>
           </div>
           <div v-if="dynamoCreate.error" class="alert-error">{{ dynamoCreate.error }}</div>
           <div v-if="dynamoCreate.result" class="alert-success">{{ dynamoCreate.result }}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-            <button class="btn" @click="submitDynamoCreate" :disabled="dynamoCreate.loading">{{ dynamoCreate.loading ? 'Creating...' : 'Create Table' }}</button>
-            <button class="btn sm" @click="dynamoCreate.open = false">Cancel</button>
+            <button class="btn" @click="submitDynamoCreate" :disabled="dynamoCreate.loading">{{ dynamoCreate.loading ? t('awsv.lit.creating') : t('awsv.lit.createTable') }}</button>
+            <button class="btn sm" @click="dynamoCreate.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -3035,19 +3035,19 @@
       <div class="modal" style="width:700px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">Glue Job — {{ glueInfo.job?.name }}</span>
-          <button class="btn sm" @click="glueInfo.open = false">Close</button>
+          <button class="btn sm" @click="glueInfo.open = false">{{ t('action.close') }}</button>
         </div>
-        <div v-if="glueInfo.loading" class="empty-row">Loading...</div>
+        <div v-if="glueInfo.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="glueInfo.error" class="alert-error">{{ glueInfo.error }}</div>
         <div v-else-if="glueInfo.data" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
           <!-- Summary cards -->
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
             <div class="config-section">
-              <div class="config-title">Tipo</div>
+              <div class="config-title">{{ t('res.type') }}</div>
               <span class="text-dim">{{ glueInfo.data.command || '-' }}</span>
             </div>
             <div class="config-section">
-              <div class="config-title">Glue Version</div>
+              <div class="config-title">{{ t('awsv.glueVersion') }}</div>
               <span class="text-dim">{{ glueInfo.data.glueVersion || '-' }}</span>
             </div>
             <div class="config-section">
@@ -3061,16 +3061,16 @@
           </div>
           <!-- Execution settings -->
           <div class="config-section">
-            <div class="config-title">Configuración de Ejecución</div>
+            <div class="config-title">{{ t('awsv.runConfiguration') }}</div>
             <div class="config-row"><span>Timeout</span><span class="mono-xs">{{ glueInfo.data.timeout ? glueInfo.data.timeout + ' min' : '-' }}</span></div>
-            <div class="config-row"><span>Max Retries</span><span class="mono-xs">{{ glueInfo.data.maxRetries ?? '-' }}</span></div>
-            <div class="config-row"><span>Max Concurrent Runs</span><span class="mono-xs">{{ glueInfo.data.maxConcurrentRuns ?? '-' }}</span></div>
-            <div class="config-row"><span>Python Version</span><span class="mono-xs">{{ glueInfo.data.pythonVersion || '-' }}</span></div>
+            <div class="config-row"><span>{{ t('awsv.maxRetries') }}</span><span class="mono-xs">{{ glueInfo.data.maxRetries ?? '-' }}</span></div>
+            <div class="config-row"><span>{{ t('awsv.maxConcurrentRuns') }}</span><span class="mono-xs">{{ glueInfo.data.maxConcurrentRuns ?? '-' }}</span></div>
+            <div class="config-row"><span>{{ t('awsv.pythonVersion') }}</span><span class="mono-xs">{{ glueInfo.data.pythonVersion || '-' }}</span></div>
             <div class="config-row"><span>Runtime</span><span class="mono-xs">{{ glueInfo.data.runtime || '-' }}</span></div>
           </div>
           <!-- IAM / Role -->
           <div class="config-section">
-            <div class="config-title">IAM Role</div>
+            <div class="config-title">{{ t('eksd.iamRole') }}</div>
             <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ glueInfo.data.role || '-' }}</span>
           </div>
           <!-- Script -->
@@ -3078,7 +3078,7 @@
             <div class="config-title">Script</div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="mono-xs" style="font-size:11px;word-break:break-all;flex:1">{{ glueInfo.data.scriptLocation }}</span>
-              <a :href="glueS3ConsoleUrl(glueInfo.data.scriptLocation)" target="_blank" class="btn sm">Open in S3</a>
+              <a :href="glueS3ConsoleUrl(glueInfo.data.scriptLocation)" target="_blank" class="btn sm">{{ t('awsv.openInS3') }}</a>
             </div>
           </div>
           <!-- CW Log Group -->
@@ -3088,19 +3088,19 @@
           </div>
           <!-- Connections -->
           <div v-if="(glueInfo.data.connections || []).length" class="config-section">
-            <div class="config-title">Conexiones ({{ glueInfo.data.connections.length }})</div>
+            <div class="config-title">{{ t('awsv.connections', { p0: glueInfo.data.connections.length }) }}</div>
             <div v-for="c in glueInfo.data.connections" :key="c" class="config-row">
               <span>{{ c }}</span>
             </div>
           </div>
           <!-- Catalog database -->
           <div v-if="glueInfo.data.databaseName" class="config-section">
-            <div class="config-title">Data Catalog Database</div>
+            <div class="config-title">{{ t('awsv.dataCatalogDatabase') }}</div>
             <span class="mono-xs">{{ glueInfo.data.databaseName }}</span>
           </div>
           <!-- Default Arguments -->
           <div v-if="Object.keys(glueInfo.data.defaultArguments || {}).length" class="config-section">
-            <div class="config-title">Default Arguments ({{ Object.keys(glueInfo.data.defaultArguments).length }})</div>
+            <div class="config-title">{{ t('awsv.defaultArguments', { p0: Object.keys(glueInfo.data.defaultArguments).length }) }}</div>
             <div v-for="(v, k) in glueInfo.data.defaultArguments" :key="k" class="config-row">
               <span class="mono-xs" style="color:var(--text-dim)">{{ k }}</span>
               <span class="mono-xs" style="word-break:break-all;font-size:11px">{{ v }}</span>
@@ -3108,7 +3108,7 @@
           </div>
           <!-- Tags -->
           <div v-if="Object.keys(glueInfo.data.tags || {}).length" class="config-section">
-            <div class="config-title">Tags</div>
+            <div class="config-title">{{ t('th.tags') }}</div>
             <div class="tag-chips">
               <span v-for="(v, k) in glueInfo.data.tags" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
             </div>
@@ -3121,58 +3121,58 @@
     <div v-if="dynamoBrowse.open" class="modal-overlay" @click.self="dynamoBrowse.open = false">
       <div class="modal-box" style="width:900px;max-width:98vw;height:80vh;display:flex;flex-direction:column">
         <div class="modal-header">
-          <span style="font-weight:600">Browse: {{ dynamoBrowse.table }}</span>
-          <button class="btn sm" @click="dynamoBrowse.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.browse2', { p0: dynamoBrowse.table }) }}</span>
+          <button class="btn sm" @click="dynamoBrowse.open = false">{{ t('action.close') }}</button>
         </div>
         <!-- Query builder -->
         <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <div style="display:flex;flex-direction:column;gap:2px">
-            <label style="font-size:11px;color:var(--text-muted)">Mode</label>
+            <label style="font-size:11px;color:var(--text-muted)">{{ t('vercel.col.mode') }}</label>
             <select v-model="dynamoBrowse.mode" class="ctrl-select">
-              <option value="scan">Scan</option>
-              <option value="query">Query</option>
+              <option value="scan">{{ t('awsLogs.scan.button') }}</option>
+              <option value="query">{{ t('awsLogs.q.modeQuery') }}</option>
             </select>
           </div>
           <template v-if="dynamoBrowse.mode === 'query'">
             <div style="display:flex;flex-direction:column;gap:2px">
-              <label style="font-size:11px;color:var(--text-muted)">Partition Key name</label>
-              <input v-model="dynamoBrowse.keyName" class="ctrl-input" placeholder="e.g. userId" style="width:140px" />
+              <label style="font-size:11px;color:var(--text-muted)">{{ t('awsv.partitionKeyName') }}</label>
+              <input v-model="dynamoBrowse.keyName" class="ctrl-input" :placeholder="t('awsv.eGUserid')" style="width:140px" />
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <label style="font-size:11px;color:var(--text-muted)">Value</label>
-              <input v-model="dynamoBrowse.keyValue" class="ctrl-input" placeholder="key value" style="width:160px" />
+              <label style="font-size:11px;color:var(--text-muted)">{{ t('vercel.col.value') }}</label>
+              <input v-model="dynamoBrowse.keyValue" class="ctrl-input" :placeholder="t('awsv.keyValue')" style="width:160px" />
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <label style="font-size:11px;color:var(--text-muted)">Type</label>
+              <label style="font-size:11px;color:var(--text-muted)">{{ t('th.type') }}</label>
               <select v-model="dynamoBrowse.keyType" class="ctrl-select">
                 <option value="S">String</option>
-                <option value="N">Number</option>
-                <option value="B">Binary</option>
+                <option value="N">{{ t('awsv.number') }}</option>
+                <option value="B">{{ t('awsv.binary') }}</option>
               </select>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <label style="font-size:11px;color:var(--text-muted)">Index (optional)</label>
-              <input v-model="dynamoBrowse.indexName" class="ctrl-input" placeholder="GSI name" style="width:120px" />
+              <label style="font-size:11px;color:var(--text-muted)">{{ t('awsv.indexOptional') }}</label>
+              <input v-model="dynamoBrowse.indexName" class="ctrl-input" :placeholder="t('awsv.gsiName')" style="width:120px" />
             </div>
           </template>
           <div style="display:flex;flex-direction:column;gap:2px">
-            <label style="font-size:11px;color:var(--text-muted)">Limit</label>
+            <label style="font-size:11px;color:var(--text-muted)">{{ t('awsLogs.q.limit') }}</label>
             <input v-model.number="dynamoBrowse.limit" type="number" min="1" max="200" class="ctrl-input" style="width:70px" />
           </div>
           <button class="btn" @click="() => executeDynamoBrowse()" :disabled="dynamoBrowse.loading">
-            {{ dynamoBrowse.loading ? 'Loading...' : 'Execute' }}
+            {{ dynamoBrowse.loading ? t('common.loading') : t('awsv.lit.execute') }}
           </button>
-          <button class="btn sm" style="margin-left:auto" @click="openDynamoNewItem">+ New Item</button>
+          <button class="btn sm" style="margin-left:auto" @click="openDynamoNewItem">{{ t('awsv.newItem') }}</button>
         </div>
         <!-- Results -->
         <div style="flex:1;overflow:auto;padding:8px">
-          <div v-if="dynamoBrowse.loading" class="empty-row">Loading...</div>
+          <div v-if="dynamoBrowse.loading" class="empty-row">{{ t('state.loading') }}</div>
           <div v-else-if="dynamoBrowse.error" class="alert-error">{{ dynamoBrowse.error }}</div>
-          <div v-else-if="!dynamoBrowse.items" class="empty-row">Run a Scan or Query to see data.</div>
-          <div v-else-if="!dynamoBrowse.items.length" class="empty-row">No items returned.</div>
+          <div v-else-if="!dynamoBrowse.items" class="empty-row">{{ t('awsv.runAScanOrQueryTo') }}</div>
+          <div v-else-if="!dynamoBrowse.items.length" class="empty-row">{{ t('awsv.noItemsReturned') }}</div>
           <div v-else>
             <div class="text-dim" style="font-size:11px;margin-bottom:6px">
-              {{ dynamoBrowse.items.length }} items shown · Total scanned: {{ dynamoBrowse.scannedCount }}
+              {{ t('awsv.itemsShownTotalScanned', { p0: dynamoBrowse.items.length, p1: dynamoBrowse.scannedCount }) }}
             </div>
             <table class="cloud-table" style="font-size:11px">
               <thead><tr>
@@ -3188,11 +3188,11 @@
                       v-if="isDynamoCellLong(item[col])"
                       class="dynamo-cell-expand-btn"
                       @click="openDynamoCellModal(col, item[col])"
-                      title="Ver contenido completo">🔍</button>
+                      :title="t('awsv.seeFullContent')">🔍</button>
                   </td>
                   <td style="white-space:nowrap;padding:2px 6px;position:sticky;right:0;background:var(--bg-card, #1e1e1e);z-index:1;box-shadow:-2px 0 4px rgba(0,0,0,.3)">
-                    <button class="btn sm" style="padding:1px 6px;font-size:10px" @click="openDynamoEdit(item)" title="Edit item">✏️</button>
-                    <button class="btn sm danger" style="padding:1px 6px;font-size:10px;margin-left:2px" @click="deleteDynamoItemFromRow(item)" title="Delete item">🗑</button>
+                    <button class="btn sm" style="padding:1px 6px;font-size:10px" @click="openDynamoEdit(item)" :title="t('awsv.editItem')">✏️</button>
+                    <button class="btn sm danger" style="padding:1px 6px;font-size:10px;margin-left:2px" @click="deleteDynamoItemFromRow(item)" :title="t('awsv.deleteItem')">🗑</button>
                   </td>
                 </tr>
               </tbody>
@@ -3201,9 +3201,9 @@
         </div>
         <!-- Pagination -->
         <div v-if="dynamoBrowse.lastEvaluatedKey || dynamoBrowse.prevKeys?.length" style="padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn sm" :disabled="!dynamoBrowse.prevKeys?.length" @click="dynamoPrevPage">‹ Prev</button>
-          <span class="text-dim" style="line-height:28px;font-size:12px">Page {{ (dynamoBrowse.prevKeys?.length || 0) + 1 }}</span>
-          <button class="btn sm" :disabled="!dynamoBrowse.lastEvaluatedKey" @click="dynamoNextPage">Next ›</button>
+          <button class="btn sm" :disabled="!dynamoBrowse.prevKeys?.length" @click="dynamoPrevPage">{{ t('awsv.prev') }}</button>
+          <span class="text-dim" style="line-height:28px;font-size:12px">{{ t('awsv.page', { p0: (dynamoBrowse.prevKeys?.length || 0) + 1 }) }}</span>
+          <button class="btn sm" :disabled="!dynamoBrowse.lastEvaluatedKey" @click="dynamoNextPage">{{ t('awsv.next') }}</button>
         </div>
       </div>
     </div>
@@ -3214,8 +3214,8 @@
         <div class="modal-header">
           <span style="font-weight:600;font-size:13px">{{ dynamoCellModal.column }}</span>
           <div style="display:flex;gap:6px">
-            <button class="btn sm" @click="copyText(dynamoCellModal.raw)">Copiar</button>
-            <button class="btn sm" @click="dynamoCellModal.open = false">Cerrar</button>
+            <button class="btn sm" @click="copyText(dynamoCellModal.raw)">{{ t('action.copy') }}</button>
+            <button class="btn sm" @click="dynamoCellModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
         <div style="flex:1;overflow:auto;padding:14px">
@@ -3228,12 +3228,12 @@
     <div v-if="dynamoEdit.open" class="modal-overlay" @click.self="dynamoEdit.open = false" style="z-index:3000">
       <div class="modal-box" style="width:660px;max-width:98vw;max-height:90vh;display:flex;flex-direction:column">
         <div class="modal-header">
-          <span style="font-weight:600;font-size:13px">Edit Item — {{ dynamoEdit.table }}</span>
-          <button class="btn sm" @click="dynamoEdit.open = false">Close</button>
+          <span style="font-weight:600;font-size:13px">{{ t('awsv.editItem2', { p0: dynamoEdit.table }) }}</span>
+          <button class="btn sm" @click="dynamoEdit.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:10px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">
-          Keys: <span class="mono-xs" style="color:var(--text)">{{ dynamoEdit.keySchema.map(k => k.name).join(', ') }}</span>
-          &nbsp;·&nbsp; Edit the JSON below and save to overwrite the item (PutItem).
+          {{ t('awsv.keys') }} <span class="mono-xs" style="color:var(--text)">{{ dynamoEdit.keySchema.map(k => k.name).join(', ') }}</span>
+          {{ t('awsv.editTheJsonBelowAndSave') }}
         </div>
         <div style="flex:1;overflow:auto;padding:12px 14px">
           <textarea
@@ -3243,13 +3243,13 @@
             class="ctrl-input code-block"
             style="width:100%;min-height:340px;resize:vertical;font-family:monospace;font-size:12px;line-height:1.5;tab-size:2"
           ></textarea>
-          <div v-if="dynamoEdit.parseError" class="alert-error" style="margin-top:6px">JSON error: {{ dynamoEdit.parseError }}</div>
+          <div v-if="dynamoEdit.parseError" class="alert-error" style="margin-top:6px">{{ t('awsv.jsonError', { p0: dynamoEdit.parseError }) }}</div>
           <div v-if="dynamoEdit.error" class="alert-error" style="margin-top:6px">{{ dynamoEdit.error }}</div>
         </div>
         <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn sm" @click="dynamoEdit.open = false">Cancel</button>
+          <button class="btn sm" @click="dynamoEdit.open = false">{{ t('action.cancel') }}</button>
           <button class="btn" @click="submitDynamoEdit" :disabled="dynamoEdit.loading || !!dynamoEdit.parseError">
-            {{ dynamoEdit.loading ? 'Saving...' : 'Save Item' }}
+            {{ dynamoEdit.loading ? t('awsv.lit.saving') : t('awsv.lit.saveItem') }}
           </button>
         </div>
       </div>
@@ -3260,16 +3260,16 @@
       <div class="modal-box" style="width:900px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
-            <span style="font-weight:600">Info de RDS — {{ rdsInfoModal.id }}</span>
+            <span style="font-weight:600">{{ t('awsv.rdsInfo', { p0: rdsInfoModal.id }) }}</span>
             <span v-if="rdsInfoModal.data" class="text-dim" style="font-size:11px">{{ rdsInfoModal.data.engine }} {{ rdsInfoModal.data.engineVersion || '' }} · {{ rdsInfoModal.data.status }}</span>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn sm" @click="openRdsConnect({ id: rdsInfoModal.id })">Conectar</button>
-            <button class="btn sm" @click="openRdsResetPwd({ id: rdsInfoModal.id })">Restablecer contraseña</button>
-            <button class="btn sm" @click="rdsInfoModal.open = false">Cerrar</button>
+            <button class="btn sm" @click="openRdsConnect({ id: rdsInfoModal.id })">{{ t('conn.connect') }}</button>
+            <button class="btn sm" @click="openRdsResetPwd({ id: rdsInfoModal.id })">{{ t('awsv.resetPassword') }}</button>
+            <button class="btn sm" @click="rdsInfoModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
-        <div v-if="rdsInfoModal.loading" class="empty-row">Cargando...</div>
+        <div v-if="rdsInfoModal.loading" class="empty-row">{{ t('common.loading') }}</div>
         <div v-else-if="rdsInfoModal.error" class="alert-error">{{ rdsInfoModal.error }}</div>
         <div v-else-if="rdsInfoModal.data" style="padding:12px;display:flex;flex-direction:column;gap:12px;overflow:hidden;flex:1">
           <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex-wrap:wrap">
@@ -3292,17 +3292,17 @@
 
             <div v-if="rdsInfoTab === 'connectivity'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">Conectividad y seguridad</div>
-                <div class="config-row"><span>Endpoint</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.endpoint ? `${rdsInfoModal.data.endpoint}:${rdsInfoModal.data.port}` : '-' }}</span></div>
-                <div class="config-row"><span>Acceso público</span><span :class="rdsInfoModal.data.public ? 'status-warn' : 'status-ok'">{{ rdsInfoModal.data.public ? 'Sí' : 'No' }}</span></div>
-                <div class="config-row"><span>Grupo de subredes</span><span class="text-dim">{{ rdsInfoModal.data.subnetGroup || '-' }}</span></div>
-                <div class="config-row"><span>Tipo de red</span><span class="text-dim">{{ rdsInfoModal.data.networkType || '-' }}</span></div>
-                <div class="config-row"><span>Autenticación IAM DB</span><span :class="rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? 'Habilitada' : 'Deshabilitada' }}</span></div>
-                <div class="config-row"><span>Certificado CA</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.caCertificateIdentifier || '-' }}</span></div>
+                <div class="config-title">{{ t('awsv.connectivityAndSecurity') }}</div>
+                <div class="config-row"><span>{{ t('sns.endpoint') }}</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.endpoint ? `${rdsInfoModal.data.endpoint}:${rdsInfoModal.data.port}` : '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.publicAccess') }}</span><span :class="rdsInfoModal.data.public ? 'status-warn' : 'status-ok'">{{ rdsInfoModal.data.public ? t('common.yes') : t('common.no') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.subnetGroup') }}</span><span class="text-dim">{{ rdsInfoModal.data.subnetGroup || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.networkType') }}</span><span class="text-dim">{{ rdsInfoModal.data.networkType || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.iamDbAuthentication') }}</span><span :class="rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.iamDatabaseAuthenticationEnabled ? t('res.enabled') : t('res.disabled') }}</span></div>
+                <div class="config-row"><span>{{ t('gsi.caCertificate') }}</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.caCertificateIdentifier || '-' }}</span></div>
               </div>
               <div class="config-section">
-                <div class="config-title">Grupos de seguridad ({{ (rdsInfoModal.data.vpcSecurityGroups || []).length }})</div>
-                <div v-if="!rdsInfoModal.data.vpcSecurityGroups?.length" class="text-dim" style="font-size:12px">Sin grupos de seguridad.</div>
+                <div class="config-title">{{ t('awsv.securityGroups', { p0: (rdsInfoModal.data.vpcSecurityGroups || []).length }) }}</div>
+                <div v-if="!rdsInfoModal.data.vpcSecurityGroups?.length" class="text-dim" style="font-size:12px">{{ t('eksd.noSecurityGroups') }}</div>
                 <div v-for="sg in rdsInfoModal.data.vpcSecurityGroups" :key="sg.id" class="config-row">
                   <span class="mono-xs">{{ sg.id }}</span>
                   <span :class="sg.status === 'active' ? 'status-ok' : 'text-dim'">{{ sg.status }}</span>
@@ -3312,43 +3312,43 @@
 
             <div v-else-if="rdsInfoTab === 'monitoring'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">Supervisión</div>
-                <div class="config-row"><span>Monitoreo mejorado</span><span :class="rdsInfoModal.data.monitoringInterval ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.monitoringInterval ? `Cada ${rdsInfoModal.data.monitoringInterval}s` : 'Deshabilitado' }}</span></div>
-                <div class="config-row"><span>Rol de monitoreo</span><span class="mono-xs text-dim" style="font-size:10px">{{ rdsInfoModal.data.monitoringRoleArn || '-' }}</span></div>
-                <div class="config-row"><span>Performance Insights</span><span :class="rdsInfoModal.data.performanceInsightsEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.performanceInsightsEnabled ? 'Habilitado' : 'Deshabilitado' }}</span></div>
-                <div class="config-row"><span>Retención PI</span><span class="text-dim">{{ rdsInfoModal.data.performanceInsightsRetentionPeriod || '-' }}</span></div>
+                <div class="config-title">{{ t('awsv.monitoring') }}</div>
+                <div class="config-row"><span>{{ t('awsv.enhancedMonitoring') }}</span><span :class="rdsInfoModal.data.monitoringInterval ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.monitoringInterval ? `Cada ${rdsInfoModal.data.monitoringInterval}s` : t('res.disabled') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.monitoringRole') }}</span><span class="mono-xs text-dim" style="font-size:10px">{{ rdsInfoModal.data.monitoringRoleArn || '-' }}</span></div>
+                <div class="config-row"><span>Performance Insights</span><span :class="rdsInfoModal.data.performanceInsightsEnabled ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.performanceInsightsEnabled ? t('res.enabled') : t('res.disabled') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.piRetention') }}</span><span class="text-dim">{{ rdsInfoModal.data.performanceInsightsRetentionPeriod || '-' }}</span></div>
               </div>
               <div class="config-section">
-                <div class="config-title">Logs exportados</div>
-                <div v-if="!(rdsInfoModal.data.enabledCloudwatchLogsExports || []).length" class="text-dim" style="font-size:12px">Sin exportaciones a CloudWatch Logs.</div>
+                <div class="config-title">{{ t('awsv.exportedLogs') }}</div>
+                <div v-if="!(rdsInfoModal.data.enabledCloudwatchLogsExports || []).length" class="text-dim" style="font-size:12px">{{ t('awsv.noExportsToCloudwatchLogs') }}</div>
                 <div v-for="logName in (rdsInfoModal.data.enabledCloudwatchLogsExports || [])" :key="logName" class="config-row">
                   <span class="mono-xs">{{ logName }}</span>
-                  <span class="status-ok">Habilitado</span>
+                  <span class="status-ok">{{ t('res.enabled') }}</span>
                 </div>
               </div>
             </div>
 
             <div v-else-if="rdsInfoTab === 'configuration'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">Configuración</div>
-                <div class="config-row"><span>Motor</span><span class="text-dim">{{ rdsInfoModal.data.engine }} {{ rdsInfoModal.data.engineVersion || '' }}</span></div>
-                <div class="config-row"><span>Clase de instancia</span><span class="text-dim">{{ rdsInfoModal.data.class || '-' }}</span></div>
-                <div class="config-row"><span>Usuario maestro</span><span class="text-dim">{{ rdsInfoModal.data.masterUsername || '-' }}</span></div>
-                <div class="config-row"><span>Nombre de base</span><span class="text-dim">{{ rdsInfoModal.data.dbName || '-' }}</span></div>
-                <div class="config-row"><span>Almacenamiento</span><span class="text-dim">{{ rdsInfoModal.data.storageGb || '-' }} GiB ({{ rdsInfoModal.data.storageType || '-' }})</span></div>
-                <div class="config-row"><span>Cifrado de almacenamiento</span><span :class="rdsInfoModal.data.storageEncrypted ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.storageEncrypted ? 'Sí' : 'No' }}</span></div>
-                <div class="config-row"><span>Máx. almacenamiento automático</span><span class="text-dim">{{ rdsInfoModal.data.maxAllocatedStorage || '-' }}</span></div>
+                <div class="config-title">{{ t('lmd.tabConfig') }}</div>
+                <div class="config-row"><span>{{ t('gsi.engine') }}</span><span class="text-dim">{{ rdsInfoModal.data.engine }} {{ rdsInfoModal.data.engineVersion || '' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.instanceClass') }}</span><span class="text-dim">{{ rdsInfoModal.data.class || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.masterUser') }}</span><span class="text-dim">{{ rdsInfoModal.data.masterUsername || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.databaseName') }}</span><span class="text-dim">{{ rdsInfoModal.data.dbName || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('ec2d.tabStorage') }}</span><span class="text-dim">{{ rdsInfoModal.data.storageGb || '-' }} GiB ({{ rdsInfoModal.data.storageType || '-' }})</span></div>
+                <div class="config-row"><span>{{ t('awsv.storageEncryption') }}</span><span :class="rdsInfoModal.data.storageEncrypted ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.storageEncrypted ? t('common.yes') : t('common.no') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.maxAutoscalingStorage') }}</span><span class="text-dim">{{ rdsInfoModal.data.maxAllocatedStorage || '-' }}</span></div>
               </div>
               <div class="config-section">
-                <div class="config-title">Parámetros y opciones</div>
-                <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Grupos de parámetros</div>
-                <div v-if="!(rdsInfoModal.data.parameterGroups || []).length" class="text-dim" style="font-size:12px">No asignados.</div>
+                <div class="config-title">{{ t('awsv.parametersAndOptions') }}</div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">{{ t('awsv.parameterGroups') }}</div>
+                <div v-if="!(rdsInfoModal.data.parameterGroups || []).length" class="text-dim" style="font-size:12px">{{ t('awsv.notAssigned') }}</div>
                 <div v-for="pg in (rdsInfoModal.data.parameterGroups || [])" :key="pg.name" class="config-row">
                   <span class="mono-xs">{{ pg.name }}</span>
                   <span class="text-dim">{{ pg.status }}</span>
                 </div>
-                <div style="font-size:11px;color:var(--text-dim);margin:10px 0 6px">Grupos de opciones</div>
-                <div v-if="!(rdsInfoModal.data.optionGroups || []).length" class="text-dim" style="font-size:12px">No asignados.</div>
+                <div style="font-size:11px;color:var(--text-dim);margin:10px 0 6px">{{ t('awsv.optionGroups') }}</div>
+                <div v-if="!(rdsInfoModal.data.optionGroups || []).length" class="text-dim" style="font-size:12px">{{ t('awsv.notAssigned') }}</div>
                 <div v-for="og in (rdsInfoModal.data.optionGroups || [])" :key="og.name" class="config-row">
                   <span class="mono-xs">{{ og.name }}</span>
                   <span class="text-dim">{{ og.status }}</span>
@@ -3358,38 +3358,38 @@
 
             <div v-else-if="rdsInfoTab === 'maintenance'" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="config-section">
-                <div class="config-title">Mantenimiento</div>
-                <div class="config-row"><span>Actualización menor automática</span><span :class="rdsInfoModal.data.autoMinorVersionUpgrade ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.autoMinorVersionUpgrade ? 'Habilitada' : 'Deshabilitada' }}</span></div>
-                <div class="config-row"><span>Ventana de mantenimiento</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredMaintenanceWindow || '-' }}</span></div>
-                <div class="config-row"><span>Protección contra eliminación</span><span :class="rdsInfoModal.data.deletionProtection ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.deletionProtection ? 'Habilitada' : 'Deshabilitada' }}</span></div>
+                <div class="config-title">{{ t('awsv.maintenance') }}</div>
+                <div class="config-row"><span>{{ t('awsv.autoMinorVersionUpgrade') }}</span><span :class="rdsInfoModal.data.autoMinorVersionUpgrade ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.autoMinorVersionUpgrade ? t('res.enabled') : t('res.disabled') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.maintenanceWindow') }}</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredMaintenanceWindow || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.deletionProtection') }}</span><span :class="rdsInfoModal.data.deletionProtection ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.deletionProtection ? t('res.enabled') : t('res.disabled') }}</span></div>
               </div>
               <div class="config-section">
-                <div class="config-title">Copias de seguridad</div>
-                <div class="config-row"><span>Retención (días)</span><span class="text-dim">{{ rdsInfoModal.data.backupRetention ?? '-' }}</span></div>
-                <div class="config-row"><span>Ventana de copia</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredBackupWindow || '-' }}</span></div>
-                <div class="config-row"><span>Último punto restaurable</span><span class="text-dim">{{ rdsInfoModal.data.latestRestorableTime ? formatDate(rdsInfoModal.data.latestRestorableTime) : '-' }}</span></div>
-                <div class="config-row"><span>Copiar etiquetas en snapshot</span><span :class="rdsInfoModal.data.copyTagsToSnapshot ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.copyTagsToSnapshot ? 'Sí' : 'No' }}</span></div>
-                <div class="config-row"><span>Destino de backup</span><span class="text-dim">{{ rdsInfoModal.data.backupTarget || '-' }}</span></div>
+                <div class="config-title">{{ t('awsv.backups') }}</div>
+                <div class="config-row"><span>{{ t('awsv.retentionDays') }}</span><span class="text-dim">{{ rdsInfoModal.data.backupRetention ?? '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.backupWindow') }}</span><span class="text-dim mono-xs">{{ rdsInfoModal.data.preferredBackupWindow || '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.latestRestorableTime') }}</span><span class="text-dim">{{ rdsInfoModal.data.latestRestorableTime ? formatDate(rdsInfoModal.data.latestRestorableTime) : '-' }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.copyTagsToSnapshot') }}</span><span :class="rdsInfoModal.data.copyTagsToSnapshot ? 'status-ok' : 'text-dim'">{{ rdsInfoModal.data.copyTagsToSnapshot ? t('common.yes') : t('common.no') }}</span></div>
+                <div class="config-row"><span>{{ t('awsv.backupTarget') }}</span><span class="text-dim">{{ rdsInfoModal.data.backupTarget || '-' }}</span></div>
               </div>
             </div>
 
             <div v-else-if="rdsInfoTab === 'migration'" class="config-section">
-              <div class="config-title">Migración y replicación</div>
-              <div class="config-row"><span>Instancia origen</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.readReplicaSourceDBInstanceIdentifier || '-' }}</span></div>
-              <div class="config-row"><span>Modo de réplica</span><span class="text-dim">{{ rdsInfoModal.data.replicaMode || '-' }}</span></div>
+              <div class="config-title">{{ t('awsv.migrationAndReplication') }}</div>
+              <div class="config-row"><span>{{ t('awsv.sourceInstance') }}</span><span class="mono-xs text-dim">{{ rdsInfoModal.data.readReplicaSourceDBInstanceIdentifier || '-' }}</span></div>
+              <div class="config-row"><span>{{ t('awsv.replicaMode') }}</span><span class="text-dim">{{ rdsInfoModal.data.replicaMode || '-' }}</span></div>
               <div class="config-row" style="align-items:flex-start">
-                <span>Réplicas de lectura (instancias)</span>
+                <span>{{ t('awsv.readReplicasInstances') }}</span>
                 <span class="text-dim mono-xs" style="font-size:10px;word-break:break-all">{{ (rdsInfoModal.data.readReplicaDBInstanceIdentifiers || []).join(', ') || '-' }}</span>
               </div>
               <div class="config-row" style="align-items:flex-start">
-                <span>Réplicas de lectura (clusters)</span>
+                <span>{{ t('awsv.readReplicasClusters') }}</span>
                 <span class="text-dim mono-xs" style="font-size:10px;word-break:break-all">{{ (rdsInfoModal.data.readReplicaDBClusterIdentifiers || []).join(', ') || '-' }}</span>
               </div>
             </div>
 
             <div v-else-if="rdsInfoTab === 'tags'" class="config-section">
-              <div class="config-title">Etiquetas</div>
-              <div v-if="!(rdsInfoModal.data.tags || []).length" class="text-dim" style="font-size:12px">Sin etiquetas.</div>
+              <div class="config-title">{{ t('awsv.tags') }}</div>
+              <div v-if="!(rdsInfoModal.data.tags || []).length" class="text-dim" style="font-size:12px">{{ t('res.noTags') }}</div>
               <div v-for="tag in (rdsInfoModal.data.tags || [])" :key="tag.key" class="config-row">
                 <span class="mono-xs">{{ tag.key }}</span>
                 <span class="mono-xs text-dim" style="word-break:break-all">{{ tag.value }}</span>
@@ -3404,25 +3404,25 @@
     <div v-if="rdsConnectModal.open" class="modal-overlay" @click.self="rdsConnectModal.open = false">
       <div class="modal-box" style="width:760px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Conexión RDS — {{ rdsConnectModal.id }}</span>
-          <button class="btn sm" @click="rdsConnectModal.open = false">Cerrar</button>
+          <span style="font-weight:600">{{ t('awsv.rdsConnection', { p0: rdsConnectModal.id }) }}</span>
+          <button class="btn sm" @click="rdsConnectModal.open = false">{{ t('action.close') }}</button>
         </div>
-        <div v-if="rdsConnectModal.loading" class="empty-row">Cargando...</div>
+        <div v-if="rdsConnectModal.loading" class="empty-row">{{ t('common.loading') }}</div>
         <div v-else-if="rdsConnectModal.error" class="alert-error">{{ rdsConnectModal.error }}</div>
         <div v-else-if="rdsConnectModal.data" style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;gap:6px;align-items:center">
-            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap">Contraseña (para URI)</label>
-            <input v-model="rdsConnectModal.password" type="password" class="ctrl-input" placeholder="contraseña del usuario maestro" style="flex:1" />
+            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap">{{ t('awsv.passwordForTheUri') }}</label>
+            <input v-model="rdsConnectModal.password" type="password" class="ctrl-input" :placeholder="t('awsv.masterUserPassword')" style="flex:1" />
           </div>
           <div v-for="entry in rdsConnectionEntries" :key="entry.key">
             <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text-muted)">{{ entry.label }}</div>
             <div style="position:relative">
               <pre class="code-block" style="user-select:all;overflow-x:auto">{{ entry.value }}</pre>
-              <button class="btn sm" style="position:absolute;top:4px;right:4px" @click="copyText(entry.value)">Copiar</button>
+              <button class="btn sm" style="position:absolute;top:4px;right:4px" @click="copyText(entry.value)">{{ t('action.copy') }}</button>
             </div>
           </div>
           <div v-if="rdsConnectModal.data.templates?.notes?.length" style="background:var(--bg-alt,#1e1e2e);border-radius:6px;padding:10px 12px">
-            <div style="font-size:11px;font-weight:600;margin-bottom:6px">Notas</div>
+            <div style="font-size:11px;font-weight:600;margin-bottom:6px">{{ t('awsv.notes') }}</div>
             <div v-for="n in rdsConnectModal.data.templates.notes" :key="n" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">• {{ n }}</div>
           </div>
         </div>
@@ -3433,24 +3433,24 @@
     <div v-if="rdsResetPwdModal.open" class="modal-overlay" @click.self="rdsResetPwdModal.open = false">
       <div class="modal-box" style="width:460px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Restablecer contraseña maestra — {{ rdsResetPwdModal.id }}</span>
-          <button class="btn sm" @click="rdsResetPwdModal.open = false">Cerrar</button>
+          <span style="font-weight:600">{{ t('awsv.resetMasterPassword', { p0: rdsResetPwdModal.id }) }}</span>
+          <button class="btn sm" @click="rdsResetPwdModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
           <label class="field-label">
-            Nueva contraseña
-            <input v-model="rdsResetPwdModal.newPassword" type="password" class="ctrl-input" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+            {{ t('awsv.newPassword') }}
+            <input v-model="rdsResetPwdModal.newPassword" type="password" class="ctrl-input" :placeholder="t('awsv.atLeast8Characters')" autocomplete="new-password" />
           </label>
           <label class="field-label">
-            Confirmar contraseña
-            <input v-model="rdsResetPwdModal.confirmPassword" type="password" class="ctrl-input" placeholder="Repetir contraseña" autocomplete="new-password" />
+            {{ t('awsv.confirmPassword') }}
+            <input v-model="rdsResetPwdModal.confirmPassword" type="password" class="ctrl-input" :placeholder="t('awsv.repeatPassword')" autocomplete="new-password" />
           </label>
           <div v-if="rdsResetPwdModal.error" class="alert-error">{{ rdsResetPwdModal.error }}</div>
           <div v-if="rdsResetPwdModal.success" style="color:#a6e3a1;font-size:12px;padding:8px;border-radius:4px;background:rgba(166,227,161,.1)">{{ rdsResetPwdModal.success }}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn sm" @click="rdsResetPwdModal.open = false">Cancelar</button>
+            <button class="btn sm" @click="rdsResetPwdModal.open = false">{{ t('action.cancel') }}</button>
             <button class="btn sm" :disabled="rdsResetPwdModal.loading" @click="doRdsResetPassword">
-              {{ rdsResetPwdModal.loading ? 'Aplicando...' : 'Restablecer contraseña' }}
+              {{ rdsResetPwdModal.loading ? t('awsv.lit.applying') : t('awsv.resetPassword') }}
             </button>
           </div>
         </div>
@@ -3466,18 +3466,18 @@
             <span class="text-dim" style="font-size:11px">{{ glueConfigModal.data?.description || 'AWS Glue Job' }}</span>
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn sm" @click="openGlueLogs(glueConfigModal.job)">Ver Logs</button>
-            <button class="btn sm" @click="glueConfigModal.open = false">Cerrar</button>
+            <button class="btn sm" @click="openGlueLogs(glueConfigModal.job)">{{ t('awsv.viewLogs') }}</button>
+            <button class="btn sm" @click="glueConfigModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
-        <div v-if="glueConfigModal.loading" class="empty-row">Loading...</div>
+        <div v-if="glueConfigModal.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="glueConfigModal.error" class="alert-error">{{ glueConfigModal.error }}</div>
         <div v-else-if="glueConfigModal.data" style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
 
           <!-- ── Última ejecución ── -->
           <div v-if="glueConfigModal.lastRun" style="border-radius:8px;padding:12px 14px;border:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap;align-items:center">
             <div style="display:flex;flex-direction:column;gap:2px">
-              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">Última ejecución</span>
+              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">{{ t('awsv.lastRun2') }}</span>
               <span :class="glueConfigModal.lastRun.status === 'SUCCEEDED' ? 'status-ok' : glueConfigModal.lastRun.status === 'RUNNING' ? 'status-warn' : 'status-err'" style="font-weight:600;font-size:13px">{{ glueConfigModal.lastRun.status }}</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
@@ -3485,23 +3485,23 @@
               <span class="mono-xs text-dim">{{ glueConfigModal.lastRun.id }}</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">Iniciado</span>
+              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">{{ t('awsv.started') }}</span>
               <span class="text-dim" style="font-size:12px">{{ glueConfigModal.lastRun.startedOn ? formatDate(glueConfigModal.lastRun.startedOn) : '-' }}</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">Completado</span>
+              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">{{ t('awsv.completed') }}</span>
               <span class="text-dim" style="font-size:12px">{{ glueConfigModal.lastRun.completedOn ? formatDate(glueConfigModal.lastRun.completedOn) : '-' }}</span>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
-              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">Duración</span>
+              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">{{ t('awsv.duration') }}</span>
               <span class="text-dim" style="font-size:12px">{{ glueConfigModal.lastRun.executionTime ? glueConfigModal.lastRun.executionTime + 's' : '-' }}</span>
             </div>
             <div v-if="glueConfigModal.lastRun.errorMessage" style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:2px">
-              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">Error</span>
+              <span style="font-size:10px;text-transform:uppercase;color:var(--text-dim);font-weight:600">{{ t('awsLogs.sync_error') }}</span>
               <span style="font-size:11px;color:#f38ba8;word-break:break-word">{{ glueConfigModal.lastRun.errorMessage }}</span>
             </div>
           </div>
-          <div v-else-if="!glueConfigModal.loadingRuns" style="font-size:12px;color:var(--text-dim);border:1px dashed var(--border);border-radius:6px;padding:8px 12px">Sin ejecuciones registradas.</div>
+          <div v-else-if="!glueConfigModal.loadingRuns" style="font-size:12px;color:var(--text-dim);border:1px dashed var(--border);border-radius:6px;padding:8px 12px">{{ t('awsv.noRecordedRuns') }}</div>
 
           <!-- ── Script & Script Link ── -->
           <div class="config-section">
@@ -3510,15 +3510,15 @@
               <a v-if="glueConfigModal.data.command?.ScriptLocation"
                 :href="glueS3ConsoleUrl(glueConfigModal.data.command.ScriptLocation)"
                 target="_blank" rel="noopener"
-                class="btn sm" style="font-size:11px;text-decoration:none">Abrir en S3 ↗</a>
+                class="btn sm" style="font-size:11px;text-decoration:none">{{ t('awsv.openInS32') }}</a>
             </div>
-            <div class="config-row"><span>Tipo</span><span class="text-dim">{{ glueConfigModal.data.command?.Name }}</span></div>
+            <div class="config-row"><span>{{ t('res.type') }}</span><span class="text-dim">{{ glueConfigModal.data.command?.Name }}</span></div>
             <div class="config-row"><span>Runtime Python</span><span class="text-dim">{{ glueConfigModal.data.command?.PythonVersion ? 'Python ' + glueConfigModal.data.command.PythonVersion : 'N/A' }}</span></div>
             <div class="config-row" style="align-items:flex-start">
-              <span style="flex-shrink:0">Ubicación</span>
+              <span style="flex-shrink:0">{{ t('gsi.location') }}</span>
               <div style="display:flex;gap:6px;align-items:center;min-width:0;flex:1">
                 <span class="text-dim mono-xs" style="word-break:break-all;flex:1">{{ glueConfigModal.data.command?.ScriptLocation }}</span>
-                <button class="btn sm" style="flex-shrink:0" @click="copyText(glueConfigModal.data.command?.ScriptLocation)">Copy</button>
+                <button class="btn sm" style="flex-shrink:0" @click="copyText(glueConfigModal.data.command?.ScriptLocation)">{{ t('action.copy') }}</button>
               </div>
             </div>
             <div class="config-row"><span>CW Log Group</span><span class="text-dim mono-xs">{{ glueConfigModal.data.cloudWatchLogGroup }}</span></div>
@@ -3527,22 +3527,22 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <!-- ── General ── -->
             <div class="config-section">
-              <div class="config-title">General</div>
-              <div class="config-row"><span>Glue Version</span><span class="text-dim">{{ glueConfigModal.data.glueVersion || '-' }}</span></div>
+              <div class="config-title">{{ t('observability.general') }}</div>
+              <div class="config-row"><span>{{ t('awsv.glueVersion') }}</span><span class="text-dim">{{ glueConfigModal.data.glueVersion || '-' }}</span></div>
               <div class="config-row"><span>Worker Type</span><span class="text-dim">{{ glueConfigModal.data.workerType || '-' }}</span></div>
               <div class="config-row"><span>Workers</span><span class="text-dim">{{ glueConfigModal.data.numberOfWorkers ?? '-' }}</span></div>
-              <div class="config-row"><span>Max Retries</span><span class="text-dim">{{ glueConfigModal.data.maxRetries ?? '-' }}</span></div>
+              <div class="config-row"><span>{{ t('awsv.maxRetries') }}</span><span class="text-dim">{{ glueConfigModal.data.maxRetries ?? '-' }}</span></div>
               <div class="config-row"><span>Timeout (min)</span><span class="text-dim">{{ glueConfigModal.data.timeout ?? '-' }}</span></div>
               <div class="config-row" style="align-items:flex-start">
-                <span style="flex-shrink:0">Role IAM</span>
+                <span style="flex-shrink:0">{{ t('eksd.iamRole') }}</span>
                 <span class="text-dim mono-xs" style="word-break:break-all;font-size:10px">{{ glueConfigModal.data.role }}</span>
               </div>
             </div>
 
             <!-- ── Conexiones ── -->
             <div class="config-section">
-              <div class="config-title">Conexiones ({{ (glueConfigModal.data.connections || []).length }})</div>
-              <div v-if="!glueConfigModal.data.connections?.length" class="text-dim" style="font-size:12px;padding:6px 0">Ninguna conexión asignada.</div>
+              <div class="config-title">{{ t('awsv.connections', { p0: (glueConfigModal.data.connections || []).length }) }}</div>
+              <div v-if="!glueConfigModal.data.connections?.length" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.noConnectionsAssigned') }}</div>
               <div v-for="conn in glueConfigModal.data.connections" :key="conn"
                 style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">
                 <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>
@@ -3553,8 +3553,8 @@
 
           <!-- ── Argumentos ── -->
           <div class="config-section">
-            <div class="config-title">Default Arguments ({{ Object.keys(glueConfigModal.data.defaultArguments || {}).length }})</div>
-            <div v-if="!Object.keys(glueConfigModal.data.defaultArguments || {}).length" class="text-dim" style="font-size:12px;padding:6px 0">Ninguno.</div>
+            <div class="config-title">{{ t('awsv.defaultArguments', { p0: Object.keys(glueConfigModal.data.defaultArguments || {}).length }) }}</div>
+            <div v-if="!Object.keys(glueConfigModal.data.defaultArguments || {}).length" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.none2') }}</div>
             <div v-for="(v, k) in glueConfigModal.data.defaultArguments" :key="k"
               style="display:grid;grid-template-columns:200px 1fr;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);font-size:11px">
               <span class="mono-xs" style="color:var(--accent)">{{ k }}</span>
@@ -3573,17 +3573,17 @@
           <div style="display:flex;gap:6px;align-items:center">
             <select v-model.number="glueLogsModal.minutes" class="ctrl-select" style="font-size:12px">
               <option :value="15">15 min</option>
-              <option :value="60">1 hour</option>
-              <option :value="360">6 hours</option>
-              <option :value="1440">24 hours</option>
+              <option :value="60">{{ t('awsv.1Hour') }}</option>
+              <option :value="360">{{ t('awsv.6Hours') }}</option>
+              <option :value="1440">{{ t('awsv.24Hours') }}</option>
             </select>
-            <button class="btn sm" @click="loadGlueLogs">Refresh</button>
-            <button class="btn sm" @click="glueLogsModal.open = false">Close</button>
+            <button class="btn sm" @click="loadGlueLogs">{{ t('action.refresh') }}</button>
+            <button class="btn sm" @click="glueLogsModal.open = false">{{ t('action.close') }}</button>
           </div>
         </div>
-        <div v-if="glueLogsModal.loading" class="empty-row">Loading logs...</div>
+        <div v-if="glueLogsModal.loading" class="empty-row">{{ t('awsv.loadingLogs') }}</div>
         <div v-else-if="glueLogsModal.error" class="alert-error">{{ glueLogsModal.error }}</div>
-        <div v-else-if="!glueLogsModal.events?.length" class="empty-row">No log events found for the selected period.</div>
+        <div v-else-if="!glueLogsModal.events?.length" class="empty-row">{{ t('awsv.noLogEventsFoundForThe') }}</div>
         <div v-else style="flex:1;overflow:auto;padding:10px;font-family:monospace;font-size:11px;line-height:1.6">
           <div v-for="(ev, i) in glueLogsModal.events" :key="i" style="display:flex;gap:10px;border-bottom:1px solid var(--border)">
             <span class="text-dim" style="white-space:nowrap;flex-shrink:0">{{ formatDate(ev.timestamp) }}</span>
@@ -3597,33 +3597,33 @@
     <div v-if="cognitoCreateModal.open" class="modal-overlay" @click.self="cognitoCreateModal.open = false">
       <div class="modal-box" style="width:460px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Create User — {{ cognitoState.selectedPool?.name }}</span>
-          <button class="btn sm" @click="cognitoCreateModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.createUser2', { p0: cognitoState.selectedPool?.name }) }}</span>
+          <button class="btn sm" @click="cognitoCreateModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:12px;color:var(--text-muted)">Username *</label>
-            <input v-model="cognitoCreateModal.username" class="ctrl-input" placeholder="username or email" />
+            <label style="font-size:12px;color:var(--text-muted)">{{ t('awsv.username2') }}</label>
+            <input v-model="cognitoCreateModal.username" class="ctrl-input" :placeholder="t('awsv.usernameOrEmail')" />
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:12px;color:var(--text-muted)">Email</label>
+            <label style="font-size:12px;color:var(--text-muted)">{{ t('ses.type_email') }}</label>
             <input v-model="cognitoCreateModal.email" type="email" class="ctrl-input" placeholder="user@example.com" />
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:12px;color:var(--text-muted)">Temporary Password (optional)</label>
-            <input v-model="cognitoCreateModal.temporaryPassword" type="password" class="ctrl-input" placeholder="leave blank to auto-generate" />
+            <label style="font-size:12px;color:var(--text-muted)">{{ t('awsv.temporaryPasswordOptional') }}</label>
+            <input v-model="cognitoCreateModal.temporaryPassword" type="password" class="ctrl-input" :placeholder="t('awsv.leaveBlankToAutoGenerate')" />
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <input type="checkbox" v-model="cognitoCreateModal.suppressMessage" id="suppressMsg" />
-            <label for="suppressMsg" style="font-size:12px">Suppress welcome message</label>
+            <label for="suppressMsg" style="font-size:12px">{{ t('awsv.suppressWelcomeMessage') }}</label>
           </div>
           <div v-if="cognitoCreateModal.error" class="alert-error">{{ cognitoCreateModal.error }}</div>
-          <div v-if="cognitoCreateModal.result" class="alert-success">User created: {{ cognitoCreateModal.result }}</div>
+          <div v-if="cognitoCreateModal.result" class="alert-success">{{ t('awsv.userCreated', { p0: cognitoCreateModal.result }) }}</div>
           <div style="display:flex;gap:8px">
             <button class="btn" @click="submitCreateCognitoUser" :disabled="cognitoCreateModal.loading">
-              {{ cognitoCreateModal.loading ? 'Creating...' : 'Create User' }}
+              {{ cognitoCreateModal.loading ? t('awsv.lit.creating') : t('awsv.lit.createUser') }}
             </button>
-            <button class="btn sm" @click="cognitoCreateModal.open = false">Cancel</button>
+            <button class="btn sm" @click="cognitoCreateModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -3633,25 +3633,25 @@
     <div v-if="cognitoGroupModal.open" class="modal-overlay" @click.self="cognitoGroupModal.open = false">
       <div class="modal-box" style="width:460px;max-width:98vw">
         <div class="modal-header">
-          <span style="font-weight:600">Create Group — {{ cognitoState.selectedPool?.name }}</span>
-          <button class="btn sm" @click="cognitoGroupModal.open = false">Close</button>
+          <span style="font-weight:600">{{ t('awsv.createGroup2', { p0: cognitoState.selectedPool?.name }) }}</span>
+          <button class="btn sm" @click="cognitoGroupModal.open = false">{{ t('action.close') }}</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:12px;color:var(--text-muted)">Group Name *</label>
+            <label style="font-size:12px;color:var(--text-muted)">{{ t('awsv.groupName2') }}</label>
             <input v-model="cognitoGroupModal.groupName" class="ctrl-input" placeholder="developers" />
           </div>
           <div style="display:flex;flex-direction:column;gap:4px">
-            <label style="font-size:12px;color:var(--text-muted)">Description</label>
-            <textarea v-model="cognitoGroupModal.description" class="ctrl-input" rows="3" placeholder="Short description for this group"></textarea>
+            <label style="font-size:12px;color:var(--text-muted)">{{ t('th.description') }}</label>
+            <textarea v-model="cognitoGroupModal.description" class="ctrl-input" rows="3" :placeholder="t('awsv.shortDescriptionForThisGroup')"></textarea>
           </div>
           <div v-if="cognitoGroupModal.error" class="alert-error">{{ cognitoGroupModal.error }}</div>
           <div v-if="cognitoGroupModal.result" class="alert-success">{{ cognitoGroupModal.result }}</div>
           <div style="display:flex;gap:8px">
             <button class="btn" @click="submitCreateCognitoGroup" :disabled="cognitoGroupModal.loading">
-              {{ cognitoGroupModal.loading ? 'Creating...' : 'Create Group' }}
+              {{ cognitoGroupModal.loading ? t('awsv.lit.creating') : t('awsv.lit.createGroup') }}
             </button>
-            <button class="btn sm" @click="cognitoGroupModal.open = false">Cancel</button>
+            <button class="btn sm" @click="cognitoGroupModal.open = false">{{ t('action.cancel') }}</button>
           </div>
         </div>
       </div>
@@ -3665,30 +3665,30 @@
             <div style="font-weight:600;font-size:13px">{{ cognitoUserDetail.username }}</div>
             <div v-if="cognitoUserDetail.data" class="text-dim" style="font-size:11px">{{ cognitoUserDetail.data.attributes?.email || '' }}</div>
           </div>
-          <button class="btn sm" @click="cognitoUserDetail.open = false">Cerrar</button>
+          <button class="btn sm" @click="cognitoUserDetail.open = false">{{ t('action.close') }}</button>
         </div>
-        <div v-if="cognitoUserDetail.loading" class="empty-row">Loading...</div>
+        <div v-if="cognitoUserDetail.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="cognitoUserDetail.data" style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
 
           <!-- Status badges row -->
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span :class="cognitoUserDetail.data.status === 'CONFIRMED' ? 'status-ok' : 'status-warn'" style="font-size:12px;font-weight:600">{{ cognitoUserDetail.data.status }}</span>
-            <span :class="cognitoUserDetail.data.enabled ? 'status-ok' : 'status-err'" style="font-size:12px">{{ cognitoUserDetail.data.enabled ? 'Habilitado' : 'Deshabilitado' }}</span>
+            <span :class="cognitoUserDetail.data.enabled ? 'status-ok' : 'status-err'" style="font-size:12px">{{ cognitoUserDetail.data.enabled ? t('res.enabled') : t('res.disabled') }}</span>
             <span :class="cognitoUserDetail.data.mfaSettingList?.length ? 'status-ok' : 'text-dim'"
               style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid currentColor">
-              MFA: {{ cognitoUserDetail.data.mfaSettingList?.join(', ') || 'Off' }}
+              MFA: {{ cognitoUserDetail.data.mfaSettingList?.join(', ') || t('awsv.lit.off') }}
             </span>
-            <span v-if="cognitoUserDetail.data.preferredMfa" class="text-dim" style="font-size:11px">Preferido: {{ cognitoUserDetail.data.preferredMfa }}</span>
+            <span v-if="cognitoUserDetail.data.preferredMfa" class="text-dim" style="font-size:11px">{{ t('awsv.preferred', { p0: cognitoUserDetail.data.preferredMfa }) }}</span>
           </div>
 
           <!-- Timestamps -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="config-section" style="margin:0">
-              <div class="config-title">Cuenta creada</div>
+              <div class="config-title">{{ t('awsv.accountCreated') }}</div>
               <div style="font-size:12px;color:var(--text-dim)">{{ cognitoUserDetail.data.created ? formatDate(cognitoUserDetail.data.created) : '-' }}</div>
             </div>
             <div class="config-section" style="margin:0">
-              <div class="config-title">Última modificación</div>
+              <div class="config-title">{{ t('awsv.lastModified') }}</div>
               <div style="font-size:12px;color:var(--text-dim)">{{ cognitoUserDetail.data.modified ? formatDate(cognitoUserDetail.data.modified) : '-' }}</div>
             </div>
           </div>
@@ -3698,7 +3698,7 @@
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
               <div>
                 <div class="config-title" style="margin:0">MFA</div>
-                <div class="text-dim" style="font-size:11px;margin-top:4px">Habilita o deshabilita MFA para este usuario.</div>
+                <div class="text-dim" style="font-size:11px;margin-top:4px">{{ t('awsv.enableOrDisableMfaForThis') }}</div>
               </div>
               <label v-if="!cognitoUserDetail.mfaEnabled" style="display:flex;align-items:center;gap:8px;cursor:pointer">
                 <input
@@ -3708,18 +3708,18 @@
                   @change="onCognitoEnableMfaToggle"
                 />
                 <span class="text-dim" style="font-size:12px;font-weight:600">
-                  Activar MFA
+                  {{ t('awsv.enableMfa') }}
                 </span>
               </label>
               <div v-else style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span class="status-ok" style="font-size:12px;font-weight:600">MFA habilitado</span>
+                <span class="status-ok" style="font-size:12px;font-weight:600">{{ t('awsv.mfaEnabled') }}</span>
                 <button class="btn sm danger" :disabled="cognitoUserDetail.savingMfa" @click="disableCognitoUserMfa">
-                  {{ cognitoUserDetail.savingMfa ? 'Procesando...' : 'Desactivar' }}
+                  {{ cognitoUserDetail.savingMfa ? t('awsv.lit.processing') : t('awsv.lit.turnOff') }}
                 </button>
               </div>
             </div>
             <div v-if="cognitoUserDetail.mfaEnabled" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
-              <span class="text-dim" style="font-size:11px">Método preferido</span>
+              <span class="text-dim" style="font-size:11px">{{ t('awsv.preferredMethod') }}</span>
               <select
                 v-model="cognitoUserDetail.mfaMethod"
                 class="ctrl-input"
@@ -3734,7 +3734,7 @@
                 :disabled="cognitoUserDetail.savingMfa"
                 @click="applyCognitoUserMfaMethod"
               >
-                {{ cognitoUserDetail.savingMfa ? 'Aplicando...' : 'Cambiar método' }}
+                {{ cognitoUserDetail.savingMfa ? t('awsv.lit.applying') : t('awsv.lit.changeMethod') }}
               </button>
             </div>
           </div>
@@ -3742,12 +3742,12 @@
           <!-- Editable attributes -->
           <div class="config-section">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-              <div class="config-title" style="margin:0">Atributos editables</div>
+              <div class="config-title" style="margin:0">{{ t('awsv.editableAttributes') }}</div>
               <button class="btn sm" :disabled="cognitoUserDetail.savingAttributes" @click="saveCognitoUserAttributes">
-                {{ cognitoUserDetail.savingAttributes ? 'Guardando...' : 'Guardar atributos' }}
+                {{ cognitoUserDetail.savingAttributes ? t('awsv.lit.saving') : t('awsv.lit.saveAttributes') }}
               </button>
             </div>
-            <div v-if="!cognitoUserDetail.editFields.length" class="text-dim" style="font-size:12px;padding:6px 0">No editable fields available for this user pool schema.</div>
+            <div v-if="!cognitoUserDetail.editFields.length" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.noEditableFieldsAvailableForThis') }}</div>
             <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:8px">
               <div v-for="field in cognitoUserDetail.editFields" :key="field.name" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
@@ -3766,33 +3766,33 @@
           <!-- Groups membership -->
           <div class="config-section">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-              <div class="config-title" style="margin:0">Grupos</div>
+              <div class="config-title" style="margin:0">{{ t('ec2d.groups') }}</div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <select v-model="cognitoUserDetail.selectedGroup" class="ctrl-input" style="min-width:220px">
-                  <option value="">Select group to add</option>
+                  <option value="">{{ t('awsv.selectGroupToAdd') }}</option>
                   <option v-for="g in cognitoUserAvailableGroups()" :key="g.name" :value="g.name">{{ g.name }}</option>
                 </select>
                 <button class="btn sm" :disabled="cognitoUserDetail.savingGroup || !cognitoUserDetail.selectedGroup" @click="addCognitoUserGroup">
-                  {{ cognitoUserDetail.savingGroup ? 'Updating...' : 'Add to group' }}
+                  {{ cognitoUserDetail.savingGroup ? t('awsv.lit.updating') : t('awsv.lit.addToGroup') }}
                 </button>
               </div>
             </div>
-            <div v-if="cognitoUserDetail.groupsLoading" class="text-dim" style="font-size:12px;padding:6px 0">Loading groups...</div>
-            <div v-else-if="!cognitoUserDetail.groups.length" class="text-dim" style="font-size:12px;padding:6px 0">This user is not assigned to any group.</div>
+            <div v-if="cognitoUserDetail.groupsLoading" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.loadingGroups') }}</div>
+            <div v-else-if="!cognitoUserDetail.groups.length" class="text-dim" style="font-size:12px;padding:6px 0">{{ t('awsv.thisUserIsNotAssignedTo') }}</div>
             <div v-else style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
               <div v-for="g in cognitoUserDetail.groups" :key="g.name" style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:6px;padding:8px 10px">
                 <div>
                   <div style="font-weight:600">{{ g.name }}</div>
                   <div class="text-dim" style="font-size:11px">{{ g.description || '-' }}</div>
                 </div>
-                <button class="btn sm danger" :disabled="cognitoUserDetail.savingGroup" @click="removeCognitoUserGroup(g.name)">Remove</button>
+                <button class="btn sm danger" :disabled="cognitoUserDetail.savingGroup" @click="removeCognitoUserGroup(g.name)">{{ t('awsLogs.remove') }}</button>
               </div>
             </div>
           </div>
 
           <!-- MFA Options detail -->
           <div v-if="cognitoUserDetail.data.mfaOptions?.length" class="config-section">
-            <div class="config-title">MFA Options</div>
+            <div class="config-title">{{ t('awsv.mfaOptions') }}</div>
             <div v-for="opt in cognitoUserDetail.data.mfaOptions" :key="opt.DeliveryMedium" class="config-row">
               <span>{{ opt.DeliveryMedium }}</span><span class="text-dim mono-xs">{{ opt.AttributeName }}</span>
             </div>
@@ -3800,9 +3800,9 @@
 
           <!-- Actions -->
           <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--border)">
-            <button class="btn sm" @click="doCognitoResetPassword(cognitoUserDetail.data)">Enviar reset de contraseña</button>
-            <button class="btn sm" v-if="cognitoUserDetail.data.enabled" @click="doCognitoDisable(cognitoUserDetail.data)">Deshabilitar</button>
-            <button class="btn sm" v-else @click="doCognitoEnable(cognitoUserDetail.data)">Habilitar</button>
+            <button class="btn sm" @click="doCognitoResetPassword(cognitoUserDetail.data)">{{ t('awsv.sendPasswordReset') }}</button>
+            <button class="btn sm" v-if="cognitoUserDetail.data.enabled" @click="doCognitoDisable(cognitoUserDetail.data)">{{ t('awsv.disable') }}</button>
+            <button class="btn sm" v-else @click="doCognitoEnable(cognitoUserDetail.data)">{{ t('awsv.enable') }}</button>
           </div>
         </div>
       </div>
@@ -4036,16 +4036,16 @@ const filteredLex         = computed(() => filterRows(awsStore.lexBots,         
 
 // ─── Lex Panel (master-detail) ────────────────────────────────────────────────
 const lexPanel = reactive({ bot: null, innerTab: 'intents' })
-const lexInnerTabs = [
-  { id: 'intents',  label: 'Intents'   },
-  { id: 'aliases',  label: 'Aliases'   },
-  { id: 'slottypes',label: 'Slot Types'},
-  { id: 'chat',     label: 'Chat'      },
-  { id: 'logs',     label: 'Logs'      },
-  { id: 'missed',   label: 'Missed'    },
-  { id: 'metrics',  label: 'Metrics'   },
-  { id: 'testset',  label: 'Test Set'  },
-]
+const lexInnerTabs = computed(() => [
+  { id: 'intents',  label: 'Intents' },
+  { id: 'aliases',  label: 'Aliases' },
+  { id: 'slottypes',label: 'Slot Types' },
+  { id: 'chat',     label: 'Chat' },
+  { id: 'logs',     label: 'Logs' },
+  { id: 'missed',   label: t('awsv.tabMissed') },
+  { id: 'metrics',  label: t('awsv.tabMetrics') },
+  { id: 'testset',  label: 'Test Set' },
+])
 const lexVersionOptions = ref(['DRAFT'])
 
 function selectLexBot(bot) {
@@ -4285,23 +4285,23 @@ function onProfileChange() {
 
 async function startEc2(i) {
   const r = await awsStore.startEc2Instance(i.id)
-  if (r) { toast(`Starting ${i.name}`, 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
+  if (r) { toast(t('awsv.toastStarting', { name: i.name }), 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
   else toast(awsStore.error || 'Error', 'error')
 }
 async function stopEc2(i) {
   const r = await awsStore.stopEc2Instance(i.id)
-  if (r) { toast(`Stopping ${i.name}`, 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
+  if (r) { toast(t('awsv.toastStopping', { name: i.name }), 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
   else toast(awsStore.error || 'Error', 'error')
 }
 
 async function startEcs(svc) {
   const r = await awsStore.startEcsService(svc.cluster, svc.name)
-  if (r) { toast(`Started ${svc.name}`, 'success'); loaded.ecs = false; loadTab('ecs') }
+  if (r) { toast(t('awsv.toastStarted', { name: svc.name }), 'success'); loaded.ecs = false; loadTab('ecs') }
   else toast(awsStore.error || 'Error', 'error')
 }
 async function stopEcs(svc) {
   const r = await awsStore.stopEcsService(svc.cluster, svc.name)
-  if (r) { toast(`Stopped ${svc.name}`, 'success'); loaded.ecs = false; loadTab('ecs') }
+  if (r) { toast(t('awsv.toastStopped', { name: svc.name }), 'success'); loaded.ecs = false; loadTab('ecs') }
   else toast(awsStore.error || 'Error', 'error')
 }
 
@@ -4337,8 +4337,8 @@ async function fetchFullConfig() {
 
 function copyConfig() {
   navigator.clipboard?.writeText(configDisplay.value)
-    .then(() => toast('Copied!', 'success'))
-    .catch(() => toast('Copy failed', 'error'))
+    .then(() => toast(t('res.copied'), 'success'))
+    .catch(() => toast(t('term.copyFailed'), 'error'))
 }
 
 const logsModal = reactive({
@@ -4376,10 +4376,10 @@ async function submitInvoke() {
   try {
     let payload = {}
     try { payload = JSON.parse(invokeModal.payload) }
-    catch { toast('Invalid JSON payload', 'error'); invokeModal.loading = false; return }
+    catch { toast(t('awsv.toastInvalidJson'), 'error'); invokeModal.loading = false; return }
     const data = await awsStore.invokeLambda(invokeModal.name, payload)
     invokeModal.result = data
-    if (data?.functionError) toast(`Lambda error: ${data.functionError}`, 'error')
+    if (data?.functionError) toast(t('awsv.toastLambdaError', { error: data.functionError }), 'error')
   } finally { invokeModal.loading = false }
 }
 
@@ -4512,7 +4512,7 @@ function openEksObservability(cluster) {
 
 async function addEksToKubeconfig(cluster) {
   try {
-    toast(`Adding ${cluster.name} to ~/.kube/config...`, 'info')
+    toast(t('awsv.toastAddingKubeconfig', { name: cluster.name }), 'info')
     const data = await awsStore.addEksKubeconfig(cluster.name)
     if (data) {
       toast(data.message || `${cluster.name} added successfully!`, 'success')
@@ -4546,7 +4546,7 @@ async function doCreateS3Bucket() {
   try {
     const result = await awsStore.createS3Bucket(createS3Modal.name.trim(), createS3Modal.region, createS3Modal.blockPublicAccess)
     if (result?.created) {
-      toast(`Bucket "${result.name}" created in ${result.region}`, 'success')
+      toast(t('awsv.toastBucketCreated', { name: result.name, region: result.region }), 'success')
       createS3Modal.open = false
       await awsStore.fetchS3Buckets()
     } else {
@@ -4572,11 +4572,11 @@ async function testS3Bucket(bucketName) {
     if (r?.accessible) {
       s3TestState[bucketName].ok  = true
       s3TestState[bucketName].msg = `OK · ${r.latencyMs}ms · ${r.region}`
-      toast(`S3 "${bucketName}" accessible — ${r.latencyMs}ms (${r.region})`, 'success')
+      toast(t('awsv.toastS3Accessible', { name: bucketName, ms: r.latencyMs, region: r.region }), 'success')
     } else {
       s3TestState[bucketName].ok  = false
       s3TestState[bucketName].msg = r?.reason || 'Not accessible'
-      toast(`S3 "${bucketName}" — ${r?.reason || 'Not accessible'}`, 'error')
+      toast(`S3 "${bucketName}" — ${r?.reason || t('awsv.notAccessible')}`, 'error')
     }
   } catch (e) {
     s3TestState[bucketName].ok  = false
@@ -4686,7 +4686,7 @@ async function openEcrDeploy(r) {
 
 function copyEcrManifest() {
   navigator.clipboard?.writeText(ecrDeployYaml.value)
-  toast('Manifest copied to clipboard', 'success')
+  toast(t('awsv.toastManifestCopied'), 'success')
 }
 
 async function doApplyEcrToK8s() {
@@ -4696,7 +4696,7 @@ async function doApplyEcrToK8s() {
     const result = await awsStore.applyK8sManifest(ecrDeployYaml.value, ecrDeployModal.context || undefined)
     ecrDeployModal.applyResult = result
     if (result?.success) {
-      toast(`Deployment applied successfully`, 'success')
+      toast(t('awsv.toastDeploymentApplied'), 'success')
     } else {
       toast(result?.stderr || 'kubectl apply failed', 'error')
     }
@@ -5019,7 +5019,7 @@ async function doCreateLexAlias() {
     lexAliasesModal.aliases.unshift(alias)
     lexAliasesModal.showCreate = false
     Object.assign(lexAliasesModal.createForm, { name: '', botVersion: 'DRAFT', description: '' })
-    toast(`Alias "${alias.name}" created`, 'success')
+    toast(t('awsv.toastAliasCreated', { name: alias.name }), 'success')
   } catch (e) {
     lexAliasesModal.createError = e?.message || 'Error creating alias'
   } finally {
@@ -5299,7 +5299,7 @@ async function saveTags() {
     const validTags   = tagsModal.tags.filter(t => t.Key && t.Key.trim())
     const r = await awsStore.saveTags(tagsModal.service, tagsModal.arn, validTags, removedKeys)
     if (r?.success) {
-      toast('Tags saved', 'success')
+      toast(t('awsv.toastTagsSaved'), 'success')
       tagsModal.originalKeys = currentKeys
       tagsModal.open = false
     } else {
@@ -5338,7 +5338,7 @@ async function submitLogging() {
     }
     if (r?.success) {
       loggingModal.result = r
-      toast('CloudWatch logging enabled', 'success')
+      toast(t('awsv.toastLoggingEnabled'), 'success')
     } else {
       loggingModal.error = awsStore.error || 'Failed to enable logging'
     }
@@ -5369,7 +5369,7 @@ async function openGlueRuns(job) {
 
 async function runGlueJob(job) {
   const r = await awsStore.runGlueJob(job.name)
-  if (r?.jobRunId) toast(`Glue job started: ${r.jobRunId}`, 'success')
+  if (r?.jobRunId) toast(t('awsv.toastGlueStarted', { id: r.jobRunId }), 'success')
   else toast(awsStore.error || 'Failed to start job', 'error')
 }
 
@@ -5415,13 +5415,13 @@ async function submitAthenaQuery() {
 
 async function activatePipeline(p) {
   const r = await awsStore.activateDataPipeline(p.id)
-  if (r?.success) { toast(`Activated: ${p.name}`, 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
+  if (r?.success) { toast(t('awsv.toastActivated', { name: p.name }), 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
   else toast(awsStore.error || 'Error', 'error')
 }
 
 async function deactivatePipeline(p) {
   const r = await awsStore.deactivateDataPipeline(p.id)
-  if (r?.success) { toast(`Paused: ${p.name}`, 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
+  if (r?.success) { toast(t('awsv.toastPaused', { name: p.name }), 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
   else toast(awsStore.error || 'Error', 'error')
 }
 
@@ -5448,7 +5448,7 @@ async function submitInvalidation() {
     const r = await awsStore.invalidateCloudfront(invalidateModal.dist.id, paths)
     if (r?.invalidationId) {
       invalidateModal.result = `Invalidation created: ${r.invalidationId} (${r.status})`
-      toast('Invalidation created', 'success')
+      toast(t('awsv.toastInvalidationCreated'), 'success')
     } else {
       invalidateModal.error = awsStore.error || 'Failed to create invalidation'
     }
@@ -5495,7 +5495,7 @@ async function submitCfCreate() {
     })
     if (r?.domainName) {
       cfCreateModal.result = r
-      toast(`Distribution created: ${r.domainName}`, 'success')
+      toast(t('awsv.toastDistributionCreated', { domain: r.domainName }), 'success')
       loaded.cloudfront = false; loadTab('cloudfront')
     } else {
       cfCreateModal.error = awsStore.error || 'Failed to create distribution'
@@ -5613,13 +5613,13 @@ async function testRoute53Record(record, test) {
 
 // ─── Cognito Actions ──────────────────────────────────────────────────────────
 
-const cognitoInnerTabs = [
-  { id: 'users',   label: 'Users' },
+const cognitoInnerTabs = computed(() => [
+  { id: 'users',   label: t('awsv.tabUsers') },
   { id: 'clients', label: 'App Clients' },
-  { id: 'idps',    label: 'Identity Providers' },
-  { id: 'groups',  label: 'Groups' },
-  { id: 'config',  label: 'Pool Config' },
-]
+  { id: 'idps',    label: t('awsv.tabIdentityProviders') },
+  { id: 'groups',  label: t('ec2d.groups') },
+  { id: 'config',  label: t('awsv.tabPoolConfig') },
+])
 
 const cognitoState = reactive({
   selectedPool:    null,
@@ -5737,21 +5737,21 @@ async function loadCognitoPoolConfig() {
 }
 
 async function doCognitoResetPassword(user) {
-  if (!confirm(`Send password reset email to ${user.username}?`)) return
+  if (!confirm(t('awsv.confirmResetEmail', { user: user.username }))) return
   const r = await awsStore.resetCognitoUserPassword(cognitoState.selectedPool.id, user.username)
-  if (r?.success) toast('Password reset email sent.', 'success')
+  if (r?.success) toast(t('awsv.toastResetSent'), 'success')
   else toast(awsStore.error || 'Failed', 'error')
 }
 
 async function doCognitoEnable(user) {
   const r = await awsStore.enableCognitoUser(cognitoState.selectedPool.id, user.username)
-  if (r?.success) { toast('User enabled.', 'success'); user.enabled = true }
+  if (r?.success) { toast(t('awsv.toastUserEnabled'), 'success'); user.enabled = true }
   else toast(awsStore.error || 'Failed', 'error')
 }
 
 async function doCognitoDisable(user) {
   const r = await awsStore.disableCognitoUser(cognitoState.selectedPool.id, user.username)
-  if (r?.success) { toast('User disabled.', 'success'); user.enabled = false }
+  if (r?.success) { toast(t('awsv.toastUserDisabled'), 'success'); user.enabled = false }
   else toast(awsStore.error || 'Failed', 'error')
 }
 
@@ -5761,7 +5761,7 @@ const cognitoCreateModal = reactive({ open: false, loading: false, username: '',
 function openCreateCognitoUser() { Object.assign(cognitoCreateModal, { open: true, username: '', email: '', temporaryPassword: '', suppressMessage: false, error: null, result: null, loading: false }) }
 
 async function submitCreateCognitoUser() {
-  if (!cognitoCreateModal.username) { cognitoCreateModal.error = 'Username is required'; return }
+  if (!cognitoCreateModal.username) { cognitoCreateModal.error = t('awsv.errUsernameRequired'); return }
   cognitoCreateModal.loading = true; cognitoCreateModal.error = null; cognitoCreateModal.result = null
   try {
     const r = await awsStore.createCognitoUser(cognitoState.selectedPool.id, {
@@ -5786,7 +5786,7 @@ function openCreateCognitoGroup() {
 
 async function submitCreateCognitoGroup() {
   if (!cognitoGroupModal.groupName.trim()) {
-    cognitoGroupModal.error = 'Group name is required'
+    cognitoGroupModal.error = t('awsv.errGroupRequired')
     return
   }
   cognitoGroupModal.loading = true
@@ -5809,7 +5809,7 @@ async function submitCreateCognitoGroup() {
       })
     if (r?.success) {
       cognitoGroupModal.result = `Group "${r.group?.name || cognitoGroupModal.groupName}" created.`
-      toast('Group created.', 'success')
+      toast(t('awsv.toastGroupCreated'), 'success')
       await loadCognitoGroups()
     } else {
       cognitoGroupModal.error = awsStore.error || 'Failed to create group'
@@ -5969,10 +5969,10 @@ async function applyCognitoUserMfaMethod() {
       cognitoUserDetail.mfaMethod,
     )
     if (r?.success) {
-      toast('Método MFA actualizado.', 'success')
+      toast(t('awsv.toastMfaUpdated'), 'success')
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo actualizar el método MFA', 'error')
+      toast(awsStore.error || t('awsv.lit.mfaUpdateFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingMfa = false }
 }
@@ -6002,7 +6002,7 @@ async function saveCognitoUserAttributes() {
   try {
     const r = await awsStore.updateCognitoUserAttributes(cognitoState.selectedPool.id, cognitoUserDetail.username, attributes)
     if (r?.success) {
-      toast('Atributos actualizados.', 'success')
+      toast(t('awsv.toastAttributesUpdated'), 'success')
       await loadCognitoUsers()
       await refreshCognitoUserDetail()
     } else {
@@ -6017,7 +6017,7 @@ async function addCognitoUserGroup() {
   try {
     const r = await awsStore.addCognitoUserToGroup(cognitoState.selectedPool.id, cognitoUserDetail.username, cognitoUserDetail.selectedGroup)
     if (r?.success) {
-      toast('Grupo asignado.', 'success')
+      toast(t('awsv.toastGroupAssigned'), 'success')
       cognitoUserDetail.selectedGroup = ''
       await refreshCognitoUserDetail()
     } else {
@@ -6028,12 +6028,12 @@ async function addCognitoUserGroup() {
 
 async function removeCognitoUserGroup(groupName) {
   if (!cognitoUserDetail.username) return
-  if (!confirm(`Remove ${cognitoUserDetail.username} from group ${groupName}?`)) return
+  if (!confirm(t('awsv.confirmRemoveFromGroup', { user: cognitoUserDetail.username, group: groupName }))) return
   cognitoUserDetail.savingGroup = true
   try {
     const r = await awsStore.removeCognitoUserFromGroup(cognitoState.selectedPool.id, cognitoUserDetail.username, groupName)
     if (r?.success) {
-      toast('Grupo removido.', 'success')
+      toast(t('awsv.toastGroupRemoved'), 'success')
       await refreshCognitoUserDetail()
     } else {
       toast(awsStore.error || 'No se pudo quitar el grupo', 'error')
@@ -6070,7 +6070,7 @@ function openDynamoCreate() {
 
 async function submitDynamoCreate() {
   if (!dynamoCreate.tableName.trim() || !dynamoCreate.partitionKey.trim()) {
-    dynamoCreate.error = 'Table name and partition key are required'; return
+    dynamoCreate.error = t('awsv.errTableRequired'); return
   }
   dynamoCreate.loading = true; dynamoCreate.error = null; dynamoCreate.result = null
   try {
@@ -6086,7 +6086,7 @@ async function submitDynamoCreate() {
     })
     if (r?.tableName) {
       dynamoCreate.result = `Table "${r.tableName}" created (${r.status})`
-      toast(`DynamoDB table created: ${r.tableName}`, 'success')
+      toast(t('awsv.toastTableCreated', { name: r.tableName }), 'success')
       loaded.dynamodb = false; loadTab('dynamodb')
     } else {
       dynamoCreate.error = awsStore.error || 'Failed to create table'
@@ -6106,11 +6106,11 @@ async function openGlueInfo(j) {
 }
 
 // ─── Athena Sub-tabs ─────────────────────────────────────────────────────────
-const athenaSubTabs = [
+const athenaSubTabs = computed(() => [
   { id: 'workgroups',  label: 'Workgroups' },
   { id: 'datasources', label: 'Data Sources' },
-  { id: 'editor',      label: '⚡ Query Editor' },
-]
+  { id: 'editor',      label: t('awsv.queryEditor') },
+])
 const athenaSubTab = ref('workgroups')
 
 // ─── Athena Workgroup Info Modal ──────────────────────────────────────────────
@@ -6294,7 +6294,7 @@ async function executeDynamoBrowse(exclusiveStartKey) {
     if (dynamoBrowse.mode === 'scan') {
       resp = await awsStore.scanDynamoTable(dynamoBrowse.table, { limit: dynamoBrowse.limit, exclusiveStartKey })
     } else {
-      if (!dynamoBrowse.keyName || dynamoBrowse.keyValue === '') { dynamoBrowse.error = 'Partition key name and value are required.'; return }
+      if (!dynamoBrowse.keyName || dynamoBrowse.keyValue === '') { dynamoBrowse.error = t('awsv.errPartitionRequired'); return }
       resp = await awsStore.queryDynamoTable(dynamoBrowse.table, {
         keyName: dynamoBrowse.keyName, keyValue: dynamoBrowse.keyValue,
         keyType: dynamoBrowse.keyType, indexName: dynamoBrowse.indexName || undefined,
@@ -6349,8 +6349,8 @@ function openDynamoCellModal(column, val) {
 
 function copyText(text) {
   navigator.clipboard?.writeText(text)
-    .then(() => toast('Copied!', 'success'))
-    .catch(() => toast('Copy failed', 'error'))
+    .then(() => toast(t('res.copied'), 'success'))
+    .catch(() => toast(t('term.copyFailed'), 'error'))
 }
 
 // ─── DynamoDB Edit Item Modal ─────────────────────────────────────────────────
@@ -6397,7 +6397,7 @@ async function submitDynamoEdit() {
     const item = JSON.parse(dynamoEdit.jsonText)
     const result = await awsStore.putDynamoItem(dynamoEdit.table, item)
     if (!result) { dynamoEdit.error = awsStore.error || 'Failed to save item'; return }
-    toast('Item saved successfully', 'success')
+    toast(t('awsv.toastItemSaved'), 'success')
     dynamoEdit.open = false
     await executeDynamoBrowse(dynamoBrowse.prevKeys[dynamoBrowse.prevKeys.length - 1])
   } catch (e) {
@@ -6410,13 +6410,13 @@ async function submitDynamoEdit() {
 async function deleteDynamoItemFromRow(item) {
   const keyAttrs = {}
   for (const k of dynamoBrowse.keySchema) {
-    if (item[k.name] === undefined) { toast(`Key field "${k.name}" not found in item`, 'error'); return }
+    if (item[k.name] === undefined) { toast(t('awsv.toastKeyMissing', { name: k.name }), 'error'); return }
     keyAttrs[k.name] = item[k.name]
   }
-  if (!confirm(`Delete item with key ${JSON.stringify(keyAttrs)}?`)) return
+  if (!confirm(t('awsv.confirmDeleteItem', { key: JSON.stringify(keyAttrs) }))) return
   const result = await awsStore.deleteDynamoItem(dynamoBrowse.table, keyAttrs)
   if (!result) { toast(awsStore.error || 'Failed to delete item', 'error'); return }
-  toast('Item deleted', 'success')
+  toast(t('awsv.toastItemDeleted'), 'success')
   await executeDynamoBrowse(dynamoBrowse.prevKeys[dynamoBrowse.prevKeys.length - 1])
 }
 
@@ -6425,14 +6425,14 @@ async function deleteDynamoItemFromRow(item) {
 const rdsInfoModal = reactive({ open: false, loading: false, error: null, id: '', data: null })
 const rdsConnectModal = reactive({ open: false, loading: false, error: null, id: '', password: '', data: null })
 const rdsResetPwdModal = reactive({ open: false, loading: false, error: null, success: null, id: '', newPassword: '', confirmPassword: '' })
-const rdsInfoTabs = [
-  { id: 'connectivity', label: 'Conectividad y seguridad' },
-  { id: 'monitoring', label: 'Supervisión y registros' },
-  { id: 'configuration', label: 'Configuración' },
-  { id: 'maintenance', label: 'Mantenimiento y copias de seguridad' },
-  { id: 'migration', label: 'Migración y réplicas' },
-  { id: 'tags', label: 'Etiquetas' },
-]
+const rdsInfoTabs = computed(() => [
+  { id: 'connectivity', label: t('awsv.connectivityAndSecurity') },
+  { id: 'monitoring', label: t('awsv.rdsTabMonitoring') },
+  { id: 'configuration', label: t('lmd.tabConfig') },
+  { id: 'maintenance', label: t('awsv.rdsTabMaintenance') },
+  { id: 'migration', label: t('awsv.rdsTabMigration') },
+  { id: 'tags', label: t('awsv.tags') },
+])
 const rdsInfoTab = ref('connectivity')
 
 const rdsInfoHighlights = computed(() => {
@@ -6446,37 +6446,37 @@ const rdsInfoHighlights = computed(() => {
     case 'connectivity':
       return [
         { label: 'Endpoint', value: d.endpoint ? `${d.endpoint}:${d.port || ''}` : '-', tone: 'text-dim' },
-        { label: 'Acceso público', value: d.public ? 'Habilitado' : 'Privado', tone: d.public ? 'status-warn' : 'status-ok' },
-        { label: 'Grupos de seguridad', value: String(sgCount), tone: sgCount ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.publicAccess'), value: d.public ? t('res.enabled') : t('eksd.private'), tone: d.public ? 'status-warn' : 'status-ok' },
+        { label: t('awsv.securityGroupsLabel'), value: String(sgCount), tone: sgCount ? 'status-ok' : 'text-dim' },
       ]
     case 'monitoring':
       return [
-        { label: 'Monitoreo mejorado', value: d.monitoringInterval ? `Cada ${d.monitoringInterval}s` : 'Deshabilitado', tone: d.monitoringInterval ? 'status-ok' : 'text-dim' },
-        { label: 'Performance Insights', value: d.performanceInsightsEnabled ? 'Habilitado' : 'Deshabilitado', tone: d.performanceInsightsEnabled ? 'status-ok' : 'text-dim' },
-        { label: 'Logs exportados', value: String(logCount), tone: logCount ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.enhancedMonitoring'), value: d.monitoringInterval ? t('gri.probeEvery', { n: d.monitoringInterval }) : t('res.disabled'), tone: d.monitoringInterval ? 'status-ok' : 'text-dim' },
+        { label: 'Performance Insights', value: d.performanceInsightsEnabled ? t('res.enabled') : t('res.disabled'), tone: d.performanceInsightsEnabled ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.exportedLogs'), value: String(logCount), tone: logCount ? 'status-ok' : 'text-dim' },
       ]
     case 'configuration':
       return [
-        { label: 'Motor', value: `${d.engine || '-'} ${d.engineVersion || ''}`.trim(), tone: 'text-dim' },
-        { label: 'Clase', value: d.class || '-', tone: 'text-dim' },
-        { label: 'Almacenamiento', value: `${d.storageGb ?? '-'} GiB`, tone: 'text-dim' },
+        { label: t('gsi.engine'), value: `${d.engine || '-'} ${d.engineVersion || ''}`.trim(), tone: 'text-dim' },
+        { label: t('awsv.instanceClass'), value: d.class || '-', tone: 'text-dim' },
+        { label: t('ec2d.tabStorage'), value: `${d.storageGb ?? '-'} GiB`, tone: 'text-dim' },
       ]
     case 'maintenance':
       return [
-        { label: 'Retención de backup', value: d.backupRetention != null ? `${d.backupRetention} días` : '-', tone: 'text-dim' },
-        { label: 'Protección de borrado', value: d.deletionProtection ? 'Habilitada' : 'Deshabilitada', tone: d.deletionProtection ? 'status-ok' : 'text-dim' },
-        { label: 'Estado', value: d.status || '-', tone: d.status === 'available' ? 'status-ok' : 'status-warn' },
+        { label: t('awsv.backupRetention'), value: d.backupRetention != null ? t('awsv.daysValue', { n: d.backupRetention }) : '-', tone: 'text-dim' },
+        { label: t('awsv.deletionProtection'), value: d.deletionProtection ? t('res.enabled') : t('res.disabled'), tone: d.deletionProtection ? 'status-ok' : 'text-dim' },
+        { label: t('res.state'), value: d.status || '-', tone: d.status === 'available' ? 'status-ok' : 'status-warn' },
       ]
     case 'migration':
       return [
-        { label: 'Instancia origen', value: d.readReplicaSourceDBInstanceIdentifier || '-', tone: 'text-dim' },
-        { label: 'Modo réplica', value: d.replicaMode || '-', tone: 'text-dim' },
-        { label: 'Total de réplicas', value: String(replicasCount), tone: replicasCount ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.sourceInstance'), value: d.readReplicaSourceDBInstanceIdentifier || '-', tone: 'text-dim' },
+        { label: t('awsv.replicaMode'), value: d.replicaMode || '-', tone: 'text-dim' },
+        { label: t('awsv.totalReplicas'), value: String(replicasCount), tone: replicasCount ? 'status-ok' : 'text-dim' },
       ]
     case 'tags':
       return [
-        { label: 'Etiquetas', value: String(tagCount), tone: tagCount ? 'status-ok' : 'text-dim' },
-        { label: 'Copiar etiquetas a snapshot', value: d.copyTagsToSnapshot ? 'Sí' : 'No', tone: d.copyTagsToSnapshot ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.tags'), value: String(tagCount), tone: tagCount ? 'status-ok' : 'text-dim' },
+        { label: t('awsv.copyTagsToSnapshot'), value: t(d.copyTagsToSnapshot ? 'common.yes' : 'common.no'), tone: d.copyTagsToSnapshot ? 'status-ok' : 'text-dim' },
         { label: 'ARN', value: d.arn || '-', tone: 'text-dim' },
       ]
     default:
@@ -6499,7 +6499,7 @@ async function openRdsInfo(db) {
   Object.assign(rdsInfoModal, { open: true, loading: true, error: null, id: db.id, data: null })
   try {
     rdsInfoModal.data = await awsStore.fetchRdsConfig(db.id)
-    if (!rdsInfoModal.data) rdsInfoModal.error = awsStore.error || 'No se pudo cargar la información de RDS'
+    if (!rdsInfoModal.data) rdsInfoModal.error = awsStore.error || t('awsv.lit.rdsInfoFailed')
   } catch (e) { rdsInfoModal.error = e.message }
   finally { rdsInfoModal.loading = false }
 }
@@ -6508,7 +6508,7 @@ async function openRdsConnect(db) {
   Object.assign(rdsConnectModal, { open: true, loading: true, error: null, id: db.id, password: '', data: null })
   try {
     rdsConnectModal.data = await awsStore.fetchRdsConnectionStrings(db.id)
-    if (!rdsConnectModal.data) rdsConnectModal.error = awsStore.error || 'No se pudieron cargar las cadenas de conexión'
+    if (!rdsConnectModal.data) rdsConnectModal.error = awsStore.error || t('awsv.lit.rdsConnectionFailed')
   } catch (e) { rdsConnectModal.error = e.message }
   finally { rdsConnectModal.loading = false }
 }
@@ -6524,22 +6524,22 @@ async function doRdsResetPassword() {
   rdsResetPwdModal.error = null
   rdsResetPwdModal.success = null
   if (!rdsResetPwdModal.newPassword || rdsResetPwdModal.newPassword.length < 8) {
-    rdsResetPwdModal.error = 'La contraseña debe tener al menos 8 caracteres'
+    rdsResetPwdModal.error = t('awsv.errPasswordLength')
     return
   }
   if (rdsResetPwdModal.newPassword !== rdsResetPwdModal.confirmPassword) {
-    rdsResetPwdModal.error = 'Las contraseñas no coinciden'
+    rdsResetPwdModal.error = t('awsv.errPasswordMismatch')
     return
   }
   rdsResetPwdModal.loading = true
   try {
     const resp = await awsStore.resetRdsPassword(rdsResetPwdModal.id, rdsResetPwdModal.newPassword)
     if (resp?.ok) {
-      rdsResetPwdModal.success = resp.message || 'Restablecimiento de contraseña iniciado'
+      rdsResetPwdModal.success = resp.message || t('awsv.lit.resetStarted')
       rdsResetPwdModal.newPassword = ''
       rdsResetPwdModal.confirmPassword = ''
     } else {
-      rdsResetPwdModal.error = awsStore.error || 'No se pudo restablecer la contraseña'
+      rdsResetPwdModal.error = awsStore.error || t('awsv.lit.resetFailed')
     }
   } catch (e) { rdsResetPwdModal.error = e.message }
   finally { rdsResetPwdModal.loading = false }
@@ -6636,7 +6636,7 @@ async function submitImportSecret() {
     )
     if (r?.keysImported) {
       importSecretModal.result = `✓ ${r.keysImported} variable(s) importadas exitosamente al Env Manager.`
-      toast(`Importadas ${r.keysImported} variable(s) desde Secrets Manager`, 'success')
+      toast(t('awsv.toastImported', { n: r.keysImported }), 'success')
       envStore.fetchProfiles()
     } else {
       importSecretModal.error = awsStore.error || 'Import fallido'
