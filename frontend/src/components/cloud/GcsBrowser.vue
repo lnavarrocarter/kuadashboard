@@ -16,7 +16,7 @@
         <!-- Toolbar: breadcrumb + actions -->
         <div class="s3b-toolbar">
           <div class="s3b-breadcrumb-inner">
-            <span class="s3b-crumb root" @click="navigate('')">&#x1F3E0; root</span>
+            <span class="s3b-crumb root" @click="navigate('')">&#x1F3E0; {{ t('objb.root') }}</span>
             <template v-for="(crumb, i) in breadcrumbs" :key="i">
               <span class="s3b-sep">/</span>
               <span class="s3b-crumb" :class="{ active: i === breadcrumbs.length - 1 }" @click="navigate(crumb.prefix)">
@@ -25,8 +25,8 @@
             </template>
           </div>
           <div class="s3b-toolbar-actions">
-            <button class="s3b-btn accent" @click="triggerUpload()" :disabled="uploading" title="Upload files to current folder">
-              {{ uploading ? `Uploading (${uploadDone}/${uploadTotal})…` : '⬆ Upload' }}
+            <button class="s3b-btn accent" @click="triggerUpload()" :disabled="uploading" :title="t('objb.uploadHint')">
+              {{ uploading ? t('objb.uploading', { done: uploadDone, total: uploadTotal }) : '⬆ ' + t('objb.upload') }}
             </button>
             <input ref="uploadInput" type="file" multiple style="display:none" @change="handleUploadFiles" />
           </div>
@@ -42,9 +42,9 @@
 
           <!-- File list pane -->
           <div class="s3b-filelist">
-            <div v-if="loading" class="s3b-empty">Loading...</div>
+            <div v-if="loading" class="s3b-empty">{{ t('objb.loading') }}</div>
             <div v-else-if="error" class="s3b-error">{{ error }}</div>
-            <div v-else-if="!folders.length && !files.length" class="s3b-empty">Empty folder.</div>
+            <div v-else-if="!folders.length && !files.length" class="s3b-empty">{{ t('objb.emptyFolder') }}</div>
             <div v-else>
               <div
                 v-for="folder in folders" :key="folder.key"
@@ -66,14 +66,14 @@
                 <span class="s3b-entry-date">{{ file.lastModified ? shortDate(file.lastModified) : '' }}</span>
               </div>
               <div v-if="nextPageToken" class="s3b-load-more">
-                <button class="s3b-btn" @click="loadMore">Load more...</button>
+                <button class="s3b-btn" @click="loadMore">{{ t('objb.loadMore') }}</button>
               </div>
             </div>
           </div>
 
           <!-- Preview pane -->
           <div class="s3b-preview">
-            <div v-if="!selectedFile" class="s3b-empty" style="padding-top:40px">Select a file to preview</div>
+            <div v-if="!selectedFile" class="s3b-empty" style="padding-top:40px">{{ t('objb.selectFile') }}</div>
             <template v-else>
               <div class="s3b-preview-header">
                 <div class="s3b-preview-title">
@@ -82,10 +82,10 @@
                 </div>
                 <div class="s3b-preview-actions">
                   <button class="s3b-btn accent" @click="downloadFile(selectedFile)" :disabled="downloading">
-                    {{ downloading ? 'Downloading...' : '⬇ Download' }}
+                    {{ downloading ? t('objb.downloading') : '⬇ ' + t('objb.download') }}
                   </button>
                   <button class="s3b-btn danger" @click="deleteSelectedFile()" :disabled="deleting">
-                    {{ deleting ? 'Deleting...' : '🗑 Delete' }}
+                    {{ deleting ? t('objb.deleting') : '🗑 ' + t('objb.delete') }}
                   </button>
                 </div>
               </div>
@@ -94,13 +94,13 @@
               <div v-if="previewData && !previewLoading" class="s3b-meta">
                 <table class="s3b-meta-table">
                   <tbody>
-                    <tr><td class="s3b-meta-label">Key</td><td class="s3b-meta-val mono-xs">{{ previewData.key }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.key') }}</td><td class="s3b-meta-val mono-xs">{{ previewData.key }}</td></tr>
                     <tr><td class="s3b-meta-label">Content-Type</td><td class="s3b-meta-val">{{ previewData.contentType || '-' }}</td></tr>
-                    <tr><td class="s3b-meta-label">Size</td><td class="s3b-meta-val">{{ formatSize(previewData.size) }}</td></tr>
-                    <tr><td class="s3b-meta-label">Last Modified</td><td class="s3b-meta-val">{{ previewData.lastModified ? new Date(previewData.lastModified).toLocaleString() : '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.size') }}</td><td class="s3b-meta-val">{{ formatSize(previewData.size) }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.lastModified') }}</td><td class="s3b-meta-val">{{ previewData.lastModified ? new Date(previewData.lastModified).toLocaleString() : '-' }}</td></tr>
                     <tr><td class="s3b-meta-label">ETag</td><td class="s3b-meta-val mono-xs">{{ previewData.etag || '-' }}</td></tr>
-                    <tr><td class="s3b-meta-label">Storage Class</td><td class="s3b-meta-val">{{ previewData.storageClass || '-' }}</td></tr>
-                    <tr><td class="s3b-meta-label">Generation</td><td class="s3b-meta-val mono-xs">{{ previewData.generation || '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.storageClass') }}</td><td class="s3b-meta-val">{{ previewData.storageClass || '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.generation') }}</td><td class="s3b-meta-val mono-xs">{{ previewData.generation || '-' }}</td></tr>
                     <tr><td class="s3b-meta-label">MD5</td><td class="s3b-meta-val mono-xs">{{ previewData.md5Hash || '-' }}</td></tr>
                     <template v-if="previewData.metadata && Object.keys(previewData.metadata).length">
                       <tr v-for="(val, mkey) in previewData.metadata" :key="mkey">
@@ -114,7 +114,7 @@
 
               <!-- Loading preview -->
               <div v-if="previewLoading" class="s3b-preview-content">
-                <div class="s3b-empty">Loading...</div>
+                <div class="s3b-empty">{{ t('objb.loading') }}</div>
               </div>
               <div v-else-if="previewError" class="s3b-preview-content">
                 <div class="s3b-error">{{ previewError }}</div>
@@ -137,7 +137,7 @@
               <div v-else-if="previewData?.binary" class="s3b-preview-content">
                 <div class="s3b-empty" style="padding-top:12px">
                   <div style="font-size:1.5rem">📎</div>
-                  <div style="margin-top:6px;color:#8b949e;font-size:12px">Binary file — use Download</div>
+                  <div style="margin-top:6px;color:#8b949e;font-size:12px">{{ t('objb.binary') }}</div>
                 </div>
               </div>
             </template>
@@ -147,9 +147,9 @@
         <!-- Footer -->
         <div class="s3b-footer">
           <span class="s3b-footer-info">
-            {{ folders.length }} folder(s) &nbsp;&bull;&nbsp; {{ files.length }} file(s)
+            {{ t('objb.footer', { folders: folders.length, files: files.length }) }}
           </span>
-          <input v-model="filterText" class="s3b-filter" placeholder="Filter files..." @input="applyFilter" />
+          <input v-model="filterText" class="s3b-filter" :placeholder="t('objb.filter')" @input="applyFilter" />
         </div>
 
       </div>
@@ -159,6 +159,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   open:      { type: Boolean, default: false },
@@ -301,7 +304,7 @@ async function downloadFile(file) {
     document.body.removeChild(a)
     URL.revokeObjectURL(objUrl)
   } catch (e) {
-    alert('Download error: ' + e.message)
+    alert(t('objb.downloadError', { error: e.message }))
   } finally {
     downloading.value = false
   }
@@ -349,7 +352,7 @@ async function handleUploadFiles(event) {
 async function deleteSelectedFile() {
   if (!selectedFile.value) return
   const file = selectedFile.value
-  if (!window.confirm(`Delete "${file.key}"?\nThis cannot be undone.`)) return
+  if (!window.confirm(t('objb.confirmDelete', { key: file.key }))) return
   deleting.value = true
   try {
     const resp = await fetch(
@@ -364,7 +367,7 @@ async function deleteSelectedFile() {
     previewData.value  = null
     await loadFolder(currentPrefix.value)
   } catch (e) {
-    alert('Delete failed: ' + e.message)
+    alert(t('objb.deleteFailed', { error: e.message }))
   } finally {
     deleting.value = false
   }

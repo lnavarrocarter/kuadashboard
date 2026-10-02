@@ -2,23 +2,23 @@
   <section class="application-logs">
     <header class="logs-toolbar">
       <div>
-        <h3>Application logs</h3>
-        <small>{{ sourceLabel }} · últimos {{ hours }} h</small>
+        <h3>{{ t('apmLogs.title') }}</h3>
+        <small>{{ sourceLabel }} · {{ t('apmLogs.lastHours', { n: hours }) }}</small>
       </div>
       <div class="logs-toolbar-actions">
-        <select v-model="hours" class="ctrl-input" aria-label="Log range">
+        <select v-model="hours" class="ctrl-input" :aria-label="t('apmLogs.range')">
           <option :value="1">1 h</option>
           <option :value="3">3 h</option>
           <option :value="24">24 h</option>
           <option :value="72">72 h</option>
         </select>
         <button class="btn sm" :disabled="loading || !selectedResource" @click="loadLogs">
-          <i data-lucide="refresh-cw"></i> Refresh
+          <i data-lucide="refresh-cw"></i> {{ t('action.refresh') }}
         </button>
       </div>
     </header>
 
-    <div v-if="loggableResources.length" class="logs-resource-tabs" role="tablist" aria-label="Application log resources">
+    <div v-if="loggableResources.length" class="logs-resource-tabs" role="tablist" :aria-label="t('apmLogs.resources')">
       <button
         v-for="resource in loggableResources"
         :key="resource.id"
@@ -34,8 +34,8 @@
 
     <div v-if="!loggableResources.length" class="apm-empty compact">
       <i data-lucide="scroll-text"></i>
-      <strong>No log source configured</strong>
-      <span>Metrics are available in the Metrics tab. Add a supported workload to view provider logs here.</span>
+      <strong>{{ t('apmLogs.noSource') }}</strong>
+      <span>{{ t('apmLogs.noSourceHint') }}</span>
     </div>
 
     <template v-else-if="selectedResource">
@@ -43,23 +43,23 @@
         <div><strong>{{ selectedResource.name }}</strong><small>{{ resourceLabel(selectedResource) }}</small></div>
         <span class="logs-source-badge">{{ sourceLabel }}</span>
         <button v-if="isKubernetes(selectedResource)" class="btn sm" @click="$emit('open-kubernetes-logs', selectedResource)">
-          <i data-lucide="external-link"></i> Open Kubernetes logs
+          <i data-lucide="external-link"></i> {{ t('apmLogs.openKubernetes') }}
         </button>
         <button v-if="isVercel(selectedResource) && latestDeployment" class="btn sm" @click="vercelLogsOpen = true">
-          <i data-lucide="external-link"></i> Open deployment logs
+          <i data-lucide="external-link"></i> {{ t('apmLogs.openDeployment') }}
         </button>
       </div>
 
-      <div v-if="loading" class="apm-empty compact">Loading provider logs…</div>
+      <div v-if="loading" class="apm-empty compact">{{ t('apmLogs.loading') }}</div>
       <div v-else-if="error" class="alert-error">{{ error }}</div>
       <div v-else-if="!entries.length" class="apm-empty compact">
         <i data-lucide="scroll-text"></i>
-        <strong>No logs in this range</strong>
+        <strong>{{ t('apmLogs.empty') }}</strong>
         <span v-if="message">{{ message }}</span>
       </div>
       <div v-else class="log-table-wrap">
         <table class="cloud-table">
-          <thead><tr><th>Time</th><th>Severity</th><th>Message</th></tr></thead>
+          <thead><tr><th>{{ t('apmLogs.time') }}</th><th>{{ t('apmLogs.severity') }}</th><th>{{ t('apmLogs.message') }}</th></tr></thead>
           <tbody>
             <tr v-for="(entry, index) in entries" :key="`${entry.timestamp || entry.created || ''}-${index}`">
               <td class="mono-xs">{{ formatTimestamp(entry.timestamp || entry.created) }}</td>
@@ -84,6 +84,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useApi } from '../../../composables/useApi'
+import { useI18n } from '../../../composables/useI18n'
 import VercelDeploymentLogs from '../VercelDeploymentLogs.vue'
 
 const props = defineProps({
@@ -95,6 +96,7 @@ const props = defineProps({
 defineEmits(['open-kubernetes-logs'])
 
 const { apiFetch } = useApi()
+const { t } = useI18n()
 const hours = ref(3)
 const selectedResource = ref(null)
 const entries = ref([])
@@ -107,9 +109,9 @@ const latestDeployment = ref(null)
 const sourceLabel = computed(() => {
   if (props.provider === 'aws') return 'CloudWatch Logs'
   if (props.provider === 'gcp') return 'Cloud Logging'
-  if (props.provider === 'kubernetes') return 'Kubernetes logs'
-  if (props.provider === 'vercel') return 'Vercel deployment logs'
-  return 'Provider logs'
+  if (props.provider === 'kubernetes') return t('apmLogs.source.kubernetes')
+  if (props.provider === 'vercel') return t('apmLogs.source.vercel')
+  return t('apmLogs.source.provider')
 })
 
 const loggableResources = computed(() => props.resources.filter(resource => {
@@ -123,7 +125,7 @@ function isKubernetes(resource) { return resource?.provider === 'kubernetes' || 
 function isVercel(resource) { return resource?.provider === 'vercel' || resource?.type === 'vercel-project' }
 function resourceLabel(resource) {
   if (isKubernetes(resource)) return [resource.kind || 'Workload', resource.namespace].filter(Boolean).join(' · ')
-  if (isVercel(resource)) return 'Project deployment'
+  if (isVercel(resource)) return t('apmLogs.projectDeployment')
   if (resource.type === 'gcp-cloud-run') return 'Cloud Run'
   if (resource.type === 'gcp-function') return 'Cloud Function'
   if (resource.type === 'eventbridge') return 'EventBridge'
@@ -144,7 +146,7 @@ function selectResource(resource) {
 async function loadLogs() {
   if (!selectedResource.value || isKubernetes(selectedResource.value)) {
     entries.value = []
-    message.value = isKubernetes(selectedResource.value) ? 'Use the Kubernetes log viewer to stream pod and workload logs.' : ''
+    message.value = isKubernetes(selectedResource.value) ? t('apmLogs.useKubernetesViewer') : ''
     return
   }
   loading.value = true
@@ -180,10 +182,10 @@ async function loadLogs() {
     } else if (isVercel(resource)) {
       const projects = await apiFetch('/api/cloud/vercel/projects', { headers: { 'X-Profile-Id': props.profileId } })
       const project = projects.find(item => item.id === resource.key || item.id === resource.name || item.name === resource.name)
-      if (!project) { message.value = 'No se encontró el proyecto en Vercel.'; return }
+      if (!project) { message.value = t('apmLogs.vercelProjectMissing'); return }
       const deployments = await apiFetch(`/api/cloud/vercel/projects/${encodeURIComponent(project.id)}/deployments?limit=1`, { headers: { 'X-Profile-Id': props.profileId } })
       latestDeployment.value = deployments?.[0] || null
-      message.value = latestDeployment.value ? 'Open the latest deployment to stream its logs.' : 'No deployments found for this project.'
+      message.value = latestDeployment.value ? t('apmLogs.openLatest') : t('apmLogs.noDeployments')
     }
   } catch (requestError) {
     error.value = requestError.message

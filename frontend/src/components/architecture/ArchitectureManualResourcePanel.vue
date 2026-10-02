@@ -1,11 +1,11 @@
 <template>
   <section class="manual-resource-panel">
     <header>
-      <span><i data-lucide="square-plus"></i><strong>Add manual resource</strong><small>Record a confirmed component not supplied by discovery.</small></span>
-      <button class="btn sm btn-icon" title="Close manual resource" @click="$emit('close')"><i data-lucide="x"></i></button>
+      <span><i data-lucide="square-plus"></i><strong>{{ t('archManual.title') }}</strong><small>{{ t('archManual.subtitle') }}</small></span>
+      <button class="btn sm btn-icon" :title="t('archManual.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
     <form @submit.prevent="addResource">
-      <label>Provider
+      <label>{{ t('archManual.provider') }}
         <select v-model="draft.provider" class="ctrl-input">
           <option value="aws">AWS</option>
           <option value="kubernetes">Kubernetes</option>
@@ -13,17 +13,17 @@
           <option value="vercel">Vercel</option>
         </select>
       </label>
-      <label>Name<input v-model.trim="draft.name" class="ctrl-input" required maxlength="120" placeholder="orders-api" /></label>
-      <label>Resource type<input v-model.trim="draft.resourceType" class="ctrl-input" required maxlength="80" :placeholder="typePlaceholder" /></label>
-      <label>Native identifier<input v-model.trim="draft.nativeId" class="ctrl-input" required maxlength="500" :placeholder="identifierPlaceholder" /></label>
+      <label>{{ t('archManual.name') }}<input v-model.trim="draft.name" class="ctrl-input" required maxlength="120" placeholder="orders-api" /></label>
+      <label>{{ t('archManual.resourceType') }}<input v-model.trim="draft.resourceType" class="ctrl-input" required maxlength="80" :placeholder="typePlaceholder" /></label>
+      <label>{{ t('archManual.nativeId') }}<input v-model.trim="draft.nativeId" class="ctrl-input" required maxlength="500" :placeholder="identifierPlaceholder" /></label>
       <label>{{ scopeLabel }}<input v-model.trim="draft.scopeId" class="ctrl-input" maxlength="200" :placeholder="scopePlaceholder" /></label>
       <label>{{ locationLabel }}<input v-model.trim="draft.location" class="ctrl-input" maxlength="120" :placeholder="locationPlaceholder" /></label>
       <label v-if="draft.provider === 'kubernetes'">Namespace<input v-model.trim="draft.namespace" class="ctrl-input" maxlength="120" placeholder="default" /></label>
-      <label>Kind<input v-model.trim="draft.kind" class="ctrl-input" maxlength="180" :placeholder="draft.resourceType || 'EC2 instance'" /></label>
+      <label>{{ t('archManual.kind') }}<input v-model.trim="draft.kind" class="ctrl-input" maxlength="180" :placeholder="draft.resourceType || t('archManual.kindPlaceholder')" /></label>
       <footer>
-        <span>Manual resources are never changed by discovery or sync.</span>
+        <span>{{ t('archManual.footer') }}</span>
         <button class="btn sm primary" :disabled="store.saving || !draft.name || !draft.resourceType || !draft.nativeId">
-          <i data-lucide="plus"></i> Add to diagram
+          <i data-lucide="plus"></i> {{ t('archManual.add') }}
         </button>
       </footer>
     </form>
@@ -34,17 +34,19 @@
 import { computed, nextTick, reactive } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useI18n } from '../../composables/useI18n'
 
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
+const { t } = useI18n()
 const draft = reactive({ provider: 'aws', name: '', resourceType: 'ec2', nativeId: '', scopeId: '', location: 'us-east-1', namespace: '', kind: '' })
 
 const typePlaceholder = computed(() => ({ aws: 'ec2', kubernetes: 'deployment', gcp: 'gcp-cloud-run', vercel: 'vercel-project' })[draft.provider])
-const identifierPlaceholder = computed(() => ({ aws: 'i-0123456789abcdef0 or ARN', kubernetes: 'Kubernetes UID', gcp: 'resource URL or ID', vercel: 'project ID or URL' })[draft.provider])
-const scopeLabel = computed(() => ({ aws: 'Account', kubernetes: 'Context', gcp: 'Project', vercel: 'Team' })[draft.provider])
+const identifierPlaceholder = computed(() => t(`archManual.idPlaceholder.${draft.provider}`))
+const scopeLabel = computed(() => t(`archManual.scope.${draft.provider}`))
 const scopePlaceholder = computed(() => ({ aws: '123456789012', kubernetes: 'arn:aws:eks:region:account:cluster/name', gcp: 'my-project', vercel: 'team-slug' })[draft.provider])
-const locationLabel = computed(() => draft.provider === 'kubernetes' ? 'Location' : 'Region / location')
-const locationPlaceholder = computed(() => draft.provider === 'kubernetes' ? 'cluster or zone' : 'us-east-1')
+const locationLabel = computed(() => draft.provider === 'kubernetes' ? t('archManual.location') : t('archManual.regionLocation'))
+const locationPlaceholder = computed(() => draft.provider === 'kubernetes' ? t('archManual.locationPlaceholder') : 'us-east-1')
 
 async function addResource() {
   const id = `manual:${draft.provider}:${globalThis.crypto?.randomUUID?.() || Date.now()}`
@@ -72,7 +74,7 @@ async function addResource() {
     node.scopeId = draft.scopeId
     node.location = draft.location
   }
-  const graph = await store.applyOperation({ type: 'node.upsert', value: node }, { reason: `Add manual ${draft.provider} resource ${draft.name}` })
+  const graph = await store.applyOperation({ type: 'node.upsert', value: node }, { reason: t('archManual.reason', { provider: draft.provider, name: draft.name }) })
   if (graph) {
     emit('imported', graph)
     nextTick(() => createIcons({ icons }))

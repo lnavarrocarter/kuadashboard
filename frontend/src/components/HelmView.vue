@@ -6,33 +6,33 @@
         <button
           :class="['helm-tab', { active: tab === 'releases' }]"
           @click="switchTab('releases')"
-        >Releases</button>
+        >{{ t('helm.releases') }}</button>
         <button
           :class="['helm-tab', { active: tab === 'repos' }]"
           @click="switchTab('repos')"
-        >Repositories</button>
+        >{{ t('helm.repos') }}</button>
         <button
           :class="['helm-tab', { active: tab === 'search' }]"
           @click="switchTab('search')"
-        >Search Charts</button>
+        >{{ t('helmv.searchCharts') }}</button>
       </div>
       <div class="toolbar-right">
         <!-- Releases actions -->
         <template v-if="tab === 'releases'">
-          <input v-model="filter" class="search-input" placeholder="Filter..." />
-          <button class="btn btn-icon" title="Refresh" @click="loadReleases">
+          <input v-model="filter" class="search-input" :placeholder="t('helmv.filter')" />
+          <button class="btn btn-icon" :title="t('action.refresh')" @click="loadReleases">
             <i data-lucide="refresh-cw"></i>
           </button>
         </template>
         <!-- Repos actions -->
         <template v-else-if="tab === 'repos'">
-          <button class="btn sm" @click="openAddRepo" title="Add repository">
-            <i data-lucide="plus"></i> Add Repo
+          <button class="btn sm" @click="openAddRepo" :title="t('helm.addRepo')">
+            <i data-lucide="plus"></i> {{ t('helmv.addRepoShort') }}
           </button>
-          <button class="btn sm" @click="updateRepos" :disabled="updatingRepos" title="Update all repos">
-            <i data-lucide="refresh-cw"></i> {{ updatingRepos ? 'Updating…' : 'Update All' }}
+          <button class="btn sm" @click="updateRepos" :disabled="updatingRepos" :title="t('helmv.updateAllHint')">
+            <i data-lucide="refresh-cw"></i> {{ updatingRepos ? t('helmv.updating') : t('helmv.updateAll') }}
           </button>
-          <button class="btn btn-icon" title="Refresh" @click="loadRepos">
+          <button class="btn btn-icon" :title="t('action.refresh')" @click="loadRepos">
             <i data-lucide="refresh-cw"></i>
           </button>
         </template>
@@ -41,12 +41,12 @@
           <input
             v-model="searchQuery"
             class="search-input"
-            placeholder="Search charts…"
+            :placeholder="t('helmv.searchPlaceholder')"
             @keydown.enter="searchCharts"
             style="width: 220px"
           />
           <button class="btn sm primary" @click="searchCharts">
-            <i data-lucide="search"></i> Search
+            <i data-lucide="search"></i> {{ t('helmv.search') }}
           </button>
         </template>
       </div>
@@ -54,26 +54,26 @@
 
     <!-- ── Releases tab ──────────────────────────────────────────────────── -->
     <div v-if="tab === 'releases'" class="table-wrap">
-      <div v-if="loadingReleases" class="loading-state">Loading releases…</div>
+      <div v-if="loadingReleases" class="loading-state">{{ t('helmv.loadingReleases') }}</div>
       <div v-else-if="releasesError" class="error-state">
         <i data-lucide="alert-triangle"></i>
         <span>{{ releasesError }}</span>
-        <button class="btn sm" @click="loadReleases">Retry</button>
+        <button class="btn sm" @click="loadReleases">{{ t('common.retry') }}</button>
       </div>
       <div v-else-if="!filteredReleases.length" class="empty-state">
-        No releases found in this namespace / context
+        {{ t('helmv.noReleases') }}
       </div>
       <table v-else class="rtable">
         <thead>
           <tr>
-            <th>Name</th>
+            <th>{{ t('helmv.col.name') }}</th>
             <th>Namespace</th>
             <th>Chart</th>
-            <th>Version</th>
-            <th>App Version</th>
-            <th>Status</th>
-            <th>Updated</th>
-            <th>Actions</th>
+            <th>{{ t('helmv.col.version') }}</th>
+            <th>{{ t('helmv.col.appVersion') }}</th>
+            <th>{{ t('helmv.col.status') }}</th>
+            <th>{{ t('helmv.col.updated') }}</th>
+            <th>{{ t('helmv.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -90,7 +90,7 @@
             <td class="col-actions">
               <button
                 class="action-btn icon-trash"
-                title="Uninstall release"
+                :title="t('helmv.uninstallRelease')"
                 @click="confirmUninstall(r)"
               ></button>
             </td>
@@ -101,21 +101,21 @@
 
     <!-- ── Repos tab ─────────────────────────────────────────────────────── -->
     <div v-else-if="tab === 'repos'" class="table-wrap">
-      <div v-if="loadingRepos" class="loading-state">Loading repositories…</div>
+      <div v-if="loadingRepos" class="loading-state">{{ t('helmv.loadingRepos') }}</div>
       <div v-else-if="reposError" class="error-state">
         <i data-lucide="alert-triangle"></i>
         <span>{{ reposError }}</span>
-        <button class="btn sm" @click="loadRepos">Retry</button>
+        <button class="btn sm" @click="loadRepos">{{ t('common.retry') }}</button>
       </div>
       <div v-else-if="!repos.length" class="empty-state">
-        No repositories configured — add one with the button above
+        {{ t('helmv.noRepos') }}
       </div>
       <table v-else class="rtable">
         <thead>
           <tr>
-            <th>Name</th>
+            <th>{{ t('helmv.col.name') }}</th>
             <th>URL</th>
-            <th>Actions</th>
+            <th>{{ t('helmv.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -125,7 +125,7 @@
             <td class="col-actions">
               <button
                 class="action-btn icon-trash"
-                title="Remove repository"
+                :title="t('helmv.removeRepo')"
                 @click="removeRepo(r.name)"
               ></button>
             </td>
@@ -136,25 +136,25 @@
 
     <!-- ── Search tab ────────────────────────────────────────────────────── -->
     <div v-else-if="tab === 'search'" class="table-wrap">
-      <div v-if="searching" class="loading-state">Searching charts…</div>
+      <div v-if="searching" class="loading-state">{{ t('helmv.searching') }}</div>
       <div v-else-if="searchError" class="error-state">
         <i data-lucide="alert-triangle"></i>
         <span>{{ searchError }}</span>
       </div>
       <div v-else-if="searchResults === null" class="empty-state">
-        Enter a chart name and press Search
+        {{ t('helmv.searchHint') }}
       </div>
       <div v-else-if="!searchResults.length" class="empty-state">
-        No charts found for "{{ searchQuery }}"
+        {{ t('helmv.noCharts', { query: searchQuery }) }}
       </div>
       <table v-else class="rtable">
         <thead>
           <tr>
             <th>Chart</th>
-            <th>Version</th>
-            <th>App Version</th>
-            <th>Description</th>
-            <th>Actions</th>
+            <th>{{ t('helmv.col.version') }}</th>
+            <th>{{ t('helmv.col.appVersion') }}</th>
+            <th>{{ t('helmv.col.description') }}</th>
+            <th>{{ t('helmv.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -164,8 +164,8 @@
             <td>{{ c.app_version || '—' }}</td>
             <td class="text-dim" style="max-width:400px; white-space:normal">{{ c.description }}</td>
             <td class="col-actions">
-              <button class="btn sm primary" title="Install chart" @click="openInstall(c)">
-                <i data-lucide="package-plus"></i> Install
+              <button class="btn sm primary" :title="t('helmv.installChart')" @click="openInstall(c)">
+                <i data-lucide="package-plus"></i> {{ t('helmv.install') }}
               </button>
             </td>
           </tr>
@@ -177,32 +177,32 @@
     <div v-if="addRepoModal" class="modal-overlay" @click.self="addRepoModal = false">
       <div class="modal-box" style="width: 420px">
         <div class="modal-header">
-          <span>Add Helm Repository</span>
+          <span>{{ t('helmv.addRepoTitle') }}</span>
           <button class="btn-close" @click="addRepoModal = false">✕</button>
         </div>
         <div class="modal-body" style="display:flex; flex-direction:column; gap:12px">
           <label class="form-label">
-            Name
-            <input v-model="newRepo.name" class="form-input" placeholder="e.g. bitnami" />
+            {{ t('helmv.col.name') }}
+            <input v-model="newRepo.name" class="form-input" :placeholder="t('helmv.repoNamePlaceholder')" />
           </label>
           <label class="form-label">
             URL
             <input v-model="newRepo.url" class="form-input" placeholder="https://charts.bitnami.com/bitnami" />
           </label>
           <label class="form-label">
-            Username <span class="text-dim">(optional)</span>
+            {{ t('helmv.username') }} <span class="text-dim">{{ t('helmv.optional') }}</span>
             <input v-model="newRepo.username" class="form-input" placeholder="user" />
           </label>
           <label class="form-label">
-            Password <span class="text-dim">(optional)</span>
+            {{ t('helmv.password') }} <span class="text-dim">{{ t('helmv.optional') }}</span>
             <input v-model="newRepo.password" class="form-input" type="password" placeholder="••••••" />
           </label>
           <div v-if="addRepoError" class="error-inline">{{ addRepoError }}</div>
         </div>
         <div class="modal-footer">
-          <button class="btn" @click="addRepoModal = false">Cancel</button>
+          <button class="btn" @click="addRepoModal = false">{{ t('action.cancel') }}</button>
           <button class="btn primary" :disabled="addingRepo" @click="addRepo">
-            {{ addingRepo ? 'Adding…' : 'Add Repository' }}
+            {{ addingRepo ? t('helmv.adding') : t('helmv.addRepository') }}
           </button>
         </div>
       </div>
@@ -212,23 +212,23 @@
     <div v-if="uninstallTarget" class="modal-overlay" @click.self="uninstallTarget = null">
       <div class="modal-box" style="width: 380px">
         <div class="modal-header">
-          <span>Uninstall Release</span>
+          <span>{{ t('helmv.uninstallTitle') }}</span>
           <button class="btn-close" @click="uninstallTarget = null">✕</button>
         </div>
         <div class="modal-body">
           <p>
-            Are you sure you want to uninstall
+            {{ t('helmv.uninstallPre') }}
             <strong>{{ uninstallTarget?.name }}</strong>
-            from namespace <strong>{{ uninstallTarget?.namespace }}</strong>?
+            {{ t('helmv.uninstallFrom') }} <strong>{{ uninstallTarget?.namespace }}</strong>?
           </p>
           <p class="text-dim" style="margin-top:8px; font-size:12px">
-            This will remove all Kubernetes resources created by the release.
+            {{ t('helmv.uninstallWarning') }}
           </p>
         </div>
         <div class="modal-footer">
-          <button class="btn" @click="uninstallTarget = null">Cancel</button>
+          <button class="btn" @click="uninstallTarget = null">{{ t('action.cancel') }}</button>
           <button class="btn danger" :disabled="uninstalling" @click="doUninstall">
-            {{ uninstalling ? 'Uninstalling…' : 'Uninstall' }}
+            {{ uninstalling ? t('helmv.uninstalling') : t('helm.uninstall') }}
           </button>
         </div>
       </div>
@@ -238,7 +238,7 @@
     <div v-if="installModal" class="modal-overlay" @click.self="closeInstall">
       <div class="modal-box helm-install-modal">
         <div class="modal-header">
-          <span>Install Chart</span>
+          <span>{{ t('helmv.installTitle') }}</span>
           <button class="btn-close" @click="closeInstall">✕</button>
         </div>
         <div class="modal-body install-body">
@@ -248,7 +248,7 @@
           </div>
           <div class="install-grid">
             <label class="form-label">
-              Release name
+              {{ t('helmv.releaseName') }}
               <input v-model.trim="installForm.releaseName" class="form-input" placeholder="my-release" />
             </label>
             <label class="form-label">
@@ -256,44 +256,44 @@
               <input v-model.trim="installForm.namespace" class="form-input" placeholder="default" />
             </label>
             <label class="form-label">
-              Version
+              {{ t('helmv.col.version') }}
               <input v-model.trim="installForm.version" class="form-input" placeholder="latest" />
             </label>
             <label class="form-label install-check">
               <input v-model="installForm.createNamespace" type="checkbox" />
-              Create namespace if needed
+              {{ t('helmv.createNamespace') }}
             </label>
             <label class="form-label install-check">
               <input v-model="installForm.wait" type="checkbox" />
-              Wait until resources are ready
+              {{ t('helmv.wait') }}
             </label>
           </div>
           <div v-if="isMetricsServerInstall" class="install-preset-box">
             <label class="form-label install-check">
               <input v-model="metricsServerPreset" type="checkbox" @change="applyMetricsServerPreset" />
-              Metrics Server compatibility values
+              {{ t('helmv.metricsPreset') }}
             </label>
             <p>
-              Adds kubelet TLS and address flags commonly needed in Docker Desktop, kind, minikube and self-signed clusters.
+              {{ t('helmv.metricsPresetHint') }}
             </p>
           </div>
           <div v-if="installing || installStatus" class="install-status-box">
             <div class="install-status-head">
               <i :data-lucide="installing ? 'loader-2' : 'check-circle-2'"></i>
-              <strong>{{ installStatus || 'Preparing installation…' }}</strong>
+              <strong>{{ installStatus || t('helmv.preparing') }}</strong>
             </div>
             <pre v-if="installOutput">{{ installOutput }}</pre>
           </div>
           <label class="form-label">
-            Values YAML <span class="text-dim">(optional)</span>
+            {{ t('helmv.valuesYaml') }} <span class="text-dim">{{ t('helmv.optional') }}</span>
             <textarea v-model="installForm.values" class="form-input install-values" spellcheck="false" placeholder="replicaCount: 2"></textarea>
           </label>
           <div v-if="installError" class="error-inline">{{ installError }}</div>
         </div>
         <div class="modal-footer">
-          <button class="btn" @click="closeInstall">Cancel</button>
+          <button class="btn" @click="closeInstall">{{ t('action.cancel') }}</button>
           <button class="btn primary" :disabled="installing" @click="installChart">
-            <i data-lucide="package-plus"></i> {{ installing ? 'Installing…' : 'Install' }}
+            <i data-lucide="package-plus"></i> {{ installing ? t('helmv.installing') : t('helmv.install') }}
           </button>
         </div>
       </div>
@@ -306,6 +306,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useKubeStore } from '../stores/useKubeStore'
 import { useToast } from '../composables/useToast'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   initialTab: { type: String, default: 'releases' },
@@ -313,6 +314,7 @@ const props = defineProps({
 
 const store = useKubeStore()
 const { toast } = useToast()
+const { t } = useI18n()
 
 // ── State ──────────────────────────────────────────────────────────────────
 const tab = ref(props.initialTab)
@@ -451,7 +453,7 @@ async function doUninstall() {
     uninstallTarget.value = null
     await loadReleases()
   } catch (err) {
-    alert(`Uninstall failed: ${err.message}`)
+    alert(t('helmv.uninstallFailed', { error: err.message }))
   } finally {
     uninstalling.value = false
   }
@@ -485,7 +487,7 @@ function openAddRepo() {
 async function addRepo() {
   addRepoError.value = null
   if (!newRepo.value.name || !newRepo.value.url) {
-    addRepoError.value = 'Name and URL are required'
+    addRepoError.value = t('helmv.nameUrlRequired')
     return
   }
   addingRepo.value = true
@@ -509,7 +511,7 @@ async function addRepo() {
 }
 
 async function removeRepo(name) {
-  if (!confirm(`Remove repository "${name}"?`)) return
+  if (!confirm(t('helmv.confirmRemoveRepo', { name }))) return
   try {
     const res = await fetch(`/api/helm/repos/${encodeURIComponent(name)}`, { method: 'DELETE' })
     if (!res.ok) {
@@ -518,7 +520,7 @@ async function removeRepo(name) {
     }
     await loadRepos()
   } catch (err) {
-    alert(`Error removing repo: ${err.message}`)
+    alert(t('helmv.removeRepoFailed', { error: err.message }))
   }
 }
 
@@ -531,7 +533,7 @@ async function updateRepos() {
       throw new Error(data.error || `HTTP ${res.status}`)
     }
   } catch (err) {
-    alert(`Update failed: ${err.message}`)
+    alert(t('helmv.updateFailed', { error: err.message }))
   } finally {
     updatingRepos.value = false
   }
@@ -610,11 +612,11 @@ function closeInstall() {
 async function installChart() {
   installError.value = null
   if (!installForm.value.releaseName || !installForm.value.namespace) {
-    installError.value = 'Release name and namespace are required'
+    installError.value = t('helmv.releaseNsRequired')
     return
   }
   installing.value = true
-  installStatus.value = 'Sending install command to Helm…'
+  installStatus.value = t('helmv.sending')
   installOutput.value = ''
   try {
     const preset = metricsServerPreset.value ? 'metrics-server' : ''
@@ -622,7 +624,7 @@ async function installChart() {
       ? ''
       : installForm.value.values
     const body = { ...installForm.value, values, context: currentContext(), preset }
-    installStatus.value = installForm.value.wait ? 'Installing and waiting for readiness…' : 'Installing release…'
+    installStatus.value = installForm.value.wait ? t('helmv.installingWaiting') : t('helmv.installingRelease')
     const res = await fetch('/api/helm/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -633,17 +635,17 @@ async function installChart() {
       throw new Error(data.error || `HTTP ${res.status}`)
     }
     installOutput.value = data.output || data.status?.info?.notes || ''
-    installStatus.value = data.status?.info?.status ? `Release status: ${data.status.info.status}` : 'Release installed'
+    installStatus.value = data.status?.info?.status ? t('helmv.releaseStatus', { status: data.status.info.status }) : t('helmv.releaseInstalled')
     filter.value = installForm.value.releaseName
-    toast(`Helm release "${installForm.value.releaseName}" installed`, 'success')
-    installStatus.value = 'Refreshing installed releases…'
+    toast(t('helmv.installedToast', { name: installForm.value.releaseName }), 'success')
+    installStatus.value = t('helmv.refreshingReleases')
     tab.value = 'releases'
     await loadReleases()
     installModal.value = false
     installTarget.value = null
   } catch (err) {
     installError.value = err.message
-    installStatus.value = 'Installation failed'
+    installStatus.value = t('helmv.installFailed')
   } finally {
     installing.value = false
     await refreshIcons()

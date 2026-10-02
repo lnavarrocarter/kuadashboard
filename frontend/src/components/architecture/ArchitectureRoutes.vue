@@ -3,48 +3,48 @@
     <header class="routes-header">
       <span class="routes-title">
         <span class="routes-title-icon"><i data-lucide="route"></i></span>
-        <span><strong>Application routes</strong><small>Event, workflow and microservice execution paths</small></span>
+        <span><strong>{{ t('archRoutes.title') }}</strong><small>{{ t('archRoutes.subtitle') }}</small></span>
       </span>
       <span class="routes-actions">
-        <select v-model="providerFilter" class="ctrl-select provider-filter" title="Filter providers" @change="persistView">
-          <option value="all">All providers</option>
+        <select v-model="providerFilter" class="ctrl-select provider-filter" :title="t('archCanvas.filterProviders')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allProviders') }}</option>
           <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ provider }}</option>
         </select>
-        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" title="Filter Kubernetes context" @change="persistView">
-          <option value="">All Kubernetes contexts</option>
+        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" :title="t('archCanvas.filterKubeContext')" @change="persistView">
+          <option value="">{{ t('archCanvas.allKubeContexts') }}</option>
           <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
         </select>
-        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" title="Filter Kubernetes namespace" @change="persistView">
-          <option value="">All namespaces</option>
+        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" :title="t('archCanvas.filterNamespace')" @change="persistView">
+          <option value="">{{ t('archCanvas.allNamespaces') }}</option>
           <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
         </select>
-        <select v-model="relationTypeFilter" class="ctrl-select" title="Filter relationship type" @change="persistView">
-          <option value="all">All relationship types</option>
+        <select v-model="relationTypeFilter" class="ctrl-select" :title="t('archCanvas.filterRelationType')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allRelationTypes') }}</option>
           <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationLabel(type) }}</option>
         </select>
-        <select v-model="relationStatusFilter" class="ctrl-select" title="Filter relationship status" @change="persistView">
-          <option value="all">All relationship statuses</option>
+        <select v-model="relationStatusFilter" class="ctrl-select" :title="t('archCanvas.filterRelationStatus')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allRelationStatuses') }}</option>
           <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
         </select>
         <label class="route-order-control">
           <i data-lucide="arrow-up-narrow-wide"></i>
-          <span>Order</span>
-          <select v-model="sortMode" class="ctrl-select" title="Order application routes">
-            <option value="sequence">Event sequence</option>
-            <option value="name">Name A-Z</option>
-            <option value="bus">Event bus</option>
-            <option value="service">Service flow</option>
-            <option value="depth">Longest route</option>
+          <span>{{ t('archRoutes.order') }}</span>
+          <select v-model="sortMode" class="ctrl-select" :title="t('archRoutes.orderHint')">
+            <option value="sequence">{{ t('archRoutes.sort.sequence') }}</option>
+            <option value="name">{{ t('archRoutes.sort.name') }}</option>
+            <option value="bus">{{ t('archRoutes.sort.bus') }}</option>
+            <option value="service">{{ t('archRoutes.sort.service') }}</option>
+            <option value="depth">{{ t('archRoutes.sort.depth') }}</option>
           </select>
         </label>
-        <span class="route-count"><strong>{{ totalPaths }}</strong> route{{ totalPaths === 1 ? '' : 's' }} · {{ groups.length }} entr{{ groups.length === 1 ? 'y' : 'ies' }}</span>
+        <span class="route-count"><strong>{{ totalPaths }}</strong> {{ t(totalPaths === 1 ? 'archRoutes.route' : 'archRoutes.routes') }} · {{ groups.length }} {{ t(groups.length === 1 ? 'archRoutes.entry' : 'archRoutes.entries') }}</span>
       </span>
     </header>
 
     <div v-if="!groups.length" class="routes-empty">
       <i data-lucide="route-off"></i>
-      <strong>No application routes in this diagram</strong>
-      <span>Import EventBridge, Step Functions, Kubernetes Ingress or Services with relationship evidence.</span>
+      <strong>{{ t('archRoutes.emptyTitle') }}</strong>
+      <span>{{ t('archRoutes.emptyHint') }}</span>
     </div>
 
     <article v-for="(group, groupIndex) in groups" :key="group.id" class="route-group">
@@ -53,14 +53,14 @@
         <span class="route-entry-icon"><i :data-lucide="iconFor(group.type)"></i></span>
         <span><strong>{{ group.name }}</strong><small>{{ labelFor(group.type) }}</small></span>
         <button v-if="group.type === 'stepfunctions'" class="btn sm" @click="$emit('inspect-workflow', group.paths[0].nodes[0])">
-          <i data-lucide="workflow"></i> Workflow diagram
+          <i data-lucide="workflow"></i> {{ t('archCanvas.workflowDiagram') }}
         </button>
       </header>
 
       <div v-if="group.config && group.category === 'event'" class="event-structure">
-        <span><small>Event bus</small><strong>{{ group.config.eventBus }}</strong></span>
-        <span v-if="group.config.scheduleExpression"><small>Schedule</small><code>{{ group.config.scheduleExpression }}</code></span>
-        <span v-if="group.config.description"><small>Purpose</small><strong>{{ group.config.description }}</strong></span>
+        <span><small>{{ t('archRoutes.eventBus') }}</small><strong>{{ group.config.eventBus }}</strong></span>
+        <span v-if="group.config.scheduleExpression"><small>{{ t('archRoutes.schedule') }}</small><code>{{ group.config.scheduleExpression }}</code></span>
+        <span v-if="group.config.description"><small>{{ t('archRoutes.purpose') }}</small><strong>{{ group.config.description }}</strong></span>
         <template v-if="group.config.eventPattern">
           <span v-for="field in eventFields(group.config.eventPattern)" :key="field.key">
             <small>{{ field.key }}</small><code>{{ patternValue(field.value) }}</code>
@@ -68,15 +68,15 @@
         </template>
       </div>
       <div v-if="group.config && group.category === 'microservice'" class="microservice-structure">
-        <span><small>Entry</small><strong>{{ group.config.entryType }}</strong></span>
+        <span><small>{{ t('archRoutes.entryLabel') }}</small><strong>{{ group.config.entryType }}</strong></span>
         <span v-if="group.config.namespace"><small>Namespace</small><strong>{{ group.config.namespace }}</strong></span>
-        <span v-if="group.config.context"><small>Context</small><code>{{ group.config.context }}</code></span>
-        <span><small>Evidence</small><strong>Declared Kubernetes selectors and backends</strong></span>
+        <span v-if="group.config.context"><small>{{ t('archRoutes.context') }}</small><code>{{ group.config.context }}</code></span>
+        <span><small>{{ t('archRoutes.evidence') }}</small><strong>{{ t('archRoutes.declaredSelectors') }}</strong></span>
       </div>
 
       <div class="route-paths">
         <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path" :data-route-id="path.id">
-          <span class="path-order"><small>Route</small><strong>{{ sequence(pathIndex) }}</strong></span>
+          <span class="path-order"><small>{{ t('archRoutes.routeLabel') }}</small><strong>{{ sequence(pathIndex) }}</strong></span>
           <span v-for="(node, index) in path.nodes" :key="node.id" class="route-segment">
             <button
               :class="['route-node', node.resourceType, { actionable: node.resourceType === 'stepfunctions' }]"
@@ -102,9 +102,11 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { architectureRouteGroups } from '../../lib/architectureRoutes'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({ graph: { type: Object, required: true } })
 const emit = defineEmits(['inspect-workflow', 'operation'])
+const { t } = useI18n()
 
 const sortMode = ref('sequence')
 const providerFilter = ref('all')
@@ -143,7 +145,7 @@ function persistView() {
       relationTypeFilter: relationTypeFilter.value,
       relationStatusFilter: relationStatusFilter.value,
     },
-  }, 'Update canvas view')
+  }, t('archCanvas.op.updateView'))
 }
 
 const filteredDocument = computed(() => {
@@ -180,32 +182,29 @@ function iconFor(type) {
 
 function labelFor(type) {
   return {
-    eventbridge: 'EventBridge event', sqs: 'SQS queue', lambda: 'Lambda', stepfunctions: 'Step Functions workflow', ecs: 'ECS', s3: 'S3',
+    eventbridge: t('archRoutes.type.eventbridge'), sqs: t('archCanvas.type.sqs'), lambda: 'Lambda', stepfunctions: t('archRoutes.type.stepfunctions'), ecs: 'ECS', s3: 'S3',
     ingress: 'Kubernetes Ingress', service: 'Kubernetes Service', deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
     daemonset: 'Kubernetes DaemonSet', pod: 'Kubernetes Pod', configmap: 'Kubernetes ConfigMap', secret: 'Kubernetes Secret', pvc: 'PersistentVolumeClaim',
   }[type] || type
 }
 
+const STAGES = ['eventbridge', 'sqs', 'lambda', 'stepfunctions', 'ecs', 's3', 'ingress', 'service', 'deployment', 'statefulset', 'daemonset', 'pod', 'configmap', 'secret', 'pvc']
+
 function stageLabel(type) {
-  return {
-    eventbridge: 'Event source',
-    sqs: 'Message buffer',
-    lambda: 'Compute',
-    stepfunctions: 'Workflow orchestration',
-    ecs: 'Container workload',
-    s3: 'Object storage',
-    ingress: 'HTTP entrypoint', service: 'Service routing', deployment: 'Workload', statefulset: 'Stateful workload',
-    daemonset: 'Node workload', pod: 'Runtime Pod', configmap: 'Configuration', secret: 'Secret reference', pvc: 'Persistent storage',
-  }[type] || labelFor(type)
+  return STAGES.includes(type) ? t(`archRoutes.stage.${type}`) : labelFor(type)
+}
+
+const RELATIONS = {
+  triggers: 'archCanvas.rel.triggers', invokes: 'archCanvas.rel.invokes', sends_to: 'archRoutes.rel.sends_to', starts_execution: 'archRoutes.rel.starts_execution',
+  routes_to: 'archCanvas.rel.routes_to', owns: 'archRoutes.rel.owns', uses: 'archRoutes.rel.uses',
 }
 
 function relationLabel(type) {
-  return { triggers: 'triggers', invokes: 'invokes', sends_to: 'sends to', starts_execution: 'starts', routes_to: 'routes to', owns: 'owns', uses: 'uses' }[type]
-    || String(type || 'depends_on').replaceAll('_', ' ')
+  return RELATIONS[type] ? t(RELATIONS[type]) : String(type || 'depends_on').replaceAll('_', ' ')
 }
 
 function relationshipStatus(status) {
-  return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
+  return ['automatic', 'suggested', 'manual', 'stale'].includes(status) ? t(`archCanvas.status.${status}`) : status
 }
 
 function patternValue(value) {
@@ -220,7 +219,7 @@ function eventFields(pattern) {
 }
 
 function categoryLabel(category) {
-  return { event: 'EVENT', workflow: 'WORKFLOW', microservice: 'MICROSERVICE' }[category] || 'ROUTE'
+  return ['event', 'workflow', 'microservice'].includes(category) ? t(`archRoutes.category.${category}`) : t('archRoutes.category.route')
 }
 
 function refreshIcons() { nextTick(() => createIcons({ icons })) }

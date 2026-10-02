@@ -1,35 +1,35 @@
 <template>
   <div class="eb-detail">
-    <div v-if="loading" class="empty-row">Loading rule details...</div>
+    <div v-if="loading" class="empty-row">{{ t('ebd.loading') }}</div>
     <div v-else-if="error" class="alert-error">{{ error }}</div>
     <template v-else-if="rule">
 
       <!-- Rule Overview -->
       <section class="eb-section">
-        <div class="eb-section-title">Rule</div>
+        <div class="eb-section-title">{{ t('ebd.rule') }}</div>
         <div class="eb-grid">
           <div class="eb-kv">
-            <span class="eb-key">Name</span>
+            <span class="eb-key">{{ t('ebd.name') }}</span>
             <span class="eb-val">{{ rule.Name }}</span>
           </div>
           <div class="eb-kv">
-            <span class="eb-key">State</span>
+            <span class="eb-key">{{ t('ebd.state') }}</span>
             <span :class="rule.State === 'ENABLED' ? 'status-ok' : 'status-err'">{{ rule.State }}</span>
           </div>
           <div class="eb-kv">
-            <span class="eb-key">Event Bus</span>
+            <span class="eb-key">{{ t('ebd.eventBus') }}</span>
             <span class="eb-val mono-xs">{{ rule.EventBusName }}</span>
           </div>
           <div v-if="rule.ManagedBy" class="eb-kv">
-            <span class="eb-key">Managed By</span>
+            <span class="eb-key">{{ t('ebd.managedBy') }}</span>
             <span class="eb-val mono-xs">{{ rule.ManagedBy }}</span>
           </div>
           <div v-if="rule.RoleArn" class="eb-kv">
-            <span class="eb-key">Role ARN</span>
+            <span class="eb-key">{{ t('ebd.roleArn') }}</span>
             <span class="eb-val mono-xs arn-clip" :title="rule.RoleArn">{{ rule.RoleArn }}</span>
           </div>
           <div v-if="rule.Description" class="eb-kv full">
-            <span class="eb-key">Description</span>
+            <span class="eb-key">{{ t('ebd.description') }}</span>
             <span class="eb-val">{{ rule.Description }}</span>
           </div>
         </div>
@@ -37,11 +37,11 @@
 
       <!-- Trigger: Schedule or Event Pattern -->
       <section class="eb-section">
-        <div class="eb-section-title">Trigger</div>
+        <div class="eb-section-title">{{ t('ebd.trigger') }}</div>
 
         <template v-if="rule.ScheduleExpression">
           <div class="eb-kv" style="margin-bottom:6px">
-            <span class="eb-key">Schedule</span>
+            <span class="eb-key">{{ t('ebd.schedule') }}</span>
             <span class="eb-val mono-xs" style="color:#34d399">{{ rule.ScheduleExpression }}</span>
           </div>
           <div v-if="scheduleDescription" class="text-dim" style="font-size:11px;margin-left:0">{{ scheduleDescription }}</div>
@@ -49,9 +49,9 @@
 
         <template v-else-if="parsedPattern">
           <div class="eb-pattern-header">
-            <span class="eb-key">Event Pattern</span>
+            <span class="eb-key">{{ t('ebd.eventPattern') }}</span>
             <button class="btn sm" style="margin-left:auto" @click="patternView = patternView === 'visual' ? 'json' : 'visual'">
-              {{ patternView === 'visual' ? 'Show JSON' : 'Show Visual' }}
+              {{ patternView === 'visual' ? t('ebd.showJson') : t('ebd.showVisual') }}
             </button>
           </div>
 
@@ -87,102 +87,102 @@
           <pre v-else class="eb-json">{{ JSON.stringify(parsedPattern, null, 2) }}</pre>
         </template>
 
-        <div v-else class="text-dim" style="font-size:12px">No trigger configured.</div>
+        <div v-else class="text-dim" style="font-size:12px">{{ t('ebd.noTrigger') }}</div>
       </section>
 
       <!-- Targets -->
       <section class="eb-section" v-if="targets.length">
-        <div class="eb-section-title">Targets ({{ targets.length }})</div>
-        <div v-for="(t, idx) in targets" :key="t.Id" class="eb-target">
+        <div class="eb-section-title">{{ t('ebd.targetsCount', { n: targets.length }) }}</div>
+        <div v-for="(target, idx) in targets" :key="target.Id" class="eb-target">
           <div class="eb-target-header">
             <span class="eb-target-idx">#{{ idx + 1 }}</span>
-            <span class="eb-target-id">{{ t.Id }}</span>
-            <span class="eb-target-type">{{ targetType(t.Arn) }}</span>
+            <span class="eb-target-id">{{ target.Id }}</span>
+            <span class="eb-target-type">{{ targetType(target.Arn) }}</span>
           </div>
 
           <div class="eb-kv" style="margin-bottom:4px">
             <span class="eb-key">ARN</span>
-            <span class="eb-val mono-xs arn-clip" :title="t.Arn">{{ t.Arn }}</span>
+            <span class="eb-val mono-xs arn-clip" :title="target.Arn">{{ target.Arn }}</span>
           </div>
 
-          <div v-if="t.RoleArn" class="eb-kv" style="margin-bottom:4px">
-            <span class="eb-key">Role</span>
-            <span class="eb-val mono-xs arn-clip" :title="t.RoleArn">{{ t.RoleArn }}</span>
+          <div v-if="target.RoleArn" class="eb-kv" style="margin-bottom:4px">
+            <span class="eb-key">{{ t('ebd.role') }}</span>
+            <span class="eb-val mono-xs arn-clip" :title="target.RoleArn">{{ target.RoleArn }}</span>
           </div>
 
           <!-- Input mode -->
-          <div class="eb-input-block" v-if="t.Input || t.InputPath || t.InputTransformer">
-            <div v-if="t.Input" class="eb-input-mode">
-              <span class="eb-input-label">Constant Input</span>
-              <pre class="eb-json small">{{ prettyJson(t.Input) }}</pre>
+          <div class="eb-input-block" v-if="target.Input || target.InputPath || target.InputTransformer">
+            <div v-if="target.Input" class="eb-input-mode">
+              <span class="eb-input-label">{{ t('ebd.constantInput') }}</span>
+              <pre class="eb-json small">{{ prettyJson(target.Input) }}</pre>
             </div>
-            <div v-else-if="t.InputPath" class="eb-input-mode">
-              <span class="eb-input-label">Input Path</span>
-              <code class="eb-code">{{ t.InputPath }}</code>
+            <div v-else-if="target.InputPath" class="eb-input-mode">
+              <span class="eb-input-label">{{ t('ebd.inputPath') }}</span>
+              <code class="eb-code">{{ target.InputPath }}</code>
             </div>
-            <div v-else-if="t.InputTransformer" class="eb-input-mode">
-              <span class="eb-input-label">Input Transformer</span>
+            <div v-else-if="target.InputTransformer" class="eb-input-mode">
+              <span class="eb-input-label">{{ t('ebd.inputTransformer') }}</span>
               <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
-                <div v-if="t.InputTransformer.InputPathsMap">
-                  <div class="eb-key" style="margin-bottom:4px">Input Paths Map</div>
+                <div v-if="target.InputTransformer.InputPathsMap">
+                  <div class="eb-key" style="margin-bottom:4px">{{ t('ebd.inputPathsMap') }}</div>
                   <div class="eb-paths-map">
-                    <div v-for="(path, varName) in t.InputTransformer.InputPathsMap" :key="varName" class="eb-paths-row">
+                    <div v-for="(path, varName) in target.InputTransformer.InputPathsMap" :key="varName" class="eb-paths-row">
                       <code class="eb-code var">{{ varName }}</code>
                       <span class="text-dim">→</span>
                       <code class="eb-code">{{ path }}</code>
                     </div>
                   </div>
                 </div>
-                <div v-if="t.InputTransformer.InputTemplate">
-                  <div class="eb-key" style="margin-bottom:4px">Template</div>
-                  <pre class="eb-json small">{{ prettyJson(t.InputTransformer.InputTemplate) }}</pre>
+                <div v-if="target.InputTransformer.InputTemplate">
+                  <div class="eb-key" style="margin-bottom:4px">{{ t('ebd.template') }}</div>
+                  <pre class="eb-json small">{{ prettyJson(target.InputTransformer.InputTemplate) }}</pre>
                 </div>
               </div>
             </div>
           </div>
-          <div v-else class="text-dim" style="font-size:11px;margin-top:4px">Matched event passed as-is</div>
+          <div v-else class="text-dim" style="font-size:11px;margin-top:4px">{{ t('ebd.passedAsIs') }}</div>
 
           <!-- ECS Parameters -->
-          <div v-if="t.EcsParameters" class="eb-extra-block">
-            <span class="eb-extra-title">ECS Parameters</span>
+          <div v-if="target.EcsParameters" class="eb-extra-block">
+            <span class="eb-extra-title">{{ t('ebd.ecsParams') }}</span>
             <div class="eb-grid compact">
-              <div class="eb-kv"><span class="eb-key">Task Def</span><span class="eb-val mono-xs arn-clip">{{ t.EcsParameters.TaskDefinitionArn }}</span></div>
-              <div class="eb-kv"><span class="eb-key">Count</span><span class="eb-val">{{ t.EcsParameters.TaskCount }}</span></div>
-              <div v-if="t.EcsParameters.LaunchType" class="eb-kv"><span class="eb-key">Launch Type</span><span class="eb-val">{{ t.EcsParameters.LaunchType }}</span></div>
+              <div class="eb-kv"><span class="eb-key">{{ t('ebd.taskDef') }}</span><span class="eb-val mono-xs arn-clip">{{ target.EcsParameters.TaskDefinitionArn }}</span></div>
+              <div class="eb-kv"><span class="eb-key">{{ t('ebd.count') }}</span><span class="eb-val">{{ target.EcsParameters.TaskCount }}</span></div>
+              <div v-if="target.EcsParameters.LaunchType" class="eb-kv"><span class="eb-key">{{ t('ebd.launchType') }}</span><span class="eb-val">{{ target.EcsParameters.LaunchType }}</span></div>
             </div>
           </div>
 
           <!-- SQS Parameters -->
-          <div v-if="t.SqsParameters" class="eb-extra-block">
-            <span class="eb-extra-title">SQS Parameters</span>
-            <div class="eb-kv"><span class="eb-key">Message Group ID</span><span class="eb-val mono-xs">{{ t.SqsParameters.MessageGroupId }}</span></div>
+          <div v-if="target.SqsParameters" class="eb-extra-block">
+            <span class="eb-extra-title">{{ t('ebd.sqsParams') }}</span>
+            <div class="eb-kv"><span class="eb-key">{{ t('ebd.messageGroupId') }}</span><span class="eb-val mono-xs">{{ target.SqsParameters.MessageGroupId }}</span></div>
           </div>
 
           <!-- HTTP Parameters -->
-          <div v-if="t.HttpParameters" class="eb-extra-block">
-            <span class="eb-extra-title">HTTP Parameters</span>
-            <pre class="eb-json small">{{ JSON.stringify(t.HttpParameters, null, 2) }}</pre>
+          <div v-if="target.HttpParameters" class="eb-extra-block">
+            <span class="eb-extra-title">{{ t('ebd.httpParams') }}</span>
+            <pre class="eb-json small">{{ JSON.stringify(target.HttpParameters, null, 2) }}</pre>
           </div>
 
           <!-- Retry Policy -->
-          <div v-if="t.RetryPolicy" class="eb-meta-row">
+          <div v-if="target.RetryPolicy" class="eb-meta-row">
             <span class="eb-meta-item">
-              Retry: max {{ t.RetryPolicy.MaximumRetryAttempts ?? '?' }} attempts,
-              {{ t.RetryPolicy.MaximumEventAgeInSeconds ? Math.round(t.RetryPolicy.MaximumEventAgeInSeconds / 60) + ' min age limit' : '' }}
+              {{ t('ebd.retry', { n: target.RetryPolicy.MaximumRetryAttempts ?? '?' }) }}
+              {{ target.RetryPolicy.MaximumEventAgeInSeconds ? t('ebd.ageLimit', { n: Math.round(target.RetryPolicy.MaximumEventAgeInSeconds / 60) }) : '' }}
             </span>
           </div>
 
           <!-- DLQ -->
-          <div v-if="t.DeadLetterConfig?.Arn" class="eb-meta-row dlq">
+          <div v-if="target.DeadLetterConfig?.Arn" class="eb-meta-row dlq">
             <span class="eb-key" style="color:#f59e0b">DLQ</span>
-            <span class="eb-val mono-xs arn-clip" :title="t.DeadLetterConfig.Arn">{{ t.DeadLetterConfig.Arn }}</span>
+            <span class="eb-val mono-xs arn-clip" :title="target.DeadLetterConfig.Arn">{{ target.DeadLetterConfig.Arn }}</span>
           </div>
         </div>
       </section>
 
       <section v-else class="eb-section">
-        <div class="eb-section-title">Targets</div>
-        <div class="text-dim" style="font-size:12px">No targets configured.</div>
+        <div class="eb-section-title">{{ t('ebd.targets') }}</div>
+        <div class="text-dim" style="font-size:12px">{{ t('ebd.noTargets') }}</div>
       </section>
 
     </template>
@@ -191,6 +191,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   rule:    { type: Object, default: null },
@@ -199,6 +200,7 @@ const props = defineProps({
   error:   { type: String,  default: null },
 })
 
+const { t } = useI18n()
 const patternView = ref('visual')
 
 const parsedPattern = computed(() => {
@@ -211,7 +213,7 @@ const scheduleDescription = computed(() => {
   if (!expr) return null
   if (expr.startsWith('rate(')) {
     const inner = expr.slice(5, -1)
-    return `Runs every ${inner}`
+    return t('ebd.runsEvery', { interval: inner })
   }
   if (expr.startsWith('cron(')) {
     return `Cron: ${expr.slice(5, -1)}`

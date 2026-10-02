@@ -3,31 +3,31 @@
     <header class="resources-header">
       <span class="resources-title">
         <span class="resources-title-icon"><i data-lucide="database"></i></span>
-        <span><strong>Canonical resources</strong><small>Shared registry — provider identity, sources and relationships</small></span>
+        <span><strong>{{ t('archRes.title') }}</strong><small>{{ t('archRes.subtitle') }}</small></span>
       </span>
       <span class="resources-actions">
-        <button class="btn sm btn-icon" title="Refresh resources" :disabled="loading" @click="$emit('refresh')"><i data-lucide="refresh-cw"></i></button>
-        <span class="resources-count"><strong>{{ resources.length }}</strong> resource{{ resources.length === 1 ? '' : 's' }}</span>
+        <button class="btn sm btn-icon" :title="t('archRes.refresh')" :disabled="loading" @click="$emit('refresh')"><i data-lucide="refresh-cw"></i></button>
+        <span class="resources-count"><strong>{{ resources.length }}</strong> {{ t(resources.length === 1 ? 'archRes.resource' : 'archRes.resources') }}</span>
       </span>
     </header>
 
-    <div v-if="loading" class="resources-empty">Loading canonical resources...</div>
+    <div v-if="loading" class="resources-empty">{{ t('archRes.loading') }}</div>
     <div v-else-if="!resources.length" class="resources-empty">
       <i data-lucide="database-zap"></i>
-      <strong>No canonical resources yet</strong>
-      <span>Resources appear once APM or Architecture discovery confirms membership for this application.</span>
+      <strong>{{ t('archRes.emptyTitle') }}</strong>
+      <span>{{ t('archRes.emptyHint') }}</span>
     </div>
 
     <table v-else class="resources-table">
       <thead>
         <tr>
-          <th>Resource</th>
-          <th>Type</th>
-          <th>Scope / Location</th>
-          <th>Sources</th>
-          <th>Status</th>
-          <th>Relations</th>
-          <th v-if="$slots.actions">Actions</th>
+          <th>{{ t('archRes.col.resource') }}</th>
+          <th>{{ t('archRes.col.type') }}</th>
+          <th>{{ t('archRes.col.scope') }}</th>
+          <th>{{ t('archRes.col.sources') }}</th>
+          <th>{{ t('archRes.col.status') }}</th>
+          <th>{{ t('archRes.col.relations') }}</th>
+          <th v-if="$slots.actions">{{ t('archRes.col.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -49,15 +49,15 @@
             <div class="resource-source-list">
               <span v-for="source in resource.sources" :key="source" :class="['resource-source-badge', source]">{{ sourceLabel(source) }}</span>
             </div>
-            <span v-if="resource.divergent" class="resource-divergence" title="Confirmed from only one side (APM or Architecture)">
-              <i data-lucide="alert-triangle"></i> Single source
+            <span v-if="resource.divergent" class="resource-divergence" :title="t('archRes.singleSourceHint')">
+              <i data-lucide="alert-triangle"></i> {{ t('archRes.singleSource') }}
             </span>
           </td>
           <td class="resource-status-cell"><span :class="['resource-status', statusFor(resource).status]">{{ statusFor(resource).label }}</span></td>
           <td class="resource-relations-cell">
             <span class="relationship-count">{{ relationshipCount(resource.id) }}</span>
-            <span v-if="divergentRelationshipCount(resource.id)" class="relationship-divergence" title="Suggested relationships still pending review">
-              <i data-lucide="alert-triangle"></i> {{ divergentRelationshipCount(resource.id) }} pending review
+            <span v-if="divergentRelationshipCount(resource.id)" class="relationship-divergence" :title="t('archRes.pendingHint')">
+              <i data-lucide="alert-triangle"></i> {{ t('archRes.pendingReview', { n: divergentRelationshipCount(resource.id) }) }}
             </span>
           </td>
           <td v-if="$slots.actions" class="resource-actions-cell"><slot name="actions" :resource="resource.sourceResource || resource"></slot></td>
@@ -69,6 +69,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({
   graph: { type: Object, default: null },
@@ -77,6 +78,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 defineEmits(['refresh'])
+const { t } = useI18n()
 
 const resources = computed(() => props.registry
   ? props.registry.resources || []
@@ -106,11 +108,11 @@ const nodesByRegistryId = computed(() => {
 
 function statusFor(resource) {
   const node = nodesByRegistryId.value.get(resource.id)
-  if (node?.syncState === 'stale') return { status: 'stale', label: 'Stale' }
+  if (node?.syncState === 'stale') return { status: 'stale', label: t('archCanvas.status.stale') }
   const health = node?.health?.status
-  if (health === 'degraded') return { status: 'degraded', label: 'Degraded' }
-  if (health === 'healthy') return { status: 'healthy', label: 'Healthy' }
-  return { status: 'unknown', label: 'Unknown' }
+  if (health === 'degraded') return { status: 'degraded', label: t('archCanvas.health.degraded') }
+  if (health === 'healthy') return { status: 'healthy', label: t('archCanvas.health.healthy') }
+  return { status: 'unknown', label: t('archRes.status.unknown') }
 }
 
 function relationshipCount(resourceId) {
@@ -124,7 +126,7 @@ function divergentRelationshipCount(resourceId) {
 }
 
 function sourceLabel(source) {
-  return source === 'apm_resource' ? 'APM' : source === 'architecture_node' ? 'Architecture' : source
+  return source === 'apm_resource' ? 'APM' : source === 'architecture_node' ? t('archView.title') : source
 }
 
 function scopeLabel(resource) {

@@ -1,61 +1,61 @@
 <template>
   <section class="kubernetes-discovery-panel">
     <header>
-      <span><i data-lucide="ship-wheel"></i><strong>Add Kubernetes resources</strong><small>Choose a context, inspect topology evidence, then confirm resources.</small></span>
-      <button class="btn sm btn-icon" title="Close Kubernetes discovery" @click="$emit('close')"><i data-lucide="x"></i></button>
+      <span><i data-lucide="ship-wheel"></i><strong>{{ t('archK8s.title') }}</strong><small>{{ t('archK8s.subtitle') }}</small></span>
+      <button class="btn sm btn-icon" :title="t('archK8s.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
     <div v-if="store.discovering" class="kubernetes-progress" role="status" aria-live="polite">
       <i data-lucide="loader-2"></i>
-      <span>{{ store.discoveryPhase === 'kubernetes-contexts' ? 'Loading Kubernetes contexts…' : 'Loading Kubernetes resources…' }}</span>
+      <span>{{ store.discoveryPhase === 'kubernetes-contexts' ? t('archK8s.loadingContexts') : t('archK8s.loadingResources') }}</span>
     </div>
 
     <template v-if="!store.kubernetesPreview">
       <div class="kubernetes-controls">
-        <label>Context
+        <label>{{ t('archK8s.context') }}
           <select v-model="contextId" class="ctrl-input" :disabled="store.discovering">
-            <option value="">Select a Kubernetes context</option>
+            <option value="">{{ t('archK8s.selectContext') }}</option>
             <option v-for="context in store.kubernetesContexts" :key="context.id" :value="context.id">{{ context.name }}</option>
           </select>
         </label>
-        <label>Namespaces
-          <input v-model.trim="namespaceFilter" class="ctrl-input" placeholder="orders, platform (optional)" :disabled="store.discovering" />
+        <label>{{ t('archK8s.namespaces') }}
+          <input v-model.trim="namespaceFilter" class="ctrl-input" :placeholder="t('archK8s.namespacesPlaceholder')" :disabled="store.discovering" />
         </label>
-        <button class="btn sm" :disabled="store.discovering" @click="loadContexts"><i data-lucide="refresh-cw"></i> Refresh contexts</button>
-        <button class="btn sm primary" :disabled="store.discovering || !contextId" @click="previewResources"><i data-lucide="scan-search"></i> Preview resources</button>
+        <button class="btn sm" :disabled="store.discovering" @click="loadContexts"><i data-lucide="refresh-cw"></i> {{ t('archK8s.refreshContexts') }}</button>
+        <button class="btn sm primary" :disabled="store.discovering || !contextId" @click="previewResources"><i data-lucide="scan-search"></i> {{ t('archK8s.previewResources') }}</button>
       </div>
-      <div v-if="!store.discovering && !store.kubernetesContexts.length" class="kubernetes-empty">No Kubernetes contexts are available for this profile.</div>
+      <div v-if="!store.discovering && !store.kubernetesContexts.length" class="kubernetes-empty">{{ t('archK8s.noContexts') }}</div>
     </template>
 
     <template v-else>
       <div class="kubernetes-summary">
-        <span><strong>{{ store.kubernetesPreview.nodes.length }}</strong> resources</span>
-        <span><strong>{{ store.kubernetesPreview.relationships.length }}</strong> relationships</span>
-        <span><strong>{{ degradedContexts }}</strong> degraded contexts</span>
-        <button class="btn sm" @click="backToContexts"><i data-lucide="arrow-left"></i> Change context</button>
+        <span><strong>{{ store.kubernetesPreview.nodes.length }}</strong> {{ t('archK8s.resources') }}</span>
+        <span><strong>{{ store.kubernetesPreview.relationships.length }}</strong> {{ t('archK8s.relationships') }}</span>
+        <span><strong>{{ degradedContexts }}</strong> {{ t('archK8s.degradedContexts') }}</span>
+        <button class="btn sm" @click="backToContexts"><i data-lucide="arrow-left"></i> {{ t('archK8s.changeContext') }}</button>
       </div>
       <div v-if="store.kubernetesPreview.failures.length" class="kubernetes-warning">
-        {{ store.kubernetesPreview.failures.map(item => item.context).join(', ') }} could not be reached.
+        {{ t('archK8s.unreachable', { contexts: store.kubernetesPreview.failures.map(item => item.context).join(', ') }) }}
       </div>
       <div class="kubernetes-resource-list">
         <section v-for="group in resourceGroups" :key="group.type" class="kubernetes-resource-group">
           <header>
             <span><i :data-lucide="resourceIcon(group.type)"></i><strong>{{ resourceLabel(group.type) }}</strong><small>{{ group.nodes.length }}</small></span>
-            <label><input type="checkbox" :checked="isGroupSelected(group)" @change="toggleGroup(group, $event.target.checked)" /> Select all</label>
+            <label><input type="checkbox" :checked="isGroupSelected(group)" @change="toggleGroup(group, $event.target.checked)" /> {{ t('archK8s.selectAll') }}</label>
           </header>
           <label v-for="node in group.nodes" :key="node.id" class="kubernetes-resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
             <input v-model="selectedNodeIds" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
             <i :data-lucide="resourceIcon(node.resourceType)"></i>
-            <span><strong>{{ node.name }}</strong><small>{{ node.kind }} · {{ node.namespace || 'cluster scope' }}</small></span>
-            <span v-if="node.alreadyInGraph" class="health already-badge">already in project</span>
-            <span v-else :class="['health', node.health?.status]">{{ node.health?.status || 'unknown' }}</span>
+            <span><strong>{{ node.name }}</strong><small>{{ node.kind }} · {{ node.namespace || t('archK8s.clusterScope') }}</small></span>
+            <span v-if="node.alreadyInGraph" class="health already-badge">{{ t('archK8s.alreadyInProject') }}</span>
+            <span v-else :class="['health', node.health?.status]">{{ node.health?.status || t('archK8s.unknown') }}</span>
           </label>
         </section>
       </div>
       <footer>
-        <span>{{ selectedNodeIds.length }} selected</span>
+        <span>{{ t('archK8s.selected', { n: selectedNodeIds.length }) }}</span>
         <button class="btn sm primary" :disabled="store.saving || !selectedNodeIds.length" @click="importResources">
-          <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>{{ store.saving ? 'Drawing…' : 'Add to diagram' }}
+          <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>{{ store.saving ? t('archDisc.drawing') : t('archManual.add') }}
         </button>
       </footer>
     </template>
@@ -66,9 +66,11 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useI18n } from '../../composables/useI18n'
 
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
+const { t } = useI18n()
 const contextId = ref('')
 const selectedNodeIds = ref([])
 const namespaceFilter = ref('')
@@ -140,8 +142,8 @@ function resourceIcon(type) {
 function resourceLabel(type) {
   return {
     deployment: 'Deployments', statefulset: 'StatefulSets', daemonset: 'DaemonSets', pod: 'Pods',
-    service: 'Services', ingress: 'Ingress', configmap: 'ConfigMaps', secret: 'Secrets', pvc: 'Persistent volumes',
-  }[type] || String(type || 'Resources').replaceAll('-', ' ')
+    service: 'Services', ingress: 'Ingress', configmap: 'ConfigMaps', secret: 'Secrets', pvc: t('archK8s.persistentVolumes'),
+  }[type] || (type ? String(type).replaceAll('-', ' ') : t('archK8s.resourcesFallback'))
 }
 watch(() => store.kubernetesPreview, refreshIcons)
 onMounted(async () => { await loadContexts(); refreshIcons() })
