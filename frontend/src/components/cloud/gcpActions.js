@@ -6,24 +6,27 @@
 //   - stop:  plain confirmation listing what keeps billing / side effects
 //   - delete: irreversible → typed resource name; blocked outright when the
 //     resource has deletion protection (GCP would reject it anyway)
+import { useI18n } from '../../composables/useI18n'
 
-const KIND_LABEL = { cloudrun: 'servicio Cloud Run', vm: 'VM', sql: 'instancia Cloud SQL' }
+const { t } = useI18n()
+
+const KIND_LABEL = { cloudrun: 'gca.kind.cloudrun', vm: 'gca.kind.vm', sql: 'gca.kind.sql' }
 
 function startConfig(kind, r) {
-  const base = { tone: 'warning', costAck: true, confirmLabel: 'Iniciar' }
+  const base = { tone: 'warning', costAck: true, confirmLabel: t('gca.start') }
   if (kind === 'cloudrun') return {
     ...base,
-    title: `Iniciar ${r.name}`,
-    message: 'Fija min instances = 1 para mantener una instancia caliente.',
-    lines: ['La instancia queda encendida 24/7 y se factura aunque no reciba tráfico.'],
+    title: t('gca.startTitle', { name: r.name }),
+    message: t('gca.startRunMessage'),
+    lines: [t('gca.startRunLine')],
     estimateKind: 'cloudrun',
     estimateSpec: { cpu: r.cpu || '1', memory: r.memory || '512Mi', minInstances: 1 },
   }
   if (kind === 'vm') return {
     ...base,
-    title: `Iniciar VM ${r.name}`,
-    message: 'La VM vuelve a facturar cómputo desde que arranca.',
-    lines: [`Zona ${r.zone} · ${r.machineType}`, 'Si la IP externa es efímera, puede cambiar al iniciar.'],
+    title: t('gca.startVmTitle', { name: r.name }),
+    message: t('gca.startVmMessage'),
+    lines: [t('gca.zoneLine', { zone: r.zone, machineType: r.machineType }), t('gca.ephemeralIpStart')],
     estimateKind: 'vm',
     estimateSpec: {
       machineType: r.machineType,
@@ -34,8 +37,8 @@ function startConfig(kind, r) {
   }
   return {
     ...base,
-    title: `Iniciar ${r.name}`,
-    message: 'La instancia vuelve a facturar cada hora que esté encendida.',
+    title: t('gca.startTitle', { name: r.name }),
+    message: t('gca.startSqlMessage'),
     lines: [`${r.database || ''} · ${r.tier || ''}`.trim()],
     estimateKind: 'sql',
     estimateSpec: {
@@ -48,62 +51,59 @@ function startConfig(kind, r) {
 }
 
 function stopConfig(kind, r) {
-  const base = { tone: 'info', confirmLabel: 'Detener' }
+  const base = { tone: 'info', confirmLabel: t('gca.stop') }
   if (kind === 'cloudrun') return {
     ...base,
-    title: `Detener ${r.name}`,
-    message: 'Fija min instances = 0: el servicio escala a cero cuando no hay tráfico.',
-    lines: ['La URL sigue activa; la primera petición tendrá un arranque en frío.'],
+    title: t('gca.stopTitle', { name: r.name }),
+    message: t('gca.stopRunMessage'),
+    lines: [t('gca.stopRunLine')],
   }
   if (kind === 'vm') return {
     ...base,
-    title: `Detener VM ${r.name}`,
-    message: 'Se apaga la VM (equivale a apagarla, no a suspenderla).',
+    title: t('gca.stopVmTitle', { name: r.name }),
+    message: t('gca.stopVmMessage'),
     lines: [
-      'Los procesos en ejecución se detienen; los datos en disco se conservan.',
-      'Los discos y las IPs estáticas siguen facturando mientras esté detenida.',
-      r.externalIp ? 'Si la IP externa es efímera, puede cambiar al volver a iniciar.' : null,
+      t('gca.stopVmProcesses'),
+      t('gca.stopVmBilling'),
+      r.externalIp ? t('gca.ephemeralIpRestart') : null,
     ].filter(Boolean),
   }
   return {
     ...base,
-    title: `Detener ${r.name}`,
-    message: 'La instancia deja de aceptar conexiones.',
-    lines: ['El almacenamiento y las IPs siguen facturando mientras esté detenida.'],
+    title: t('gca.stopTitle', { name: r.name }),
+    message: t('gca.stopSqlMessage'),
+    lines: [t('gca.stopSqlBilling')],
   }
 }
 
 function deleteConfig(kind, r) {
   const base = {
     tone: 'danger',
-    title: `Eliminar ${KIND_LABEL[kind]} ${r.name}`,
-    message: 'Esta acción no se puede deshacer.',
+    title: t('gca.deleteTitle', { kind: t(KIND_LABEL[kind]), name: r.name }),
+    message: t('gca.cannotUndo'),
     requireName: r.name,
-    confirmLabel: 'Eliminar definitivamente',
+    confirmLabel: t('gca.deleteForever'),
   }
   if (kind === 'cloudrun') return {
     ...base,
-    lines: ['Se eliminan todas las revisiones y la URL deja de responder.', 'Los contenedores en Artifact Registry no se eliminan.'],
+    lines: [t('gca.deleteRunRevisions'), t('gca.deleteRunImages')],
   }
   if (kind === 'vm') {
     const kept = r.keptDiskCount || 0
     return {
       ...base,
       lines: [
-        'Se elimina la VM y los discos marcados con auto-delete.',
-        kept ? `${kept} disco(s) sin auto-delete se conservan y seguirán facturando.` : null,
-        r.externalIp ? 'La IP externa efímera se libera.' : null,
+        t('gca.deleteVmDisks'),
+        kept ? t('gca.deleteVmKept', { n: kept }) : null,
+        r.externalIp ? t('gca.deleteVmIp') : null,
       ].filter(Boolean),
-      blocked: r.deletionProtection ? 'La VM tiene protección contra eliminación. Desactívala en la consola de Google Cloud para poder eliminarla.' : '',
+      blocked: r.deletionProtection ? t('gca.vmProtected') : '',
     }
   }
   return {
     ...base,
-    lines: [
-      'Se eliminan todas las bases de datos, usuarios y backups automáticos de la instancia.',
-      'La eliminación continúa en segundo plano durante unos minutos.',
-    ],
-    blocked: r.deletionProtection ? 'La instancia tiene protección contra eliminación. Desactívala en la consola de Google Cloud para poder eliminarla.' : '',
+    lines: [t('gca.deleteSqlData'), t('gca.deleteSqlBackground')],
+    blocked: r.deletionProtection ? t('gca.sqlProtected') : '',
   }
 }
 
@@ -113,18 +113,18 @@ function sshConfig(r) {
   const internal = !r.externalIp
   return {
     tone: 'info',
-    title: `SSH a ${r.name}`,
-    message: 'Se abrirá una sesión en la consola de KUA.',
+    title: t('gca.sshTitle', { name: r.name }),
+    message: t('gca.sshMessage'),
     lines: [
-      'KUA genera una llave SSH temporal (30 min) solo para esta conexión; no se guarda.',
-      'Si la VM usa OS Login, la llave se agrega a tu perfil de OS Login; si no, a la metadata "ssh-keys" de la VM con vencimiento.',
+      t('gca.sshKey'),
+      t('gca.sshOsLogin'),
       internal
-        ? `⚠ La VM no tiene IP externa: se usará la IP interna ${r.internalIp || ''} (requiere VPN o acceso a la VPC).`
-        : `Conexión a ${r.externalIp}:22 (la regla de firewall debe permitir SSH desde tu IP).`,
+        ? t('gca.sshInternal', { ip: r.internalIp || '' })
+        : t('gca.sshExternal', { ip: r.externalIp }),
     ],
-    confirmLabel: 'Conectar',
+    confirmLabel: t('gca.connect'),
     addressType: internal ? 'internal' : 'external',
-    blocked: r.status !== 'RUNNING' ? `La VM está ${r.status}; iníciala antes de conectarte.` : '',
+    blocked: r.status !== 'RUNNING' ? t('gca.sshNotRunning', { status: r.status }) : '',
   }
 }
 

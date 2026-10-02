@@ -62,7 +62,7 @@
           <div v-if="!d.security?.serviceAccounts?.length" class="gi-empty">{{ t('gvi.noServiceAccount') }}</div>
           <div v-for="sa in d.security?.serviceAccounts || []" :key="sa.email" style="margin-bottom:6px">
             <div class="gi-mono">{{ sa.email }}</div>
-            <span v-for="s in sa.scopes" :key="s" class="gi-chip">{{ s }}</span>
+            <span v-for="s in sa.scopes" :key="scopeLabel(s)" class="gi-chip">{{ scopeLabel(s) }}</span>
           </div>
         </div>
 
@@ -147,7 +147,7 @@ const notes = computed(() => {
   const v = d.value
   const hasExternalIp = (v.networks || []).some(n => n.externalIp)
   if (hasExternalIp) out.push({ level: 'warn', text: t('gvi.notePublicIp') })
-  if ((v.security?.serviceAccounts || []).some(sa => sa.scopes.some(s => s.startsWith('cloud-platform')))) {
+  if ((v.security?.serviceAccounts || []).some(sa => sa.scopes.some(s => scopeLabel(s).startsWith('cloud-platform')))) {
     out.push({ level: 'warn', text: t('gvi.noteCloudPlatform') })
   }
   if ((v.security?.serviceAccounts || []).some(sa => /-compute@developer\.gserviceaccount\.com$/.test(sa.email))) {
@@ -168,5 +168,10 @@ function statusTone(s) {
   return 'err'
 }
 function yesNo(v) { return v == null ? '—' : t(v ? 'common.yes' : 'common.no') }
+// The backend sends each scope as { name, access } with access 'full' | 'read' | 'write' | null.
+function scopeLabel(scope) {
+  if (typeof scope === 'string') return scope
+  return scope.access ? `${scope.name} (${t(`gvi.scopeAccess.${scope.access}`)})` : scope.name
+}
 function fmt(v) { return v ? new Date(v).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US') : '—' }
 </script>

@@ -5937,13 +5937,13 @@ async function setCognitoUserMfaEnabled(nextEnabled) {
       payloadMethod,
     )
     if (r?.success) {
-      toast(nextEnabled ? 'MFA habilitado.' : 'MFA deshabilitado.', 'success')
+      toast(nextEnabled ? t('awsv.lit.mfaTurnedOn') : t('awsv.lit.mfaTurnedOff'), 'success')
       await loadCognitoUsers()
       await refreshCognitoUserDetail()
       return true
     } else {
       cognitoUserDetail.mfaEnabled = previousEnabled
-      toast(awsStore.error || 'No se pudo actualizar MFA', 'error')
+      toast(awsStore.error || t('awsv.lit.mfaToggleFailed'), 'error')
       return false
     }
   } finally { cognitoUserDetail.savingMfa = false }
@@ -6006,7 +6006,7 @@ async function saveCognitoUserAttributes() {
       await loadCognitoUsers()
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo actualizar el usuario', 'error')
+      toast(awsStore.error || t('awsv.lit.userUpdateFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingAttributes = false }
 }
@@ -6021,7 +6021,7 @@ async function addCognitoUserGroup() {
       cognitoUserDetail.selectedGroup = ''
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo asignar el grupo', 'error')
+      toast(awsStore.error || t('awsv.lit.groupAddFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingGroup = false }
 }
@@ -6036,7 +6036,7 @@ async function removeCognitoUserGroup(groupName) {
       toast(t('awsv.toastGroupRemoved'), 'success')
       await refreshCognitoUserDetail()
     } else {
-      toast(awsStore.error || 'No se pudo quitar el grupo', 'error')
+      toast(awsStore.error || t('awsv.lit.groupRemoveFailed'), 'error')
     }
   } finally { cognitoUserDetail.savingGroup = false }
 }
@@ -6613,7 +6613,7 @@ async function openImportSecret(s) {
       importSecretModal.previewKeys  = resp.keys
       importSecretModal.selectedKeys = [...resp.keys]
     } else {
-      importSecretModal.keysError = awsStore.error || 'No se pudieron cargar las variables'
+      importSecretModal.keysError = awsStore.error || t('awsv.lit.secretKeysFailed')
     }
   } catch (e) { importSecretModal.keysError = e.message }
   finally { importSecretModal.loadingKeys = false }
@@ -6652,7 +6652,7 @@ async function openSecretConfig(s) {
   Object.assign(secretConfigModal, { open: true, loading: true, error: null, secret: s, data: null })
   try {
     secretConfigModal.data = await awsStore.fetchSecretConfig(s.name)
-    if (!secretConfigModal.data) secretConfigModal.error = awsStore.error || 'Error cargando config'
+    if (!secretConfigModal.data) secretConfigModal.error = awsStore.error || t('awsv.lit.secretConfigFailed')
   } catch (e) { secretConfigModal.error = e.message }
   finally { secretConfigModal.loading = false }
 }

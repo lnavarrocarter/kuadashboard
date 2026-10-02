@@ -44,7 +44,7 @@
         <div class="gi-card">
           <div class="gi-card-title">{{ t('gsi.maintenanceSecurity') }}</div>
           <dl>
-            <dt>{{ t('gsi.window') }}</dt><dd>{{ d.maintenance ? `${d.maintenance.day}${d.maintenance.hour != null ? ` ${d.maintenance.hour}:00 UTC` : ''}` : t('gsi.anyTime') }}<span v-if="d.maintenance?.track" class="gi-dim"> · {{ d.maintenance.track }}</span></dd>
+            <dt>{{ t('gsi.window') }}</dt><dd>{{ d.maintenance ? `${maintenanceDay(d.maintenance.day)}${d.maintenance.hour != null ? ` ${d.maintenance.hour}:00 UTC` : ''}` : t('gsi.anyTime') }}<span v-if="d.maintenance?.track" class="gi-dim"> · {{ d.maintenance.track }}</span></dd>
             <dt>{{ t('gvi.deletionProtection') }}</dt><dd><span :class="['gi-badge', d.security?.deletionProtection ? 'ok' : 'warn']">{{ yesNo(d.security?.deletionProtection) }}</span></dd>
             <dt>Query Insights</dt><dd>{{ yesNo(d.security?.queryInsights) }}</dd>
             <dt>{{ t('gsi.caCertificate') }}</dt><dd>{{ t('gsi.expires', { date: fmtDate(d.security?.serverCaExpires) }) }}</dd>
@@ -148,6 +148,8 @@ const notes = computed(() => {
 })
 
 function yesNo(v) { return v == null ? '—' : t(v ? 'common.yes' : 'common.no') }
+// The backend sends the maintenance day as 1 (Monday) … 7 (Sunday), or null for any day.
+function maintenanceDay(day) { return day >= 1 && day <= 7 ? t(`gsi.day.${day}`) : t('gsi.anyDay') }
 function fmt(v) { return v ? new Date(v).toLocaleString(dateLocale()) : '—' }
 function fmtDate(v) { return v ? new Date(v).toLocaleDateString(dateLocale()) : '—' }
 </script>

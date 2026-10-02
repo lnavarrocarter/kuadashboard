@@ -14,16 +14,16 @@
         </ul>
 
         <!-- Cost estimate -->
-        <div v-if="estimateLoading" class="gcpc-estimate text-dim">Calculando costo estimado…</div>
+        <div v-if="estimateLoading" class="gcpc-estimate text-dim">{{ t('gcc.calculating') }}</div>
         <div v-else-if="estimate" :class="['gcpc-estimate', { high: estimate.highCost }]" data-test="estimate">
           <div class="gcpc-estimate-total">
-            <span>Costo estimado</span>
-            <strong v-if="estimate.known">~${{ formatUsd(estimate.monthlyUsd) }} / mes</strong>
-            <strong v-else>desconocido</strong>
+            <span>{{ t('gcc.estimated') }}</span>
+            <strong v-if="estimate.known">{{ t('gcc.perMonth', { usd: formatUsd(estimate.monthlyUsd) }) }}</strong>
+            <strong v-else>{{ t('gcc.unknown') }}</strong>
           </div>
           <table v-if="estimate.items?.length" class="gcpc-items">
             <tr v-for="item in estimate.items" :key="item.label">
-              <td>{{ item.label }}</td><td class="num">${{ formatUsd(item.monthlyUsd) }}</td>
+              <td>{{ item.key && t(`gcn.estimate.${item.key}`, item.params) !== `gcn.estimate.${item.key}` ? t(`gcn.estimate.${item.key}`, item.params) : item.label }}</td><td class="num">${{ formatUsd(item.monthlyUsd) }}</td>
             </tr>
           </table>
           <ul v-if="estimate.warnings?.length" class="gcpc-warnings">
@@ -35,15 +35,15 @@
         <!-- Acknowledgements -->
         <label v-if="costAck && !blocked" class="gcpc-check">
           <input v-model="costAcked" type="checkbox" data-test="cost-ack" />
-          Entiendo que esta acción genera costos en Google Cloud.
+          {{ t('gcc.costAck') }}
         </label>
         <label v-if="costAck && estimate?.highCost" class="gcpc-check high">
           <input v-model="highCostAcked" type="checkbox" data-test="high-cost-ack" />
-          Confirmo el costo alto estimado (~${{ formatUsd(estimate.monthlyUsd) }} / mes).
+          {{ t('gcc.highCostAck', { usd: formatUsd(estimate.monthlyUsd) }) }}
         </label>
 
         <div v-if="requireName && !blocked" class="gcpc-name">
-          <label :for="inputId">Escribe <code>{{ requireName }}</code> para confirmar</label>
+          <label :for="inputId">{{ t('gcc.typePre') }} <code>{{ requireName }}</code> {{ t('gcc.typePost') }}</label>
           <input :id="inputId" v-model="typedName" class="gcpc-input" autocomplete="off" spellcheck="false" data-test="confirm-name" @keydown.enter="canConfirm && confirm()" />
         </div>
 
@@ -52,9 +52,9 @@
       </div>
 
       <div class="gcpc-footer">
-        <button class="btn sm" :disabled="busy" @click="$emit('cancel')">Cancelar</button>
+        <button class="btn sm" :disabled="busy" @click="$emit('cancel')">{{ t('gcc.cancel') }}</button>
         <button :class="['btn', 'sm', tone === 'danger' ? 'danger' : 'primary']" :disabled="!canConfirm" data-test="confirm" @click="confirm">
-          {{ busy ? 'Procesando…' : confirmLabel }}
+          {{ busy ? t('gcc.processing') : (confirmLabel || t('gcc.confirm')) }}
         </button>
       </div>
     </div>
@@ -69,6 +69,9 @@
 // The confirm event carries the acknowledgements so callers can forward them to
 // the backend, which validates them again.
 import { computed, ref, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   open:            { type: Boolean, default: false },
@@ -76,7 +79,7 @@ const props = defineProps({
   message:         { type: String,  default: '' },
   lines:           { type: Array,   default: () => [] },
   tone:            { type: String,  default: 'info' },   // info | warning | danger
-  confirmLabel:    { type: String,  default: 'Confirmar' },
+  confirmLabel:    { type: String,  default: '' },
   requireName:     { type: String,  default: '' },
   costAck:         { type: Boolean, default: false },
   estimate:        { type: Object,  default: null },

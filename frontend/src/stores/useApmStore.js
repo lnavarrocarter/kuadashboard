@@ -1,6 +1,9 @@
 import { computed, ref } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useApi } from '../composables/useApi'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const RANGE_MS = {
   '6h': 6 * 60 * 60 * 1000,
@@ -58,7 +61,7 @@ export const useApmStore = defineStore('apm', () => {
   })
 
   function headers(json = false) {
-    if (!activeProfileId.value) throw new Error('No cloud profile selected')
+    if (!activeProfileId.value) throw new Error(t('store.noCloudProfile'))
     return {
       'X-Profile-Id': activeProfileId.value,
       ...(json ? { 'Content-Type': 'application/json' } : {}),

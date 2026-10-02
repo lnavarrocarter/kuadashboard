@@ -175,10 +175,10 @@ function ssoExpiry(profile) {
   const expiresAt = profile.meta?.__sso?.expiresAt
   if (!expiresAt) return null
   const ms = expiresAt - now.value
-  if (ms <= 0) return { label: 'SSO · sesión expirada', cls: 'expired' }
+  if (ms <= 0) return { label: t('envm.ssoExpired'), cls: 'expired' }
   const mins = Math.round(ms / 60000)
   const rel  = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`
-  return { label: `SSO · expira en ${rel}`, cls: mins < 15 ? 'warning' : 'ok' }
+  return { label: t('envm.ssoExpiresIn', { time: rel }), cls: mins < 15 ? 'warning' : 'ok' }
 }
 
 function relativeTime(iso) {
