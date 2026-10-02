@@ -7,6 +7,7 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import EksDetail from '../components/cloud/EksDetail.vue'
 import AwsView from '../components/cloud/AwsView.vue'
 import { useAwsStore } from '../stores/useAwsStore'
+import { settings } from '../composables/useSettings'
 
 const DETAILS = {
   region: 'us-east-1',
@@ -93,7 +94,7 @@ describe('EksDetail.vue (#69)', () => {
     await flushPromises()
     const ng = w.find('[data-tab="nodegroups"]').text()
     expect(ng).toContain('general')
-    expect(ng).toContain('min 2 · deseado 2 · max 4')
+    expect(ng).toContain('min 2 · desired 2 · max 4')
     expect(ng).toContain('eks-general-asg')
     expect(ng).toContain('AsgInstanceLaunchFailures')
   })
@@ -115,8 +116,14 @@ describe('EksDetail.vue (#69)', () => {
     })
     const w = mountDetail()
     await flushPromises()
-    expect(w.find('.eksd-notice').text()).toContain('Instancias EC2')
+    expect(w.find('.eksd-notice').text()).toContain('EC2 instances')
     expect(w.find('.eksd-notice').text()).toContain('ec2:DescribeInstances')
+    // Same panel in Spanish
+    settings.lang = 'es'
+    await flushPromises()
+    expect(w.find('.eksd-notice').text()).toContain('Información parcial')
+    expect(w.find('.eksd-notice').text()).toContain('Instancias EC2')
+    settings.lang = 'en'
   })
 
   it('shows the error when the request fails', async () => {
