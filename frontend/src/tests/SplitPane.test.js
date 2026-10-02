@@ -99,7 +99,7 @@ describe('Cloud Run observations — default service account', () => {
   it('flags the default Compute SA even when GCP returns it by email', () => {
     const detail = { serviceAccount: '306971032277-compute@developer.gserviceaccount.com', scaling: {}, envVars: [], status: 'ready' }
     const notes = mount(GcpCloudRunInfo, { props: { detail, section: 'overview' } }).find('[data-test="notes"]').text()
-    expect(notes).toMatch(/cuenta de servicio por defecto/)
+    expect(notes).toMatch(/default Compute service account/)
   })
 
   it('does not flag a dedicated service account', () => {

@@ -44,10 +44,10 @@
           v-if="activeTab?.type === 'log' && activeTab.resourceType !== 'pods' && activeLogPods.length"
           class="ctrl-select sm term-pod-select"
           v-model="activePod"
-          title="Filtrar logs por pod"
+          :title="t('term.filterPod')"
           @change="changePod"
         >
-          <option value="">Todos los pods</option>
+          <option value="">{{ t('term.allPods') }}</option>
           <option v-for="pod in activeLogPods" :key="pod" :value="pod">{{ pod }}</option>
         </select>
         <!-- Container selector (pod exec only) -->
@@ -60,19 +60,19 @@
           <option v-for="c in activeTabContainers" :key="c" :value="c">{{ c }}</option>
         </select>
         <!-- Previous logs toggle (log tabs only) -->
-        <label v-if="activeTab && !isShellTab" class="chk-label"><input type="checkbox" v-model="showPrevious" /> Prev</label>
+        <label v-if="activeTab && !isShellTab" class="chk-label"><input type="checkbox" v-model="showPrevious" /> {{ t('term.previous') }}</label>
         <div class="term-btn-sep"></div>
         <button
           v-if="activeTab"
           class="btn btn-icon"
           :class="{ primary: filtersOpen || filtersActive }"
-          title="Buscar y filtrar logs"
+          :title="t('term.searchFilter')"
           @click="filtersOpen = !filtersOpen"
         ><i data-lucide="search"></i></button>
-        <button v-if="activeTab" class="btn btn-icon" title="Descargar logs" @click="downloadLogs"><i data-lucide="download"></i></button>
-        <button v-if="activeTab" class="btn btn-icon" title="Copiar seleccion" @click="copySelectedOutput"><i data-lucide="copy"></i></button>
-        <button v-if="activeTab" class="btn btn-icon" title="Copiar output" @click="copyAllOutput"><i data-lucide="clipboard"></i></button>
-        <button v-if="isShellTab" class="btn btn-icon" title="Pegar en terminal" @click="pasteIntoInput"><i data-lucide="clipboard-paste"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" :title="t('term.download')" @click="downloadLogs"><i data-lucide="download"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" :title="t('term.copySelection')" @click="copySelectedOutput"><i data-lucide="copy"></i></button>
+        <button v-if="activeTab" class="btn btn-icon" :title="t('term.copyOutput')" @click="copyAllOutput"><i data-lucide="clipboard"></i></button>
+        <button v-if="isShellTab" class="btn btn-icon" :title="t('term.paste')" @click="pasteIntoInput"><i data-lucide="clipboard-paste"></i></button>
         <button
           v-if="activeTab && activeTab.connectionState !== 'connected'"
           class="btn btn-icon primary"
@@ -81,15 +81,15 @@
         ><i data-lucide="refresh-cw"></i></button>
         <button class="btn btn-icon" :title="t('term.clear')" @click="clearLogs"><i data-lucide="eraser"></i></button>
         <button v-if="isShellTab" class="btn btn-icon" :title="t('term.clearHistory')" @click="clearActiveHistory"><i data-lucide="history"></i></button>
-        <button class="btn btn-icon" :class="{ primary: store.wrap }" title="Wrap text" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
+        <button class="btn btn-icon" :class="{ primary: store.wrap }" :title="t('term.wrap')" @click="store.wrap = !store.wrap"><i data-lucide="wrap-text"></i></button>
         <button
           v-if="activeTab && !isShellTab"
           class="btn btn-icon"
           :class="{ primary: followLogs }"
-          title="Seguir logs en vivo"
+          :title="t('term.follow')"
           @click="enableFollow"
         ><i data-lucide="radio"></i></button>
-        <button class="btn btn-icon" title="Scroll to end" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
+        <button class="btn btn-icon" :title="t('term.scrollEnd')" @click="scrollEnd"><i data-lucide="arrow-down-to-line"></i></button>
         <div class="term-btn-sep"></div>
         <!-- File browser toggle (local shell only) -->
         <button
@@ -101,32 +101,32 @@
         <!-- Help toggle -->
         <button
           :class="['btn btn-icon', { primary: showHelp }]"
-          title="Keyboard shortcuts"
+          :title="t('term.shortcuts')"
           @click="showHelp = !showHelp"
         ><i data-lucide="circle-help"></i></button>
         <div class="term-btn-sep"></div>
         <button class="btn btn-icon stop" :title="t('term.stop')" @click="stopActive"><i data-lucide="square"></i></button>
-        <button class="btn btn-icon" title="Pop out" @click="popOut"><i data-lucide="external-link"></i></button>
-        <button class="btn btn-icon" title="Minimise" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
-        <button class="btn btn-icon" title="Close all tabs" @click="closeAll"><i data-lucide="x"></i></button>
+        <button class="btn btn-icon" :title="t('term.popOut')" @click="popOut"><i data-lucide="external-link"></i></button>
+        <button class="btn btn-icon" :title="t('term.minimise')" @click="minimised = !minimised"><i data-lucide="minus"></i></button>
+        <button class="btn btn-icon" :title="t('term.closeAll')" @click="closeAll"><i data-lucide="x"></i></button>
       </div>
     </div>
 
     <div v-if="filtersOpen && activeTab && !minimised" class="term-filterbar">
       <div class="term-filter-group search">
         <i data-lucide="search"></i>
-        <input v-model="logSearch" class="term-filter-input" placeholder="Buscar en logs..." spellcheck="false" />
+        <input v-model="logSearch" class="term-filter-input" :placeholder="t('term.searchLogs')" spellcheck="false" />
       </div>
       <label class="term-filter-group">
-        <span>Desde</span>
+        <span>{{ t('term.from') }}</span>
         <input v-model="logFrom" class="term-filter-input date" type="datetime-local" />
       </label>
       <label class="term-filter-group">
-        <span>Hasta</span>
+        <span>{{ t('term.to') }}</span>
         <input v-model="logTo" class="term-filter-input date" type="datetime-local" />
       </label>
-      <span class="term-filter-count">{{ filteredLineCount }}/{{ lineCount }} lineas</span>
-      <button class="btn sm" :disabled="!filtersActive" @click="clearFilters">Limpiar</button>
+      <span class="term-filter-count">{{ t('term.linesOf', { n: filteredLineCount, total: lineCount }) }}</span>
+      <button class="btn sm" :disabled="!filtersActive" @click="clearFilters">{{ t('term.clearFilters') }}</button>
     </div>
 
     <!-- ── Help overlay ─────────────────────────────────────────────────── -->
@@ -134,43 +134,43 @@
     <div v-if="showHelp && !minimised" class="term-help">
       <div class="term-help-cols">
         <div>
-          <div class="term-help-section">Shell input</div>
+          <div class="term-help-section">{{ t('term.helpShell') }}</div>
           <table class="term-help-table"><tbody>
-            <tr><td><kbd>↑</kbd><kbd>↓</kbd></td><td>Command history</td></tr>
-            <tr><td><kbd>Tab</kbd></td><td>Path autocomplete</td></tr>
-            <tr><td><kbd>Enter</kbd></td><td>Send command</td></tr>
-            <tr><td><kbd>Ctrl+C</kbd></td><td>Interrupt (SIGINT)</td></tr>
-            <tr><td><kbd>Ctrl+D</kbd></td><td>EOF / close session</td></tr>
-            <tr><td><kbd>Ctrl+L</kbd></td><td>Clear output</td></tr>
+            <tr><td><kbd>↑</kbd><kbd>↓</kbd></td><td>{{ t('term.helpHistory') }}</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>{{ t('term.helpAutocomplete') }}</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>{{ t('term.helpSend') }}</td></tr>
+            <tr><td><kbd>Ctrl+C</kbd></td><td>{{ t('term.helpInterrupt') }}</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>{{ t('term.helpEof') }}</td></tr>
+            <tr><td><kbd>Ctrl+L</kbd></td><td>{{ t('term.helpClear') }}</td></tr>
           </tbody></table>
         </div>
         <div>
-          <div class="term-help-section">File browser</div>
+          <div class="term-help-section">{{ t('term.fileBrowser') }}</div>
           <table class="term-help-table"><tbody>
-            <tr><td>Click 📁</td><td>Navigate + <code>cd</code></td></tr>
-            <tr><td>Click 📄</td><td>Preview file</td></tr>
-            <tr><td>Double click</td><td>Insert path into input</td></tr>
-            <tr><td>↑ (top)</td><td>Go to parent directory</td></tr>
+            <tr><td>{{ t('term.helpClick') }} 📁</td><td>{{ t('term.helpNavigate') }} <code>cd</code></td></tr>
+            <tr><td>{{ t('term.helpClick') }} 📄</td><td>{{ t('term.helpPreview') }}</td></tr>
+            <tr><td>{{ t('term.helpDoubleClick') }}</td><td>{{ t('term.helpInsertPath') }}</td></tr>
+            <tr><td>↑ ({{ t('term.helpTop') }})</td><td>{{ t('term.helpParent') }}</td></tr>
           </tbody></table>
-          <div class="term-help-section" style="margin-top:8px">Line colours</div>
+          <div class="term-help-section" style="margin-top:8px">{{ t('term.helpColours') }}</div>
           <table class="term-help-table"><tbody>
-            <tr><td><span class="th-dot err"></span></td><td>Error / exception</td></tr>
-            <tr><td><span class="th-dot warn"></span></td><td>Warning</td></tr>
-            <tr><td><span class="th-dot ok"></span></td><td>Success / OK</td></tr>
-            <tr><td><span class="th-dot sys"></span></td><td>System / meta</td></tr>
+            <tr><td><span class="th-dot err"></span></td><td>{{ t('term.helpError') }}</td></tr>
+            <tr><td><span class="th-dot warn"></span></td><td>{{ t('term.helpWarning') }}</td></tr>
+            <tr><td><span class="th-dot ok"></span></td><td>{{ t('term.helpSuccess') }}</td></tr>
+            <tr><td><span class="th-dot sys"></span></td><td>{{ t('term.helpSystem') }}</td></tr>
           </tbody></table>
         </div>
         <div>
-          <div class="term-help-section">Common commands</div>
+          <div class="term-help-section">{{ t('term.helpCommands') }}</div>
           <table class="term-help-table"><tbody>
-            <tr><td><code>ls -la</code></td><td>List files</td></tr>
-            <tr><td><code>pwd</code></td><td>Current directory</td></tr>
-            <tr><td><code>env</code></td><td>Environment vars</td></tr>
-            <tr><td><code>ps aux</code></td><td>Running processes</td></tr>
-            <tr><td><code>cat /etc/os-release</code></td><td>OS info</td></tr>
-            <tr><td><code>df -h</code></td><td>Disk usage</td></tr>
-            <tr><td><code>top</code> / <code>htop</code></td><td>CPU / memory</td></tr>
-            <tr><td><code>curl -I &lt;url&gt;</code></td><td>HTTP check</td></tr>
+            <tr><td><code>ls -la</code></td><td>{{ t('term.cmdList') }}</td></tr>
+            <tr><td><code>pwd</code></td><td>{{ t('term.cmdPwd') }}</td></tr>
+            <tr><td><code>env</code></td><td>{{ t('term.cmdEnv') }}</td></tr>
+            <tr><td><code>ps aux</code></td><td>{{ t('term.cmdPs') }}</td></tr>
+            <tr><td><code>cat /etc/os-release</code></td><td>{{ t('term.cmdOs') }}</td></tr>
+            <tr><td><code>df -h</code></td><td>{{ t('term.cmdDisk') }}</td></tr>
+            <tr><td><code>top</code> / <code>htop</code></td><td>{{ t('term.cmdTop') }}</td></tr>
+            <tr><td><code>curl -I &lt;url&gt;</code></td><td>{{ t('term.cmdCurl') }}</td></tr>
           </tbody></table>
         </div>
       </div>
@@ -192,14 +192,14 @@
             <span v-if="i > 0" class="fb-sep">{{ browserSep }}</span>
             <span class="fb-seg" @click="browseNavigate(seg.path)" :title="seg.path">{{ seg.label }}</span>
           </span>
-          <span class="fb-refresh" @click="refreshBrowser" title="Refresh">↻</span>
+          <span class="fb-refresh" @click="refreshBrowser" :title="t('action.refresh')">↻</span>
         </div>
         <!-- Entries -->
         <div class="term-fb-entries" ref="fbEntriesRef">
-          <div v-if="browserLoading" class="fb-msg">Loading…</div>
+          <div v-if="browserLoading" class="fb-msg">{{ t('common.loading') }}</div>
           <div v-else-if="browserErr" class="fb-msg err">{{ browserErr }}</div>
           <template v-else>
-            <div v-if="browserParent" class="fb-entry fb-dir" @click="browseNavigate(browserParent)" title="Parent directory">
+            <div v-if="browserParent" class="fb-entry fb-dir" @click="browseNavigate(browserParent)" :title="t('term.helpParent')">
               <span class="fb-icon">↑</span><span>..</span>
             </div>
             <div
@@ -214,7 +214,7 @@
               <span class="fb-name">{{ e.name }}</span>
               <span v-if="!e.isDir" class="fb-size">{{ e.sizeHuman }}</span>
             </div>
-            <div v-if="!browserEntries.length" class="fb-msg">Empty</div>
+            <div v-if="!browserEntries.length" class="fb-msg">{{ t('term.emptyDir') }}</div>
           </template>
         </div>
       </div>
@@ -250,7 +250,7 @@
       />
       <!-- Suggestion chip -->
       <span v-if="suggestion" class="term-suggestion" @click="applySuggestion">{{ suggestion }}</span>
-      <button class="btn btn-icon" title="Ctrl+C — interrupt" @click="sendCtrlC"><i data-lucide="x-circle"></i></button>
+      <button class="btn btn-icon" :title="t('term.interrupt')" @click="sendCtrlC"><i data-lucide="x-circle"></i></button>
     </div>
 
     <!-- ── Footer ────────────────────────────────────────────────────────── -->
@@ -258,12 +258,12 @@
       <span>{{ statusText }}</span>
       <span v-if="clipboardMsg" class="text-dim">{{ clipboardMsg }}</span>
       <span v-if="activeTab?.context === 'local'" class="term-footer-cwd text-dim">{{ browserCwd }}</span>
-      <span v-if="filtersActive" class="text-dim">{{ filteredLineCount }} filtradas</span>
-      <span id="termLineCount" style="margin-left:auto">{{ lineCount }} lines</span>
+      <span v-if="filtersActive" class="text-dim">{{ t('term.filtered', { n: filteredLineCount }) }}</span>
+      <span id="termLineCount" style="margin-left:auto">{{ t('term.lines', { n: lineCount }) }}</span>
       <div v-if="activeTab && !isShellTab" class="term-log-nav">
-        <button class="btn btn-icon" title="Bloque anterior" :disabled="!hasOlderLogs" @click="showOlderLogs"><i data-lucide="chevron-up"></i></button>
+        <button class="btn btn-icon" :title="t('term.olderBlock')" :disabled="!hasOlderLogs" @click="showOlderLogs"><i data-lucide="chevron-up"></i></button>
         <span>{{ visibleRangeLabel }}</span>
-        <button class="btn btn-icon" title="Bloque siguiente" :disabled="!hasNewerLogs" @click="showNewerLogs"><i data-lucide="chevron-down"></i></button>
+        <button class="btn btn-icon" :title="t('term.newerBlock')" :disabled="!hasNewerLogs" @click="showNewerLogs"><i data-lucide="chevron-down"></i></button>
       </div>
     </div>
   </div>
@@ -357,16 +357,16 @@ const visibleRangeLabel   = computed(() => {
 
 const statusText = computed(() => {
   const tab = activeTab.value
-  if (!tab) return 'Idle'
+  if (!tab) return t('term.idle')
   const label = tab.label || tab.pod || 'Shell'
-  return tab.streaming ? `● ${label}` : `○ ${label} (ended)`
+  return tab.streaming ? `● ${label}` : `○ ${label} (${t('term.ended')})`
 })
 
 const shellPlaceholder = computed(() => {
-  if (!activeTab.value?.streaming) return 'Session ended — reconnect or close tab'
+  if (!activeTab.value?.streaming) return t('term.sessionEnded')
   return suggestion.value
-    ? `${cmdInput.value}${suggestion.value}  (Tab to complete)`
-    : 'Type command and press Enter…   Tab=autocomplete  ↑↓=history'
+    ? `${cmdInput.value}${suggestion.value}  (${t('term.tabComplete')})`
+    : t('term.inputPlaceholder')
 })
 
 watch(activeTab, tab => {
@@ -559,7 +559,7 @@ function getSelectedOutputText() {
 
 async function writeClipboardText(text, successMsg = 'Copiado') {
   if (!text) {
-    showClipboardMsg('Sin texto para copiar')
+    showClipboardMsg(t('term.nothingToCopy'))
     return false
   }
   try {
@@ -578,17 +578,17 @@ async function writeClipboardText(text, successMsg = 'Copiado') {
     showClipboardMsg(successMsg)
     return true
   } catch (_) {
-    showClipboardMsg('No se pudo copiar')
+    showClipboardMsg(t('term.copyFailed'))
     return false
   }
 }
 
 function copySelectedOutput() {
-  writeClipboardText(getSelectedOutputText(), 'Seleccion copiada')
+  writeClipboardText(getSelectedOutputText(), t('term.selectionCopied'))
 }
 
 function copyAllOutput() {
-  writeClipboardText(getOutputText(), 'Output copiado')
+  writeClipboardText(getOutputText(), t('term.outputCopied'))
 }
 
 async function pasteIntoInput() {
@@ -596,15 +596,15 @@ async function pasteIntoInput() {
   try {
     const text = await navigator.clipboard?.readText?.()
     if (!text) {
-      showClipboardMsg('Portapapeles vacio')
+      showClipboardMsg(t('term.clipboardEmpty'))
       return
     }
-    if (text.includes('\n') && !confirm('El texto tiene multiples lineas. Pegar en el input sin ejecutar?')) return
+    if (text.includes('\n') && !confirm(t('term.pasteMultiline'))) return
     cmdInput.value += text
-    showClipboardMsg('Texto pegado')
+    showClipboardMsg(t('term.pasted'))
     nextTick(() => inputRef.value?.focus())
   } catch (_) {
-    showClipboardMsg('No se pudo leer el portapapeles')
+    showClipboardMsg(t('term.clipboardFailed'))
   }
 }
 
