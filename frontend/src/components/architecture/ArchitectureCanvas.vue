@@ -6,81 +6,81 @@
           v-model.trim="nodeDraft.name"
           class="ctrl-input"
           maxlength="120"
-          placeholder="Component name"
+          :placeholder="t('archCanvas.componentName')"
           @keyup.enter="addNode"
         />
-        <select v-model="nodeDraft.resourceType" class="ctrl-select" title="Component type">
+        <select v-model="nodeDraft.resourceType" class="ctrl-select" :title="t('archCanvas.componentType')">
           <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
         <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
-          <i data-lucide="plus"></i> Add component
+          <i data-lucide="plus"></i> {{ t('archCanvas.addComponent') }}
         </button>
-        <span class="canvas-hint">Drag between handles to connect components</span>
+        <span class="canvas-hint">{{ t('archCanvas.dragHint') }}</span>
       </div>
       <div class="canvas-toolbar-row canvas-layout-controls">
-        <select v-model="providerFilter" class="ctrl-select provider-filter" title="Filter providers" @change="persistView">
-          <option value="all">All providers</option>
+        <select v-model="providerFilter" class="ctrl-select provider-filter" :title="t('archCanvas.filterProviders')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allProviders') }}</option>
           <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ providerLabel(provider) }}</option>
         </select>
-        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" title="Filter Kubernetes context" @change="persistView">
-          <option value="">All Kubernetes contexts</option>
+        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" :title="t('archCanvas.filterKubeContext')" @change="persistView">
+          <option value="">{{ t('archCanvas.allKubeContexts') }}</option>
           <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
         </select>
-        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" title="Filter Kubernetes namespace" @change="persistView">
-          <option value="">All namespaces</option>
+        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" :title="t('archCanvas.filterNamespace')" @change="persistView">
+          <option value="">{{ t('archCanvas.allNamespaces') }}</option>
           <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
         </select>
-        <select v-model="relationTypeFilter" class="ctrl-select" title="Filter relationship type" @change="persistView">
-          <option value="all">All relationship types</option>
+        <select v-model="relationTypeFilter" class="ctrl-select" :title="t('archCanvas.filterRelationType')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allRelationTypes') }}</option>
           <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationshipLabel(type) }}</option>
         </select>
-        <select v-model="relationStatusFilter" class="ctrl-select" title="Filter relationship status" @change="persistView">
-          <option value="all">All relationship statuses</option>
+        <select v-model="relationStatusFilter" class="ctrl-select" :title="t('archCanvas.filterRelationStatus')" @change="persistView">
+          <option value="all">{{ t('archCanvas.allRelationStatuses') }}</option>
           <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
         </select>
-        <select v-model="layoutMode" class="ctrl-select" title="Canvas arrangement" @change="persistView">
-          <option value="request-flow">Request flow</option>
-          <option value="resource-type">Resource type sections</option>
-          <option value="provider-lanes">Provider lanes</option>
-          <option value="provider-resource">Provider + resource sections</option>
+        <select v-model="layoutMode" class="ctrl-select" :title="t('archCanvas.arrangement')" @change="persistView">
+          <option value="request-flow">{{ t('archCanvas.layout.requestFlow') }}</option>
+          <option value="resource-type">{{ t('archCanvas.layout.resourceType') }}</option>
+          <option value="provider-lanes">{{ t('archCanvas.layout.providerLanes') }}</option>
+          <option value="provider-resource">{{ t('archCanvas.layout.providerResource') }}</option>
         </select>
-        <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" title="Request flow direction" @change="persistView">
-          <option value="horizontal">Flow left to right</option>
-          <option value="vertical">Flow top to bottom</option>
+        <select v-if="layoutMode === 'request-flow'" v-model="layoutDirection" class="ctrl-select direction-select" :title="t('archCanvas.flowDirection')" @change="persistView">
+          <option value="horizontal">{{ t('archCanvas.flowLeftRight') }}</option>
+          <option value="vertical">{{ t('archCanvas.flowTopBottom') }}</option>
         </select>
         <button class="btn sm" :disabled="saving || !flowNodes.length" @click="arrangeFlow">
           <i :data-lucide="layoutMode === 'resource-type' || layoutMode === 'provider-resource' ? 'rows-3' : layoutMode === 'provider-lanes' ? 'columns-3' : 'layout-dashboard'"></i>
-          {{ layoutMode === 'resource-type' ? 'Arrange by type' : layoutMode === 'provider-resource' ? 'Arrange sections' : layoutMode === 'provider-lanes' ? 'Arrange lanes' : 'Arrange flow' }}
+          {{ layoutMode === 'resource-type' ? t('archCanvas.arrangeByType') : layoutMode === 'provider-resource' ? t('archCanvas.arrangeSections') : layoutMode === 'provider-lanes' ? t('archCanvas.arrangeLanes') : t('archCanvas.arrangeFlow') }}
         </button>
       </div>
       <div class="canvas-toolbar-row canvas-action-controls">
-        <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" title="Toggle relationship labels" @click="toggleEdgeLabels">
-          <i data-lucide="tags"></i> Labels
+        <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" :title="t('archCanvas.toggleLabels')" @click="toggleEdgeLabels">
+          <i data-lucide="tags"></i> {{ t('archCanvas.labels') }}
         </button>
-        <button :class="['btn', 'sm', { primary: showHealthOverlay }]" :disabled="!flowNodes.length" title="Toggle health/freshness overlay" @click="toggleHealthOverlay">
-          <i data-lucide="heart-pulse"></i> Health
+        <button :class="['btn', 'sm', { primary: showHealthOverlay }]" :disabled="!flowNodes.length" :title="t('archCanvas.toggleHealth')" @click="toggleHealthOverlay">
+          <i data-lucide="heart-pulse"></i> {{ t('archCanvas.health') }}
         </button>
-        <button :class="['btn', 'sm', { primary: showMetricsOverlay }]" :disabled="metricsLoading || !flowNodes.length" title="Toggle resource metrics overlay" @click="toggleMetricsOverlay">
-          <i :data-lucide="metricsLoading ? 'loader-2' : 'chart-no-axes-combined'"></i> Metrics
+        <button :class="['btn', 'sm', { primary: showMetricsOverlay }]" :disabled="metricsLoading || !flowNodes.length" :title="t('archCanvas.toggleMetrics')" @click="toggleMetricsOverlay">
+          <i :data-lucide="metricsLoading ? 'loader-2' : 'chart-no-axes-combined'"></i> {{ t('archCanvas.metrics') }}
         </button>
-        <button :class="['btn', 'sm', { primary: showCollectionOverlay }]" :disabled="collectionLoading || !flowNodes.length" title="Toggle collection status overlay" @click="toggleCollectionOverlay">
-          <i :data-lucide="collectionLoading ? 'loader-2' : 'radio-tower'"></i> Collection
+        <button :class="['btn', 'sm', { primary: showCollectionOverlay }]" :disabled="collectionLoading || !flowNodes.length" :title="t('archCanvas.toggleCollection')" @click="toggleCollectionOverlay">
+          <i :data-lucide="collectionLoading ? 'loader-2' : 'radio-tower'"></i> {{ t('archCanvas.collection') }}
         </button>
-        <button :class="['btn', 'sm', { primary: showTraceOverlay }]" :disabled="traceLoading || !traceEnabled || !flowNodes.length" title="Highlight the latest process trace" @click="toggleTraceOverlay">
-          <i :data-lucide="traceLoading ? 'loader-2' : 'route'"></i> Trace
+        <button :class="['btn', 'sm', { primary: showTraceOverlay }]" :disabled="traceLoading || !traceEnabled || !flowNodes.length" :title="t('archCanvas.toggleTrace')" @click="toggleTraceOverlay">
+          <i :data-lucide="traceLoading ? 'loader-2' : 'route'"></i> {{ t('archCanvas.trace') }}
         </button>
-        <button :class="['btn', 'sm', { primary: showEventsOverlay }]" :disabled="eventsLoading || !flowNodes.length" title="Toggle Kubernetes warning events overlay" @click="toggleEventsOverlay">
-          <i :data-lucide="eventsLoading ? 'loader-2' : 'triangle-alert'"></i> Events
+        <button :class="['btn', 'sm', { primary: showEventsOverlay }]" :disabled="eventsLoading || !flowNodes.length" :title="t('archCanvas.toggleEvents')" @click="toggleEventsOverlay">
+          <i :data-lucide="eventsLoading ? 'loader-2' : 'triangle-alert'"></i> {{ t('archCanvas.events') }}
         </button>
-        <button class="btn sm" :disabled="exporting || !flowNodes.length" title="Export the full diagram as a print-ready PDF" @click="exportPdf">
-          <i data-lucide="printer"></i> Export PDF
+        <button class="btn sm" :disabled="exporting || !flowNodes.length" :title="t('archCanvas.exportPdfHint')" @click="exportPdf">
+          <i data-lucide="printer"></i> {{ t('archCanvas.exportPdf') }}
         </button>
-        <button class="btn sm" :disabled="!flowNodes.length" title="Download the diagram as a Mermaid file" @click="exportMermaid">
-          <i data-lucide="file-code"></i> Export Mermaid
+        <button class="btn sm" :disabled="!flowNodes.length" :title="t('archCanvas.exportMermaidHint')" @click="exportMermaid">
+          <i data-lucide="file-code"></i> {{ t('archCanvas.exportMermaid') }}
         </button>
         <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
-          <i data-lucide="route"></i> {{ trace.executionName || 'Latest trace' }} · {{ trace.nodeIds.length }} nodes
-          <button class="btn sm" type="button" @click="clearTraceOverlay">Clear</button>
+          <i data-lucide="route"></i> {{ trace.executionName || t('archCanvas.latestTrace') }} · {{ t('archCanvas.traceNodes', { n: trace.nodeIds.length }) }}
+          <button class="btn sm" type="button" @click="clearTraceOverlay">{{ t('archCanvas.clear') }}</button>
         </span>
       </div>
     </header>
@@ -121,8 +121,8 @@
               :title="data.health.label"
             ></span>
             <span v-if="data.metrics" class="node-metrics">
-              <small v-if="data.metrics.loading">Loading metrics…</small>
-              <small v-else-if="!data.metrics.items.length">No metric data</small>
+              <small v-if="data.metrics.loading">{{ t('archCanvas.loadingMetrics') }}</small>
+              <small v-else-if="!data.metrics.items.length">{{ t('archCanvas.noMetricData') }}</small>
               <span v-else v-for="metric in data.metrics.items" :key="metric.key" class="node-metric">
                 <small>{{ metric.label }}</small><strong>{{ metric.value }}</strong>
               </span>
@@ -148,40 +148,40 @@
 
       <div v-if="!flowNodes.length" class="canvas-empty">
         <i data-lucide="boxes"></i>
-        <strong>Add the first component</strong>
-        <span>Build the application manually, then connect dependencies directly on the canvas.</span>
+        <strong>{{ t('archCanvas.emptyTitle') }}</strong>
+        <span>{{ t('archCanvas.emptyHint') }}</span>
       </div>
 
       <aside v-if="selectedNode" class="canvas-inspector">
         <header>
-          <span><i data-lucide="box"></i> Component</span>
-          <button class="btn sm btn-icon" title="Close inspector" @click="clearSelection"><i data-lucide="x"></i></button>
+          <span><i data-lucide="box"></i> {{ t('archCanvas.component') }}</span>
+          <button class="btn sm btn-icon" :title="t('archCanvas.closeInspector')" @click="clearSelection"><i data-lucide="x"></i></button>
         </header>
-        <label>Name<input v-model.trim="editDraft.name" class="ctrl-input" maxlength="120" /></label>
-        <label>Type
+        <label>{{ t('archCanvas.name') }}<input v-model.trim="editDraft.name" class="ctrl-input" maxlength="120" /></label>
+        <label>{{ t('archCanvas.type') }}
           <select v-model="editDraft.resourceType" class="ctrl-select">
             <option v-for="option in editNodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
         <section v-if="selectedNode.kind || selectedNode.stackName || selectedNode.arn" class="component-metadata">
-          <span v-if="selectedNode.kind"><small>CloudFormation type</small><strong>{{ selectedNode.kind }}</strong></span>
+          <span v-if="selectedNode.kind"><small>{{ t('archCanvas.cfnType') }}</small><strong>{{ selectedNode.kind }}</strong></span>
           <span v-if="selectedNode.stackName"><small>Stack</small><strong>{{ selectedNode.stackName }}</strong></span>
           <span v-if="selectedNode.logicalId"><small>Logical ID</small><strong>{{ selectedNode.logicalId }}</strong></span>
           <span v-if="selectedNode.arn"><small>ARN</small><strong>{{ selectedNode.arn }}</strong></span>
         </section>
         <section v-if="selectedNodeApiRoutes.length" class="api-gateway-routes">
-          <span class="inspector-section-title">API Gateway routes</span>
+          <span class="inspector-section-title">{{ t('archCanvas.apiRoutes') }}</span>
           <button v-for="route in selectedNodeApiRoutes" :key="route.key" class="component-reference" @click="selectReferencedNode(route.node)">
             <i data-lucide="route"></i>
             <span>
               <strong>{{ route.route }}</strong>
-              <small>{{ route.permissions }} Lambda permission{{ route.permissions === 1 ? '' : 's' }} · {{ route.node.name }}</small>
+              <small>{{ t(route.permissions === 1 ? 'archCanvas.lambdaPermission' : 'archCanvas.lambdaPermissions', { n: route.permissions }) }} · {{ route.node.name }}</small>
             </span>
           </button>
         </section>
         <section v-if="selectedNodeReferences.length" class="component-references">
-          <span class="inspector-section-title">References</span>
+          <span class="inspector-section-title">{{ t('archCanvas.references') }}</span>
           <button
             v-for="reference in selectedNodeReferences"
             :key="reference.key"
@@ -199,9 +199,9 @@
           v-if="selectedNode.resourceType === 'stepfunctions'"
           class="btn sm"
           @click="emit('inspect-workflow', selectedNode)"
-        ><i data-lucide="workflow"></i> Workflow diagram</button>
+        ><i data-lucide="workflow"></i> {{ t('archCanvas.workflowDiagram') }}</button>
         <section v-if="nodeActions.length" class="component-node-actions">
-          <span class="inspector-section-title">Navigate</span>
+          <span class="inspector-section-title">{{ t('archCanvas.navigate') }}</span>
           <button
             v-for="action in nodeActions"
             :key="action.key"
@@ -210,30 +210,30 @@
           ><i :data-lucide="action.icon"></i> {{ action.label }}</button>
         </section>
         <div class="inspector-actions">
-          <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> Save</button>
-          <button class="btn sm danger" :disabled="saving" @click="removeNode"><i data-lucide="trash-2"></i> Delete</button>
+          <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> {{ t('archCanvas.save') }}</button>
+          <button class="btn sm danger" :disabled="saving" @click="removeNode"><i data-lucide="trash-2"></i> {{ t('archCanvas.delete') }}</button>
         </div>
       </aside>
 
       <aside v-else-if="selectedEdge" class="canvas-inspector">
         <header>
-          <span><i data-lucide="git-branch"></i> Relationship</span>
-          <button class="btn sm btn-icon" title="Close inspector" @click="clearSelection"><i data-lucide="x"></i></button>
+          <span><i data-lucide="git-branch"></i> {{ t('archCanvas.relationship') }}</span>
+          <button class="btn sm btn-icon" :title="t('archCanvas.closeInspector')" @click="clearSelection"><i data-lucide="x"></i></button>
         </header>
         <strong>{{ nodeName(selectedEdge.sourceNodeId) }}</strong>
         <span class="relationship-direction"><i data-lucide="arrow-down"></i> {{ relationshipLabel(selectedEdge.relationType) }}</span>
         <strong>{{ nodeName(selectedEdge.targetNodeId) }}</strong>
         <span :class="['relationship-status', selectedEdge.status]">
-          {{ relationshipStatus(selectedEdge.status) }} · {{ Math.round(selectedEdge.confidence * 100) }}% confidence
+          {{ relationshipStatus(selectedEdge.status) }} · {{ t('archCanvas.confidence', { pct: Math.round(selectedEdge.confidence * 100) }) }}
         </span>
         <small v-if="selectedEdge.evidence?.length" class="relationship-evidence">
-          {{ selectedEdge.evidence[0].intrinsic || selectedEdge.evidence[0].type }} · {{ selectedEdge.evidence[0].path || 'Recorded evidence' }}
+          {{ selectedEdge.evidence[0].intrinsic || selectedEdge.evidence[0].type }} · {{ selectedEdge.evidence[0].path || t('archCanvas.recordedEvidence') }}
         </small>
         <div v-if="['automatic', 'suggested'].includes(selectedEdge.status)" class="inspector-actions">
-          <button class="btn sm primary" :disabled="saving" @click="reviewEdge('accept')"><i data-lucide="check"></i> Accept</button>
-          <button class="btn sm danger" :disabled="saving" @click="reviewEdge('reject')"><i data-lucide="x"></i> Reject</button>
+          <button class="btn sm primary" :disabled="saving" @click="reviewEdge('accept')"><i data-lucide="check"></i> {{ t('archCanvas.accept') }}</button>
+          <button class="btn sm danger" :disabled="saving" @click="reviewEdge('reject')"><i data-lucide="x"></i> {{ t('archCanvas.reject') }}</button>
         </div>
-        <button v-else class="btn sm danger" :disabled="saving" @click="removeEdge"><i data-lucide="trash-2"></i> Delete relationship</button>
+        <button v-else class="btn sm danger" :disabled="saving" @click="removeEdge"><i data-lucide="trash-2"></i> {{ t('archCanvas.deleteRelationship') }}</button>
       </aside>
     </div>
   </section>
@@ -248,6 +248,7 @@ import { getRectOfNodes, getTransformForBounds, MarkerType, useVueFlow, VueFlow 
 import { toPng } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { useToast } from '../../composables/useToast'
+import { useI18n } from '../../composables/useI18n'
 import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
@@ -270,20 +271,21 @@ const props = defineProps({
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events'])
 
-const nodeTypes = [
-  { value: 'service', label: 'Service' },
+const { t } = useI18n()
+const nodeTypes = computed(() => [
+  { value: 'service', label: t('archCanvas.nodeType.service') },
   { value: 'api', label: 'API' },
-  { value: 'database', label: 'Database' },
-  { value: 'queue', label: 'Queue / topic' },
-  { value: 'function', label: 'Function' },
-  { value: 'storage', label: 'Storage' },
-  { value: 'external', label: 'External system' },
-]
+  { value: 'database', label: t('archCanvas.nodeType.database') },
+  { value: 'queue', label: t('archCanvas.nodeType.queue') },
+  { value: 'function', label: t('archCanvas.nodeType.function') },
+  { value: 'storage', label: t('archCanvas.nodeType.storage') },
+  { value: 'external', label: t('archCanvas.nodeType.external') },
+])
 const nodeDraft = reactive({ name: '', resourceType: 'service' })
 const editDraft = reactive({ name: '', resourceType: 'service' })
-const editNodeTypes = computed(() => nodeTypes.some(option => option.value === editDraft.resourceType)
-  ? nodeTypes
-  : [...nodeTypes, { value: editDraft.resourceType, label: typeLabel(editDraft.resourceType) }])
+const editNodeTypes = computed(() => nodeTypes.value.some(option => option.value === editDraft.resourceType)
+  ? nodeTypes.value
+  : [...nodeTypes.value, { value: editDraft.resourceType, label: typeLabel(editDraft.resourceType) }])
 const flowNodes = ref([])
 const flowEdges = ref([])
 const layoutMode = ref('request-flow')
@@ -343,7 +345,7 @@ const selectedNodeApiRoutes = computed(() => {
   for (const edge of props.graph.document.edges) {
     if (edge.status === 'rejected' || edge.targetNodeId !== selectedNode.value.id || edge.relationType !== 'routes_to') continue
     const node = nodesById.get(edge.sourceNodeId)
-    const route = edge.evidence?.find(item => item.route)?.route || node?.name || 'API Gateway route'
+    const route = edge.evidence?.find(item => item.route)?.route || node?.name || t('archCanvas.type.apiRoute')
     const permissions = edge.evidence?.filter(item => item.type === 'lambda_permission').length || 0
     const key = `${node?.id}:${route}`
     const current = routes.get(key)
@@ -362,28 +364,28 @@ const nodeActions = computed(() => {
   const actions = []
   if (node.provider === 'kubernetes') {
     if (KUBE_LOG_KINDS.includes(node.kind)) {
-      actions.push({ key: 'kubernetes-logs', label: 'View logs', icon: 'scroll-text' })
-      actions.push({ key: 'inline-logs', label: 'View logs here', icon: 'panel-right' })
-      actions.push({ key: 'kubernetes-log-suggestions', label: 'Suggest relationships from logs', icon: 'sparkles' })
+      actions.push({ key: 'kubernetes-logs', label: t('archCanvas.action.viewLogs'), icon: 'scroll-text' })
+      actions.push({ key: 'inline-logs', label: t('archCanvas.action.viewLogsHere'), icon: 'panel-right' })
+      actions.push({ key: 'kubernetes-log-suggestions', label: t('archCanvas.action.suggestFromLogs'), icon: 'sparkles' })
     }
-    if (KUBE_DETAIL_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-detail', label: 'View detail', icon: 'file-code-2' })
-    if (KUBE_WORKLOAD_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-pods', label: 'View pods', icon: 'boxes' })
+    if (KUBE_DETAIL_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-detail', label: t('archCanvas.action.viewDetail'), icon: 'file-code-2' })
+    if (KUBE_WORKLOAD_KINDS.includes(node.kind)) actions.push({ key: 'kubernetes-pods', label: t('archCanvas.action.viewPods'), icon: 'boxes' })
     if (props.observabilityEnabled && OBSERVABILITY_KUBE_KINDS.includes(node.kind)) {
-      actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
-      actions.push({ key: 'inline-metrics', label: 'View metrics here', icon: 'panel-right' })
+      actions.push({ key: 'observability-metrics', label: t('archCanvas.action.viewMetrics'), icon: 'chart-no-axes-combined' })
+      actions.push({ key: 'inline-metrics', label: t('archCanvas.action.viewMetricsHere'), icon: 'panel-right' })
     }
   } else if (AWS_DETAIL_TYPES.includes(node.resourceType)) {
     if (node.resourceType === 'lambda') {
-      actions.push({ key: 'aws-logs', label: 'View logs', icon: 'scroll-text' })
-      actions.push({ key: 'inline-logs', label: 'View logs here', icon: 'panel-right' })
+      actions.push({ key: 'aws-logs', label: t('archCanvas.action.viewLogs'), icon: 'scroll-text' })
+      actions.push({ key: 'inline-logs', label: t('archCanvas.action.viewLogsHere'), icon: 'panel-right' })
     }
-    actions.push({ key: 'aws-detail', label: 'Open in AWS view', icon: 'external-link' })
+    actions.push({ key: 'aws-detail', label: t('archCanvas.action.openAws'), icon: 'external-link' })
     if (props.observabilityEnabled && ['lambda', 'ec2'].includes(node.resourceType)) {
-      actions.push({ key: 'observability-metrics', label: 'View metrics', icon: 'chart-no-axes-combined' })
-      actions.push({ key: 'inline-metrics', label: 'View metrics here', icon: 'panel-right' })
+      actions.push({ key: 'observability-metrics', label: t('archCanvas.action.viewMetrics'), icon: 'chart-no-axes-combined' })
+      actions.push({ key: 'inline-metrics', label: t('archCanvas.action.viewMetricsHere'), icon: 'panel-right' })
     }
     if (props.observabilityEnabled && node.resourceType === 'stepfunctions') {
-      actions.push({ key: 'observability-traces', label: 'View traces', icon: 'route' })
+      actions.push({ key: 'observability-traces', label: t('archCanvas.action.viewTraces'), icon: 'route' })
     }
   }
   return actions
@@ -488,10 +490,10 @@ function manualId(prefix) {
 // without inventing new backend telemetry; opt-in via the Health toggle to keep dense diagrams readable.
 function nodeHealthOverlay(node) {
   if (!showHealthOverlay.value) return null
-  if (node.syncState === 'stale') return { status: 'stale', label: 'Stale — missing from the last sync' }
+  if (node.syncState === 'stale') return { status: 'stale', label: t('archCanvas.health.stale') }
   const status = node.health?.status
-  if (status === 'degraded') return { status: 'degraded', label: 'Degraded' }
-  if (status === 'healthy') return { status: 'healthy', label: 'Healthy' }
+  if (status === 'degraded') return { status: 'degraded', label: t('archCanvas.health.degraded') }
+  if (status === 'healthy') return { status: 'healthy', label: t('archCanvas.health.healthy') }
   return null
 }
 
@@ -502,13 +504,13 @@ function nodeMetricsOverlay(node) {
 
 function nodeCollectionOverlay(node) {
   if (!showCollectionOverlay.value) return null
-  return props.collection[node.id] || { loading: props.collectionLoading, status: 'unknown', label: props.collectionLoading ? 'Loading' : 'No data', icon: props.collectionLoading ? 'loader-2' : 'circle-help', detail: 'No collection status available' }
+  return props.collection[node.id] || { loading: props.collectionLoading, status: 'unknown', label: props.collectionLoading ? t('archCanvas.collection.loading') : t('archCanvas.collection.noData'), icon: props.collectionLoading ? 'loader-2' : 'circle-help', detail: t('archCanvas.collection.noStatus') }
 }
 
 function nodeTraceOverlay(node) {
   if (!showTraceOverlay.value || !props.trace) return null
   const sequence = traceNodeIds.value.has(node.id) ? props.trace.nodeIds.indexOf(node.id) + 1 : 0
-  return sequence ? { sequence, detail: `${props.trace.executionName || 'Latest trace'} · step ${sequence}` } : null
+  return sequence ? { sequence, detail: t('archCanvas.traceStep', { trace: props.trace.executionName || t('archCanvas.latestTrace'), n: sequence }) } : null
 }
 
 // Kubernetes Warning Events, already collected by discovery — opt-in overlay projects them
@@ -621,14 +623,14 @@ function arrangeFlow() {
     emit('operation', {
       type: 'layout.set',
       value: result.layout,
-    }, layoutMode.value === 'provider-lanes' ? 'Arrange provider lanes' : layoutMode.value === 'provider-resource' ? 'Arrange provider resource sections' : 'Arrange resources by type')
+    }, layoutMode.value === 'provider-lanes' ? t('archCanvas.op.arrangeLanes') : layoutMode.value === 'provider-resource' ? t('archCanvas.op.arrangeSections') : t('archCanvas.op.arrangeByType'))
     return
   }
   resourceSections.value = []
   emit('operation', {
     type: 'layout.set',
     value: requestFlowLayout(filteredGraphDocument.value, layoutDirection.value, smartSpacing.value),
-  }, `Arrange request flow ${layoutDirection.value === 'vertical' ? 'top to bottom' : 'left to right'}`)
+  }, layoutDirection.value === 'vertical' ? t('archCanvas.op.arrangeFlowTopBottom') : t('archCanvas.op.arrangeFlowLeftRight'))
 }
 
 function persistView() {
@@ -653,7 +655,7 @@ function persistView() {
       relationTypeFilter: relationTypeFilter.value,
       relationStatusFilter: relationStatusFilter.value,
     },
-  }, 'Update canvas view')
+  }, t('archCanvas.op.updateView'))
 }
 
 function toggleEdgeLabels() {
@@ -700,7 +702,7 @@ function addNode() {
   emit('operation', {
     type: 'node.upsert',
     value: { id: manualId('node'), name: nodeDraft.name, resourceType: nodeDraft.resourceType, manual: true },
-  }, `Add ${nodeDraft.name}`)
+  }, t('archCanvas.op.add', { name: nodeDraft.name }))
   nodeDraft.name = ''
 }
 
@@ -717,7 +719,7 @@ function connectNodes(connection) {
       confidence: 1,
       evidence: [],
     },
-  }, 'Connect components')
+  }, t('archCanvas.op.connect'))
 }
 
 function persistPosition({ node }) {
@@ -725,7 +727,7 @@ function persistPosition({ node }) {
   emit('operation', {
     type: 'layout.set',
     value: { [node.id]: { x: Math.round(node.position.x), y: Math.round(node.position.y) } },
-  }, `Move ${nodeName(node.id)}`)
+  }, t('archCanvas.op.move', { name: nodeName(node.id) }))
 }
 
 function selectNode({ node }) {
@@ -755,18 +757,18 @@ function saveNode() {
   emit('operation', {
     type: 'node.upsert',
     value: { id: selectedNode.value.id, name: editDraft.name, resourceType: editDraft.resourceType },
-  }, `Update ${editDraft.name}`)
+  }, t('archCanvas.op.update', { name: editDraft.name }))
 }
 
 function removeNode() {
   if (!selectedNode.value || props.saving) return
-  emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, `Delete ${nodeName(selectedNode.value.id)}`)
+  emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, t('archCanvas.op.delete', { name: nodeName(selectedNode.value.id) }))
   clearSelection()
 }
 
 function removeEdge() {
   if (!selectedEdge.value || props.saving) return
-  emit('operation', { type: 'edge.remove', subjectId: selectedEdge.value.id }, 'Delete relationship')
+  emit('operation', { type: 'edge.remove', subjectId: selectedEdge.value.id }, t('archCanvas.deleteRelationship'))
   clearSelection()
 }
 
@@ -774,7 +776,7 @@ function reviewEdge(decision) {
   if (!selectedEdge.value || props.saving) return
   emit('operation', {
     type: 'edge.review', subjectId: selectedEdge.value.id, value: { decision },
-  }, `${decision === 'accept' ? 'Accept' : 'Reject'} inferred relationship`)
+  }, decision === 'accept' ? t('archCanvas.op.acceptInferred') : t('archCanvas.op.rejectInferred'))
   clearSelection()
 }
 
@@ -802,15 +804,15 @@ function referenceMeta(reference) {
 }
 
 function typeLabel(resourceType) {
-  return nodeTypes.find(option => option.value === resourceType)?.label || {
-    lambda: 'Lambda', layer: 'Lambda layer', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
-    ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
-    sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: 'Secret',
-    kubernetes: 'Kubernetes cluster', deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
+  return nodeTypes.value.find(option => option.value === resourceType)?.label || {
+    lambda: 'Lambda', layer: 'Lambda layer', sqs: t('archCanvas.type.sqs'), eventbridge: t('archCanvas.type.eventbridge'), stepfunctions: 'Step Functions',
+    ecs: 'ECS', s3: t('archCanvas.type.s3'), iam: t('archCanvas.type.iam'), 'iam-policy': t('archCanvas.type.iamPolicy'), policy: t('archCanvas.type.policy'),
+    sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: t('archCanvas.type.secret'),
+    kubernetes: t('archCanvas.type.kubernetes'), deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
     daemonset: 'Kubernetes DaemonSet', pod: 'Kubernetes Pod', service: 'Kubernetes Service', ingress: 'Kubernetes Ingress',
     configmap: 'Kubernetes ConfigMap', pvc: 'Kubernetes PersistentVolumeClaim',
-    'api-route': 'API Gateway route', 'api-integration': 'API Gateway integration', apigateway: 'API Gateway', apigatewayv2: 'API Gateway V2',
-  }[resourceType] || String(resourceType || 'AWS resource').replaceAll('-', ' ')
+    'api-route': t('archCanvas.type.apiRoute'), 'api-integration': t('archCanvas.type.apiIntegration'), apigateway: 'API Gateway', apigatewayv2: 'API Gateway V2',
+  }[resourceType] || (resourceType ? String(resourceType).replaceAll('-', ' ') : t('archCanvas.type.awsResource'))
 }
 
 function providerLabel(provider) {
@@ -835,12 +837,13 @@ function sectionResourceLabel(provider, resourceType) {
 }
 
 function relationshipStatus(status) {
-  return { automatic: 'Automatic', suggested: 'Suggested', manual: 'Confirmed', stale: 'Stale' }[status] || status
+  return ['automatic', 'suggested', 'manual', 'stale'].includes(status) ? t(`archCanvas.status.${status}`) : status
 }
 
+const RELATION_TYPES = ['depends_on', 'triggers', 'invokes', 'runs_on', 'routes_to', 'references', 'accesses']
 function relationshipLabel(relationType) {
-  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on', routes_to: 'routes to', references: 'references', accesses: 'can access' }[relationType]
-    || String(relationType || 'depends_on').replaceAll('_', ' ')
+  const type = relationType || 'depends_on'
+  return RELATION_TYPES.includes(type) ? t(`archCanvas.rel.${type}`) : String(type).replaceAll('_', ' ')
 }
 
 const presentationForType = architectureResourcePresentation
@@ -908,7 +911,7 @@ async function exportPdf() {
     pdf.addImage(dataUrl, 'PNG', 0, 0, imageWidth, imageHeight)
     pdf.save(`${graphFileName()}.pdf`)
   } catch {
-    toast('Could not export the PDF. Try again with fewer visible nodes (use filters).', 'error')
+    toast(t('archCanvas.exportFailed'), 'error')
   } finally {
     exporting.value = false
   }

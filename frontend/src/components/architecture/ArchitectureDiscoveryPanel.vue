@@ -1,11 +1,11 @@
 <template>
   <section class="discovery-panel">
     <header class="discovery-header">
-      <span><i data-lucide="scan-search"></i><strong>Configure AWS application</strong><small>Build the diagram from deployment evidence</small></span>
-      <button class="btn sm btn-icon" title="Close discovery" @click="$emit('close')"><i data-lucide="x"></i></button>
+      <span><i data-lucide="scan-search"></i><strong>{{ t('archDisc.title') }}</strong><small>{{ t('archDisc.subtitle') }}</small></span>
+      <button class="btn sm btn-icon" :title="t('archDisc.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
-    <nav class="discovery-steps" aria-label="Application setup progress">
+    <nav class="discovery-steps" :aria-label="t('archDisc.progressLabel')">
       <span v-for="(step, index) in steps" :key="step.label" :class="{ active: currentStep === index, complete: currentStep > index }">
         <span>{{ currentStep > index ? '✓' : index + 1 }}</span>
         <strong>{{ step.label }}</strong>
@@ -22,62 +22,62 @@
     </div>
 
     <div v-if="!store.discoveryPreview" class="discovery-controls">
-      <label>Region<input v-model.trim="region" class="ctrl-input" placeholder="us-east-1" /></label>
+      <label>{{ t('archDisc.region') }}<input v-model.trim="region" class="ctrl-input" placeholder="us-east-1" /></label>
       <button class="btn sm primary" :disabled="store.discovering || !region" @click="loadDeployments">
         <i :data-lucide="store.discovering ? 'loader-2' : 'cloud-download'"></i>
-        {{ store.discoveryCatalog ? 'Refresh stacks' : 'Find CloudFormation stacks' }}
+        {{ store.discoveryCatalog ? t('archDisc.refreshStacks') : t('archDisc.findStacks') }}
       </button>
       <span v-if="store.discoveryCatalog" class="discovery-scope">
-        Account {{ store.discoveryCatalog.scope.accountId }} · {{ store.discoveryCatalog.estimate.awsRequests }} read request{{ store.discoveryCatalog.estimate.awsRequests === 1 ? '' : 's' }}
+        {{ t('archDisc.accountScope', { account: store.discoveryCatalog.scope.accountId, n: store.discoveryCatalog.estimate.awsRequests }) }}
       </span>
     </div>
 
     <template v-if="store.discoveryCatalog && !store.discoveryPreview">
       <div class="discovery-section-heading">
-        <span><strong>1. Choose CloudFormation</strong><small>Select up to 10 deployments that belong to this application</small></span>
-        <strong class="selection-count">{{ selectedStacks.length }} selected</strong>
+        <span><strong>{{ t('archDisc.chooseCfn') }}</strong><small>{{ t('archDisc.chooseCfnHint') }}</small></span>
+        <strong class="selection-count">{{ t('archDisc.selected', { n: selectedStacks.length }) }}</strong>
       </div>
       <div v-if="store.discoveryCatalog.deployments.length" class="deployment-list">
         <label v-for="deployment in store.discoveryCatalog.deployments" :key="deployment.id" class="discovery-row">
           <input v-model="selectedStacks" type="checkbox" :value="deployment.name" :disabled="!selectedStacks.includes(deployment.name) && selectedStacks.length >= 10" />
           <span><strong>{{ deployment.name }}</strong><small>{{ deployment.status }}</small></span>
-          <time>{{ deployment.updatedAt ? new Date(deployment.updatedAt).toLocaleString() : 'No update time' }}</time>
+          <time>{{ deployment.updatedAt ? new Date(deployment.updatedAt).toLocaleString() : t('archDisc.noUpdateTime') }}</time>
         </label>
       </div>
-      <div v-else class="discovery-empty">No active CloudFormation stacks found in this region.</div>
+      <div v-else class="discovery-empty">{{ t('archDisc.noStacks') }}</div>
       <div class="discovery-next-actions">
         <button v-if="store.discoveryCatalog.deployments.length" class="btn sm" :disabled="store.discovering" @click="previewRegionalInventory">
-          <i data-lucide="radar"></i> Use regional inventory
+          <i data-lucide="radar"></i> {{ t('archDisc.useRegional') }}
         </button>
         <button class="btn sm primary" :disabled="store.discovering || (store.discoveryCatalog.deployments.length > 0 && !selectedStacks.length)" @click="previewSelectedStacks">
-          Continue to resources <i data-lucide="arrow-right"></i>
+          {{ t('archDisc.continue') }} <i data-lucide="arrow-right"></i>
         </button>
       </div>
     </template>
 
     <template v-if="store.discoveryPreview">
       <div class="discovery-section-heading resource-step-heading">
-        <span><strong>2. Add application resources</strong><small>{{ selectedStackSummary }}</small></span>
-        <button class="btn sm" @click="backToStacks"><i data-lucide="arrow-left"></i> Back to stacks</button>
+        <span><strong>{{ t('archDisc.addResources') }}</strong><small>{{ selectedStackSummary }}</small></span>
+        <button class="btn sm" @click="backToStacks"><i data-lucide="arrow-left"></i> {{ t('archDisc.backToStacks') }}</button>
       </div>
       <div v-if="selectedStacks.length" class="stack-resource-summary">
         <span class="resource-icon"><i data-lucide="layers-3"></i></span>
         <span>
-          <strong>CloudFormation coverage</strong>
-          <small>{{ stackNodes.length }} resources · {{ stackRelationshipCount }} relationships from {{ selectedStacks.length }} deployment{{ selectedStacks.length === 1 ? '' : 's' }}</small>
+          <strong>{{ t('archDisc.cfnCoverage') }}</strong>
+          <small>{{ t('archDisc.coverageDetail', { resources: stackNodes.length, relationships: stackRelationshipCount, n: selectedStacks.length }) }}</small>
         </span>
         <button class="btn sm primary" :disabled="store.saving || !stackNodes.length || stackNodes.length > 500" @click="drawStackResources">
-          <i data-lucide="layout-dashboard"></i> Draw all stack resources
+          <i data-lucide="layout-dashboard"></i> {{ t('archDisc.drawAllStack') }}
         </button>
       </div>
       <div v-if="store.discoveryPreview.applicationCandidates?.length" class="application-candidates">
         <div class="discovery-section-heading">
-          <span><strong>Identified applications</strong><small>Connected components inferred from AWS evidence</small></span>
+          <span><strong>{{ t('archDisc.identifiedApps') }}</strong><small>{{ t('archDisc.identifiedAppsHint') }}</small></span>
         </div>
         <div v-for="candidate in store.discoveryPreview.applicationCandidates" :key="candidate.id" class="application-row">
           <span>
             <strong>{{ candidate.name }}</strong>
-            <small>{{ candidate.resourceCount }} resources · {{ candidate.relationshipCount }} relationships · {{ Math.round(candidate.confidence * 100) }}% confidence<template v-if="candidateAlreadyAddedCount(candidate)"> · {{ candidateAlreadyAddedCount(candidate) }} already in this project</template></small>
+            <small>{{ t('archDisc.candidateDetail', { resources: candidate.resourceCount, relationships: candidate.relationshipCount, pct: Math.round(candidate.confidence * 100) }) }}<template v-if="candidateAlreadyAddedCount(candidate)"> · {{ t('archDisc.alreadyInProjectCount', { n: candidateAlreadyAddedCount(candidate) }) }}</template></small>
             <span class="application-types">
               <span v-for="item in candidate.resourceTypes" :key="item.type">
                 <i :data-lucide="resourceIcon(item.type)"></i>{{ item.count }} {{ resourceLabel(item.type) }}
@@ -86,60 +86,60 @@
           </span>
           <button class="btn sm primary" :disabled="store.saving" @click="drawApplication(candidate)">
             <i :data-lucide="store.saving ? 'loader-2' : 'workflow'"></i>
-            {{ store.saving ? 'Drawing…' : 'Draw application' }}
+            {{ store.saving ? t('archDisc.drawing') : t('archDisc.drawApplication') }}
           </button>
         </div>
       </div>
       <div v-if="store.discoveryPreview.estimate.truncated" class="inventory-warning">
         <i data-lucide="triangle-alert"></i>
-        Inventory reached the 500-resource preview limit. Identified applications may be partial.
+        {{ t('archDisc.truncated') }}
       </div>
       <div v-if="crossStackReferences.length" class="inventory-warning">
         <i data-lucide="link-2"></i>
         <span>
-          {{ crossStackReferences.length }} resource{{ crossStackReferences.length === 1 ? '' : 's' }} import{{ crossStackReferences.length === 1 ? 's' : '' }} a value from another stack ({{ crossStackReferenceNames }}) — consider adding that stack too so the relationship can be resolved.
+          {{ t('archDisc.crossStack', { n: crossStackReferences.length, names: crossStackReferenceNames }) }}
         </span>
       </div>
       <div v-if="!confirmingRelationships" class="discovery-section-heading">
-        <span><strong>Confirm resources</strong><small>{{ resourceSelectionHint }}</small></span>
+        <span><strong>{{ t('archDisc.confirmResources') }}</strong><small>{{ resourceSelectionHint }}</small></span>
         <button v-if="selectedStacks.length > 1" class="btn sm primary" :disabled="store.saving || !stackNodes.length || stackNodes.length > 500" @click="drawStackResources">
           <i :data-lucide="store.saving ? 'loader-2' : 'layout-dashboard'"></i>
-          {{ store.saving ? 'Drawing…' : 'Draw complete diagram' }}
+          {{ store.saving ? t('archDisc.drawing') : t('archDisc.drawComplete') }}
         </button>
         <button v-else class="btn sm primary" :disabled="!reviewNodeIds.length || store.saving" @click="continueToRelationships">
-          Review relationships <i data-lucide="arrow-right"></i>
+          {{ t('archDisc.reviewRelationships') }} <i data-lucide="arrow-right"></i>
         </button>
       </div>
       <div v-if="!confirmingRelationships && selectedStacks.length <= 1" class="resource-list">
         <section v-for="group in resourceGroups" :key="group.type" class="resource-group">
           <header class="resource-group-heading">
             <span class="resource-icon"><i :data-lucide="resourceIcon(group.type)"></i></span>
-            <span><strong>{{ group.label }}</strong><small>{{ group.nodes.length }} resource{{ group.nodes.length === 1 ? '' : 's' }}</small></span>
+            <span><strong>{{ group.label }}</strong><small>{{ t(group.nodes.length === 1 ? 'archDisc.resource' : 'archDisc.resources', { n: group.nodes.length }) }}</small></span>
           </header>
           <label v-for="node in group.nodes" :key="node.id" class="discovery-row resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
             <input v-model="selectedNodes" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
             <span><strong>{{ node.name }}</strong><small>{{ resourceOrigin(node) }}</small></span>
-            <span v-if="node.alreadyInGraph" class="evidence-badge already-badge"><i data-lucide="check-circle-2"></i> Already in project</span>
+            <span v-if="node.alreadyInGraph" class="evidence-badge already-badge"><i data-lucide="check-circle-2"></i> {{ t('archDisc.alreadyInProject') }}</span>
             <span v-else class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
           </label>
         </section>
-        <div v-if="!resourceGroups.length" class="discovery-empty">All preview resources already participate in suggested relationships.</div>
+        <div v-if="!resourceGroups.length" class="discovery-empty">{{ t('archDisc.allCovered') }}</div>
       </div>
       <div v-if="!confirmingRelationships" class="relationship-readiness">
         <i data-lucide="git-branch"></i>
         <span>
-          <strong>{{ store.discoveryPreview.relationshipSuggestions.length }} relationship suggestion{{ store.discoveryPreview.relationshipSuggestions.length === 1 ? '' : 's' }}</strong>
-          <small>{{ relatedNodeIds.length }} related resource{{ relatedNodeIds.length === 1 ? '' : 's' }} will be included automatically; lower confidence remains suggested.</small>
+          <strong>{{ t('archDisc.suggestionCount', { n: store.discoveryPreview.relationshipSuggestions.length }) }}</strong>
+          <small>{{ t('archDisc.relatedIncluded', { n: relatedNodeIds.length }) }}</small>
         </span>
       </div>
       <template v-if="confirmingRelationships">
         <div class="discovery-section-heading">
-          <span><strong>Review relationships</strong><small>{{ reviewNodeIds.length }} resources · {{ reviewRelationships.length }} relationships ready to draw</small></span>
+          <span><strong>{{ t('archDisc.reviewRelationships') }}</strong><small>{{ t('archDisc.reviewDetail', { resources: reviewNodeIds.length, relationships: reviewRelationships.length }) }}</small></span>
           <span class="review-actions">
-            <button class="btn sm" :disabled="store.saving" @click="confirmingRelationships = false"><i data-lucide="arrow-left"></i> Back</button>
+            <button class="btn sm" :disabled="store.saving" @click="confirmingRelationships = false"><i data-lucide="arrow-left"></i> {{ t('archDisc.back') }}</button>
             <button class="btn sm primary" :disabled="!reviewNodeIds.length || store.saving" @click="importResources(reviewNodeIds)">
               <i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>
-              {{ store.saving ? 'Drawing…' : 'Draw diagram' }}
+              {{ store.saving ? t('archDisc.drawing') : t('archDisc.drawDiagram') }}
             </button>
           </span>
         </div>
@@ -148,12 +148,12 @@
             <span><strong>{{ nodeName(suggestion.sourceNodeId) }}</strong><small>{{ relationshipLabel(suggestion.relationType) }}</small><strong>{{ nodeName(suggestion.targetNodeId) }}</strong></span>
             <span class="confidence">{{ Math.round(suggestion.confidence * 100) }}%</span>
             <span :class="['outcome-badge', suggestion.confidence >= threshold ? 'automatic' : 'suggested']">
-              {{ suggestion.confidence >= threshold ? 'Automatic' : 'Review' }}
+              {{ suggestion.confidence >= threshold ? t('archDisc.automatic') : t('archDisc.review') }}
             </span>
             <span class="evidence-badge"><i data-lucide="shield-check"></i> {{ suggestion.evidence[0]?.intrinsic }}</span>
           </div>
         </div>
-        <div v-else class="discovery-empty">No relationships found between the selected resources.</div>
+        <div v-else class="discovery-empty">{{ t('archDisc.noRelationships') }}</div>
       </template>
     </template>
   </section>
@@ -163,24 +163,26 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useI18n } from '../../composables/useI18n'
 
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
+const { t } = useI18n()
 const region = ref('us-east-1')
 const selectedStacks = ref([])
 const selectedNodes = ref([])
 const confirmingRelationships = ref(false)
-const steps = [
-  { label: 'CloudFormation', detail: 'Choose deployments' },
-  { label: 'Resources', detail: 'Confirm components' },
-  { label: 'Diagram', detail: 'Review application flow' },
-]
+const steps = computed(() => [
+  { label: 'CloudFormation', detail: t('archDisc.step.cfnDetail') },
+  { label: t('archDisc.step.resources'), detail: t('archDisc.step.resourcesDetail') },
+  { label: t('archDisc.step.diagram'), detail: t('archDisc.step.diagramDetail') },
+])
 const threshold = computed(() => store.selectedProject?.automaticEdgeThreshold ?? 0.85)
 const thresholdPercent = computed(() => Math.round(threshold.value * 100))
 const currentStep = computed(() => (store.discoveryPreview ? (confirmingRelationships.value ? 2 : 1) : 0))
 const discoveryProgress = computed(() => store.discoveryPhase === 'stacks'
-  ? { title: 'Loading CloudFormation stacks', detail: 'AWS is listing deployments in the selected region.' }
-  : { title: 'Analyzing AWS resources', detail: 'Reading selected stacks, regional inventory and relationship evidence. This can take a moment.' })
+  ? { title: t('archDisc.loadingStacks'), detail: t('archDisc.loadingStacksDetail') }
+  : { title: t('archDisc.analyzing'), detail: t('archDisc.analyzingDetail') })
 const stackNodes = computed(() => store.discoveryPreview?.nodes?.filter(node => selectedStacks.value.includes(node.stackName)) || [])
 const stackRelationshipCount = computed(() => {
   const nodeIds = new Set(stackNodes.value.map(node => node.id))
@@ -210,15 +212,15 @@ const reviewRelationships = computed(() => (store.discoveryPreview?.relationship
   .filter(edge => reviewNodeSet.value.has(edge.sourceNodeId) && reviewNodeSet.value.has(edge.targetNodeId)))
 const alreadyAddedCount = computed(() => selectableNodes.value.filter(node => node.alreadyInGraph).length)
 const resourceSelectionHint = computed(() => {
-  if (selectedStacks.value.length > 1) return 'Multiple stacks draw the complete stack diagram'
-  if (!selectableNodes.value.length) return 'Suggested relationships already cover every preview resource'
+  if (selectedStacks.value.length > 1) return t('archDisc.hint.multipleStacks')
+  if (!selectableNodes.value.length) return t('archDisc.hint.allCovered')
   const pendingCount = selectableNodes.value.length - alreadyAddedCount.value
-  const suffix = alreadyAddedCount.value ? ` (${alreadyAddedCount.value} already in this project)` : ''
-  return `${pendingCount} unlinked resource${pendingCount === 1 ? '' : 's'} available for manual selection${suffix}`
+  const suffix = alreadyAddedCount.value ? t('archDisc.hint.alreadySuffix', { n: alreadyAddedCount.value }) : ''
+  return t('archDisc.hint.unlinked', { n: pendingCount }) + suffix
 })
 const selectedStackSummary = computed(() => selectedStacks.value.length
-  ? `${selectedStacks.value.length} CloudFormation deployment${selectedStacks.value.length === 1 ? '' : 's'} selected`
-  : 'Regional inventory without a CloudFormation deployment')
+  ? t(selectedStacks.value.length === 1 ? 'archDisc.deploymentSelected' : 'archDisc.deploymentsSelected', { n: selectedStacks.value.length })
+  : t('archDisc.regionalNoCfn'))
 const crossStackReferences = computed(() => store.discoveryPreview?.relationshipAnalysis?.crossStackReferences || [])
 const crossStackReferenceNames = computed(() => [...new Set(crossStackReferences.value.map(reference => reference.exportName))].join(', '))
 
@@ -287,10 +289,10 @@ function resourceIcon(type) {
 
 function resourceLabel(type) {
   return {
-    lambda: 'Lambda', sqs: 'SQS queue', eventbridge: 'EventBridge rule', stepfunctions: 'Step Functions',
-    ecs: 'ECS', s3: 'S3 bucket', iam: 'IAM role', 'iam-policy': 'IAM policy', policy: 'Resource policy',
-    sns: 'SNS', dynamodb: 'DynamoDB', api: 'API Gateway', logs: 'CloudWatch Logs', secret: 'Secret',
-  }[type] || String(type || 'AWS resource').replaceAll('-', ' ')
+    lambda: 'Lambda', sqs: t('archCanvas.type.sqs'), eventbridge: t('archCanvas.type.eventbridge'), stepfunctions: 'Step Functions',
+    ecs: 'ECS', s3: t('archCanvas.type.s3'), iam: t('archCanvas.type.iam'), 'iam-policy': t('archCanvas.type.iamPolicy'), policy: t('archCanvas.type.policy'),
+    sns: 'SNS', dynamodb: 'DynamoDB', api: 'API Gateway', logs: 'CloudWatch Logs', secret: t('archCanvas.type.secret'),
+  }[type] || (type ? String(type).replaceAll('-', ' ') : t('archCanvas.type.awsResource'))
 }
 
 function nodeName(nodeId) {
@@ -298,11 +300,11 @@ function nodeName(nodeId) {
 }
 
 function resourceOrigin(node) {
-  return node.stackName ? `${node.stackName} / ${node.logicalId}` : 'Regional inventory'
+  return node.stackName ? `${node.stackName} / ${node.logicalId}` : t('archDisc.regionalInventory')
 }
 
 function evidenceLabel(node) {
-  return node.evidence?.[0]?.type === 'cloudformation_resource' ? 'CloudFormation' : 'AWS inventory'
+  return node.evidence?.[0]?.type === 'cloudformation_resource' ? 'CloudFormation' : t('archDisc.awsInventory')
 }
 
 function candidateAlreadyAddedCount(candidate) {
@@ -320,9 +322,11 @@ async function drawStackResources() {
   await importResources(selectedNodes.value)
 }
 
+const RELATION_TYPES = ['depends_on', 'triggers', 'invokes', 'runs_on', 'routes_to', 'references', 'accesses']
+
 function relationshipLabel(relationType) {
-  return { depends_on: 'depends on', triggers: 'triggers', invokes: 'invokes', runs_on: 'runs on', references: 'references', accesses: 'can access' }[relationType]
-    || String(relationType || 'depends_on').replaceAll('_', ' ')
+  const type = relationType || 'depends_on'
+  return RELATION_TYPES.includes(type) ? t(`archCanvas.rel.${type}`) : String(type).replaceAll('_', ' ')
 }
 
 function refreshIcons() {

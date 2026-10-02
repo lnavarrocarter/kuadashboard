@@ -23,6 +23,13 @@ const MIGRATED = [
   'components/cloud/Ec2Shell.vue',
   'components/TerminalPanel.vue',
   'components/StepFnDetail.vue',
+  'components/architecture/ArchitectureCanvas.vue',
+  'components/architecture/ArchitectureView.vue',
+  'components/architecture/ArchitectureRoutes.vue',
+  'components/architecture/ArchitectureDiscoveryPanel.vue',
+  'components/architecture/ArchitectureKubernetesDiscoveryPanel.vue',
+  'components/architecture/ArchitectureResources.vue',
+  'components/architecture/ArchitectureManualResourcePanel.vue',
 ]
 
 // Characters that only appear in Spanish text.

@@ -3,43 +3,43 @@
     <header class="architecture-toolbar">
       <div class="architecture-title">
         <i data-lucide="network"></i>
-        <span><strong>Architecture</strong><small>Evidence-backed application diagrams</small></span>
+        <span><strong>{{ t('archView.title') }}</strong><small>{{ t('archView.subtitle') }}</small></span>
       </div>
       <div class="architecture-actions">
         <input ref="bundleInput" class="bundle-file-input" type="file" accept=".kuaapp.json,application/json" @change="handleBundleFile" />
-        <button class="btn sm" :disabled="!profileId || store.saving" title="Import a local KUA Application backup" @click="openBundlePicker">
-          <i data-lucide="upload"></i> Import backup
+        <button class="btn sm" :disabled="!profileId || store.saving" :title="t('archView.importHint')" @click="openBundlePicker">
+          <i data-lucide="upload"></i> {{ t('archView.importBackup') }}
         </button>
-        <button v-if="activeApplication" class="btn sm" :disabled="store.saving" title="Download a sanitized local KUA Application backup" @click="exportKuaApp">
-          <i data-lucide="download"></i> Export backup
+        <button v-if="activeApplication" class="btn sm" :disabled="store.saving" :title="t('archView.exportHint')" @click="exportKuaApp">
+          <i data-lucide="download"></i> {{ t('archView.exportBackup') }}
         </button>
-        <button class="btn sm btn-icon" title="Refresh application" :disabled="store.loading || !profileId" @click="refreshWorkspace">
+        <button class="btn sm btn-icon" :title="t('archView.refreshApplication')" :disabled="store.loading || !profileId" @click="refreshWorkspace">
           <i data-lucide="refresh-cw"></i>
         </button>
         <div v-if="store.selectedProject" class="resource-add-menu">
           <button class="btn sm" :disabled="store.loading" @click="resourceProvider = resourceProvider ? '' : 'aws'">
-            <i data-lucide="plus"></i> Add resources
+            <i data-lucide="plus"></i> {{ t('archView.addResources') }}
           </button>
           <div v-if="resourceProvider" class="resource-provider-options">
             <button :class="{ active: resourceProvider === 'aws' }" @click="resourceProvider = 'aws'"><i data-lucide="cloud"></i> AWS</button>
             <button :class="{ active: resourceProvider === 'kubernetes' }" @click="resourceProvider = 'kubernetes'"><i data-lucide="boxes"></i> Kubernetes</button>
-            <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> Manual resource</button>
+            <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> {{ t('archView.manualResource') }}</button>
             <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
             <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
-            <button @click="emit('open-observability-setup')"><i data-lucide="square-activity"></i> Observability</button>
+            <button @click="emit('open-observability-setup')"><i data-lucide="square-activity"></i> {{ t('archView.observability') }}</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
-          <i data-lucide="plus"></i> New project
+          <i data-lucide="plus"></i> {{ t('archView.newProject') }}
         </button>
       </div>
     </header>
 
     <div v-if="!profileId" class="architecture-empty architecture-application-picker">
       <i data-lucide="boxes"></i>
-      <strong>Select a KUA application</strong>
-      <span>Choose an application to open its Architecture workspace.</span>
-      <div v-if="store.loading" class="architecture-empty compact">Loading applications...</div>
+      <strong>{{ t('archView.selectApplication') }}</strong>
+      <span>{{ t('archView.selectApplicationHint') }}</span>
+      <div v-if="store.loading" class="architecture-empty compact">{{ t('archView.loadingApplications') }}</div>
       <div v-else-if="store.applications.length" class="architecture-first-access-list">
         <button
           v-for="application in store.applications"
@@ -53,26 +53,26 @@
         </button>
       </div>
       <template v-else-if="!store.error">
-        <span>No KUA applications are configured yet.</span>
-        <button class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Refresh</button>
+        <span>{{ t('archView.noApplications') }}</span>
+        <button class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> {{ t('action.refresh') }}</button>
       </template>
-      <button v-if="store.error" class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> Retry</button>
+      <button v-if="store.error" class="btn sm" @click="refreshApplicationCatalog"><i data-lucide="refresh-cw"></i> {{ t('common.retry') }}</button>
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
     </div>
 
     <template v-else>
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
       <form v-if="creatingProject" class="architecture-create" @submit.prevent="submitProject">
-        <input v-model.trim="projectDraft.name" class="ctrl-input" required maxlength="120" placeholder="Project name" />
-        <input v-model.trim="projectDraft.description" class="ctrl-input" maxlength="500" placeholder="Description" />
-        <button class="btn sm primary" :disabled="store.saving"><i data-lucide="arrow-right"></i> Create and configure</button>
-        <button type="button" class="btn sm" @click="creatingProject = false">Cancel</button>
+        <input v-model.trim="projectDraft.name" class="ctrl-input" required maxlength="120" :placeholder="t('archView.projectName')" />
+        <input v-model.trim="projectDraft.description" class="ctrl-input" maxlength="500" :placeholder="t('archView.description')" />
+        <button class="btn sm primary" :disabled="store.saving"><i data-lucide="arrow-right"></i> {{ t('archView.createAndConfigure') }}</button>
+        <button type="button" class="btn sm" @click="creatingProject = false">{{ t('action.cancel') }}</button>
       </form>
 
       <div :class="['architecture-layout', { 'architecture-layout--embedded': props.hideApplicationList }]">
         <aside v-if="!props.hideApplicationList" class="architecture-projects">
           <template v-if="!props.hideApplicationList && store.applications.length">
-            <div class="architecture-list-heading"><span>KUA Applications</span><strong>{{ store.applications.length }}</strong></div>
+            <div class="architecture-list-heading"><span>{{ t('archView.kuaApplications') }}</span><strong>{{ store.applications.length }}</strong></div>
             <button
               v-for="application in store.applications"
               :key="application.id"
@@ -83,7 +83,7 @@
               <span><strong>{{ application.name }}</strong><small>{{ [application.environment, application.team].filter(Boolean).join(' / ') || application.provider.toUpperCase() }}</small></span>
             </button>
           </template>
-          <div class="architecture-list-heading"><span>Projects</span><strong>{{ store.projects.length }}</strong></div>
+          <div class="architecture-list-heading"><span>{{ t('archView.projects') }}</span><strong>{{ store.projects.length }}</strong></div>
           <button
             v-for="project in store.projects"
             :key="project.id"
@@ -91,65 +91,65 @@
             @click="store.selectProject(project.id)"
           >
             <span class="project-mark">{{ project.name.slice(0, 2).toUpperCase() }}</span>
-            <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+            <span><strong>{{ project.name }}</strong><small>{{ project.description || t('archView.defaultProjectDescription') }}</small></span>
           </button>
           <button v-if="!store.projects.length && !store.loading" class="architecture-project-empty" @click="creatingProject = true">
-            <i data-lucide="plus"></i> Create the first project
+            <i data-lucide="plus"></i> {{ t('archView.createFirstProject') }}
           </button>
         </aside>
 
         <main class="architecture-workspace">
-          <div v-if="store.loading" class="architecture-empty compact">Loading architecture...</div>
+          <div v-if="store.loading" class="architecture-empty compact">{{ t('archView.loadingArchitecture') }}</div>
           <div v-else-if="!store.selectedProject" class="architecture-empty">
             <i data-lucide="waypoints"></i>
-            <strong>{{ store.selectedApplication ? `No architecture view for ${store.selectedApplication.name}` : 'No architecture selected' }}</strong>
-            <span>{{ store.selectedApplication ? 'Create the application view to start collecting scopes, sources and evidence.' : 'Create a project to start collecting scopes, sources and evidence.' }}</span>
-            <button v-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> Create application view</button>
+            <strong>{{ store.selectedApplication ? t('archView.noViewFor', { name: store.selectedApplication.name }) : t('archView.noneSelected') }}</strong>
+            <span>{{ store.selectedApplication ? t('archView.createViewHint') : t('archView.createProjectHint') }}</span>
+            <button v-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> {{ t('archView.createApplicationView') }}</button>
           </div>
           <template v-else>
             <section class="architecture-project-header">
               <div>
-                <span class="architecture-kicker">{{ applicationContextLabel }} / revision {{ store.graph?.revision ?? 0 }}</span>
+                <span class="architecture-kicker">{{ applicationContextLabel }} / {{ t('archView.revision', { n: store.graph?.revision ?? 0 }) }}</span>
                 <h2>{{ store.selectedProject.name }}</h2>
-                <p>{{ store.selectedProject.description || 'Application architecture workspace' }}</p>
+                <p>{{ store.selectedProject.description || t('archView.defaultWorkspaceDescription') }}</p>
               </div>
               <form class="snapshot-form" @submit.prevent="submitSnapshot">
                 <button v-if="store.linkedApplication" class="btn sm" type="button" @click="emit('open-observability', store.linkedApplication)">
-                  <i data-lucide="square-activity"></i> Open observability
+                  <i data-lucide="square-activity"></i> {{ t('archView.openObservability') }}
                 </button>
                 <button class="btn sm" type="button" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
                   <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
-                  {{ store.syncPreviewing ? 'Checking…' : 'Sync preview' }}
+                  {{ store.syncPreviewing ? t('archView.checking') : t('archView.syncPreview') }}
                 </button>
-                <input v-model.trim="snapshotName" class="ctrl-input" required maxlength="120" placeholder="Snapshot name" />
-                <button class="btn sm" :disabled="store.saving"><i data-lucide="camera"></i> Snapshot</button>
-                <button class="btn sm btn-icon danger" type="button" :disabled="store.saving" title="Delete project" @click="deleteProject">
+                <input v-model.trim="snapshotName" class="ctrl-input" required maxlength="120" :placeholder="t('archView.snapshotName')" />
+                <button class="btn sm" :disabled="store.saving"><i data-lucide="camera"></i> {{ t('archView.snapshot') }}</button>
+                <button class="btn sm btn-icon danger" type="button" :disabled="store.saving" :title="t('archView.deleteProject')" @click="deleteProject">
                   <i data-lucide="trash-2"></i>
                 </button>
               </form>
             </section>
 
             <section v-if="store.selectedApplication || store.linkedApplications.length" class="architecture-application-context">
-              <span class="architecture-application-context-wide"><small>Applications</small><strong>{{ linkedApplicationLabel }}</strong></span>
-              <span><small>Provider</small><strong>{{ activeApplication?.provider?.toUpperCase() || '—' }}</strong></span>
-              <span><small>Environment</small><strong>{{ activeApplication?.environment || '—' }}</strong></span>
-              <span><small>Team</small><strong>{{ activeApplication?.team || '—' }}</strong></span>
-              <span><small>Scopes</small><strong>{{ store.graph?.document?.scopes?.length || 0 }}</strong></span>
-              <span :class="(store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'linked' : 'unlinked'"><small>Architecture</small><strong>{{ (store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'Linked' : 'Not linked' }}</strong></span>
+              <span class="architecture-application-context-wide"><small>{{ t('archView.applications') }}</small><strong>{{ linkedApplicationLabel }}</strong></span>
+              <span><small>{{ t('archView.provider') }}</small><strong>{{ activeApplication?.provider?.toUpperCase() || '—' }}</strong></span>
+              <span><small>{{ t('archView.environment') }}</small><strong>{{ activeApplication?.environment || '—' }}</strong></span>
+              <span><small>{{ t('archView.team') }}</small><strong>{{ activeApplication?.team || '—' }}</strong></span>
+              <span><small>{{ t('archView.scopes') }}</small><strong>{{ store.graph?.document?.scopes?.length || 0 }}</strong></span>
+              <span :class="(store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'linked' : 'unlinked'"><small>{{ t('archView.title') }}</small><strong>{{ (store.linkedApplications.length || activeApplication?.architectureProjectId) ? t('archView.linked') : t('archView.notLinked') }}</strong></span>
             </section>
 
             <section class="architecture-stats">
-              <div><span>Nodes</span><strong>{{ store.graph?.document.nodes.length || 0 }}</strong></div>
-              <div><span>Relations</span><strong>{{ store.graph?.document.edges.length || 0 }}</strong></div>
-              <div><span>Sources</span><strong>{{ store.graph?.document.sources.length || 0 }}</strong></div>
-              <div><span>Snapshots</span><strong>{{ store.snapshots.length }}</strong></div>
+              <div><span>{{ t('archView.nodes') }}</span><strong>{{ store.graph?.document.nodes.length || 0 }}</strong></div>
+              <div><span>{{ t('archView.relations') }}</span><strong>{{ store.graph?.document.edges.length || 0 }}</strong></div>
+              <div><span>{{ t('archView.sources') }}</span><strong>{{ store.graph?.document.sources.length || 0 }}</strong></div>
+              <div><span>{{ t('archView.snapshots') }}</span><strong>{{ store.snapshots.length }}</strong></div>
             </section>
 
             <section v-if="store.syncPreview" class="sync-preview-panel">
               <header>
-                <span><i data-lucide="refresh-cw"></i><strong>CloudFormation sync preview</strong><small>{{ syncSourceLabel }}</small></span>
-                <strong>{{ store.syncPreview.summary.changeCount }} change{{ store.syncPreview.summary.changeCount === 1 ? '' : 's' }}</strong>
-                <button class="btn sm btn-icon" title="Close sync preview" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
+                <span><i data-lucide="refresh-cw"></i><strong>{{ t('archView.cfnSyncPreview') }}</strong><small>{{ syncSourceLabel }}</small></span>
+                <strong>{{ t(store.syncPreview.summary.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: store.syncPreview.summary.changeCount }) }}</strong>
+                <button class="btn sm btn-icon" :title="t('archView.closeSyncPreview')" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
               </header>
               <div class="sync-preview-grid">
                 <div v-for="item in resourceSyncCounts" :key="`resource:${item.key}`">
@@ -176,19 +176,19 @@
                 </details>
               </div>
               <footer>
-                <span>{{ store.syncPreview.summary.resources.missing }} resource{{ store.syncPreview.summary.resources.missing === 1 ? '' : 's' }} will become stale</span>
+                <span>{{ t('archView.willBecomeStale', { n: store.syncPreview.summary.resources.missing }) }}</span>
                 <button class="btn sm primary" :disabled="store.saving" @click="applySync">
-                  <i data-lucide="check"></i> Apply sync
+                  <i data-lucide="check"></i> {{ t('archView.applySync') }}
                 </button>
               </footer>
             </section>
 
             <section v-if="staleResources.length" class="stale-resource-list">
-              <header><span>Stale resources</span><small>{{ staleResources.length }} need a decision</small></header>
+              <header><span>{{ t('archView.staleResources') }}</span><small>{{ t('archView.needDecision', { n: staleResources.length }) }}</small></header>
               <div v-for="node in staleResources" :key="node.id" class="stale-resource-row">
                 <span><strong>{{ node.name }}</strong><small>{{ node.kind || node.resourceType }}</small></span>
-                <button class="btn sm" :disabled="store.saving" @click="restoreStaleResource(node)"><i data-lucide="undo-2"></i> Restore</button>
-                <button class="btn sm danger" :disabled="store.saving" @click="removeStaleResource(node)"><i data-lucide="trash-2"></i> Remove</button>
+                <button class="btn sm" :disabled="store.saving" @click="restoreStaleResource(node)"><i data-lucide="undo-2"></i> {{ t('archView.restore') }}</button>
+                <button class="btn sm danger" :disabled="store.saving" @click="removeStaleResource(node)"><i data-lucide="trash-2"></i> {{ t('archView.remove') }}</button>
               </div>
             </section>
 
@@ -222,13 +222,13 @@
 
             <div class="architecture-view-tabs">
               <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
-                <i data-lucide="route"></i> Routes
+                <i data-lucide="route"></i> {{ t('archView.routes') }}
               </button>
               <button :class="['btn', 'sm', { primary: activeView === 'canvas' }]" @click="activeView = 'canvas'">
-                <i data-lucide="network"></i> Canvas
+                <i data-lucide="network"></i> {{ t('archView.canvas') }}
               </button>
               <button :class="['btn', 'sm', { primary: activeView === 'resources' }]" :disabled="!store.linkedApplication" @click="selectResourcesView">
-                <i data-lucide="database"></i> Resources
+                <i data-lucide="database"></i> {{ t('archView.resources') }}
               </button>
             </div>
 
@@ -278,7 +278,7 @@
             />
 
             <BaseModal :show="Boolean(inlineNode)" wide @close="inlineNode = null">
-              <template #title>{{ inlineNode?.name }} — {{ inlineMode === 'logs' ? 'Logs' : 'Metrics' }}</template>
+              <template #title>{{ inlineNode?.name }} — {{ inlineMode === 'logs' ? t('archView.logs') : t('archView.metrics') }}</template>
               <ApmProviderMetrics
                 v-if="inlineNode && inlineMode === 'metrics'"
                 :provider="store.linkedApplication?.provider || 'generic'"
@@ -297,28 +297,28 @@
             </BaseModal>
 
             <section v-if="store.snapshots.length" class="snapshot-list">
-              <header><span>Snapshots</span><small>Immutable local history</small></header>
+              <header><span>{{ t('archView.snapshots') }}</span><small>{{ t('archView.immutableHistory') }}</small></header>
               <div v-for="snapshot in store.snapshots" :key="snapshot.id" class="snapshot-row">
                 <span class="snapshot-version">v{{ snapshot.version }}</span>
-                <span><strong>{{ snapshot.name }}</strong><small>Revision {{ snapshot.sourceRevision }}</small></span>
+                <span><strong>{{ snapshot.name }}</strong><small>{{ t('archView.revisionLabel', { n: snapshot.sourceRevision }) }}</small></span>
                 <time>{{ new Date(snapshot.createdAt).toLocaleString() }}</time>
-                <button class="btn sm btn-icon" title="Compare with current graph" @click="compareSnapshot(snapshot.id)">
+                <button class="btn sm btn-icon" :title="t('archView.compareSnapshot')" @click="compareSnapshot(snapshot.id)">
                   <i data-lucide="git-compare-arrows"></i>
                 </button>
-                <button class="btn sm btn-icon" title="Restore this snapshot" :disabled="store.saving" @click="restoreSnapshot(snapshot)">
+                <button class="btn sm btn-icon" :title="t('archView.restoreSnapshot')" :disabled="store.saving" @click="restoreSnapshot(snapshot)">
                   <i data-lucide="history"></i>
                 </button>
               </div>
             </section>
 
             <section v-if="store.snapshotDiff" class="architecture-diff">
-              <span><i data-lucide="git-compare-arrows"></i> Compared with v{{ store.snapshotDiff.snapshot.version }}</span>
-              <strong>{{ store.snapshotDiff.diff.changeCount }} change{{ store.snapshotDiff.diff.changeCount === 1 ? '' : 's' }}</strong>
-              <button class="btn sm btn-icon" title="Close comparison" @click="store.snapshotDiff = null"><i data-lucide="x"></i></button>
+              <span><i data-lucide="git-compare-arrows"></i> {{ t('archView.comparedWith', { n: store.snapshotDiff.snapshot.version }) }}</span>
+              <strong>{{ t(store.snapshotDiff.diff.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: store.snapshotDiff.diff.changeCount }) }}</strong>
+              <button class="btn sm btn-icon" :title="t('archView.closeComparison')" @click="store.snapshotDiff = null"><i data-lucide="x"></i></button>
             </section>
 
             <section v-if="store.changes.length" class="change-list">
-              <header><span>Change history</span><small>Latest {{ store.changes.length }} revisions</small></header>
+              <header><span>{{ t('archView.changeHistory') }}</span><small>{{ t('archView.latestRevisions', { n: store.changes.length }) }}</small></header>
               <div v-for="change in store.changes" :key="change.id" class="change-row">
                 <span class="change-revision">r{{ change.revision }}</span>
                 <span><strong>{{ changeLabel(change.type) }}</strong><small>{{ change.reason || change.subjectId || change.subjectType }}</small></span>
@@ -340,6 +340,7 @@ import { useApmStore } from '../../stores/useApmStore'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useToast } from '../../composables/useToast'
+import { useI18n } from '../../composables/useI18n'
 import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
 import BaseModal from '../BaseModal.vue'
@@ -371,6 +372,7 @@ const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
 const { toast } = useToast()
+const { t } = useI18n()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
@@ -385,7 +387,7 @@ const linkedApplicationLabel = computed(() => {
 })
 const applicationContextLabel = computed(() => store.linkedApplication
   ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
-  : 'Architecture')
+  : t('archView.title'))
 const syncSource = computed(() => {
   const sources = store.graph?.document?.sources?.filter(source => source.type === 'cloudformation') || []
   if (!sources.length) return null
@@ -399,19 +401,19 @@ const syncSource = computed(() => {
   }
 })
 const syncSourceLabel = computed(() => syncSource.value
-  ? `${syncSource.value.stackNames.length} stack${syncSource.value.stackNames.length === 1 ? '' : 's'} · ${syncSource.value.region}`
-  : 'No CloudFormation source')
+  ? t('archView.stackCount', { n: syncSource.value.stackNames.length, region: syncSource.value.region })
+  : t('archView.noCfnSource'))
 const resourceSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.resources, {
-  new: 'New', changed: 'Changed', unchanged: 'Unchanged', missing: 'Missing', stale: 'Stale', manual: 'Manual',
+  new: t('archView.sync.new'), changed: t('archView.sync.changed'), unchanged: t('archView.sync.unchanged'), missing: t('archView.sync.missing'), stale: t('archView.sync.stale'), manual: t('archView.sync.manual'),
 }))
 const relationshipSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.relationships, {
-  new: 'New relationships', reinforced: 'Reinforced', unchanged: 'Unchanged', missingEvidence: 'Missing evidence', rejected: 'Rejected', manual: 'Manual',
+  new: t('archView.sync.newRelationships'), reinforced: t('archView.sync.reinforced'), unchanged: t('archView.sync.unchanged'), missingEvidence: t('archView.sync.missingEvidence'), rejected: t('archView.sync.rejected'), manual: t('archView.sync.manual'),
 }))
 const syncResourceSections = computed(() => [
-  ['new', 'New resources'], ['changed', 'Changed resources'], ['missing', 'Missing resources'], ['stale', 'Already stale'], ['manual', 'Manual resources'],
+  ['new', t('archView.sync.newResources')], ['changed', t('archView.sync.changedResources')], ['missing', t('archView.sync.missingResources')], ['stale', t('archView.sync.alreadyStale')], ['manual', t('archView.sync.manualResources')],
 ].map(([key, label]) => ({ key, label, items: store.syncPreview?.resources?.[key] || [] })))
 const syncRelationshipSections = computed(() => [
-  ['new', 'New relationships'], ['reinforced', 'Reinforced relationships'], ['missingEvidence', 'Relationships missing evidence'], ['rejected', 'Rejected relationships'], ['manual', 'Manual relationships'],
+  ['new', t('archView.sync.newRelationships')], ['reinforced', t('archView.sync.reinforcedRelationships')], ['missingEvidence', t('archView.sync.relationshipsMissingEvidence')], ['rejected', t('archView.sync.rejectedRelationships')], ['manual', t('archView.sync.manualRelationships')],
 ].map(([key, label]) => ({ key: `relationship:${key}`, label, items: store.syncPreview?.relationships?.[key] || [] })))
 const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
 const metricsByNode = ref({})
@@ -435,13 +437,17 @@ const inlineResources = computed(() => {
 })
 
 const METRIC_LABELS = {
-  invocations_observed: 'Invocations',
-  errors_observed: 'Errors',
-  duration_ms: 'Duration',
-  cpu_cores: 'CPU',
-  memory_bytes: 'Memory',
-  log_bytes: 'Logs',
-  pods_ready: 'Ready pods',
+  invocations_observed: 'archView.metric.invocations',
+  errors_observed: 'archView.metric.errors',
+  duration_ms: 'archView.metric.duration',
+  memory_bytes: 'archView.metric.memory',
+  log_bytes: 'archView.logs',
+  pods_ready: 'archView.metric.readyPods',
+}
+
+function metricLabel(metric) {
+  if (metric === 'cpu_cores') return 'CPU'
+  return METRIC_LABELS[metric] ? t(METRIC_LABELS[metric]) : metric
 }
 
 function syncCountItems(counts = {}, labels) {
@@ -514,9 +520,11 @@ function formatMetricValue(value, unit) {
 }
 
 function collectionOverlay(run) {
-  if (!run) return { status: 'unknown', label: 'Not collected', icon: 'circle-help', detail: 'No collection has completed for this application' }
+  if (!run) return { status: 'unknown', label: t('archView.collection.notCollected'), icon: 'circle-help', detail: t('archView.collection.noneCompleted') }
   const status = run.status || 'unknown'
-  const label = status === 'budget_exhausted' ? 'Budget' : status.charAt(0).toUpperCase() + status.slice(1)
+  const statusKey = `archView.collection.${status}`
+  const label = status === 'budget_exhausted' ? t('archView.collection.budget')
+    : t(statusKey) !== statusKey ? t(statusKey) : status.charAt(0).toUpperCase() + status.slice(1)
   const timestamp = run.finishedAt || run.startedAt
   return {
     status,
@@ -548,7 +556,7 @@ async function loadOperationalMetrics() {
       for (const chart of charts) {
         const points = await apmStore.loadSeries(chart.metric, { resourceId: resource.id })
         const value = formatMetricValue(points.at(-1)?.v, chart.unit)
-        if (value != null) items.push({ key: chart.metric, label: METRIC_LABELS[chart.metric] || chart.metric, value })
+        if (value != null) items.push({ key: chart.metric, label: metricLabel(chart.metric), value })
       }
       nextMetrics[node.id] = { loading: false, items }
     }
@@ -580,7 +588,7 @@ async function loadOperationalTrace() {
     const result = await apmStore.traceProcess(application.id, workflowNode.arn)
     const trace = result?.traces?.[0]
     if (!trace) {
-      toast('No recent execution trace found for this workflow', 'info')
+      toast(t('archView.noRecentTrace'), 'info')
       return
     }
     const graphNodes = store.graph?.document?.nodes || []
@@ -605,7 +613,7 @@ async function loadOperationalTrace() {
       if (edge) edgeIds.push(edge.id)
     }
     traceOverlay.value = {
-      executionName: trace.name || trace.executionArn || 'Latest trace',
+      executionName: trace.name || trace.executionArn || t('archView.latestTrace'),
       eventCount: (trace.timeline || []).length,
       nodeIds: [...new Set(path)],
       edgeIds: [...new Set(edgeIds)],
@@ -681,7 +689,7 @@ async function submitSnapshot() {
 
 async function deleteProject() {
   const project = store.selectedProject
-  if (!project || !window.confirm(`Delete project "${project.name}" and all of its graph history? This cannot be undone.`)) return
+  if (!project || !window.confirm(t('archView.confirmDeleteProject', { name: project.name }))) return
   resourceProvider.value = ''
   selectedWorkflow.value = null
   await store.deleteProject(project.id)
@@ -697,14 +705,14 @@ async function handleBundleFile(event) {
   event.target.value = ''
   if (!file) return
   const result = await store.importKuaApp(file)
-  if (result) toast(`Imported ${result.application.name}`, 'success')
+  if (result) toast(t('archView.imported', { name: result.application.name }), 'success')
   nextTick(() => createIcons({ icons }))
 }
 
 async function exportKuaApp() {
   if (!activeApplication.value) return
   const downloaded = await store.downloadKuaApp(activeApplication.value.id)
-  if (downloaded) toast(`Exported ${activeApplication.value.name}`, 'success')
+  if (downloaded) toast(t('archView.exported', { name: activeApplication.value.name }), 'success')
 }
 
 async function previewSync() {
@@ -724,19 +732,19 @@ async function restoreStaleResource(node) {
   await store.applyOperation({
     type: 'node.upsert',
     value: { ...restoredNode, manual: true, syncState: 'restored' },
-  }, { reason: `Restore stale resource ${node.name}` })
+  }, { reason: t('archView.reasonRestoreStale', { name: node.name }) })
   nextTick(() => createIcons({ icons }))
 }
 
 async function removeStaleResource(node) {
-  if (!window.confirm(`Remove stale resource "${node.name}" and its relationships?`)) return
-  await store.applyOperation({ type: 'node.remove', subjectId: node.id }, { reason: `Remove stale resource ${node.name}` })
+  if (!window.confirm(t('archView.confirmRemoveStale', { name: node.name }))) return
+  await store.applyOperation({ type: 'node.remove', subjectId: node.id }, { reason: t('archView.reasonRemoveStale', { name: node.name }) })
   nextTick(() => createIcons({ icons }))
 }
 
 function syncItemName(item) {
   const node = item.preview || item.node
-  return node?.name || item.edge?.relationType || 'Unknown resource'
+  return node?.name || item.edge?.relationType || t('archView.unknownResource')
 }
 
 function syncItemId(item) {
@@ -746,7 +754,9 @@ function syncItemId(item) {
 
 function syncRelationshipName(item) {
   const edge = item.preview || item.edge
-  return edge ? `${edge.relationType}: ${edge.sourceNodeId} to ${edge.targetNodeId}` : 'Unknown relationship'
+  return edge
+    ? t('archView.relationshipName', { type: edge.relationType, source: edge.sourceNodeId, target: edge.targetNodeId })
+    : t('archView.unknownRelationship')
 }
 
 async function compareSnapshot(snapshotId) {
@@ -755,8 +765,8 @@ async function compareSnapshot(snapshotId) {
 }
 
 async function restoreSnapshot(snapshot) {
-  if (!window.confirm(`Restore snapshot v${snapshot.version} "${snapshot.name}"? A new snapshot will preserve the restored state.`)) return
-  await store.revertSnapshot(snapshot.id, { reason: `Restore snapshot v${snapshot.version}` })
+  if (!window.confirm(t('archView.confirmRestoreSnapshot', { n: snapshot.version, name: snapshot.name }))) return
+  await store.revertSnapshot(snapshot.id, { reason: t('archView.reasonRestoreSnapshot', { n: snapshot.version }) })
   nextTick(() => createIcons({ icons }))
 }
 
@@ -810,7 +820,7 @@ async function suggestRelationshipsFromLogs(node) {
   const tab = terminalStore.tabs.find(item =>
     item.type === 'log' && item.resourceType === resourceType && item.ns === node.namespace && item.pod === node.name)
   if (!tab?.entries?.length) {
-    toast('Open logs for this resource first, then try again', 'error')
+    toast(t('archView.openLogsFirst'), 'error')
     return
   }
   const suggestions = suggestGraphRelationships({
@@ -819,7 +829,7 @@ async function suggestRelationshipsFromLogs(node) {
     nodes: store.graph?.document?.nodes || [],
   })
   if (!suggestions.length) {
-    toast('No relationship evidence found in the current logs', 'info')
+    toast(t('archView.noLogEvidence'), 'info')
     return
   }
   for (const suggestion of suggestions) {
@@ -834,9 +844,9 @@ async function suggestRelationshipsFromLogs(node) {
         confidence: suggestion.confidence,
         evidence: [{ type: 'log_reference', values: [suggestion.sample], occurrences: suggestion.occurrences }],
       },
-    }, `Suggest relationship from logs: ${node.name} -> ${suggestion.targetName}`)
+    }, t('archView.reasonSuggestFromLogs', { source: node.name, target: suggestion.targetName }))
   }
-  toast(`${suggestions.length} suggested relationship${suggestions.length === 1 ? '' : 's'} added for review`, 'success')
+  toast(t('archView.suggestionsAdded', { n: suggestions.length }), 'success')
   nextTick(() => createIcons({ icons }))
 }
 
