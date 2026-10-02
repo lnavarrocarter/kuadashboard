@@ -8,6 +8,8 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { ArchitectureCloudDiscoveryService } = require('../lib/architecture/cloudDiscoveryService');
 const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryReader');
 const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
+const { evaluateThresholds } = require('../lib/apm/thresholds');
+const { adviseProduct } = require('../lib/advisor/product');
 
 function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
   if (!database) throw new Error('database is required');
@@ -109,6 +111,25 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
   router.get('/applications/catalog', (req, res) => {
     if (!apmDatabase) return res.json([]);
     res.json(apmDatabase.listApplications());
+  });
+
+  // Product lens of the Advisor for a KUApps application (any provider):
+  // objectives, ownership, release path and telemetry. No cloud calls.
+  router.get('/applications/:applicationId/advisor', (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    const application = apmDatabase?.getApplication(req.params.applicationId);
+    if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
+    const overview = apmDatabase.getOverview(application.id);
+    res.json(adviseProduct({
+      application,
+      overview: {
+        ...overview,
+        health: evaluateThresholds(overview.metrics, application.thresholds),
+        latestRun: apmDatabase.getLatestCollectionRun(application.id),
+      },
+      siblings: apmDatabase.listApplications({ profileId: profile }),
+    }));
   });
 
   router.post('/projects', (req, res) => {

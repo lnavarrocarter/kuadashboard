@@ -38,6 +38,48 @@
       </div>
     </section>
 
+    <section v-if="logs && (logs.signals.length || logs.uncachedResourceIds.length)" class="log-intelligence">
+      <div class="dependency-title"><i data-lucide="scroll-text"></i> {{ t('apm.logs.title') }}</div>
+      <div v-for="signal in logs.signals" :key="signal.resourceId + signal.logGroup" class="log-signal">
+        <div class="log-signal-head">
+          <strong>{{ signal.resourceName }}</strong>
+          <small>{{ signal.logGroup }}</small>
+          <span :class="['log-rate', { high: signal.errorRateHigh }]">
+            {{ signal.last24h?.errorRatePercent == null ? t('apm.logs.noEvents') : t('apm.logs.errorRate', { rate: signal.last24h.errorRatePercent, errors: signal.last24h.errors, events: signal.last24h.events }) }}
+          </span>
+          <button v-if="resourceType(signal.resourceId) === 'lambda'" class="btn sm" type="button" @click="$emit('open-lambda-logs', signal.resourceName)">
+            <i data-lucide="file-search"></i> {{ t('apm.openLogs') }}
+          </button>
+        </div>
+        <div v-if="Object.keys(signal.severeKeywords).length" class="log-keywords">
+          <span v-for="(count, keyword) in signal.severeKeywords" :key="keyword" class="finding warning">{{ t(`apm.logs.keyword_${keyword}`) }} × {{ count }}</span>
+        </div>
+        <div v-if="signal.topCategories?.length" class="log-keywords">
+          <span v-for="item in signal.topCategories" :key="item.category" class="finding info">{{ t(`awsLogs.cat.${item.category}`) }} × {{ item.count }}</span>
+        </div>
+        <ul v-if="signal.recommendations?.length" class="log-recommendations">
+          <li v-for="rec in signal.recommendations" :key="rec.id" :class="rec.severity">
+            <i data-lucide="lightbulb"></i> {{ t(`awsLogs.rec.${rec.id}.title`, rec.params) }}
+          </li>
+        </ul>
+        <ul v-if="signal.recurringErrors.length" class="log-signatures">
+          <li v-for="item in signal.recurringErrors" :key="item.signature" :title="item.sample">
+            <code>{{ item.signature }}</code> <small>× {{ item.occurrences }}</small>
+          </li>
+        </ul>
+        <small class="log-freshness">{{ t('apm.logs.freshness', { synced: formatAge(signal.lastSyncAt), last: formatAge(signal.lastEventAt) }) }}</small>
+      </div>
+      <p v-if="logs.uncachedResourceIds.length" class="analysis-disclaimer">
+        {{ t('apm.logs.uncached', { names: logs.uncachedResourceIds.map(resourceName).join(', ') }) }}
+      </p>
+      <div v-if="logs.unresolvedReferences?.length" class="log-unresolved">
+        <small>{{ t('apm.logs.referencedOutside') }}</small>
+        <span v-for="ref in logs.unresolvedReferences" :key="`${ref.type}:${ref.name}`" class="finding info" :title="ref.target">
+          {{ ref.type }}: {{ ref.name }} · {{ t('apm.logs.seenIn', { names: ref.seenIn.join(', '), count: ref.occurrences }) }}
+        </span>
+      </div>
+    </section>
+
     <div v-if="topology.resources?.length" class="apm-resource-grid">
       <button
         v-for="resource in topology.resources"
@@ -121,7 +163,7 @@ const props = defineProps({
   confirmingSuggestions: { type: Boolean, default: false },
 })
 
-defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource'])
+defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs'])
 const { t } = useI18n()
 
 const resolvedEdges = computed(() => {
@@ -153,8 +195,26 @@ const unresolvedReferences = computed(() => {
   return [...grouped.values()].sort((left, right) => left.name.localeCompare(right.name))
 })
 
+// Observed evidence from cached log groups (lib/logIntelligenceEvidence.js).
+const logs = computed(() => props.topology.analysis?.logs || null)
+
+function resourceById(id) {
+  return (props.topology.resources || []).find(resource => resource.id === id)
+}
+function resourceName(id) { return resourceById(id)?.name || id }
+function resourceType(id) { return resourceById(id)?.type || '' }
+
+function formatAge(timestamp) {
+  if (!timestamp) return '—'
+  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000))
+  if (minutes < 60) return t('apm.logs.minutesAgo', { n: minutes })
+  const hours = Math.round(minutes / 60)
+  return hours < 48 ? t('apm.logs.hoursAgo', { n: hours }) : t('apm.logs.daysAgo', { n: Math.round(hours / 24) })
+}
+
 function evidenceLabel(edge) {
   return (edge.evidence || []).map(item => {
+    if (item.type === 'observed_log_reference') return t('apm.evidenceLog', { group: item.values[0], count: item.values[2] })
     if (item.type === 'asl_reference') return t('apm.evidenceAsl', { state: item.values[0], resource: item.values[1] })
     if (item.type === 'shared_name_tokens') return t('apm.evidenceName', { values: item.values.join(', ') })
     if (item.type === 'same_kubernetes_scope') return t('apm.evidenceScope', { values: item.values.join(', ') })
@@ -212,6 +272,23 @@ onMounted(renderIcons)
 .dependency-row { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 11px; }
 .dependency-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dependency-row svg { color: #d29922; }
+.log-intelligence { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; display: flex; flex-direction: column; gap: 10px; }
+.log-signal { display: flex; flex-direction: column; gap: 5px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+.log-signal:last-of-type { border-bottom: 0; }
+.log-signal-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.log-signal-head small { color: var(--text-dim); font-family: monospace; }
+.log-signal-head .btn { margin-left: auto; }
+.log-rate { font-size: 11px; color: var(--text-dim); }
+.log-rate.high { color: var(--red); font-weight: 600; }
+.log-keywords, .log-unresolved { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.log-signatures { margin: 0; padding-left: 16px; font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
+.log-signatures code { overflow-wrap: anywhere; }
+.log-recommendations { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.log-recommendations li { display: flex; gap: 5px; align-items: center; }
+.log-recommendations li.high { color: var(--red); }
+.log-recommendations li.medium { color: #d29922; }
+.log-recommendations svg { width: 12px; height: 12px; flex: none; }
+.log-freshness { font-size: 10px; color: var(--text-dim); }
 .suggestion-list { margin-top: 14px; padding: 12px; border: 1px dashed color-mix(in srgb, #58a6ff 45%, var(--border)); display: flex; flex-direction: column; gap: 8px; }
 .suggestion-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .suggestion-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

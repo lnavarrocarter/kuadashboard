@@ -10,7 +10,7 @@ A KUA Application is the operational boundary for one application, environment a
 - evidence-backed topology and architecture diagrams;
 - deployments, sources and discovery state;
 - relationship review and topology analysis;
-- process traces, findings and future recommendations.
+- process traces, findings and recommendations (Phase 19).
 
 This does not mean creating one diagram for an entire cloud account. A project remains scoped to one application boundary. A large platform can contain several KUA Applications, while a single application can span AWS, GCP, Vercel and Kubernetes.
 
@@ -65,7 +65,7 @@ The resource identity must be independent from display names. The minimum cross-
 - A resource can be discovered in several sources but has one canonical membership record.
 - Manual membership and relationship decisions are never overwritten by discovery.
 - Discovery remains read-only; collection remains opt-in and budgeted.
-- Telemetry remains local, aggregated and retention-bound. Payloads, credentials, secrets and arbitrary logs are not persisted.
+- Telemetry remains local, aggregated and retention-bound. Payloads, credentials, secrets and arbitrary logs are not persisted. The one exception is the opt-in CloudWatch log cache (Phase 18): log groups the user explicitly caches are kept locally for at most 7 days, sanitized, compressed and encrypted at rest (AES-256-GCM, key in the OS user's keychain), and never leave the machine (not in KUAAppBundle exports or cloud backups).
 - Architecture snapshots contain topology state, not metric history or trace payloads.
 - Cross-provider edges require evidence or explicit user confirmation; name similarity alone remains a suggestion.
 
@@ -223,6 +223,56 @@ Logs are streamed and visually classified in [useTerminalStreams.js](../../front
 
 Exit criteria: a recurring HTTP call or DNS reference observed in logs appears as a reviewable suggested relationship, never as an automatic graph edit.
 
+### Phase 18: Log intelligence from cached log groups
+
+Delivered first slice (AWS CloudWatch).
+
+- **Storage at rest.** Cached events are sealed in blocks (`lib/logCacheCrypto.js`): Brotli compression and AES-256-GCM bound to the log group, with a random per-installation key in the OS keychain of the current user (fallback: key file wrapped with the KUA vault passphrase). The last 6 hours stay in small hot blocks; older events are compacted into one block per group and hour. Measured on a real 146 MB cache: 4 MB after migration (~19x compression of the messages). Search decrypts blocks newest first; a full scan of ~28,000 events takes about 70 ms. Syncs read the most recent hours first and backfill older hours with the remaining page budget. Aggregates of the log intelligence stay unencrypted because they are sanitized and read by Observability on every topology request. Every event of a cached log group passes through one entry point (`ingest` in `lib/awsLogCache.js`): it is sanitized, stored for the cache window (≤ 7 days, size-bounded), analyzed into aggregates by `lib/logIntelligence.js`, and handed to hooks (Lambda REPORT lines feed the existing APM metric buckets with the same deduplication as the opportunistic capture).
+
+- **One extractor for every provider.** `frontend/src/shared/logSignals.mjs` holds the deterministic rules (sanitization, levels, recurring error signatures, failure keywords, references to ARNs, SQS queues, API Gateway hosts, Kubernetes DNS and hosts). The Kubernetes log evidence of Phase 16 (`frontend/src/lib/logRelationshipEvidence.js`) now imports the same module, so a rule change applies to Kubernetes tabs and CloudWatch alike. Raising `SIGNALS_VERSION` re-analyzes cached groups on their next read.
+- **Aggregates, not logs, are the durable record.** 30-minute buckets (events, errors, warnings, keywords), signatures with a sanitized sample, and references are kept 30 days, longer than the raw cache, so historical rates survive event expiry. Keys are `(scope, region, source)` and contain nothing provider-specific beyond the source name.
+- **Observed evidence in the application.** `lib/logIntelligenceEvidence.js` maps cached groups to APM resources (explicit `logGroup` or the Lambda default group) and returns per-resource signals, findings (`log_error_rate_high` using the application's `errorRatePercent` threshold, `log_recurring_errors`, `log_failure_keywords`, `log_cache_stale`, `logs_not_cached`, `log_references_outside_app`) and suggestions with `observed_log_reference` evidence. `analyzeTopology` receives it as a separate evidence class: it adds findings and reviewable suggestions but never changes the structural score and never creates edges.
+- **Categories, sensitive data and recommendations.** Each event gets one primary category (timeout, out of memory, throttling, access denied, connection, crash, configuration, database, code exception, not found, validation, cold start, platform, debug, other); failure categories only apply to error/warning lines, and each category has an equivalent Logs Insights query. The sanitizer reports what it redacted by type (passwords, tokens, keys, JWTs, URL credentials and queries, emails, Luhn-valid card numbers, check-digit-valid RUTs; IP addresses are reported but kept). `lib/logRecommendations.js` turns these aggregates into deterministic recommendations of four kinds (fix, sanitize, practice, cost) with evidence, confidence and actions (filter cached events, copy query, code snippet, AWS docs). Examples: the missing IAM actions named in access-denied messages with a least-privilege policy, adaptive retries for throttling, masking in the logger and a CloudWatch data protection policy for sensitive values, JSON log format, log level, retention. Cached events can be filtered by category, level or signature (decrypted locally). Observability shows the top categories and recommendations per resource. This is the shape the AI slice (18f) must keep: evidence first, explicit confidence, no automatic changes.
+- **Same answer live and cached.** Live reads return the newest events of a range (`lib/awsLogFetch.js` walks backwards in growing segments, because FilterLogEvents returns events ascending), and the cache evaluates the same CloudWatch filter pattern syntax (`frontend/src/shared/filterPattern.mjs`: terms, phrases, `?`/`-` terms, JSON and space-delimited patterns). Remaining differences are explicit: the cache only reaches its last sync and stores sanitized text.
+- **History control and activity chart.** Each cached group has a history setting (only new events, 1 h … whole window) that bounds backfill, and can be filled on demand with a larger page budget. The intelligence panel charts cached events per level with a resolution adapted to the range (1 s to 1 day bins), zoom by click or drag, a table view, and level colors validated for both themes; query results with a `bin()` column are charted too.
+- **Background scans.** Up to 5 days of a group can be read in the background (`lib/awsLogScans.js`): state and progress live in the cache database, the newest hour is read first, a range asked by a scan is pinned beyond the group window, and the scan stops at the cache budget instead of making pruning evict it. 18d (#91) reuses this runner for scheduled syncs.
+- **Raw logs stay in the provider tab** (Phase 17 direction): Observability shows aggregates and links to AWS → CloudWatch Logs for the events.
+
+Next slices, in order (one ticket each):
+
+1. **18b Kubernetes sources (#89).** Feed retained lines of opened Pod/workload log tabs through the same aggregates (opt-in per workload), replacing the session-only measurement.
+2. **18c Historical rates in Overview (#90).** Chart the 30-day buckets next to APM metrics and evaluate log thresholds (error rate, recurring signature growth) in the same threshold engine; alerting reuses it instead of a parallel rule set.
+3. **18d Scheduled sync (#91).** Optional background sync of cached groups inside the existing APM scheduler and per-profile request budget (FilterLogEvents has no scan charge, but it still counts as requests).
+4. **18e GCP and Vercel sources (#92).** Cloud Logging and Vercel runtime logs plug into `ingest` through their adapters with the same extractor.
+5. **18f Assisted diagnosis (Intelligent System / AI Ops, #93).** Any model-based analysis consumes the aggregates and sanitized samples, never raw logs, and its output enters the same findings and suggestions flow with explicit evidence and confidence (aligned with recommendations in #54).
+
+Guardrails for every slice: the cache and the intelligence tables are local-only and excluded from KUAAppBundle and cloud backups (#25, #31); suggestions always require confirmation; findings name their evidence and freshness.
+
+Exit criteria for the AWS slice: a cached Lambda's errors, recurring signatures and references appear in the application's Intelligent topology without opening the logs, and a referenced resource in the same application appears as a reviewable suggestion.
+
+### Phase 19: Advisor — good practices per provider, product lens per application
+
+Delivered first slice. The overviews answer "what is running and how is it doing"; the Advisor adds "what should change". Two lenses, kept apart on purpose:
+
+- **Technical lens in each provider overview** (Kubernetes, AWS, GCP): security, infrastructure, architecture and development. These are properties of resources and accounts, so they live where those resources are listed.
+- **Product lens in KUApps**: objectives (breached, or left at KUA defaults), ownership, environment and release path (production without a pre-production stage), architecture of the user journeys, and telemetry coverage and freshness. These are properties of an application, so they live on the application.
+
+Design rules, shared with the log recommendations of Phase 18:
+
+- **Deterministic and evidence-first.** Every finding names its rule, severity, the affected resources (first 10 and the real count) and the provider documentation. No model calls; an AI slice must keep this shape (#93).
+- **No billed reads.** Kubernetes reuses the overview lists plus NetworkPolicies, PodDisruptionBudgets and HPAs. AWS reads only free control-plane APIs (IAM credential report, CloudTrail, EC2/RDS/EKS Describe, Lambda List), cached 15 minutes per profile and region; no Cost Explorer, CloudWatch metrics or S3 requests. GCP reuses the rows the overview already collected. The product lens reads the KUApps registry only.
+- **Partial data is explicit.** Each source settles on its own; a source that cannot be read is listed as not checked, with the IAM actions it needs, and its rules are skipped instead of reported as passing.
+- **Pure rules, thin adapters.** `lib/advisor/{kubernetes,aws,gcp,product}.js` turn collected data into one report shape (`lib/advisor/core.js`); the frontend renders it with one component (`AdvisorPanel.vue`) and i18n keys `advisor.rule.<id>.title/body`.
+- **Provider-neutral endpoint for the product lens** (`GET /api/architecture/applications/:id/advisor`), so applications of every provider, Kubernetes included, are covered.
+
+Next slices:
+
+1. **Accept or mute findings, and score history (#94).** Accepted risk with reason and expiry, audited; posture trend stored in the snapshot history.
+2. **Coverage (#95).** S3 (billed requests, shown before scanning), IAM policies, Kubernetes RBAC and Pod Security Admission, a Vercel overview, and a freshness check for the hand-maintained deprecated-runtime lists.
+3. **Product lens v2 (#96).** Error budget and burn rate, DORA metrics from deployments, and the technical findings that affect the application's own resources (filtered by registry membership).
+
+Exit criteria for the first slice: every overview shows its Advisor with no additional cost, and every KUA Application shows its product lens.
+
 ### Deferred: GCP and Vercel architecture discovery
 
 GCP and Vercel adapters remain planned entries in [ArchitectureView.vue](../../frontend/src/ArchitectureView.vue#L20); the model and manual resources are ready, but there is no operative discovery yet. This stays out of scope until AWS and Kubernetes gaps above (Phases 9-15) are closed.
@@ -245,6 +295,16 @@ Exit criteria (once scope is confirmed): no code path infers a resource's provid
 
 ## Analysis Roadmap
 
+The analysis engine should combine three evidence classes without pretending they have equal certainty:
+
+- **Declared**: CloudFormation, Kubernetes ownership, deployment manifests, Vercel project configuration and source metadata.
+- **Observed**: metrics, collection runs, events and sanitized execution traces.
+- **Inferred**: name/type heuristics or unresolved references, always shown as suggestions.
+
+Future scoring should report topology coverage, operational health, evidence freshness and confidence separately. A single score can be useful as a summary, but it must link to the underlying findings and never hide partial data.
+
+Recommendations are the output of that engine: Phase 18 (logs) and Phase 19 (Advisor) already follow these rules, with findings that name their evidence, freshness and confidence.
+
 ## Provisioning, Cost and Control Roadmap
 
 KUA Application should also become the boundary for planning and creating infrastructure, not only observing it after it exists. The detailed plan lives in [KUA Provisioning and Control Plan](./provisioning-and-control-plan.md).
@@ -258,14 +318,6 @@ The high-level direction is:
 - expose live controls through typed operations with guarded destructive actions.
 
 This extends the same safety principles used by discovery: preview before mutation, provider-scoped capabilities, explicit confirmation, audit logging and no uncontrolled delete path.
-
-The analysis engine should combine three evidence classes without pretending they have equal certainty:
-
-- **Declared**: CloudFormation, Kubernetes ownership, deployment manifests, Vercel project configuration and source metadata.
-- **Observed**: metrics, collection runs, events and sanitized execution traces.
-- **Inferred**: name/type heuristics or unresolved references, always shown as suggestions.
-
-Future scoring should report topology coverage, operational health, evidence freshness and confidence separately. A single score can be useful as a summary, but it must link to the underlying findings and never hide partial data.
 
 ## Risks and Guardrails
 

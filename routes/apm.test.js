@@ -11,8 +11,11 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createApmRouter } = require('./apm');
 const { createArchitectureRouter } = require('./architecture');
+const { createLogCache } = require('../lib/awsLogCache');
 
 async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter } = {}) {
+  // In-memory log cache: tests never touch the user's data directory.
+  const logCache = createLogCache({ dataDir: ':memory:' });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
   const database = new ApmDatabase({
     filePath: path.join(directory, 'apm.sqlite3'),
@@ -43,6 +46,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     topologyReader,
     processTracer,
     kubernetesAdapter,
+    logCache: () => logCache,
   }));
   app.use('/api/architecture', createArchitectureRouter({
     database: architectureDatabase,
@@ -90,6 +94,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
   return {
     auditEvents,
     database,
+    logCache,
     architectureDatabase,
     architectureRequest,
     architectureCatalogRequest,
@@ -97,6 +102,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     async close() {
       await new Promise(resolve => server.close(resolve));
       database.close();
+      logCache.close();
       architectureDatabase.close();
       fs.rmSync(directory, { recursive: true, force: true });
     },
@@ -823,6 +829,103 @@ test('API lists Kubernetes contexts before a targeted preview', async () => {
     const contexts = await subject.request(`/applications/${application.body.id}/discovery/kubernetes/contexts`);
     assert.equal(contexts.status, 200);
     assert.deepEqual(contexts.body.contexts, [{ id: 'aws-cluster', name: 'orders-eks' }]);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('cached log groups feed the intelligent topology with observed findings and reviewable suggestions', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', { method: 'POST', body: { name: 'orders', region: 'us-east-1' } });
+    const applicationId = application.body.id;
+    for (const body of [
+      { type: 'lambda', key: 'arn:aws:lambda:us-east-1:111111111111:function:orders-api', arn: 'arn:aws:lambda:us-east-1:111111111111:function:orders-api', name: 'orders-api', associationSource: 'manual' },
+      { type: 'sqs', key: 'arn:aws:sqs:us-east-1:111111111111:orders-queue', arn: 'arn:aws:sqs:us-east-1:111111111111:orders-queue', name: 'orders-queue', associationSource: 'manual' },
+      { type: 'lambda', key: 'arn:aws:lambda:us-east-1:111111111111:function:billing', arn: 'arn:aws:lambda:us-east-1:111111111111:function:billing', name: 'billing', associationSource: 'manual' },
+    ]) assert.equal((await subject.request(`/applications/${applicationId}/resources`, { method: 'POST', body })).status, 201);
+
+    const now = Date.now();
+    const scope = { profileId: 'local:dev', region: 'us-east-1', logGroup: '/aws/lambda/orders-api' };
+    subject.logCache.enable(scope);
+    await subject.logCache.ingest({ ...scope, events: [
+      ...[1, 2, 3, 4].map(i => ({ eventId: `e${i}`, timestamp: now - i * 60000, message: `ERROR timeout sending to https://sqs.us-east-1.amazonaws.com/111111111111/orders-queue after ${i}000 ms token=abc${i}` })),
+      { eventId: 'ok', timestamp: now - 1000, message: 'INFO processed order' },
+    ] });
+
+    const topology = await subject.request(`/applications/${applicationId}/topology`);
+    assert.equal(topology.status, 200);
+    const { analysis } = topology.body;
+    const codes = analysis.findings.map(finding => finding.code);
+    assert.ok(codes.includes('log_error_rate_high'));
+    assert.ok(codes.includes('log_recurring_errors'));
+    assert.ok(codes.includes('log_failure_keywords'));
+    assert.ok(codes.includes('logs_not_cached'), 'billing has no cached logs');
+    const signal = analysis.logs.signals[0];
+    assert.equal(signal.last24h.events, 5);
+    assert.equal(signal.last24h.errors, 4);
+    assert.doesNotMatch(signal.recurringErrors[0].sample, /abc1/, 'samples are sanitized');
+    const queue = topology.body.resources.find(resource => resource.name === 'orders-queue');
+    const suggestion = analysis.suggestions.find(item => item.targetResourceId === queue.id);
+    assert.equal(suggestion.relationType, 'sends_to');
+    assert.equal(suggestion.confirmed, false);
+    assert.equal(suggestion.evidence[0].type, 'observed_log_reference');
+    assert.deepEqual(topology.body.edges, [], 'observed evidence never creates edges');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('a CloudFormation stack links to an application once and is found from the stack', async () => {
+  const previews = [];
+  const deploymentReader = {
+    async listDeployments() { return { stacks: [] }; },
+    async preview({ stackNames, region }) {
+      previews.push({ stackNames, region });
+      return { resources: [
+        { type: 'lambda', key: 'arn:aws:lambda:us-east-1:111111111111:function:orders-fn', arn: 'arn:aws:lambda:us-east-1:111111111111:function:orders-fn', name: 'orders-fn', service: '', kind: 'AWS::Lambda::Function', stackName: 'orders' },
+        { type: 'sqs', key: 'arn:aws:sqs:us-east-1:111111111111:orders-q', arn: 'arn:aws:sqs:us-east-1:111111111111:orders-q', name: 'orders-q', service: '', kind: 'AWS::SQS::Queue', stackName: 'orders' },
+      ] };
+    },
+  };
+  const subject = await fixture({ deploymentReader });
+  try {
+    const application = await subject.request('/applications', { method: 'POST', body: { name: 'orders', region: 'us-east-1' } });
+    const id = application.body.id;
+    const first = await subject.request(`/applications/${id}/link-stack`, { method: 'POST', body: { stackName: 'orders', region: 'us-east-1' } });
+    assert.equal(first.status, 200);
+    assert.equal(first.body.added, 2);
+    assert.equal(subject.database.listResources(id).find(r => r.name === 'orders-fn').logGroup, '/aws/lambda/orders-fn');
+    const again = await subject.request(`/applications/${id}/link-stack`, { method: 'POST', body: { stackName: 'orders', region: 'us-east-1' } });
+    assert.deepEqual([again.body.added, again.body.alreadyLinked], [0, 2]);
+    assert.equal(subject.database.listResources(id).length, 2);
+
+    const links = await subject.request('/stack-applications?stackName=orders&region=us-east-1');
+    assert.equal(links.body.linkable, 2);
+    assert.deepEqual(links.body.applications.map(a => [a.name, a.matched]), [['orders', 2]]);
+    assert.equal((await subject.request('/stack-applications?stackName=1bad')).status, 400);
+    assert.ok(subject.auditEvents.some(event => event.action === 'CloudFormation stack linked'));
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API returns the product advisor of an application, scoped by profile', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/applications', {
+      method: 'POST',
+      body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
+    });
+    const advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(advisor.status, 200);
+    assert.deepEqual(advisor.body.categories, ['product']);
+    const ids = advisor.body.findings.map(finding => finding.id);
+    for (const id of ['product.no_owner', 'product.no_staging', 'product.no_resources', 'product.default_slos', 'product.no_architecture']) {
+      assert.ok(ids.includes(id), `expected ${id}`);
+    }
+    const otherProfile = await subject.architectureRequest(`/applications/${created.body.id}/advisor`, { profile: 'local:other' });
+    assert.equal(otherProfile.status, 404);
   } finally {
     await subject.close();
   }

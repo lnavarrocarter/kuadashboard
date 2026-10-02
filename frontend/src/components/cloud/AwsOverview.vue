@@ -101,6 +101,15 @@
         @refresh-costs="loadInsights({ refreshCosts: true })"
       />
 
+      <AdvisorPanel
+        :report="awsStore.overviewAdvisor"
+        :loading="advisorLoading"
+        :error="advisorError || ''"
+        refreshable
+        storage-key="advisor.aws"
+        @refresh="loadAdvisor({ refresh: true })"
+      />
+
       <!-- Services -->
       <section class="aov-services">
         <button
@@ -154,6 +163,7 @@ import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 import AwsOverviewInsights from './AwsOverviewInsights.vue'
+import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 
 defineProps({
   profileId: { type: String, default: '' },
@@ -172,6 +182,8 @@ const accessService = ref(null)
 const insightsLoading = ref(false)
 const insightsError = ref(null)
 const refreshingCosts = ref(false)
+const advisorLoading = ref(false)
+const advisorError = ref(null)
 let insightsRequestId = 0
 
 function openAccess(service) {
@@ -243,10 +255,26 @@ async function loadInsights({ refreshCosts = false, force = false } = {}) {
   }
 }
 
+// Good-practice checks load on their own: a slow IAM credential report never delays the overview.
+let advisorRequestId = 0
+async function loadAdvisor({ refresh = false } = {}) {
+  const id = ++advisorRequestId
+  advisorLoading.value = true
+  try {
+    await awsStore.fetchOverviewAdvisor({ refresh })
+    if (id === advisorRequestId) advisorError.value = null
+  } catch (e) {
+    if (id === advisorRequestId) advisorError.value = e.message
+  } finally {
+    if (id === advisorRequestId) advisorLoading.value = false
+  }
+}
+
 // Background refreshes reuse cached data (overview 5 min, costs/activity 15 min);
 // the refresh button forces a new read.
 async function load({ force = false } = {}) {
   loadInsights({ force })
+  loadAdvisor({ refresh: force })
   const id = ++requestId
   loading.value = true
   try {

@@ -71,6 +71,7 @@
   ],
   "GET /logs/lambda/:name": [
     "lambda:GetFunctionConfiguration",
+    "logs:DescribeLogGroups",
     "logs:FilterLogEvents"
   ],
   "POST /lambda/activity": [
@@ -207,6 +208,7 @@
     "states:ListExecutions"
   ],
   "GET /stepfunctions/execution/events": [
+    "states:DescribeStateMachineForExecution",
     "states:GetExecutionHistory"
   ],
   "GET /stepfunctions/executions/count": [
@@ -528,7 +530,8 @@
     "lex:ListSlots"
   ],
   "GET /lex/:botId/logs": [
-    "logs:DescribeLogGroups",
+    "lex:DescribeBotAlias",
+    "lex:ListBotAliases",
     "logs:FilterLogEvents"
   ],
   "GET /lex/:botId/testsets": [
@@ -551,6 +554,8 @@
     "lex:RecognizeText"
   ],
   "GET /lex/:botId/missed-utterances": [
+    "lex:DescribeBotAlias",
+    "lex:ListBotAliases",
     "logs:DescribeLogGroups",
     "logs:FilterLogEvents"
   ],
@@ -559,9 +564,114 @@
     "lex:DescribeBotLocale"
   ],
   "GET /lex/:botId/metrics": [
-    "cloudwatch:GetMetricData"
+    "cloudwatch:GetMetricData",
+    "lex:ListBots"
   ],
   "GET /cloudformation/stacks": [
     "cloudformation:ListStacks"
+  ],
+  "GET /cloudwatch/log-groups": [
+    "logs:DescribeLogGroups"
+  ],
+  "GET /cloudwatch/log-groups/streams": [
+    "logs:DescribeLogStreams"
+  ],
+  "GET /cloudwatch/log-groups/events": [
+    "logs:FilterLogEvents"
+  ],
+  "POST /cloudwatch/log-cache": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "POST /cloudwatch/log-cache/sync": [
+    "logs:FilterLogEvents"
+  ],
+  "GET /cloudwatch/log-scans/estimate": [
+    "logs:DescribeLogGroups"
+  ],
+  "POST /cloudwatch/log-scans": [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents"
+  ],
+  "GET /cloudwatch/log-backup": [
+    "cloudtrail:DescribeTrails",
+    "ec2:DescribeFlowLogs",
+    "logs:DescribeExportTasks",
+    "logs:DescribeLogGroups",
+    "logs:DescribeSubscriptionFilters"
+  ],
+  "GET /cloudwatch/log-archive/object": [
+    "s3:GetObject"
+  ],
+  "POST /cloudwatch/log-groups/query": [
+    "logs:FilterLogEvents"
+  ],
+  "GET /cloudwatch/log-groups/insights/estimate": [
+    "logs:DescribeLogGroups"
+  ],
+  "POST /cloudwatch/log-groups/insights": [
+    "logs:StartQuery"
+  ],
+  "GET /cloudwatch/log-groups/volume": [
+    "cloudwatch:GetMetricData"
+  ],
+  "GET /cloudformation/stack-list": [
+    "cloudformation:DescribeStacks"
+  ],
+  "GET /cloudformation/stack": [
+    "cloudformation:DescribeStacks",
+    "cloudformation:ListStackResources"
+  ],
+  "GET /cloudformation/stack/events": [
+    "cloudformation:DescribeStackEvents"
+  ],
+  "GET /cloudformation/stack/template": [
+    "cloudformation:GetTemplate"
+  ],
+  "POST /cloudformation/stack/drift": [
+    "cloudformation:DetectStackDrift"
+  ],
+  "GET /cloudformation/stack/drift": [
+    "cloudformation:DescribeStackDriftDetectionStatus",
+    "cloudformation:DescribeStackResourceDrifts"
+  ],
+  "GET /cloudformation/exports": [
+    "cloudformation:ListExports",
+    "cloudformation:ListImports"
+  ],
+  "GET /cloudformation/stack/change-sets": [
+    "cloudformation:ListChangeSets"
+  ],
+  "GET /cloudformation/change-set": [
+    "cloudformation:DescribeChangeSet"
+  ],
+  "POST /cloudformation/stack/parameter-change-set": [
+    "cloudformation:CreateChangeSet",
+    "cloudformation:DescribeStacks"
+  ],
+  "POST /cloudformation/change-set/execute": [
+    "cloudformation:DescribeChangeSet",
+    "cloudformation:DescribeStacks",
+    "cloudformation:ExecuteChangeSet"
+  ],
+  "DELETE /cloudformation/change-set": [
+    "cloudformation:DeleteChangeSet"
+  ],
+  "POST /cloudformation/stack/termination-protection": [
+    "cloudformation:DescribeStacks",
+    "cloudformation:UpdateTerminationProtection"
+  ],
+  "GET /cloudformation/stack/delete-preview": [
+    "cloudformation:DescribeStacks",
+    "cloudformation:GetTemplate",
+    "cloudformation:ListImports",
+    "cloudformation:ListStackResources"
+  ],
+  "POST /cloudformation/stack/delete": [
+    "cloudformation:DeleteStack",
+    "cloudformation:DescribeStacks",
+    "cloudformation:GetTemplate",
+    "cloudformation:ListImports",
+    "cloudformation:ListStackResources"
   ]
 }

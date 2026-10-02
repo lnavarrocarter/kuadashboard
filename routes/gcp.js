@@ -36,12 +36,14 @@ const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
 const { createGcloudCli } = require('../lib/gcloudCli');
 const { getStateHistory } = require('../lib/stateHistory');
+const { getCloudHistory } = require('../lib/cloudHistory');
 const { mapVmDetail, mapCloudRunDetail, mapSqlDetail } = require('../lib/gcpDetails');
 const {
   mapCloudRunService, mapVm, mapSqlInstance,
-  estimate, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
+  estimate, estimateOverviewCosts, createPresets, assertDeleteConfirmed, validateCreate, waitForZoneOperation,
   validateLabels, hasLabelChanges,
 } = require('../lib/gcpResources');
+const { adviseGcp } = require('../lib/advisor/gcp');
 
 const router    = express.Router();
 const execAsync = promisify(exec);
@@ -86,6 +88,15 @@ function handleErr(res, err) {
   res.status(status).json({ error: err.message });
 }
 
+function cloudHistory() {
+  try { return getCloudHistory(); } catch (err) { console.warn('[gcp-cloud-history]', err.message); return null; }
+}
+
+function cloudCacheTtlMs(req) {
+  const minutes = Number(req.query.cacheMin || 5);
+  return (minutes >= 1 && minutes <= 1440 ? minutes : 5) * 60 * 1000;
+}
+
 /** Wait for a Compute Engine zone operation (start/stop/insert/delete). */
 function waitZoneOp(auth, project, zone, operation) {
   const { ZoneOperationsClient } = require('@google-cloud/compute');
@@ -125,7 +136,7 @@ async function resolveGcpAuth(profileId) {
     tokenClient.setCredentials({ access_token: accessToken });
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     auth.cachedCredential = tokenClient;
-    return { auth, projectId: cfg.project || null, credentials: {}, accessToken };
+    return { auth, projectId: cfg.project || null, credentials: {}, account: cfg.account || null, accessToken };
   }
 
   // ── Stored profile ────────────────────────────────────────────────────────
@@ -148,7 +159,7 @@ async function resolveGcpAuth(profileId) {
   });
 
   const projectId = keys['GCP_PROJECT_ID'] || credentials.project_id || null;
-  return { auth, projectId, credentials };
+  return { auth, projectId, credentials, account: credentials.client_email || null };
 }
 
 /** Read X-Profile-Id header or return 400 */
@@ -437,6 +448,219 @@ function recordUserAction(profileId, projectId, resourceType, key, name, action,
     getStateHistory().recordAction({ provider: 'gcp', profileId, project: projectId, resourceType, key, name, action, details });
   } catch (err) { console.warn('[gcp] state history:', err.message); }
 }
+
+function overviewResourceState(serviceId, item) {
+  const raw = String(item?.status || item?.state || item?.lifecycleState || item?.stateCode || '').toUpperCase();
+  if (serviceId === 'cloudrun') return raw === 'READY' || raw === 'TRUE' || raw === '';
+  if (serviceId === 'vms') return raw === 'RUNNING';
+  if (serviceId === 'sql') return raw === 'RUNNING' || raw === 'RUNNABLE';
+  if (serviceId === 'gke') return raw === 'RUNNING';
+  if (serviceId === 'build') return raw === 'SUCCESS';
+  return !['FAILED', 'ERROR', 'TERMINATED', 'STOPPED', 'DELETED', 'DISABLED'].includes(raw);
+}
+
+const OVERVIEW_GROUPS = {
+  compute: new Set(['cloudrun', 'gke', 'vms', 'cloudrunJobs']),
+  data: new Set(['sql', 'storage', 'bigquery', 'firestore', 'spanner', 'memorystore']),
+  platform: new Set(['functions', 'artifact', 'build', 'workflows']),
+  integration: new Set(['pubsub', 'pubsubSubs', 'tasks', 'scheduler']),
+  security: new Set(['secrets', 'iam', 'kms']),
+  network: new Set(['dns', 'vpc']),
+};
+
+function overviewGroup(serviceId) {
+  for (const [group, ids] of Object.entries(OVERVIEW_GROUPS)) {
+    if (ids.has(serviceId)) return group;
+  }
+  return 'other';
+}
+
+function overviewItemState(item) {
+  return String(item?.status || item?.state || item?.lifecycleState || item?.stateCode || '').toUpperCase();
+}
+
+function overviewItemName(item) {
+  const value = item?.name || item?.id || item?.displayName || item?.email;
+  return value ? String(value).split('/').pop() : null;
+}
+
+function overviewSignal(serviceId, item) {
+  const state = overviewItemState(item);
+  if (serviceId === 'iam' && item?.disabled) return { level: 'critical', code: 'disabled' };
+  if (serviceId === 'scheduler' && state === 'DISABLED') return { level: 'critical', code: 'disabled' };
+  if (serviceId === 'scheduler' && state === 'PAUSED') return { level: 'warning', code: 'paused' };
+  if (['FAILED', 'ERROR', 'INTERNAL_ERROR', 'DEGRADED', 'UNHEALTHY'].includes(state)) return { level: 'critical', code: state.toLowerCase() };
+  if (serviceId === 'cloudrun' && state === 'FAILED') return { level: 'critical', code: 'failed' };
+  if (['RECONCILING', 'PROVISIONING', 'STAGING', 'STARTING', 'STOPPING', 'UPDATING', 'WORKING', 'PENDING'].includes(state)) {
+    return { level: 'warning', code: state.toLowerCase() };
+  }
+  return null;
+}
+
+function overviewHealth(status, signals) {
+  if (status === 'unavailable') return 'unavailable';
+  if (signals.some(signal => signal.level === 'critical')) return 'critical';
+  if (signals.some(signal => signal.level === 'warning')) return 'warning';
+  if (status === 'empty') return 'empty';
+  return 'healthy';
+}
+
+function overviewError(err) {
+  return { code: err?.code || err?.response?.status || null, message: String(err?.message || err).slice(0, 500) };
+}
+
+async function gcpOverview(req, res) {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const region = String(req.query.region || '');
+  const force = req.query.force === '1';
+  let authCtx = null;
+  try {
+    authCtx = await resolveGcpAuth(profileId);
+    const { auth, projectId } = authCtx;
+    if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const snapshotKey = { provider: 'gcp', profileId, region, resourceKey: 'overview', kind: 'gcp-overview' };
+    const history = cloudHistory();
+    if (!force) {
+      const cached = history?.readLatest(snapshotKey);
+      if (cached) return res.json(cached.payload);
+    }
+
+    const restList = (url, key) => gcpFetch(url, authCtx).then(data => data[key] || []);
+    const collectors = [
+      { id: 'cloudrun', label: 'Cloud Run', tab: 'cloudrun', load: () => listCloudRunServices({ auth, projectId }) },
+      { id: 'gke', label: 'GKE', tab: 'gke', load: async () => {
+        const { ClusterManagerClient } = require('@google-cloud/container');
+        const [data] = await new ClusterManagerClient({ auth }).listClusters({ parent: `projects/${projectId}/locations/-` });
+        return data.clusters || [];
+      } },
+      { id: 'vms', label: 'Compute VMs', tab: 'vms', load: () => listVms({ auth, projectId }) },
+      { id: 'sql', label: 'Cloud SQL', tab: 'sql', load: () => listSqlInstances(authCtx) },
+      { id: 'storage', label: 'Storage', tab: 'storage', load: () => restList(`https://storage.googleapis.com/storage/v1/b?project=${encodeURIComponent(projectId)}&maxResults=200`, 'items') },
+      { id: 'functions', label: 'Functions', tab: 'functions', load: () => restList(`https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions') },
+      { id: 'pubsub', label: 'Pub/Sub', tab: 'pubsub', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/topics`, 'topics') },
+      { id: 'secrets', label: 'Secret Manager', tab: 'secrets', load: () => restList(`https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`, 'secrets') },
+      { id: 'artifact', label: 'Artifact Registry', tab: 'artifact', load: () => restList(`https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/-/repositories`, 'repositories') },
+      { id: 'bigquery', label: 'BigQuery', tab: 'bigquery', load: () => restList(`https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/datasets`, 'datasets') },
+      { id: 'workflows', label: 'Workflows', tab: 'workflows', load: () => restList(`https://workflows.googleapis.com/v1/projects/${projectId}/locations/-/workflows`, 'workflows') },
+      { id: 'dns', label: 'Cloud DNS', tab: 'dns', load: () => restList(`https://dns.googleapis.com/dns/v1/projects/${projectId}/managedZones`, 'managedZones') },
+      { id: 'firestore', label: 'Firestore', tab: 'firestore', load: () => restList(`https://firestore.googleapis.com/v1/projects/${projectId}/databases`, 'databases') },
+      { id: 'spanner', label: 'Spanner', tab: 'spanner', load: () => restList(`https://spanner.googleapis.com/v1/projects/${projectId}/instances`, 'instances') },
+      { id: 'memorystore', label: 'Memorystore', tab: 'memorystore', load: () => restList(`https://redis.googleapis.com/v1/projects/${projectId}/locations/-/instances`, 'instances') },
+      { id: 'tasks', label: 'Cloud Tasks', tab: 'tasks', load: () => restList(`https://cloudtasks.googleapis.com/v2/projects/${projectId}/locations/-/queues`, 'queues') },
+      { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', load: () => restList(`https://cloudscheduler.googleapis.com/v1/projects/${projectId}/locations/-/jobs`, 'jobs') },
+      { id: 'build', label: 'Cloud Build', tab: 'build', load: () => restList(`https://cloudbuild.googleapis.com/v1/projects/${projectId}/builds?pageSize=100`, 'builds') },
+      { id: 'iam', label: 'IAM', tab: 'iam', load: () => restList(`https://iam.googleapis.com/v1/projects/${projectId}/serviceAccounts`, 'accounts') },
+      { id: 'cloudrunJobs', label: 'Cloud Run Jobs', tab: 'cloudrunJobs', load: () => restList(`https://run.googleapis.com/v2/projects/${projectId}/locations/-/jobs`, 'jobs') },
+      { id: 'pubsubSubs', label: 'Pub/Sub Subs', tab: 'pubsubSubs', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions`, 'subscriptions') },
+      { id: 'vpc', label: 'VPC Networks', tab: 'vpc', load: () => restList(`https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`, 'items') },
+      { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => restList(`https://cloudkms.googleapis.com/v1/projects/${projectId}/locations/-/keyRings`, 'keyRings') },
+    ];
+    const settled = await Promise.allSettled(collectors.map(collector => collector.load()));
+    const collectedRows = new Map(collectors.map((collector, index) => {
+      const result = settled[index];
+      return [collector.id, result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []];
+    }));
+    const services = collectors.map((collector, index) => {
+      const result = settled[index];
+      if (result.status === 'rejected') {
+        return {
+          id: collector.id, label: collector.label, tab: collector.tab, group: overviewGroup(collector.id),
+          status: 'unavailable', health: 'unavailable', count: 0, active: 0,
+          inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [], error: overviewError(result.reason),
+        };
+      }
+      const items = Array.isArray(result.value) ? result.value : [];
+        const signals = items.map(item => {
+          const signal = overviewSignal(collector.id, item);
+          return signal ? { ...signal, name: overviewItemName(item) } : null;
+        }).filter(Boolean);
+        const critical = signals.filter(signal => signal.level === 'critical').length;
+        const warning = signals.filter(signal => signal.level === 'warning').length;
+        const status = items.length ? 'available' : 'empty';
+      return {
+          id: collector.id, label: collector.label, tab: collector.tab, group: overviewGroup(collector.id), status,
+          health: overviewHealth(status, signals),
+        count: items.length,
+        active: items.filter(item => overviewResourceState(collector.id, item)).length,
+          inactive: items.filter(item => !overviewResourceState(collector.id, item)).length,
+          issueCount: signals.length, critical, warning, signals: signals.slice(0, 8),
+        error: null,
+      };
+    });
+    const available = services.filter(service => service.status !== 'unavailable');
+    const unavailable = services.filter(service => service.status === 'unavailable');
+      const critical = services.reduce((sum, service) => sum + service.critical, 0);
+      const warning = services.reduce((sum, service) => sum + service.warning, 0);
+      const inactive = services.reduce((sum, service) => sum + service.inactive, 0);
+      const costs = estimateOverviewCosts({
+        cloudrun: collectedRows.get('cloudrun'),
+        vms: collectedRows.get('vms'),
+        sql: collectedRows.get('sql'),
+      });
+      costs.unmodeledServices = services
+        .filter(service => !['cloudrun', 'vms', 'sql'].includes(service.id) && service.status !== 'unavailable')
+        .map(service => service.label);
+      costs.unavailableServices = services
+        .filter(service => service.status === 'unavailable')
+        .map(service => service.label);
+    const payload = {
+      provider: 'gcp',
+      generatedAt: new Date().toISOString(),
+        identity: { projectId, region: region || null, account: authCtx.account || null },
+      projectId,
+      region: region || null,
+      summary: {
+        total: services.reduce((sum, service) => sum + service.count, 0),
+        active: services.reduce((sum, service) => sum + service.active, 0),
+          inactive,
+        empty: available.filter(service => service.status === 'empty').length,
+        unavailable: unavailable.length,
+          critical,
+          warning,
+        attention: critical + warning + unavailable.length,
+        health: critical ? 'critical' : (warning || unavailable.length) ? 'degraded' : 'healthy',
+        services: services.length,
+        availableServices: available.length,
+      },
+      costs,
+      services,
+      advisor: (() => {
+        try {
+          return adviseGcp({ rows: collectedRows, unavailable: unavailable.map(service => service.id), projectId });
+        } catch (err) {
+          return { error: err.message };
+        }
+      })(),
+    };
+    try { history?.putSnapshot({ ...snapshotKey, payload, ttlMs: cloudCacheTtlMs(req), metadata: { projectId } }); } catch (err) { console.warn('[gcp-cloud-history] write:', err.message); }
+    res.json(payload);
+  } catch (err) {
+    const history = cloudHistory();
+    const cached = history?.readLatest({ provider: 'gcp', profileId, region, resourceKey: 'overview', kind: 'gcp-overview', allowExpired: true });
+    if (cached) return res.json(cached.payload);
+    handleErr(res, err);
+  }
+}
+
+router.get('/overview', gcpOverview);
+
+router.get('/overview/history', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const daysValue = Number(req.query.days || 7);
+    const days = Number.isFinite(daysValue) ? Math.min(Math.max(daysValue, 1), 30) : 7;
+    const region = String(req.query.region || '');
+    const now = Date.now();
+    const rows = cloudHistory()?.readRange({
+      provider: 'gcp', profileId, region,
+      resourceKey: 'overview', kind: 'gcp-overview',
+      from: now - days * 24 * 60 * 60 * 1000, to: now + 1, limit: 500,
+    }) || [];
+    res.json({ provider: 'gcp', profileId, region: region || null, days, snapshots: rows });
+  } catch (err) { handleErr(res, err); }
+});
 
 router.get('/cloudrun', async (req, res) => {
   const profileId = requireProfileId(req, res);

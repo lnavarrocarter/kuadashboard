@@ -21,7 +21,7 @@
       />
 
       <!-- Toolbar -->
-      <div v-if="activeTab !== 'apm'" class="aws-toolbar">
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview'" class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" placeholder="Filter..." />
         <span class="text-dim" style="font-size:12px">
           <template v-if="currentTab.loading">Loading...</template>
@@ -31,12 +31,183 @@
       </div>
 
       <!-- Permission denied banner -->
-      <div v-if="activeTab !== 'apm' && currentTab.error" class="api-disabled-banner">
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && currentTab.error" class="api-disabled-banner">
         <span>{{ currentTab.error }}</span>
         <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank"
            class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0">
           Enable API
         </a>
+      </div>
+
+      <!-- GCP Overview -->
+      <div v-show="activeTab === 'overview'" class="tab-panel gcp-overview-panel">
+        <div class="gcp-overview-toolbar">
+          <div>
+            <div class="gcp-overview-title">Project overview</div>
+            <div class="text-dim gcp-overview-subtitle">
+              <span class="gcp-overview-project">{{ gcpStore.overview?.projectId || 'Project unavailable' }}</span>
+              <span v-if="gcpStore.overview?.identity?.account"> · {{ gcpStore.overview.identity.account }}</span>
+              <span v-if="gcpStore.overview?.region"> · {{ gcpStore.overview.region }}</span>
+              <span v-if="gcpStore.overview?.generatedAt"> · Updated {{ new Date(gcpStore.overview.generatedAt).toLocaleString() }}</span>
+            </div>
+          </div>
+          <button class="btn sm" @click="reloadOverview" :disabled="gcpStore.overviewLoading" title="Refresh overview">
+            <i data-lucide="refresh-cw"></i> {{ gcpStore.overviewLoading ? 'Loading...' : 'Refresh' }}
+          </button>
+        </div>
+        <div v-if="gcpStore.overviewError" class="api-disabled-banner">{{ gcpStore.overviewError }}</div>
+        <div v-if="gcpStore.overviewLoading && !gcpStore.overview" class="empty-row">Loading overview...</div>
+        <template v-else-if="gcpStore.overview">
+          <section :class="['gcp-overview-health-banner', overviewHealthClass(overviewHealth)]">
+            <div class="gcp-overview-health-main">
+              <span class="gcp-overview-health-dot"></span>
+              <span class="gcp-overview-health-label">Project health</span>
+              <strong>{{ overviewHealthLabel }}</strong>
+            </div>
+            <div class="gcp-overview-health-detail">
+              {{ gcpStore.overview?.summary?.availableServices ?? 0 }}/{{ gcpStore.overview?.summary?.services ?? 0 }} services responding
+              <span v-if="gcpStore.overview?.summary?.attention"> · {{ gcpStore.overview.summary.attention }} signal(s) need attention</span>
+              <span v-else> · No active signals</span>
+            </div>
+          </section>
+
+          <div class="gcp-overview-metrics">
+            <div class="gcp-overview-metric"><span class="text-dim">Resources</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ gcpStore.overview?.summary?.active ?? 0 }} active</small></div>
+            <div class="gcp-overview-metric"><span class="text-dim">Needs attention</span><strong :class="gcpStore.overview?.summary?.attention ? 'status-warn' : 'status-ok'">{{ gcpStore.overview?.summary?.attention ?? 0 }}</strong><small>{{ gcpStore.overview?.summary?.critical ?? 0 }} critical · {{ gcpStore.overview?.summary?.warning ?? 0 }} warning</small></div>
+            <div class="gcp-overview-metric"><span class="text-dim">API unavailable</span><strong :class="gcpStore.overview?.summary?.unavailable ? 'status-err' : 'status-ok'">{{ gcpStore.overview?.summary?.unavailable ?? 0 }}</strong><small>{{ gcpStore.overview?.summary?.empty ?? 0 }} empty services</small></div>
+            <div class="gcp-overview-metric"><span class="text-dim">Service coverage</span><strong>{{ overviewCoverage }}%</strong><small>{{ gcpStore.overview?.summary?.availableServices ?? 0 }} of {{ gcpStore.overview?.summary?.services ?? 0 }} responding</small></div>
+          </div>
+
+          <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" />
+
+          <section class="gcp-overview-section gcp-overview-costs" data-test="overview-costs">
+            <div class="gcp-overview-section-title gcp-overview-costs-title">
+              <span>Estimated costs</span>
+              <span :class="['gcp-overview-health-pill', overviewCostStatusTone]">{{ overviewCostStatusLabel }}</span>
+            </div>
+            <template v-if="overviewCosts">
+              <div class="gcp-overview-costs-head">
+                <div class="gcp-overview-cost-total">
+                  <span class="text-dim">Monthly resource baseline</span>
+                  <strong>{{ formatOverviewUsd(overviewCosts.monthlyEstimate) }}</strong>
+                </div>
+                <div class="gcp-overview-cost-meta">
+                  <span>{{ overviewCosts.modeledResources ?? 0 }} modeled resource(s)</span>
+                  <span v-if="overviewCosts.unknownResources">{{ overviewCosts.unknownResources }} without a price</span>
+                  <span>{{ overviewCosts.pricingRegion || 'us-central1' }} list prices</span>
+                </div>
+              </div>
+              <div v-if="overviewCosts.byService?.length" class="gcp-overview-cost-services">
+                <button v-for="service in overviewCosts.byService" :key="service.id" class="gcp-overview-cost-row" @click="service.tab && switchTab(service.tab)">
+                  <span class="gcp-overview-cost-label"><strong>{{ service.label }}</strong><small>{{ service.count }} resource(s) · {{ service.modeled }} priced</small></span>
+                  <span class="gcp-overview-cost-track"><span :style="{ width: `${overviewCostWidth(service)}%` }"></span></span>
+                  <span class="gcp-overview-cost-value">{{ formatOverviewUsd(service.monthlyUsd) }}</span>
+                </button>
+              </div>
+              <div v-if="overviewCosts.unpricedResources?.length" class="gcp-overview-cost-warning">
+                <strong>Not priced:</strong>
+                {{ overviewCosts.unpricedResources.map(resource => `${resource.service} / ${resource.name}`).join(', ') }}
+              </div>
+              <div v-if="overviewCosts.unmodeledServices?.length" class="gcp-overview-cost-warning">
+                <strong>Not modeled:</strong> {{ overviewCosts.unmodeledServices.join(', ') }}
+              </div>
+              <div v-if="overviewCosts.unavailableServices?.length" class="gcp-overview-cost-warning">
+                <strong>Inventory unavailable:</strong> {{ overviewCosts.unavailableServices.join(', ') }}
+              </div>
+              <div class="gcp-overview-cost-disclaimer">{{ overviewCosts.disclaimer }}</div>
+              <div class="gcp-overview-cost-footer">
+                <span class="text-dim">This is not actual spend or a billing forecast.</span>
+                <button class="btn sm" data-test="open-billing" @click="openOverviewBilling">Open Cloud Billing</button>
+              </div>
+            </template>
+            <div v-else class="gcp-overview-empty-callout">Cost baseline is not available in this snapshot.</div>
+          </section>
+
+          <div class="gcp-overview-grid">
+            <section class="gcp-overview-section">
+              <div class="gcp-overview-section-title">Health by area</div>
+              <div class="gcp-overview-groups">
+                <button v-for="group in overviewGroups" :key="group.id" class="gcp-overview-group" @click="group.tab && switchTab(group.tab)">
+                  <div class="gcp-overview-group-head">
+                    <span>{{ group.label }}</span>
+                    <span :class="['gcp-overview-health-pill', overviewHealthTone(group.health)]">{{ overviewHealthLabelFor(group.health) }}</span>
+                  </div>
+                  <div class="gcp-overview-group-track"><span :class="['gcp-overview-group-fill', overviewHealthTone(group.health)]" :style="{ width: `${group.activePercent}%` }"></span></div>
+                  <div class="gcp-overview-group-facts">
+                    <span>{{ group.resources }} resources</span>
+                    <span>{{ group.active }} active</span>
+                    <span>{{ group.inactive }} inactive</span>
+                    <span v-if="group.issues" class="status-warn">{{ group.issues }} issue(s)</span>
+                    <span v-else class="status-ok">Healthy</span>
+                  </div>
+                </button>
+              </div>
+            </section>
+
+            <section class="gcp-overview-section">
+              <div class="gcp-overview-section-title">Needs attention <span class="text-dim">({{ overviewAttention.length }})</span></div>
+              <div v-if="!overviewAttention.length" class="gcp-overview-empty-callout"><span class="gcp-overview-health-dot healthy"></span>No active service signals.</div>
+              <div v-else class="gcp-overview-attention-list">
+                <button v-for="item in overviewAttention" :key="`${item.tab}:${item.name || item.code}`" class="gcp-overview-attention" @click="item.tab && switchTab(item.tab)">
+                  <span :class="['gcp-overview-signal-dot', item.level]"></span>
+                  <span class="gcp-overview-attention-copy">
+                    <strong>{{ item.service }}</strong>
+                    <span>{{ overviewSignalText(item) }}</span>
+                  </span>
+                  <span v-if="item.name" class="gcp-overview-attention-name">{{ item.name }}</span>
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div class="gcp-overview-grid gcp-overview-grid-services">
+            <section class="gcp-overview-section gcp-overview-section-wide">
+              <div class="gcp-overview-section-title">Services <span class="text-dim">· click Open to inspect the full resource list</span></div>
+              <div class="gcp-overview-table-wrap">
+                <table class="cloud-table gcp-overview-table">
+                  <thead><tr><th>Service</th><th>Area</th><th>Health</th><th>Resources</th><th>Active</th><th>Inactive</th><th>Signals</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="service in overviewServices" :key="service.id">
+                      <td>
+                        <div class="fw-medium">{{ service.label }}</div>
+                        <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.message">{{ service.error.message }}</div>
+                      </td>
+                      <td class="text-dim">{{ overviewGroupLabel(service.group) }}</td>
+                      <td><span :class="['gcp-overview-health-pill', overviewHealthTone(overviewServiceHealth(service))]">{{ overviewHealthLabelFor(overviewServiceHealth(service)) }}</span></td>
+                      <td class="font-mono">{{ service.count ?? 0 }}</td>
+                      <td class="font-mono">{{ service.active ?? 0 }}</td>
+                      <td class="font-mono">{{ service.inactive ?? Math.max(0, (service.count ?? 0) - (service.active ?? 0)) }}</td>
+                      <td>
+                        <span v-if="service.issueCount" class="status-warn">{{ service.issueCount }}</span>
+                        <span v-else class="text-dim">—</span>
+                      </td>
+                      <td><button class="btn sm" @click="switchTab(service.tab)">Open</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="gcp-overview-section">
+              <div class="gcp-overview-section-title">7-day trend</div>
+              <div class="gcp-overview-trend-summary">
+                <div><span class="text-dim">Resources</span><strong>{{ overviewTrendLatest.total }}</strong><span :class="overviewDeltaClass(overviewTrendDelta.total)">{{ formatOverviewDelta(overviewTrendDelta.total) }}</span></div>
+                <div><span class="text-dim">Active</span><strong>{{ overviewTrendLatest.active }}</strong><span :class="overviewDeltaClass(overviewTrendDelta.active)">{{ formatOverviewDelta(overviewTrendDelta.active) }}</span></div>
+                <div><span class="text-dim">Unavailable</span><strong>{{ overviewTrendLatest.unavailable }}</strong><span :class="overviewDeltaClass(-overviewTrendDelta.unavailable)">{{ formatOverviewDelta(overviewTrendDelta.unavailable) }}</span></div>
+              </div>
+              <div v-if="!overviewTrend.length" class="empty-row">No historical snapshots yet.</div>
+              <div v-else class="gcp-overview-history">
+                <div v-for="snapshot in overviewTrend" :key="snapshot.id || snapshot.capturedAt" class="gcp-overview-history-row">
+                  <div class="gcp-overview-history-bar"><span :style="{ height: `${overviewTrendHeight(snapshot)}%` }"></span></div>
+                  <time class="text-dim">{{ new Date(snapshot.capturedAt).toLocaleDateString() }}</time>
+                  <span>{{ snapshot.payload?.summary?.total ?? 0 }} resources</span>
+                  <span class="status-ok">{{ snapshot.payload?.summary?.active ?? 0 }} active</span>
+                  <span class="text-dim">{{ snapshot.payload?.summary?.unavailable ?? 0 }} unavailable</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </template>
       </div>
 
       <!-- Cloud Run -->
@@ -1857,6 +2028,7 @@ import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
+import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useToast }    from '../../composables/useToast'
 import { useApi }      from '../../composables/useApi'
 import { settings as appSettings } from '../../composables/useSettings'
@@ -1920,6 +2092,7 @@ function onProfileChange() {
 
 const TABS = [
   { id: 'apm',         label: 'Applications' },
+  { id: 'overview',    label: 'Overview' },
   { id: 'cloudrun',    label: 'Cloud Run' },
   { id: 'gke',         label: 'GKE' },
   { id: 'vms',         label: 'Compute VMs' },
@@ -1949,13 +2122,17 @@ const TABS = [
 ]
 
 const activeTab = ref('cloudrun')
-const loaded    = reactive({ apm: false, cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
+const loaded    = reactive({ apm: false, overview: false, cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
 const search    = ref('')
 
 const fetchMap = {
   apm:         async () => {
     await Promise.allSettled([gcpStore.fetchCloudRunServices(), gcpStore.fetchFunctions()])
     await apmViewRef.value?.refreshLocal?.()
+  },
+  overview:    async () => {
+    await gcpStore.fetchOverview()
+    await gcpStore.fetchOverviewHistory()
   },
   cloudrun:    () => gcpStore.fetchCloudRunServices(),
   gke:         () => gcpStore.fetchGkeClusters(),
@@ -2004,6 +2181,14 @@ async function reloadActiveTab(options = {}) {
   await loadTab(activeTab.value, options)
 }
 
+async function reloadOverview() {
+  try {
+    await gcpStore.fetchOverview({ force: true })
+    await gcpStore.fetchOverviewHistory()
+    nextTick(() => createIcons({ icons }))
+  } catch { /* the store keeps the visible error */ }
+}
+
 defineExpose({ reloadActiveTab })
 
 async function loadAllTabs() {
@@ -2023,8 +2208,129 @@ watch(() => props.activeService, (newTab) => {
 }, { immediate: true })
 
 const currentTab = computed(() => gcpStore.tabs[activeTab.value] || { data: [], loading: false, error: null })
+const overviewTrend = computed(() => [...gcpStore.overviewHistory].sort((a, b) => a.capturedAt - b.capturedAt))
+const OVERVIEW_GROUP_DEFINITIONS = [
+  { id: 'compute', label: 'Compute' },
+  { id: 'data', label: 'Data' },
+  { id: 'platform', label: 'Platform' },
+  { id: 'integration', label: 'Integration' },
+  { id: 'security', label: 'Security' },
+  { id: 'network', label: 'Network' },
+  { id: 'other', label: 'Other' },
+]
+const OVERVIEW_GROUP_LABELS = Object.fromEntries(OVERVIEW_GROUP_DEFINITIONS.map(group => [group.id, group.label]))
+const overviewServices = computed(() => gcpStore.overview?.services || [])
+const overviewCosts = computed(() => gcpStore.overview?.costs || null)
+const overviewCostMax = computed(() => Math.max(1, ...(overviewCosts.value?.byService || []).map(service => Number(service.monthlyUsd || 0))))
+const overviewCostStatusLabel = computed(() => ({
+  estimated: 'Estimated', partial: 'Partial', 'no-data': 'No data',
+}[overviewCosts.value?.status] || (overviewCosts.value ? 'Estimated' : 'Unavailable')))
+const overviewCostStatusTone = computed(() => overviewCosts.value?.status === 'no-data' ? 'empty' : 'warning')
+const overviewHealth = computed(() => {
+  const summary = gcpStore.overview?.summary || {}
+  if (summary.health) return summary.health
+  if (summary.critical) return 'critical'
+  if (summary.warning || summary.unavailable) return 'degraded'
+  return 'healthy'
+})
+const overviewHealthLabel = computed(() => overviewHealthLabelFor(overviewHealth.value))
+const overviewCoverage = computed(() => {
+  const summary = gcpStore.overview?.summary || {}
+  return summary.services ? Math.round(((summary.availableServices || 0) / summary.services) * 100) : 0
+})
+const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
+  const services = overviewServices.value.filter(service => (service.group || 'other') === group.id)
+  const resources = services.reduce((sum, service) => sum + Number(service.count || 0), 0)
+  const active = services.reduce((sum, service) => sum + Number(service.active || 0), 0)
+  const inactive = services.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
+  const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0) + (service.status === 'unavailable' ? 1 : 0), 0)
+  const healthValues = services.map(overviewServiceHealth)
+  const health = healthValues.includes('critical') ? 'critical'
+    : healthValues.includes('unavailable') ? 'unavailable'
+      : healthValues.includes('warning') ? 'warning'
+      : healthValues.length && healthValues.every(value => value === 'empty') ? 'empty' : 'healthy'
+  return {
+    ...group,
+    services,
+    resources,
+    active,
+    inactive,
+    issues,
+    health,
+    activePercent: resources ? Math.round((active / resources) * 100) : 0,
+    tab: services.find(service => service.status !== 'unavailable')?.tab || services[0]?.tab || null,
+  }
+}).filter(group => group.services.length))
+const overviewAttention = computed(() => {
+  const rows = []
+  for (const service of overviewServices.value) {
+    if (service.status === 'unavailable') {
+      rows.push({ key: `${service.id}:unavailable`, service: service.label, tab: service.tab, level: 'critical', code: 'unavailable', name: null })
+    }
+    ;(service.signals || []).forEach((signal, index) => rows.push({
+      ...signal,
+      key: `${service.id}:${signal.name || signal.code}:${index}`,
+      service: service.label,
+      tab: service.tab,
+    }))
+  }
+  const rank = { critical: 0, warning: 1 }
+  return rows.sort((a, b) => (rank[a.level] ?? 9) - (rank[b.level] ?? 9)).slice(0, 10)
+})
+const overviewTrendMax = computed(() => Math.max(1, ...overviewTrend.value.map(snapshot => Number(snapshot.payload?.summary?.total || 0))))
+const overviewTrendLatest = computed(() => {
+  const summary = overviewTrend.value.at(-1)?.payload?.summary || gcpStore.overview?.summary || {}
+  return { total: summary.total || 0, active: summary.active || 0, unavailable: summary.unavailable || 0 }
+})
+const overviewTrendPrevious = computed(() => overviewTrend.value.at(-2)?.payload?.summary || null)
+const overviewTrendDelta = computed(() => ({
+  total: overviewTrendLatest.value.total - Number(overviewTrendPrevious.value?.total ?? overviewTrendLatest.value.total),
+  active: overviewTrendLatest.value.active - Number(overviewTrendPrevious.value?.active ?? overviewTrendLatest.value.active),
+  unavailable: overviewTrendLatest.value.unavailable - Number(overviewTrendPrevious.value?.unavailable ?? overviewTrendLatest.value.unavailable),
+}))
 function tabCount(id)    { return gcpStore.tabs[id]?.data?.length ?? 0 }
 function tabHasError(id) { return !!gcpStore.tabs[id]?.error }
+
+function overviewServiceHealth(service) {
+  if (service.health) return service.health
+  if (service.status === 'unavailable') return 'unavailable'
+  if (service.critical) return 'critical'
+  if (service.warning) return 'warning'
+  return service.status === 'empty' ? 'empty' : 'healthy'
+}
+function overviewHealthTone(value) {
+  return ['critical', 'unavailable'].includes(value) ? 'critical' : ['warning', 'degraded'].includes(value) ? 'warning' : value === 'empty' ? 'empty' : 'healthy'
+}
+function overviewHealthClass(value) { return overviewHealthTone(value) }
+function overviewHealthLabelFor(value) {
+  return { healthy: 'Healthy', warning: 'Warning', degraded: 'Degraded', critical: 'Critical', unavailable: 'API unavailable', empty: 'Empty' }[value] || 'Unknown'
+}
+function overviewGroupLabel(value) { return OVERVIEW_GROUP_LABELS[value] || 'Other' }
+function overviewSignalText(signal) {
+  return {
+    unavailable: 'API unavailable', disabled: 'Disabled', paused: 'Paused', failed: 'Failed', error: 'Error',
+    internal_error: 'Internal error', degraded: 'Degraded', unhealthy: 'Unhealthy', reconciling: 'Reconciling',
+    provisioning: 'Provisioning', staging: 'Staging', starting: 'Starting', stopping: 'Stopping', updating: 'Updating',
+    working: 'Working', pending: 'Pending',
+  }[signal.code] || signal.code || 'Needs review'
+}
+function overviewTrendHeight(snapshot) {
+  return Math.max(8, Math.round((Number(snapshot.payload?.summary?.total || 0) / overviewTrendMax.value) * 100))
+}
+function formatOverviewDelta(value) { return value > 0 ? `+${value}` : value < 0 ? String(value) : '—' }
+function overviewDeltaClass(value) { return value > 0 ? 'status-ok' : value < 0 ? 'status-warn' : 'text-dim' }
+function overviewCostWidth(service) { return Math.max(3, Math.round((Number(service.monthlyUsd || 0) / overviewCostMax.value) * 100)) }
+function formatOverviewUsd(value) {
+  if (value == null) return '—'
+  return new Intl.NumberFormat(appSettings.lang === 'es' ? 'es' : 'en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value) || 0)
+}
+function openOverviewBilling() {
+  const project = gcpStore.overview?.projectId
+  if (!project) return
+  const url = `https://console.cloud.google.com/billing?project=${encodeURIComponent(project)}`
+  if (window.kuaElectron?.openExternal) window.kuaElectron.openExternal(url)
+  else window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 function filterRows(rows) {
   if (!search.value) return rows
@@ -2340,6 +2646,11 @@ function statusClass(s) {
   const l = s.toLowerCase()
   if (l === 'ready' || l === 'running') return 'status-ok'
   if (l === 'reconciling')              return 'status-warn'
+  return 'status-err'
+}
+function overviewStatusClass(s) {
+  if (s === 'available') return 'status-ok'
+  if (s === 'empty') return 'text-dim'
   return 'status-err'
 }
 function gkeStatusClass(s) {
@@ -3448,4 +3759,100 @@ async function openIamKeys(sa) {
 .monitoring-title { padding: 6px 12px; font-size: 12px; font-weight: 600; background: #161b22; border-bottom: 1px solid var(--border); }
 /* Fase 4 – Logging */
 .logging-query-bar { display: flex; gap: 8px; padding: 8px; background: var(--bg-panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.gcp-overview-panel { padding: 8px 12px 18px; overflow: auto; }
+.gcp-overview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 12px; }
+.gcp-overview-title { font-size: 15px; font-weight: 700; }
+.gcp-overview-subtitle { font-size: 11px; margin-top: 3px; }
+.gcp-overview-project { color: var(--accent); font-family: monospace; }
+.gcp-overview-health-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); margin-bottom: 12px; }
+.gcp-overview-health-banner.healthy { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.gcp-overview-health-banner.warning { border-color: color-mix(in srgb, var(--yellow) 55%, var(--border)); }
+.gcp-overview-health-banner.critical, .gcp-overview-health-banner.unavailable { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); }
+.gcp-overview-health-main, .gcp-overview-health-detail { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.gcp-overview-health-main strong { font-size: 13px; }
+.gcp-overview-health-detail { color: var(--text-dim); justify-content: flex-end; text-align: right; }
+.gcp-overview-health-dot, .gcp-overview-signal-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-dim); }
+.gcp-overview-health-dot.healthy { background: var(--green); }
+.gcp-overview-health-banner.warning .gcp-overview-health-dot, .gcp-overview-signal-dot.warning { background: var(--yellow); }
+.gcp-overview-health-banner.critical .gcp-overview-health-dot, .gcp-overview-health-banner.unavailable .gcp-overview-health-dot, .gcp-overview-signal-dot.critical { background: var(--red); }
+.gcp-overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.gcp-overview-metric { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; }
+.gcp-overview-metric span { font-size: 11px; }
+.gcp-overview-metric strong { font-size: 20px; line-height: 1; }
+.gcp-overview-metric small { color: var(--text-dim); font-size: 10px; }
+.gcp-overview-costs { margin-bottom: 12px; }
+.gcp-overview-costs-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gcp-overview-costs-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border-bottom: 1px solid var(--border); }
+.gcp-overview-cost-total { display: flex; flex-direction: column; gap: 5px; }
+.gcp-overview-cost-total span, .gcp-overview-cost-meta, .gcp-overview-cost-label small { font-size: 10px; }
+.gcp-overview-cost-total strong { font-size: 22px; line-height: 1; }
+.gcp-overview-cost-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 12px; color: var(--text-dim); text-align: right; }
+.gcp-overview-cost-services { padding: 4px 0; }
+.gcp-overview-cost-row { display: grid; grid-template-columns: minmax(150px, .65fr) minmax(100px, 1fr) minmax(80px, .25fr); align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent); background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.gcp-overview-cost-row:last-child { border-bottom: 0; }
+.gcp-overview-cost-row:hover { background: var(--bg-hover); }
+.gcp-overview-cost-label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gcp-overview-cost-label strong { font-size: 11px; }
+.gcp-overview-cost-label small { color: var(--text-dim); }
+.gcp-overview-cost-track { height: 7px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--text-dim) 18%, transparent); }
+.gcp-overview-cost-track span { display: block; height: 100%; min-width: 4px; border-radius: 4px; background: var(--accent); }
+.gcp-overview-cost-value { font-family: monospace; font-size: 11px; text-align: right; }
+.gcp-overview-cost-warning, .gcp-overview-cost-disclaimer { padding: 8px 12px; color: var(--text-dim); font-size: 10px; line-height: 1.4; }
+.gcp-overview-cost-warning { color: var(--yellow); border-top: 1px solid var(--border); }
+.gcp-overview-cost-disclaimer { border-top: 1px solid var(--border); }
+.gcp-overview-cost-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--border); }
+.gcp-overview-cost-footer .text-dim { font-size: 10px; }
+.gcp-overview-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 12px; }
+.gcp-overview-grid-services { grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); }
+.gcp-overview-section-wide { min-width: 0; }
+.gcp-overview-section { min-width: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.gcp-overview-section-title { padding: 8px 12px; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.gcp-overview-groups { display: flex; flex-direction: column; }
+.gcp-overview-group { display: block; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent); background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.gcp-overview-group:last-child { border-bottom: 0; }
+.gcp-overview-group:hover, .gcp-overview-attention:hover { background: var(--bg-hover); }
+.gcp-overview-group-head, .gcp-overview-group-facts { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+.gcp-overview-group-head { font-weight: 600; }
+.gcp-overview-group-facts { color: var(--text-dim); margin-top: 5px; }
+.gcp-overview-group-track { height: 6px; margin-top: 9px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--text-dim) 18%, transparent); }
+.gcp-overview-group-fill { display: block; height: 100%; min-width: 4px; border-radius: 4px; background: var(--green); }
+.gcp-overview-group-fill.warning, .gcp-overview-group-fill.empty { background: var(--yellow); }
+.gcp-overview-group-fill.critical { background: var(--red); }
+.gcp-overview-health-pill { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-dim); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.gcp-overview-health-pill.healthy { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.gcp-overview-health-pill.warning, .gcp-overview-health-pill.empty { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+.gcp-overview-health-pill.critical, .gcp-overview-health-pill.unavailable { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.gcp-overview-empty-callout { display: flex; align-items: center; gap: 8px; padding: 14px 12px; color: var(--text-dim); font-size: 12px; }
+.gcp-overview-attention-list { max-height: 260px; overflow: auto; }
+.gcp-overview-attention { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent); background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.gcp-overview-attention:last-child { border-bottom: 0; }
+.gcp-overview-attention-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11px; }
+.gcp-overview-attention-copy strong { font-size: 12px; }
+.gcp-overview-attention-copy span { color: var(--text-dim); }
+.gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
+.gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-overview-table-wrap { overflow: auto; max-height: 500px; }
+.gcp-overview-table { margin: 0; }
+.gcp-overview-table th, .gcp-overview-table td { white-space: nowrap; }
+.gcp-overview-table td:first-child { white-space: normal; min-width: 150px; }
+.gcp-overview-history { max-height: 500px; overflow: auto; }
+.gcp-overview-trend-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.gcp-overview-trend-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 10px; }
+.gcp-overview-trend-summary strong { font-size: 17px; line-height: 1; }
+.gcp-overview-history-row { display: grid; grid-template-columns: 16px minmax(80px, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.gcp-overview-history-bar { display: flex; align-items: flex-end; height: 28px; width: 8px; border-radius: 3px; background: color-mix(in srgb, var(--text-dim) 15%, transparent); overflow: hidden; }
+.gcp-overview-history-bar span { display: block; width: 100%; min-height: 2px; border-radius: 3px; background: var(--accent); }
+@media (max-width: 760px) {
+  .gcp-overview-metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .gcp-overview-grid { grid-template-columns: 1fr; }
+  .gcp-overview-health-banner { align-items: flex-start; flex-direction: column; }
+  .gcp-overview-health-detail { justify-content: flex-start; text-align: left; }
+  .gcp-overview-costs-head, .gcp-overview-cost-footer { align-items: flex-start; flex-direction: column; }
+  .gcp-overview-cost-meta { justify-content: flex-start; text-align: left; }
+  .gcp-overview-cost-row { grid-template-columns: minmax(120px, 1fr) auto; }
+  .gcp-overview-cost-track { grid-column: 1 / -1; grid-row: 2; }
+  .gcp-overview-cost-value { grid-column: 2; grid-row: 1; }
+  .gcp-overview-history-row { grid-template-columns: 16px 1fr 1fr; }
+  .gcp-overview-history-row > span:nth-last-child(-n+2) { display: none; }
+}
 </style>

@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="sfnd-backdrop" @mousedown.self="$emit('close')">
-      <div class="sfnd-modal">
+      <div class="sfnd-modal" :class="{ 'sfnd-modal-execution': activeTab === 'events' }">
 
         <!-- Header -->
         <div class="sfnd-header">
@@ -22,7 +22,7 @@
           </button>
           <div class="sfnd-tabs-right">
             <button v-if="!loaded && !loading" class="btn sm" @click="load">Cargar</button>
-            <button v-else-if="loaded" class="btn sm" @click="load" :disabled="loading" title="Refrescar">↺</button>
+            <button v-else-if="loaded" class="btn sm" @click="load(true)" :disabled="loading" title="Refrescar">↺</button>
           </div>
         </div>
 
@@ -118,7 +118,7 @@
                     <td class="text-dim nowrap">{{ calcDuration(ex.startDate, ex.stopDate) }}</td>
                     <td>
                       <button class="btn sm" @click.stop="viewEvents(ex)" style="font-size:10px">
-                        Ver logs
+                        Inspeccionar
                       </button>
                     </td>
                   </tr>
@@ -127,7 +127,7 @@
             </div>
 
             <!-- ══ EVENTOS ════════════════════════════════════════════════ -->
-            <div v-show="activeTab === 'events'" class="sfnd-section">
+            <div v-if="activeTab === 'events'" class="sfnd-section sfnd-execution-section">
               <div v-if="!selectedExecution" class="sfnd-empty">Selecciona una ejecución en la pestaña Ejecuciones para ver sus eventos.</div>
               <template v-else>
                 <div class="sfnd-events-header">
@@ -136,7 +136,7 @@
                     <span class="mono-xs" style="color:#ccc">{{ selectedExecution.name }}</span>
                     <span :class="execStatusClass(selectedExecution.status)">{{ selectedExecution.status }}</span>
                   </div>
-                  <button class="btn sm" @click="loadEvents(selectedExecution)" :disabled="eventsLoading">↺ Refrescar</button>
+                  <button class="btn sm" @click="loadEvents(selectedExecution, true)" :disabled="eventsLoading">↺ Refrescar</button>
                 </div>
                 <div v-if="eventsLoading" class="sfnd-spinner-wrap" style="padding:20px 0">
                   <div class="sfnd-spinner"></div>
@@ -144,19 +144,9 @@
                 </div>
                 <div v-else-if="eventsError" class="sfnd-error">{{ eventsError }}</div>
                 <div v-else-if="!events.length" class="sfnd-empty">No se encontraron eventos.</div>
-                <div v-else class="sfnd-events-list">
-                  <div v-for="ev in events" :key="ev.id" class="sfnd-event-item" :class="`ev-type-${evCategory(ev.type)}`">
-                    <div class="sfnd-event-meta">
-                      <span class="sfnd-event-id">#{{ ev.id }}</span>
-                      <span class="sfnd-event-type" :class="`ev-badge-${evCategory(ev.type)}`">{{ ev.type }}</span>
-                      <span class="sfnd-event-ts text-dim">{{ fmtDate(ev.timestamp) }}</span>
-                      <span v-if="ev.previousEventId" class="sfnd-event-prev text-dim">← #{{ ev.previousEventId }}</span>
-                    </div>
-                    <div v-if="evDetails(ev)" class="sfnd-event-details">
-                      <pre class="sfnd-json sfnd-json-sm">{{ fmtJson(JSON.stringify(evDetails(ev))) }}</pre>
-                    </div>
-                  </div>
-                </div>
+                <StepFnExecution v-else :key="selectedExecution.executionArn" :events="events"
+                  :definition="executionDefinition || data.definition || ''"
+                  :definition-warning="executionDefinition ? '' : 'Definicion de la ejecucion no disponible. Se muestra la definicion actual; puede diferir del historial.'" />
               </template>
             </div>
 
@@ -217,6 +207,7 @@
 import { ref, reactive, watch } from 'vue'
 import { useAwsStore } from '../stores/useAwsStore'
 import StepFnDiagram from './StepFnDiagram.vue'
+import StepFnExecution from './StepFnExecution.vue'
 
 const props = defineProps({
   open:      { type: Boolean, default: false },
@@ -248,6 +239,8 @@ const selectedExecution = ref(null)
 const eventsLoading     = ref(false)
 const eventsError       = ref(null)
 const events            = ref([])
+const executionDefinition = ref(null)
+let eventsRequest = 0
 
 const versions          = ref([])
 const versionsLoading   = ref(false)
@@ -289,11 +282,11 @@ async function loadVersionDefinition(v) {
   }
 }
 
-async function load() {
+async function load(force = false) {
   if (!props.sm?.arn) return
   loading.value = true; error.value = null
   try {
-    const res = await awsStore.fetchStepFnDiagram(props.sm.arn)
+    const res = await awsStore.fetchStepFnDiagram(props.sm.arn, { force })
     if (!res) throw new Error('No se recibió respuesta de la API')
     const sm = res.stateMachine ?? {}
     data.value = {
@@ -324,17 +317,23 @@ async function viewEvents(ex) {
 
 async function selectExecution(ex) {
   selectedExecution.value = ex
+  await loadEvents(ex)
 }
 
-async function loadEvents(ex) {
+async function loadEvents(ex, force = false) {
+  const request = ++eventsRequest
   eventsLoading.value = true; eventsError.value = null; events.value = []
+  executionDefinition.value = null
   try {
-    const res = await awsStore.fetchStepFnExecutionEvents(ex.executionArn)
+    const res = await awsStore.fetchStepFnExecutionEvents(ex.executionArn, { force })
+    if (request !== eventsRequest) return
+    if (!res) throw new Error('No se pudo obtener el historial. Revisa los permisos de AWS y vuelve a intentar.')
     events.value = res?.events ?? []
+    executionDefinition.value = res.definition ?? null
   } catch (e) {
-    eventsError.value = e?.message || 'Error cargando eventos'
+    if (request === eventsRequest) eventsError.value = e?.message || 'Error cargando eventos'
   } finally {
-    eventsLoading.value = false
+    if (request === eventsRequest) eventsLoading.value = false
   }
 }
 
@@ -363,23 +362,6 @@ function execStatusClass(status) {
   return map[status] || 'text-dim'
 }
 
-function evCategory(type) {
-  if (!type) return 'other'
-  const t = type.toLowerCase()
-  if (t.includes('failed') || t.includes('fail')) return 'fail'
-  if (t.includes('succeed') || t.includes('success') || t.includes('exited')) return 'success'
-  if (t.includes('started') || t.includes('entered')) return 'start'
-  return 'other'
-}
-
-function evDetails(ev) {
-  const keys = Object.keys(ev).filter(k => !['id', 'type', 'timestamp', 'previousEventId'].includes(k))
-  if (!keys.length) return null
-  const obj = {}
-  for (const k of keys) { if (ev[k] !== undefined && ev[k] !== null) obj[k] = ev[k] }
-  return Object.keys(obj).length ? obj : null
-}
-
 function copyField(text, key) {
   if (!text) return
   navigator.clipboard?.writeText(text).catch(() => {})
@@ -394,6 +376,7 @@ watch(() => props.open, (val) => {
     load()
   }
   if (!val) {
+    eventsRequest++; eventsLoading.value = false; executionDefinition.value = null
     loaded.value = false; data.value = null; error.value = null
     selectedExecution.value = null; events.value = []; eventsError.value = null
     versions.value = []; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
@@ -403,6 +386,7 @@ watch(() => props.open, (val) => {
 
 // Reset if SM changes
 watch(() => props.sm?.arn, () => {
+  eventsRequest++; eventsLoading.value = false; executionDefinition.value = null
   loaded.value = false; data.value = null; error.value = null
   selectedExecution.value = null; events.value = []
   versions.value = []; versionsError.value = null; selectedVersion.value = null; versionDef.value = null
@@ -429,6 +413,17 @@ watch(() => props.sm?.arn, () => {
   display: flex; flex-direction: column;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.sfnd-modal-execution { width: min(1440px, 96vw); height: 92vh; }
+.sfnd-execution-section { display: flex; flex-direction: column; }
+.sfnd-events-header { flex-shrink: 0; }
+.sfnd-events-header .mono-xs { overflow-wrap: anywhere; min-width: 0; }
+@media (max-width: 760px) {
+  .sfnd-backdrop { padding: 6px; }
+  .sfnd-modal-execution { width: 100%; height: 96dvh; }
+  .sfnd-tabs { overflow-x: auto; }
+  .sfnd-tab { padding: 9px 10px; white-space: nowrap; }
+  .sfnd-body { padding: 10px; }
 }
 
 /* ─── Header ────────────────────────────────────────────────────────────────── */

@@ -237,6 +237,12 @@
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click.prevent="awsTab = r.id">{{ r.label }}</a>
           </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.management') }}</div>
+            <a v-for="r in AWS_SIDEBAR.management" :key="r.id"
+               :class="['sidebar-item', { active: awsTab === r.id }]"
+               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+          </div>
         </nav>
 
         <!-- Vercel sidebar -->
@@ -399,7 +405,7 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
@@ -589,7 +595,8 @@ const AWS_SIDEBAR = {
   integration: [{ id: 'eventbridge', label: 'EventBridge' }, { id: 'stepfn', label: 'Step Functions' }, { id: 'sqs', label: 'SQS' }, { id: 'sns', label: 'SNS' }, { id: 'ses', label: 'SES' }, { id: 'lex', label: 'Amazon Lex' }],
   ai:          [{ id: 'bedrock', label: 'Bedrock' }, { id: 'agentcorecfn', label: 'AgentCore CFN' }],
   security:    [{ id: 'cognito', label: 'Cognito' }, { id: 'secrets', label: 'Secrets Manager' }],
-  monitoring:  [{ id: 'cwdashboards', label: 'CloudWatch Dashboards' }],
+  monitoring:  [{ id: 'cwdashboards', label: 'CloudWatch Dashboards' }, { id: 'cwlogs', label: 'CloudWatch Logs' }],
+  management:  [{ id: 'cloudformation', label: 'CloudFormation' }],
 }
 
 const VERCEL_SIDEBAR = {
@@ -601,7 +608,7 @@ const VERCEL_SIDEBAR = {
 }
 
 const GCP_SIDEBAR = {
-  compute:    [{ id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
+  compute:    [{ id: 'overview', label: 'Overview' }, { id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
   database:   [{ id: 'sql', label: 'Cloud SQL' }, { id: 'firestore', label: 'Firestore' }, { id: 'spanner', label: 'Cloud Spanner' }],
   storage:    [{ id: 'storage', label: 'Storage' }, { id: 'artifact', label: 'Artifact Registry' }],
   serverless: [{ id: 'functions', label: 'Functions' }, { id: 'cloudrunJobs', label: 'Run Jobs' }],

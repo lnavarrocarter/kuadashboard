@@ -5,17 +5,21 @@
     <template v-else>
       <!-- Toolbar -->
       <div class="sfn-toolbar">
-        <button class="sfn-btn" title="Zoom in" @click="zoomBy(0.2)">＋</button>
-        <button class="sfn-btn" title="Zoom out" @click="zoomBy(-0.2)">－</button>
-        <button class="sfn-btn" title="Fit to view" @click="fitView">⊡</button>
+        <button class="sfn-btn" title="Acercar" aria-label="Acercar" @click="zoomBy(0.2)"><i data-lucide="zoom-in"></i></button>
+        <button class="sfn-btn" title="Alejar" aria-label="Alejar" @click="zoomBy(-0.2)"><i data-lucide="zoom-out"></i></button>
+        <button class="sfn-btn" title="Ajustar diagrama" aria-label="Ajustar diagrama" @click="fitView"><i data-lucide="maximize"></i></button>
         <span class="sfn-zoom-label">{{ Math.round(zoom * 100) }}%</span>
-        <div class="sfn-legend">
+        <div v-if="!execution" class="sfn-legend">
           <span v-for="t in STATE_TYPES" :key="t.type" class="sfn-legend-item">
             <span class="sfn-legend-dot" :style="{ background: t.fill }"></span>
             <span>{{ t.type }}</span>
           </span>
         </div>
-        <span class="sfn-hint">Drag to pan · Scroll to zoom</span>
+        <div v-else class="sfn-legend">
+          <span v-for="(status, key) in EXECUTION_STATUS" :key="key" class="sfn-legend-item">
+            <span class="sfn-legend-dot" :style="{ background: status.color }"></span>{{ status.label }}
+          </span>
+        </div>
       </div>
 
       <!-- Canvas -->
@@ -33,10 +37,10 @@
           class="sfn-svg"
         >
           <defs>
-            <marker id="sfn-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <marker :id="`${diagramId}-arrow`" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
               <polygon points="0 0, 8 3, 0 6" fill="#666" />
             </marker>
-            <marker id="sfn-arrow-catch" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <marker :id="`${diagramId}-catch`" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
               <polygon points="0 0, 8 3, 0 6" fill="#f59e0b" />
             </marker>
           </defs>
@@ -50,7 +54,7 @@
               :x1="startPos.x" :y1="startPos.y - NH/2 - 14"
               :x2="startPos.x" :y2="startPos.y - NH/2"
               stroke="#22c55e" stroke-width="2"
-              marker-end="url(#sfn-arrow)"
+              :marker-end="`url(#${diagramId}-arrow)`"
             />
 
             <!-- Edges -->
@@ -58,10 +62,11 @@
               <path
                 :d="edgePath(e)"
                 fill="none"
-                :stroke="e.type === 'catch' ? '#f59e0b' : e.type === 'choice' ? '#818cf8' : '#555'"
-                stroke-width="1.5"
+                :stroke="edgeExecuted(e) ? '#4ade80' : e.type === 'catch' ? '#f59e0b' : e.type === 'choice' ? '#818cf8' : '#555'"
+                :stroke-width="edgeExecuted(e) ? 3 : 1.5"
+                :opacity="execution && !edgeExecuted(e) ? 0.3 : 1"
                 :stroke-dasharray="e.type === 'catch' ? '4 3' : 'none'"
-                :marker-end="e.type === 'catch' ? 'url(#sfn-arrow-catch)' : 'url(#sfn-arrow)'"
+                :marker-end="`url(#${diagramId}-${e.type === 'catch' ? 'catch' : 'arrow'})`"
               />
               <text
                 v-if="e.label"
@@ -79,18 +84,28 @@
               :key="n.name"
               :transform="`translate(${n.x},${n.y})`"
               class="sfn-node"
-              :class="`sfn-type-${n.state.Type.toLowerCase()}`"
+              :class="[`sfn-type-${n.state.Type.toLowerCase()}`, { 'sfn-unvisited': execution && !nodeStatuses[n.name] }]"
+              role="button"
+              tabindex="0"
+              :aria-label="`${n.name}: ${EXECUTION_STATUS[nodeStatuses[n.name] || 'UNVISITED']?.label || n.state.Type}`"
+              :aria-pressed="selectedName === n.name"
+              @mousedown.stop
               @click="$emit('nodeClick', n)"
+              @keydown.enter.prevent="$emit('nodeClick', n)"
+              @keydown.space.prevent="$emit('nodeClick', n)"
               style="cursor:pointer"
             >
+              <title>{{ n.name }}{{ execution ? `: ${EXECUTION_STATUS[nodeStatuses[n.name] || 'UNVISITED']?.label}` : '' }}</title>
+              <rect v-if="selectedName === n.name" :x="-NW/2 - 5" :y="-NH/2 - 5" :width="NW + 10" :height="NH + 10" rx="8" fill="none" stroke="#fafafa" stroke-width="2" />
               <rect
                 :x="-NW/2" :y="-NH/2"
                 :width="NW" :height="NH"
                 :rx="nodeRx(n.state.Type)"
                 :fill="nodeFill(n.state.Type)"
-                stroke="#444"
-                stroke-width="1.2"
+                :stroke="execution ? EXECUTION_STATUS[nodeStatuses[n.name] || 'UNVISITED']?.color : '#444'"
+                :stroke-width="execution ? 2.5 : 1.2"
               />
+              <text v-if="execution" :x="NW/2 - 5" :y="-NH/2 + 12" text-anchor="end" font-size="9" :fill="EXECUTION_STATUS[nodeStatuses[n.name] || 'UNVISITED']?.color">{{ EXECUTION_STATUS[nodeStatuses[n.name] || 'UNVISITED']?.mark }}</text>
 
               <!-- Type label -->
               <text
@@ -144,16 +159,33 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, nextTick, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch, useId } from 'vue'
+import { createIcons, icons } from 'lucide'
 
 const props = defineProps({
   definition: { type: String, default: '' },
+  execution: { type: Boolean, default: false },
+  nodeStatuses: { type: Object, default: () => ({}) },
+  selectedName: { type: String, default: '' },
+  transitions: { type: Array, default: () => [] },
 })
 
 defineEmits(['nodeClick'])
 
 const wrap   = ref(null)
 const canvas = ref(null)
+const diagramId = useId()
+const EXECUTION_STATUS = {
+  SUCCEEDED: { label: 'Completado', color: '#4ade80', mark: 'OK' },
+  FAILED: { label: 'Fallido', color: '#f87171', mark: '!' },
+  TIMED_OUT: { label: 'Tiempo agotado', color: '#fbbf24', mark: '!' },
+  RUNNING: { label: 'En curso', color: '#60a5fa', mark: '...' },
+  ABORTED: { label: 'Interrumpido', color: '#a1a1aa', mark: 'X' },
+  UNVISITED: { label: 'No visitado', color: '#71717a', mark: '-' },
+}
+function edgeExecuted(edge) {
+  return props.transitions.some(transition => transition.from === edge.from && transition.to === edge.to)
+}
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 const NW    = 150  // node width
@@ -195,6 +227,7 @@ function fitView() {
   if (!nodes.value.length || !canvas.value) return
   const cw = canvas.value.clientWidth
   const ch = canvas.value.clientHeight
+  if (!cw || !ch) return
   const minX = Math.min(...nodes.value.map(n => n.x - NW / 2))
   const maxX = Math.max(...nodes.value.map(n => n.x + NW / 2))
   const minY = Math.min(...nodes.value.map(n => n.y - NH / 2)) - 40  // room for START indicator
@@ -445,9 +478,18 @@ function shortResource(r) {
 async function initView() {
   await nextTick()
   fitView()
+  createIcons({ icons })
 }
 
-onMounted(initView)
+let resizeObserver
+onMounted(() => {
+  initView()
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(fitView)
+    resizeObserver.observe(wrap.value)
+  }
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 watch(() => props.definition, initView)
 </script>
 
@@ -522,6 +564,10 @@ watch(() => props.definition, initView)
 /* ─── Nodes ───────────────────────────────────────────────────────────────── */
 .sfn-node { transition: opacity 0.15s; }
 .sfn-node:hover { opacity: 0.85; }
+.sfn-node.sfn-unvisited { opacity: 0.38; }
+.sfn-node:focus { outline: none; }
+.sfn-node:focus > rect { stroke: #fff; }
+.sfn-btn :deep(svg) { width: 16px; height: 16px; }
 
 /* ─── States ──────────────────────────────────────────────────────────────── */
 .sfn-error,
