@@ -19,7 +19,7 @@
           <template v-if="kind === 'cloudrun'">
             <label class="gcpn-field"><span>{{ t('res.region') }}</span>
               <select v-model="form.region" class="gcpn-input" data-test="region">
-                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ regionLabel(l) }}</option>
               </select></label>
             <label class="gcpn-field wide"><span>{{ t('lmd.image') }}</span>
               <input v-model.trim="form.image" class="gcpn-input mono" /></label>
@@ -41,7 +41,7 @@
           <template v-else-if="kind === 'vm'">
             <label class="gcpn-field"><span>{{ t('res.region') }}</span>
               <select v-model="form.region" class="gcpn-input" data-test="region">
-                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ regionLabel(l) }}</option>
               </select></label>
             <label class="gcpn-field"><span>{{ t('res.zone') }}</span>
               <select v-model="form.zone" class="gcpn-input" data-test="zone">
@@ -51,9 +51,9 @@
               <legend>{{ t('gcn.machineType') }}</legend>
               <label v-for="p in presets.vm" :key="p.value" :class="['gcpn-preset', { active: !customMachine && form.machineType === p.value }]">
                 <input type="radio" name="gcpn-machine" :value="p.value" :checked="!customMachine && form.machineType === p.value" @change="pickPreset('machineType', p.value)" />
-                <span class="gcpn-preset-name">{{ p.label }} <small class="mono">{{ p.value }}</small></span>
-                <span class="gcpn-preset-specs">{{ p.specs }}</span>
-                <span class="gcpn-preset-use">{{ p.use }}</span>
+                <span class="gcpn-preset-name">{{ presetText('vm', p, 'label') }} <small class="mono">{{ p.value }}</small></span>
+                <span class="gcpn-preset-specs">{{ presetText('vm', p, 'specs') }}</span>
+                <span class="gcpn-preset-use">{{ presetText('vm', p, 'use') }}</span>
                 <span class="gcpn-preset-price">{{ p.monthlyUsd != null ? `~$${p.monthlyUsd.toFixed(2)}/mes` : '' }}</span>
               </label>
               <label :class="['gcpn-preset', 'other', { active: customMachine }]">
@@ -80,7 +80,7 @@
           <template v-else-if="kind === 'sql'">
             <label class="gcpn-field"><span>{{ t('res.region') }}</span>
               <select v-model="form.region" class="gcpn-input" data-test="region">
-                <option v-for="l in locations" :key="l.region" :value="l.region">{{ l.label }}</option>
+                <option v-for="l in locations" :key="l.region" :value="l.region">{{ regionLabel(l) }}</option>
               </select></label>
             <label class="gcpn-field"><span>{{ t('gsi.engine') }}</span>
               <select v-model="form.databaseVersion" class="gcpn-input">
@@ -90,9 +90,9 @@
               <legend>{{ t('gcn.instanceSize') }}</legend>
               <label v-for="p in presets.sql" :key="p.value" :class="['gcpn-preset', { active: !customTier && form.tier === p.value }]">
                 <input type="radio" name="gcpn-tier" :value="p.value" :checked="!customTier && form.tier === p.value" @change="pickPreset('tier', p.value)" />
-                <span class="gcpn-preset-name">{{ p.label }} <small class="mono">{{ p.value }}</small></span>
-                <span class="gcpn-preset-specs">{{ p.specs }}</span>
-                <span class="gcpn-preset-use">{{ p.use }}</span>
+                <span class="gcpn-preset-name">{{ presetText('sql', p, 'label') }} <small class="mono">{{ p.value }}</small></span>
+                <span class="gcpn-preset-specs">{{ presetText('sql', p, 'specs') }}</span>
+                <span class="gcpn-preset-use">{{ presetText('sql', p, 'use') }}</span>
                 <span class="gcpn-preset-price">{{ p.monthlyUsd != null ? `~$${p.monthlyUsd.toFixed(2)}/mes` : '' }}</span>
               </label>
               <label :class="['gcpn-preset', 'other', { active: customTier }]">
@@ -128,7 +128,7 @@
           <template v-else-if="estimateData">
             <div class="gcpn-estimate-total">{{ estimateData.known ? t('gcn.perMonth', { usd: estimateData.monthlyUsd.toFixed(2) }) : t('gcn.noPrice') }}</div>
             <div v-if="estimateData.highCost" class="gcpn-high">{{ t('gcn.highCost') }}</div>
-            <div v-for="item in estimateData.items" :key="item.label" class="gcpn-item"><span>{{ item.label }}</span><span>${{ item.monthlyUsd.toFixed(2) }}</span></div>
+            <div v-for="item in estimateData.items" :key="item.label" class="gcpn-item"><span>{{ item.key ? translated(`gcn.estimate.${item.key}`, item.label, item.params) : item.label }}</span><span>${{ item.monthlyUsd.toFixed(2) }}</span></div>
           </template>
           <div v-else-if="estimateError" class="gcpn-invalid">{{ estimateError }}</div>
         </aside>
@@ -205,6 +205,17 @@ const locations = computed(() => {
   // Unknown zones for a non-curated region: let the user pick after choosing a listed region
   return [...list, { region, label: region, zones: ['b', 'c'].map(z => `${region}-${z}`) }]
 })
+// The backend sends English labels plus codes; translate by code, keep the label as fallback.
+function translated(key, fallback, params) {
+  const text = t(key, params)
+  return text === key ? fallback : text
+}
+function regionLabel(location) {
+  return translated(`gcpPreset.region.${location.region}`, location.label)
+}
+function presetText(kind, preset, field) {
+  return translated(`gcpPreset.${kind}.${preset.value}.${field}`, preset[field])
+}
 const zonesForRegion = computed(() => locations.value.find(l => l.region === form.region)?.zones || [])
 const cloudRunOptions = computed(() => presets.value.cloudRun)
 

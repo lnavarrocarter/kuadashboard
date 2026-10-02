@@ -24,7 +24,7 @@ const VM = {
   machine: { type: 'e2-micro', os: 'rocky linux 9', cpuPlatform: 'Intel', gpus: [] },
   scheduling: { provisioningModel: 'SPOT', automaticRestart: false, onHostMaintenance: 'TERMINATE', terminationAction: 'STOP' },
   security: { deletionProtection: false, secureBoot: false, vtpm: true, integrityMonitoring: true, confidentialCompute: false, canIpForward: false, osLogin: null, serialPortEnabled: false,
-    serviceAccounts: [{ email: 'sa@p.iam.gserviceaccount.com', scopes: ['cloud-platform (acceso completo)'] }] },
+    serviceAccounts: [{ email: 'sa@p.iam.gserviceaccount.com', scopes: [{ name: 'cloud-platform', access: 'full' }] }] },
   networks: [{ name: 'nic0', network: 'default', subnetwork: 'default', internalIp: '10.0.0.2', externalIp: '34.1.2.3', networkTier: 'PREMIUM' }],
   disks: [{ name: 'web', deviceName: 'd0', boot: true, type: 'pd-balanced', sizeGb: 20, interface: 'SCSI', mode: 'READ_WRITE', sourceImage: 'rocky-9', encryption: 'Google-managed', autoDelete: false }],
   metadata: [{ key: 'ssh-keys', sensitive: true, value: null, size: 540 }, { key: 'enable-oslogin', sensitive: false, value: 'FALSE', size: 5 }],
@@ -247,5 +247,14 @@ describe('GCP info panels in English', () => {
     expect(vm.text()).toContain('ssh-keys · hidden value (540 characters)')
     expect(vm.text()).toContain('Deletion protection')
     expect(vm.text()).not.toContain('Observaciones')
+  })
+
+  it('translates the scope access and maintenance day codes sent by the server', () => {
+    expect(mount(GcpVmInfo, { props: { detail: VM, section: 'overview' } }).text()).toContain('cloud-platform (full access)')
+    const sql = { ...SQL, maintenance: { day: 7, hour: 4, track: 'stable' } }
+    expect(mount(GcpSqlInfo, { props: { detail: sql, section: 'overview' } }).text()).toContain('Sunday 4:00 UTC')
+    settings.lang = 'es'
+    expect(mount(GcpVmInfo, { props: { detail: VM, section: 'overview' } }).text()).toContain('cloud-platform (acceso completo)')
+    expect(mount(GcpSqlInfo, { props: { detail: sql, section: 'overview' } }).text()).toContain('Domingo 4:00 UTC')
   })
 })
