@@ -791,6 +791,13 @@ export default {
   'common.yes': 'Yes',
   'common.no': 'No',
 
+  // ── VPC detail ──
+  'vpcd.summary': 'Summary',
+  'vpcd.noRouteTables': 'No route tables.',
+  'vpcd.noInternetGateways': 'No internet gateways attached.',
+  'vpcd.noNatGateways': 'No NAT gateways.',
+  'vpcd.loadFailed': 'Could not load the VPC details',
+
   // ── EKS cluster detail ──
   'eksd.loading': 'Loading cluster infrastructure…',
   'eksd.loadFailed': 'Could not load the cluster infrastructure',
