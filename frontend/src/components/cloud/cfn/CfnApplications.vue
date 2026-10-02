@@ -62,8 +62,9 @@ async function load() {
       apiFetch(`${APM}/stack-applications?stackName=${encodeURIComponent(props.stackName)}&region=${encodeURIComponent(props.region)}`, { headers: headers() }),
       apiFetch(`${APM}/applications?region=${encodeURIComponent(props.region)}`, { headers: headers() }),
     ])
-    links.value = stackLinks
-    apps.value = applications
+    // Normalize so a partial response never breaks the template.
+    links.value = { linkable: 0, ...stackLinks, applications: Array.isArray(stackLinks?.applications) ? stackLinks.applications : [] }
+    apps.value = Array.isArray(applications) ? applications : []
   } catch (err) { error.value = err.message } finally { loading.value = false }
 }
 
