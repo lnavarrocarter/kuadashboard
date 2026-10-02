@@ -10,6 +10,11 @@ import GcpView from '../components/cloud/GcpView.vue'
 import { gcpActionConfig } from '../components/cloud/gcpActions'
 import { useGcpStore } from '../stores/useGcpStore'
 import { useTerminalStore } from '../stores/useTerminalStore'
+import { settings } from '../composables/useSettings'
+
+// These assertions read the Spanish texts; the English create modal is checked at the end.
+beforeEach(() => { settings.lang = 'es' })
+afterEach(() => { settings.lang = 'en' })
 
 const LOW_ESTIMATE = { known: true, monthlyUsd: 12.5, highCost: false, items: [{ label: 'VM e2-small', monthlyUsd: 12.5 }], warnings: ['Billing starts…'], disclaimer: 'Approximate' }
 const HIGH_ESTIMATE = { ...LOW_ESTIMATE, monthlyUsd: 480, highCost: true }
@@ -258,6 +263,18 @@ describe('GcpCreateModal (#74)', () => {
     const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
     await w.find('[data-test="name"]').setValue('Web_2')
     expect(w.find('[data-test="review"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('follows the app language', async () => {
+    settings.lang = 'en'
+    vi.unstubAllGlobals()
+    calls = stubFetch(LOW_ESTIMATE, { presets: null })
+    const w = mount(GcpCreateModal, { props: { open: true, kind: 'vm' } })
+    await settle()
+    expect(w.text()).toContain('New Compute Engine VM')
+    expect(w.text()).toContain('Could not load the preset options')
+    expect(w.text()).toContain('Review and create…')
+    expect(w.text()).not.toContain('Revisar y crear')
   })
 })
 
