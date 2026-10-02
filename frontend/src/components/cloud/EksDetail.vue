@@ -23,7 +23,7 @@
             {{ tab.label }}<span v-if="data && tab.count" class="eksd-tab-count">{{ tab.count(data) }}</span>
           </button>
           <div class="eksd-tabs-right">
-            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" title="Refrescar">↺</button>
+            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" :title="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -32,16 +32,16 @@
 
           <div v-if="loading" class="eksd-spinner-wrap">
             <div class="eksd-spinner"></div>
-            <span>Cargando infraestructura del cluster...</span>
+            <span>{{ t('eksd.loading') }}</span>
           </div>
           <div v-else-if="error" class="eksd-error">{{ error }}</div>
 
           <template v-else-if="data">
 
             <div v-if="data.warnings?.length" class="eksd-notice">
-              <strong>⚠ Información parcial</strong>
+              <strong>⚠ {{ t('eksd.partial') }}</strong>
               <div v-for="w in data.warnings" :key="w.section" class="eksd-notice-row">
-                <span class="mono">{{ SECTION_LABELS[w.section] || w.section }}</span>: {{ w.message }}
+                <span class="mono">{{ SECTION_LABELS[w.section] ? t(SECTION_LABELS[w.section]) : w.section }}</span>: {{ w.message }}
               </div>
             </div>
 
@@ -51,32 +51,32 @@
                 <div class="eksd-card">
                   <div class="eksd-card-title">Cluster</div>
                   <dl>
-                    <dt>Nombre</dt>     <dd>{{ data.cluster.name }}</dd>
-                    <dt>ARN</dt>        <dd class="mono wrap copyable">{{ data.cluster.arn }}<button class="copy-btn" @click.stop="copyField(data.cluster.arn,'arn')" :title="copiedKey==='arn'?'¡Copiado!':'Copiar'">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Versión</dt>    <dd class="mono">{{ data.cluster.version }} <span class="text-dim">({{ data.cluster.platformVersion || '—' }})</span></dd>
-                    <dt>Estado</dt>     <dd><span :class="['eksd-state', stateClass(data.cluster.status)]">{{ data.cluster.status }}</span></dd>
-                    <dt>Creado</dt>     <dd>{{ fmtDate(data.cluster.createdAt) }}</dd>
-                    <dt>Rol IAM</dt>    <dd class="mono wrap copyable">{{ data.cluster.roleArn || '—' }}<button v-if="data.cluster.roleArn" class="copy-btn" @click.stop="copyField(data.cluster.roleArn,'role')" :title="copiedKey==='role'?'¡Copiado!':'Copiar'">{{ copiedKey==='role' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('res.name') }}</dt>     <dd>{{ data.cluster.name }}</dd>
+                    <dt>ARN</dt>        <dd class="mono wrap copyable">{{ data.cluster.arn }}<button class="copy-btn" @click.stop="copyField(data.cluster.arn,'arn')" :title="copiedKey==='arn' ? t('res.copied') : t('action.copy')">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('lmd.version') }}</dt>    <dd class="mono">{{ data.cluster.version }} <span class="text-dim">({{ data.cluster.platformVersion || '—' }})</span></dd>
+                    <dt>{{ t('res.state') }}</dt>     <dd><span :class="['eksd-state', stateClass(data.cluster.status)]">{{ data.cluster.status }}</span></dd>
+                    <dt>{{ t('res.created') }}</dt>     <dd>{{ fmtDate(data.cluster.createdAt) }}</dd>
+                    <dt>{{ t('eksd.iamRole') }}</dt>    <dd class="mono wrap copyable">{{ data.cluster.roleArn || '—' }}<button v-if="data.cluster.roleArn" class="copy-btn" @click.stop="copyField(data.cluster.roleArn,'role')" :title="copiedKey==='role' ? t('res.copied') : t('action.copy')">{{ copiedKey==='role' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="eksd-card">
                   <div class="eksd-card-title">API endpoint</div>
                   <dl>
-                    <dt>Endpoint</dt>   <dd class="mono wrap copyable">{{ data.cluster.endpoint || '—' }}<button v-if="data.cluster.endpoint" class="copy-btn" @click.stop="copyField(data.cluster.endpoint,'endpoint')" :title="copiedKey==='endpoint'?'¡Copiado!':'Copiar'">{{ copiedKey==='endpoint' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Público</dt>    <dd><span :class="data.cluster.endpointPublicAccess ? 'badge-yellow' : 'badge-gray'">{{ data.cluster.endpointPublicAccess ? 'Sí' : 'No' }}</span></dd>
-                    <dt>Privado</dt>    <dd><span :class="data.cluster.endpointPrivateAccess ? 'badge-green' : 'badge-gray'">{{ data.cluster.endpointPrivateAccess ? 'Sí' : 'No' }}</span></dd>
-                    <dt v-if="data.cluster.endpointPublicAccess">CIDRs públicos</dt>
+                    <dt>Endpoint</dt>   <dd class="mono wrap copyable">{{ data.cluster.endpoint || '—' }}<button v-if="data.cluster.endpoint" class="copy-btn" @click.stop="copyField(data.cluster.endpoint,'endpoint')" :title="copiedKey==='endpoint' ? t('res.copied') : t('action.copy')">{{ copiedKey==='endpoint' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('eksd.public') }}</dt>    <dd><span :class="data.cluster.endpointPublicAccess ? 'badge-yellow' : 'badge-gray'">{{ yesNo(data.cluster.endpointPublicAccess) }}</span></dd>
+                    <dt>{{ t('eksd.private') }}</dt>    <dd><span :class="data.cluster.endpointPrivateAccess ? 'badge-green' : 'badge-gray'">{{ yesNo(data.cluster.endpointPrivateAccess) }}</span></dd>
+                    <dt v-if="data.cluster.endpointPublicAccess">{{ t('eksd.publicCidrs') }}</dt>
                     <dd v-if="data.cluster.endpointPublicAccess" class="mono">{{ data.cluster.publicAccessCidrs.join(', ') || '—' }}</dd>
                     <dt>OIDC issuer</dt><dd class="mono wrap">{{ data.cluster.oidcIssuer || '—' }}</dd>
-                    <dt>Autenticación</dt><dd>{{ data.cluster.authenticationMode || '—' }}</dd>
+                    <dt>{{ t('eksd.authentication') }}</dt><dd>{{ data.cluster.authenticationMode || '—' }}</dd>
                   </dl>
                 </div>
 
                 <div class="eksd-card">
-                  <div class="eksd-card-title">Red del cluster</div>
+                  <div class="eksd-card-title">{{ t('eksd.clusterNetwork') }}</div>
                   <dl>
-                    <dt>VPC</dt>        <dd class="mono copyable">{{ data.network.vpc?.id || '—' }}<button v-if="data.network.vpc?.id" class="copy-btn" @click.stop="copyField(data.network.vpc.id,'vpc')" :title="copiedKey==='vpc'?'¡Copiado!':'Copiar'">{{ copiedKey==='vpc' ? '✓' : '⧉' }}</button></dd>
+                    <dt>VPC</dt>        <dd class="mono copyable">{{ data.network.vpc?.id || '—' }}<button v-if="data.network.vpc?.id" class="copy-btn" @click.stop="copyField(data.network.vpc.id,'vpc')" :title="copiedKey==='vpc' ? t('res.copied') : t('action.copy')">{{ copiedKey==='vpc' ? '✓' : '⧉' }}</button></dd>
                     <dt>CIDR VPC</dt>   <dd class="mono">{{ data.network.vpc?.cidr || '—' }}</dd>
                     <dt>CIDR services</dt><dd class="mono">{{ data.cluster.serviceIpv4Cidr || '—' }}</dd>
                     <dt>IP family</dt>  <dd>{{ data.cluster.ipFamily || '—' }}</dd>
@@ -86,14 +86,14 @@
                 </div>
 
                 <div class="eksd-card">
-                  <div class="eksd-card-title">Capacidad</div>
+                  <div class="eksd-card-title">{{ t('eksd.capacity') }}</div>
                   <dl>
                     <dt>Node groups</dt><dd>{{ data.nodegroups.length }}</dd>
-                    <dt>Instancias EC2</dt><dd>{{ data.instances.length }}</dd>
+                    <dt>{{ t('eksd.ec2Instances') }}</dt><dd>{{ data.instances.length }}</dd>
                     <dt>Add-ons</dt>    <dd>{{ data.addons.length }}</dd>
                     <dt>Logging</dt>
                     <dd>
-                      <span v-if="!data.cluster.logging.length" class="badge-gray">deshabilitado</span>
+                      <span v-if="!data.cluster.logging.length" class="badge-gray">{{ t('eksd.loggingOff') }}</span>
                       <span v-for="l in data.cluster.logging" :key="l" class="eksd-chip">{{ l }}</span>
                     </dd>
                   </dl>
@@ -103,7 +103,7 @@
               <div class="eksd-card" style="margin-top:12px">
                 <div class="eksd-card-title">Tags ({{ Object.keys(data.cluster.tags || {}).length }})</div>
                 <table class="eksd-table" v-if="Object.keys(data.cluster.tags || {}).length">
-                  <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                  <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="(v, k) in data.cluster.tags" :key="k">
                       <td class="mono">{{ k }}</td>
@@ -111,7 +111,7 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('res.noTags') }}</div>
               </div>
             </div>
 
@@ -120,25 +120,25 @@
               <div class="eksd-card" style="margin-bottom:12px">
                 <div class="eksd-card-title">Subnets ({{ data.network.subnets.length }})</div>
                 <table v-if="data.network.subnets.length" class="eksd-table">
-                  <thead><tr><th>Subnet</th><th>CIDR</th><th>Zona</th><th>IPs libres</th><th>IP pública</th><th>Usada por</th></tr></thead>
+                  <thead><tr><th>Subnet</th><th>CIDR</th><th>{{ t('res.zone') }}</th><th>{{ t('eksd.freeIps') }}</th><th>{{ t('ec2d.publicIp') }}</th><th>{{ t('eksd.usedBy') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="s in data.network.subnets" :key="s.id">
                       <td class="mono">{{ s.id }}<div v-if="s.name" class="text-dim eksd-sub">{{ s.name }}</div></td>
                       <td class="mono">{{ s.cidr || '—' }}</td>
                       <td class="mono">{{ s.az || '—' }}</td>
                       <td>{{ s.availableIps ?? '—' }}</td>
-                      <td><span v-if="s.mapPublicIp !== null" :class="s.mapPublicIp ? 'badge-yellow' : 'badge-gray'">{{ s.mapPublicIp ? 'Sí' : 'No' }}</span><span v-else>—</span></td>
+                      <td><span v-if="s.mapPublicIp !== null" :class="s.mapPublicIp ? 'badge-yellow' : 'badge-gray'">{{ yesNo(s.mapPublicIp) }}</span><span v-else>—</span></td>
                       <td><span v-for="u in s.usedBy" :key="u" class="eksd-chip">{{ u }}</span></td>
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin subnets.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('eksd.noSubnets') }}</div>
               </div>
 
               <div class="eksd-card">
                 <div class="eksd-card-title">Security groups ({{ data.network.securityGroups.length }})</div>
                 <table v-if="data.network.securityGroups.length" class="eksd-table">
-                  <thead><tr><th>Grupo</th><th>Rol</th><th>Reglas in / out</th><th>Descripción</th></tr></thead>
+                  <thead><tr><th>{{ t('eksd.group') }}</th><th>{{ t('eksd.role') }}</th><th>{{ t('eksd.rulesInOut') }}</th><th>{{ t('res.description') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="g in data.network.securityGroups" :key="g.id">
                       <td class="mono">{{ g.id }}<div v-if="g.name" class="text-dim eksd-sub">{{ g.name }}</div></td>
@@ -148,13 +148,13 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin security groups.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('eksd.noSecurityGroups') }}</div>
               </div>
             </div>
 
             <!-- ══ NODE GROUPS ══════════════════════════════════════════════ -->
             <div v-show="activeTab === 'nodegroups'" class="eksd-section" data-tab="nodegroups">
-              <div v-if="!data.nodegroups.length" class="eksd-empty">Sin managed node groups (el cluster puede usar Fargate, Karpenter o nodos self-managed).</div>
+              <div v-if="!data.nodegroups.length" class="eksd-empty">{{ t('eksd.noNodegroups') }}</div>
               <div v-for="ng in data.nodegroups" :key="ng.name" class="eksd-card" style="margin-bottom:12px">
                 <div class="eksd-card-title">
                   🖥 {{ ng.name }}
@@ -163,16 +163,16 @@
                   <span class="badge-gray">{{ ng.architecture }}</span>
                 </div>
                 <dl>
-                  <dt>Tipos</dt>        <dd class="mono">{{ ng.instanceTypes.join(', ') || '—' }}</dd>
-                  <dt>Escalado</dt>     <dd>min {{ ng.scaling.minSize ?? '—' }} · deseado {{ ng.scaling.desiredSize ?? '—' }} · max {{ ng.scaling.maxSize ?? '—' }}</dd>
-                  <dt>Instancias EC2</dt><dd>{{ ng.instanceCount ?? 0 }}</dd>
+                  <dt>{{ t('eksd.types') }}</dt>        <dd class="mono">{{ ng.instanceTypes.join(', ') || '—' }}</dd>
+                  <dt>{{ t('eksd.scaling') }}</dt>     <dd>{{ t('eksd.scalingValue', { min: ng.scaling.minSize ?? '—', desired: ng.scaling.desiredSize ?? '—', max: ng.scaling.maxSize ?? '—' }) }}</dd>
+                  <dt>{{ t('eksd.ec2Instances') }}</dt><dd>{{ ng.instanceCount ?? 0 }}</dd>
                   <dt>AMI</dt>          <dd class="mono">{{ ng.amiType || '—' }} <span class="text-dim">{{ ng.releaseVersion || '' }}</span></dd>
-                  <dt>Versión K8s</dt>  <dd class="mono">{{ ng.version || '—' }}</dd>
-                  <dt>Disco</dt>        <dd>{{ ng.diskSize ? ng.diskSize + ' GiB' : '—' }}</dd>
+                  <dt>{{ t('eksd.k8sVersion') }}</dt>  <dd class="mono">{{ ng.version || '—' }}</dd>
+                  <dt>{{ t('eksd.disk') }}</dt>        <dd>{{ ng.diskSize ? ng.diskSize + ' GiB' : '—' }}</dd>
                   <dt>Subnets</dt>      <dd class="mono">{{ ng.subnets.join(', ') || '—' }}</dd>
                   <dt>Auto Scaling</dt> <dd class="mono">{{ ng.autoScalingGroups.join(', ') || '—' }}</dd>
                   <dt>Launch template</dt><dd class="mono">{{ ng.launchTemplate ? `${ng.launchTemplate.name || ng.launchTemplate.id} (v${ng.launchTemplate.version})` : '—' }}</dd>
-                  <dt>Rol de nodo</dt>  <dd class="mono wrap">{{ ng.nodeRole || '—' }}</dd>
+                  <dt>{{ t('eksd.nodeRole') }}</dt>  <dd class="mono wrap">{{ ng.nodeRole || '—' }}</dd>
                 </dl>
                 <div v-if="ng.healthIssues.length" class="eksd-issues">
                   <div v-for="(h, i) in ng.healthIssues" :key="i"><span class="badge-red">{{ h.code }}</span> {{ h.message }}</div>
@@ -182,13 +182,13 @@
 
             <!-- ══ EC2 ══════════════════════════════════════════════════════ -->
             <div v-show="activeTab === 'instances'" class="eksd-section" data-tab="instances">
-              <div v-if="!data.instances.length" class="eksd-empty">Sin instancias EC2 asociadas (Fargate o sin nodos activos).</div>
+              <div v-if="!data.instances.length" class="eksd-empty">{{ t('eksd.noInstances') }}</div>
               <div v-else class="eksd-card">
                 <table class="eksd-table">
-                  <thead><tr><th>Instancia</th><th>Tipo</th><th>Estado</th><th>Origen</th><th>IP privada</th><th>Zona</th><th>Ciclo</th><th>Lanzada</th></tr></thead>
+                  <thead><tr><th>{{ t('ec2d.instance') }}</th><th>{{ t('res.type') }}</th><th>{{ t('res.state') }}</th><th>{{ t('ec2d.source') }}</th><th>{{ t('ec2d.privateIp') }}</th><th>{{ t('res.zone') }}</th><th>{{ t('eksd.lifecycle') }}</th><th>{{ t('eksd.launched') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="i in data.instances" :key="i.id">
-                      <td class="mono copyable">{{ i.id }}<button class="copy-btn" @click.stop="copyField(i.id, i.id)" :title="copiedKey===i.id?'¡Copiado!':'Copiar'">{{ copiedKey===i.id ? '✓' : '⧉' }}</button><div v-if="i.name" class="text-dim eksd-sub">{{ i.name }}</div></td>
+                      <td class="mono copyable">{{ i.id }}<button class="copy-btn" @click.stop="copyField(i.id, i.id)" :title="copiedKey===i.id ? t('res.copied') : t('action.copy')">{{ copiedKey===i.id ? '✓' : '⧉' }}</button><div v-if="i.name" class="text-dim eksd-sub">{{ i.name }}</div></td>
                       <td class="mono">{{ i.type }}</td>
                       <td><span :class="['eksd-state', stateClass(i.state)]">{{ i.state }}</span></td>
                       <td><span class="eksd-chip">{{ i.nodegroup }}</span></td>
@@ -204,10 +204,10 @@
 
             <!-- ══ ADD-ONS ══════════════════════════════════════════════════ -->
             <div v-show="activeTab === 'addons'" class="eksd-section" data-tab="addons">
-              <div v-if="!data.addons.length" class="eksd-empty">Sin add-ons administrados por EKS.</div>
+              <div v-if="!data.addons.length" class="eksd-empty">{{ t('eksd.noAddons') }}</div>
               <div v-else class="eksd-card">
                 <table class="eksd-table">
-                  <thead><tr><th>Add-on</th><th>Versión</th><th>Estado</th><th>Rol IRSA</th><th>Problemas</th></tr></thead>
+                  <thead><tr><th>Add-on</th><th>{{ t('lmd.version') }}</th><th>{{ t('res.state') }}</th><th>{{ t('eksd.irsaRole') }}</th><th>{{ t('eksd.issues') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="a in data.addons" :key="a.name">
                       <td class="mono">{{ a.name }}</td>
@@ -232,8 +232,10 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useAwsStore } from '../../stores/useAwsStore'
+import { useI18n } from '../../composables/useI18n'
+import { settings } from '../../composables/useSettings'
 
 const props = defineProps({
   open:    { type: Boolean, default: false },
@@ -242,18 +244,21 @@ const props = defineProps({
 defineEmits(['close'])
 
 const awsStore = useAwsStore()
+const { t } = useI18n()
+const yesNo = value => t(value ? 'common.yes' : 'common.no')
 
-const TABS = [
+const TABS = computed(() => [
   { id: 'overview',   label: '📋 Overview' },
-  { id: 'network',    label: '🌐 Red',           count: d => d.network.subnets.length + d.network.securityGroups.length },
+  { id: 'network',    label: `🌐 ${t('eksd.tabNetwork')}`, count: d => d.network.subnets.length + d.network.securityGroups.length },
   { id: 'nodegroups', label: '🖥 Node groups',   count: d => d.nodegroups.length },
-  { id: 'instances',  label: 'Instancias EC2',  count: d => d.instances.length },
+  { id: 'instances',  label: t('eksd.ec2Instances'), count: d => d.instances.length },
   { id: 'addons',     label: '🧩 Add-ons',       count: d => d.addons.length },
-]
+])
 
+// Warning sections → i18n keys (names that are AWS terms stay as they are).
 const SECTION_LABELS = {
-  nodegroups: 'Node groups', addons: 'Add-ons', instances: 'Instancias EC2',
-  vpc: 'VPC', subnets: 'Subnets', securityGroups: 'Security groups',
+  nodegroups: 'eksd.sectionNodegroups', addons: 'eksd.sectionAddons', instances: 'eksd.ec2Instances',
+  vpc: 'eksd.sectionVpc', subnets: 'eksd.sectionSubnets', securityGroups: 'eksd.sectionSecurityGroups',
 }
 
 const activeTab = ref('overview')
@@ -283,7 +288,7 @@ async function load() {
     data.value   = res
     loaded.value = true
   } catch (e) {
-    error.value = e?.message || 'No se pudo cargar la infraestructura del cluster'
+    error.value = e?.message || t('eksd.loadFailed')
   } finally {
     loading.value = false
   }
@@ -292,7 +297,7 @@ async function load() {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(d).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function stateClass(s) {

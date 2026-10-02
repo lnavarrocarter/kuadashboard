@@ -24,21 +24,21 @@
             <input v-model="form.host" placeholder="e.g. 1.2.3.4" class="ec2sh-input" />
           </div>
           <div class="ec2sh-form-row">
-            <label>User</label>
+            <label>{{ t('conn.user') }}</label>
             <input v-model="form.user" placeholder="ec2-user" class="ec2sh-input" style="width:130px" />
           </div>
           <div class="ec2sh-form-row">
-            <label>Port</label>
+            <label>{{ t('gri.port') }}</label>
             <input v-model.number="form.port" type="number" min="1" max="65535" placeholder="22" class="ec2sh-input" style="width:80px" />
           </div>
           <div class="ec2sh-form-row">
-            <label>Credential profile ID</label>
-            <input v-model="form.profileId" placeholder="Env Manager profile: SSH_PRIVATE_KEY or SSH_PASSWORD" class="ec2sh-input ec2sh-input-wide" />
+            <label>{{ t('conn.profileId') }}</label>
+            <input v-model="form.profileId" :placeholder="t('conn.sshProfileHint')" class="ec2sh-input ec2sh-input-wide" />
           </div>
 
           <div class="ec2sh-form-actions">
-            <button class="btn" @click="connect" :disabled="!form.host || !form.profileId">Connect</button>
-            <button class="btn btn-ghost" @click="$emit('close')">Cancel</button>
+            <button class="btn" @click="connect" :disabled="!form.host || !form.profileId">{{ t('conn.connect') }}</button>
+            <button class="btn btn-ghost" @click="$emit('close')">{{ t('action.cancel') }}</button>
           </div>
         </div>
 
@@ -49,14 +49,14 @@
             <span class="ec2sh-conn-info">{{ form.user }}@{{ form.host }}:{{ form.port }}</span>
             <div class="ec2sh-toolbar-btns">
               <span v-if="clipboardMsg" class="ec2sh-clip-msg">{{ clipboardMsg }}</span>
-              <button class="ec2sh-tbtn" title="Copy selected terminal text" @click="copySelectedOutput">Copy selected</button>
-              <button class="ec2sh-tbtn" title="Copy all terminal output" @click="copyAllOutput">Copy output</button>
-              <button class="ec2sh-tbtn" title="Paste clipboard into command input" @click="pasteIntoInput">Paste</button>
+              <button class="ec2sh-tbtn" :title="t('term.copySelection')" @click="copySelectedOutput">{{ t('term.copySelection') }}</button>
+              <button class="ec2sh-tbtn" :title="t('term.copyOutput')" @click="copyAllOutput">{{ t('term.copyOutput') }}</button>
+              <button class="ec2sh-tbtn" :title="t('term.paste')" @click="pasteIntoInput">{{ t('conn.paste') }}</button>
               <button class="ec2sh-tbtn" title="Ctrl+C" @click="sendCtrlC">&#x23F9; INT</button>
               <button class="ec2sh-tbtn" title="Ctrl+D" @click="sendCtrlD">EOF</button>
-              <button class="ec2sh-tbtn" @click="clearOutput">Clear</button>
-              <button v-if="sessionStatus === 'ended'" class="ec2sh-tbtn accent" @click="connect">Reconnect</button>
-              <button v-else class="ec2sh-tbtn" @click="disconnect">Disconnect</button>
+              <button class="ec2sh-tbtn" @click="clearOutput">{{ t('term.clear') }}</button>
+              <button v-if="sessionStatus === 'ended'" class="ec2sh-tbtn accent" @click="connect">{{ t('term.reconnect') }}</button>
+              <button v-else class="ec2sh-tbtn" @click="disconnect">{{ t('conn.disconnect') }}</button>
             </div>
           </div>
 
@@ -87,7 +87,9 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useTerminalStreams } from '../../composables/useTerminalStreams'
+import { useI18n } from '../../composables/useI18n'
 
+const { t } = useI18n()
 const props = defineProps({
   open:          { type: Boolean, default: false },
   instance:      { type: Object,  default: null  },
@@ -144,19 +146,19 @@ watch(sessionStatus, status => { if (status === 'connected') nextTick(() => inpu
 // ── Computed ──────────────────────────────────────────────────────────────────
 const statusLabel = computed(() => {
   const map = {
-    disconnected: 'Disconnected',
-    config:       'Configure',
-    connecting:   'Connecting...',
-    connected:    `Connected`,
-    ended:        'Session ended',
+    disconnected: t('term.disconnected'),
+    config:       t('conn.configure'),
+    connecting:   t('conn.connecting'),
+    connected:    t('term.connected'),
+    ended:        t('conn.ended'),
   }
   return map[sessionStatus.value] || sessionStatus.value
 })
 
 const inputPlaceholder = computed(() => {
-  if (sessionStatus.value === 'connected')  return 'Type command and press Enter...'
-  if (sessionStatus.value === 'connecting') return 'Connecting...'
-  return 'Session ended - click Reconnect'
+  if (sessionStatus.value === 'connected')  return t('term.inputPlaceholder')
+  if (sessionStatus.value === 'connecting') return t('conn.connecting')
+  return t('conn.endedReconnect')
 })
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -174,13 +176,13 @@ async function connect() {
   const isReconnect = Boolean(nextTab.entries?.length)
   tab.value = nextTab
   await startSshStream(tab.value, { reconnect: isReconnect })
-  if (!tab.value.ws) contextError.value = 'Invalid console context or credential profile'
+  if (!tab.value.ws) contextError.value = t('conn.invalidContext')
 }
 
 function disconnect() {
   if (!tab.value) return
   store.stopStream(tab.value)
-  store.pushLine(tab.value, 'Disconnected by user', 'sys')
+  store.pushLine(tab.value, t('conn.disconnectedByUser'), 'sys')
 }
 
 // ── Output helpers ────────────────────────────────────────────────────────────
@@ -207,7 +209,7 @@ function getSelectedOutputText() {
 
 async function writeClipboardText(text, successMsg = 'Copied') {
   if (!text) {
-    showClipboardMsg('No text selected')
+    showClipboardMsg(t('conn.noSelection'))
     return false
   }
   try {
@@ -226,32 +228,32 @@ async function writeClipboardText(text, successMsg = 'Copied') {
     showClipboardMsg(successMsg)
     return true
   } catch (_) {
-    showClipboardMsg('Copy failed')
+    showClipboardMsg(t('term.copyFailed'))
     return false
   }
 }
 
 function copySelectedOutput() {
-  writeClipboardText(getSelectedOutputText(), 'Selection copied')
+  writeClipboardText(getSelectedOutputText(), t('term.selectionCopied'))
 }
 
 function copyAllOutput() {
-  writeClipboardText((tab.value?.lines || []).map(htmlToText).join('\n'), 'Output copied')
+  writeClipboardText((tab.value?.lines || []).map(htmlToText).join('\n'), t('term.outputCopied'))
 }
 
 async function pasteIntoInput() {
   try {
     const text = await navigator.clipboard?.readText?.()
     if (!text) {
-      showClipboardMsg('Clipboard empty')
+      showClipboardMsg(t('term.clipboardEmpty'))
       return
     }
-    if (text.includes('\n') && !confirm('Clipboard has multiple lines. Paste into input without running it?')) return
+    if (text.includes('\n') && !confirm(t('term.pasteMultiline'))) return
     cmdInput.value += text
     showClipboardMsg('Pasted')
     nextTick(() => inputRef.value?.focus())
   } catch (_) {
-    showClipboardMsg('Paste failed')
+    showClipboardMsg(t('term.clipboardFailed'))
   }
 }
 

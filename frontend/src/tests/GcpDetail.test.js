@@ -11,6 +11,11 @@ import GcpLabelsEditor from '../components/cloud/GcpLabelsEditor.vue'
 import GcpStateTimeline from '../components/cloud/GcpStateTimeline.vue'
 import GcpPollingSettings from '../components/cloud/GcpPollingSettings.vue'
 import { useGcpStore } from '../stores/useGcpStore'
+import { settings } from '../composables/useSettings'
+
+// The assertions below read the Spanish texts; the last block checks English.
+beforeEach(() => { settings.lang = 'es' })
+afterEach(() => { settings.lang = 'en' })
 
 const VM = {
   name: 'web', instanceId: '123', zone: 'us-central1-a', status: 'RUNNING',
@@ -229,5 +234,18 @@ describe('GcpPollingSettings (#81)', () => {
     const put = calls.find(c => c.method === 'PUT')
     expect(put.body).toEqual({ enabled: true, intervalMinutes: 30, resourceTypes: ['gcp-vm', 'gcp-cloud-run', 'gcp-sql'], retentionDays: 90 })
     expect(w.emitted('saved')[0][0].enabled).toBe(true)
+  })
+})
+
+describe('GCP info panels in English', () => {
+  beforeEach(() => { settings.lang = 'en' })
+
+  it('render labels and observations in English', () => {
+    const vm = mount(GcpVmInfo, { props: { detail: VM, section: 'overview' } })
+    expect(vm.text()).toContain('Observations')
+    expect(vm.text()).toContain('It has a public IP')
+    expect(vm.text()).toContain('ssh-keys · hidden value (540 characters)')
+    expect(vm.text()).toContain('Deletion protection')
+    expect(vm.text()).not.toContain('Observaciones')
   })
 })

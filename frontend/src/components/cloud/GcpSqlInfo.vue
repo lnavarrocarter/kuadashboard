@@ -3,59 +3,59 @@
     <!-- ══ Resumen ══ -->
     <template v-if="section === 'overview'">
       <div v-if="notes.length" class="gi-notes" data-test="notes">
-        <div class="gi-notes-title">Observaciones</div>
+        <div class="gi-notes-title">{{ t('gi.notes') }}</div>
         <ul><li v-for="n in notes" :key="n.text" :class="n.level">{{ n.text }}</li></ul>
       </div>
 
       <div class="gi-grid">
         <div class="gi-card">
-          <div class="gi-card-title">Instancia</div>
+          <div class="gi-card-title">{{ t('ec2d.instance') }}</div>
           <dl>
-            <dt>Estado</dt><dd><span :class="['gi-badge', d.status === 'RUNNING' ? 'ok' : d.status === 'STOPPED' ? '' : 'warn']">{{ d.status }}</span></dd>
-            <dt>Motor</dt><dd class="gi-mono">{{ d.database }}</dd>
-            <dt>Edición · tier</dt><dd>{{ d.edition || '—' }} · <span class="gi-mono">{{ d.tier }}</span></dd>
-            <dt>Disponibilidad</dt><dd><span :class="['gi-badge', d.availabilityType === 'REGIONAL' ? 'ok' : '']">{{ d.availabilityType === 'REGIONAL' ? 'Alta disponibilidad' : 'Zonal' }}</span></dd>
-            <dt>Ubicación</dt><dd class="gi-mono">{{ d.zone || d.region }}<span v-if="d.secondaryZone" class="gi-dim"> · standby {{ d.secondaryZone }}</span></dd>
-            <dt>Creada</dt><dd>{{ fmt(d.created) }}</dd>
+            <dt>{{ t('res.state') }}</dt><dd><span :class="['gi-badge', d.status === 'RUNNING' ? 'ok' : d.status === 'STOPPED' ? '' : 'warn']">{{ d.status }}</span></dd>
+            <dt>{{ t('gsi.engine') }}</dt><dd class="gi-mono">{{ d.database }}</dd>
+            <dt>{{ t('gsi.editionTier') }}</dt><dd>{{ d.edition || '—' }} · <span class="gi-mono">{{ d.tier }}</span></dd>
+            <dt>{{ t('gvi.availability') }}</dt><dd><span :class="['gi-badge', d.availabilityType === 'REGIONAL' ? 'ok' : '']">{{ d.availabilityType === 'REGIONAL' ? t('gsi.highAvailability') : t('gsi.zonal') }}</span></dd>
+            <dt>{{ t('gsi.location') }}</dt><dd class="gi-mono">{{ d.zone || d.region }}<span v-if="d.secondaryZone" class="gi-dim"> · standby {{ d.secondaryZone }}</span></dd>
+            <dt>{{ t('gri.createdF') }}</dt><dd>{{ fmt(d.created) }}</dd>
           </dl>
         </div>
 
         <div class="gi-card">
-          <div class="gi-card-title">Almacenamiento</div>
+          <div class="gi-card-title">{{ t('ec2d.tabStorage') }}</div>
           <dl>
-            <dt>Tipo · tamaño</dt><dd>{{ d.storage?.type || '—' }} · {{ d.storage?.sizeGb ? `${d.storage.sizeGb} GB` : '—' }}</dd>
-            <dt>Auto-resize</dt><dd>{{ d.storage?.autoResize ? `Sí${d.storage.autoResizeLimitGb ? ` (hasta ${d.storage.autoResizeLimitGb} GB)` : ' (sin límite)'}` : 'No' }}</dd>
+            <dt>{{ t('gsi.typeSize') }}</dt><dd>{{ d.storage?.type || '—' }} · {{ d.storage?.sizeGb ? `${d.storage.sizeGb} GB` : '—' }}</dd>
+            <dt>Auto-resize</dt><dd>{{ d.storage?.autoResize ? (d.storage.autoResizeLimitGb ? t('gsi.autoResizeUpTo', { gb: d.storage.autoResizeLimitGb }) : t('gsi.autoResizeUnlimited')) : t('common.no') }}</dd>
             <dt>Data cache</dt><dd>{{ yesNo(d.storage?.dataCache) }}</dd>
-            <dt>Cifrado</dt><dd>{{ d.storage?.encryption || '—' }}</dd>
+            <dt>{{ t('ec2d.encrypted') }}</dt><dd>{{ d.storage?.encryption || '—' }}</dd>
           </dl>
         </div>
 
         <div class="gi-card">
           <div class="gi-card-title">Backups</div>
           <dl>
-            <dt>Automáticos</dt><dd><span :class="['gi-badge', d.backups?.enabled ? 'ok' : 'err']">{{ d.backups?.enabled ? 'Activados' : 'Desactivados' }}</span></dd>
-            <dt>Hora (UTC)</dt><dd>{{ d.backups?.enabled ? (d.backups.startTime || '—') : '—' }}</dd>
+            <dt>{{ t('gsi.automatic') }}</dt><dd><span :class="['gi-badge', d.backups?.enabled ? 'ok' : 'err']">{{ d.backups?.enabled ? t('gsi.backupsOn') : t('gsi.backupsOff') }}</span></dd>
+            <dt>{{ t('gsi.timeUtc') }}</dt><dd>{{ d.backups?.enabled ? (d.backups.startTime || '—') : '—' }}</dd>
             <dt>Point-in-time</dt><dd>{{ yesNo(d.backups?.pointInTimeRecovery) }}</dd>
-            <dt>Retención</dt><dd>{{ d.backups?.retainedBackups ?? '—' }} backups · logs {{ d.backups?.logRetentionDays ?? '—' }} días</dd>
-            <dt v-if="d.backups?.location">Ubicación</dt><dd v-if="d.backups?.location">{{ d.backups.location }}</dd>
+            <dt>{{ t('gsi.retention') }}</dt><dd>{{ t('gsi.retentionValue', { backups: d.backups?.retainedBackups ?? '—', days: d.backups?.logRetentionDays ?? '—' }) }}</dd>
+            <dt v-if="d.backups?.location">{{ t('gsi.location') }}</dt><dd v-if="d.backups?.location">{{ d.backups.location }}</dd>
           </dl>
         </div>
 
         <div class="gi-card">
-          <div class="gi-card-title">Mantenimiento y seguridad</div>
+          <div class="gi-card-title">{{ t('gsi.maintenanceSecurity') }}</div>
           <dl>
-            <dt>Ventana</dt><dd>{{ d.maintenance ? `${d.maintenance.day}${d.maintenance.hour != null ? ` ${d.maintenance.hour}:00 UTC` : ''}` : 'Cualquier momento' }}<span v-if="d.maintenance?.track" class="gi-dim"> · {{ d.maintenance.track }}</span></dd>
-            <dt>Protección eliminación</dt><dd><span :class="['gi-badge', d.security?.deletionProtection ? 'ok' : 'warn']">{{ yesNo(d.security?.deletionProtection) }}</span></dd>
+            <dt>{{ t('gsi.window') }}</dt><dd>{{ d.maintenance ? `${d.maintenance.day}${d.maintenance.hour != null ? ` ${d.maintenance.hour}:00 UTC` : ''}` : t('gsi.anyTime') }}<span v-if="d.maintenance?.track" class="gi-dim"> · {{ d.maintenance.track }}</span></dd>
+            <dt>{{ t('gvi.deletionProtection') }}</dt><dd><span :class="['gi-badge', d.security?.deletionProtection ? 'ok' : 'warn']">{{ yesNo(d.security?.deletionProtection) }}</span></dd>
             <dt>Query Insights</dt><dd>{{ yesNo(d.security?.queryInsights) }}</dd>
-            <dt>Certificado CA</dt><dd>vence {{ fmtDate(d.security?.serverCaExpires) }}</dd>
+            <dt>{{ t('gsi.caCertificate') }}</dt><dd>{{ t('gsi.expires', { date: fmtDate(d.security?.serverCaExpires) }) }}</dd>
           </dl>
         </div>
 
         <div v-if="d.replication?.primary || d.replication?.replicas?.length" class="gi-card">
-          <div class="gi-card-title">Replicación</div>
+          <div class="gi-card-title">{{ t('gsi.replication') }}</div>
           <dl>
-            <dt v-if="d.replication.primary">Primaria</dt><dd v-if="d.replication.primary" class="gi-mono">{{ d.replication.primary }}</dd>
-            <dt>Réplicas</dt><dd><span v-for="r in d.replication.replicas" :key="r" class="gi-chip">{{ r }}</span><span v-if="!d.replication.replicas.length">—</span></dd>
+            <dt v-if="d.replication.primary">{{ t('gsi.primary') }}</dt><dd v-if="d.replication.primary" class="gi-mono">{{ d.replication.primary }}</dd>
+            <dt>{{ t('gsi.replicas') }}</dt><dd><span v-for="r in d.replication.replicas" :key="r" class="gi-chip">{{ r }}</span><span v-if="!d.replication.replicas.length">—</span></dd>
           </dl>
         </div>
       </div>
@@ -64,12 +64,12 @@
     <!-- ══ Configuración (flags) ══ -->
     <template v-else-if="section === 'config'">
       <div class="gi-card">
-        <div class="gi-card-title">Flags de base de datos ({{ d.flags?.length || 0 }})</div>
+        <div class="gi-card-title">{{ t('gsi.flags', { n: d.flags?.length || 0 }) }}</div>
         <table v-if="d.flags?.length" class="gi-table" data-test="flags">
-          <thead><tr><th>Flag</th><th>Valor</th></tr></thead>
+          <thead><tr><th>Flag</th><th>{{ t('res.value') }}</th></tr></thead>
           <tbody><tr v-for="f in d.flags" :key="f.name"><td class="gi-mono">{{ f.name }}</td><td class="gi-mono">{{ f.value }}</td></tr></tbody>
         </table>
-        <div v-else class="gi-empty">Sin flags personalizados (se usan los valores por defecto).</div>
+        <div v-else class="gi-empty">{{ t('gsi.noFlags') }}</div>
       </div>
     </template>
 
@@ -77,34 +77,34 @@
     <template v-else-if="section === 'connection'">
       <div class="gi-grid">
         <div class="gi-card">
-          <div class="gi-card-title">Direcciones</div>
+          <div class="gi-card-title">{{ t('gsi.addresses') }}</div>
           <dl>
             <dt>Connection name</dt><dd class="gi-mono gi-wrap">{{ d.connectionName || '—' }}</dd>
-            <dt>IP pública</dt><dd class="gi-mono">{{ d.network?.publicIp || '—' }}<span v-if="d.network && !d.network.ipv4Enabled" class="gi-dim"> (desactivada)</span></dd>
-            <dt>IP privada</dt><dd class="gi-mono">{{ d.network?.privateIp || '—' }}<span v-if="d.network?.privateNetwork" class="gi-dim"> · VPC {{ d.network.privateNetwork }}</span></dd>
-            <dt>IP de salida</dt><dd class="gi-mono">{{ d.network?.outgoingIp || '—' }}</dd>
+            <dt>{{ t('ec2d.publicIp') }}</dt><dd class="gi-mono">{{ d.network?.publicIp || '—' }}<span v-if="d.network && !d.network.ipv4Enabled" class="gi-dim"> ({{ t('gsi.disabledF') }})</span></dd>
+            <dt>{{ t('ec2d.privateIp') }}</dt><dd class="gi-mono">{{ d.network?.privateIp || '—' }}<span v-if="d.network?.privateNetwork" class="gi-dim"> · VPC {{ d.network.privateNetwork }}</span></dd>
+            <dt>{{ t('gsi.outgoingIp') }}</dt><dd class="gi-mono">{{ d.network?.outgoingIp || '—' }}</dd>
             <dt v-if="d.dnsName">DNS</dt><dd v-if="d.dnsName" class="gi-mono gi-wrap">{{ d.dnsName }}</dd>
             <dt>Private Service Connect</dt><dd>{{ yesNo(d.network?.pscEnabled) }}</dd>
           </dl>
         </div>
         <div class="gi-card">
-          <div class="gi-card-title">Cifrado en tránsito</div>
+          <div class="gi-card-title">{{ t('gsi.inTransit') }}</div>
           <dl>
-            <dt>Modo SSL</dt><dd><span :class="['gi-badge', sslTone]">{{ sslLabel }}</span></dd>
+            <dt>{{ t('gsi.sslMode') }}</dt><dd><span :class="['gi-badge', sslTone]">{{ sslLabel }}</span></dd>
           </dl>
         </div>
         <div class="gi-card wide">
-          <div class="gi-card-title">Redes autorizadas ({{ d.network?.authorizedNetworks?.length || 0 }})</div>
+          <div class="gi-card-title">{{ t('gsi.authorizedNetworks', { n: d.network?.authorizedNetworks?.length || 0 }) }}</div>
           <table v-if="d.network?.authorizedNetworks?.length" class="gi-table" data-test="authorized">
-            <thead><tr><th>Nombre</th><th>CIDR</th></tr></thead>
+            <thead><tr><th>{{ t('res.name') }}</th><th>CIDR</th></tr></thead>
             <tbody>
               <tr v-for="n in d.network.authorizedNetworks" :key="n.cidr">
                 <td>{{ n.name || '—' }}</td>
-                <td class="gi-mono">{{ n.cidr }} <span v-if="n.cidr === '0.0.0.0/0'" class="gi-badge err">todo Internet</span></td>
+                <td class="gi-mono">{{ n.cidr }} <span v-if="n.cidr === '0.0.0.0/0'" class="gi-badge err">{{ t('gsi.allInternet') }}</span></td>
               </tr>
             </tbody>
           </table>
-          <div v-else class="gi-empty">Ninguna: solo conexiones vía Cloud SQL Auth Proxy / conectores o IP privada.</div>
+          <div v-else class="gi-empty">{{ t('gsi.noAuthorizedNetworks') }}</div>
         </div>
       </div>
     </template>
@@ -113,6 +113,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from '../../composables/useI18n'
+import { settings } from '../../composables/useSettings'
 import './gcpInfo.css'
 
 const props = defineProps({
@@ -120,30 +122,32 @@ const props = defineProps({
   section: { type: String, default: 'overview' },   // overview | config | connection
 })
 const d = computed(() => props.detail || {})
+const { t } = useI18n()
+const dateLocale = () => (settings.lang === 'es' ? 'es' : 'en-US')
 
 const SSL = {
-  ENCRYPTED_ONLY: ['Solo conexiones cifradas', 'ok'],
-  TRUSTED_CLIENT_CERTIFICATE_REQUIRED: ['Requiere certificado de cliente', 'ok'],
-  REQUIRE_SSL: ['Requiere SSL', 'ok'],
-  ALLOW_UNENCRYPTED_AND_ENCRYPTED: ['Permite conexiones sin cifrar', 'err'],
+  ENCRYPTED_ONLY: ['gsi.sslEncryptedOnly', 'ok'],
+  TRUSTED_CLIENT_CERTIFICATE_REQUIRED: ['gsi.sslClientCert', 'ok'],
+  REQUIRE_SSL: ['gsi.sslRequired', 'ok'],
+  ALLOW_UNENCRYPTED_AND_ENCRYPTED: ['gsi.sslAllowUnencrypted', 'err'],
 }
-const sslLabel = computed(() => SSL[d.value.network?.sslMode]?.[0] || d.value.network?.sslMode || '—')
+const sslLabel = computed(() => (SSL[d.value.network?.sslMode] ? t(SSL[d.value.network.sslMode][0]) : d.value.network?.sslMode || '—'))
 const sslTone = computed(() => SSL[d.value.network?.sslMode]?.[1] || '')
 
 const notes = computed(() => {
   const out = []
   const v = d.value
-  if (v.backups && !v.backups.enabled) out.push({ level: 'err', text: 'Los backups automáticos están desactivados.' })
-  if (v.network?.sslMode === 'ALLOW_UNENCRYPTED_AND_ENCRYPTED') out.push({ level: 'err', text: 'Se permiten conexiones sin cifrar.' })
-  if ((v.network?.authorizedNetworks || []).some(n => n.cidr === '0.0.0.0/0')) out.push({ level: 'err', text: 'Una red autorizada es 0.0.0.0/0: la base está abierta a todo Internet.' })
-  else if (v.network?.ipv4Enabled && v.network?.authorizedNetworks?.length) out.push({ level: 'warn', text: `IP pública con ${v.network.authorizedNetworks.length} red(es) autorizada(s).` })
-  if (v.security && !v.security.deletionProtection) out.push({ level: 'warn', text: 'Sin protección contra eliminación.' })
-  if (v.availabilityType !== 'REGIONAL') out.push({ level: 'warn', text: 'Instancia zonal: sin failover automático ante caída de la zona.' })
-  if (v.status === 'STOPPED') out.push({ level: 'warn', text: 'Detenida: el almacenamiento y las IPs siguen facturando.' })
+  if (v.backups && !v.backups.enabled) out.push({ level: 'err', text: t('gsi.noteBackupsOff') })
+  if (v.network?.sslMode === 'ALLOW_UNENCRYPTED_AND_ENCRYPTED') out.push({ level: 'err', text: t('gsi.noteUnencrypted') })
+  if ((v.network?.authorizedNetworks || []).some(n => n.cidr === '0.0.0.0/0')) out.push({ level: 'err', text: t('gsi.noteOpenWorld') })
+  else if (v.network?.ipv4Enabled && v.network?.authorizedNetworks?.length) out.push({ level: 'warn', text: t('gsi.notePublicIp', { n: v.network.authorizedNetworks.length }) })
+  if (v.security && !v.security.deletionProtection) out.push({ level: 'warn', text: t('gvi.noteDeletionProtection') })
+  if (v.availabilityType !== 'REGIONAL') out.push({ level: 'warn', text: t('gsi.noteZonal') })
+  if (v.status === 'STOPPED') out.push({ level: 'warn', text: t('gsi.noteStopped') })
   return out
 })
 
-function yesNo(v) { return v == null ? '—' : v ? 'Sí' : 'No' }
-function fmt(v) { return v ? new Date(v).toLocaleString() : '—' }
-function fmtDate(v) { return v ? new Date(v).toLocaleDateString() : '—' }
+function yesNo(v) { return v == null ? '—' : t(v ? 'common.yes' : 'common.no') }
+function fmt(v) { return v ? new Date(v).toLocaleString(dateLocale()) : '—' }
+function fmtDate(v) { return v ? new Date(v).toLocaleDateString(dateLocale()) : '—' }
 </script>

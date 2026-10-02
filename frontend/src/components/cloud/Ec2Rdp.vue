@@ -12,7 +12,7 @@
           </div>
           <div class="rdpc-hdr-right">
             <span :class="['rdpc-status', sessionStatus]">{{ statusLabel }}</span>
-            <button class="rdpc-tbtn" title="Fullscreen" @click="toggleFullscreen">⛶</button>
+            <button class="rdpc-tbtn" :title="t('conn.fullscreen')" @click="toggleFullscreen">⛶</button>
             <button class="rdpc-close" @click="$emit('close')">✕</button>
           </div>
         </div>
@@ -23,11 +23,8 @@
 
           <!-- NLA warning -->
           <div class="rdpc-notice">
-            <strong>⚠ Requisito:</strong> La instancia Windows debe tener NLA deshabilitado.<br>
-            <span class="rdpc-notice-sub">
-              En el servidor → Propiedades del sistema → Acceso remoto →
-              <em>"Permitir conexiones de equipos con cualquier versión de Escritorio remoto"</em>.
-            </span>
+            <strong>⚠ {{ t('conn.rdpRequirement') }}</strong> {{ t('conn.rdpNla') }}<br>
+            <span class="rdpc-notice-sub">{{ t('conn.rdpNlaHow') }}</span>
           </div>
 
           <div class="rdpc-form-row">
@@ -35,23 +32,23 @@
             <input v-model="form.host" placeholder="e.g. 54.1.2.3" class="rdpc-input" />
           </div>
           <div class="rdpc-form-row">
-            <label>Puerto</label>
+            <label>{{ t('gri.port') }}</label>
             <input v-model.number="form.port" type="number" min="1" max="65535" class="rdpc-input" style="width:80px" />
           </div>
           <div class="rdpc-form-row">
-            <label>Usuario</label>
+            <label>{{ t('conn.user') }}</label>
             <input v-model="form.user" placeholder="Administrator" class="rdpc-input" style="width:200px" />
           </div>
           <div class="rdpc-form-row">
-            <label>ID de perfil</label>
-            <input v-model="form.profileId" placeholder="Perfil Env Manager con RDP_PASSWORD" class="rdpc-input" style="width:240px" />
+            <label>{{ t('conn.profileId') }}</label>
+            <input v-model="form.profileId" :placeholder="t('conn.rdpProfileHint')" class="rdpc-input" style="width:240px" />
           </div>
           <div class="rdpc-form-row">
-            <label>Dominio</label>
-            <input v-model="form.domain" placeholder="(opcional)" class="rdpc-input" style="width:180px" />
+            <label>{{ t('conn.domain') }}</label>
+            <input v-model="form.domain" :placeholder="t('conn.optional')" class="rdpc-input" style="width:180px" />
           </div>
           <div class="rdpc-form-row">
-            <label>Resolución</label>
+            <label>{{ t('conn.resolution') }}</label>
             <select v-model="form.resolution" class="rdpc-select">
               <option value="1024x768">1024 × 768</option>
               <option value="1280x800">1280 × 800</option>
@@ -62,9 +59,9 @@
           </div>
 
           <div class="rdpc-form-actions">
-            <button class="btn" @click="connect" :disabled="!form.host || !form.profileId">Conectar</button>
-            <button class="btn btn-ghost" @click="$emit('close')">Cancelar</button>
-            <button class="btn btn-ghost" @click="downloadRdpFile" :disabled="!form.host">⬇ Archivo .rdp</button>
+            <button class="btn" @click="connect" :disabled="!form.host || !form.profileId">{{ t('conn.connect') }}</button>
+            <button class="btn btn-ghost" @click="$emit('close')">{{ t('action.cancel') }}</button>
+            <button class="btn btn-ghost" @click="downloadRdpFile" :disabled="!form.host">⬇ {{ t('conn.rdpFile') }}</button>
           </div>
         </div>
 
@@ -76,35 +73,35 @@
             <span class="rdpc-conn-info">{{ form.user }}@{{ form.host }}:{{ form.port }}</span>
             <div class="rdpc-toolbar-btns">
               <span v-if="pasteMsg" class="rdpc-paste-msg">{{ pasteMsg }}</span>
-              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="openPasteModal" title="Pegar texto en la sesion remota enfocada">
-                Paste text
+              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="openPasteModal" :title="t('conn.pasteHint')">
+                {{ t('conn.pasteText') }}
               </button>
-              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="sendCtrlAltDel" title="Enviar Ctrl+Alt+Del">
+              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="sendCtrlAltDel" :title="t('conn.sendCad')">
                 ⌨ Ctrl+Alt+Del
               </button>
-              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="sendWinKey" title="Tecla Windows">
+              <button v-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="sendWinKey" :title="t('conn.winKey')">
                 ⊞ Win
               </button>
-              <span v-if="sessionStatus === 'connecting'" class="rdpc-conn-info">Conectando...</span>
-              <button v-if="sessionStatus === 'ended'" class="rdpc-tbtn accent" @click="connect">↺ Reconectar</button>
-              <button v-else-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="disconnect">Desconectar</button>
+              <span v-if="sessionStatus === 'connecting'" class="rdpc-conn-info">{{ t('conn.connecting') }}</span>
+              <button v-if="sessionStatus === 'ended'" class="rdpc-tbtn accent" @click="connect">↺ {{ t('term.reconnect') }}</button>
+              <button v-else-if="sessionStatus === 'connected'" class="rdpc-tbtn" @click="disconnect">{{ t('conn.disconnect') }}</button>
             </div>
           </div>
 
           <div v-if="pasteModalOpen" class="rdpc-paste-panel">
             <div class="rdpc-paste-head">
-              <span>Paste text into RDP</span>
+              <span>{{ t('conn.pasteTitle') }}</span>
               <button class="rdpc-close" @click="closePasteModal">✕</button>
             </div>
             <textarea
               v-model="pasteText"
               class="rdpc-paste-textarea"
-              placeholder="Paste text here. It will be sent as keyboard input to the focused remote field."
+              :placeholder="t('conn.pastePlaceholder')"
               spellcheck="false"
             ></textarea>
             <div class="rdpc-paste-actions">
-              <button class="btn" :disabled="!pasteText || pasteSending" @click="sendPasteText">{{ pasteSending ? 'Sending...' : 'Send text' }}</button>
-              <button class="btn btn-ghost" :disabled="pasteSending" @click="closePasteModal">Cancel</button>
+              <button class="btn" :disabled="!pasteText || pasteSending" @click="sendPasteText">{{ pasteSending ? t('conn.sending') : t('conn.sendText') }}</button>
+              <button class="btn btn-ghost" :disabled="pasteSending" @click="closePasteModal">{{ t('action.cancel') }}</button>
             </div>
           </div>
 
@@ -129,16 +126,16 @@
             <div v-if="sessionStatus === 'connecting'" class="rdpc-overlay">
               <div class="rdpc-overlay-content">
                 <div class="rdpc-spinner"></div>
-                <span>Conectando a {{ form.host }}...</span>
+                <span>{{ t('conn.connectingTo', { host: form.host }) }}</span>
               </div>
             </div>
             <div v-if="sessionStatus === 'ended'" class="rdpc-overlay rdpc-overlay-ended">
               <div class="rdpc-overlay-content">
                 <span style="font-size:2rem">🔌</span>
-                <span>{{ errorMsg || 'Sesión terminada' }}</span>
+                <span>{{ errorMsg || t('conn.ended') }}</span>
                 <div style="display:flex;gap:8px">
-                  <button class="btn" @click="connect">↺ Reconectar</button>
-                  <button class="btn btn-ghost" @click="sessionStatus = 'disconnected'">← Formulario</button>
+                  <button class="btn" @click="connect">↺ {{ t('term.reconnect') }}</button>
+                  <button class="btn btn-ghost" @click="sessionStatus = 'disconnected'">← {{ t('conn.form') }}</button>
                 </div>
               </div>
             </div>
@@ -154,6 +151,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted, markRaw } from 'vue'
 import { prepareConsoleConnection } from '../../composables/consoleConnection'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({
   open:     { type: Boolean, default: false },
@@ -197,12 +195,9 @@ watch(() => props.open, val => {
 }, { immediate: true })
 
 // ── Computed ──────────────────────────────────────────────────────────────────
-const statusLabel = computed(() => ({
-  disconnected: 'Desconectado',
-  connecting:   'Conectando...',
-  connected:    'Conectado',
-  ended:        'Sesión terminada',
-})[sessionStatus.value] || sessionStatus.value)
+const { t } = useI18n()
+const STATUS_KEYS = { disconnected: 'term.disconnected', connecting: 'conn.connecting', connected: 'term.connected', ended: 'conn.ended' }
+const statusLabel = computed(() => (STATUS_KEYS[sessionStatus.value] ? t(STATUS_KEYS[sessionStatus.value]) : sessionStatus.value))
 
 // ── Connection ────────────────────────────────────────────────────────────────
 let connectionAttempt = 0
@@ -225,7 +220,7 @@ async function connect() {
   } catch (_) {
     if (attempt !== connectionAttempt) return
     sessionStatus.value = 'disconnected'
-    errorMsg.value = 'Contexto o perfil de credenciales inválido'
+    errorMsg.value = t('conn.invalidContext')
     return
   }
   if (attempt !== connectionAttempt) return
@@ -249,7 +244,7 @@ async function connect() {
     } else if (msg.type === 'bitmap') {
       renderBitmap(msg)
     } else if (msg.type === 'error') {
-      errorMsg.value = msg.data || 'Error de conexión'
+      errorMsg.value = msg.data || t('conn.connectionError')
       sessionStatus.value = 'ended'
     } else if (msg.type === 'done') {
       if (sessionStatus.value === 'connected') {
@@ -261,13 +256,13 @@ async function connect() {
 
   sock.addEventListener('close', () => {
     if (sessionStatus.value === 'connecting' || sessionStatus.value === 'connected') {
-      if (!errorMsg.value) errorMsg.value = 'Conexión cerrada inesperadamente'
+      if (!errorMsg.value) errorMsg.value = t('conn.closedUnexpectedly')
       sessionStatus.value = 'ended'
     }
   })
 
   sock.addEventListener('error', () => {
-    errorMsg.value = 'Error de WebSocket'
+    errorMsg.value = t('conn.websocketError')
     sessionStatus.value = 'ended'
   })
 }
@@ -530,7 +525,7 @@ async function sendPasteText() {
       }
       await sendKeyStroke(spec.code, !!spec.shift)
     }
-    showPasteMsg(skipped ? `Texto enviado (${skipped} caracteres omitidos)` : 'Texto enviado')
+    showPasteMsg(skipped ? t('conn.textSentSkipped', { n: skipped }) : t('conn.textSent'))
     pasteModalOpen.value = false
     pasteText.value = ''
     nextTick(() => canvasRef.value?.focus())

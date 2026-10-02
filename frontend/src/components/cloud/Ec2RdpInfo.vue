@@ -19,76 +19,76 @@
 
           <!-- Connection details card -->
           <div class="rdp-card">
-            <div class="rdp-card-title">🔌 Datos de conexión</div>
+            <div class="rdp-card-title">🔌 {{ t('conn.connectionData') }}</div>
             <div class="rdp-row">
               <span class="rdp-label">Host / IP</span>
               <span class="rdp-value mono">{{ host || '—' }}</span>
               <button v-if="host" class="rdp-copy-btn" @click="copy(host)" :class="{ copied: copied === 'host' }">
-                {{ copied === 'host' ? '✓' : 'Copiar' }}
+                {{ copied === 'host' ? '✓' : t('action.copy') }}
               </button>
             </div>
             <div class="rdp-row">
-              <span class="rdp-label">Puerto</span>
+              <span class="rdp-label">{{ t('gri.port') }}</span>
               <span class="rdp-value mono">3389</span>
             </div>
             <div class="rdp-row">
-              <span class="rdp-label">Usuario</span>
+              <span class="rdp-label">{{ t('conn.user') }}</span>
               <span class="rdp-value mono">Administrator</span>
               <button class="rdp-copy-btn" @click="copy('Administrator')" :class="{ copied: copied === 'Administrator' }">
-                {{ copied === 'Administrator' ? '✓' : 'Copiar' }}
+                {{ copied === 'Administrator' ? '✓' : t('action.copy') }}
               </button>
             </div>
           </div>
 
           <!-- Password retrieval -->
           <div class="rdp-card">
-            <div class="rdp-card-title">🔑 Obtener contraseña de Windows</div>
+            <div class="rdp-card-title">🔑 {{ t('conn.getPassword') }}</div>
             <p class="rdp-hint">
-              AWS genera una contraseña temporal cifrada con tu PEM. Necesitas descifrarla con la AWS CLI:
+              {{ t('conn.passwordHint') }}
             </p>
             <div class="rdp-code-block">
               <code>aws ec2 get-password-data \<br>
 &nbsp;&nbsp;--instance-id {{ instance?.id || '&lt;instance-id&gt;' }} \<br>
-&nbsp;&nbsp;--priv-launch-key /ruta/a/tu/key.pem \<br>
+&nbsp;&nbsp;--priv-launch-key {{ t('conn.keyPath') }} \<br>
 &nbsp;&nbsp;{{ profileArg }}</code>
             </div>
             <button class="rdp-copy-btn wide" @click="copyCmd" :class="{ copied: copied === 'cmd' }">
-              {{ copied === 'cmd' ? '✓ Copiado' : '📋 Copiar comando' }}
+              {{ copied === 'cmd' ? `✓ ${t('res.copied')}` : `📋 ${t('conn.copyCommand')}` }}
             </button>
           </div>
 
           <!-- How to connect -->
           <div class="rdp-card">
-            <div class="rdp-card-title">🚀 Cómo conectarse</div>
+            <div class="rdp-card-title">🚀 {{ t('conn.howToConnect') }}</div>
             <div class="rdp-steps">
               <div class="rdp-step">
                 <span class="rdp-step-num">1</span>
-                <span>Ejecuta el comando de arriba para obtener la contraseña.</span>
+                <span>{{ t('conn.runCommand') }}</span>
               </div>
               <div class="rdp-step">
                 <span class="rdp-step-num">2</span>
                 <span>
-                  Abre tu cliente RDP:
+                  {{ t('conn.openClient') }}
                   <strong>macOS</strong>: Microsoft Remote Desktop (App Store) ·
-                  <strong>Linux</strong>: Remmina o FreeRDP ·
+                  <strong>Linux</strong>: {{ t('conn.linuxClients') }} ·
                   <strong>Windows</strong>: mstsc.exe
                 </span>
               </div>
               <div class="rdp-step">
                 <span class="rdp-step-num">3</span>
-                <span>Introduce el host <code>{{ host || '&lt;IP&gt;' }}</code>, usuario <code>Administrator</code> y la contraseña obtenida.</span>
+                <span>{{ t('conn.enterHost', { host: host || '<IP>' }) }}</span>
               </div>
               <div class="rdp-step rdp-step-tip">
                 <span class="rdp-step-num">💡</span>
-                <span>Asegúrate de que el Security Group permite tráfico entrante en el puerto <strong>3389 (TCP)</strong> desde tu IP.</span>
+                <span>{{ t('conn.sgHint') }}</span>
               </div>
             </div>
           </div>
 
           <!-- Quick open RDP file (macOS / Windows) -->
           <div v-if="host" class="rdp-card rdp-card-action">
-            <div class="rdp-card-title">⚡ Acceso rápido</div>
-            <p class="rdp-hint">Descarga un archivo <code>.rdp</code> listo para abrir con tu cliente RDP.</p>
+            <div class="rdp-card-title">⚡ {{ t('conn.quickAccess') }}</div>
+            <p class="rdp-hint">{{ t('conn.downloadHint') }}</p>
             <button class="rdp-dl-btn" @click="downloadRdpFile">
               ⬇ Descargar archivo .rdp
             </button>
@@ -98,7 +98,7 @@
 
         <!-- Footer -->
         <div class="rdp-footer">
-          <button class="btn btn-ghost" @click="$emit('close')">Cerrar</button>
+          <button class="btn btn-ghost" @click="$emit('close')">{{ t('action.close') }}</button>
         </div>
 
       </div>
@@ -108,7 +108,9 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useI18n } from '../../composables/useI18n'
 
+const { t } = useI18n()
 const props = defineProps({
   open:     { type: Boolean, default: false },
   instance: { type: Object,  default: null  },
@@ -123,7 +125,7 @@ const host = computed(() =>
 
 const profileArg = computed(() => {
   // If we can infer profile from the store we'd pass it, for now show placeholder
-  return '--profile &lt;tu-perfil&gt;'
+  return `--profile &lt;${t('conn.yourProfile')}&gt;`
 })
 
 function copy(text) {
@@ -133,7 +135,7 @@ function copy(text) {
 }
 
 const rawCmd = computed(() =>
-  `aws ec2 get-password-data \\\n  --instance-id ${props.instance?.id || '<instance-id>'} \\\n  --priv-launch-key /ruta/a/tu/key.pem`
+  `aws ec2 get-password-data \\\n  --instance-id ${props.instance?.id || '<instance-id>'} \\\n  --priv-launch-key ${t('conn.keyPath')}`
 )
 
 function copyCmd() {

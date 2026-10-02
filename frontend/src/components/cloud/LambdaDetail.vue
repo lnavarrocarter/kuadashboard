@@ -22,8 +22,8 @@
             {{ tab.label }}
           </button>
           <div class="lmd-tabs-right">
-            <button v-if="!detailLoaded && !loading" class="btn sm" @click="loadDetails">Cargar</button>
-            <button v-else-if="detailLoaded" class="btn sm" @click="loadDetails" :disabled="loading">↺</button>
+            <button v-if="!detailLoaded && !loading" class="btn sm" @click="loadDetails">{{ t('lmd.load') }}</button>
+            <button v-else-if="detailLoaded" class="btn sm" @click="loadDetails" :disabled="loading" :title="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -32,7 +32,7 @@
 
           <div v-if="loading" class="lmd-spinner-wrap">
             <div class="lmd-spinner"></div>
-            <span>{{ codeLoading ? 'Descargando código...' : 'Cargando...' }}</span>
+            <span>{{ codeLoading ? t('lmd.downloadingCode') : t('common.loading') }}</span>
           </div>
           <div v-else-if="error" class="lmd-error">{{ error }}</div>
 
@@ -42,18 +42,18 @@
             <div v-show="activeTab === 'basic'" class="lmd-section">
               <div class="lmd-grid">
                 <div class="lmd-card">
-                  <div class="lmd-card-title">Función</div>
+                  <div class="lmd-card-title">{{ t('lmd.function') }}</div>
                   <dl>
-                    <dt>Nombre</dt>       <dd>{{ data.basic.name }}</dd>
-                    <dt>Descripción</dt>  <dd>{{ data.basic.description || '—' }}</dd>
-                    <dt>ARN</dt>          <dd class="mono wrap copyable">{{ data.basic.arn }}<button class="copy-btn" @click.stop="copyField(data.basic.arn,'arn')" :title="copiedKey==='arn'?'¡Copiado!':'Copiar'">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Estado</dt>
+                    <dt>{{ t('res.name') }}</dt>       <dd>{{ data.basic.name }}</dd>
+                    <dt>{{ t('res.description') }}</dt>  <dd>{{ data.basic.description || '—' }}</dd>
+                    <dt>ARN</dt>          <dd class="mono wrap copyable">{{ data.basic.arn }}<button class="copy-btn" @click.stop="copyField(data.basic.arn,'arn')" :title="copiedKey==='arn' ? t('res.copied') : t('action.copy')">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('res.state') }}</dt>
                     <dd>
                       <span :class="['lmd-state', data.basic.state]">{{ data.basic.state }}</span>
                       <span v-if="data.basic.stateReason" class="text-dim" style="font-size:.75rem;margin-left:6px">{{ data.basic.stateReason }}</span>
                     </dd>
-                    <dt>Versión</dt>      <dd class="mono">{{ data.basic.version }}</dd>
-                    <dt>Modificado</dt>   <dd>{{ fmtDate(data.basic.lastModified) }}</dd>
+                    <dt>{{ t('lmd.version') }}</dt>      <dd class="mono">{{ data.basic.version }}</dd>
+                    <dt>{{ t('lmd.modified') }}</dt>   <dd>{{ fmtDate(data.basic.lastModified) }}</dd>
                   </dl>
                 </div>
 
@@ -62,36 +62,36 @@
                   <dl>
                     <dt>Runtime</dt>      <dd class="mono">{{ data.basic.runtime }}</dd>
                     <dt>Handler</dt>      <dd class="mono">{{ data.basic.handler }}</dd>
-                    <dt>Arquitectura</dt> <dd class="mono">{{ data.basic.architecture }}</dd>
-                    <dt>Paquete</dt>      <dd class="mono">{{ data.basic.packageType }}</dd>
-                    <dt v-if="data.basic.imageUri">Imagen</dt>
+                    <dt>{{ t('ec2d.architecture') }}</dt> <dd class="mono">{{ data.basic.architecture }}</dd>
+                    <dt>{{ t('lmd.package') }}</dt>      <dd class="mono">{{ data.basic.packageType }}</dd>
+                    <dt v-if="data.basic.imageUri">{{ t('lmd.image') }}</dt>
                     <dd v-if="data.basic.imageUri" class="mono wrap">{{ data.basic.imageUri }}</dd>
                     <dt>SnapStart</dt>    <dd>{{ data.basic.snapStart || 'None' }}</dd>
                   </dl>
                 </div>
 
                 <div class="lmd-card">
-                  <div class="lmd-card-title">Recursos</div>
+                  <div class="lmd-card-title">{{ t('lmd.resources') }}</div>
                   <dl>
-                    <dt>Memoria</dt>      <dd>{{ data.basic.memory }} MB</dd>
+                    <dt>{{ t('lmd.memory') }}</dt>      <dd>{{ data.basic.memory }} MB</dd>
                     <dt>Timeout</dt>      <dd>{{ data.basic.timeout }} s</dd>
-                    <dt>Efímero /tmp</dt> <dd>{{ data.basic.ephemeralStorage }} MB</dd>
-                    <dt>Código</dt>       <dd>{{ fmtBytes(data.basic.codeSize) }}</dd>
-                    <dt>SHA256</dt>       <dd class="mono wrap copyable" style="font-size:.72rem">{{ data.basic.codeHash }}<button class="copy-btn" @click.stop="copyField(data.basic.codeHash,'hash')" :title="copiedKey==='hash'?'¡Copiado!':'Copiar'">{{ copiedKey==='hash' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('lmd.ephemeral') }}</dt> <dd>{{ data.basic.ephemeralStorage }} MB</dd>
+                    <dt>{{ t('lmd.code') }}</dt>       <dd>{{ fmtBytes(data.basic.codeSize) }}</dd>
+                    <dt>SHA256</dt>       <dd class="mono wrap copyable" style="font-size:.72rem">{{ data.basic.codeHash }}<button class="copy-btn" @click.stop="copyField(data.basic.codeHash,'hash')" :title="copiedKey==='hash' ? t('res.copied') : t('action.copy')">{{ copiedKey==='hash' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="lmd-card">
-                  <div class="lmd-card-title">Tags ({{ Object.keys(data.basic.tags || {}).length }})</div>
+                  <div class="lmd-card-title">{{ t('res.tagsCount', { n: Object.keys(data.basic.tags || {}).length }) }}</div>
                   <table class="lmd-table" v-if="Object.keys(data.basic.tags || {}).length">
-                    <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                    <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                     <tbody>
                       <tr v-for="(v, k) in data.basic.tags" :key="k">
                         <td class="mono">{{ k }}</td><td class="mono">{{ v }}</td>
                       </tr>
                     </tbody>
                   </table>
-                  <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
+                  <div v-else class="text-dim" style="font-size:.82rem">{{ t('res.noTags') }}</div>
                 </div>
               </div>
             </div>
@@ -101,13 +101,13 @@
               <!-- Env Vars -->
               <div class="lmd-card" style="margin-bottom:10px">
                 <div class="lmd-card-title" style="display:flex;justify-content:space-between;align-items:center">
-                  Variables de entorno ({{ data.config.envVars.length }})
+                  {{ t('lmd.envVars', { n: data.config.envVars.length }) }}
                   <button class="btn sm" v-if="data.config.envVars.length" @click="showEnvValues = !showEnvValues">
-                    {{ showEnvValues ? '🙈 Ocultar' : '👁 Mostrar' }}
+                    {{ showEnvValues ? `🙈 ${t('lmd.hide')}` : `👁 ${t('lmd.show')}` }}
                   </button>
                 </div>
                 <table class="lmd-table" v-if="data.config.envVars.length">
-                  <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                  <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="e in data.config.envVars" :key="e.k">
                       <td class="mono">{{ e.k }}</td>
@@ -115,14 +115,14 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin variables de entorno.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('lmd.noEnvVars') }}</div>
               </div>
 
               <!-- Layers -->
               <div class="lmd-card" style="margin-bottom:10px">
                 <div class="lmd-card-title">Layers ({{ data.config.layers.length }})</div>
                 <table class="lmd-table" v-if="data.config.layers.length">
-                  <thead><tr><th>ARN</th><th>Tamaño</th></tr></thead>
+                  <thead><tr><th>ARN</th><th>{{ t('ec2d.size') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="l in data.config.layers" :key="l.arn">
                       <td class="mono wrap">{{ l.arn }}</td>
@@ -130,7 +130,7 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin layers.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('lmd.noLayers') }}</div>
               </div>
 
               <!-- VPC -->
@@ -138,7 +138,7 @@
                 <div class="lmd-card-title">VPC</div>
                 <template v-if="data.config.vpc">
                   <dl>
-                    <dt>VPC</dt>     <dd class="mono copyable">{{ data.config.vpc.vpcId }}<button class="copy-btn" @click.stop="copyField(data.config.vpc.vpcId,'vpcid')" :title="copiedKey==='vpcid'?'¡Copiado!':'Copiar'">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
+                    <dt>VPC</dt>     <dd class="mono copyable">{{ data.config.vpc.vpcId }}<button class="copy-btn" @click.stop="copyField(data.config.vpc.vpcId,'vpcid')" :title="copiedKey==='vpcid' ? t('res.copied') : t('action.copy')">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
                     <dt>Subnets</dt> <dd>
                       <span v-for="s in data.config.vpc.subnetIds" :key="s" class="lmd-chip">{{ s }}</span>
                     </dd>
@@ -147,18 +147,18 @@
                     </dd>
                   </dl>
                 </template>
-                <div v-else class="text-dim" style="font-size:.82rem">No está en VPC.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('lmd.noVpc') }}</div>
               </div>
 
               <!-- Misc config -->
               <div class="lmd-card" style="margin-bottom:10px">
-                <div class="lmd-card-title">Otras opciones</div>
+                <div class="lmd-card-title">{{ t('lmd.otherOptions') }}</div>
                 <dl>
                   <dt>Tracing (X-Ray)</dt>     <dd>{{ data.config.tracing || '—' }}</dd>
-                  <dt>DLQ (cola de errores)</dt><dd class="mono wrap copyable">{{ data.config.dlq || '—' }}<button v-if="data.config.dlq" class="copy-btn" @click.stop="copyField(data.config.dlq,'dlq')" :title="copiedKey==='dlq'?'¡Copiado!':'Copiar'">{{ copiedKey==='dlq' ? '✓' : '⧉' }}</button></dd>
-                  <dt>Concurrencia reservada</dt>
-                  <dd>{{ data.config.reservedConcurrency !== null ? data.config.reservedConcurrency : 'Sin límite' }}</dd>
-                  <dt>KMS Key</dt>             <dd class="mono wrap copyable">{{ data.config.kmsKeyArn || '—' }}<button v-if="data.config.kmsKeyArn" class="copy-btn" @click.stop="copyField(data.config.kmsKeyArn,'kms')" :title="copiedKey==='kms'?'¡Copiado!':'Copiar'">{{ copiedKey==='kms' ? '✓' : '⧉' }}</button></dd>
+                  <dt>{{ t('lmd.dlq') }}</dt><dd class="mono wrap copyable">{{ data.config.dlq || '—' }}<button v-if="data.config.dlq" class="copy-btn" @click.stop="copyField(data.config.dlq,'dlq')" :title="copiedKey==='dlq' ? t('res.copied') : t('action.copy')">{{ copiedKey==='dlq' ? '✓' : '⧉' }}</button></dd>
+                  <dt>{{ t('lmd.reservedConcurrency') }}</dt>
+                  <dd>{{ data.config.reservedConcurrency !== null ? data.config.reservedConcurrency : t('lmd.unlimited') }}</dd>
+                  <dt>KMS Key</dt>             <dd class="mono wrap copyable">{{ data.config.kmsKeyArn || '—' }}<button v-if="data.config.kmsKeyArn" class="copy-btn" @click.stop="copyField(data.config.kmsKeyArn,'kms')" :title="copiedKey==='kms' ? t('res.copied') : t('action.copy')">{{ copiedKey==='kms' ? '✓' : '⧉' }}</button></dd>
                 </dl>
               </div>
 
@@ -243,11 +243,11 @@
                   <svg class="lmd-sparkline" viewBox="0 0 200 40" preserveAspectRatio="none">
                     <polyline v-if="sparkPoints(m.key)" :points="sparkPoints(m.key)" fill="none" :stroke="m.color || '#58a6ff'" stroke-width="1.5"/>
                   </svg>
-                  <div class="lmd-metric-range">Últimas 3 h · período 5 min</div>
+                  <div class="lmd-metric-range">{{ t('lmd.metricRange') }}</div>
                 </div>
               </div>
               <div v-if="!hasAnyMetric" class="text-dim" style="text-align:center;padding:32px">
-                Sin datos de CloudWatch en las últimas 3 horas.
+                {{ t('lmd.noMetrics') }}
               </div>
             </div>
 
@@ -256,7 +256,7 @@
               <div v-if="data.aliases.length" class="lmd-card">
                 <div class="lmd-card-title">Aliases ({{ data.aliases.length }})</div>
                 <table class="lmd-table">
-                  <thead><tr><th>Nombre</th><th>Versión</th><th>Routing</th><th>Descripción</th></tr></thead>
+                  <thead><tr><th>{{ t('res.name') }}</th><th>{{ t('lmd.version') }}</th><th>Routing</th><th>{{ t('res.description') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="a in data.aliases" :key="a.name">
                       <td><strong>{{ a.name }}</strong><div class="mono-xs text-dim">{{ a.arn }}</div></td>
@@ -273,14 +273,14 @@
                 </table>
               </div>
               <div v-else class="text-dim" style="text-align:center;padding:32px">
-                Sin aliases configurados.
+                {{ t('lmd.noAliases') }}
               </div>
 
               <!-- Versions -->
               <div class="lmd-card" style="margin-top:10px">
-                <div class="lmd-card-title">Versiones publicadas (últimas 10)</div>
+                <div class="lmd-card-title">{{ t('lmd.versions') }}</div>
                 <table class="lmd-table" v-if="data.versions.length">
-                  <thead><tr><th>Versión</th><th>Estado</th><th>Código</th><th>Modificado</th><th>Descripción</th></tr></thead>
+                  <thead><tr><th>{{ t('lmd.version') }}</th><th>{{ t('res.state') }}</th><th>{{ t('lmd.code') }}</th><th>{{ t('lmd.modified') }}</th><th>{{ t('res.description') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="v in data.versions" :key="v.version">
                       <td class="mono">{{ v.version === '$LATEST' ? '🔴 $LATEST' : 'v' + v.version }}</td>
@@ -291,7 +291,7 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin versiones publicadas.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('lmd.noVersions') }}</div>
               </div>
             </div>
 
@@ -301,10 +301,10 @@
               <!-- Not loaded yet -->
               <div v-if="!codeData && !codeError" class="lmd-code-empty">
                 <div>💻</div>
-                <div>Haz clic para descargar y explorar el código desplegado</div>
+                <div>{{ t('lmd.codeHint') }}</div>
                 <button class="btn" @click="loadCode" :disabled="codeLoading">
-                  <span v-if="codeLoading">Descargando...</span>
-                  <span v-else>⬇ Cargar código</span>
+                  <span v-if="codeLoading">{{ t('lmd.downloading') }}</span>
+                  <span v-else>⬇ {{ t('lmd.loadCode') }}</span>
                 </button>
               </div>
 
@@ -312,7 +312,7 @@
 
               <!-- Image type -->
               <div v-else-if="codeData?.type === 'image'" class="lmd-card">
-                <div class="lmd-card-title">Imagen de contenedor</div>
+                <div class="lmd-card-title">{{ t('lmd.containerImage') }}</div>
                 <dl>
                   <dt>URI</dt><dd class="mono wrap">{{ codeData.imageUri || '—' }}</dd>
                 </dl>
@@ -324,7 +324,7 @@
                   <!-- File tree -->
                   <div class="lmd-file-tree">
                     <div class="lmd-file-tree-title">
-                      Archivos ({{ codeData.files.length }})
+                      {{ t('lmd.files', { n: codeData.files.length }) }}
                     </div>
                     <div class="lmd-file-list">
                       <button
@@ -342,7 +342,7 @@
                   <!-- Code viewer -->
                   <div class="lmd-code-viewer">
                     <div v-if="!selectedFile" class="lmd-code-placeholder">
-                      ← Selecciona un archivo para ver su contenido
+                      ← {{ t('lmd.selectFile') }}
                     </div>
                     <template v-else>
                       <div class="lmd-code-toolbar">
@@ -350,10 +350,10 @@
                         <span class="lmd-badge runtime">{{ fmtBytes(selectedFile.size) }}</span>
                       </div>
                       <div v-if="!selectedFile.isText" class="lmd-code-placeholder">
-                        Archivo binario — no se puede mostrar como texto.
+                        {{ t('lmd.binaryFile') }}
                       </div>
                       <div v-else-if="selectedFile.content === null" class="lmd-code-placeholder">
-                        Archivo demasiado grande para mostrar (> 256 KB).
+                        {{ t('lmd.fileTooLarge') }}
                       </div>
                       <pre v-else class="lmd-code-pre"><code>{{ selectedFile.content }}</code></pre>
                     </template>
@@ -366,7 +366,7 @@
           </template>
 
           <div v-else class="lmd-empty">
-            Haz clic en <strong>Cargar</strong> para ver los detalles de esta función.
+            {{ t('lmd.emptyHint') }}
           </div>
 
         </div>
@@ -377,6 +377,7 @@
 
 <script setup>
 import { useI18n } from '../../composables/useI18n'
+import { settings } from '../../composables/useSettings'
 import { ref, computed, watch } from 'vue'
 
 const { t } = useI18n()
@@ -393,14 +394,15 @@ const props = defineProps({
 })
 defineEmits(['close'])
 
-const TABS = [
-  { id: 'basic',      label: '📋 Básico'         },
-  { id: 'config',     label: '⚙️ Configuración'   },
-  { id: 'logs',       label: '📋 Logs'            },
-  { id: 'monitoring', label: '📊 Monitoreo'       },
-  { id: 'aliases',    label: '🏷 Aliases'          },
-  { id: 'code',       label: '💻 Código'           },
-]
+const TABS = computed(() => [
+  { id: 'basic',      label: `📋 ${t('lmd.tabBasic')}` },
+  { id: 'config',     label: `⚙️ ${t('lmd.tabConfig')}` },
+  { id: 'logs',       label: '📋 Logs' },
+  { id: 'monitoring', label: `📊 ${t('ec2d.tabMonitoring')}` },
+  { id: 'aliases',    label: '🏷 Aliases' },
+  { id: 'code',       label: `💻 ${t('lmd.code')}` },
+])
+const dateLocale = () => (settings.lang === 'es' ? 'es' : 'en-US')
 
 const activeTab    = ref('basic')
 const data         = ref(null)
@@ -509,7 +511,7 @@ async function createLogGroup() {
 
 function fmtTs(ts) {
   if (!ts) return ''
-  return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function shortStream(s) {
@@ -565,7 +567,7 @@ async function loadCode() {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(d).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function fmtBytes(b) {
@@ -589,13 +591,13 @@ function fileIcon(path) {
 }
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
-const metricCards = [
-  { key: 'Invocations',          label: 'Invocaciones',     unit: 'n',   color: '#58a6ff' },
-  { key: 'Errors',               label: 'Errores',          unit: 'n',   color: '#f85149' },
-  { key: 'Duration',             label: 'Duración (avg)',   unit: 'ms',  color: '#3fb950' },
-  { key: 'Throttles',            label: 'Throttles',        unit: 'n',   color: '#d29922' },
-  { key: 'ConcurrentExecutions', label: 'Concurrencia max', unit: 'n',   color: '#a371f7' },
-]
+const metricCards = computed(() => [
+  { key: 'Invocations',          label: t('lmd.invocations'),    unit: 'n',  color: '#58a6ff' },
+  { key: 'Errors',               label: t('lmd.errors'),         unit: 'n',  color: '#f85149' },
+  { key: 'Duration',             label: t('lmd.durationAvg'),    unit: 'ms', color: '#3fb950' },
+  { key: 'Throttles',            label: 'Throttles',             unit: 'n',  color: '#d29922' },
+  { key: 'ConcurrentExecutions', label: t('lmd.maxConcurrency'), unit: 'n',  color: '#a371f7' },
+])
 
 function lastVal(key) {
   const pts = data.value?.metrics?.[key]

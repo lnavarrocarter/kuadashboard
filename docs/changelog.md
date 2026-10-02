@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- **Language of detail screens:** the EC2, Lambda, EKS and VPC details, the GCP Cloud Run, VM and Cloud SQL info panels, the GCP create resource modal, the terminal and the EC2 RDP/SSH connection screens had hard-coded text, so several stayed in Spanish with the app in English. They now follow the app language, dates included, and a test keeps migrated screens from getting hard-coded text back.
 - **CloudWatch Logs search:** live searches returned the oldest events of the range (FilterLogEvents reads forward) while the cache returned the newest, and the cache searched filter patterns as plain text. Both now return the newest events and apply the same filter pattern syntax.
 - **Control plane deployment:** The Cloud Run control plane (`cloud/control-plane`) now builds and deploys. Cloud Build runs as the deploy account instead of the default Compute Engine account (which the deployer could not act as), stages source in its own bucket and no longer uploads `node_modules`; the service runs as `kua-control-plane-run`. Configuration moves to GitHub vars and secrets, with sensitive values synced to Secret Manager. Stripe webhooks failed with `PERMISSION_DENIED` because the project's `(default)` Datastore database rejects every write; the service now uses its own `kua-control-plane` database. `/health` replaces `/healthz` (reserved by Cloud Run) and 500 errors are logged.
 

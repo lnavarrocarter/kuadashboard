@@ -23,7 +23,7 @@
             {{ tab.label }}<span v-if="data && tab.count" class="vpcd-tab-count">{{ tab.count(data) }}</span>
           </button>
           <div class="vpcd-tabs-right">
-            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" title="Refrescar">↺</button>
+            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" :title="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -33,7 +33,7 @@
           <!-- Loading / Error -->
           <div v-if="loading" class="vpcd-spinner-wrap">
             <div class="vpcd-spinner"></div>
-            <span>Cargando detalles...</span>
+            <span>{{ t('res.loadingDetails') }}</span>
           </div>
           <div v-else-if="error" class="vpcd-error">{{ error }}</div>
 
@@ -45,17 +45,17 @@
                 <div class="vpcd-card">
                   <div class="vpcd-card-title">VPC</div>
                   <dl>
-                    <dt>VPC ID</dt>    <dd class="mono copyable">{{ data.vpc?.VpcId || '—' }}<button v-if="data.vpc?.VpcId" class="copy-btn" @click.stop="copyField(data.vpc.VpcId,'vpcid')" :title="copiedKey==='vpcid'?'¡Copiado!':'Copiar'">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
-                    <dt>CIDR</dt>      <dd class="mono copyable">{{ data.vpc?.CidrBlock || '—' }}<button v-if="data.vpc?.CidrBlock" class="copy-btn" @click.stop="copyField(data.vpc.CidrBlock,'cidr')" :title="copiedKey==='cidr'?'¡Copiado!':'Copiar'">{{ copiedKey==='cidr' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Estado</dt>    <dd><span :class="['vpcd-state', data.vpc?.State]">{{ data.vpc?.State || '—' }}</span></dd>
-                    <dt>Default</dt>   <dd><span :class="data.vpc?.IsDefault ? 'badge-yellow' : 'badge-gray'">{{ data.vpc?.IsDefault ? 'Sí' : 'No' }}</span></dd>
-                    <dt>Tenencia</dt>  <dd>{{ data.vpc?.InstanceTenancy || '—' }}</dd>
-                    <dt>DHCP Options</dt><dd class="mono copyable">{{ data.vpc?.DhcpOptionsId || '—' }}<button v-if="data.vpc?.DhcpOptionsId" class="copy-btn" @click.stop="copyField(data.vpc.DhcpOptionsId,'dhcp')" :title="copiedKey==='dhcp'?'¡Copiado!':'Copiar'">{{ copiedKey==='dhcp' ? '✓' : '⧉' }}</button></dd>
+                    <dt>VPC ID</dt>    <dd class="mono copyable">{{ data.vpc?.VpcId || '—' }}<button v-if="data.vpc?.VpcId" class="copy-btn" @click.stop="copyField(data.vpc.VpcId,'vpcid')" :title="copiedKey==='vpcid' ? t('res.copied') : t('action.copy')">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
+                    <dt>CIDR</dt>      <dd class="mono copyable">{{ data.vpc?.CidrBlock || '—' }}<button v-if="data.vpc?.CidrBlock" class="copy-btn" @click.stop="copyField(data.vpc.CidrBlock,'cidr')" :title="copiedKey==='cidr' ? t('res.copied') : t('action.copy')">{{ copiedKey==='cidr' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('res.state') }}</dt>    <dd><span :class="['vpcd-state', data.vpc?.State]">{{ data.vpc?.State || '—' }}</span></dd>
+                    <dt>Default</dt>   <dd><span :class="data.vpc?.IsDefault ? 'badge-yellow' : 'badge-gray'">{{ yesNo(data.vpc?.IsDefault) }}</span></dd>
+                    <dt>{{ t('ec2d.tenancy') }}</dt>  <dd>{{ data.vpc?.InstanceTenancy || '—' }}</dd>
+                    <dt>DHCP Options</dt><dd class="mono copyable">{{ data.vpc?.DhcpOptionsId || '—' }}<button v-if="data.vpc?.DhcpOptionsId" class="copy-btn" @click.stop="copyField(data.vpc.DhcpOptionsId,'dhcp')" :title="copiedKey==='dhcp' ? t('res.copied') : t('action.copy')">{{ copiedKey==='dhcp' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="vpcd-card">
-                  <div class="vpcd-card-title">Resumen</div>
+                  <div class="vpcd-card-title">{{ t('vpcd.summary') }}</div>
                   <dl>
                     <dt>Subnets</dt>           <dd>{{ data.subnets?.length ?? 0 }}</dd>
                     <dt>Security Groups</dt>   <dd>{{ data.securityGroups?.length ?? 0 }}</dd>
@@ -70,7 +70,7 @@
               <div class="vpcd-card" style="margin-top:12px">
                 <div class="vpcd-card-title">Tags ({{ data.vpc?.Tags?.length ?? 0 }})</div>
                 <table class="vpcd-table" v-if="data.vpc?.Tags?.length">
-                  <thead><tr><th>Clave</th><th>Valor</th></tr></thead>
+                  <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="t in data.vpc.Tags" :key="t.Key">
                       <td class="mono">{{ t.Key }}</td>
@@ -78,23 +78,23 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.82rem">Sin tags.</div>
+                <div v-else class="text-dim" style="font-size:.82rem">{{ t('res.noTags') }}</div>
               </div>
             </div>
 
             <!-- ══ SUBNETS ══════════════════════════════════════════════════ -->
             <div v-show="activeTab === 'subnets'" class="vpcd-section" data-tab="subnets">
-              <div v-if="!data.subnets?.length" class="vpcd-empty">Sin subnets.</div>
+              <div v-if="!data.subnets?.length" class="vpcd-empty">{{ t('eksd.noSubnets') }}</div>
               <div v-else class="vpcd-card">
                 <table class="vpcd-table">
-                  <thead><tr><th>Subnet ID</th><th>CIDR</th><th>Zona</th><th>Estado</th><th>IP pública</th><th>IPs libres</th></tr></thead>
+                  <thead><tr><th>Subnet ID</th><th>CIDR</th><th>{{ t('res.zone') }}</th><th>{{ t('res.state') }}</th><th>{{ t('ec2d.publicIp') }}</th><th>{{ t('eksd.freeIps') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="s in data.subnets" :key="s.SubnetId">
-                      <td class="mono copyable">{{ s.SubnetId }}<button class="copy-btn" @click.stop="copyField(s.SubnetId, s.SubnetId)" :title="copiedKey===s.SubnetId?'¡Copiado!':'Copiar'">{{ copiedKey===s.SubnetId ? '✓' : '⧉' }}</button></td>
+                      <td class="mono copyable">{{ s.SubnetId }}<button class="copy-btn" @click.stop="copyField(s.SubnetId, s.SubnetId)" :title="copiedKey===s.SubnetId ? t('res.copied') : t('action.copy')">{{ copiedKey===s.SubnetId ? '✓' : '⧉' }}</button></td>
                       <td class="mono">{{ s.CidrBlock }}</td>
                       <td class="mono">{{ s.AvailabilityZone }}</td>
                       <td><span :class="['vpcd-state', s.State]">{{ s.State }}</span></td>
-                      <td><span :class="s.MapPublicIpOnLaunch ? 'badge-yellow' : 'badge-gray'">{{ s.MapPublicIpOnLaunch ? 'Sí' : 'No' }}</span></td>
+                      <td><span :class="s.MapPublicIpOnLaunch ? 'badge-yellow' : 'badge-gray'">{{ yesNo(s.MapPublicIpOnLaunch) }}</span></td>
                       <td>{{ s.AvailableIpAddressCount }}</td>
                     </tr>
                   </tbody>
@@ -104,16 +104,16 @@
 
             <!-- ══ SECURITY GROUPS ══════════════════════════════════════════ -->
             <div v-show="activeTab === 'sgs'" class="vpcd-section" data-tab="sgs">
-              <div v-if="!data.securityGroups?.length" class="vpcd-empty">Sin security groups.</div>
+              <div v-if="!data.securityGroups?.length" class="vpcd-empty">{{ t('eksd.noSecurityGroups') }}</div>
               <div v-for="sg in (data.securityGroups || [])" :key="sg.GroupId" class="vpcd-card" style="margin-bottom:12px">
                 <div class="vpcd-card-title">
                   🔒 {{ sg.GroupName }}
                   <span class="text-dim mono-xs">{{ sg.GroupId }}</span>
                   <span class="text-dim vpcd-card-desc">{{ sg.Description }}</span>
                 </div>
-                <div class="vpcd-sg-label">Entrada ({{ sg.IpPermissions?.length ?? 0 }})</div>
+                <div class="vpcd-sg-label">{{ t('ec2d.inbound', { n: sg.IpPermissions?.length ?? 0 }) }}</div>
                 <table class="vpcd-table" v-if="sg.IpPermissions?.length">
-                  <thead><tr><th>Protocolo</th><th>Puertos</th><th>Origen</th></tr></thead>
+                  <thead><tr><th>{{ t('ec2d.protocol') }}</th><th>{{ t('ec2d.ports') }}</th><th>{{ t('ec2d.source') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="(rule, i) in sg.IpPermissions" :key="i">
                       <td class="mono">{{ fmtProtocol(rule) }}</td>
@@ -124,13 +124,13 @@
                     </tr>
                   </tbody>
                 </table>
-                <div v-else class="text-dim" style="font-size:.8rem">Sin reglas de entrada.</div>
+                <div v-else class="text-dim" style="font-size:.8rem">{{ t('ec2d.noInbound') }}</div>
               </div>
             </div>
 
             <!-- ══ ROUTE TABLES ═════════════════════════════════════════════ -->
             <div v-show="activeTab === 'routes'" class="vpcd-section" data-tab="routes">
-              <div v-if="!data.routeTables?.length" class="vpcd-empty">Sin route tables.</div>
+              <div v-if="!data.routeTables?.length" class="vpcd-empty">{{ t('vpcd.noRouteTables') }}</div>
               <div v-for="rt in (data.routeTables || [])" :key="rt.RouteTableId" class="vpcd-card" style="margin-bottom:12px">
                 <div class="vpcd-card-title">
                   🧭 <span class="mono">{{ rt.RouteTableId }}</span>
@@ -138,7 +138,7 @@
                   <span class="text-dim vpcd-card-desc">{{ tagName(rt.Tags) }}</span>
                 </div>
                 <table class="vpcd-table">
-                  <thead><tr><th>Destino</th><th>Target</th><th>Estado</th></tr></thead>
+                  <thead><tr><th>{{ t('ec2d.destination') }}</th><th>Target</th><th>{{ t('res.state') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="(r, i) in (rt.Routes || [])" :key="i">
                       <td class="mono">{{ r.DestinationCidrBlock || r.DestinationIpv6CidrBlock || r.DestinationPrefixListId }}</td>
@@ -152,13 +152,13 @@
 
             <!-- ══ INTERNET GATEWAYS ════════════════════════════════════════ -->
             <div v-show="activeTab === 'igws'" class="vpcd-section" data-tab="igws">
-              <div v-if="!data.internetGateways?.length" class="vpcd-empty">Sin internet gateways asociados.</div>
+              <div v-if="!data.internetGateways?.length" class="vpcd-empty">{{ t('vpcd.noInternetGateways') }}</div>
               <div v-else class="vpcd-card">
                 <table class="vpcd-table">
-                  <thead><tr><th>Gateway ID</th><th>Estado</th><th>Nombre</th></tr></thead>
+                  <thead><tr><th>Gateway ID</th><th>{{ t('res.state') }}</th><th>{{ t('res.name') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="igw in data.internetGateways" :key="igw.InternetGatewayId">
-                      <td class="mono copyable">{{ igw.InternetGatewayId }}<button class="copy-btn" @click.stop="copyField(igw.InternetGatewayId, igw.InternetGatewayId)" :title="copiedKey===igw.InternetGatewayId?'¡Copiado!':'Copiar'">{{ copiedKey===igw.InternetGatewayId ? '✓' : '⧉' }}</button></td>
+                      <td class="mono copyable">{{ igw.InternetGatewayId }}<button class="copy-btn" @click.stop="copyField(igw.InternetGatewayId, igw.InternetGatewayId)" :title="copiedKey===igw.InternetGatewayId ? t('res.copied') : t('action.copy')">{{ copiedKey===igw.InternetGatewayId ? '✓' : '⧉' }}</button></td>
                       <td><span :class="igw.Attachments?.[0]?.State === 'available' ? 'badge-green' : 'badge-yellow'">{{ igw.Attachments?.[0]?.State || '—' }}</span></td>
                       <td class="text-dim">{{ tagName(igw.Tags) || '—' }}</td>
                     </tr>
@@ -169,13 +169,13 @@
 
             <!-- ══ NAT GATEWAYS ═════════════════════════════════════════════ -->
             <div v-show="activeTab === 'nats'" class="vpcd-section" data-tab="nats">
-              <div v-if="!data.natGateways?.length" class="vpcd-empty">Sin NAT gateways.</div>
+              <div v-if="!data.natGateways?.length" class="vpcd-empty">{{ t('vpcd.noNatGateways') }}</div>
               <div v-else class="vpcd-card">
                 <table class="vpcd-table">
-                  <thead><tr><th>NAT ID</th><th>Subnet</th><th>IP pública</th><th>IP privada</th><th>Estado</th></tr></thead>
+                  <thead><tr><th>NAT ID</th><th>Subnet</th><th>{{ t('ec2d.publicIp') }}</th><th>{{ t('ec2d.privateIp') }}</th><th>{{ t('res.state') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="nat in data.natGateways" :key="nat.NatGatewayId">
-                      <td class="mono copyable">{{ nat.NatGatewayId }}<button class="copy-btn" @click.stop="copyField(nat.NatGatewayId, nat.NatGatewayId)" :title="copiedKey===nat.NatGatewayId?'¡Copiado!':'Copiar'">{{ copiedKey===nat.NatGatewayId ? '✓' : '⧉' }}</button></td>
+                      <td class="mono copyable">{{ nat.NatGatewayId }}<button class="copy-btn" @click.stop="copyField(nat.NatGatewayId, nat.NatGatewayId)" :title="copiedKey===nat.NatGatewayId ? t('res.copied') : t('action.copy')">{{ copiedKey===nat.NatGatewayId ? '✓' : '⧉' }}</button></td>
                       <td class="mono text-dim">{{ nat.SubnetId }}</td>
                       <td class="mono">{{ nat.NatGatewayAddresses?.[0]?.PublicIp || '—' }}</td>
                       <td class="mono">{{ nat.NatGatewayAddresses?.[0]?.PrivateIp || '—' }}</td>
@@ -196,6 +196,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useAwsStore } from '../../stores/useAwsStore'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -204,6 +205,8 @@ const props = defineProps({
 defineEmits(['close'])
 
 const awsStore = useAwsStore()
+const { t } = useI18n()
+const yesNo = value => t(value ? 'common.yes' : 'common.no')
 
 const TABS = [
   { id: 'overview', label: '📋 Overview' },
@@ -240,7 +243,7 @@ async function load() {
       data.value   = res
       loaded.value = true
     } else {
-      error.value = awsStore.error || 'No se pudieron cargar los detalles de la VPC'
+      error.value = awsStore.error || t('vpcd.loadFailed')
     }
   } catch (e) {
     error.value = e?.message || 'Error'
@@ -255,11 +258,11 @@ function tagName(tags) {
 }
 
 function fmtProtocol(rule) {
-  return rule.IpProtocol === '-1' ? 'Todos' : rule.IpProtocol
+  return rule.IpProtocol === '-1' ? t('ec2d.allPorts') : rule.IpProtocol
 }
 
 function fmtPortRange(rule) {
-  if (rule.IpProtocol === '-1' || rule.FromPort == null) return 'Todos'
+  if (rule.IpProtocol === '-1' || rule.FromPort == null) return t('ec2d.allPorts')
   if (rule.FromPort === rule.ToPort) return String(rule.FromPort)
   return `${rule.FromPort}–${rule.ToPort}`
 }
