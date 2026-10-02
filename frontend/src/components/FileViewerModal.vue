@@ -8,64 +8,64 @@
         <div class="fvm-title-left">
           <span class="fvm-mode-chip" :class="mode">{{ MODE_LABELS[mode] }}</span>
           <span class="fvm-filename" :title="filePath">{{ fileName }}</span>
-          <span v-if="dirty" class="fvm-dirty" title="Unsaved changes">●</span>
+          <span v-if="dirty" class="fvm-dirty" :title="t('fvm.unsaved')">●</span>
         </div>
         <div class="fvm-title-right">
-          <span class="fvm-meta">{{ lineCount }} lines · {{ sizeHuman }}</span>
+          <span class="fvm-meta">{{ t('fvm.lines', { n: lineCount }) }} · {{ sizeHuman }}</span>
           <!-- Mode switcher -->
           <button
             v-if="isMarkdown"
             class="fvm-btn"
             :class="{ active: mode === 'md' }"
-            title="Markdown preview (Ctrl+P)"
+            :title="t('fvm.previewHint')"
             @click="setMode('md')"
-          >Preview</button>
+          >{{ t('fvm.preview') }}</button>
           <button
             v-if="mode !== 'cat'"
             class="fvm-btn"
             :class="{ active: mode === 'view' }"
-            title="View mode (read-only)"
+            :title="t('fvm.viewHint')"
             @click="setMode('view')"
-          >View</button>
+          >{{ t('fvm.view') }}</button>
           <button
             class="fvm-btn"
             :class="{ active: mode === 'edit' }"
-            title="Edit mode"
+            :title="t('fvm.editHint')"
             @click="setMode('edit')"
-          >Edit</button>
+          >{{ t('fvm.edit') }}</button>
           <div class="fvm-sep"></div>
-          <button class="fvm-btn" title="Copy all" @click="copyAll">Copy</button>
-          <button v-if="dirty" class="fvm-btn primary" title="Save (Ctrl+S)" @click="save">Save</button>
-          <button class="fvm-btn close" title="Close (Esc)" @click="tryClose">✕</button>
+          <button class="fvm-btn" :title="t('fvm.copyHint')" @click="copyAll">{{ t('fvm.copy') }}</button>
+          <button v-if="dirty" class="fvm-btn primary" :title="t('fvm.saveHint')" @click="save">{{ t('fvm.save') }}</button>
+          <button class="fvm-btn close" :title="t('fvm.closeHint')" @click="tryClose">✕</button>
         </div>
       </div>
 
       <!-- ── Status bar (nano-style) ────────────────────────────────────── -->
       <div v-if="mode !== 'cat' && mode !== 'md'" class="fvm-statusbar">
         <span>{{ filePath }}</span>
-        <span class="fvm-sb-pos">Ln {{ cursorLine }}, Col {{ cursorCol }}</span>
+        <span class="fvm-sb-pos">{{ t('fvm.position', { line: cursorLine, col: cursorCol }) }}</span>
         <span v-if="searchActive" class="fvm-sb-search">🔍 {{ searchQuery }}</span>
         <div style="flex:1"></div>
         <span v-if="mode === 'view'" class="fvm-sb-hint">
-          <kbd>Ctrl+E</kbd> Edit &nbsp;
-          <kbd>Ctrl+F</kbd> Find &nbsp;
-          <kbd>Esc</kbd> Close
+          <kbd>Ctrl+E</kbd> {{ t('fvm.edit') }} &nbsp;
+          <kbd>Ctrl+F</kbd> {{ t('fvm.find') }} &nbsp;
+          <kbd>Esc</kbd> {{ t('fvm.close') }}
         </span>
         <span v-else class="fvm-sb-hint">
-          <kbd>Ctrl+S</kbd> Save &nbsp;
-          <kbd>Ctrl+F</kbd> Find &nbsp;
-          <kbd>Esc</kbd> Close
+          <kbd>Ctrl+S</kbd> {{ t('fvm.save') }} &nbsp;
+          <kbd>Ctrl+F</kbd> {{ t('fvm.find') }} &nbsp;
+          <kbd>Esc</kbd> {{ t('fvm.close') }}
         </span>
       </div>
 
       <!-- ── Search bar ─────────────────────────────────────────────────── -->
       <div v-if="searchActive" class="fvm-searchbar">
-        <span>Find:</span>
+        <span>{{ t('fvm.findLabel') }}</span>
         <input
           ref="searchRef"
           v-model="searchQuery"
           class="fvm-search-input"
-          placeholder="Search…"
+          :placeholder="t('fvm.searchPlaceholder')"
           @keydown.enter="findNext"
           @keydown.escape="closeSearch"
           @input="doSearch"
@@ -143,7 +143,7 @@
       <div class="fvm-footer">
         <span v-if="saveMsg" :class="['fvm-save-msg', saveMsg.ok ? 'ok' : 'err']">{{ saveMsg.text }}</span>
         <span v-else class="fvm-footer-hint">
-          {{ mode === 'cat' ? 'Read-only log view' : mode === 'md' ? 'Markdown preview — Ctrl+E para editar fuente' : mode === 'view' ? 'Read-only — Ctrl+E to edit' : 'Editing — Ctrl+S to save' }}
+          {{ t(`fvm.footer.${['cat', 'md', 'view'].includes(mode) ? mode : 'edit'}`) }}
         </span>
         <span style="margin-left:auto; color:#555; font-size:10px">{{ ext.toUpperCase() || 'TXT' }}</span>
       </div>
@@ -156,6 +156,9 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 // ── Props / emits ──────────────────────────────────────────────────────────
 const props  = defineProps({ filePath: String, initialMode: { type: String, default: 'auto' } })
@@ -192,7 +195,7 @@ const searchMatchInfo = computed(() => {
   if (!searchQuery.value) return ''
   return searchMatches.value.length
     ? `${searchCurrent.value + 1} / ${searchMatches.value.length}`
-    : 'No results'
+    : t('fvm.noResults')
 })
 
 const MODE_LABELS = { cat: 'CAT', view: 'VIEW', edit: 'EDIT', md: 'MD' }
@@ -278,10 +281,10 @@ async function save() {
     if (!res.ok) throw new Error(data.error)
     rawContent.value = editContent.value
     sizeHuman.value  = data.sizeHuman
-    showSaveMsg({ ok: true, text: `Saved — ${data.sizeHuman}` })
+    showSaveMsg({ ok: true, text: t('fvm.saved', { size: data.sizeHuman }) })
     emit('saved', props.filePath)
   } catch (err) {
-    showSaveMsg({ ok: false, text: `Save failed: ${err.message}` })
+    showSaveMsg({ ok: false, text: t('fvm.saveFailed', { error: err.message }) })
   }
 }
 
@@ -294,7 +297,7 @@ function showSaveMsg(msg) {
 // ── Close / dirty guard ────────────────────────────────────────────────────
 function tryClose() {
   if (dirty.value && mode.value === 'edit') {
-    if (!confirm('You have unsaved changes. Close anyway?')) return
+    if (!confirm(t('fvm.confirmClose'))) return
   }
   visible.value = false
   emit('close')
@@ -303,7 +306,7 @@ function tryClose() {
 // ── Copy ───────────────────────────────────────────────────────────────────
 function copyAll() {
   navigator.clipboard.writeText(mode.value === 'edit' ? editContent.value : rawContent.value)
-    .then(() => showSaveMsg({ ok: true, text: 'Copied to clipboard' }))
+    .then(() => showSaveMsg({ ok: true, text: t('fvm.copied') }))
     .catch(() => {})
 }
 

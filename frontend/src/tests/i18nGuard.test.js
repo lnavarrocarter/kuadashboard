@@ -36,6 +36,11 @@ const MIGRATED = [
   'components/EventBridgeLogs.vue',
   'components/cloud/apm/ApmObservabilityView.vue',
   'components/cloud/apm/ApmApplicationLogs.vue',
+  'components/kuapps/KUAppsView.vue',
+  'components/cloud/S3Browser.vue',
+  'components/cloud/GcsBrowser.vue',
+  'components/cloud/EksObservabilityDashboard.vue',
+  'components/FileViewerModal.vue',
 ]
 
 // Characters that only appear in Spanish text.

@@ -1,6 +1,6 @@
 <template>
   <div class="kuapps-view">
-    <div v-if="!compactNavigation" class="kuapps-tabs" role="tablist" aria-label="KUApps views">
+    <div v-if="!compactNavigation" class="kuapps-tabs" role="tablist" :aria-label="t('kuapps.viewsLabel')">
       <button
         :class="['kuapps-tab', { active: activeView === 'architecture' }]"
         role="tab"
@@ -8,7 +8,7 @@
         @click="selectView('architecture')"
       >
         <i data-lucide="network"></i>
-        <span><strong>Architecture</strong><small>Application resources and relationships</small></span>
+        <span><strong>{{ t('kuapps.architecture') }}</strong><small>{{ t('kuapps.architectureHint') }}</small></span>
       </button>
       <button
         :class="['kuapps-tab', { active: activeView === 'observability' }]"
@@ -17,16 +17,16 @@
         @click="selectView('observability')"
       >
         <i data-lucide="square-activity"></i>
-        <span><strong>Observability</strong><small>Health, metrics and traces</small></span>
+        <span><strong>{{ t('kuapps.observability') }}</strong><small>{{ t('kuapps.observabilityHint') }}</small></span>
       </button>
     </div>
 
     <div class="kuapps-application-shell">
       <aside class="kuapps-applications">
         <div class="kuapps-list-heading">
-          <span>Applications</span><strong>{{ applications.length }}</strong>
-          <button class="btn btn-icon" title="Create application" @click="openObservabilitySetup"><i data-lucide="plus"></i></button>
-          <button class="btn btn-icon" title="Refresh applications" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
+          <span>{{ t('kuapps.applications') }}</span><strong>{{ applications.length }}</strong>
+          <button class="btn btn-icon" :title="t('kuapps.createApplication')" @click="openObservabilitySetup"><i data-lucide="plus"></i></button>
+          <button class="btn btn-icon" :title="t('kuapps.refreshApplications')" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
         </div>
         <div v-for="application in applications" :key="application.id" class="kuapps-application-item">
           <button
@@ -38,7 +38,7 @@
             <b>{{ application.architectureProjectIds?.length || (application.architectureProjectId ? 1 : 0) }}</b>
           </button>
           <div v-if="activeView === 'architecture' && selectedApplicationId === application.id" class="kuapps-project-sublist">
-            <span class="kuapps-sublevel-heading">Projects</span>
+            <span class="kuapps-sublevel-heading">{{ t('kuapps.projects') }}</span>
             <button
               v-for="project in applicationProjects"
               :key="project.id"
@@ -46,36 +46,36 @@
               @click="selectProject(project)"
             >
               <span class="project-mark">{{ project.name.slice(0, 2).toUpperCase() }}</span>
-              <span><strong>{{ project.name }}</strong><small>{{ project.description || 'Application architecture' }}</small></span>
+              <span><strong>{{ project.name }}</strong><small>{{ project.description || t('kuapps.defaultProjectDescription') }}</small></span>
             </button>
-            <span v-if="!applicationProjects.length && !architectureStore.loading" class="kuapps-empty-projects">No architecture projects yet</span>
+            <span v-if="!applicationProjects.length && !architectureStore.loading" class="kuapps-empty-projects">{{ t('kuapps.noProjects') }}</span>
           </div>
         </div>
-        <div v-if="catalogLoading" class="kuapps-empty-list">Loading applications…</div>
+        <div v-if="catalogLoading" class="kuapps-empty-list">{{ t('kuapps.loading') }}</div>
         <template v-else-if="!applications.length">
-          <div class="kuapps-empty-list">No Applications configured.</div>
-          <button class="btn sm kuapps-create-btn" @click="openObservabilitySetup"><i data-lucide="plus"></i> Create application</button>
+          <div class="kuapps-empty-list">{{ t('kuapps.noApplications') }}</div>
+          <button class="btn sm kuapps-create-btn" @click="openObservabilitySetup"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
         </template>
       </aside>
 
       <main class="kuapps-workspace">
         <div v-if="!selectedApplication && activeView !== 'observability'" class="kuapps-empty-state">
           <i data-lucide="boxes"></i>
-          <strong>Select an Application</strong>
-          <span>Architecture, observability, metrics and provider logs will open in this context.</span>
-          <button class="btn sm primary" @click="openObservabilitySetup"><i data-lucide="plus"></i> Create application</button>
+          <strong>{{ t('kuapps.selectApplication') }}</strong>
+          <span>{{ t('kuapps.selectApplicationHint') }}</span>
+          <button class="btn sm primary" @click="openObservabilitySetup"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
         </div>
 
         <template v-else>
           <div v-if="selectedApplication" class="kuapps-application-header">
             <div>
-              <span class="kuapps-kicker">KUApps / Application</span>
+              <span class="kuapps-kicker">{{ t('kuapps.kicker') }}</span>
               <h2>{{ selectedApplication.name }}</h2>
               <small>{{ selectedApplication.provider.toUpperCase() }}<template v-if="selectedApplication.environment"> · {{ selectedApplication.environment }}</template><template v-if="selectedApplication.team"> · {{ selectedApplication.team }}</template></small>
             </div>
             <div class="kuapps-associations">
-              <span><strong>{{ architectureCount }}</strong><small>{{ architectureCount === 1 ? 'Architecture' : 'Architectures' }}</small></span>
-              <span><strong>{{ selectedApplication.provider === 'aws' ? 'CloudWatch' : selectedApplication.provider === 'gcp' ? 'Cloud Monitoring / Logging' : selectedApplication.provider === 'kubernetes' ? 'metrics.k8s.io / Logs' : 'Provider metrics / Logs' }}</strong><small>Operational sources</small></span>
+              <span><strong>{{ architectureCount }}</strong><small>{{ architectureCount === 1 ? t('kuapps.architecture') : t('kuapps.architectures') }}</small></span>
+              <span><strong>{{ selectedApplication.provider === 'aws' ? 'CloudWatch' : selectedApplication.provider === 'gcp' ? 'Cloud Monitoring / Logging' : selectedApplication.provider === 'kubernetes' ? 'metrics.k8s.io / Logs' : t('kuapps.providerSources') }}</strong><small>{{ t('kuapps.operationalSources') }}</small></span>
             </div>
           </div>
 
@@ -134,6 +134,7 @@ import ArchitectureView from '../architecture/ArchitectureView.vue'
 import ApmObservabilityView from '../cloud/apm/ApmObservabilityView.vue'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useApi } from '../../composables/useApi'
+import { useI18n } from '../../composables/useI18n'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 
 const props = defineProps({
@@ -152,6 +153,7 @@ const emit = defineEmits([
   'open-aws-resource', 'open-aws-logs',
 ])
 
+const { t } = useI18n()
 const architectureRef = ref(null)
 const observabilityRef = ref(null)
 const architectureStore = useArchitectureStore()

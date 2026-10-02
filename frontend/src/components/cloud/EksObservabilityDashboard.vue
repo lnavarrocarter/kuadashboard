@@ -1,37 +1,37 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="eksobs-backdrop" @click.self="$emit('close')">
-      <section class="eksobs-modal" role="dialog" aria-modal="true" aria-label="EKS observability dashboard">
+      <section class="eksobs-modal" role="dialog" aria-modal="true" :aria-label="t('eksObs.dialogLabel')">
         <header class="eksobs-header">
           <div>
-            <div class="eksobs-eyebrow">EKS OBSERVABILITY</div>
+            <div class="eksobs-eyebrow">{{ t('eksObs.eyebrow') }}</div>
             <div class="eksobs-title">
               {{ cluster?.name }}
               <span :class="statusClass">{{ dashboard?.cluster?.status || cluster?.status }}</span>
             </div>
             <div class="eksobs-subtitle">{{ dashboard?.cluster?.region || cluster?.region }} · Kubernetes {{ dashboard?.cluster?.version || cluster?.version }}</div>
           </div>
-          <button class="eksobs-icon-btn" title="Close" @click="$emit('close')"><i data-lucide="x"></i></button>
+          <button class="eksobs-icon-btn" :title="t('eksObs.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
         </header>
 
         <div class="eksobs-toolbar">
-          <div class="eksobs-segment" aria-label="Group metrics by">
+          <div class="eksobs-segment" :aria-label="t('eksObs.groupBy')">
             <button v-for="option in groupOptions" :key="option.id"
               :class="{ active: groupBy === option.id }" :disabled="loading"
               @click="selectGroup(option.id)">{{ option.label }}</button>
           </div>
           <label class="eksobs-range">
-            <span>Range</span>
+            <span>{{ t('eksObs.range') }}</span>
             <select v-model.number="hours" :disabled="loading" @change="load">
-              <option :value="1">1 hour</option>
-              <option :value="3">3 hours</option>
-              <option :value="6">6 hours</option>
-              <option :value="12">12 hours</option>
-              <option :value="24">24 hours</option>
-              <option :value="72">3 days</option>
+              <option :value="1">{{ t('eksObs.hour1') }}</option>
+              <option :value="3">{{ t('eksObs.hours', { n: 3 }) }}</option>
+              <option :value="6">{{ t('eksObs.hours', { n: 6 }) }}</option>
+              <option :value="12">{{ t('eksObs.hours', { n: 12 }) }}</option>
+              <option :value="24">{{ t('eksObs.hours', { n: 24 }) }}</option>
+              <option :value="72">{{ t('eksObs.days3') }}</option>
             </select>
           </label>
-          <button class="eksobs-icon-btn" :disabled="loading" title="Refresh metrics" @click="load">
+          <button class="eksobs-icon-btn" :disabled="loading" :title="t('eksObs.refresh')" @click="load">
             <i data-lucide="refresh-cw" :class="{ spinning: loading }"></i>
           </button>
         </div>
@@ -39,7 +39,7 @@
         <main class="eksobs-body">
           <div v-if="loading && !dashboard" class="eksobs-loading">
             <i data-lucide="loader-circle" class="spinning"></i>
-            <span>Discovering Container Insights metrics...</span>
+            <span>{{ t('eksObs.discovering') }}</span>
           </div>
           <div v-else-if="error" class="eksobs-alert error">
             <i data-lucide="triangle-alert"></i><span>{{ error }}</span>
@@ -48,15 +48,15 @@
             <div class="eksobs-context">
               <div class="eksobs-tags">
                 <span v-for="([key, value]) in tagEntries" :key="key"><strong>{{ key }}</strong>{{ value }}</span>
-                <span v-if="!tagEntries.length" class="empty">No cluster tags</span>
+                <span v-if="!tagEntries.length" class="empty">{{ t('eksObs.noTags') }}</span>
               </div>
-              <span v-if="dashboard.partial" class="eksobs-partial">Partial metric catalog</span>
+              <span v-if="dashboard.partial" class="eksobs-partial">{{ t('eksObs.partial') }}</span>
             </div>
 
             <section class="eksobs-section">
               <div class="eksobs-section-heading">
-                <div><span>COMPUTE STRUCTURE</span><strong>Node groups and architecture</strong></div>
-                <small>{{ dashboard.nodegroups.length }} node group{{ dashboard.nodegroups.length === 1 ? '' : 's' }}</small>
+                <div><span>{{ t('eksObs.compute') }}</span><strong>{{ t('eksObs.computeTitle') }}</strong></div>
+                <small>{{ t('eksObs.nodegroupCount', { n: dashboard.nodegroups.length }) }}</small>
               </div>
               <div v-if="dashboard.nodegroups.length" class="eksobs-nodegroups">
                 <article v-for="nodegroup in dashboard.nodegroups" :key="nodegroup.name" class="eksobs-nodegroup">
@@ -68,33 +68,33 @@
                   <div class="eksobs-nodegroup-meta">{{ nodegroup.capacityType }} · {{ nodegroup.instanceTypes.join(', ') || nodegroup.amiType }}</div>
                   <div class="eksobs-scale">
                     <span>min <strong>{{ nodegroup.scaling.minSize ?? '-' }}</strong></span>
-                    <span>desired <strong>{{ nodegroup.scaling.desiredSize ?? '-' }}</strong></span>
+                    <span>{{ t('eksObs.desired') }} <strong>{{ nodegroup.scaling.desiredSize ?? '-' }}</strong></span>
                     <span>max <strong>{{ nodegroup.scaling.maxSize ?? '-' }}</strong></span>
                   </div>
                 </article>
               </div>
-              <div v-else class="eksobs-inline-empty">No managed node groups found. The cluster may use Fargate, Karpenter, or self-managed nodes.</div>
+              <div v-else class="eksobs-inline-empty">{{ t('eksObs.noNodegroups') }}</div>
             </section>
 
             <div v-if="!dashboard.containerInsightsAvailable" class="eksobs-onboarding">
               <i data-lucide="activity"></i>
               <div>
-                <strong>Container Insights is not publishing metrics for this cluster</strong>
-                <p>Enable the Amazon CloudWatch Observability add-on, then allow <code>cloudwatch:ListMetrics</code> and <code>cloudwatch:GetMetricData</code> for this profile.</p>
+                <strong>{{ t('eksObs.noInsights') }}</strong>
+                <p>{{ t('eksObs.enablePre') }} <code>cloudwatch:ListMetrics</code> {{ t('eksObs.and') }} <code>cloudwatch:GetMetricData</code> {{ t('eksObs.enablePost') }}</p>
               </div>
             </div>
             <div v-else-if="!dashboard.availableGroupings.includes(groupBy)" class="eksobs-onboarding compact">
               <i data-lucide="filter-x"></i>
               <div>
-                <strong>No {{ groupLabel.toLowerCase() }} dimension is available</strong>
-                <p>Available groupings: {{ availableGroupingLabels }}.</p>
+                <strong>{{ t('eksObs.noDimension', { group: groupLabel.toLowerCase() }) }}</strong>
+                <p>{{ t('eksObs.availableGroupings', { list: availableGroupingLabels }) }}</p>
               </div>
             </div>
             <template v-else>
               <section class="eksobs-section">
                 <div class="eksobs-section-heading">
-                  <div><span>HEALTH SIGNALS</span><strong>Cluster totals grouped by {{ groupLabel.toLowerCase() }}</strong></div>
-                  <small>{{ dashboard.source }} · {{ dashboard.period }}s resolution</small>
+                  <div><span>{{ t('eksObs.health') }}</span><strong>{{ t('eksObs.healthTitle', { group: groupLabel.toLowerCase() }) }}</strong></div>
+                  <small>{{ dashboard.source }} · {{ t('eksObs.resolution', { n: dashboard.period }) }}</small>
                 </div>
                 <div v-if="summaryEntries.length" class="eksobs-kpis">
                   <article v-for="([key, metric]) in summaryEntries" :key="key">
@@ -102,7 +102,7 @@
                     <strong>{{ formatMetric(metric.latest, metric.unit) }}</strong>
                   </article>
                 </div>
-                <div v-else class="eksobs-inline-empty">No datapoints were returned in this time range.</div>
+                <div v-else class="eksobs-inline-empty">{{ t('eksObs.noDatapoints') }}</div>
               </section>
 
               <section v-if="summaryEntries.length" class="eksobs-charts">
@@ -113,8 +113,8 @@
 
               <section class="eksobs-section">
                 <div class="eksobs-section-heading">
-                  <div><span>BREAKDOWN</span><strong>{{ groupLabel }} signals</strong></div>
-                  <small>{{ dashboard.groups.length }} group{{ dashboard.groups.length === 1 ? '' : 's' }}</small>
+                  <div><span>{{ t('eksObs.breakdown') }}</span><strong>{{ t('eksObs.signals', { group: groupLabel }) }}</strong></div>
+                  <small>{{ t('eksObs.groupCount', { n: dashboard.groups.length }) }}</small>
                 </div>
                 <div class="eksobs-table-wrap">
                   <table v-if="dashboard.groups.length" class="eksobs-table">
@@ -124,7 +124,7 @@
                       <td v-for="key in metricKeys" :key="key">{{ formatGroupMetric(group.metrics[key]) }}</td>
                     </tr></tbody>
                   </table>
-                  <div v-else class="eksobs-inline-empty">No groups returned datapoints in this range.</div>
+                  <div v-else class="eksobs-inline-empty">{{ t('eksObs.noGroups') }}</div>
                 </div>
               </section>
             </template>
@@ -140,6 +140,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useAwsStore } from '../../stores/useAwsStore'
 import CloudMetricChart from './CloudMetricChart.vue'
+import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -147,6 +148,7 @@ const props = defineProps({
 })
 defineEmits(['close'])
 
+const { t } = useI18n()
 const awsStore = useAwsStore()
 const dashboard = ref(null)
 const loading = ref(false)
@@ -188,7 +190,7 @@ async function load() {
       hours: hours.value,
       groupBy: groupBy.value,
     })
-    if (!result) throw new Error(awsStore.error || 'Failed to load EKS metrics')
+    if (!result) throw new Error(awsStore.error || t('eksObs.loadFailed'))
     dashboard.value = result
   } catch (loadError) {
     error.value = loadError.message

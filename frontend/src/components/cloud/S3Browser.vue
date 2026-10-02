@@ -16,7 +16,7 @@
         <!-- Breadcrumb -->
         <div class="s3b-breadcrumb">
           <span class="s3b-crumb root" @click="navigate('')">
-            &#x1F3E0; root
+            &#x1F3E0; {{ t('objb.root') }}
           </span>
           <template v-for="(crumb, i) in breadcrumbs" :key="i">
             <span class="s3b-sep">/</span>
@@ -31,9 +31,9 @@
 
           <!-- File list pane -->
           <div class="s3b-filelist">
-            <div v-if="loading" class="s3b-empty">Loading...</div>
+            <div v-if="loading" class="s3b-empty">{{ t('objb.loading') }}</div>
             <div v-else-if="error" class="s3b-error">{{ error }}</div>
-            <div v-else-if="!folders.length && !files.length" class="s3b-empty">Empty folder.</div>
+            <div v-else-if="!folders.length && !files.length" class="s3b-empty">{{ t('objb.emptyFolder') }}</div>
             <div v-else>
               <!-- Folders -->
               <div
@@ -59,7 +59,7 @@
               </div>
 
               <div v-if="nextContinuationToken" class="s3b-load-more">
-                <button class="s3b-btn" @click="loadMore">Load more...</button>
+                <button class="s3b-btn" @click="loadMore">{{ t('objb.loadMore') }}</button>
               </div>
             </div>
           </div>
@@ -67,7 +67,7 @@
           <!-- Preview pane -->
           <div class="s3b-preview">
             <div v-if="!selectedFile" class="s3b-empty" style="padding-top:40px">
-              Select a file to preview
+              {{ t('objb.selectFile') }}
             </div>
             <template v-else>
               <div class="s3b-preview-header">
@@ -77,7 +77,7 @@
                 </div>
                 <div class="s3b-preview-actions">
                   <button class="s3b-btn accent" @click="downloadFile(selectedFile)" :disabled="downloading">
-                    {{ downloading ? 'Downloading...' : '&#x2913; Download' }}
+                    {{ downloading ? t('objb.downloading') : '⤓ ' + t('objb.download') }}
                   </button>
                 </div>
               </div>
@@ -86,14 +86,14 @@
               <div v-if="previewData && !previewLoading" class="s3b-meta">
                 <table class="s3b-meta-table">
                   <tbody>
-                    <tr><td class="s3b-meta-label">Key</td><td class="s3b-meta-val mono-xs">{{ previewData.key }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.key') }}</td><td class="s3b-meta-val mono-xs">{{ previewData.key }}</td></tr>
                     <tr><td class="s3b-meta-label">Content-Type</td><td class="s3b-meta-val">{{ previewData.contentType || '-' }}</td></tr>
-                    <tr><td class="s3b-meta-label">Size</td><td class="s3b-meta-val">{{ formatSize(previewData.size) }}</td></tr>
-                    <tr><td class="s3b-meta-label">Last Modified</td><td class="s3b-meta-val">{{ previewData.lastModified ? new Date(previewData.lastModified).toLocaleString() : '-' }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.size') }}</td><td class="s3b-meta-val">{{ formatSize(previewData.size) }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.lastModified') }}</td><td class="s3b-meta-val">{{ previewData.lastModified ? new Date(previewData.lastModified).toLocaleString() : '-' }}</td></tr>
                     <tr><td class="s3b-meta-label">ETag</td><td class="s3b-meta-val mono-xs">{{ previewData.etag || '-' }}</td></tr>
-                    <tr v-if="previewData.versionId"><td class="s3b-meta-label">Version ID</td><td class="s3b-meta-val mono-xs">{{ previewData.versionId }}</td></tr>
-                    <tr><td class="s3b-meta-label">Storage Class</td><td class="s3b-meta-val">{{ previewData.storageClass || '-' }}</td></tr>
-                    <tr v-if="previewData.serverSideEncryption"><td class="s3b-meta-label">Encryption</td><td class="s3b-meta-val">{{ previewData.serverSideEncryption }}</td></tr>
+                    <tr v-if="previewData.versionId"><td class="s3b-meta-label">{{ t('objb.versionId') }}</td><td class="s3b-meta-val mono-xs">{{ previewData.versionId }}</td></tr>
+                    <tr><td class="s3b-meta-label">{{ t('objb.storageClass') }}</td><td class="s3b-meta-val">{{ previewData.storageClass || '-' }}</td></tr>
+                    <tr v-if="previewData.serverSideEncryption"><td class="s3b-meta-label">{{ t('objb.encryption') }}</td><td class="s3b-meta-val">{{ previewData.serverSideEncryption }}</td></tr>
                     <tr v-if="previewData.cacheControl"><td class="s3b-meta-label">Cache-Control</td><td class="s3b-meta-val">{{ previewData.cacheControl }}</td></tr>
                     <tr v-if="previewData.contentEncoding"><td class="s3b-meta-label">Content-Encoding</td><td class="s3b-meta-val">{{ previewData.contentEncoding }}</td></tr>
                     <tr v-if="previewData.contentDisposition"><td class="s3b-meta-label">Content-Disposition</td><td class="s3b-meta-val">{{ previewData.contentDisposition }}</td></tr>
@@ -110,7 +110,7 @@
 
               <!-- Content preview -->
               <div v-if="previewLoading" class="s3b-preview-content">
-                <div class="s3b-empty">Loading...</div>
+                <div class="s3b-empty">{{ t('objb.loading') }}</div>
               </div>
               <div v-else-if="previewError" class="s3b-preview-content">
                 <div class="s3b-error">{{ previewError }}</div>
@@ -146,7 +146,7 @@
               <div v-else-if="previewData?.binary" class="s3b-preview-content">
                 <div class="s3b-empty" style="padding-top:12px">
                   <div style="font-size:1.5rem">📎</div>
-                  <div style="margin-top:6px;color:#8b949e;font-size:12px">Binary file &mdash; use Download</div>
+                  <div style="margin-top:6px;color:#8b949e;font-size:12px">{{ t('objb.binary') }}</div>
                 </div>
               </div>
 
@@ -159,13 +159,13 @@
         <!-- Footer -->
         <div class="s3b-footer">
           <span class="s3b-footer-info">
-            {{ folders.length }} folder(s) &nbsp;&bull;&nbsp; {{ files.length }} file(s)
+            {{ t('objb.footer', { folders: folders.length, files: files.length }) }}
           </span>
           <div style="display:flex;gap:6px">
             <input
               v-model="filterText"
               class="s3b-filter"
-              placeholder="Filter files..."
+              :placeholder="t('objb.filter')"
               @input="onFilterChange"
             />
           </div>
@@ -178,6 +178,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   open:       { type: Boolean, default: false },
@@ -349,7 +352,7 @@ async function downloadFile(file) {
     document.body.removeChild(a)
     URL.revokeObjectURL(objUrl)
   } catch (e) {
-    alert('Download error: ' + e.message)
+    alert(t('objb.downloadError', { error: e.message }))
   } finally {
     downloading.value = false
   }
