@@ -8,6 +8,8 @@ import es from '../locales/es'
 // hard-coded text is migrated, so new hard-coded Spanish cannot slip back in.
 const MIGRATED = [
   'components/advisor/AdvisorPanel.vue',
+  'components/cloud/AwsView.vue',
+  'components/cloud/GcpView.vue',
   'components/cloud/Ec2Detail.vue',
   'components/cloud/LambdaDetail.vue',
   'components/cloud/EksDetail.vue',
@@ -20,6 +22,7 @@ const MIGRATED = [
   'components/cloud/Ec2RdpInfo.vue',
   'components/cloud/Ec2Shell.vue',
   'components/TerminalPanel.vue',
+  'components/StepFnDetail.vue',
 ]
 
 // Characters that only appear in Spanish text.

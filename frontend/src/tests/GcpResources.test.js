@@ -444,5 +444,13 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(costs.text()).toContain('a3-megagpu-8g')
     expect(costs.text()).toContain('BigQuery')
     expect(costs.text()).toContain('Cloud Scheduler')
+
+    // The same overview in Spanish
+    settings.lang = 'es'
+    await flushPromises()
+    expect(w.text()).toContain('Resumen del proyecto')
+    expect(w.find('[data-test="overview-costs"]').text()).toContain('Costos estimados')
+    expect(w.find('.gcp-overview-groups').text()).toContain('Cómputo')
+    expect(w.text()).not.toContain('Estimated costs')
   })
 })

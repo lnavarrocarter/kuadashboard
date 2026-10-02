@@ -21,8 +21,8 @@
             {{ tab.label }}
           </button>
           <div class="sfnd-tabs-right">
-            <button v-if="!loaded && !loading" class="btn sm" @click="load">Cargar</button>
-            <button v-else-if="loaded" class="btn sm" @click="load(true)" :disabled="loading" title="Refrescar">↺</button>
+            <button v-if="!loaded && !loading" class="btn sm" @click="load">{{ t('lmd.load') }}</button>
+            <button v-else-if="loaded" class="btn sm" @click="load(true)" :disabled="loading" :title="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -31,7 +31,7 @@
 
           <div v-if="loading && !loaded" class="sfnd-spinner-wrap">
             <div class="sfnd-spinner"></div>
-            <span>Cargando detalles...</span>
+            <span>{{ t('res.loadingDetails') }}</span>
           </div>
           <div v-else-if="error && !loaded" class="sfnd-error">{{ error }}</div>
 
@@ -43,38 +43,38 @@
                 <div class="sfnd-card">
                   <div class="sfnd-card-title">State Machine</div>
                   <dl>
-                    <dt>Nombre</dt>
+                    <dt>{{ t('res.name') }}</dt>
                     <dd>{{ data.name }}</dd>
                     <dt>ARN</dt>
-                    <dd class="mono wrap copyable">{{ data.arn }}<button class="copy-btn" @click.stop="copyField(data.arn,'arn')" :title="copiedKey==='arn'?'¡Copiado!':'Copiar'">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Tipo</dt>
+                    <dd class="mono wrap copyable">{{ data.arn }}<button class="copy-btn" @click.stop="copyField(data.arn,'arn')" :title="copiedKey==='arn' ? t('res.copied') : t('action.copy')">{{ copiedKey==='arn' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('res.type') }}</dt>
                     <dd><span :class="data.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ data.type }}</span></dd>
-                    <dt>Estado</dt>
+                    <dt>{{ t('res.state') }}</dt>
                     <dd><span :class="['sfnd-state', data.status?.toLowerCase()]">{{ data.status || '—' }}</span></dd>
-                    <dt>Creado</dt>
+                    <dt>{{ t('res.created') }}</dt>
                     <dd>{{ fmtDate(data.creationDate) }}</dd>
                   </dl>
                 </div>
 
                 <div class="sfnd-card">
-                  <div class="sfnd-card-title">IAM y Trazado</div>
+                  <div class="sfnd-card-title">{{ t('sfnd.iamAndTracing') }}</div>
                   <dl>
                     <dt>Role ARN</dt>
-                    <dd class="mono wrap copyable">{{ data.roleArn || '—' }}<button v-if="data.roleArn" class="copy-btn" @click.stop="copyField(data.roleArn,'role')" :title="copiedKey==='role'?'¡Copiado!':'Copiar'">{{ copiedKey==='role' ? '✓' : '⧉' }}</button></dd>
-                    <dt>Tracing</dt>
+                    <dd class="mono wrap copyable">{{ data.roleArn || '—' }}<button v-if="data.roleArn" class="copy-btn" @click.stop="copyField(data.roleArn,'role')" :title="copiedKey==='role' ? t('res.copied') : t('action.copy')">{{ copiedKey==='role' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('apm.tracingProcess') }}</dt>
                     <dd>{{ data.tracingEnabled ? '✅ Habilitado' : '—' }}</dd>
                   </dl>
                 </div>
 
                 <div v-if="data.loggingConfig" class="sfnd-card">
-                  <div class="sfnd-card-title">Logging</div>
+                  <div class="sfnd-card-title">{{ t('awsActivity.logging') }}</div>
                   <dl>
-                    <dt>Nivel</dt>
+                    <dt>{{ t('sfnd.level') }}</dt>
                     <dd class="mono">{{ data.loggingConfig.level || 'OFF' }}</dd>
-                    <dt>Incl. datos exec.</dt>
-                    <dd>{{ data.loggingConfig.includeExecutionData ? 'Sí' : 'No' }}</dd>
+                    <dt>{{ t('sfnd.inclExecutionData') }}</dt>
+                    <dd>{{ yesNo(data.loggingConfig.includeExecutionData) }}</dd>
                     <template v-if="data.loggingConfig.destinations?.length">
-                      <dt>Destino CW</dt>
+                      <dt>{{ t('sfnd.cwDestination') }}</dt>
                       <dd class="mono wrap" style="font-size:10px">{{ data.loggingConfig.destinations[0]?.cloudWatchLogsLogGroup?.logGroupArn || '—' }}</dd>
                     </template>
                   </dl>
@@ -82,8 +82,8 @@
 
                 <div v-if="data.definition" class="sfnd-card sfnd-card-wide">
                   <div class="sfnd-card-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>Definición ASL</span>
-                    <button class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(data.definition,'def')" :title="copiedKey==='def'?'¡Copiado!':'Copiar'">{{ copiedKey==='def' ? '✓ Copiado' : '⧉ Copiar' }}</button>
+                    <span>{{ t('sfnd.aslDefinition') }}</span>
+                    <button class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(data.definition,'def')" :title="copiedKey==='def' ? t('res.copied') : t('action.copy')">{{ copiedKey==='def' ? `✓ ${t('res.copied')}` : `⧉ ${t('action.copy')}` }}</button>
                   </div>
                   <pre class="sfnd-json">{{ fmtJson(data.definition) }}</pre>
                 </div>
@@ -97,15 +97,15 @@
 
             <!-- ══ EJECUCIONES ════════════════════════════════════════════ -->
             <div v-show="activeTab === 'executions'" class="sfnd-section">
-              <div v-if="!data.executions?.length" class="sfnd-empty">No se encontraron ejecuciones recientes.</div>
+              <div v-if="!data.executions?.length" class="sfnd-empty">{{ t('sfnd.noRecentExecutionsFound') }}</div>
               <table v-else class="sfnd-table">
                 <thead><tr>
-                  <th>Nombre</th>
-                  <th>Estado</th>
-                  <th>Inicio</th>
-                  <th>Fin</th>
-                  <th>Duración</th>
-                  <th>Eventos</th>
+                  <th>{{ t('res.name') }}</th>
+                  <th>{{ t('res.state') }}</th>
+                  <th>{{ t('sfnd.start') }}</th>
+                  <th>{{ t('gcpv.end') }}</th>
+                  <th>{{ t('awsv.duration') }}</th>
+                  <th>{{ t('sfnd.events') }}</th>
                 </tr></thead>
                 <tbody>
                   <tr v-for="ex in data.executions" :key="ex.executionArn"
@@ -118,7 +118,7 @@
                     <td class="text-dim nowrap">{{ calcDuration(ex.startDate, ex.stopDate) }}</td>
                     <td>
                       <button class="btn sm" @click.stop="viewEvents(ex)" style="font-size:10px">
-                        Inspeccionar
+                        {{ t('sfnd.inspect') }}
                       </button>
                     </td>
                   </tr>
@@ -128,22 +128,22 @@
 
             <!-- ══ EVENTOS ════════════════════════════════════════════════ -->
             <div v-if="activeTab === 'events'" class="sfnd-section sfnd-execution-section">
-              <div v-if="!selectedExecution" class="sfnd-empty">Selecciona una ejecución en la pestaña Ejecuciones para ver sus eventos.</div>
+              <div v-if="!selectedExecution" class="sfnd-empty">{{ t('sfnd.selectAnExecutionInTheExecutions') }}</div>
               <template v-else>
                 <div class="sfnd-events-header">
                   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                    <span style="font-size:12px;color:#888">Ejecución:</span>
+                    <span style="font-size:12px;color:#888">{{ t('sfnd.execution') }}</span>
                     <span class="mono-xs" style="color:#ccc">{{ selectedExecution.name }}</span>
                     <span :class="execStatusClass(selectedExecution.status)">{{ selectedExecution.status }}</span>
                   </div>
-                  <button class="btn sm" @click="loadEvents(selectedExecution, true)" :disabled="eventsLoading">↺ Refrescar</button>
+                  <button class="btn sm" @click="loadEvents(selectedExecution, true)" :disabled="eventsLoading">{{ t('sfnd.refresh') }}</button>
                 </div>
                 <div v-if="eventsLoading" class="sfnd-spinner-wrap" style="padding:20px 0">
                   <div class="sfnd-spinner"></div>
-                  <span>Cargando eventos...</span>
+                  <span>{{ t('sfnd.loadingEvents') }}</span>
                 </div>
                 <div v-else-if="eventsError" class="sfnd-error">{{ eventsError }}</div>
-                <div v-else-if="!events.length" class="sfnd-empty">No se encontraron eventos.</div>
+                <div v-else-if="!events.length" class="sfnd-empty">{{ t('sfnd.noEventsFound') }}</div>
                 <StepFnExecution v-else :key="selectedExecution.executionArn" :events="events"
                   :definition="executionDefinition || data.definition || ''"
                   :definition-warning="executionDefinition ? '' : 'Definicion de la ejecucion no disponible. Se muestra la definicion actual; puede diferir del historial.'" />
@@ -155,14 +155,14 @@
               <!-- Version list -->
               <div style="min-width:220px;max-width:260px;display:flex;flex-direction:column;gap:0;border-right:1px solid #222;overflow-y:auto">
                 <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1a1a1a">
-                  <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">Versiones ({{ versions.length }})</span>
+                  <span style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em">{{ t('sfnd.versions', { p0: versions.length }) }}</span>
                   <button class="btn sm" @click="loadVersions" :disabled="versionsLoading" style="font-size:10px;padding:2px 6px">↺</button>
                 </div>
                 <div v-if="versionsLoading" class="sfnd-spinner-wrap" style="padding:16px 0">
                   <div class="sfnd-spinner"></div>
                 </div>
                 <div v-else-if="versionsError" class="sfnd-error" style="margin:8px">{{ versionsError }}</div>
-                <div v-else-if="!versions.length" class="sfnd-empty" style="padding:16px 12px;font-size:12px">Sin versiones publicadas.</div>
+                <div v-else-if="!versions.length" class="sfnd-empty" style="padding:16px 12px;font-size:12px">{{ t('lmd.noVersions') }}</div>
                 <div v-else>
                   <div v-for="v in versions" :key="v.stateMachineVersionArn"
                     :class="['sfnd-version-item', { selected: selectedVersion?.stateMachineVersionArn === v.stateMachineVersionArn }]"
@@ -177,17 +177,17 @@
               </div>
               <!-- Version definition -->
               <div style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;min-width:0">
-                <div v-if="!selectedVersion" class="sfnd-empty" style="padding:24px">Selecciona una versión para ver su definición.</div>
+                <div v-if="!selectedVersion" class="sfnd-empty" style="padding:24px">{{ t('sfnd.selectAVersionToSeeIts') }}</div>
                 <template v-else>
                   <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
-                    <span style="font-size:12px;color:#888">Versión: <span class="mono-xs" style="color:#ccc">{{ selectedVersion.stateMachineVersionArn?.split(':').pop() }}</span></span>
+                    <span style="font-size:12px;color:#888">{{ t('sfnd.version') }} <span class="mono-xs" style="color:#ccc">{{ selectedVersion.stateMachineVersionArn?.split(':').pop() }}</span></span>
                     <div style="display:flex;gap:6px">
                       <button v-if="versionDef" class="copy-btn" style="font-size:11px;padding:2px 6px" @click.stop="copyField(versionDef,'vdef')">{{ copiedKey==='vdef' ? '✓ Copiado' : '⧉ Copiar' }}</button>
                     </div>
                   </div>
                   <div v-if="versionDefLoading" class="sfnd-spinner-wrap" style="padding:20px 0">
                     <div class="sfnd-spinner"></div>
-                    <span>Cargando definición...</span>
+                    <span>{{ t('awsv.loadingDefinition') }}</span>
                   </div>
                   <div v-else-if="versionDefError" class="sfnd-error">{{ versionDefError }}</div>
                   <pre v-else-if="versionDef" class="sfnd-json" style="flex:1;overflow:auto;margin:0">{{ fmtJson(versionDef) }}</pre>
@@ -204,8 +204,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useAwsStore } from '../stores/useAwsStore'
+import { useI18n } from '../composables/useI18n'
+import { settings } from '../composables/useSettings'
 import StepFnDiagram from './StepFnDiagram.vue'
 import StepFnExecution from './StepFnExecution.vue'
 
@@ -220,13 +222,15 @@ defineEmits(['close'])
 
 const awsStore = useAwsStore()
 
-const TABS = [
-  { id: 'details',    label: 'Detalles' },
-  { id: 'diagram',    label: 'Diagrama' },
-  { id: 'executions', label: 'Ejecuciones' },
-  { id: 'events',     label: 'Eventos' },
-  { id: 'versions',   label: 'Versiones' },
-]
+const { t } = useI18n()
+const yesNo = value => t(value ? 'common.yes' : 'common.no')
+const TABS = computed(() => [
+  { id: 'details',    label: t('ec2d.tabDetails') },
+  { id: 'diagram',    label: t('awsv.diagram') },
+  { id: 'executions', label: t('gcpv.metricExecutions') },
+  { id: 'events',     label: t('sfnd.events') },
+  { id: 'versions',   label: t('sfnd.tabVersions') },
+])
 
 const activeTab        = ref('details')
 const loading          = ref(false)
@@ -262,7 +266,7 @@ async function loadVersions() {
     const res = await awsStore.fetchStepFnVersions(props.sm.arn)
     versions.value = res?.versions ?? []
   } catch (e) {
-    versionsError.value = e?.message || 'Error cargando versiones'
+    versionsError.value = e?.message || t('sfnd.errVersions')
   } finally {
     versionsLoading.value = false
   }
@@ -274,9 +278,9 @@ async function loadVersionDefinition(v) {
   try {
     const res = await awsStore.fetchStepFnVersionDefinition(v.stateMachineVersionArn)
     versionDef.value = res?.definition ?? null
-    if (!versionDef.value) versionDefError.value = 'No se encontró la definición de esta versión.'
+    if (!versionDef.value) versionDefError.value = t('sfnd.errNoDefinition')
   } catch (e) {
-    versionDefError.value = e?.message || 'Error cargando definición'
+    versionDefError.value = e?.message || t('sfnd.errDefinition')
   } finally {
     versionDefLoading.value = false
   }
@@ -287,7 +291,7 @@ async function load(force = false) {
   loading.value = true; error.value = null
   try {
     const res = await awsStore.fetchStepFnDiagram(props.sm.arn, { force })
-    if (!res) throw new Error('No se recibió respuesta de la API')
+    if (!res) throw new Error(t('sfnd.errNoResponse'))
     const sm = res.stateMachine ?? {}
     data.value = {
       name:          sm.name         ?? props.sm.name,
@@ -303,7 +307,7 @@ async function load(force = false) {
     }
     loaded.value = true
   } catch (e) {
-    error.value = e?.message || 'Error cargando detalles'
+    error.value = e?.message || t('sfnd.errDetails')
   } finally {
     loading.value = false
   }
@@ -327,11 +331,11 @@ async function loadEvents(ex, force = false) {
   try {
     const res = await awsStore.fetchStepFnExecutionEvents(ex.executionArn, { force })
     if (request !== eventsRequest) return
-    if (!res) throw new Error('No se pudo obtener el historial. Revisa los permisos de AWS y vuelve a intentar.')
+    if (!res) throw new Error(t('sfnd.errHistory'))
     events.value = res?.events ?? []
     executionDefinition.value = res.definition ?? null
   } catch (e) {
-    if (request === eventsRequest) eventsError.value = e?.message || 'Error cargando eventos'
+    if (request === eventsRequest) eventsError.value = e?.message || t('sfnd.errEvents')
   } finally {
     if (request === eventsRequest) eventsLoading.value = false
   }
@@ -339,7 +343,7 @@ async function loadEvents(ex, force = false) {
 
 function fmtDate(d) {
   if (!d) return '—'
-  try { return new Date(d).toLocaleString() } catch { return String(d) }
+  try { return new Date(d).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US') } catch { return String(d) }
 }
 
 function fmtJson(str) {
@@ -372,7 +376,7 @@ function copyField(text, key) {
 // Auto-load when opened
 watch(() => props.open, (val) => {
   if (val && !loaded.value) {
-    activeTab.value = TABS.some(tab => tab.id === props.initialTab) ? props.initialTab : 'details'
+    activeTab.value = TABS.value.some(tab => tab.id === props.initialTab) ? props.initialTab : 'details'
     load()
   }
   if (!val) {
