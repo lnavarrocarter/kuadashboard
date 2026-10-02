@@ -54,7 +54,7 @@
             <dt>{{ t('gri.concurrency') }}</dt><dd>{{ t('gri.concurrencyValue', { n: d.scaling?.concurrency ?? '—' }) }}</dd>
             <dt>Timeout</dt><dd>{{ d.scaling?.timeoutSeconds ? `${d.scaling.timeoutSeconds} s` : '—' }}</dd>
             <dt>{{ t('gri.environment') }}</dt><dd>{{ d.scaling?.executionEnvironment || t('gri.defaultValue') }}</dd>
-            <dt>{{ t('gri.sessionAffinity') }}</dt><dd>{{ d.scaling?.sessionAffinity ? 'Sí' : 'No' }}</dd>
+            <dt>{{ t('gri.sessionAffinity') }}</dt><dd>{{ yesNo(d.scaling?.sessionAffinity) }}</dd>
           </dl>
         </div>
 

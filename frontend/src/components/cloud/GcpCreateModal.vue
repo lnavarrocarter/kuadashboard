@@ -186,8 +186,8 @@ const NAME_RULES = {
 // (it also carries prices from the same table as the estimates).
 const FALLBACK_PRESETS = {
   locations: [{ region: 'us-central1', label: 'Iowa (us-central1)', zones: ['us-central1-a', 'us-central1-b', 'us-central1-c', 'us-central1-f'] }],
-  vm: [{ value: 'e2-small', label: 'Pequeña', specs: '2 vCPU compartidas · 2 GB', use: '', monthlyUsd: null }],
-  sql: [{ value: 'db-f1-micro', label: 'Micro', specs: 'vCPU compartida · 0.6 GB', use: '', monthlyUsd: null }],
+  vm: [{ value: 'e2-small', label: t('gcn.presetSmall'), specs: t('gcn.presetSmallSpecs'), use: '', monthlyUsd: null }],
+  sql: [{ value: 'db-f1-micro', label: 'Micro', specs: t('gcn.presetMicroSpecs'), use: '', monthlyUsd: null }],
   vmImages: [{ key: 'debian-12', label: 'Debian 12', project: 'debian-cloud', family: 'debian-12' }],
   sqlVersions: ['POSTGRES_16', 'MYSQL_8_0'],
   cloudRun: { cpu: ['1', '2', '4'], memory: ['512Mi', '1Gi', '2Gi', '4Gi'] },

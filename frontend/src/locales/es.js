@@ -790,6 +790,14 @@ export default {
   'common.yes': 'Sí',
   'common.no': 'No',
 
+  // ── EC2 RDP and GCP presets ──
+  'conn.passwordHint': 'AWS genera una contraseña temporal cifrada con tu PEM. Descifrala con la AWS CLI:',
+  'conn.copyCommand': 'Copiar comando',
+  'gcn.presetSmall': 'Pequeña',
+  'gcn.presetSmallSpecs': '2 vCPU compartidas · 2 GB',
+  'gcn.presetMicroSpecs': 'vCPU compartida · 0.6 GB',
+  'gcn.other': 'Otro…',
+
   // ── EC2 RDP clients ──
   'conn.openClient': 'Abrí tu cliente RDP:',
   'conn.linuxClients': 'Remmina o FreeRDP',

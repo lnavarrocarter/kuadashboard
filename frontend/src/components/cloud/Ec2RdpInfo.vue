@@ -24,7 +24,7 @@
               <span class="rdp-label">Host / IP</span>
               <span class="rdp-value mono">{{ host || '—' }}</span>
               <button v-if="host" class="rdp-copy-btn" @click="copy(host)" :class="{ copied: copied === 'host' }">
-                {{ copied === 'host' ? '✓' : 'Copiar' }}
+                {{ copied === 'host' ? '✓' : t('action.copy') }}
               </button>
             </div>
             <div class="rdp-row">
@@ -35,7 +35,7 @@
               <span class="rdp-label">{{ t('conn.user') }}</span>
               <span class="rdp-value mono">Administrator</span>
               <button class="rdp-copy-btn" @click="copy('Administrator')" :class="{ copied: copied === 'Administrator' }">
-                {{ copied === 'Administrator' ? '✓' : 'Copiar' }}
+                {{ copied === 'Administrator' ? '✓' : t('action.copy') }}
               </button>
             </div>
           </div>
@@ -44,16 +44,16 @@
           <div class="rdp-card">
             <div class="rdp-card-title">🔑 {{ t('conn.getPassword') }}</div>
             <p class="rdp-hint">
-              AWS genera una contraseña temporal cifrada con tu PEM. Necesitas descifrarla con la AWS CLI:
+              {{ t('conn.passwordHint') }}
             </p>
             <div class="rdp-code-block">
               <code>aws ec2 get-password-data \<br>
 &nbsp;&nbsp;--instance-id {{ instance?.id || '&lt;instance-id&gt;' }} \<br>
-&nbsp;&nbsp;--priv-launch-key /ruta/a/tu/key.pem \<br>
+&nbsp;&nbsp;--priv-launch-key {{ t('conn.keyPath') }} \<br>
 &nbsp;&nbsp;{{ profileArg }}</code>
             </div>
             <button class="rdp-copy-btn wide" @click="copyCmd" :class="{ copied: copied === 'cmd' }">
-              {{ copied === 'cmd' ? '✓ Copiado' : '📋 Copiar comando' }}
+              {{ copied === 'cmd' ? `✓ ${t('res.copied')}` : `📋 ${t('conn.copyCommand')}` }}
             </button>
           </div>
 

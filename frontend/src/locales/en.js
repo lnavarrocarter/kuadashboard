@@ -791,6 +791,14 @@ export default {
   'common.yes': 'Yes',
   'common.no': 'No',
 
+  // ── EC2 RDP and GCP presets ──
+  'conn.passwordHint': 'AWS generates a temporary password encrypted with your PEM. Decrypt it with the AWS CLI:',
+  'conn.copyCommand': 'Copy command',
+  'gcn.presetSmall': 'Small',
+  'gcn.presetSmallSpecs': '2 shared vCPU · 2 GB',
+  'gcn.presetMicroSpecs': 'Shared vCPU · 0.6 GB',
+  'gcn.other': 'Other…',
+
   // ── EC2 RDP clients ──
   'conn.openClient': 'Open your RDP client:',
   'conn.linuxClients': 'Remmina or FreeRDP',
