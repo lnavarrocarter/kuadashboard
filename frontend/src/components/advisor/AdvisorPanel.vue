@@ -12,6 +12,10 @@
         <span v-if="report && totals.checks" class="adv-score" :class="scoreLevel">
           {{ t('advisor.passed', { passed: totals.passed, checks: totals.checks }) }}
         </span>
+        <AgentBriefActions
+          v-if="report?.findings?.length" compact
+          :build="buildBrief" :subject="briefSubject"
+        />
         <button v-if="refreshable" class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('advisor.rescan')" @click="$emit('refresh')">
           <i data-lucide="refresh-cw"></i>
         </button>
@@ -92,6 +96,8 @@
 import { computed, nextTick, onMounted, onUpdated, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useI18n } from '../../composables/useI18n'
+import { advisorBrief } from '../../shared/agentBrief.mjs'
+import AgentBriefActions from './AgentBriefActions.vue'
 
 const props = defineProps({
   report: { type: Object, default: null },
@@ -103,6 +109,8 @@ const props = defineProps({
   // Remembers the collapsed state per placement
   storageKey: { type: String, default: 'advisor' },
   defaultCollapsed: { type: Boolean, default: false },
+  // Extra Context rows of the agent brief ({ label: value }), e.g. account or profile
+  briefContext: { type: Object, default: () => ({}) },
 })
 defineEmits(['refresh'])
 
@@ -126,6 +134,15 @@ const scoreLevel = computed(() => {
   if (findings.some(finding => finding.severity === 'medium')) return 'warn'
   return 'good'
 })
+
+const briefSubject = computed(() => {
+  const scope = props.report?.scope || {}
+  return ['advisor', scope.provider, scope.region || scope.projectId || scope.namespace || scope.applicationId].filter(Boolean).join('-')
+})
+
+function buildBrief() {
+  return advisorBrief(props.report, { t, lens: props.lens, context: props.briefContext })
+}
 
 function readCollapsed() {
   try {

@@ -91,11 +91,12 @@ describe('AdvisorPanel', () => {
     const wrapper = mount(AdvisorPanel, { props: { report: report(), defaultCollapsed: true, refreshable: true, storageKey: 'advisor.test' } })
     expect(wrapper.find('.adv-list').exists()).toBe(false)
     expect(wrapper.text()).toContain('2 recommendation(s), 1 high')
+    // Header: agent brief (copy, download), refresh, collapse
     const buttons = wrapper.findAll('.adv-head-side button')
-    await buttons[1].trigger('click')
+    await buttons.at(-1).trigger('click')
     expect(wrapper.find('.adv-list').exists()).toBe(true)
     expect(localStorage.getItem('kua.advisor.test.collapsed')).toBe('0')
-    await buttons[0].trigger('click')
+    await buttons.at(-2).trigger('click')
     expect(wrapper.emitted('refresh')).toHaveLength(1)
   })
 

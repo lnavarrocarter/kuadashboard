@@ -49,7 +49,7 @@
         </button>
       </div>
 
-      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" />
+      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" />
 
       <div class="kov-grid">
         <!-- Cluster usage -->

@@ -22,7 +22,10 @@
 
       <!-- Recommendations -->
       <section v-if="data.recommendations?.length" class="msg-section">
-        <h5>{{ t('awsLogs.intel.recommendations') }}</h5>
+        <div class="li-rec-head">
+          <h5>{{ t('awsLogs.intel.recommendations') }}</h5>
+          <AgentBriefActions :build="buildBrief" :subject="group" />
+        </div>
         <article v-for="rec in data.recommendations" :key="rec.id" class="li-rec" :class="rec.severity">
           <header>
             <span class="msg-chip" :class="rec.severity === 'high' ? 'err' : rec.severity === 'medium' ? 'warn' : ''">{{ t(`awsLogs.intel.severity_${rec.severity}`) }}</span>
@@ -142,6 +145,8 @@ import { useToast } from '../../../composables/useToast'
 import { settings } from '../../../composables/useSettings'
 import { formatTime } from '../../../lib/awsLogs'
 import { CATEGORIES, categoryQuery } from '../../../shared/logSignals.mjs'
+import { logsBrief } from '../../../shared/agentBrief.mjs'
+import AgentBriefActions from '../../advisor/AgentBriefActions.vue'
 import LogActivityChart from './LogActivityChart.vue'
 
 const props = defineProps({ group: { type: String, required: true }, profileId: { type: String, default: '' } })
@@ -207,6 +212,10 @@ function clearFilter() {
   loadEvents()
 }
 
+function buildBrief() {
+  return logsBrief(data.value, { t, group: props.group })
+}
+
 async function copy(text) {
   try {
     await navigator.clipboard.writeText(text)
@@ -219,6 +228,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.li-rec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.li-rec-head h5 { margin: 0; }
 .li { display: flex; flex-direction: column; gap: 12px; padding: 6px 2px; white-space: normal; }
 .li-stats { display: flex; gap: 8px; flex-wrap: wrap; }
 .li-stat { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; min-width: 120px; font-size: 11px; color: var(--text-dim); }

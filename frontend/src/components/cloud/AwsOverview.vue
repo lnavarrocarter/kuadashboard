@@ -107,6 +107,7 @@
         :error="advisorError || ''"
         refreshable
         storage-key="advisor.aws"
+        :brief-context="{ [t('agentBrief.field.account')]: identity.alias ? `${identity.alias} (${identity.account})` : identity.account, [t('agentBrief.field.profile')]: profileName || profileId }"
         @refresh="loadAdvisor({ refresh: true })"
       />
 
