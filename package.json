@@ -13,6 +13,7 @@
     "pretest": "npm run native:node",
     "test": "node --test \"lib/**/*.test.js\" \"routes/**/*.test.js\" \"scripts/**/*.test.js\"",
     "start": "cross-env PORT=7190 node server.js",
+    "mcp": "node mcp/server.mjs",
     "predev": "npm run native:node",
     "dev": "cross-env PORT=7192 nodemon server.js",
     "predev:full": "npm run native:node",
@@ -102,7 +103,12 @@
     "productName": "KuaDashboard",
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**"
+      "node_modules/better-sqlite3/**",
+      "mcp/**",
+      "lib/mcp/**",
+      "frontend/src/shared/agentBrief.mjs",
+      "frontend/src/locales/**",
+      "frontend/package.json"
     ],
     "npmRebuild": true,
     "afterSign": "electron/notarize.js",
@@ -112,6 +118,9 @@
       "routes/**",
       "lib/**",
       "frontend/src/shared/**",
+      "frontend/src/locales/**",
+      "frontend/package.json",
+      "mcp/**",
       "config/**",
       "public/**",
       "assets/icon.ico",
