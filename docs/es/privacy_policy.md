@@ -67,7 +67,7 @@ Cuando inicias sesión, el control plane de KUA guarda:
 | Dato | Para qué | Cuánto tiempo |
 |---|---|---|
 | Id de la cuenta de Google, email, nombre y URL de la foto de perfil | Identificar tu cuenta | Hasta que borres la cuenta |
-| Sesiones: un hash del token, las fechas de creación y vencimiento y el cliente (web o escritorio) | Mantener tu sesión abierta | 30 días, o hasta que cierres sesión |
+| Sesiones: un hash del token, el cliente (web o escritorio), las fechas de creación, última actividad y vencimiento y, en KUA Desktop, un id de dispositivo opaco (un hash, para que volver a iniciar sesión en el mismo equipo reemplace su sesión), el nombre del equipo, el sistema operativo, la arquitectura y la versión de KUA | Mantener tu sesión abierta y mostrar los dispositivos con sesión iniciada en la cuenta | 30 días, o hasta que cierres sesión |
 | Códigos de un solo uso para iniciar sesión en el escritorio (como hash) | Vincular KUA Desktop de forma segura | 5 minutos; se usan una vez |
 | Suscripción: plan, estado, fecha de renovación e ids de suscripción y cliente en Polar | Activar tu plan | Hasta que borres la cuenta |
 | Ids de los avisos de pago recibidos de Polar (sin datos personales) | Procesar cada aviso una sola vez | 90 días |
