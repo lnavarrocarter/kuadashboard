@@ -118,8 +118,15 @@
         <i data-lucide="receipt"></i>
         <div>
           <h4>{{ t('usage.title') }}</h4>
-          <p class="text-dim">{{ usage ? t('account.usageMonth', { usd: usd(usage.totals.month.usd), calls: usage.totals.month.calls }) : t('common.loading') }}</p>
+          <p class="text-dim" data-test="account-usage-text">{{ usageText }}</p>
         </div>
+        <span v-if="usage" class="acp-actions">
+          <button v-if="usage.enabled === false" class="btn sm" :disabled="usageBusy" data-test="account-usage-enable" @click="setUsage('enable')">{{ t('account.usageEnable') }}</button>
+          <template v-else>
+            <button class="btn sm" :disabled="usageBusy" data-test="account-usage-disable" @click="setUsage('disable')">{{ t('account.usageDisable') }}</button>
+            <button class="btn sm danger" :disabled="usageBusy" data-test="account-usage-clear" @click="setUsage('clear')">{{ t('account.usageClear') }}</button>
+          </template>
+        </span>
       </div>
       <p class="text-dim acp-note">{{ t('account.usageHint') }}</p>
     </section>
@@ -225,6 +232,7 @@ async function portal() {
 const ml = ref(null)
 const mlBusy = ref(false)
 const usage = ref(null)
+const usageBusy = ref(false)
 
 const mb = bytes => Math.max(1, Math.round((bytes || 0) / 1048576))
 const yes = value => (value ? '✓' : '—')
@@ -232,6 +240,11 @@ const usd = value => {
   const amount = Number(value) || 0
   return amount === 0 ? 'USD 0' : amount >= 0.01 ? `USD ${amount.toFixed(2)}` : `USD ${amount.toPrecision(2)}`
 }
+const usageText = computed(() => {
+  if (!usage.value) return t('common.loading')
+  if (usage.value.enabled === false) return t('account.usageOff')
+  return t('account.usageMonth', { usd: usd(usage.value.totals.month.usd), calls: usage.value.totals.month.calls })
+})
 const mlText = computed(() => {
   if (!ml.value) return t('common.loading')
   if (!ml.value.enabled) return t('account.mlOff')
@@ -257,8 +270,18 @@ async function setMl(action) {
 async function loadUsage() {
   try {
     const summary = await api('GET', '/api/system/usage?days=30')
-    usage.value = summary?.totals?.month ? summary : null
+    usage.value = summary?.enabled === false || summary?.totals?.month ? summary : null
   } catch { usage.value = null }
+}
+
+/** Spend tracking is optional: 'disable' stops recording, 'clear' also deletes the history. */
+async function setUsage(action) {
+  usageBusy.value = true
+  try {
+    if (action === 'enable') await api('POST', '/api/system/usage/enable')
+    else await api('POST', '/api/system/usage/disable', { clear: action === 'clear' })
+    await loadUsage()
+  } catch (err) { error.value = err.message } finally { usageBusy.value = false }
 }
 
 const refreshIcons = () => nextTick(() => createIcons({ icons }))

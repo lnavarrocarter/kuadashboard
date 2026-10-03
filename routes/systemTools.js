@@ -197,14 +197,26 @@ router.get('/mcp', (_req, res) => {
 
 router.get('/usage', (req, res) => {
   try {
+    const ledger = require('../lib/usage/ledger').getUsageLedger();
+    // Optional (Help & Options → Account): when off, the panels hide.
+    if (!ledger.isEnabled()) return res.json({ enabled: false });
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 400);
     const { PRICES } = require('../lib/usage/awsPricing');
     res.json({
-      ...require('../lib/usage/ledger').getUsageLedger().summary({
-        days, profileId: req.query.profile || null, service: req.query.service || null,
-      }),
+      enabled: true,
+      ...ledger.summary({ days, profileId: req.query.profile || null, service: req.query.service || null }),
       prices: Object.values(PRICES),
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /usage/enable · POST /usage/disable { clear?: true } (clear deletes the history)
+router.post('/usage/:action(enable|disable)', (req, res) => {
+  try {
+    const ledger = require('../lib/usage/ledger').getUsageLedger();
+    res.json(ledger.setEnabled(req.params.action === 'enable', { clear: req.params.action === 'disable' && req.body?.clear === true }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
