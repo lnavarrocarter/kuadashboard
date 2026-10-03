@@ -17,7 +17,7 @@ The brief is a self-contained task, written in the app language:
 | --- | --- |
 | Context | Provider, account, profile, region, project, namespace, Kubernetes context or log group |
 | Your task | Working rules for the agent: verify the current state first, fix by severity and root cause, change infrastructure as code instead of the console, ask before destructive or billed operations, never expose secrets, finish with a report |
-| Findings / Recommendations | Severity, rule, affected resources and docs. For logs: activity, sanitized error signatures, sensitive data found, Logs Insights queries and code snippets |
+| Findings / Recommendations | Severity, rule, affected resources and docs. For logs: activity, anomalies against the previous 7 days, sanitized error signatures, sensitive data found, Logs Insights queries and code snippets |
 | How to verify | How to confirm the fix in KUA and with the provider CLI |
 
 Paste it into any agent or chat. It works with every model because it is plain Markdown.
@@ -37,7 +37,7 @@ All tools are read-only.
 | `gcp_advisor` | GCP Advisor findings from the last stored overview |
 | `kubernetes_advisor` | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
-| `log_intelligence` | Brief of a cached log group: error rates, signatures, recommendations, queries |
+| `log_intelligence` | Brief of a cached log group: error rates, anomalies, signatures, recommendations, queries |
 | `list_applications` | KUApps applications |
 | `product_advisor` | Product findings of a KUApps application |
 

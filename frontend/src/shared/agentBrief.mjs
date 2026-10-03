@@ -140,6 +140,38 @@ function percent(value) {
   return value == null ? '—' : `${value}%`
 }
 
+const iso = time => new Date(time).toISOString()
+
+/** Anomalies of a log group (lib/logAnomalies.js output); only a status line when there are none. */
+function anomalySection(t, result) {
+  if (!result) return []
+  const anomalies = result.anomalies || []
+  const lines = [`## ${t('agentBrief.anomalies', { n: anomalies.length })}`, '']
+  if (!anomalies.length) {
+    const text = result.status === 'ok'
+      ? t('awsLogs.anomaly.none', { time: iso(result.evaluatedAt) })
+      : t(`awsLogs.anomaly.status_${result.status}`)
+    return [...lines, text, '']
+  }
+  lines.push(t('agentBrief.anomaliesHint', { time: iso(result.evaluatedAt) }), '')
+  anomalies.forEach((anomaly, index) => {
+    const params = anomaly.category ? { ...anomaly.params, category: t(`awsLogs.cat.${anomaly.category}`) } : anomaly.params
+    lines.push(
+      `### ${index + 1}. [${t(`awsLogs.intel.severity_${anomaly.severity}`).toUpperCase()}] ${oneLine(t(`awsLogs.anomaly.${anomaly.id}.title`, params))}`,
+      '',
+      oneLine(t(`awsLogs.anomaly.${anomaly.id}.body`, params)),
+      '',
+    )
+    if (anomaly.evidence?.from != null) lines.push(`- **${t('agentBrief.window')}:** ${iso(anomaly.evidence.from)} → ${iso(anomaly.evidence.to)}`, '')
+    for (const signature of anomaly.evidence?.signatures || []) {
+      lines.push(`- ${code(signature.signature)} × ${signature.occurrences}`)
+      if (signature.sample && signature.sample !== signature.signature) lines.push(`  - ${t('agentBrief.sample')}: ${code(oneLine(signature.sample))}`)
+    }
+    if (anomaly.evidence?.signatures?.length) lines.push('')
+  })
+  return lines
+}
+
 /**
  * Brief for the log intelligence of a log group (GET log-intelligence output:
  * last24h, last7d, recommendations, signatures, references…).
@@ -169,6 +201,8 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
     }
     lines.push('', t('agentBrief.analyzed', { n: data.eventsAnalyzed ?? 0 }), '')
   }
+
+  lines.push(...anomalySection(t, data?.anomalies))
 
   lines.push(`## ${t('agentBrief.recommendations', { n: recommendations.length })}`, '')
   if (!recommendations.length) lines.push(t('agentBrief.noRecommendations'), '')

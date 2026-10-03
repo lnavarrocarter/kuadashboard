@@ -128,6 +128,30 @@ describe('logsBrief', () => {
     expect(md).not.toContain('View events')
   })
 
+  it('starts with the anomalies, their window and new errors', () => {
+    const T = Date.parse('2026-10-02T10:40:00Z')
+    const data = {
+      ...intel(),
+      anomalies: {
+        status: 'ok', evaluatedAt: T,
+        anomalies: [
+          { id: 'category_surge', category: 'timeout', severity: 'medium', params: { count: 96, category: 'timeout', perDay: 4.8, ratio: 20 }, evidence: { from: T - 86400000, to: T } },
+          { id: 'new_errors', severity: 'medium', params: { count: 1 }, evidence: { from: T - 7200000, to: T, signatures: [{ signature: 'TypeError: x', occurrences: 4, sample: 'TypeError: x is undefined' }] } },
+        ],
+      },
+    }
+    const md = logsBrief(data, { t: en, group: 'g', now: NOW })
+    expect(md.indexOf('## Anomalies (2)')).toBeLessThan(md.indexOf('## Recommendations'))
+    expect(md).toContain('Compared with the previous 7 days of this log group, up to 2026-10-02T10:40:00.000Z.')
+    expect(md).toContain('### 1. [MEDIUM] Timeouts: 96 in 24 h, 20× the usual rate')
+    expect(md).toContain('- **Window:** 2026-10-01T10:40:00.000Z → 2026-10-02T10:40:00.000Z')
+    expect(md).toContain('- `TypeError: x` × 4')
+    expect(md).toContain('  - sample: `TypeError: x is undefined`')
+
+    const quiet = logsBrief({ ...intel(), anomalies: { status: 'stale', evaluatedAt: T, anomalies: [] } }, { t: es, group: 'g', now: NOW })
+    expect(quiet).toContain('## Anomalías (0)')
+    expect(quiet).toContain(es('awsLogs.anomaly.status_stale'))
+  })
   it('handles a group without data', () => {
     const md = logsBrief(null, { t: en, group: 'g', now: NOW })
     expect(md).toContain('## Recommendations (0)')

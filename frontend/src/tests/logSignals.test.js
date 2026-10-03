@@ -147,4 +147,62 @@ describe('LogIntelligencePanel', () => {
     expect(wrapper.findAll('.li-cat').length).toBe(2)
     wrapper.unmount()
   })
+
+  it('shows anomalies, opens their window and filters by a new error', async () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+    const calls = []
+    const T = Date.parse('2026-10-02T10:40:00Z')
+    vi.stubGlobal('fetch', vi.fn(async url => {
+      calls.push(url)
+      const body = url.includes('/log-intelligence/histogram')
+        ? { from: 0, to: 120000, binMs: 60000, events: 0, buckets: [], coverage: { oldest: 0, newest: 100 } }
+        : url.includes('/log-intelligence/events')
+        ? { truncated: false, blocksRead: 1, events: [] }
+        : {
+          last24h: { events: 10, errors: 2, warnings: 0, errorRatePercent: 20 }, last7d: { events: 10, errors: 2, errorRatePercent: 20 },
+          keywords24h: {}, categories7d: {}, sensitive7d: {}, signatures: [], references: [], apm: [], eventsAnalyzed: 10, recommendations: [],
+          anomalies: {
+            status: 'ok', evaluatedAt: T,
+            anomalies: [
+              { id: 'error_spike', severity: 'high', params: { count: 90, expected: 4.7, ratio: 19.3, rate: 30, baselineRate: 2 }, evidence: { from: T - 4200000, to: T } },
+              { id: 'category_surge', category: 'timeout', severity: 'medium', params: { count: 96, category: 'timeout', perDay: 4.8, ratio: 20 }, evidence: { from: T - 86400000, to: T } },
+              { id: 'new_errors', severity: 'medium', params: { count: 1 }, evidence: { from: T - 7200000, to: T, signatures: [{ signature: 'TypeError: x', occurrences: 4, sample: 'TypeError' }] } },
+            ],
+          },
+        }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    const wrapper = mount(LogIntelligencePanel, { props: { group: '/aws/lambda/orders', profileId: 'p' } })
+    await flushPromises()
+    const section = wrapper.get('[data-test="log-anomalies"]')
+    expect(section.text()).toContain('90 errors in the last hour, 19.3× the usual')
+    expect(section.text()).toContain('Timeouts: 96 in 24 h, 20× the usual rate')
+
+    await wrapper.get('[data-test="log-anomaly-error_spike"] .li-actions button').trigger('click')
+    await flushPromises()
+    expect(calls.some(url => url.includes('/log-intelligence/events?') && url.includes('level=error') && url.includes(`to=${T}`))).toBe(true)
+
+    await wrapper.get('[data-test="log-anomaly-new_errors"] .li-sig-btn').trigger('click')
+    await flushPromises()
+    expect(calls.some(url => url.includes('/log-intelligence/events?') && url.includes('signature=TypeError'))).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('explains why anomalies are not evaluated yet', async () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+    vi.stubGlobal('fetch', vi.fn(async url => {
+      const body = url.includes('/log-intelligence/histogram')
+        ? { from: 0, to: 120000, binMs: 60000, events: 0, buckets: [], coverage: { oldest: 0, newest: 100 } }
+        : {
+          last24h: { events: 1, errors: 0, warnings: 0, errorRatePercent: 0 }, last7d: { events: 1, errors: 0, errorRatePercent: 0 },
+          keywords24h: {}, categories7d: {}, sensitive7d: {}, signatures: [], references: [], apm: [], eventsAnalyzed: 1, recommendations: [],
+          anomalies: { status: 'insufficient_history', evaluatedAt: 1, anomalies: [] },
+        }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    const wrapper = mount(LogIntelligencePanel, { props: { group: '/g', profileId: 'p' } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="log-anomalies"]').text()).toContain('at least 6 hours of synced logs')
+    wrapper.unmount()
+  })
 })
