@@ -83,6 +83,26 @@ describe('AccountProfile sign-in', () => {
   })
 })
 
+describe('AccountProfile legal links', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('shows the terms before paying and opens them in the language of KUA', async () => {
+    stub('free')
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-legal"]').text()).toContain('non-refundable')
+    await wrapper.get('[data-test="account-terms"]').trigger('click')
+    expect(open).toHaveBeenCalledWith('https://kuadashboard.navarrocarter.com/terms.html', '_blank', 'noopener')
+    const { settings } = await import('../composables/useSettings')
+    settings.lang = 'es'
+    await wrapper.get('[data-test="account-terms"]').trigger('click')
+    expect(open).toHaveBeenLastCalledWith('https://kuadashboard.navarrocarter.com/es/terms.html', '_blank', 'noopener')
+    settings.lang = 'en'
+  })
+})
+
 describe('AdvisorPanel on the Free plan', () => {
   beforeEach(() => { try { localStorage.clear() } catch { /* jsdom */ } })
   afterEach(() => vi.unstubAllGlobals())

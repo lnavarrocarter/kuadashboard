@@ -81,6 +81,13 @@
         <button v-if="paid" class="btn sm" :disabled="busy" data-test="account-portal" @click="portal">{{ t('account.manage') }}</button>
       </div>
       <p v-if="waiting === 'payment'" class="acp-note" data-test="account-waiting-payment">{{ t('account.waitingPayment') }}</p>
+      <!-- Shown before paying: terms (renewal, no refunds) and privacy of the account -->
+      <p class="text-dim acp-note" data-test="account-legal">
+        {{ t('account.legal') }}
+        <a href="#" data-test="account-terms" @click.prevent="openLegal('terms')">{{ t('account.terms') }}</a> ·
+        <a href="#" @click.prevent="openLegal('privacy_policy')">{{ t('account.privacy') }}</a> ·
+        <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>
+      </p>
       <p class="text-dim acp-note">{{ t(plan?.source === 'env' ? 'account.planHintEnv' : account?.linked ? 'account.planHintAccount' : 'account.planHint') }}</p>
     </section>
 
@@ -135,6 +142,7 @@ import { usePlan } from '../../composables/usePlan'
 import { formatBytes } from '../../lib/awsLogs'
 import LogCacheBudget from '../cloud/logs/LogCacheBudget.vue'
 import { openExternal } from '../../lib/openExternal'
+import { settings } from '../../composables/useSettings'
 import { useToast } from '../../composables/useToast'
 
 const PLAN_ORDER = ['free', 'pro', 'team']
@@ -186,6 +194,11 @@ function pollAccount({ kind, refresh = false, everyMs, forMs, done }) {
       await reloadPlan()
     } else if (Date.now() > until) stopPolling()
   }, everyMs)
+}
+
+const LEGAL_SITE = 'https://kuadashboard.navarrocarter.com'
+function openLegal(page) {
+  openExternal(`${LEGAL_SITE}${settings.lang === 'es' ? '/es' : ''}/${page}.html`)
 }
 
 async function signIn() {
