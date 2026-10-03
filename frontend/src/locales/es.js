@@ -3592,6 +3592,7 @@ export default {
   'account.signInSoon': 'Próximamente: vincular KUA a una cuenta con plan Pro o Team',
   'account.manageOnWeb': 'Administra tu cuenta en la web: dispositivos, almacenamiento en la nube y suscripción',
   'account.noticeAction': 'Abrir mi cuenta',
+  'account.keyConflict': 'Este equipo tiene otra clave de firma en tu cuenta: cierra sesión y vuelve a iniciarla para firmar backups desde aquí.',
   'account.notice.trialEndingCard': 'Tu prueba termina el {date}. Paga antes y obtén {percent}% de descuento en el primer pago.',
   'account.notice.trialEndingCardPlain': 'Tu prueba termina el {date}: ese día Polar cobrará el plan.',
   'account.notice.trialEndingNoCard': 'Tu prueba gratis termina el {date}. Suscríbete para mantener tu plan.',
@@ -4090,6 +4091,9 @@ export default {
   // ── Architecture view ──
   'archView.title': 'Arquitectura',
   'archView.subtitle': 'Diagramas de aplicaciones respaldados por evidencia',
+  'cloudBackups.tampered': 'Este backup fue modificado después de firmarse, por eso KUA no lo restauró.',
+  'cloudBackups.unsigned': 'Este backup no está firmado, por eso KUA no lo restauró.',
+  'cloudBackups.keyConflict': 'Este equipo todavía no puede firmar backups: cierra sesión y vuelve a iniciarla.',
   'cloudBackups.title': 'Backups en la nube',
   'cloudBackups.hint': 'Copias saneadas de tus KUA Applications en tu cuenta KUA: arquitectura, snapshots y metadatos del registro. Las credenciales, los perfiles y los logs nunca salen de este equipo.',
   'cloudBackups.usage': '{count} de {maxCount} backups · {size} de {maxSize}',

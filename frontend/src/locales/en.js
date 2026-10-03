@@ -3593,6 +3593,7 @@ export default {
   'account.signInSoon': 'Coming soon: linking KUA to an account with a Pro or Team plan',
   'account.manageOnWeb': 'Manage your account on the web: devices, cloud storage and subscription',
   'account.noticeAction': 'Open my account',
+  'account.keyConflict': 'This computer has another signing key in your account: sign out and sign in again to sign cloud backups from here.',
   'account.notice.trialEndingCard': 'Your trial ends on {date}. Pay before then to get {percent}% off your first payment.',
   'account.notice.trialEndingCardPlain': 'Your trial ends on {date}: Polar will charge the plan that day.',
   'account.notice.trialEndingNoCard': 'Your free trial ends on {date}. Subscribe to keep your plan.',
@@ -4091,6 +4092,9 @@ export default {
   // ── Architecture view ──
   'archView.title': 'Architecture',
   'archView.subtitle': 'Evidence-backed application diagrams',
+  'cloudBackups.tampered': 'This backup was changed after it was signed, so KUA did not restore it.',
+  'cloudBackups.unsigned': 'This backup is not signed, so KUA did not restore it.',
+  'cloudBackups.keyConflict': 'This computer cannot sign backups yet: sign out and sign in again.',
   'cloudBackups.title': 'Cloud backups',
   'cloudBackups.hint': 'Sanitized copies of your KUA Applications in your KUA account: architecture, snapshots and registry metadata. Credentials, profiles and logs never leave this computer.',
   'cloudBackups.usage': '{count} of {maxCount} backups · {size} of {maxSize}',

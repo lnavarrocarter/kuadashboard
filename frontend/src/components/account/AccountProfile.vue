@@ -23,6 +23,7 @@
       </div>
       <p v-if="waiting === 'login'" class="acp-note" data-test="account-waiting">{{ t('account.waitingLogin') }}</p>
       <p v-if="account?.stale" class="acp-note acp-warn">{{ t('account.stale') }}</p>
+      <p v-if="account?.keyConflict" class="acp-note acp-warn" data-test="account-key-conflict">{{ t('account.keyConflict') }}</p>
       <!-- Billing notices from the account service (trial ending, payment failed, cancellation…) -->
       <p v-for="notice in account?.notices || []" :key="notice.type" :class="['acp-note', notice.type === 'payment_failed' || notice.type === 'trial_ended' ? 'acp-warn' : '']" :data-test="`account-notice-${notice.type}`">
         {{ noticeText(notice) }}
