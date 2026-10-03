@@ -1,12 +1,9 @@
 <template>
-  <section class="msg-section lml" data-test="log-ml">
-    <div class="lml-head">
-      <h5><i data-lucide="sparkles"></i>{{ t('awsLogs.ml.title') }}</h5>
-      <span v-if="status?.enabled" class="lml-actions">
-        <button class="btn sm" data-test="log-ml-disable" @click="disable(false)">{{ t('awsLogs.ml.disable') }}</button>
-        <button v-if="status.downloaded" class="btn sm" data-test="log-ml-remove" @click="disable(true)">{{ t('awsLogs.ml.remove', { size: mb(status.diskBytes) }) }}</button>
-      </span>
-    </div>
+  <CollapsibleSection id="logIntel.ml" data-test="log-ml" class="lml" :title="t('awsLogs.ml.title')" :badge="badge">
+    <template v-if="status?.enabled" #actions>
+      <button class="btn sm" data-test="log-ml-disable" @click="disable(false)">{{ t('awsLogs.ml.disable') }}</button>
+      <button v-if="status.downloaded" class="btn sm" data-test="log-ml-remove" @click="disable(true)">{{ t('awsLogs.ml.remove', { size: mb(status.diskBytes) }) }}</button>
+    </template>
 
     <template v-if="!status"><p class="text-dim li-meta">{{ t('common.loading') }}</p></template>
 
@@ -60,14 +57,14 @@
       </template>
       <p v-if="ml?.state === 'ready'" class="text-dim li-meta">{{ t('awsLogs.ml.privacy') }}</p>
     </template>
-  </section>
+  </CollapsibleSection>
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, onUpdated, ref } from 'vue'
-import { createIcons, icons } from 'lucide'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useApi } from '../../../composables/useApi'
 import { useI18n } from '../../../composables/useI18n'
+import CollapsibleSection from './CollapsibleSection.vue'
 
 const props = defineProps({
   group: { type: String, required: true },
@@ -88,6 +85,12 @@ const searchError = ref('')
 let timer = null
 
 const mb = bytes => Math.max(1, Math.round((bytes || 0) / 1048576))
+// Header summary: off, loading, or the number of similar-error groups.
+const badge = computed(() => {
+  if (!status.value?.enabled) return t('awsLogs.ml.badgeOff')
+  if (status.value.state === 'loading') return t('awsLogs.ml.badgeLoading')
+  return props.ml?.clusters?.length ? t('awsLogs.ml.badgeClusters', { n: props.ml.clusters.length }) : t('awsLogs.ml.badgeOn')
+})
 
 async function refresh() {
   const previous = status.value?.state
@@ -127,18 +130,11 @@ async function search() {
   }
 }
 
-const refreshIcons = () => nextTick(() => createIcons({ icons }))
-onMounted(() => { refresh(); refreshIcons() })
-onUpdated(refreshIcons)
+onMounted(refresh)
 onUnmounted(() => clearTimeout(timer))
 </script>
 
 <style scoped>
-.lml { display: flex; flex-direction: column; gap: 8px; }
-.lml-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.lml-head h5 { margin: 0; display: inline-flex; gap: 6px; align-items: center; }
-.lml-head h5 svg { width: 14px; height: 14px; color: var(--accent); }
-.lml-actions { display: inline-flex; gap: 4px; }
 .lml-search { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .lml-search input { flex: 1; min-width: 180px; }
 .lml-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }

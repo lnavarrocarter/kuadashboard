@@ -78,7 +78,7 @@ const props = defineProps({
   prefill: { type: Object, default: null },
   pollMs: { type: Number, default: 3000 },
 })
-const emit = defineEmits(['open', 'changed', 'active'])
+const emit = defineEmits(['open', 'changed', 'active', 'active-groups'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
@@ -141,6 +141,7 @@ async function load() {
     error.value = ''
   } catch (err) { error.value = err.message }
   emit('active', activeCount.value)
+  emit('active-groups', [...new Set(scans.value.filter(scan => ACTIVE.includes(scan.status)).map(scan => scan.logGroup))])
   schedule()
 }
 
