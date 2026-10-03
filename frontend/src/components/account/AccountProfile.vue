@@ -27,6 +27,8 @@
       <p class="text-dim acp-note">{{ t('account.linkHint') }}</p>
     </section>
 
+    <AccountAdmin v-if="account?.admin" @changed="onAdminChange" />
+
     <!-- Plan -->
     <section class="acp-card" data-test="account-plan">
       <div class="acp-head">
@@ -141,6 +143,7 @@ import { useI18n } from '../../composables/useI18n'
 import { usePlan } from '../../composables/usePlan'
 import { formatBytes } from '../../lib/awsLogs'
 import LogCacheBudget from '../cloud/logs/LogCacheBudget.vue'
+import AccountAdmin from './AccountAdmin.vue'
 import { openExternal } from '../../lib/openExternal'
 import { settings } from '../../composables/useSettings'
 import { useToast } from '../../composables/useToast'
@@ -199,6 +202,11 @@ function pollAccount({ kind, refresh = false, everyMs, forMs, done }) {
 const LEGAL_SITE = 'https://kuadashboard.navarrocarter.com'
 function openLegal(page) {
   openExternal(`${LEGAL_SITE}${settings.lang === 'es' ? '/es' : ''}/${page}.html`)
+}
+
+// An administrator who changes their own plan sees it at once.
+async function onAdminChange(updated) {
+  if (updated?.user?.email && updated.user.email === account.value?.user?.email) { await loadAccount(); await reloadPlan() }
 }
 
 async function signIn() {

@@ -13,6 +13,9 @@
  *   POST /portal      billing portal URL
  *   GET  /backups     cloud backups of KUA Applications (Pro and Team)
  *   DELETE /backups/:id
+ *   GET  /admin/accounts[?email=]     administrators of the KUA service only
+ *   PUT  /admin/accounts/:id/grant    { plan: pro|team, expiresAt?, reason? }
+ *   DELETE /admin/accounts/:id/grant
  *   (creating and restoring a backup live in routes/kuaApps.js, next to the bundle export)
  */
 
@@ -66,6 +69,25 @@ function createAccountRouter({ account = getAccount, port = () => process.env.PO
 
   router.post('/portal', async (_req, res) => {
     try { res.json(await account().portal()); } catch (err) { fail(res, err); }
+  });
+
+  router.get('/admin/accounts', async (req, res) => {
+    try { res.json(await account().admin.accounts(String(req.query.email || ''))); } catch (err) { fail(res, err); }
+  });
+
+  // Granting to this same account changes its own plan: read it again right away.
+  async function afterGrant(res, result) {
+    if (result?.user?.email && result.user.email === account().status().user?.email) await account().refresh().catch(() => {});
+    res.json(result);
+  }
+
+  router.put('/admin/accounts/:id/grant', async (req, res) => {
+    const body = { plan: String(req.body?.plan || ''), expiresAt: req.body?.expiresAt || null, reason: String(req.body?.reason || '') };
+    try { await afterGrant(res, await account().admin.grant(req.params.id, body)); } catch (err) { fail(res, err); }
+  });
+
+  router.delete('/admin/accounts/:id/grant', async (req, res) => {
+    try { await afterGrant(res, await account().admin.revoke(req.params.id)); } catch (err) { fail(res, err); }
   });
 
   router.get('/backups', async (_req, res) => {
