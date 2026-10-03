@@ -18,7 +18,8 @@
     </div>
 
     <div v-if="estimateData && estimateReady" class="cwl-scan-estimate" :class="{ warn: !estimateData.fits }" data-test="scan-estimate-result">
-      <span>{{ t('awsLogs.scan.estimateText', { size: formatBytes(estimateData.estimatedBytes), days: estimateData.days, free: formatBytes(estimateData.freeBytes), budget: formatBytes(estimateData.budgetBytes) }) }}</span>
+      <span v-if="estimateData.unknownSize">{{ t('awsLogs.scan.estimateUnknown', { days: estimateData.days, free: formatBytes(estimateData.freeBytes), budget: formatBytes(estimateData.budgetBytes) }) }}</span>
+      <span v-else>{{ t('awsLogs.scan.estimateText', { size: formatBytes(estimateData.estimatedBytes), days: estimateData.days, free: formatBytes(estimateData.freeBytes), budget: formatBytes(estimateData.budgetBytes) }) }}</span>
       <span v-if="estimateData.limitedBy">{{ t(`awsLogs.scan.limited_${estimateData.limitedBy}`, { days: estimateData.days }) }}</span>
       <span v-if="!estimateData.fits">{{ t('awsLogs.scan.mayNotFit') }}</span>
       <span v-if="!estimateData.cached">{{ t('awsLogs.scan.willCache') }}</span>
@@ -66,6 +67,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useApi } from '../../../composables/useApi'
+import { useLogApi } from './logApi'
 import { useI18n } from '../../../composables/useI18n'
 import { useToast } from '../../../composables/useToast'
 import { settings } from '../../../composables/useSettings'
@@ -83,7 +85,7 @@ const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
 
-const BASE = '/api/cloud/aws/cloudwatch/log-scans'
+const BASE = `${useLogApi().base}/log-scans`
 const DAY_OPTIONS = [0.25, 0.5, 1, 2, 3, 4, 5]
 const ACTIVE = ['running', 'queued']
 const RESUMABLE = ['paused', 'error', 'budget']

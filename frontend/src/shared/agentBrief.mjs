@@ -187,6 +187,8 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
     context: { [t('agentBrief.field.logGroup')]: group, ...context },
   })
 
+  // Kubernetes workloads come from the shared cache with provider 'kubernetes' (lib/kubeLogs).
+  const kube = data?.provider === 'kubernetes'
   lines.push(...task(t, ['agentBrief.rule.logsLocate', ...COMMON_RULES]))
 
   if (data?.last24h || data?.last7d) {
@@ -242,7 +244,7 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
       lines.push('')
     }
     for (const action of rec.actions || []) {
-      if (action.type === 'query') lines.push(`**${t('agentBrief.query')}**`, '', fence(action.query), '')
+      if (action.type === 'query') lines.push(`**${t(kube ? 'agentBrief.queryKube' : 'agentBrief.query')}**`, '', fence(action.query), '')
       else if (action.type === 'snippet') lines.push(`**${t('agentBrief.snippet', { language: action.language })}**`, '', fence(action.code, action.language), '')
       else if (action.type === 'link') lines.push(`${t('agentBrief.docs')}: ${action.url}`, '')
     }
@@ -268,7 +270,7 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
     lines.push('')
   }
 
-  lines.push(`## ${t('agentBrief.verify')}`, '', t('agentBrief.verifyLogs'), '')
+  lines.push(`## ${t('agentBrief.verify')}`, '', t(kube ? 'agentBrief.verifyLogsKube' : 'agentBrief.verifyLogs'), '')
   return `${lines.join('\n').trimEnd()}\n`
 }
 

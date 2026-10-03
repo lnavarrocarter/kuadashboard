@@ -65,6 +65,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useApi } from '../../../composables/useApi'
 import { useI18n } from '../../../composables/useI18n'
 import CollapsibleSection from './CollapsibleSection.vue'
+import { useLogApi } from './logApi'
 
 const props = defineProps({
   group: { type: String, required: true },
@@ -76,6 +77,7 @@ const emit = defineEmits(['filter', 'ready'])
 
 const { t } = useI18n()
 const { apiFetch } = useApi()
+const logApi = useLogApi()
 const status = ref(null)
 const query = ref('')
 const scope = ref('all')
@@ -120,7 +122,7 @@ async function search() {
   // The first search loads the model; show its progress meanwhile.
   if (status.value?.state !== 'ready') setTimeout(refresh, 300)
   try {
-    const response = await apiFetch(`/api/cloud/aws/cloudwatch/log-intelligence/search?${params}`, { headers: { 'X-Profile-Id': props.profileId } })
+    const response = await apiFetch(`${logApi.base}/log-intelligence/search?${params}`, { headers: { 'X-Profile-Id': props.profileId } })
     results.value = response.results
   } catch (err) {
     searchError.value = err.message

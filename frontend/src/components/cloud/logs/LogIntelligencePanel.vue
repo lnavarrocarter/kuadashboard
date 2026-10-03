@@ -189,6 +189,7 @@ import { logsBrief } from '../../../shared/agentBrief.mjs'
 import AgentBriefActions from '../../advisor/AgentBriefActions.vue'
 import LogActivityChart from './LogActivityChart.vue'
 import LogMlSection from './LogMlSection.vue'
+import { useLogApi } from './logApi'
 import CollapsibleSection from './CollapsibleSection.vue'
 
 const props = defineProps({
@@ -202,6 +203,7 @@ const props = defineProps({
 })
 const { t } = useI18n()
 const { apiFetch } = useApi()
+const logApi = useLogApi()
 const { toast } = useToast()
 const data = ref(null)
 const loading = ref(false)
@@ -249,7 +251,7 @@ async function load() {
   error.value = null
   const revision = props.revision
   try {
-    data.value = await apiFetch(`/api/cloud/aws/cloudwatch/log-intelligence?group=${encodeURIComponent(props.group)}`, { headers: headers() })
+    data.value = await apiFetch(`${logApi.base}/log-intelligence?group=${encodeURIComponent(props.group)}`, { headers: headers() })
     loadedRevision.value = revision
   } catch (err) { error.value = err.message } finally { loading.value = false }
 }
@@ -263,7 +265,7 @@ async function loadEvents() {
     if (filter.category) query.set('category', filter.category)
     if (filter.level) query.set('level', filter.level)
     if (filter.signature) query.set('signature', filter.signature)
-    events.value = await apiFetch(`/api/cloud/aws/cloudwatch/log-intelligence/events?${query}`, { headers: headers() })
+    events.value = await apiFetch(`${logApi.base}/log-intelligence/events?${query}`, { headers: headers() })
   } catch (err) { error.value = err.message } finally { eventsLoading.value = false }
 }
 

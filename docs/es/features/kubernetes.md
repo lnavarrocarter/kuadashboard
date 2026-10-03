@@ -84,6 +84,16 @@ Transmite logs de pods y workloads en tiempo real vía WebSocket:
 - Limpieza ANSI/VT y buffer de fragmentos para logs de frameworks serializados correctamente
 - Auto-scroll con anulación manual
 
+## Logs de workloads e Intelligence
+
+**Logs → Logs de workloads** en la barra lateral trae a Kubernetes la experiencia de CloudWatch Logs:
+
+- **Workloads**: deployments, statefulsets, daemonsets y pods sueltos del namespace, con sus pods listos. **Cachear logs** guarda los logs de los pods de un workload en esta computadora (cifrados, en la misma caché que CloudWatch), **Consultar** ejecuta sintaxis de Logs Insights sobre los logs en vivo o la caché, y **Escanear** lee hasta 5 días en segundo plano.
+- **En caché**: cada workload en caché abre el mismo panel Intelligence que CloudWatch: tasas de error, categorías, errores recurrentes, anomalías frente a los 7 días anteriores, ML local (búsqueda por significado, errores parecidos, categorías sugeridas), recomendaciones y el brief para agentes IA.
+- Los logs se leen por la API de Kubernetes con tu kubeconfig: todos los contenedores de los pods del workload, más la instancia anterior de los contenedores que se reiniciaron. No tiene costo cloud.
+- El kubelet solo conserva los logs recientes (los archivos rotados y los pods borrados se pierden), así que conviene cachear a tiempo los workloads importantes. KUA captura mientras está abierto; un agente en el clúster para captura continua está planificado.
+- Los agentes IA pueden usar `list_kube_log_workloads`, `kube_log_intelligence` y `search_logs` con `provider: "kubernetes"` (ver Agentes IA).
+
 ## Shell Interactiva (Exec)
 
 Abre una sesión de terminal directamente en cualquier pod en ejecución:

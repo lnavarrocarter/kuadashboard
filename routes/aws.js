@@ -6095,14 +6095,9 @@ router.patch('/cloudwatch/log-cache', async (req, res) => {
 // working (lib/awsLogScans.js). FilterLogEvents has no per-request charge;
 // the download counts as AWS data transfer out (first 100 GB/month free).
 
-let logScanRunner = null;
+// One runner for every provider of the shared cache (Kubernetes scans too).
 function logScans() {
-  if (!logScanRunner) {
-    const { createScanRunner } = require('../lib/awsLogScans');
-    logScanRunner = createScanRunner({ cache: logCache(), configFor: resolveAwsConfig });
-    logScanRunner.init();
-  }
-  return logScanRunner;
+  return require('../lib/logScanRunner').getLogScanRunner();
 }
 
 function scanDays(value) {
