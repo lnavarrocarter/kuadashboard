@@ -11,6 +11,45 @@
         <button class="btn sm primary" @click="openAccount">{{ t(blocked === 'signedOut' ? 'cloudBackups.signIn' : 'cloudBackups.seePlans') }}</button>
       </div>
       <template v-else-if="data">
+        <!-- Sync between this account's computers -->
+        <section v-if="data.enabled || syncInfo?.applications?.length" class="cbk-sync" data-test="cloud-sync">
+          <h4>{{ t('cloudSync.title') }}</h4>
+          <template v-if="applicationId">
+            <div v-if="current?.conflict" class="cbk-conflict" data-test="cloud-sync-conflict">
+              <p>{{ t('cloudSync.conflict', { version: current.conflict.remote?.version, device: current.conflict.remote?.signedBy?.device || '?' }) }}</p>
+              <span class="cbk-actions">
+                <button class="btn sm" :disabled="busy" data-test="cloud-sync-mine" @click="resolve('mine')">{{ t('cloudSync.keepMine') }}</button>
+                <button class="btn sm" :disabled="busy" data-test="cloud-sync-theirs" @click="resolve('theirs')">{{ t('cloudSync.takeTheirs') }}</button>
+              </span>
+              <p class="text-dim cbk-note">{{ t('cloudSync.conflictHint') }}</p>
+            </div>
+            <div v-else-if="current" class="cbk-usage" data-test="cloud-sync-state">
+              <span>{{ t(current.changedHere ? 'cloudSync.pending' : 'cloudSync.synced', { version: current.version, when: when(current.syncedAt) }) }}</span>
+              <span class="cbk-actions">
+                <button class="btn sm" :disabled="busy" data-test="cloud-sync-now" @click="runSync">{{ t('cloudSync.now') }}</button>
+                <button class="btn sm" :disabled="busy" @click="stopSync(false)">{{ t('cloudSync.stopHere') }}</button>
+                <button class="btn sm danger" :disabled="busy" @click="stopSync(true)">{{ t('cloudSync.stopEverywhere') }}</button>
+              </span>
+            </div>
+            <div v-else-if="data.enabled" class="cbk-usage">
+              <span class="text-dim">{{ t('cloudSync.offHint') }}</span>
+              <button class="btn sm primary" :disabled="busy" data-test="cloud-sync-enable" @click="enableSync">{{ t('cloudSync.enable', { name: applicationName }) }}</button>
+            </div>
+          </template>
+          <template v-if="syncInfo?.available?.length">
+            <p class="text-dim cbk-note">{{ t('cloudSync.available') }}</p>
+            <ul class="cbk-list" data-test="cloud-sync-available">
+              <li v-for="item in syncInfo.available" :key="item.syncId">
+                <div class="cbk-item">
+                  <strong>{{ item.name }}</strong>
+                  <small class="text-dim">{{ t('cloudSync.remote', { version: item.version, device: item.signedBy?.device || '?', when: when(item.updatedAt) }) }}</small>
+                </div>
+                <button class="btn sm" :disabled="busy || !profileId" :data-test="`cloud-sync-add-${item.syncId}`" @click="addSynced(item)">{{ t('cloudSync.add') }}</button>
+              </li>
+            </ul>
+          </template>
+        </section>
+
         <div class="cbk-usage" data-test="cloud-backups-usage">
           <span>{{ t('cloudBackups.usage', { count: data.usage.count, maxCount: data.limits.count, size: size(data.usage.bytes), maxSize: size(data.limits.bytes) }) }}</span>
           <button v-if="applicationId && data.enabled" class="btn sm primary" :disabled="busy" data-test="cloud-backup-now" @click="backupNow">
@@ -67,12 +106,31 @@ const loading = ref(false)
 const busy = ref(false)
 const confirming = ref('')
 const blockedBy = ref('')
+const syncInfo = ref(null)
+const current = computed(() => syncInfo.value?.applications?.find(item => item.applicationId === props.applicationId) || null)
 
 const blocked = computed(() => blockedBy.value || (data.value && !data.value.enabled && !data.value.items.length ? 'plan' : ''))
 const size = bytes => formatBytes(bytes || 0)
 const when = at => (at ? new Date(at).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '')
 
+async function loadSync() {
+  try { syncInfo.value = await store.syncStatus() } catch { syncInfo.value = null }
+}
+async function syncAction(action, message) {
+  const result = await run(action)
+  if (result) { if (message) toast(message, 'success'); syncInfo.value = result.applications ? result : await store.syncStatus().catch(() => null) }
+}
+const enableSync = () => syncAction(() => store.enableSync(props.applicationId), t('cloudSync.enabled', { name: props.applicationName }))
+const runSync = () => syncAction(() => store.syncNow())
+const stopSync = everywhere => syncAction(() => store.disableSync(props.applicationId, everywhere))
+const resolve = choice => syncAction(() => store.resolveSync(props.applicationId, choice), t('cloudSync.resolved'))
+async function addSynced(item) {
+  const result = await run(() => store.addSynced(item.syncId))
+  if (result) { toast(t('cloudSync.added', { name: item.name }), 'success'); emit('close') }
+}
+
 async function load() {
+  loadSync()
   loading.value = true
   error.value = ''
   blockedBy.value = ''
@@ -132,6 +190,10 @@ watch(() => props.show, open => { if (open) { confirming.value = ''; load() } },
 .cbk-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; flex-wrap: wrap; }
 .cbk-item { display: flex; flex-direction: column; min-width: 0; }
 .cbk-item strong { overflow-wrap: anywhere; }
-.cbk-actions { display: flex; gap: 6px; }
+.cbk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.cbk-sync { display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.cbk-sync h4 { margin: 0; font-size: 13px; }
+.cbk-conflict { border: 1px solid var(--warning, #d97706); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.cbk-conflict p { margin: 0; }
 .acp-warn { color: var(--warning, #d97706); }
 </style>

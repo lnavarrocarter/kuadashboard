@@ -314,6 +314,24 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  // Sync between the account's computers (lib/sync/syncEngine.js).
+  const syncCall = (path, method = 'GET', body) => apiFetch(`/api/kua-apps${path}`, { method, headers: headers(body !== undefined), ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
+  const syncStatus = () => syncCall('/sync/status')
+  const enableSync = applicationId => syncCall(`/${encodeURIComponent(applicationId)}/sync`, 'POST')
+  const disableSync = (applicationId, everywhere = false) => syncCall(`/${encodeURIComponent(applicationId)}/sync${everywhere ? '?everywhere=1' : ''}`, 'DELETE')
+  const syncNow = () => syncCall('/sync/now', 'POST')
+  async function resolveSync(applicationId, choice) {
+    const result = await syncCall(`/${encodeURIComponent(applicationId)}/sync/resolve`, 'POST', { choice })
+    if (selectedApplicationId.value === applicationId) await selectApplication(applicationId)
+    return result
+  }
+  async function addSynced(syncId) {
+    const result = await syncCall(`/sync/${encodeURIComponent(syncId)}/add`, 'POST')
+    await loadApplications({ preserveSelection: false })
+    if (result.application?.id) await selectApplication(result.application.id)
+    return result
+  }
+
   // Cloud backups (KUA account, Pro and Team): errors keep their status and code for the caller.
   async function backupKuaAppToCloud(applicationId) {
     return apiFetch(`/api/kua-apps/${encodeURIComponent(applicationId)}/cloud-backup`, { method: 'POST', headers: headers() })
@@ -771,6 +789,12 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importKubernetesResources,
     importKuaApp,
     backupKuaAppToCloud,
+    syncStatus,
+    enableSync,
+    disableSync,
+    syncNow,
+    resolveSync,
+    addSynced,
     restoreCloudBackup,
     loadApplicationCatalog,
     loadAwsDeployments,

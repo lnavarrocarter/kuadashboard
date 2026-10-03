@@ -91,4 +91,28 @@ describe('CloudBackupsModal', () => {
     await flushPromises()
     expect(wrapper.get('[data-test="cloud-backups-error"]').text()).toContain('changed after it was signed')
   })
+
+  it('shows a sync conflict to resolve and the applications of the other computers', async () => {
+    const calls = []
+    const SYNC = {
+      enabled: true,
+      applications: [{ applicationId: 'app-1', syncId: 's1', version: 1, changedHere: true, conflict: { remote: { version: 2, signedBy: { device: 'ANA-PC' } } } }],
+      available: [{ syncId: 's2', name: 'Billing', version: 4, signedBy: { device: 'ANA-PC' }, updatedAt: '2026-10-03T10:00:00Z' }],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      calls.push({ url, method: options.method || 'GET', body: options.body })
+      let body = {}
+      if (url === '/api/account/backups') body = { enabled: true, plan: 'pro', usage: { count: 0, bytes: 0 }, limits: { count: 100, bytes: 1 }, items: [] }
+      else if (url === '/api/kua-apps/sync/status' || url.endsWith('/sync/resolve')) body = SYNC
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    const wrapper = await mountModal()
+    expect(wrapper.get('[data-test="cloud-sync-conflict"]').text()).toContain('Another computer (ANA-PC) saved version 2')
+    expect(wrapper.get('[data-test="cloud-sync-available"]').text()).toContain('Billing')
+    await wrapper.get('[data-test="cloud-sync-mine"]').trigger('click')
+    await flushPromises()
+    const resolve = calls.find(c => c.url === '/api/kua-apps/app-1/sync/resolve')
+    expect(resolve.method).toBe('POST')
+    expect(JSON.parse(resolve.body)).toEqual({ choice: 'mine' })
+  })
 })
