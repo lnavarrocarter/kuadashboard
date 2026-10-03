@@ -45,6 +45,9 @@
         <p v-if="data.anomalies.anomalies.length" class="text-dim li-meta">{{ t('awsLogs.anomaly.method', { time: formatTime(data.anomalies.evaluatedAt, settings.lang) }) }}</p>
       </section>
 
+      <!-- Local ML: semantic search, similar errors (lib/ml) -->
+      <LogMlSection :group="group" :profile-id="profileId" :ml="data.ml" @filter="applyFilter" @ready="load" />
+
       <!-- Recommendations -->
       <section v-if="data.recommendations?.length" class="msg-section">
         <div class="li-rec-head">
@@ -129,7 +132,10 @@
           <table v-else class="msg-subtable">
             <tbody>
               <tr v-for="s in data.signatures" :key="s.signature" class="li-sig-row" @click="applyFilter({ signature: s.signature, category: '' })">
-                <td><span class="msg-chip" :class="s.level === 'error' ? 'err' : 'warn'">{{ t(`awsLogs.cat.${s.category || 'other_error'}`) }}</span></td>
+                <td>
+                  <span class="msg-chip" :class="s.level === 'error' ? 'err' : 'warn'">{{ t(`awsLogs.cat.${s.category || 'other_error'}`) }}</span>
+                  <span v-if="suggestions[s.signature]" class="msg-chip li-suggested" :title="t('awsLogs.ml.suggestedHint', { score: Math.round(suggestions[s.signature].score * 100) })">≈ {{ t(`awsLogs.cat.${suggestions[s.signature].category}`) }}</span>
+                </td>
                 <td :title="s.sample"><code class="li-sig">{{ s.signature }}</code></td>
                 <td class="activity-cell">× {{ s.occurrences }}</td>
                 <td class="text-dim li-time">{{ formatTime(s.lastSeen, settings.lang) }}</td>
@@ -173,6 +179,7 @@ import { CATEGORIES, categoryQuery } from '../../../shared/logSignals.mjs'
 import { logsBrief } from '../../../shared/agentBrief.mjs'
 import AgentBriefActions from '../../advisor/AgentBriefActions.vue'
 import LogActivityChart from './LogActivityChart.vue'
+import LogMlSection from './LogMlSection.vue'
 
 const props = defineProps({ group: { type: String, required: true }, profileId: { type: String, default: '' } })
 const { t } = useI18n()
@@ -202,6 +209,8 @@ const GROUPS = Object.fromEntries(CATEGORIES.map(c => [c.id, c.group]))
 const categories = computed(() => Object.entries(data.value?.categories7d || {})
   .map(([category, count]) => ({ category, count, group: GROUPS[category] || (category === 'info' ? 'info' : 'failure') }))
   .sort((a, b) => (a.group === 'failure' ? 0 : 1) - (b.group === 'failure' ? 0 : 1) || b.count - a.count))
+// Category suggested by local ML for signatures the rules left uncategorized.
+const suggestions = computed(() => Object.fromEntries((data.value?.ml?.suggestions || []).map(s => [s.signature, s])))
 const sensitiveTotal = computed(() => Object.values(data.value?.sensitive7d || {}).reduce((sum, n) => sum + n, 0))
 
 function headers() { return { 'X-Profile-Id': props.profileId } }
@@ -290,6 +299,7 @@ onMounted(load)
 .li-confidence { margin-left: auto; font-size: 11px; }
 .li-evidence { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
 .li-evidence code { font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--bg-hover); overflow-wrap: anywhere; }
+.li-suggested { border-style: dashed; margin-left: 4px; }
 .li-sig-btn { display: inline-flex; gap: 4px; align-items: center; max-width: 100%; text-align: left; }
 .li-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .li-actions a.btn { text-decoration: none; }

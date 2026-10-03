@@ -10,6 +10,7 @@ const MIGRATED = [
   'components/advisor/AdvisorPanel.vue',
   'components/advisor/AgentBriefActions.vue',
   'components/advisor/AgentConnectModal.vue',
+  'components/cloud/logs/LogMlSection.vue',
   'shared/agentBrief.mjs',
   'components/cloud/AwsView.vue',
   'components/cloud/GcpView.vue',
