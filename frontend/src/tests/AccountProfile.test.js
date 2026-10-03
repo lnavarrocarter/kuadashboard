@@ -45,7 +45,7 @@ describe('AccountProfile', () => {
     const advisorRow = table.findAll('tr').find(row => row.text().startsWith('Advisor'))
     expect(advisorRow.findAll('td').slice(1).map(td => td.text())).toEqual(['—', '✓', '✓'])
     expect(table.text()).toContain('every 15 min')
-    expect(wrapper.get('[data-test="account-sign-in"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="account-sign-in"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-test="account-usage"]').text()).toContain('USD 0.03 this month in 3 billed calls')
     expect(wrapper.find('[data-test="log-cache-budget"]').exists()).toBe(true)
 
@@ -96,5 +96,90 @@ describe('HelpModal', () => {
     await flushPromises()
     expect(document.querySelector('[data-test="account-profile"]')).not.toBeNull()
     wrapper.unmount()
+  })
+})
+
+describe('AccountProfile sign-in and billing', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+
+  function stubAccount() {
+    const state = { linked: false, plan: null, calls: [] }
+    const status = () => ({ linked: state.linked, user: state.linked ? { email: 'ana@example.com', name: 'Ana', picture: null } : null, plan: state.plan, stale: false })
+    vi.stubGlobal('open', vi.fn())
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      const method = options.method || 'GET'
+      state.calls.push({ url, method, body: options.body })
+      let body = {}
+      if (url === '/api/system/plan') body = { ...PLANS[state.plan || 'free'], source: state.linked ? 'account' : 'default', plans: PLANS, refreshChoices: [1, 5, 15, 30, 60] }
+      else if (url === '/api/account' || url === '/api/account/refresh' || url === '/api/account/logout') {
+        if (url === '/api/account/logout') { state.linked = false; state.plan = null }
+        body = status()
+      } else if (url === '/api/account/login') body = { url: 'https://cp.example/auth/desktop/start?state=s' }
+      else if (url === '/api/account/checkout') body = { url: 'https://polar.example/checkout' }
+      else if (url === '/api/account/portal') body = { url: 'https://polar.example/portal' }
+      else if (url === '/api/system/ml') body = { enabled: false, downloaded: false, downloadBytes: 1 }
+      else if (url.startsWith('/api/system/usage')) body = { totals: { month: { usd: 0, calls: 0 } } }
+      else if (url.startsWith('/api/system/log-cache-budget')) body = { mb: 256, bytes: 1, source: 'default', maxMb: 256, plan: 'free', choices: [], usage: { bytes: 0, budgetBytes: 1 } }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    return state
+  }
+
+  it('signs in through the browser and shows the linked account', async () => {
+    vi.useFakeTimers()
+    const state = stubAccount()
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    await wrapper.get('[data-test="account-sign-in"]').trigger('click')
+    await flushPromises()
+    expect(window.open).toHaveBeenCalledWith('https://cp.example/auth/desktop/start?state=s', '_blank', 'noopener')
+    expect(wrapper.find('[data-test="account-waiting"]').exists()).toBe(true)
+
+    state.linked = true // the browser step finished
+    state.plan = 'free'
+    await vi.advanceTimersByTimeAsync(2100)
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-user"]').text()).toContain('ana@example.com')
+    expect(wrapper.find('[data-test="account-waiting"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="account-upgrade-pro"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="account-portal"]').exists()).toBe(false)
+  })
+
+  it('opens the checkout and waits for the payment before showing the new plan', async () => {
+    vi.useFakeTimers()
+    const state = stubAccount()
+    state.linked = true
+    state.plan = 'free'
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    await wrapper.findAll('.acp-interval button')[1].trigger('click') // yearly
+    expect(wrapper.get('[data-test="account-upgrade-team"]').text()).toContain('USD 290/year')
+    await wrapper.get('[data-test="account-upgrade-pro"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(state.calls.find(c => c.url === '/api/account/checkout').body)).toEqual({ plan: 'pro', interval: 'year' })
+    expect(window.open).toHaveBeenCalledWith('https://polar.example/checkout', '_blank', 'noopener')
+    expect(wrapper.find('[data-test="account-waiting-payment"]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(5100)
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-waiting-payment"]').exists()).toBe(true) // not confirmed yet
+
+    state.plan = 'pro' // the billing webhook confirmed it
+    await vi.advanceTimersByTimeAsync(5100)
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-waiting-payment"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="account-plan-name"]').text()).toBe('Pro')
+    expect(wrapper.find('[data-test="account-upgrade-pro"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="account-upgrade-team"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="account-portal"]').trigger('click')
+    await flushPromises()
+    expect(window.open).toHaveBeenLastCalledWith('https://polar.example/portal', '_blank', 'noopener')
+
+    await wrapper.get('[data-test="account-sign-out"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-sign-in"]').exists()).toBe(true)
   })
 })

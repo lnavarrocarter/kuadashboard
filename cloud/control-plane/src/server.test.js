@@ -193,3 +193,88 @@ test('the cloud repository targets a named database when GCP_DATABASE_ID is set'
   assert.equal(clientOptions({}), undefined);
   assert.equal(loadConfig({ GCP_DATABASE_ID: ' kua-control-plane ' }).databaseId, 'kua-control-plane');
 });
+
+test('KUA Desktop signs in through a loopback redirect, a one-time code and PKCE', async () => {
+  const crypto = require('node:crypto');
+  let oauthOptions;
+  const googleClient = {
+    generateAuthUrl(options) { oauthOptions = options; return `https://accounts.google.com/auth?state=${encodeURIComponent(options.state)}`; },
+    async getToken() { return { tokens: { id_token: 'id-token' } }; },
+    async verifyIdToken() { return { getPayload: () => ({ sub: 'desk-1', email: 'desk@example.com', email_verified: true, name: 'Desk', nonce: oauthOptions.nonce }) }; },
+  };
+  const subject = await fixture({ googleClient });
+  try {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const redirectUri = 'http://127.0.0.1:7190/api/account/callback';
+
+    // Only loopback callbacks of KUA Desktop are accepted.
+    for (const bad of ['https://evil.example/api/account/callback', 'http://127.0.0.1:7190/other', 'http://10.0.0.1:7190/api/account/callback']) {
+      const rejected = await subject.request(`/auth/desktop/start?${new URLSearchParams({ redirect_uri: bad, code_challenge: challenge, state: 's' })}`, { redirect: 'manual' });
+      assert.equal(rejected.response.status, 400, bad);
+    }
+    const noPkce = await subject.request(`/auth/desktop/start?${new URLSearchParams({ redirect_uri: redirectUri, state: 's' })}`, { redirect: 'manual' });
+    assert.equal(noPkce.response.status, 400);
+
+    const start = await subject.request(`/auth/desktop/start?${new URLSearchParams({ redirect_uri: redirectUri, code_challenge: challenge, state: 'desk-state' })}`, { redirect: 'manual' });
+    assert.equal(start.response.status, 302);
+    const callback = await subject.request(`/auth/google/callback?code=authorization-code&state=${encodeURIComponent(oauthOptions.state)}`, { redirect: 'manual' });
+    assert.equal(callback.response.status, 302);
+    assert.equal(callback.response.headers.get('set-cookie'), null, 'desktop sign-ins get no browser cookie');
+    const back = new URL(callback.response.headers.get('location'));
+    assert.equal(`${back.origin}${back.pathname}`, redirectUri);
+    assert.equal(back.searchParams.get('state'), 'desk-state');
+    const code = back.searchParams.get('code');
+
+    const wrongVerifier = await subject.request('/auth/desktop/token', { method: 'POST', body: { code, code_verifier: 'x'.repeat(43) } });
+    assert.equal(wrongVerifier.response.status, 400);
+    // The code was consumed by the failed attempt: a stolen code is useless without the verifier, and works once.
+    const start2 = await subject.request(`/auth/desktop/start?${new URLSearchParams({ redirect_uri: redirectUri, code_challenge: challenge, state: 'desk-state' })}`, { redirect: 'manual' });
+    assert.equal(start2.response.status, 302);
+    const callback2 = await subject.request(`/auth/google/callback?code=authorization-code&state=${encodeURIComponent(oauthOptions.state)}`, { redirect: 'manual' });
+    const code2 = new URL(callback2.response.headers.get('location')).searchParams.get('code');
+
+    const token = await subject.request('/auth/desktop/token', { method: 'POST', body: { code: code2, code_verifier: verifier } });
+    assert.equal(token.response.status, 200);
+    assert.equal(token.body.user.email, 'desk@example.com');
+    assert.equal(token.body.entitlements.plan, 'free');
+    const reused = await subject.request('/auth/desktop/token', { method: 'POST', body: { code: code2, code_verifier: verifier } });
+    assert.equal(reused.response.status, 400, 'a code works once');
+
+    const me = await subject.request('/api/me', { headers: { Authorization: `Bearer ${token.body.token}` } });
+    assert.equal(me.response.status, 200);
+    assert.equal(me.body.user.email, 'desk@example.com');
+
+    const logout = await subject.request('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token.body.token}` } });
+    assert.equal(logout.response.status, 204);
+    const after = await subject.request('/api/me', { headers: { Authorization: `Bearer ${token.body.token}` } });
+    assert.equal(after.response.status, 401, 'logout ends the desktop session');
+
+    const done = await subject.request('/billing/done?status=success');
+    assert.equal(done.response.status, 200);
+    assert.match(done.text, /return to KUA/);
+  } finally { await subject.close(); }
+});
+
+test('desktop checkouts and portal sessions come back to the return-to-KUA page', async () => {
+  const created = {};
+  const stripeClient = {
+    customers: { async create() { return { id: 'cus_d' }; } },
+    checkout: { sessions: { async create(input) { created.checkout = input; return { id: 'cs_d', url: 'https://checkout.stripe.com/cs_d' }; } } },
+    billingPortal: { sessions: { async create(input) { created.portal = input; return { url: 'https://billing.stripe.com/p' }; } } },
+  };
+  const subject = await fixture({ stripeClient });
+  try {
+    const user = await subject.repository.upsertUser({ id: 'u1', email: 'u@example.com', name: 'U', stripeCustomerId: 'cus_d' });
+    const crypto = require('node:crypto');
+    const token = 'desk-token';
+    await subject.repository.createSession({ tokenHash: crypto.createHash('sha256').update(token).digest('hex'), userId: user.id, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() });
+    const auth = { Authorization: `Bearer ${token}` };
+    const checkout = await subject.request('/api/billing/checkout', { method: 'POST', body: { plan: 'pro', interval: 'month', client: 'desktop' }, headers: auth });
+    assert.equal(checkout.response.status, 201, JSON.stringify(checkout.body));
+    assert.equal(created.checkout.success_url, 'http://127.0.0.1/billing/done?status=success');
+    assert.equal(created.checkout.cancel_url, 'http://127.0.0.1/billing/done?status=cancelled');
+    await subject.request('/api/billing/portal', { method: 'POST', body: { client: 'desktop' }, headers: auth });
+    assert.equal(created.portal.return_url, 'http://127.0.0.1/billing/done?status=portal');
+  } finally { await subject.close(); }
+});

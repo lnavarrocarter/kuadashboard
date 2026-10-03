@@ -1,15 +1,28 @@
 <template>
   <div class="acp" data-test="account-profile">
-    <!-- Account: linking to a KUA account arrives with sign-in (#35, #31) -->
-    <section class="acp-card">
+    <!-- KUA account: sign-in through the browser, plan and billing (routes/account.js) -->
+    <section class="acp-card" data-test="account-card">
       <div class="acp-head">
-        <i data-lucide="user-round"></i>
+        <img v-if="account?.user?.picture" :src="account.user.picture" alt="" class="acp-avatar" referrerpolicy="no-referrer" />
+        <i v-else data-lucide="user-round"></i>
         <div>
           <h4>{{ t('account.title') }}</h4>
-          <p class="text-dim">{{ t('account.notLinked') }}</p>
+          <p v-if="account?.linked" class="text-dim" data-test="account-user">{{ t('account.linkedAs', { name: account.user.name, email: account.user.email }) }}</p>
+          <p v-else class="text-dim">{{ t('account.notLinked') }}</p>
         </div>
-        <button class="btn sm" disabled :title="t('account.signInSoon')" data-test="account-sign-in">{{ t('account.signIn') }}</button>
+        <span class="acp-actions">
+          <template v-if="account?.linked">
+            <button class="btn sm" :disabled="busy" data-test="account-refresh" @click="refreshAccount">{{ t('account.refresh') }}</button>
+            <button class="btn sm" :disabled="busy" data-test="account-sign-out" @click="signOut">{{ t('account.signOut') }}</button>
+          </template>
+          <button v-else class="btn sm primary" :disabled="busy || waiting === 'login'" data-test="account-sign-in" @click="signIn">
+            {{ waiting === 'login' ? t('account.waitingBrowser') : t('account.signIn') }}
+          </button>
+        </span>
       </div>
+      <p v-if="waiting === 'login'" class="acp-note" data-test="account-waiting">{{ t('account.waitingLogin') }}</p>
+      <p v-if="account?.stale" class="acp-note acp-warn">{{ t('account.stale') }}</p>
+      <p v-if="error" class="acp-note acp-warn" data-test="account-error">{{ error }}</p>
       <p class="text-dim acp-note">{{ t('account.linkHint') }}</p>
     </section>
 
@@ -56,7 +69,18 @@
           </tbody>
         </table>
       </div>
-      <p class="text-dim acp-note">{{ t('account.planHint') }}</p>
+      <!-- Upgrade and manage: only with a linked account -->
+      <div v-if="account?.linked" class="acp-billing" data-test="account-billing">
+        <div class="acp-interval" role="group" :aria-label="t('account.interval')">
+          <button v-for="option in ['month', 'year']" :key="option" :class="['btn', 'sm', { accent: interval === option }]" :aria-pressed="interval === option" @click="interval = option">{{ t(`account.interval_${option}`) }}</button>
+        </div>
+        <button v-for="target in upgrades" :key="target" class="btn sm primary" :disabled="busy" :data-test="`account-upgrade-${target}`" @click="checkout(target)">
+          {{ t('account.upgrade', { plan: t(`plan.name_${target}`), price: t(`account.price_${target}_${interval}`) }) }}
+        </button>
+        <button v-if="paid" class="btn sm" :disabled="busy" data-test="account-portal" @click="portal">{{ t('account.manage') }}</button>
+      </div>
+      <p v-if="waiting === 'payment'" class="acp-note" data-test="account-waiting-payment">{{ t('account.waitingPayment') }}</p>
+      <p class="text-dim acp-note">{{ t(plan?.source === 'env' ? 'account.planHintEnv' : account?.linked ? 'account.planHintAccount' : 'account.planHint') }}</p>
     </section>
 
     <!-- Log cache size (capped by the plan) -->
@@ -102,18 +126,101 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUpdated, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, onUpdated, ref } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
 import { usePlan } from '../../composables/usePlan'
 import { formatBytes } from '../../lib/awsLogs'
 import LogCacheBudget from '../cloud/logs/LogCacheBudget.vue'
+import { openExternal } from '../../lib/openExternal'
+import { useToast } from '../../composables/useToast'
 
 const PLAN_ORDER = ['free', 'pro', 'team']
 
 const { t } = useI18n()
-const { plan } = usePlan()
+const { plan, reload: reloadPlan } = usePlan()
+const { toast } = useToast()
+const account = ref(null)
+const busy = ref(false)
+const error = ref('')
+// 'login' while the browser sign-in runs, 'payment' after opening the checkout.
+const waiting = ref('')
+const interval = ref('month')
+let poll = null
+
+const accountPlan = computed(() => account.value?.plan || 'free')
+const upgrades = computed(() => PLAN_ORDER.slice(PLAN_ORDER.indexOf(accountPlan.value) + 1))
+const paid = computed(() => accountPlan.value === 'pro' || accountPlan.value === 'team')
+
+async function loadAccount() {
+  try {
+    const status = await api('GET', '/api/account')
+    account.value = status && 'linked' in status ? status : null
+  } catch { account.value = null }
+}
+
+async function run(action) {
+  busy.value = true
+  error.value = ''
+  try { return await action() } catch (err) { error.value = err.message; return null } finally { busy.value = false }
+}
+
+function stopPolling() {
+  clearInterval(poll)
+  poll = null
+  waiting.value = ''
+}
+
+/** Polls until `done(status)` or the time runs out (the browser step happens outside KUA). */
+function pollAccount({ kind, refresh = false, everyMs, forMs, done }) {
+  stopPolling()
+  waiting.value = kind
+  const until = Date.now() + forMs
+  poll = setInterval(async () => {
+    const status = refresh ? await api('POST', '/api/account/refresh').catch(() => null) : await api('GET', '/api/account').catch(() => null)
+    if (status && 'linked' in status) account.value = status
+    if (status && done(status)) {
+      stopPolling()
+      await reloadPlan()
+    } else if (Date.now() > until) stopPolling()
+  }, everyMs)
+}
+
+async function signIn() {
+  const login = await run(() => api('POST', '/api/account/login'))
+  if (!login?.url) return
+  openExternal(login.url)
+  pollAccount({ kind: 'login', everyMs: 2000, forMs: 5 * 60 * 1000, done: status => status.linked })
+}
+
+async function signOut() {
+  const status = await run(() => api('POST', '/api/account/logout'))
+  if (status) { account.value = status; await reloadPlan() }
+}
+
+async function refreshAccount() {
+  const status = await run(() => api('POST', '/api/account/refresh'))
+  if (status) { account.value = status; await reloadPlan() }
+}
+
+async function checkout(target) {
+  const result = await run(() => api('POST', '/api/account/checkout', { plan: target, interval: interval.value }))
+  if (!result?.url) return
+  openExternal(result.url)
+  const before = accountPlan.value
+  // The plan changes when the billing webhook confirms the payment, not when the checkout opens.
+  pollAccount({ kind: 'payment', refresh: true, everyMs: 5000, forMs: 10 * 60 * 1000, done: status => status.plan && status.plan !== before })
+}
+
+async function portal() {
+  const result = await run(() => api('POST', '/api/account/portal'))
+  if (result?.url) {
+    openExternal(result.url)
+    toast(t('account.portalOpened'), 'info')
+  }
+}
+
 const ml = ref(null)
 const mlBusy = ref(false)
 const usage = ref(null)
@@ -154,7 +261,8 @@ async function loadUsage() {
 }
 
 const refreshIcons = () => nextTick(() => createIcons({ icons }))
-onMounted(() => { loadMl(); loadUsage(); refreshIcons() })
+onMounted(() => { loadAccount(); loadMl(); loadUsage(); refreshIcons() })
+onUnmounted(stopPolling)
 onUpdated(refreshIcons)
 </script>
 
@@ -169,6 +277,10 @@ onUpdated(refreshIcons)
 .acp-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .acp-note { margin: 0; font-size: 11px; line-height: 1.5; }
 .acp-plan { text-transform: none; font-size: 11px; }
+.acp-avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.acp-warn { color: var(--yellow); }
+.acp-billing { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.acp-interval { display: inline-flex; gap: 4px; margin-right: 6px; }
 .acp-table-wrap { overflow-x: auto; }
 .acp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .acp-table th, .acp-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: center; }

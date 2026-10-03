@@ -103,6 +103,8 @@ const apmScheduler = new ApmScheduler({
 apmScheduler.start();
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
 require('./lib/logAutoRefresh').getAutoRefresh().start();
+// Keeps the plan of a linked KUA account current (every 6 h; cached for offline use).
+require('./lib/account/account').getAccount().startAutoRefresh();
 // GCP resource state polling: runs only for profiles that enabled it (off by default)
 gcpRoutes.startStatePoller();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
@@ -306,6 +308,8 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 }));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
+// KUA account: sign-in, plan and billing (lib/account, cloud/control-plane).
+app.use('/api/account', require('./routes/account').createAccountRouter());
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
 
@@ -3368,6 +3372,7 @@ function shutdown(signal) {
   clearInterval(apmCleanupInterval);
   apmScheduler.stop();
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
+  require('./lib/account/account').getAccount().stopAutoRefresh();
   gcpRoutes.stopStatePoller();
   console.log(`[server] ${signal} received, shutting down`);
 
