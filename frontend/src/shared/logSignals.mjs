@@ -7,7 +7,7 @@
 // confirm them before they change a graph (KUA unified plan, Phase 16).
 
 // Raising it re-analyzes cached sources on their next read.
-export const SIGNALS_VERSION = 2
+export const SIGNALS_VERSION = 3
 
 // ─── Sanitization and sensitive data ────────────────────────────────────────
 
@@ -96,6 +96,27 @@ export function sanitizeWithFindings(line) {
 /** Redacts common secret-shaped substrings before a line is ever kept as evidence. */
 export function sanitizeLogLine(line) {
   return sanitizeWithFindings(line).text
+}
+
+// ANSI color/style sequences (Nest, Winston and other colored loggers).
+const ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g
+
+/**
+ * The application message of a line: unwraps container runtime JSON
+ * ({"time","stream","log": "..."} from Docker, containerd and Container
+ * Insights) and drops ANSI colors, so signatures and samples describe the
+ * error and not the wrapper (pod names, timestamps, escape codes).
+ */
+export function messageText(line) {
+  let text = String(line || '')
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{') && trimmed.includes('"log"')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (typeof parsed.log === 'string') text = parsed.log
+    } catch { /* not JSON: keep the line */ }
+  }
+  return text.replace(ANSI_RE, '').trim()
 }
 
 /** Normalizes a line into a signature (strips ids, numbers, timestamps) to group recurring errors. */
@@ -312,14 +333,16 @@ export function extractCorrelationIds(lines = []) {
 export function eventSignals(message) {
   const level = lineLevel(message)
   const { text: sanitized, findings } = sanitizeWithFindings(message)
+  // Signature and sample come from the application message, not its wrapper.
+  const appText = level === 'info' ? null : sanitizeLogLine(messageText(message))
   return {
     level,
     category: categorize(message, level),
     sensitive: findings,
     structured: String(message || '').trim().startsWith('{'),
     keywords: failureKeywords(message),
-    signature: level === 'info' ? null : errorSignature(sanitized),
-    sample: level === 'info' ? null : sanitized.slice(0, 240),
+    signature: level === 'info' ? null : errorSignature(appText),
+    sample: level === 'info' ? null : appText.slice(0, 240),
     references: lineReferences(sanitized),
   }
 }
