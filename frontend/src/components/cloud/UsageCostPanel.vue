@@ -1,14 +1,20 @@
 <template>
-  <section class="ucp" :class="{ compact }" data-test="usage-cost">
+  <section class="ucp" :class="{ compact, closed: !open }" data-test="usage-cost">
     <header class="ucp-head">
       <div class="ucp-title">
         <i data-lucide="receipt"></i>
         <div>
           <h3>{{ t('usage.title') }}</h3>
-          <p>{{ t(service ? 'usage.subtitleService' : 'usage.subtitle', { service }) }}</p>
+          <p v-if="open">{{ t(service ? 'usage.subtitleService' : 'usage.subtitle', { service }) }}</p>
+          <p v-else data-test="usage-summary">{{ data ? t('usage.summary', { usd: usd(data.totals.month.usd), calls: data.totals.month.calls }) : error || t('common.loading') }}</p>
         </div>
       </div>
       <div class="ucp-controls">
+        <button class="btn sm" :aria-expanded="open" data-test="usage-toggle" @click="open = !open">
+          <i :data-lucide="open ? 'chevron-up' : 'chevron-down'"></i>{{ t(open ? 'usage.hideDetails' : 'usage.showDetails') }}
+        </button>
+      </div>
+      <div v-if="open" class="ucp-controls">
         <select v-model.number="days" class="ctrl-select" :aria-label="t('usage.period')" @change="load">
           <option v-for="n in [7, 30, 90]" :key="n" :value="n">{{ t('usage.lastDays', { n }) }}</option>
         </select>
@@ -20,6 +26,7 @@
       </div>
     </header>
 
+    <template v-if="open">
     <p v-if="error" class="activity-notice">{{ error }}</p>
     <p v-else-if="!data" class="text-dim ucp-note">{{ t('common.loading') }}</p>
     <template v-else>
@@ -69,6 +76,7 @@
       </details>
       <p class="text-dim ucp-note">{{ t('usage.disclaimer') }}</p>
     </template>
+    </template>
   </section>
 </template>
 
@@ -94,6 +102,8 @@ const error = ref('')
 const loading = ref(false)
 const days = ref(30)
 const scope = ref('profile')
+// Closed by default: the header shows the month total, the details open on demand.
+const open = ref(false)
 
 /** USD with enough decimals to show sub-cent API costs (USD 0.00002). */
 function usd(value) {
@@ -173,5 +183,7 @@ defineExpose({ load })
 .ucp-recent code { font-size: 10px; }
 .ucp-note { margin: 0; font-size: 11px; }
 .ucp.compact { padding: 8px 10px; gap: 6px; }
+.ucp.closed .ucp-head { align-items: center; }
+.ucp-controls .btn svg { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; }
 @media (max-width: 640px) { .ucp-kpi { min-width: calc(50% - 4px); } }
 </style>
