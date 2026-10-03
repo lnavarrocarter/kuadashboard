@@ -101,6 +101,8 @@ const apmScheduler = new ApmScheduler({
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
 apmScheduler.start();
+// Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
+require('./lib/logAutoRefresh').getAutoRefresh().start();
 // GCP resource state polling: runs only for profiles that enabled it (off by default)
 gcpRoutes.startStatePoller();
 // Use noServer + manual upgrade routing to avoid the ws multi-server path conflict
@@ -3357,6 +3359,7 @@ function shutdown(signal) {
   shuttingDown = true;
   clearInterval(apmCleanupInterval);
   apmScheduler.stop();
+  require('./lib/logAutoRefresh').getAutoRefresh().stop();
   gcpRoutes.stopStatePoller();
   console.log(`[server] ${signal} received, shutting down`);
 

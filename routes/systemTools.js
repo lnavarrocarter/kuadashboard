@@ -215,4 +215,32 @@ router.post('/ml/disable', (req, res) => {
   }
 });
 
+// ─── Plan and log cache budget (lib/plans.js, lib/logCacheBudget.js) ──────────
+
+router.get('/plan', (_req, res) => {
+  const { getPlan, PLANS, REFRESH_CHOICES } = require('../lib/plans');
+  res.json({ ...getPlan(), plans: PLANS, refreshChoices: REFRESH_CHOICES });
+});
+
+router.get('/log-cache-budget', (_req, res) => {
+  try {
+    const store = require('../lib/logCacheBudget').getBudgetStore();
+    res.json({ ...store.current(), choices: store.choices(), usage: require('../lib/awsLogCache').getLogCache().usage() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Saves the budget (capped by the plan) and applies it right away.
+router.put('/log-cache-budget', async (req, res) => {
+  try {
+    const store = require('../lib/logCacheBudget').getBudgetStore();
+    const budget = store.save(req.body?.mb);
+    const usage = await require('../lib/awsLogCache').getLogCache().setBudget(budget.bytes);
+    res.json({ ...budget, choices: store.choices(), usage });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message, code: err.code, required: err.required });
+  }
+});
+
 module.exports = router;
