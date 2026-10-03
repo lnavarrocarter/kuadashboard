@@ -917,9 +917,10 @@ test('API returns the product advisor of an application, scoped by profile', asy
       method: 'POST',
       body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
     });
-    // Free plan: only the counts of the Advisor (it is a Pro feature).
+    // Free plan: only the counts of the Advisor (it is a Pro feature). Set explicitly:
+    // without KUA_PLAN the plan would come from the account linked on this computer.
     const previousPlan = process.env.KUA_PLAN;
-    delete process.env.KUA_PLAN;
+    process.env.KUA_PLAN = 'free';
     const locked = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
     assert.equal(locked.status, 200);
     assert.equal(locked.body.locked, true);
