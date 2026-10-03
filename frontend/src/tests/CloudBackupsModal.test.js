@@ -79,4 +79,16 @@ describe('CloudBackupsModal', () => {
     expect(wrapper.find('[data-test="cloud-backup-restore-b1"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('no longer includes cloud backups')
   })
+
+  it('says when a backup was changed after it was signed', async () => {
+    stub({ enabled: true, plan: 'pro', usage: { count: 1, bytes: 2048 }, limits: { count: 100, bytes: 500 * 1048576 }, items: [ITEM] })
+    const wrapper = await mountModal()
+    const original = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => url.includes('/restore')
+      ? { ok: false, status: 400, headers: { get: () => 'application/json' }, json: async () => ({ error: 'The backup signature is not valid', code: 'BACKUP_TAMPERED' }) }
+      : original(url, options)))
+    await wrapper.get('[data-test="cloud-backup-restore-b1"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="cloud-backups-error"]').text()).toContain('changed after it was signed')
+  })
 })
