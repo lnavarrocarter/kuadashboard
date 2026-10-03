@@ -17,7 +17,7 @@ El brief es una tarea autocontenida, escrita en el idioma de la app:
 | --- | --- |
 | Contexto | Proveedor, cuenta, perfil, región, proyecto, namespace, contexto de Kubernetes o log group |
 | Tu tarea | Reglas de trabajo para el agente: verificar primero el estado actual, corregir por severidad y causa raíz, cambiar la infraestructura como código en vez de la consola, pedir confirmación antes de operaciones destructivas o con costo, nunca exponer secretos, terminar con un informe |
-| Hallazgos / Recomendaciones | Severidad, regla, recursos afectados y documentación. Para logs: actividad, firmas de error sanitizadas, datos sensibles encontrados, consultas de Logs Insights y ejemplos de código |
+| Hallazgos / Recomendaciones | Severidad, regla, recursos afectados y documentación. Para logs: actividad, anomalías frente a los 7 días anteriores, firmas de error sanitizadas, datos sensibles encontrados, consultas de Logs Insights y ejemplos de código |
 | Cómo verificar | Cómo confirmar la corrección en KUA y con la CLI del proveedor |
 
 Pégalo en cualquier agente o chat. Funciona con cualquier modelo porque es Markdown simple.
@@ -37,7 +37,7 @@ Todas son de solo lectura.
 | `gcp_advisor` | Hallazgos del Advisor de GCP a partir del último overview guardado |
 | `kubernetes_advisor` | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
 | `list_log_groups` | Log groups de CloudWatch en la caché de KUA para un perfil |
-| `log_intelligence` | Brief de un log group en caché: tasas de error, firmas, recomendaciones, consultas |
+| `log_intelligence` | Brief de un log group en caché: tasas de error, anomalías, firmas, recomendaciones, consultas |
 | `list_applications` | Aplicaciones de KUApps |
 | `product_advisor` | Hallazgos de producto de una aplicación de KUApps |
 

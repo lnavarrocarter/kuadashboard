@@ -20,6 +20,31 @@
       <!-- Activity over time -->
       <LogActivityChart ref="chart" :group="group" :profile-id="profileId" :category="filter.category" :level="filter.level" @range="onRange" />
 
+      <!-- Anomalies (statistics on the aggregates, see lib/logAnomalies.js) -->
+      <section v-if="data.anomalies" class="msg-section" data-test="log-anomalies">
+        <h5>{{ t('awsLogs.anomaly.title') }}</h5>
+        <p v-if="data.anomalies.status !== 'ok' && !data.anomalies.anomalies.length" class="text-dim li-meta">{{ t(`awsLogs.anomaly.status_${data.anomalies.status}`) }}</p>
+        <p v-else-if="!data.anomalies.anomalies.length" class="text-dim li-meta">{{ t('awsLogs.anomaly.none', { time: formatTime(data.anomalies.evaluatedAt, settings.lang) }) }}</p>
+        <article v-for="anomaly in data.anomalies.anomalies" :key="anomaly.id + (anomaly.category || '')" class="li-rec" :class="anomaly.severity" :data-test="`log-anomaly-${anomaly.id}`">
+          <header>
+            <span class="msg-chip" :class="anomaly.severity === 'high' ? 'err' : anomaly.severity === 'medium' ? 'warn' : ''">{{ t(`awsLogs.intel.severity_${anomaly.severity}`) }}</span>
+            <strong>{{ t(`awsLogs.anomaly.${anomaly.id}.title`, anomalyParams(anomaly)) }}</strong>
+          </header>
+          <p>{{ t(`awsLogs.anomaly.${anomaly.id}.body`, anomalyParams(anomaly)) }}</p>
+          <div v-if="anomaly.evidence?.signatures?.length" class="li-evidence">
+            <span class="text-dim">{{ t('awsLogs.intel.evidence') }}</span>
+            <button v-for="s in anomaly.evidence.signatures" :key="s.signature" class="btn sm li-sig-btn" :title="s.sample" @click="applyFilter({ signature: s.signature, category: '' })">
+              <code>{{ s.signature }}</code> × {{ s.occurrences }}
+            </button>
+          </div>
+          <div class="li-actions">
+            <button v-if="anomaly.category" class="btn sm" @click="applyFilter({ category: anomaly.category })">{{ t('awsLogs.intel.viewEvents') }}</button>
+            <button v-else-if="anomaly.id !== 'new_errors'" class="btn sm" @click="viewAnomaly(anomaly)">{{ t('awsLogs.anomaly.viewWindow') }}</button>
+          </div>
+        </article>
+        <p v-if="data.anomalies.anomalies.length" class="text-dim li-meta">{{ t('awsLogs.anomaly.method', { time: formatTime(data.anomalies.evaluatedAt, settings.lang) }) }}</p>
+      </section>
+
       <!-- Recommendations -->
       <section v-if="data.recommendations?.length" class="msg-section">
         <div class="li-rec-head">
@@ -207,6 +232,17 @@ function applyFilter(changes) {
   loadEvents()
 }
 
+// Category ids become their translated name in anomaly texts.
+function anomalyParams(anomaly) {
+  return anomaly.category ? { ...anomaly.params, category: t(`awsLogs.cat.${anomaly.category}`) } : anomaly.params
+}
+
+/** Zooms the chart (and so the event list) to the anomaly window; spikes show only errors. */
+function viewAnomaly(anomaly) {
+  filter.level = anomaly.id.startsWith('error_spike') ? 'error' : ''
+  chart.value?.zoom({ from: anomaly.evidence.from, to: anomaly.evidence.to })
+}
+
 function clearFilter() {
   Object.assign(filter, { category: '', level: '', signature: '' })
   loadEvents()
@@ -254,6 +290,7 @@ onMounted(load)
 .li-confidence { margin-left: auto; font-size: 11px; }
 .li-evidence { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
 .li-evidence code { font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--bg-hover); overflow-wrap: anywhere; }
+.li-sig-btn { display: inline-flex; gap: 4px; align-items: center; max-width: 100%; text-align: left; }
 .li-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .li-actions a.btn { text-decoration: none; }
 .li-snippet { position: relative; }
