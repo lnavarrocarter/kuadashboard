@@ -13,6 +13,8 @@ const MIGRATED = [
   'components/advisor/AgentConnectModal.vue',
   'components/cloud/logs/LogMlSection.vue',
   'components/cloud/logs/KubeLogsView.vue',
+  'components/cloud/logs/LogRefreshControl.vue',
+  'components/cloud/logs/LogCacheBudget.vue',
   'components/cloud/logs/CollapsibleSection.vue',
   'shared/agentBrief.mjs',
   'components/cloud/AwsView.vue',

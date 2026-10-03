@@ -54,6 +54,11 @@
             <button v-if="scan.status === 'running' || scan.status === 'queued'" class="btn sm" :disabled="busy[scan.id]" @click="act(scan, 'pause')">{{ t('awsLogs.scan.pause') }}</button>
             <button v-if="RESUMABLE.includes(scan.status)" class="btn sm" :disabled="busy[scan.id]" @click="act(scan, 'resume')">{{ t('awsLogs.scan.resume') }}</button>
             <button v-if="scan.inserted > 0" class="btn sm" @click="emit('open', scan)">{{ t('awsLogs.scan.view') }}</button>
+            <LogRefreshControl
+              v-if="scan.status === 'done' && groupOf(scan)" :group="scan.logGroup" :profile-id="profileId"
+              :minutes="groupOf(scan).refreshMinutes" :last-sync-at="groupOf(scan).lastSyncAt" :title="t('logRefresh.afterScan')"
+              @updated="emit('refresh-changed', $event)"
+            />
             <button v-if="!FINISHED.includes(scan.status)" class="btn sm" :disabled="busy[scan.id]" @click="act(scan, 'cancel')">{{ t('awsLogs.scan.cancel') }}</button>
             <button v-if="scan.status !== 'running'" class="btn sm danger" :disabled="busy[scan.id]" :title="t('awsLogs.scan.removeHint')" @click="remove(scan)">{{ t('awsLogs.remove') }}</button>
           </td>
@@ -68,6 +73,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useApi } from '../../../composables/useApi'
 import { useLogApi } from './logApi'
+import LogRefreshControl from './LogRefreshControl.vue'
 import { useI18n } from '../../../composables/useI18n'
 import { useToast } from '../../../composables/useToast'
 import { settings } from '../../../composables/useSettings'
@@ -79,8 +85,11 @@ const props = defineProps({
   // Prefills the form (e.g. "Scan" on a cached group row).
   prefill: { type: Object, default: null },
   pollMs: { type: Number, default: 3000 },
+  // Cached groups (with refreshMinutes): a finished scan can keep its group updated.
+  groups: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['open', 'changed', 'active', 'active-groups'])
+const emit = defineEmits(['open', 'changed', 'active', 'active-groups', 'refresh-changed'])
+const groupOf = scan => props.groups.find(group => group.logGroup === scan.logGroup && (!group.region || !scan.region || group.region === scan.region))
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()

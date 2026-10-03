@@ -25,6 +25,8 @@
       @changed="loadCache"
       @active="n => { activeScans = n }"
       @active-groups="groups => { scanningGroups = groups }"
+      :groups="cache?.groups || []"
+      @refresh-changed="loadCache"
     />
 
     <!-- Workloads of the namespace -->
@@ -68,13 +70,13 @@
     <!-- Cached workloads with their intelligence -->
     <template v-else>
       <div class="klv-toolbar">
-        <span v-if="cache" class="text-dim">{{ t('kubeLogs.usage', { size: formatBytes(cache.totalBytes), budget: formatBytes(cache.budgetBytes), events: cache.totalEvents }) }}</span>
+        <LogCacheBudget @changed="loadCache" />
         <button class="btn sm" :disabled="syncing || !cache?.groups?.length" data-test="kube-logs-sync-all" @click="sync()">{{ syncing ? t('kubeLogs.syncing') : t('kubeLogs.syncAll') }}</button>
       </div>
       <p v-if="!cache?.groups?.length" class="empty-row">{{ t('kubeLogs.noCache') }}</p>
       <table v-else class="data-table klv-table" data-test="kube-logs-cache">
         <thead>
-          <tr><th>{{ t('kubeLogs.colWorkload') }}</th><th>{{ t('kubeLogs.colEvents') }}</th><th>{{ t('kubeLogs.colSize') }}</th><th>{{ t('kubeLogs.colSynced') }}</th><th></th></tr>
+          <tr><th>{{ t('kubeLogs.colWorkload') }}</th><th>{{ t('kubeLogs.colEvents') }}</th><th>{{ t('kubeLogs.colSize') }}</th><th>{{ t('kubeLogs.colSynced') }}</th><th>{{ t('logRefresh.column') }}</th><th></th></tr>
         </thead>
         <tbody>
           <template v-for="c in cache.groups" :key="c.logGroup">
@@ -83,6 +85,9 @@
               <td>{{ formatNumber(c.events || 0) }}</td>
               <td>{{ formatBytes(c.bytes) }}</td>
               <td class="text-dim">{{ c.lastSyncAt ? formatTime(c.lastSyncAt, settings.lang) : '—' }}<span v-if="c.lastSyncStatus === 'error'" class="msg-chip warn" :title="c.lastError">{{ t('kubeLogs.syncError') }}</span></td>
+              <td>
+                <LogRefreshControl :group="c.logGroup" :profile-id="profileId" :minutes="c.refreshMinutes" :last-sync-at="c.lastSyncAt" :pages-per-sync="podsOf(c.logGroup)" @updated="loadCache" />
+              </td>
               <td class="klv-actions">
                 <button class="btn sm" :class="{ accent: openGroup === c.logGroup }" @click="openIntelligence(c.logGroup)">{{ t('awsLogs.intel.button') }}</button>
                 <button class="btn sm" :disabled="syncing" @click="sync(c.logGroup)">{{ t('kubeLogs.sync') }}</button>
@@ -91,7 +96,7 @@
               </td>
             </tr>
             <tr v-if="openGroup === c.logGroup">
-              <td colspan="5">
+              <td colspan="6">
                 <LogIntelligencePanel :key="c.logGroup" :group="c.logGroup" :profile-id="profileId" :revision="revision(c)" :scanning="scanningGroups.includes(c.logGroup)" />
               </td>
             </tr>
@@ -115,6 +120,8 @@ import { KUBE_LOG_API, provideLogApi } from './logApi'
 import LogIntelligencePanel from './LogIntelligencePanel.vue'
 import LogScansPanel from './LogScansPanel.vue'
 import LogsQueryEditor from './LogsQueryEditor.vue'
+import LogRefreshControl from './LogRefreshControl.vue'
+import LogCacheBudget from './LogCacheBudget.vue'
 
 // The shared panels (intelligence, scans, queries) talk to /api/kube-logs here.
 provideLogApi(KUBE_LOG_API)
@@ -146,6 +153,8 @@ const visibleWorkloads = computed(() => {
   return workloads.value.filter(w => !needle || w.group.toLowerCase().includes(needle))
 })
 const groupNames = computed(() => [...new Set([...(cache.value?.groups || []).map(g => g.logGroup), ...workloads.value.map(w => w.group)])])
+// One log read per container and refresh: pods of the workload approximate it.
+const podsOf = group => Math.max(1, workloads.value.find(w => w.group === group)?.pods || 1)
 // Changes when a sync or scan caches new events: the panel then offers to refresh.
 const revision = group => `${group.events ?? ''}|${group.newest ?? ''}|${group.lastSyncAt ?? ''}`
 

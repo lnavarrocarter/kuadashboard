@@ -6080,14 +6080,26 @@ router.patch('/cloudwatch/log-cache', async (req, res) => {
   if (!profileId) return;
   const group = requireLogGroup(req.body?.group, res);
   if (!group) return;
-  const hours = req.body?.historyHours;
-  if (hours !== null && !(Number(hours) >= 0)) return res.status(400).json({ error: 'historyHours must be null or a number of hours' });
+  const body = req.body || {};
+  const hours = body.historyHours;
+  if ('historyHours' in body && hours !== null && !(Number(hours) >= 0)) return res.status(400).json({ error: 'historyHours must be null or a number of hours' });
+  if (!('historyHours' in body) && !('refreshMinutes' in body)) return res.status(400).json({ error: 'historyHours or refreshMinutes is required' });
   try {
+    const { checkRefreshMinutes } = require('../lib/plans');
+    // Validated first: a plan error must not leave a half-applied change.
+    const refreshMinutes = 'refreshMinutes' in body ? checkRefreshMinutes(body.refreshMinutes) : undefined;
     const cfg = await resolveAwsConfig(profileId);
     const cache = logCache();
     if (!cache.isCached(profileId, cfg.region, group)) return res.status(404).json({ error: 'Log group is not cached' });
-    res.json(cache.setHistory({ profileId, region: cfg.region, logGroup: group, historyMs: hours === null ? null : Number(hours) * 3600000 }));
-  } catch (err) { handleErr(res, err); }
+    const scope = { profileId, region: cfg.region, logGroup: group };
+    let result = cache.describeGroup(profileId, cfg.region, group);
+    if ('historyHours' in body) result = cache.setHistory({ ...scope, historyMs: hours === null ? null : Number(hours) * 3600000 });
+    if (refreshMinutes !== undefined) result = cache.setRefresh({ ...scope, minutes: refreshMinutes });
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'PLAN_REQUIRED' || err.statusCode === 400) return res.status(err.statusCode).json({ error: err.message, code: err.code, required: err.required });
+    handleErr(res, err);
+  }
 });
 
 // ─── Background log scans ─────────────────────────────────────────────────────

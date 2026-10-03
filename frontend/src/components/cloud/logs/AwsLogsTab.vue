@@ -26,6 +26,8 @@
       @changed="onScanChanged"
       @active="n => { activeScans = n }"
       @active-groups="groups => { scanningGroups = groups }"
+      :groups="cache?.groups || []"
+      @refresh-changed="loadCache"
     />
 
     <!-- ── Log groups ─────────────────────────────────────────────── -->
@@ -171,6 +173,7 @@
             </div>
             <div class="cwl-bar" role="progressbar" :aria-valuenow="usage" aria-valuemin="0" aria-valuemax="100"><div :style="{ width: `${usage}%` }"></div></div>
           </div>
+          <LogCacheBudget @changed="loadCache" />
           <button class="btn sm primary" :disabled="loading.sync || !cache.groups.length" @click="syncAll">{{ loading.sync ? t('awsLogs.syncing') : t('awsLogs.syncAll') }}</button>
         </div>
         <div class="cwl-hint">{{ t('awsLogs.cachePolicy', { max: formatWindow(cache.maxWindowMs), hot: formatWindow(cache.hotWindowMs) }) }}</div>
@@ -204,6 +207,7 @@
                   <option v-for="o in HISTORY_OPTIONS" :key="o.key" :value="o.key">{{ t(`awsLogs.history.${o.key}`) }}</option>
                 </select>
                 <button v-if="c.backfillPending" class="btn sm" :disabled="busy[c.logGroup]" :title="t('awsLogs.history.fillHint')" @click="fillHistory(c.logGroup)">{{ busy[c.logGroup] ? '…' : t('awsLogs.history.fill') }}</button>
+                <LogRefreshControl :group="c.logGroup" :profile-id="profileId" :minutes="c.refreshMinutes" :last-sync-at="c.lastSyncAt" @updated="group => replaceCachedGroup(c.logGroup, group)" />
               </td>
               <td class="text-dim">{{ c.dailyBytes ? `~${formatBytes(c.dailyBytes)}` : '—' }}</td>
               <td class="activity-cell">{{ c.events }}</td>
@@ -366,6 +370,8 @@ import {
 } from '../../../lib/awsLogs'
 import LogsQueryEditor from './LogsQueryEditor.vue'
 import LogIntelligencePanel from './LogIntelligencePanel.vue'
+import LogRefreshControl from './LogRefreshControl.vue'
+import LogCacheBudget from './LogCacheBudget.vue'
 import UsageCostPanel from '../UsageCostPanel.vue'
 import LogActivityChart from './LogActivityChart.vue'
 import LogScansPanel from './LogScansPanel.vue'
@@ -559,6 +565,12 @@ async function syncOne(name, extra = {}) {
 // Fill older hours now with a bigger page budget (FilterLogEvents: no scan charge).
 function fillHistory(name) {
   return syncOne(name, { backfillPages: 50 })
+}
+
+/** Puts an updated cached group (PATCH answer) in place. */
+function replaceCachedGroup(name, group) {
+  cache.value = { ...cache.value, groups: cache.value.groups.map(g => (g.logGroup === name ? group : g)) }
+  updateGroupCache(name, group)
 }
 
 async function setHistory(name, key) {
