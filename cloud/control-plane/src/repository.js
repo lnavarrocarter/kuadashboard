@@ -4,6 +4,7 @@ class MemoryRepository {
   constructor() {
     this.users = new Map();
     this.sessions = new Map();
+    this.loginCodes = new Map();
     this.subscriptions = new Map();
     this.webhookEvents = new Set();
   }
@@ -31,6 +32,13 @@ class MemoryRepository {
     return session;
   }
   async deleteSession(tokenHash) { this.sessions.delete(tokenHash); }
+  // One-time desktop sign-in codes: consumed once, expire in minutes.
+  async createLoginCode(code) { this.loginCodes.set(code.codeHash, code); return code; }
+  async consumeLoginCode(codeHash) {
+    const code = this.loginCodes.get(codeHash) || null;
+    this.loginCodes.delete(codeHash);
+    return code && new Date(code.expiresAt).getTime() > Date.now() ? code : null;
+  }
   async getSubscriptionByUserId(userId) { return this.subscriptions.get(userId) || null; }
   async upsertSubscription(userId, subscription) {
     const next = { ...subscription, userId };
@@ -88,6 +96,20 @@ class FirestoreRepository {
     return session;
   }
   async deleteSession(tokenHash) { await this.firestore.collection('sessions').doc(tokenHash).delete(); }
+  async createLoginCode(code) {
+    await this.firestore.collection('loginCodes').doc(code.codeHash).set(code);
+    return code;
+  }
+  async consumeLoginCode(codeHash) {
+    const ref = this.firestore.collection('loginCodes').doc(codeHash);
+    const code = await this.firestore.runTransaction(async transaction => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return null;
+      transaction.delete(ref);
+      return snapshot.data();
+    });
+    return code && new Date(code.expiresAt).getTime() > Date.now() ? code : null;
+  }
   async getSubscriptionByUserId(userId) {
     const snapshot = await this.firestore.collection('subscriptions').doc(userId).get();
     return snapshot.exists ? snapshot.data() : null;
@@ -157,6 +179,23 @@ class DatastoreRepository {
     return session;
   }
   async deleteSession(tokenHash) { await this.delete('KuaSession', tokenHash); }
+  async createLoginCode(code) { return this.save('KuaLoginCode', code.codeHash, code); }
+  async consumeLoginCode(codeHash) {
+    const transaction = this.datastore.transaction();
+    await transaction.run();
+    try {
+      const key = this.key('KuaLoginCode', codeHash);
+      const [entity] = await transaction.get(key);
+      if (!entity) { await transaction.rollback(); return null; }
+      transaction.delete(key);
+      await transaction.commit();
+      const { [DatastoreRepository.ID_FIELD]: _id, ...code } = entity;
+      return new Date(code.expiresAt).getTime() > Date.now() ? code : null;
+    } catch (error) {
+      await transaction.rollback().catch(() => {});
+      throw error;
+    }
+  }
   async getSubscriptionByUserId(userId) { return this.find('KuaSubscription', userId); }
   async upsertSubscription(userId, subscription) { return this.save('KuaSubscription', userId, subscription); }
   async deleteSubscription(userId) { await this.delete('KuaSubscription', userId); }

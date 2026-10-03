@@ -22,6 +22,9 @@ Endpoints principales:
 - `POST /api/billing/checkout`: crea un Checkout Session para `pro` o `team`, mensual o anual (`{ plan, interval: 'month' | 'year' }`).
 - `POST /api/billing/portal`: abre el portal de facturación.
 - `POST /webhooks/stripe`: actualiza la licencia desde eventos Stripe con firma e idempotencia.
+- `GET /auth/desktop/start` y `POST /auth/desktop/token`: login de KUA Desktop. La app abre el navegador con `redirect_uri=http://127.0.0.1:<puerto>/api/account/callback` (solo se aceptan direcciones loopback con esa ruta), un `state` y un `code_challenge` S256. Tras Google, el control plane no pone cookie: redirige a KUA con un código de un solo uso (5 minutos) que KUA canjea con su `code_verifier` por un token de sesión (Bearer, 30 días).
+- `POST /auth/logout`: cierra la sesión de la cookie o del token Bearer.
+- `GET /billing/done`: página "vuelve a KUA" después del checkout o del portal cuando la petición viene con `client: 'desktop'`.
 
 ## Google OAuth
 

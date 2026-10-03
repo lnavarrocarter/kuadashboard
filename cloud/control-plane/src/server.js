@@ -54,6 +54,25 @@ function safeReturnTo(value, frontendUrl) {
   return '/';
 }
 
+const LOGIN_CODE_MAX_AGE_MS = 5 * 60 * 1000;
+// KUA Desktop receives the sign-in on its own local server only (loopback, RFC 8252).
+const DESKTOP_CALLBACK_PATH = '/api/account/callback';
+
+/** Loopback redirect of KUA Desktop: http://127.0.0.1|localhost:<port>/api/account/callback, else null. */
+function desktopRedirect(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname)) return null;
+    if (url.pathname !== DESKTOP_CALLBACK_PATH || url.search || url.hash || url.username || url.password) return null;
+    return url.toString();
+  } catch { return null; }
+}
+
+/** PKCE S256 challenge of a verifier. */
+function pkceChallenge(verifier) {
+  return crypto.createHash('sha256').update(String(verifier)).digest('base64url');
+}
+
 function hashSessionToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -192,6 +211,61 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     }));
   });
 
+  app.get('/auth/desktop/start', (req, res) => {
+    const missing = missingGoogleConfig(config);
+    if (missing.length || !oauth) return res.status(503).json({ error: 'Google authentication is not configured', missing });
+    const redirectUri = desktopRedirect(req.query.redirect_uri);
+    if (!redirectUri) return res.status(400).json({ error: `redirect_uri must be http://127.0.0.1:<port>${DESKTOP_CALLBACK_PATH}` });
+    const challenge = String(req.query.code_challenge || '');
+    if (!/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) return res.status(400).json({ error: 'code_challenge (S256) is required' });
+    const desktopState = String(req.query.state || '').slice(0, 200);
+    if (!desktopState) return res.status(400).json({ error: 'state is required' });
+    const state = signState({
+      createdAt: now(),
+      nonce: crypto.randomBytes(16).toString('hex'),
+      desktop: { redirectUri, challenge, state: desktopState },
+    }, config.sessionSecret);
+    res.redirect(oauth.generateAuthUrl({
+      access_type: 'online',
+      scope: ['openid', 'email', 'profile'],
+      prompt: 'select_account',
+      state,
+      nonce: JSON.parse(Buffer.from(state.split('.')[0], 'base64url').toString('utf8')).nonce,
+    }));
+  });
+
+  // KUA Desktop exchanges the one-time code (and its PKCE verifier) for a session token.
+  app.post('/auth/desktop/token', express.json({ limit: '16kb' }), async (req, res) => {
+    try {
+      const code = String(req.body?.code || '');
+      const verifier = String(req.body?.code_verifier || '');
+      if (!code || !verifier) return res.status(400).json({ error: 'code and code_verifier are required' });
+      const login = await repository.consumeLoginCode(hashSessionToken(code));
+      if (!login || login.challenge !== pkceChallenge(verifier)) return res.status(400).json({ error: 'Invalid or expired sign-in code' });
+      const user = await repository.findUserById(login.userId);
+      if (!user) return res.status(400).json({ error: 'Invalid or expired sign-in code' });
+      const token = crypto.randomBytes(32).toString('base64url');
+      const expiresAt = new Date(now() + SESSION_MAX_AGE_MS).toISOString();
+      await repository.createSession({ tokenHash: hashSessionToken(token), userId: user.id, createdAt: new Date(now()).toISOString(), expiresAt, client: 'desktop' });
+      const subscription = await repository.getSubscriptionByUserId(user.id);
+      res.json({ token, expiresAt, user: publicUser(user), entitlements: entitlementsFor(subscription, config.stripePrices) });
+    } catch (error) { jsonError(res, error); }
+  });
+
+  // Where checkout and the billing portal send desktop users back: a page that says to return to KUA.
+  app.get('/billing/done', (req, res) => {
+    const status = ['success', 'cancelled', 'portal'].includes(req.query.status) ? req.query.status : 'success';
+    const messages = {
+      success: ['Payment received', 'Your KUA plan updates in a few seconds. You can close this tab and return to KUA.'],
+      cancelled: ['Checkout cancelled', 'Nothing was charged. You can close this tab and return to KUA.'],
+      portal: ['Subscription updated', 'You can close this tab and return to KUA.'],
+    };
+    const [title, body] = messages[status];
+    res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>KUA · ${title}</title>
+<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0}main{max-width:420px;padding:24px;text-align:center}h1{font-size:20px}p{color:#94a3b8;line-height:1.5}</style></head>
+<body><main><h1>${title}</h1><p>${body}</p></main></body></html>`);
+  });
+
   app.get('/auth/google/callback', async (req, res) => {
     try {
       const missing = missingGoogleConfig(config);
@@ -218,6 +292,20 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
         createdAt: existing?.createdAt || new Date(now()).toISOString(),
         updatedAt: new Date(now()).toISOString(),
       });
+      if (state.desktop) {
+        const code = crypto.randomBytes(32).toString('base64url');
+        await repository.createLoginCode({
+          codeHash: hashSessionToken(code),
+          userId: user.id,
+          challenge: state.desktop.challenge,
+          createdAt: new Date(now()).toISOString(),
+          expiresAt: new Date(now() + LOGIN_CODE_MAX_AGE_MS).toISOString(),
+        });
+        const target = new URL(state.desktop.redirectUri);
+        target.searchParams.set('code', code);
+        target.searchParams.set('state', state.desktop.state);
+        return res.redirect(target.toString());
+      }
       const rawSessionToken = crypto.randomBytes(32).toString('base64url');
       await repository.createSession({
         tokenHash: hashSessionToken(rawSessionToken),
@@ -234,6 +322,8 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
     try {
       const cookie = req.get('Cookie')?.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`))?.[1];
       if (cookie) await repository.deleteSession(hashSessionToken(decodeURIComponent(cookie)));
+      const authorization = req.get('Authorization') || '';
+      if (authorization.startsWith('Bearer ')) await repository.deleteSession(hashSessionToken(authorization.slice(7).trim()));
       clearSessionCookie(res);
       res.status(204).end();
     } catch (error) { jsonError(res, error); }
@@ -298,6 +388,8 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       const plan = String(req.body?.plan || '').toLowerCase();
       if (!PLAN_NAMES.has(plan)) return res.status(400).json({ error: 'plan must be pro or team' });
       const interval = String(req.body?.interval || 'month').toLowerCase();
+      const desktop = req.body?.client === 'desktop';
+      const successUrl = desktop ? `${config.controlPlaneUrl}/billing/done?status=success` : null;
       if (!['month', 'year'].includes(interval)) return res.status(400).json({ error: 'interval must be month or year' });
       if (usePolar) {
         const missing = missingPolarConfig(config, plan, interval);
@@ -307,7 +399,7 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
           products: [productId],
           external_customer_id: req.user.id,
           customer_email: req.user.email,
-          success_url: `${config.frontendUrl}/billing/success?checkout_id={CHECKOUT_ID}`,
+          success_url: successUrl || `${config.frontendUrl}/billing/success?checkout_id={CHECKOUT_ID}`,
           metadata: { userId: req.user.id, plan, interval },
         });
         return res.status(201).json({ url: checkout.url, sessionId: checkout.id, provider: 'polar' });
@@ -326,8 +418,8 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
         customer: user.stripeCustomerId,
         client_reference_id: user.id,
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${config.frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${config.frontendUrl}/billing/cancelled`,
+        success_url: successUrl || `${config.frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: desktop ? `${config.controlPlaneUrl}/billing/done?status=cancelled` : `${config.frontendUrl}/billing/cancelled`,
         metadata: { userId: user.id, plan, interval },
         subscription_data: { metadata: { userId: user.id, plan, priceId } },
       });
@@ -340,7 +432,8 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       if (usePolar) {
         if (!polar) return res.status(503).json({ error: 'Polar billing is not configured' });
         try {
-          const session = await polar.createCustomerSession({ external_customer_id: req.user.id, return_url: config.frontendUrl });
+          const returnUrl = req.body?.client === 'desktop' ? `${config.controlPlaneUrl}/billing/done?status=portal` : config.frontendUrl;
+          const session = await polar.createCustomerSession({ external_customer_id: req.user.id, return_url: returnUrl });
           return res.json({ url: session.customer_portal_url, provider: 'polar' });
         } catch (error) {
           // The Polar customer only exists after the first checkout.
@@ -352,7 +445,7 @@ function createApp({ config = loadConfig(), repository, googleClient, stripeClie
       if (!req.user.stripeCustomerId) return res.status(400).json({ error: 'No Stripe customer exists for this account' });
       const session = await stripe.billingPortal.sessions.create({
         customer: req.user.stripeCustomerId,
-        return_url: config.frontendUrl,
+        return_url: req.body?.client === 'desktop' ? `${config.controlPlaneUrl}/billing/done?status=portal` : config.frontendUrl,
         ...(config.stripePortalConfiguration ? { configuration: config.stripePortalConfiguration } : {}),
       });
       res.json({ url: session.url });
