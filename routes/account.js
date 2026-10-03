@@ -21,7 +21,10 @@ function createAccountRouter({ account = getAccount, port = () => process.env.PO
 
   const fail = (res, err) => res.status(err.statusCode || 500).json({ error: err.message, code: err.code });
 
-  router.get('/', (_req, res) => res.json(account().status()));
+  // Restores a session kept in the keychain when this KUA has no cached account yet.
+  router.get('/', async (_req, res) => {
+    try { res.json(await account().restore()); } catch { res.json(account().status()); }
+  });
 
   router.post('/login', (_req, res) => {
     // KUA listens on the loopback address only (server.js), which is what the control plane accepts.
