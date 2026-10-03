@@ -59,6 +59,7 @@ const enNav = [
   { text: 'Features', link: '/features/' },
   { text: 'Changelog', link: '/changelog' },
   { text: 'Legal', items: [
+    { text: 'Terms of Service', link: '/terms' },
     { text: 'Privacy Policy', link: '/privacy_policy' },
     { text: 'EULA', link: '/EULA' },
   ]},
@@ -74,7 +75,8 @@ const esNav = [
   { text: 'Funcionalidades', link: '/es/features/' },
   { text: 'Changelog', link: '/es/changelog' },
   { text: 'Legal', items: [
-    { text: 'Privacy Policy', link: '/privacy_policy' },
+    { text: 'Términos de servicio', link: '/es/terms' },
+    { text: 'Política de privacidad', link: '/es/privacy_policy' },
     { text: 'EULA', link: '/EULA' },
   ]},
   { text: 'Descarga', link: '/es/download' },
@@ -228,7 +230,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Released under the MIT License.',
+      message: 'Released under the MIT License. <a href="/terms">Terms</a> · <a href="/privacy_policy">Privacy</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>',
       copyright: 'Copyright © 2024-present KuaDashboard',
     },
 
