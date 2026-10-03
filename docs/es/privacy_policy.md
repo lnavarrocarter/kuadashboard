@@ -71,6 +71,7 @@ Cuando inicias sesión, el control plane de KUA guarda:
 | Códigos de un solo uso para iniciar sesión en el escritorio (como hash) | Vincular KUA Desktop de forma segura | 5 minutos; se usan una vez |
 | Suscripción: plan, estado, fecha de renovación e ids de suscripción y cliente en Polar | Activar tu plan | Hasta que borres la cuenta |
 | Ids de los avisos de pago recibidos de Polar (sin datos personales) | Procesar cada aviso una sola vez | 90 días |
+| Backups en la nube (Pro y Team): los paquetes saneados de KUA Applications que elijas respaldar, con su nombre, aplicación, tamaño, checksum y fecha | Restaurarlos en cualquier equipo | Hasta que los borres o borres la cuenta |
 
 De Google solo recibimos tu identidad. No recibimos ni guardamos tokens de acceso o de renovación de Google, y KUA no puede leer tu Gmail, tu Drive ni ningún otro dato de Google.
 
@@ -78,7 +79,7 @@ Tu plan y el nombre de tu cuenta quedan guardados en tu equipo para hasta 7 día
 
 **Pagos.** Polar (polar.sh) vende las suscripciones como *merchant of record*. Polar recibe tus datos de pago, tu dirección de facturación y tu información tributaria, y los trata según su propia [política de privacidad](https://polar.sh/legal/privacy). Nosotros nunca vemos ni guardamos números de tarjeta. Polar conserva las facturas el tiempo que exige la ley tributaria, aunque borres tu cuenta KUA.
 
-**Lo que nunca llega al control plane:** credenciales cloud, kubeconfigs, perfiles, llaves, logs, la caché local de logs, los datos de inteligencia de logs y los inventarios de recursos. Todo eso se queda en tu equipo. Los futuros respaldos en la nube solo subirán los paquetes de aplicación saneados que elijas respaldar, y actualizaremos esta política antes de lanzarlos.
+**Lo que nunca llega al control plane:** credenciales cloud, kubeconfigs, perfiles, llaves, logs, la caché local de logs, los datos de inteligencia de logs y los inventarios de recursos. Todo eso se queda en tu equipo. Los backups en la nube suben solo el paquete saneado de la aplicación que elijas respaldar (arquitectura, snapshots y metadatos del registro, sin ids de perfil, muestras de evidencia ni payloads de estado), y el servicio rechaza cualquier paquete con campos sensibles o valores con forma de credencial. Se guardan en un bucket privado de Google Cloud Storage; al borrar un backup o la cuenta se eliminan definitivamente.
 
 **Dónde se guardan los datos.** El control plane funciona en Google Cloud, en Estados Unidos (us-central1).
 
@@ -86,7 +87,7 @@ Tu plan y el nombre de tu cuenta quedan guardados en tu equipo para hasta 7 día
 
 Puedes pedir acceso a los datos de tu cuenta KUA, y también corregirlos, exportarlos o borrarlos, u oponerte a su tratamiento. Estos derechos vienen de la ley chilena de protección de datos (Ley 19.628 y sus modificaciones) y, cuando te correspondan, de normas como el RGPD. Escribe a [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) y te responderemos en un plazo de 30 días.
 
-Al borrar la cuenta se eliminan tu registro de usuario, tu suscripción y todas tus sesiones. Si tienes una suscripción de pago activa, cancélala primero para que no se renueve.
+Al borrar la cuenta se eliminan tu registro de usuario, tu suscripción, todas tus sesiones y todos tus backups en la nube. Si tienes una suscripción de pago activa, cancélala primero para que no se renueve.
 
 ## Datos compartidos
 

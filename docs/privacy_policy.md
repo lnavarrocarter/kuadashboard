@@ -64,6 +64,7 @@ When you sign in, the KUA control plane stores the following:
 | One-time desktop sign-in codes (hashed) | To link KUA Desktop safely | 5 minutes, used once |
 | Subscription: plan, status, renewal date and Polar subscription and customer ids | To unlock your plan | Until you delete the account |
 | Ids of the payment notifications received from Polar (no personal data) | To process each one once | 90 days |
+| Cloud backups (Pro and Team): the sanitized KUA Application bundles you choose to back up, with their name, application, size, checksum and date | To restore them on any computer | Until you delete them or the account |
 
 We receive only your identity from Google. We do not receive or store Google access or refresh tokens, and KUA cannot read your Gmail, Drive or any other Google data.
 
@@ -71,13 +72,13 @@ The plan and the account name are cached on your computer for up to 7 days of of
 
 **Payments.** Polar (polar.sh) sells the subscriptions as merchant of record. It collects your payment details, billing address and tax information under its own [privacy policy](https://polar.sh/legal/privacy). We never see or store card numbers. Polar keeps invoices for as long as tax law requires, even after you delete your KUA account.
 
-**What never goes to the control plane:** cloud credentials, kubeconfigs, profiles, keys, logs, the local log cache, log intelligence data and resource inventories. These stay on your computer. Future cloud backups will only upload the sanitized application bundles you choose to back up, and this policy will be updated before they launch.
+**What never goes to the control plane:** cloud credentials, kubeconfigs, profiles, keys, logs, the local log cache, log intelligence data and resource inventories. These stay on your computer. Cloud backups upload only the sanitized application bundle you choose to back up (architecture, snapshots and registry metadata, without profile ids, evidence samples or state payloads), and the service refuses any bundle that contains sensitive fields or values that look like credentials. Backups are stored in a private Google Cloud Storage bucket; deleting a backup or the account deletes them for good.
 
 **Where the data is stored.** The control plane runs on Google Cloud in the United States (us-central1).
 
 ## Your Rights
 
-You can ask to access, correct, export or delete your KUA account data, or object to its processing. These rights come from the Chilean data protection law (Law 19,628 and its amendments) and, where they apply to you, from laws such as the GDPR. Write to [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) and we will answer within 30 days. Deleting the account removes your user record, subscription record and all sessions. If a paid subscription is active, cancel it first so it is not renewed.
+You can ask to access, correct, export or delete your KUA account data, or object to its processing. These rights come from the Chilean data protection law (Law 19,628 and its amendments) and, where they apply to you, from laws such as the GDPR. Write to [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) and we will answer within 30 days. Deleting the account removes your user record, subscription record, all sessions and all cloud backups. If a paid subscription is active, cancel it first so it is not renewed.
 
 ## Data Sharing
 

@@ -314,6 +314,23 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  // Cloud backups (KUA account, Pro and Team): errors keep their status and code for the caller.
+  async function backupKuaAppToCloud(applicationId) {
+    return apiFetch(`/api/kua-apps/${encodeURIComponent(applicationId)}/cloud-backup`, { method: 'POST', headers: headers() })
+  }
+
+  async function restoreCloudBackup(backupId) {
+    saving.value = true
+    try {
+      const result = await apiFetch(`/api/kua-apps/cloud-backups/${encodeURIComponent(backupId)}/restore`, { method: 'POST', headers: headers() })
+      await loadApplications({ preserveSelection: false })
+      if (result.application?.id) await selectApplication(result.application.id)
+      return result
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function createProject(input) {
     saving.value = true
     error.value = null
@@ -753,6 +770,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importAwsResources,
     importKubernetesResources,
     importKuaApp,
+    backupKuaAppToCloud,
+    restoreCloudBackup,
     loadApplicationCatalog,
     loadAwsDeployments,
     loadKubernetesContexts,

@@ -11,6 +11,9 @@
  *   POST /logout
  *   POST /checkout    { plan: pro|team, interval: month|year } → URL
  *   POST /portal      billing portal URL
+ *   GET  /backups     cloud backups of KUA Applications (Pro and Team)
+ *   DELETE /backups/:id
+ *   (creating and restoring a backup live in routes/kuaApps.js, next to the bundle export)
  */
 
 const express = require('express');
@@ -63,6 +66,14 @@ function createAccountRouter({ account = getAccount, port = () => process.env.PO
 
   router.post('/portal', async (_req, res) => {
     try { res.json(await account().portal()); } catch (err) { fail(res, err); }
+  });
+
+  router.get('/backups', async (_req, res) => {
+    try { res.json(await account().backups.list()); } catch (err) { fail(res, err); }
+  });
+
+  router.delete('/backups/:id', async (req, res) => {
+    try { await account().backups.remove(req.params.id); res.status(204).end(); } catch (err) { fail(res, err); }
   });
 
   return router;
