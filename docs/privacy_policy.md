@@ -60,7 +60,7 @@ When you sign in, the KUA control plane stores the following:
 | Data | Why | How long |
 |---|---|---|
 | Google account id, email, name and profile picture URL | To identify your account | Until you delete the account |
-| Sessions: a one-way hash of the session token, creation and expiry dates, and the client (web or desktop) | To keep you signed in | 30 days, or until you sign out |
+| Sessions: a one-way hash of the session token, the client (web or desktop), creation, last activity and expiry dates and, for KUA Desktop, the computer name, operating system, architecture and KUA version | To keep you signed in and to show the signed-in devices of the account | 30 days, or until you sign out |
 | One-time desktop sign-in codes (hashed) | To link KUA Desktop safely | 5 minutes, used once |
 | Subscription: plan, status, renewal date and Polar subscription and customer ids | To unlock your plan | Until you delete the account |
 | Ids of the payment notifications received from Polar (no personal data) | To process each one once | 90 days |
