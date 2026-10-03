@@ -6,7 +6,8 @@ KuaDashboard is configured via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | HTTP server port |
+| `PORT` | `7190` | HTTP server port |
+| `KUA_HOST` | `127.0.0.1` | Address the server listens on. Only this machine can reach KUA by default. The API has no authentication, so `0.0.0.0` lets anyone on your network control KUA: use it only on a trusted network |
 | `KUBECONFIG` | `~/.kube/config` | Kubeconfig file path(s) |
 | `KUADASHBOARD_STORE` | `env` | Credential store backend |
 
