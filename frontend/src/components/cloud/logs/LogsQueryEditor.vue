@@ -4,7 +4,7 @@
       <select v-model="source" class="ctrl-select" :aria-label="t('awsLogs.q.source')">
         <option value="cache" :disabled="!group.cache">{{ t('awsLogs.q.sourceCache') }}</option>
         <option value="live">{{ t('awsLogs.q.sourceLive') }}</option>
-        <option value="insights">{{ t('awsLogs.q.sourceInsights') }}</option>
+        <option v-if="logApi.insights" value="insights">{{ t('awsLogs.q.sourceInsights') }}</option>
       </select>
       <select v-model.number="minutes" class="ctrl-select" :aria-label="t('awsLogs.range')">
         <option v-for="r in LOG_RANGES" :key="r.minutes" :value="r.minutes">{{ r.label }}</option>
@@ -165,6 +165,7 @@
 <script setup>
 import { computed, reactive, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useApi } from '../../../composables/useApi'
+import { useLogApi } from './logApi'
 import { useI18n } from '../../../composables/useI18n'
 import { useToast } from '../../../composables/useToast'
 import { settings } from '../../../composables/useSettings'
@@ -182,6 +183,7 @@ const props = defineProps({
   sampleEvents: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['request-access', 'ingested'])
+const logApi = useLogApi()
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
@@ -341,7 +343,7 @@ async function run() {
   if (!validation.value.ok) return
   running.value = true
   try {
-    result.value = await apiFetch('/api/cloud/aws/cloudwatch/log-groups/query', {
+    result.value = await apiFetch(`${logApi.base}/log-groups/query`, {
       method: 'POST',
       headers: headers(true),
       body: JSON.stringify({ group: props.group.name, query: query.value, minutes: minutes.value, source: source.value }),

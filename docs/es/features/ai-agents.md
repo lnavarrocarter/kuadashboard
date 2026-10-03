@@ -38,7 +38,9 @@ Todas son de solo lectura.
 | `kubernetes_advisor` | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
 | `list_log_groups` | Log groups de CloudWatch en la caché de KUA para un perfil |
 | `log_intelligence` | Brief de un log group en caché: tasas de error, anomalías, errores parecidos, firmas, recomendaciones, consultas |
-| `search_logs` | Errores recurrentes de los log groups en caché buscados por significado, en cualquier idioma (requiere el ML local activado en KUA) |
+| `search_logs` | Errores recurrentes de los log groups en caché buscados por significado, en cualquier idioma (requiere el ML local activado en KUA); `provider: "kubernetes"` busca en los workloads de Kubernetes en caché |
+| `list_kube_log_workloads` | Workloads de Kubernetes cuyos logs de pods guarda KUA para el contexto actual |
+| `kube_log_intelligence` | Brief de un workload de Kubernetes en caché: tasas de error, anomalías, errores parecidos, recomendaciones, consultas |
 | `list_applications` | Aplicaciones de KUApps |
 | `product_advisor` | Hallazgos de producto de una aplicación de KUApps |
 

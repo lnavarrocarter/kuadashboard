@@ -38,7 +38,9 @@ All tools are read-only.
 | `kubernetes_advisor` | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
 | `log_intelligence` | Brief of a cached log group: error rates, anomalies, similar errors, signatures, recommendations, queries |
-| `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA) |
+| `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA); `provider: "kubernetes"` searches cached Kubernetes workloads |
+| `list_kube_log_workloads` | Kubernetes workloads whose pod logs KUA caches for the current context |
+| `kube_log_intelligence` | Brief of a cached Kubernetes workload: error rates, anomalies, similar errors, recommendations, queries |
 | `list_applications` | KUApps applications |
 | `product_advisor` | Product findings of a KUApps application |
 

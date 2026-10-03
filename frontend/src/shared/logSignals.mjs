@@ -7,7 +7,7 @@
 // confirm them before they change a graph (KUA unified plan, Phase 16).
 
 // Raising it re-analyzes cached sources on their next read.
-export const SIGNALS_VERSION = 3
+export const SIGNALS_VERSION = 4
 
 // ─── Sanitization and sensitive data ────────────────────────────────────────
 
@@ -192,7 +192,7 @@ export const CATEGORIES = [
   { id: 'connection', group: 'failure', pattern: 'ECONNREFUSED|ECONNRESET|connection refused|connection reset|EAI_AGAIN|ENOTFOUND|getaddrinfo|socket hang up|EPIPE' },
   { id: 'crash', group: 'failure', pattern: 'Runtime\\.ExitError|Runtime exited|segmentation fault|core dumped|CrashLoopBackOff|uncaughtException|unhandled ?rejection' },
   { id: 'configuration', group: 'failure', pattern: 'Runtime\\.ImportModuleError|Cannot find module|ModuleNotFoundError|ImportError|environment variable|missing required|ConfigurationError|InvalidParameterValue' },
-  { id: 'database', group: 'failure', pattern: 'ConditionalCheckFailed|TransactionCanceled|deadlock|duplicate key|SQLSTATE|too many connections|could not connect to server|ER_[A-Z_]+' },
+  { id: 'database', group: 'failure', pattern: 'ConditionalCheckFailed|TransactionCanceled|deadlock|duplicate key|SQLSTATE|too many connections|could not connect to server|ER_[A-Z_]+|unable to connect to (the )?database|database connection (failed|lost|error)|Connection terminated unexpectedly|ServerSelectionTimeout|MongoNetworkError|MongoServerSelectionError|SequelizeConnection\\w*Error|PrismaClientInitializationError' },
   { id: 'code_exception', group: 'failure', pattern: 'TypeError|ReferenceError|SyntaxError|NullPointerException|KeyError|AttributeError|IndexError|ValueError|Traceback|Cannot read propert|NoneType' },
   { id: 'not_found', group: 'client', pattern: 'ResourceNotFound|NoSuchKey|NoSuchBucket|\\b404\\b|not found' },
   { id: 'validation', group: 'client', pattern: 'ValidationException|ValidationError|Bad Request|\\b400\\b|invalid (input|request|parameter|payload)|schema validation' },

@@ -1,7 +1,7 @@
 <template>
   <section class="lac">
     <div class="lac-range">
-      <span v-if="cached" class="lac-switch" role="group" :aria-label="t('awsLogs.chart.source')">
+      <span v-if="cached && logApi.volume" class="lac-switch" role="group" :aria-label="t('awsLogs.chart.source')">
         <button class="btn sm" :class="{ accent: source === 'levels' }" :aria-pressed="source === 'levels'" :title="t('awsLogs.chart.levelsHint')" @click="setSource('levels')">{{ t('awsLogs.chart.levels') }}</button>
         <button class="btn sm" :class="{ accent: source === 'volume' }" :aria-pressed="source === 'volume'" :title="t('awsLogs.chart.volumeHint')" @click="setSource('volume')">{{ t('awsLogs.chart.volume') }}</button>
       </span>
@@ -35,6 +35,7 @@
 // Emits `range` ({ from, to, zoomed }) when the visible window changes.
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useApi } from '../../../composables/useApi'
+import { useLogApi } from './logApi'
 import { useI18n } from '../../../composables/useI18n'
 import { settings } from '../../../composables/useSettings'
 import { LOG_RANGES, formatTime } from '../../../lib/awsLogs'
@@ -53,7 +54,8 @@ const { t } = useI18n()
 const { apiFetch } = useApi()
 
 const view = reactive({ minutes: props.defaultMinutes, from: null, to: null, stack: [] })
-const source = ref(props.cached ? 'levels' : 'volume')
+const logApi = useLogApi()
+const source = ref(props.cached || !logApi.volume ? 'levels' : 'volume')
 const hist = ref(null)
 const total = ref(null) // CloudWatch total for the same window (levels mode)
 const loading = ref(false)
@@ -102,9 +104,9 @@ async function reload() {
   try {
     const { from, to } = currentRange()
     const query = new URLSearchParams({ group: props.group, from, to })
-    let path = '/api/cloud/aws/cloudwatch/log-groups/volume'
+    let path = `${logApi.base}/log-groups/volume`
     if (source.value === 'levels') {
-      path = '/api/cloud/aws/cloudwatch/log-intelligence/histogram'
+      path = `${logApi.base}/log-intelligence/histogram`
       if (props.category) query.set('category', props.category)
       if (props.level) query.set('level', props.level)
     }
@@ -112,8 +114,8 @@ async function reload() {
     const [data, volume] = await Promise.all([
       apiFetch(`${path}?${query}`, { headers }),
       // Same window from CloudWatch (served from the local history when fresh), to show coverage.
-      source.value === 'levels' && !props.category && !props.level
-        ? apiFetch(`/api/cloud/aws/cloudwatch/log-groups/volume?${new URLSearchParams({ group: props.group, from, to })}`, { headers }).catch(() => null)
+      source.value === 'levels' && !props.category && !props.level && logApi.volume
+        ? apiFetch(`${logApi.base}/log-groups/volume?${new URLSearchParams({ group: props.group, from, to })}`, { headers }).catch(() => null)
         : Promise.resolve(null),
     ])
     hist.value = data

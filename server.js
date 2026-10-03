@@ -288,6 +288,12 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   auditLog,
 }));
 app.use('/api/cloud/vercel',  vercelRoutes);
+// Kubernetes workload logs on the shared log cache (lib/kubeLogs).
+app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
+  k8s,
+  getKubeConfig: () => currentKc,
+  getContext: () => currentContext,
+}));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
 app.use('/api/local',         localShellRoutes);

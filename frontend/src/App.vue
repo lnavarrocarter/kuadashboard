@@ -163,6 +163,11 @@
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
+            <div class="sidebar-section-title">{{ t('sidebar.logs') }}</div>
+            <a :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
+               @click.prevent="setCloudView('kube-logs')">{{ t('sidebar.logsIntelligence') }}</a>
+          </div>
+          <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
             <a :class="['sidebar-item', { active: cloudView === 'helm' }]"
                @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
@@ -378,6 +383,7 @@
           <AuditLogView  v-else-if="cloudView === 'audit'" />
           <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
           <KubeOverview ref="kubeOverviewRef" v-else-if="cloudView === 'kube-overview' && activeProvider === 'kubernetes'" @navigate="openKubeFromOverview" />
+          <KubeLogsView v-else-if="cloudView === 'kube-logs' && activeProvider === 'kubernetes'" />
           <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">
             <div class="kube-main-split" :class="{ 'detail-open': !!selectedKubeResource, resizing: isKubeResizing }">
@@ -532,6 +538,7 @@ import { useArchitectureContext } from './composables/useArchitectureContext'
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import HelmView         from './components/HelmView.vue'
+import KubeLogsView from './components/cloud/logs/KubeLogsView.vue'
 import KubeOverview     from './components/KubeOverview.vue'
 import { loadTableView, saveTableView } from './composables/useTableViews'
 import AuditLogView    from './components/AuditLogView.vue'
