@@ -3591,6 +3591,7 @@ export default {
   'account.notLinked': 'Not linked: KUA works locally, without an account. Sign in to use a Pro or Team plan.',
   'account.signIn': 'Sign in with Google',
   'account.signInSoon': 'Coming soon: linking KUA to an account with a Pro or Team plan',
+  'account.manageOnWeb': 'Manage your account on the web: devices, cloud storage and subscription',
   'account.linkHint': 'Linking this computer to a KUA account will bring the plan from the account, cloud backups and team sharing. Profiles, keys and logs never leave this computer.',
   'account.planTitle': 'Plan',
   'account.legal': 'Subscriptions renew automatically and payments are non-refundable, except billing errors or where the law requires it. Polar processes the payment as merchant of record.',

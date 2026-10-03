@@ -78,6 +78,7 @@ describe('AccountProfile sign-in', () => {
     expect(card.get('[data-test="account-user"]').text()).toContain('ana@example.com')
     expect(card.find('img.acp-avatar').exists()).toBe(true)
     expect(card.find('[data-test="account-sign-out"]').exists()).toBe(true)
+    expect(card.get('[data-test="account-web"]').text()).toContain('Manage your account on the web')
     wrapper.unmount()
     lucide.createIcons.mockReset()
   })
