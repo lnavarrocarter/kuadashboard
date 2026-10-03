@@ -15,6 +15,8 @@
       <button v-if="notice.access" class="btn sm" @click="emit('request-access', notice)">{{ t('awsAccess.requestAccess') }}</button>
     </div>
 
+    <UsageCostPanel v-if="view === 'cache'" ref="usagePanel" compact service="CloudWatch Logs" :profile-id="profileId" />
+
     <LogScansPanel
       v-show="view === 'cache'"
       :profile-id="profileId"
@@ -364,6 +366,7 @@ import {
 } from '../../../lib/awsLogs'
 import LogsQueryEditor from './LogsQueryEditor.vue'
 import LogIntelligencePanel from './LogIntelligencePanel.vue'
+import UsageCostPanel from '../UsageCostPanel.vue'
 import LogActivityChart from './LogActivityChart.vue'
 import LogScansPanel from './LogScansPanel.vue'
 
@@ -399,6 +402,7 @@ const activeScans = ref(0)
 const scanningGroups = ref([])
 // Changes when a sync or scan caches new events: the panel then offers to refresh.
 const cacheRevision = group => `${group.events ?? ''}|${group.newest ?? ''}|${group.lastSyncAt ?? ''}`
+const usagePanel = ref(null)
 const scanPrefill = ref(null)
 const groupNames = computed(() => (groupsData.value?.groups || []).map(g => g.name))
 
@@ -589,6 +593,8 @@ function openScan(scan) {
 // A scan started (it may have cached a new group) or finished: refresh the cache summary.
 async function onScanChanged() {
   await loadCache()
+  // A finished scan downloaded data: show its cost.
+  usagePanel.value?.load()
   for (const g of cache.value?.groups || []) updateGroupCache(g.logGroup, g)
 }
 

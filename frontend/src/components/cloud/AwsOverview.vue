@@ -111,6 +111,9 @@
         @refresh="loadAdvisor({ refresh: true })"
       />
 
+      <!-- What KUA itself spent on billed AWS APIs (lib/usage) -->
+      <UsageCostPanel :profile-id="profileId" />
+
       <!-- Services -->
       <section class="aov-services">
         <button
@@ -165,6 +168,7 @@ import { useToast } from '../../composables/useToast'
 import AwsAccessRequestModal from './AwsAccessRequestModal.vue'
 import AwsOverviewInsights from './AwsOverviewInsights.vue'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
+import UsageCostPanel from './UsageCostPanel.vue'
 
 defineProps({
   profileId: { type: String, default: '' },
