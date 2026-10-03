@@ -2,8 +2,9 @@
 
 const express = require('express');
 const { buildKuaAppBundle, validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
+const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
 
@@ -43,7 +44,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog } = {}) {
 
   function handleError(res, error) {
     const status = error.statusCode || (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
-    res.status(status).json({ error: error.message || 'Internal server error' });
+    res.status(status).json({ error: error.message || 'Internal server error', ...(error.code ? { code: error.code } : {}) });
   }
 
   function availableProjectName(profile, requestedName) {
@@ -90,7 +91,32 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog } = {}) {
     } catch (error) {
       return handleError(res, error);
     }
+    importBundle(res, profile, bundle);
+  });
 
+  // Cloud backups (KUA account, Pro and Team): the same sanitized bundle as the export.
+  router.post('/:applicationId/cloud-backup', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const backup = await account().backups.create(exportBundle(application));
+      auditLog?.log({ category: 'kua', action: 'KUAAppBundle backed up to the cloud', resource: application.name, context: application.profileId, details: { applicationId: application.id, backupId: backup.id } });
+      res.status(201).json(backup);
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Restores a cloud backup as a new application of this profile, like an import.
+  router.post('/cloud-backups/:backupId/restore', async (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    let bundle;
+    try {
+      bundle = validateKuaAppBundle(await account().backups.download(req.params.backupId));
+    } catch (error) { return handleError(res, error); }
+    importBundle(res, profile, bundle);
+  });
+
+  function importBundle(res, profile, bundle) {
     let project = null;
     let application = null;
     try {
@@ -147,7 +173,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog } = {}) {
       if (project) database.deleteProject(project.id);
       handleError(res, error);
     }
-  });
+  }
 
   return router;
 }

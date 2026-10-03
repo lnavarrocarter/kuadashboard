@@ -13,6 +13,9 @@
         <button v-if="activeApplication" class="btn sm" :disabled="store.saving" :title="t('archView.exportHint')" @click="exportKuaApp">
           <i data-lucide="download"></i> {{ t('archView.exportBackup') }}
         </button>
+        <button class="btn sm" :disabled="!profileId" :title="t('cloudBackups.hint')" data-test="open-cloud-backups" @click="cloudBackupsOpen = true">
+          <i data-lucide="cloud"></i> {{ t('cloudBackups.title') }}
+        </button>
         <button class="btn sm btn-icon" :title="t('archView.refreshApplication')" :disabled="store.loading || !profileId" @click="refreshWorkspace">
           <i data-lucide="refresh-cw"></i>
         </button>
@@ -34,6 +37,8 @@
         </button>
       </div>
     </header>
+
+    <CloudBackupsModal :show="cloudBackupsOpen" :profile-id="profileId || ''" :application-id="activeApplication?.id || ''" :application-name="activeApplication?.name || ''" @close="cloudBackupsOpen = false" />
 
     <div v-if="!profileId" class="architecture-empty architecture-application-picker">
       <i data-lucide="boxes"></i>
@@ -344,6 +349,7 @@ import { useI18n } from '../../composables/useI18n'
 import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
 import BaseModal from '../BaseModal.vue'
+import CloudBackupsModal from './CloudBackupsModal.vue'
 import ApmProviderMetrics from '../cloud/apm/ApmProviderMetrics.vue'
 import ApmApplicationLogs from '../cloud/apm/ApmApplicationLogs.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
@@ -372,6 +378,7 @@ const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
 const { toast } = useToast()
+const cloudBackupsOpen = ref(false)
 const { t } = useI18n()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
