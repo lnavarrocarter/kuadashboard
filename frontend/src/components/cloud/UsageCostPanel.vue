@@ -1,5 +1,6 @@
 <template>
-  <section class="ucp" :class="{ compact }" data-test="usage-cost">
+  <!-- Optional: hidden when the spend tracking is off (Help & Options → Account) -->
+  <section v-if="!disabled" class="ucp" :class="{ compact }" data-test="usage-cost">
     <header class="ucp-head">
       <div class="ucp-title">
         <i data-lucide="receipt"></i>
@@ -90,6 +91,7 @@ const props = defineProps({
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const data = ref(null)
+const disabled = ref(false)
 const error = ref('')
 const loading = ref(false)
 const days = ref(30)
@@ -128,6 +130,8 @@ async function load() {
   if (props.service) params.set('service', props.service)
   try {
     const response = await apiFetch(`/api/system/usage?${params}`)
+    disabled.value = response?.enabled === false
+    if (disabled.value) { data.value = null; return }
     // An unexpected answer (older backend, proxy page) must not break the overview.
     if (!response?.totals || !Array.isArray(response.byOperation)) throw new Error(t('usage.unavailable'))
     data.value = response
