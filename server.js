@@ -3335,8 +3335,12 @@ app.get('*', (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 7190;
-server.listen(PORT, () => {
+// Loopback only by default: the API has no authentication and manages
+// credentials, clusters and shells. KUA_HOST=0.0.0.0 exposes it on purpose.
+const HOST = process.env.KUA_HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
   console.log(`\n  KuaDashboard running → http://localhost:${PORT}`);
+  if (HOST !== '127.0.0.1') console.log(`  Listening on ${HOST}: the API has no authentication, so anyone who reaches this address controls KUA.`);
   console.log(`  Context: ${currentContext}\n`);
 });
 
