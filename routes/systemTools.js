@@ -210,4 +210,28 @@ router.get('/usage', (req, res) => {
   }
 });
 
+// ─── Local ML (lib/ml/localModel.js) ──────────────────────────────────────────
+// Opt-in local embeddings. Enabling downloads the model once from Hugging Face
+// (free, ~130 MB) into the KUA data directory; disabling can delete it.
+
+router.get('/ml', (_req, res) => {
+  res.json(require('../lib/ml/localModel').getLocalModel().status());
+});
+
+router.post('/ml/enable', (_req, res) => {
+  try {
+    res.json(require('../lib/ml/localModel').getLocalModel().enable());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/ml/disable', (req, res) => {
+  try {
+    res.json(require('../lib/ml/localModel').getLocalModel().disable({ remove: req.body?.remove === true }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

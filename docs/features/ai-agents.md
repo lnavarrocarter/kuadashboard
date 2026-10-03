@@ -37,7 +37,8 @@ All tools are read-only.
 | `gcp_advisor` | GCP Advisor findings from the last stored overview |
 | `kubernetes_advisor` | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
-| `log_intelligence` | Brief of a cached log group: error rates, anomalies, signatures, recommendations, queries |
+| `log_intelligence` | Brief of a cached log group: error rates, anomalies, similar errors, signatures, recommendations, queries |
+| `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA) |
 | `list_applications` | KUApps applications |
 | `product_advisor` | Product findings of a KUApps application |
 

@@ -37,7 +37,8 @@ Todas son de solo lectura.
 | `gcp_advisor` | Hallazgos del Advisor de GCP a partir del último overview guardado |
 | `kubernetes_advisor` | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
 | `list_log_groups` | Log groups de CloudWatch en la caché de KUA para un perfil |
-| `log_intelligence` | Brief de un log group en caché: tasas de error, anomalías, firmas, recomendaciones, consultas |
+| `log_intelligence` | Brief de un log group en caché: tasas de error, anomalías, errores parecidos, firmas, recomendaciones, consultas |
+| `search_logs` | Errores recurrentes de los log groups en caché buscados por significado, en cualquier idioma (requiere el ML local activado en KUA) |
 | `list_applications` | Aplicaciones de KUApps |
 | `product_advisor` | Hallazgos de producto de una aplicación de KUApps |
 

@@ -6240,6 +6240,25 @@ router.get('/cloudwatch/log-intelligence', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// Recurring errors of the cached groups ranked by meaning with the local model
+// (?q=, optional ?group=). Local only, no AWS call; 409 when local ML is off.
+router.get('/cloudwatch/log-intelligence/search', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.status(400).json({ error: 'q is required' });
+  const group = req.query.group ? requireLogGroup(req.query.group, res) : null;
+  if (req.query.group && !group) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const results = await logCache().searchSignatures({ profileId, region: cfg.region, query: query.slice(0, 500), logGroup: group, limit: Math.min(Number(req.query.limit) || 20, 50) });
+    res.json({ query, region: cfg.region, results });
+  } catch (err) {
+    if (err.code === 'ML_DISABLED') return res.status(409).json({ error: 'Local ML is disabled. Enable it in KUA (Intelligence → Local ML).', code: 'ML_DISABLED' });
+    handleErr(res, err);
+  }
+});
+
 // Cached events of a category, level or signature (decrypted locally, no AWS call).
 router.get('/cloudwatch/log-intelligence/events', async (req, res) => {
   const profileId = requireProfileId(req, res);
