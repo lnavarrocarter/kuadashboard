@@ -12,6 +12,7 @@ gcloud artifacts repositories describe kua-control-plane --location="${REGION}" 
 
 gcloud builds submit . --config=cloudbuild.yaml --project="${PROJECT_ID}" --substitutions="_TAG=$(git rev-parse HEAD)"
 
+# CONTROL_PLANE_URL: the run.app URL until api.kuadashboard.navarrocarter.com serves HTTPS (#33).
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -22,7 +23,7 @@ gcloud run deploy "${SERVICE}" \
   --max=3 \
   --memory=256Mi \
   --cpu=1 \
-  --set-env-vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://api.kuadashboard.navarrocarter.com,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
+  --set-env-vars="NODE_ENV=production,GCP_DATABASE_MODE=datastore,CONTROL_PLANE_URL=https://kua-control-plane-306971032277.us-central1.run.app,FRONTEND_URL=https://kuadashboard.navarrocarter.com,GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
   --set-secrets="GOOGLE_CLIENT_ID=KUA_GOOGLE_CLIENT_ID:1,GOOGLE_CLIENT_SECRET=KUA_GOOGLE_CLIENT_SECRET:1,KUA_SESSION_SECRET=KUA_SESSION_SECRET:1,STRIPE_SECRET_KEY=KUA_STRIPE_SECRET_KEY:1,STRIPE_WEBHOOK_SECRET=KUA_STRIPE_WEBHOOK_SECRET:1,STRIPE_PRICE_PRO=KUA_STRIPE_PRICE_PRO:1,STRIPE_PRICE_TEAM=KUA_STRIPE_PRICE_TEAM:1"
 
 echo "Cloud Run deployed: ${SERVICE} in ${REGION}"
