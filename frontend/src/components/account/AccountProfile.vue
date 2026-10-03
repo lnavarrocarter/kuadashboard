@@ -24,6 +24,9 @@
       <p v-if="waiting === 'login'" class="acp-note" data-test="account-waiting">{{ t('account.waitingLogin') }}</p>
       <p v-if="account?.stale" class="acp-note acp-warn">{{ t('account.stale') }}</p>
       <p v-if="error" class="acp-note acp-warn" data-test="account-error">{{ error }}</p>
+      <p v-if="account?.linked" class="acp-note">
+        <a href="#" data-test="account-web" @click.prevent="openExternal(ACCOUNT_PORTAL)">{{ t('account.manageOnWeb') }}</a>
+      </p>
       <p class="text-dim acp-note">{{ t('account.linkHint') }}</p>
     </section>
 
@@ -196,6 +199,8 @@ function pollAccount({ kind, refresh = false, everyMs, forMs, done }) {
   }, everyMs)
 }
 
+// The account portal: devices, cloud storage, subscription and the account's data.
+const ACCOUNT_PORTAL = 'https://app.kuadashboard.navarrocarter.com/'
 const LEGAL_SITE = 'https://kuadashboard.navarrocarter.com'
 function openLegal(page) {
   openExternal(`${LEGAL_SITE}${settings.lang === 'es' ? '/es' : ''}/${page}.html`)
