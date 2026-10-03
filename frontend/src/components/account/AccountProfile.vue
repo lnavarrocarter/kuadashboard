@@ -261,8 +261,31 @@ async function loadUsage() {
 }
 
 const refreshIcons = () => nextTick(() => createIcons({ icons }))
-onMounted(() => { loadAccount(); loadMl(); loadUsage(); refreshIcons() })
-onUnmounted(stopPolling)
+/**
+ * Sign-in and payments finish in the browser: when the user comes back to KUA
+ * (focus or visible again), read the account and, if it changed, the plan of
+ * the whole app — the polling may have stopped while the window was hidden.
+ */
+async function onReturn() {
+  if (document.visibilityState === 'hidden') return
+  const before = JSON.stringify([account.value?.linked, account.value?.plan])
+  await loadAccount()
+  if (JSON.stringify([account.value?.linked, account.value?.plan]) !== before) {
+    if (account.value?.linked && waiting.value === 'login') stopPolling()
+    await reloadPlan()
+  }
+}
+
+onMounted(() => {
+  loadAccount(); loadMl(); loadUsage(); refreshIcons()
+  window.addEventListener('focus', onReturn)
+  document.addEventListener('visibilitychange', onReturn)
+})
+onUnmounted(() => {
+  stopPolling()
+  window.removeEventListener('focus', onReturn)
+  document.removeEventListener('visibilitychange', onReturn)
+})
 onUpdated(refreshIcons)
 </script>
 
