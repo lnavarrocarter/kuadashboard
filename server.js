@@ -148,6 +148,14 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 app.use(express.json({ limit: '10mb' }));
+
+// What KUA spends on AWS: priced SDK calls go to a local ledger (lib/usage),
+// attributed to the profile and feature of the request that triggered them.
+const { installAwsMeter, usageContextMiddleware } = require('./lib/usage/awsMeter');
+const { getUsageLedger } = require('./lib/usage/ledger');
+installAwsMeter({ ledger: getUsageLedger() });
+try { getUsageLedger().prune(); } catch (err) { console.warn('[usage] prune:', err.message); }
+app.use('/api', usageContextMiddleware);
 mountConsoleRoutes(app, consoleSessions);
 
 for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssGcpSsh, wssVercelLogs]) {

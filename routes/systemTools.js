@@ -191,6 +191,25 @@ router.get('/mcp', (_req, res) => {
   }));
 });
 
+// ─── GET /usage ───────────────────────────────────────────────────────────────
+// What KUA itself spent on cloud APIs (lib/usage): totals, the calculation per
+// operation and the latest priced calls. ?days= (1–400), ?profile=, ?service=.
+
+router.get('/usage', (req, res) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 400);
+    const { PRICES } = require('../lib/usage/awsPricing');
+    res.json({
+      ...require('../lib/usage/ledger').getUsageLedger().summary({
+        days, profileId: req.query.profile || null, service: req.query.service || null,
+      }),
+      prices: Object.values(PRICES),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Local ML (lib/ml/localModel.js) ──────────────────────────────────────────
 // Opt-in local embeddings. Enabling downloads the model once from Hugging Face
 // (free, ~130 MB) into the KUA data directory; disabling can delete it.
