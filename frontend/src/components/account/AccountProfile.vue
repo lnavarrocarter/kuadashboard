@@ -23,6 +23,11 @@
       </div>
       <p v-if="waiting === 'login'" class="acp-note" data-test="account-waiting">{{ t('account.waitingLogin') }}</p>
       <p v-if="account?.stale" class="acp-note acp-warn">{{ t('account.stale') }}</p>
+      <!-- Billing notices from the account service (trial ending, payment failed, cancellation…) -->
+      <p v-for="notice in account?.notices || []" :key="notice.type" :class="['acp-note', notice.type === 'payment_failed' || notice.type === 'trial_ended' ? 'acp-warn' : '']" :data-test="`account-notice-${notice.type}`">
+        {{ noticeText(notice) }}
+        <a href="#" @click.prevent="openExternal('https://app.kuadashboard.navarrocarter.com/')">{{ t('account.noticeAction') }}</a>
+      </p>
       <p v-if="error" class="acp-note acp-warn" data-test="account-error">{{ error }}</p>
       <p v-if="account?.linked" class="acp-note">
         <a href="#" data-test="account-web" @click.prevent="openExternal(ACCOUNT_PORTAL)">{{ t('account.manageOnWeb') }}</a>
@@ -204,6 +209,14 @@ const ACCOUNT_PORTAL = 'https://app.kuadashboard.navarrocarter.com/'
 const LEGAL_SITE = 'https://kuadashboard.navarrocarter.com'
 function openLegal(page) {
   openExternal(`${LEGAL_SITE}${settings.lang === 'es' ? '/es' : ''}/${page}.html`)
+}
+
+const day = at => (at ? new Date(at).toLocaleDateString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'medium' }) : '')
+function noticeText(notice) {
+  const key = notice.type === 'trial_ending'
+    ? (notice.kind === 'card' ? (notice.offerPercent ? 'trialEndingCard' : 'trialEndingCardPlain') : 'trialEndingNoCard')
+    : { trial_ended: 'trialEnded', payment_failed: 'paymentFailed', ends: 'ends', renews: 'renews', grant_ending: 'grantEnding' }[notice.type]
+  return key ? t(`account.notice.${key}`, { date: day(notice.endsAt || notice.date), percent: notice.offerPercent, plan: t(`plan.name_${notice.plan || 'pro'}`) }) : ''
 }
 
 async function signIn() {

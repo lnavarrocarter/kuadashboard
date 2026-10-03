@@ -84,6 +84,20 @@ describe('AccountProfile sign-in', () => {
   })
 })
 
+describe('AccountProfile billing notices', () => {
+  afterEach(() => { vi.unstubAllGlobals(); account = { linked: false, plan: 'free' } })
+
+  it('shows the notices of the account service', async () => {
+    account = { linked: true, plan: 'pro', user: { email: 'ana@example.com', name: 'Ana' }, notices: [{ type: 'payment_failed' }, { type: 'trial_ending', kind: 'card', endsAt: '2026-10-07T00:00:00Z', offerPercent: 15 }] }
+    stub('pro')
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-notice-payment_failed"]').text()).toContain('The last payment failed')
+    expect(wrapper.get('[data-test="account-notice-trial_ending"]').text()).toContain('15% off your first payment')
+  })
+})
+
 describe('AccountProfile legal links', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
