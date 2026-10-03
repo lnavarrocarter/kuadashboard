@@ -1,7 +1,15 @@
 <template>
   <div class="li">
-    <div v-if="loading" class="empty-row">{{ t('common.loading') }}</div>
-    <div v-else-if="error" class="activity-notice">{{ error }}</div>
+    <!-- A scan or sync cached new events after this analysis: offer to refresh instead of reloading under the reader -->
+    <div v-if="scanning" class="li-banner" data-test="log-intel-scanning">
+      <span class="li-spin" aria-hidden="true">⟳</span>{{ t('awsLogs.intel.scanning') }}
+    </div>
+    <div v-else-if="stale" class="li-banner warn" data-test="log-intel-stale">
+      <span>{{ t('awsLogs.intel.stale') }}</span>
+      <button class="btn sm accent" :disabled="loading" data-test="log-intel-refresh" @click="load">{{ loading ? t('common.loading') : t('awsLogs.intel.refresh') }}</button>
+    </div>
+    <div v-if="loading && !data" class="empty-row">{{ t('common.loading') }}</div>
+    <div v-else-if="error && !data" class="activity-notice">{{ error }}</div>
     <template v-else-if="data">
       <div class="li-stats">
         <div class="li-stat"><b>{{ data.last24h.events }}</b><span>{{ t('awsLogs.intel.events24h') }}</span></div>
@@ -21,8 +29,10 @@
       <LogActivityChart ref="chart" :group="group" :profile-id="profileId" :category="filter.category" :level="filter.level" @range="onRange" />
 
       <!-- Anomalies (statistics on the aggregates, see lib/logAnomalies.js) -->
-      <section v-if="data.anomalies" class="msg-section" data-test="log-anomalies">
-        <h5>{{ t('awsLogs.anomaly.title') }}</h5>
+      <CollapsibleSection
+        v-if="data.anomalies" id="logIntel.anomalies" data-test="log-anomalies"
+        :title="t('awsLogs.anomaly.title')" :badge="data.anomalies.anomalies.length" :tone="severityTone(data.anomalies.anomalies)"
+      >
         <p v-if="data.anomalies.status !== 'ok' && !data.anomalies.anomalies.length" class="text-dim li-meta">{{ t(`awsLogs.anomaly.status_${data.anomalies.status}`) }}</p>
         <p v-else-if="!data.anomalies.anomalies.length" class="text-dim li-meta">{{ t('awsLogs.anomaly.none', { time: formatTime(data.anomalies.evaluatedAt, settings.lang) }) }}</p>
         <article v-for="anomaly in data.anomalies.anomalies" :key="anomaly.id + (anomaly.category || '')" class="li-rec" :class="anomaly.severity" :data-test="`log-anomaly-${anomaly.id}`">
@@ -43,14 +53,17 @@
           </div>
         </article>
         <p v-if="data.anomalies.anomalies.length" class="text-dim li-meta">{{ t('awsLogs.anomaly.method', { time: formatTime(data.anomalies.evaluatedAt, settings.lang) }) }}</p>
-      </section>
+      </CollapsibleSection>
+
+      <!-- Local ML: semantic search, similar errors (lib/ml) -->
+      <LogMlSection :group="group" :profile-id="profileId" :ml="data.ml" @filter="applyFilter" @ready="load" />
 
       <!-- Recommendations -->
-      <section v-if="data.recommendations?.length" class="msg-section">
-        <div class="li-rec-head">
-          <h5>{{ t('awsLogs.intel.recommendations') }}</h5>
-          <AgentBriefActions :build="buildBrief" :subject="group" />
-        </div>
+      <CollapsibleSection
+        v-if="data.recommendations?.length" id="logIntel.recommendations" data-test="log-recommendations"
+        :title="t('awsLogs.intel.recommendations')" :badge="data.recommendations.length" :tone="severityTone(data.recommendations)"
+      >
+        <template #actions><AgentBriefActions :build="buildBrief" :subject="group" /></template>
         <article v-for="rec in data.recommendations" :key="rec.id" class="li-rec" :class="rec.severity">
           <header>
             <span class="msg-chip" :class="rec.severity === 'high' ? 'err' : rec.severity === 'medium' ? 'warn' : ''">{{ t(`awsLogs.intel.severity_${rec.severity}`) }}</span>
@@ -84,11 +97,10 @@
             </div>
           </template>
         </article>
-      </section>
+      </CollapsibleSection>
 
       <!-- Categories and filters -->
-      <section class="msg-section">
-        <h5>{{ t('awsLogs.intel.categories') }}</h5>
+      <CollapsibleSection id="logIntel.categories" :title="t('awsLogs.intel.categories')" :badge="categories.length">
         <div class="li-chips">
           <button
             v-for="item in categories" :key="item.category"
@@ -120,25 +132,29 @@
             </div>
           </div>
         </template>
-      </section>
+      </CollapsibleSection>
 
       <div class="msg-columns">
-        <section class="msg-section">
-          <h5>{{ t('awsLogs.intel.signatures') }}</h5>
+        <CollapsibleSection
+          id="logIntel.signatures" data-test="log-signatures" :title="t('awsLogs.intel.signatures')"
+          :badge="data.signatures.length" :tone="data.signatures.some(s => s.level === 'error') ? 'err' : data.signatures.length ? 'warn' : ''"
+        >
           <div v-if="!data.signatures.length" class="text-dim">{{ t('awsLogs.intel.noSignatures') }}</div>
           <table v-else class="msg-subtable">
             <tbody>
               <tr v-for="s in data.signatures" :key="s.signature" class="li-sig-row" @click="applyFilter({ signature: s.signature, category: '' })">
-                <td><span class="msg-chip" :class="s.level === 'error' ? 'err' : 'warn'">{{ t(`awsLogs.cat.${s.category || 'other_error'}`) }}</span></td>
+                <td>
+                  <span class="msg-chip" :class="s.level === 'error' ? 'err' : 'warn'">{{ t(`awsLogs.cat.${s.category || 'other_error'}`) }}</span>
+                  <span v-if="suggestions[s.signature]" class="msg-chip li-suggested" :title="t('awsLogs.ml.suggestedHint', { score: Math.round(suggestions[s.signature].score * 100) })">≈ {{ t(`awsLogs.cat.${suggestions[s.signature].category}`) }}</span>
+                </td>
                 <td :title="s.sample"><code class="li-sig">{{ s.signature }}</code></td>
                 <td class="activity-cell">× {{ s.occurrences }}</td>
                 <td class="text-dim li-time">{{ formatTime(s.lastSeen, settings.lang) }}</td>
               </tr>
             </tbody>
           </table>
-        </section>
-        <section class="msg-section">
-          <h5>{{ t('awsLogs.intel.references') }}</h5>
+        </CollapsibleSection>
+        <CollapsibleSection id="logIntel.references" :title="t('awsLogs.intel.references')" :badge="data.references.length">
           <div v-if="!data.references.length" class="text-dim">{{ t('awsLogs.intel.noReferences') }}</div>
           <ul v-else class="msg-list">
             <li v-for="r in data.references" :key="r.kind + r.target" :title="r.target">
@@ -146,16 +162,15 @@
               <span class="text-dim"> × {{ r.occurrences }}</span>
             </li>
           </ul>
-        </section>
-        <section class="msg-section">
-          <h5>{{ t('awsLogs.intel.observability') }}</h5>
+        </CollapsibleSection>
+        <CollapsibleSection id="logIntel.observability" :title="t('awsLogs.intel.observability')" :badge="data.apm.length">
           <div v-if="!data.apm.length" class="text-dim">{{ t('awsLogs.intel.notLinked') }}</div>
           <ul v-else class="msg-list">
             <li v-for="link in data.apm" :key="link.applicationId + link.resourceId">
               <b>{{ link.applicationName }}</b><span v-if="link.environment" class="text-dim"> ({{ link.environment }})</span> → {{ link.type }} {{ link.resourceName }}
             </li>
           </ul>
-        </section>
+        </CollapsibleSection>
       </div>
       <div class="cwl-hint">{{ t('awsLogs.intel.privacy', { analyzed: data.eventsAnalyzed }) }}</div>
     </template>
@@ -173,8 +188,18 @@ import { CATEGORIES, categoryQuery } from '../../../shared/logSignals.mjs'
 import { logsBrief } from '../../../shared/agentBrief.mjs'
 import AgentBriefActions from '../../advisor/AgentBriefActions.vue'
 import LogActivityChart from './LogActivityChart.vue'
+import LogMlSection from './LogMlSection.vue'
+import CollapsibleSection from './CollapsibleSection.vue'
 
-const props = defineProps({ group: { type: String, required: true }, profileId: { type: String, default: '' } })
+const props = defineProps({
+  group: { type: String, required: true },
+  profileId: { type: String, default: '' },
+  // Version of the cached data of the group (events, newest event, last sync):
+  // when it changes after this analysis, the panel offers to refresh.
+  revision: { type: String, default: '' },
+  // A background scan of this group is running.
+  scanning: { type: Boolean, default: false },
+})
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
@@ -202,15 +227,30 @@ const GROUPS = Object.fromEntries(CATEGORIES.map(c => [c.id, c.group]))
 const categories = computed(() => Object.entries(data.value?.categories7d || {})
   .map(([category, count]) => ({ category, count, group: GROUPS[category] || (category === 'info' ? 'info' : 'failure') }))
   .sort((a, b) => (a.group === 'failure' ? 0 : 1) - (b.group === 'failure' ? 0 : 1) || b.count - a.count))
+// Category suggested by local ML for signatures the rules left uncategorized.
+const suggestions = computed(() => Object.fromEntries((data.value?.ml?.suggestions || []).map(s => [s.signature, s])))
 const sensitiveTotal = computed(() => Object.values(data.value?.sensitive7d || {}).reduce((sum, n) => sum + n, 0))
 
 function headers() { return { 'X-Profile-Id': props.profileId } }
 
+// Revision of the cached data this analysis was built from.
+const loadedRevision = ref('')
+const stale = computed(() => !!data.value && !!props.revision && props.revision !== loadedRevision.value)
+
+/** Badge tone of a list with severities: err when any is high, warn when any is medium. */
+function severityTone(items) {
+  if (items.some(item => item.severity === 'high')) return 'err'
+  if (items.some(item => item.severity === 'medium')) return 'warn'
+  return ''
+}
+
 async function load() {
   loading.value = true
   error.value = null
+  const revision = props.revision
   try {
     data.value = await apiFetch(`/api/cloud/aws/cloudwatch/log-intelligence?group=${encodeURIComponent(props.group)}`, { headers: headers() })
+    loadedRevision.value = revision
   } catch (err) { error.value = err.message } finally { loading.value = false }
 }
 
@@ -264,8 +304,10 @@ onMounted(load)
 </script>
 
 <style scoped>
-.li-rec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.li-rec-head h5 { margin: 0; }
+.li-banner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-dim); }
+.li-banner.warn { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.li-spin { display: inline-block; animation: li-spin 1.2s linear infinite; }
+@keyframes li-spin { to { transform: rotate(360deg); } }
 .li { display: flex; flex-direction: column; gap: 12px; padding: 6px 2px; white-space: normal; }
 .li-stats { display: flex; gap: 8px; flex-wrap: wrap; }
 .li-stat { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; min-width: 120px; font-size: 11px; color: var(--text-dim); }
@@ -290,6 +332,7 @@ onMounted(load)
 .li-confidence { margin-left: auto; font-size: 11px; }
 .li-evidence { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
 .li-evidence code { font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--bg-hover); overflow-wrap: anywhere; }
+.li-suggested { border-style: dashed; margin-left: 4px; }
 .li-sig-btn { display: inline-flex; gap: 4px; align-items: center; max-width: 100%; text-align: left; }
 .li-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .li-actions a.btn { text-decoration: none; }

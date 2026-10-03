@@ -204,6 +204,17 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
 
   lines.push(...anomalySection(t, data?.anomalies))
 
+  const clusters = data?.ml?.clusters || []
+  if (clusters.length) {
+    lines.push(`## ${t('agentBrief.clusters')}`, '', t('agentBrief.clustersHint'), '')
+    clusters.forEach((cluster, index) => {
+      lines.push(`${index + 1}. × ${cluster.occurrences}`)
+      for (const signature of cluster.signatures) lines.push(`   - ${code(signature.signature)} × ${signature.occurrences}`)
+      if (cluster.size > cluster.signatures.length) lines.push(`   - ${t('advisor.more', { n: cluster.size - cluster.signatures.length })}`)
+    })
+    lines.push('')
+  }
+
   lines.push(`## ${t('agentBrief.recommendations', { n: recommendations.length })}`, '')
   if (!recommendations.length) lines.push(t('agentBrief.noRecommendations'), '')
 
@@ -240,8 +251,10 @@ export function logsBrief(data, { t, group, context = {}, now = Date.now() } = {
   const signatures = data?.signatures || []
   if (signatures.length) {
     lines.push(`## ${t('agentBrief.signatures')}`, '')
+    const suggested = new Map((data?.ml?.suggestions || []).map(item => [item.signature, item.category]))
     for (const signature of signatures.slice(0, 15)) {
-      lines.push(`- [${t(`awsLogs.cat.${signature.category || 'other_error'}`)}] ${code(signature.signature)} × ${signature.occurrences}`)
+      const hint = suggested.has(signature.signature) ? ` (${t('agentBrief.suggested', { category: t(`awsLogs.cat.${suggested.get(signature.signature)}`) })})` : ''
+      lines.push(`- [${t(`awsLogs.cat.${signature.category || 'other_error'}`)}${hint}] ${code(signature.signature)} × ${signature.occurrences}`)
     }
     lines.push('')
   }

@@ -23,6 +23,7 @@
       @open="openScan"
       @changed="onScanChanged"
       @active="n => { activeScans = n }"
+      @active-groups="groups => { scanningGroups = groups }"
     />
 
     <!-- ── Log groups ─────────────────────────────────────────────── -->
@@ -225,7 +226,7 @@
               </td>
             </tr>
             <tr v-if="intelOpen === c.logGroup" class="msg-detail-row">
-              <td colspan="9"><LogIntelligencePanel :key="`${c.logGroup}:${c.lastSyncAt}`" :group="c.logGroup" :profile-id="profileId" /></td>
+              <td colspan="9"><LogIntelligencePanel :key="c.logGroup" :group="c.logGroup" :profile-id="profileId" :revision="cacheRevision(c)" :scanning="scanningGroups.includes(c.logGroup)" /></td>
             </tr>
             </template>
           </tbody>
@@ -394,6 +395,10 @@ const busy = reactive({})
 const loading = reactive({ groups: false, cache: false, backup: false, events: false, sync: false })
 const activityChart = ref(null)
 const activeScans = ref(0)
+// Groups with a running background scan (their Intelligence panel says so).
+const scanningGroups = ref([])
+// Changes when a sync or scan caches new events: the panel then offers to refresh.
+const cacheRevision = group => `${group.events ?? ''}|${group.newest ?? ''}|${group.lastSyncAt ?? ''}`
 const scanPrefill = ref(null)
 const groupNames = computed(() => (groupsData.value?.groups || []).map(g => g.name))
 
