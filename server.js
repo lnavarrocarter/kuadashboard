@@ -308,7 +308,7 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 }));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
-// KUA account: sign-in, plan and billing (lib/account, cloud/control-plane).
+// KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
