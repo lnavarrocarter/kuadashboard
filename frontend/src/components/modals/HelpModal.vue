@@ -289,6 +289,12 @@
           </div>
         </div>
 
+        <!-- Account: plan, limits and account-wide settings (lib/plans.js) -->
+        <div v-show="activeTab === 'account'" class="help-section">
+          <h3>{{ t('help.tabAccount') }}</h3>
+          <AccountProfile v-if="activeTab === 'account'" />
+        </div>
+
         <!-- Reportar issue / sugerencia -->
         <div v-show="activeTab === 'feedback'" class="help-section">
           <div class="help-section-header">
@@ -347,11 +353,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
 import { settings, applySettings, SETTINGS_DEFAULTS } from '../../composables/useSettings.js'
 import PlatformStorage from '../PlatformStorage.vue'
+import AccountProfile from '../account/AccountProfile.vue'
 import { useI18n } from '../../composables/useI18n.js'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
 import { CHANGELOG, CHANGELOG_VERSION, localized } from '../../composables/useChangelog.js'
@@ -435,15 +442,21 @@ const VERSION = window.kuaElectron?.getVersion?.() || CHANGELOG_VERSION
 const latestReleaseHighlights = computed(() => (CHANGELOG[0]?.items || []).slice(0, 4).map(i => i.text))
 const RELEASE_ITEM_LIMIT = 8
 
-defineProps({ show: Boolean })
+const props = defineProps({
+  show: Boolean,
+  // Tab to open with (e.g. 'account' from "See plans").
+  initialTab: { type: String, default: '' },
+})
 defineEmits(['close'])
 
 const activeTab = ref('about')
+watch(() => [props.show, props.initialTab], ([show, tab]) => { if (show && tab) activeTab.value = tab })
 const expandedReleases = ref(new Set())
 
 const TABS = computed(() => [
   { id: 'about',    label: t('help.tabAbout'),    icon: 'info' },
   { id: 'releases', label: t('help.tabReleases'), icon: 'tag' },
+  { id: 'account',  label: t('help.tabAccount'),  icon: 'user-round' },
   { id: 'options',  label: t('help.tabOptions'),  icon: 'settings' },
   { id: 'feedback', label: t('help.tabFeedback'), icon: 'message-square' },
 ])

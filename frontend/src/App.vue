@@ -499,7 +499,7 @@
     <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
-    <HelpModal        :show="modals.help"                                                    @close="modals.help = false" />
+    <HelpModal        :show="modals.help" :initial-tab="helpTab"                             @close="modals.help = false; helpTab = ''" />
     <ProfileModal
       :show="modals.addConnection"
       :profile="null"
@@ -822,6 +822,12 @@ watch(availableObservabilityProviders, providers => {
 watch(() => store.namespace, v => LS.set('kubeNs', v))
 watch(kubeDetailWidth, v => LS.set('kubeDetailWidth', String(v)))
 
+// Tab Help & Options opens with; components ask for one with the kua:open-help event.
+const helpTab = ref('')
+window.addEventListener('kua:open-help', event => {
+  helpTab.value = event.detail?.tab || ''
+  modals.help = true
+})
 const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
 const modalData = reactive({
   deleteMsg: '', deletePending: null,

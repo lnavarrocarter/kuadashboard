@@ -121,7 +121,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     const application = apmDatabase?.getApplication(req.params.applicationId);
     if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
     const overview = apmDatabase.getOverview(application.id);
-    res.json(adviseProduct({
+    res.json(require('../lib/plans').gateAdvisor(adviseProduct({
       application,
       overview: {
         ...overview,
@@ -129,7 +129,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
         latestRun: apmDatabase.getLatestCollectionRun(application.id),
       },
       siblings: apmDatabase.listApplications({ profileId: profile }),
-    }));
+    })));
   });
 
   router.post('/projects', (req, res) => {

@@ -33,16 +33,16 @@ Todas son de solo lectura.
 | Herramienta | Qué devuelve |
 | --- | --- |
 | `list_profiles` | Perfiles de AWS, GCP y Vercel (id, nombre, proveedor). Nunca devuelve credenciales |
-| `aws_advisor` | Hallazgos del Advisor de AWS para un perfil (caché de 15 min; `refresh` vuelve a analizar con APIs gratuitas) |
-| `gcp_advisor` | Hallazgos del Advisor de GCP a partir del último overview guardado |
-| `kubernetes_advisor` | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
+| `aws_advisor` (Pro) | Hallazgos del Advisor de AWS para un perfil (caché de 15 min; `refresh` vuelve a analizar con APIs gratuitas) |
+| `gcp_advisor` (Pro) | Hallazgos del Advisor de GCP a partir del último overview guardado |
+| `kubernetes_advisor` (Pro) | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
 | `list_log_groups` | Log groups de CloudWatch en la caché de KUA para un perfil |
 | `log_intelligence` | Brief de un log group en caché: tasas de error, anomalías, errores parecidos, firmas, recomendaciones, consultas |
 | `search_logs` | Errores recurrentes de los log groups en caché buscados por significado, en cualquier idioma (requiere el ML local activado en KUA); `provider: "kubernetes"` busca en los workloads de Kubernetes en caché |
 | `list_kube_log_workloads` | Workloads de Kubernetes cuyos logs de pods guarda KUA para el contexto actual |
 | `kube_log_intelligence` | Brief de un workload de Kubernetes en caché: tasas de error, anomalías, errores parecidos, recomendaciones, consultas |
 | `list_applications` | Aplicaciones de KUApps |
-| `product_advisor` | Hallazgos de producto de una aplicación de KUApps |
+| `product_advisor` (Pro) | Hallazgos de producto de una aplicación de KUApps |
 
 Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto, o `json` para los datos crudos) y `lang` (`en` o `es`). `profile` acepta el id o el nombre del perfil y se puede omitir cuando hay un solo perfil de ese proveedor.
 

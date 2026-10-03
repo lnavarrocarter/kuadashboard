@@ -8,6 +8,7 @@ import es from '../locales/es'
 // hard-coded text is migrated, so new hard-coded Spanish cannot slip back in.
 const MIGRATED = [
   'components/advisor/AdvisorPanel.vue',
+  'components/account/AccountProfile.vue',
   'components/cloud/UsageCostPanel.vue',
   'components/advisor/AgentBriefActions.vue',
   'components/advisor/AgentConnectModal.vue',
