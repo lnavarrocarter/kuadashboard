@@ -9,6 +9,8 @@ const PLANS = {
   team: { plan: 'team', features: { advisor: true, logAutoRefresh: true, teamSharing: true }, limits: { logCacheMaxMb: 20480, logRefreshMinMinutes: 1 } },
 }
 
+let account = { linked: false, plan: 'free' }
+
 function stub(plan = 'pro') {
   const calls = []
   vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
@@ -18,6 +20,7 @@ function stub(plan = 'pro') {
     else if (url === '/api/system/ml') body = { enabled: false, state: 'disabled', downloaded: false, downloadBytes: 136314880, diskBytes: 0 }
     else if (url === '/api/system/ml/enable') body = { enabled: true, state: 'loading', downloaded: false, diskBytes: 0 }
     else if (url.startsWith('/api/system/usage')) body = { totals: { month: { usd: 0.0315, calls: 3 } } }
+    else if (url === '/api/account') body = account
     else if (url.startsWith('/api/system/log-cache-budget')) body = { mb: 256, bytes: 256 * 1048576, source: 'default', maxMb: 2048, plan, choices: [{ mb: 256, allowed: true, plan: 'free' }], usage: { bytes: 0, budgetBytes: 256 * 1048576 } }
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
   }))
@@ -52,6 +55,31 @@ describe('AccountProfile', () => {
     await wrapper.get('[data-test="account-ml-enable"]').trigger('click')
     await flushPromises()
     expect(calls.some(c => c.url === '/api/system/ml/enable' && c.method === 'POST')).toBe(true)
+  })
+})
+
+describe('AccountProfile sign-in', () => {
+  afterEach(() => { vi.unstubAllGlobals(); account = { linked: false, plan: 'free' } })
+
+  it('shows the linked account even after Lucide replaced the icons (as in the app)', async () => {
+    stub('free')
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const lucide = await import('lucide')
+    lucide.createIcons.mockImplementation(() => document.querySelectorAll('i[data-lucide]').forEach(el => el.replaceWith(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))))
+    const wrapper = mount(AccountProfile, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-card"]').text()).toContain('Not linked')
+
+    // The sign-in finished in the browser; the user comes back to KUA.
+    account = { linked: true, plan: 'free', user: { email: 'ana@example.com', name: 'Ana', picture: 'https://example.com/a.png' } }
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    const card = wrapper.get('[data-test="account-card"]')
+    expect(card.get('[data-test="account-user"]').text()).toContain('ana@example.com')
+    expect(card.find('img.acp-avatar').exists()).toBe(true)
+    expect(card.find('[data-test="account-sign-out"]').exists()).toBe(true)
+    wrapper.unmount()
+    lucide.createIcons.mockReset()
   })
 })
 

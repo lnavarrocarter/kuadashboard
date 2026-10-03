@@ -4,7 +4,8 @@
     <section class="acp-card" data-test="account-card">
       <div class="acp-head">
         <img v-if="account?.user?.picture" :src="account.user.picture" alt="" class="acp-avatar" referrerpolicy="no-referrer" />
-        <i v-else data-lucide="user-round"></i>
+        <!-- Lucide swaps the <i> for an <svg>: Vue must own the node it toggles, or linking the account aborts the update -->
+        <span v-else class="acp-icon"><i data-lucide="user-round"></i></span>
         <div>
           <h4>{{ t('account.title') }}</h4>
           <p v-if="account?.linked" class="text-dim" data-test="account-user">{{ t('account.linkedAs', { name: account.user.name, email: account.user.email }) }}</p>
@@ -301,6 +302,7 @@ onUpdated(refreshIcons)
 .acp-note { margin: 0; font-size: 11px; line-height: 1.5; }
 .acp-plan { text-transform: none; font-size: 11px; }
 .acp-avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.acp-icon { display: inline-flex; flex: none; }
 .acp-warn { color: var(--yellow); }
 .acp-billing { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .acp-interval { display: inline-flex; gap: 4px; margin-right: 6px; }
