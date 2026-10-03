@@ -183,3 +183,34 @@ describe('AccountProfile sign-in and billing', () => {
     expect(wrapper.find('[data-test="account-sign-in"]').exists()).toBe(true)
   })
 })
+
+describe('AccountProfile when returning from the browser', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reads the account and the plan again when KUA gets the focus back', async () => {
+    let linked = false
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async url => {
+      calls.push(url)
+      let body = {}
+      if (url === '/api/system/plan') body = { ...PLANS[linked ? 'pro' : 'free'], source: linked ? 'account' : 'default', plans: PLANS, refreshChoices: [1, 5, 15, 30, 60] }
+      else if (url === '/api/account') body = { linked, user: linked ? { email: 'ana@example.com', name: 'Ana' } : null, plan: linked ? 'pro' : null, stale: false }
+      else if (url === '/api/system/ml') body = { enabled: false, downloaded: false, downloadBytes: 1 }
+      else if (url.startsWith('/api/system/usage')) body = { totals: { month: { usd: 0, calls: 0 } } }
+      else if (url.startsWith('/api/system/log-cache-budget')) body = { mb: 256, bytes: 1, source: 'default', maxMb: 256, plan: 'free', choices: [], usage: { bytes: 0, budgetBytes: 1 } }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-sign-in"]').exists()).toBe(true)
+
+    linked = true // signed in in the browser while no polling ran
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-user"]').text()).toContain('ana@example.com')
+    expect(wrapper.get('[data-test="account-plan-name"]').text()).toBe('Pro')
+    expect(calls.filter(url => url === '/api/system/plan').length).toBeGreaterThan(1)
+    wrapper.unmount()
+  })
+})
