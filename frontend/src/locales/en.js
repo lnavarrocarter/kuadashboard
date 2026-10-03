@@ -3451,6 +3451,7 @@ export default {
   // ── Advisor (good practices in overviews; product lens in KUApps) ──
   // ── Usage: what KUA spent on billed cloud APIs (lib/usage) ──
   'usage.title': 'Spent by KUA',
+  'usage.unavailable': 'The spend summary is not available.',
   'usage.subtitle': 'Estimated cost of the billed cloud API calls KUA made, with the calculation',
   'usage.subtitleService': 'Estimated cost of the billed {service} calls KUA made (scans, queries, downloads)',
   'usage.period': 'Period',

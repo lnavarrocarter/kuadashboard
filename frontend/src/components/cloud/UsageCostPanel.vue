@@ -127,7 +127,10 @@ async function load() {
   if (props.profileId && scope.value === 'profile') params.set('profile', props.profileId)
   if (props.service) params.set('service', props.service)
   try {
-    data.value = await apiFetch(`/api/system/usage?${params}`)
+    const response = await apiFetch(`/api/system/usage?${params}`)
+    // An unexpected answer (older backend, proxy page) must not break the overview.
+    if (!response?.totals || !Array.isArray(response.byOperation)) throw new Error(t('usage.unavailable'))
+    data.value = response
   } catch (err) {
     error.value = err.message
   } finally {

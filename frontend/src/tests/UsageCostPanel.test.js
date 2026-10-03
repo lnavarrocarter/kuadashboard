@@ -71,3 +71,14 @@ describe('UsageCostPanel', () => {
     expect(wrapper.get('[data-test="usage-today"]').text()).toContain('USD 0')
   })
 })
+
+describe('UsageCostPanel with an unexpected answer', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  it('shows a notice instead of breaking', async () => {
+    settings.lang = 'en'
+    stub({ something: 'else' })
+    const wrapper = mount(UsageCostPanel, { props: {} })
+    await flushPromises()
+    expect(wrapper.text()).toContain('The spend summary is not available.')
+  })
+})
