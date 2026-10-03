@@ -90,7 +90,9 @@ async function run(action) {
   busy.value = true
   error.value = ''
   try { return await action() } catch (err) {
-    error.value = err.details?.code === 'PLAN_REQUIRED' ? t('cloudBackups.planRequired') : err.message
+    // Plan and signature answers have their own words; the rest keeps the service message.
+    const known = { PLAN_REQUIRED: 'planRequired', BACKUP_TAMPERED: 'tampered', UNSIGNED_BACKUP: 'unsigned', DEVICE_KEY_SET: 'keyConflict', DEVICE_KEY_MISSING: 'keyConflict' }[err.details?.code]
+    error.value = known ? t(`cloudBackups.${known}`) : err.message
     return null
   } finally { busy.value = false }
 }
