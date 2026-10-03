@@ -1075,7 +1075,7 @@ app.get('/api/overview', async (req, res) => {
     } catch (err) {
       advisor = { error: err.message };
     }
-    res.json({ ...overview, advisor });
+    res.json({ ...overview, advisor: require('./lib/plans').gateAdvisor(advisor) });
   } catch (err) { handleError(res, err); }
 });
 

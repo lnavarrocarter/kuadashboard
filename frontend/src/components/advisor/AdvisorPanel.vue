@@ -25,13 +25,30 @@
       </div>
     </header>
 
-    <p v-if="collapsed && report?.findings?.length" class="adv-foot">
+    <p v-if="collapsed && report?.locked" class="adv-foot">
+      <i data-lucide="lock"></i>{{ t('advisor.collapsedSummary', { n: report.totals.findings, high: report.totals.high }) }} · {{ t('plan.name_pro') }}
+    </p>
+    <p v-else-if="collapsed && report?.findings?.length" class="adv-foot">
       {{ t('advisor.collapsedSummary', { n: report.findings.length, high: report.findings.filter(f => f.severity === 'high').length }) }}
     </p>
 
     <template v-if="!collapsed">
       <p v-if="loading && !report" class="adv-empty">{{ t('advisor.loading') }}</p>
       <p v-else-if="error && !report" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ error }}</p>
+      <!-- Free plan: the Advisor is a Pro feature; the counts show what it found -->
+      <div v-else-if="report?.locked" class="adv-locked" data-test="advisor-locked">
+        <i data-lucide="lock"></i>
+        <div>
+          <p class="adv-locked-title">{{ t('advisor.lockedTitle') }}</p>
+          <p>{{ t('advisor.lockedBody', { n: report.totals.findings, high: report.totals.high, medium: report.totals.medium, low: report.totals.low }) }}</p>
+          <div v-if="categories.length > 1" class="adv-cats">
+            <span v-for="cat in categories" :key="cat" class="adv-cat">
+              <i :data-lucide="CATEGORY_ICONS[cat]"></i>{{ t(`advisor.cat.${cat}`) }} <b :class="{ high: report.summary[cat]?.high }">{{ report.summary[cat]?.findings ?? 0 }}</b>
+            </span>
+          </div>
+          <button class="btn sm primary" data-test="advisor-see-plans" @click="openPlans">{{ t('advisor.seePlans') }}</button>
+        </div>
+      </div>
       <p v-else-if="report?.error" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ report.error }}</p>
       <template v-else-if="report">
         <div v-if="categories.length > 1" class="adv-cats" role="tablist">
@@ -144,6 +161,11 @@ function buildBrief() {
   return advisorBrief(props.report, { t, lens: props.lens, context: props.briefContext })
 }
 
+/** Opens Help & Options on the Account tab, where plans are compared. */
+function openPlans() {
+  window.dispatchEvent(new CustomEvent('kua:open-help', { detail: { tab: 'account' } }))
+}
+
 function readCollapsed() {
   try {
     const stored = localStorage.getItem(`kua.${props.storageKey}.collapsed`)
@@ -208,6 +230,11 @@ onUpdated(refreshIcons)
 .adv-dim { color: var(--text-dim); }
 .adv-empty, .adv-ok, .adv-notice, .adv-foot { margin: 0; font-size: 12px; display: flex; gap: 6px; align-items: center; }
 .adv-ok { color: var(--green); }
+.adv-locked { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 6px; font-size: 12px; }
+.adv-locked > svg { width: 18px; height: 18px; color: var(--accent); flex: none; margin-top: 2px; }
+.adv-locked > div { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+.adv-locked p { margin: 0; line-height: 1.5; }
+.adv-locked-title { font-weight: 600; }
 .adv-ok svg, .adv-notice svg, .adv-foot svg { width: 14px; height: 14px; flex: none; }
 .adv-notice { color: var(--yellow); }
 .adv-foot { font-size: 11px; color: var(--text-dim); }

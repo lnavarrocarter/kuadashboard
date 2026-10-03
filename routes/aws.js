@@ -178,6 +178,7 @@ const auditLog     = require('../lib/auditLog');
 const { getApmDatabase } = require('../lib/apm/database');
 const { captureLambdaCloudWatchMetrics, captureLambdaLogEvents } = require('../lib/apm/opportunisticCapture');
 const { readLocalAwsProfiles, resolveAwsConfig } = require('../lib/awsProfileResolver');
+const { gateAdvisor } = require('../lib/plans');
 const {
   GROUP_DIMENSIONS,
   METRIC_DEFINITIONS,
@@ -544,11 +545,11 @@ router.get('/overview/advisor', async (req, res) => {
     const key = `${profileId}|${cfg.region || ''}`;
     const cached = advisorCache.get(key);
     if (cached && req.query.refresh !== '1' && Date.now() - cached.at < ADVISOR_TTL_MS) {
-      return res.json({ ...cached.report, fromCache: true });
+      return res.json({ ...gateAdvisor(cached.report), fromCache: true });
     }
     const report = await buildAwsAdvisor(cfg);
     advisorCache.set(key, { at: Date.now(), report });
-    res.json(report);
+    res.json(gateAdvisor(report));
   } catch (err) { handleErr(res, err); }
 });
 

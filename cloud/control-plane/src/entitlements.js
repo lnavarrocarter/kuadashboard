@@ -3,18 +3,18 @@
 const PLANS = Object.freeze({
   free: Object.freeze({
     plan: 'free',
-    features: Object.freeze({ cloudBackup: false, remoteHistory: false, teamSharing: false, teamRoles: false, auditComments: false, logAutoRefresh: false }),
+    features: Object.freeze({ cloudBackup: false, remoteHistory: false, teamSharing: false, teamRoles: false, auditComments: false, logAutoRefresh: false, advisor: false }),
     // Log limits are enforced by the desktop app (lib/plans.js keeps the same values).
     limits: Object.freeze({ cloudBackups: 0, members: 1, logCacheMaxMb: 256, logRefreshMinMinutes: null }),
   }),
   pro: Object.freeze({
     plan: 'pro',
-    features: Object.freeze({ cloudBackup: true, remoteHistory: true, teamSharing: false, teamRoles: false, auditComments: false, logAutoRefresh: true }),
+    features: Object.freeze({ cloudBackup: true, remoteHistory: true, teamSharing: false, teamRoles: false, auditComments: false, logAutoRefresh: true, advisor: true }),
     limits: Object.freeze({ cloudBackups: 100, members: 1, logCacheMaxMb: 2048, logRefreshMinMinutes: 15 }),
   }),
   team: Object.freeze({
     plan: 'team',
-    features: Object.freeze({ cloudBackup: true, remoteHistory: true, teamSharing: true, teamRoles: true, auditComments: true, logAutoRefresh: true }),
+    features: Object.freeze({ cloudBackup: true, remoteHistory: true, teamSharing: true, teamRoles: true, auditComments: true, logAutoRefresh: true, advisor: true }),
     limits: Object.freeze({ cloudBackups: 1000, members: 10, logCacheMaxMb: 20480, logRefreshMinMinutes: 1 }),
   }),
 });

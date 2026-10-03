@@ -10,7 +10,7 @@ KuaDashboard se configura mediante variables de entorno:
 | `KUA_HOST` | `127.0.0.1` | Dirección en la que escucha el servidor. Por defecto solo este equipo puede llegar a KUA. La API no tiene autenticación, así que `0.0.0.0` permite que cualquiera en tu red controle KUA: úsalo solo en una red de confianza |
 | `KUBECONFIG` | `~/.kube/config` | Ruta(s) al archivo kubeconfig |
 | `KUADASHBOARD_STORE` | `env` | Backend de almacenamiento de credenciales |
-| `KUA_PLAN` | `free` | Plan usado hasta vincular la app a una cuenta KUA: `free`, `pro` o `team`. Desbloquea el refresco automático de logs y cachés de logs más grandes |
+| `KUA_PLAN` | `free` | Plan usado hasta vincular la app a una cuenta KUA: `free`, `pro` o `team`. Desbloquea el Advisor (Pro), el refresco automático de logs y cachés de logs más grandes. Se ve en Ayuda y Opciones → Cuenta |
 | `KUA_LOG_CACHE_MB` | — | Tamaño fijo de la caché local de logs en MB. Reemplaza el tamaño elegido en KUA y no está limitado por el plan |
 
 ## Kubeconfig

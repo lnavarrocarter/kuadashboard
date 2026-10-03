@@ -33,16 +33,16 @@ All tools are read-only.
 | Tool | What it returns |
 | --- | --- |
 | `list_profiles` | AWS, GCP and Vercel profiles (id, name, provider). Credentials are never returned |
-| `aws_advisor` | AWS Advisor findings for a profile (cached 15 min, `refresh` scans again with free APIs) |
-| `gcp_advisor` | GCP Advisor findings from the last stored overview |
-| `kubernetes_advisor` | Kubernetes Advisor findings for the current context (optional `namespace`) |
+| `aws_advisor` (Pro) | AWS Advisor findings for a profile (cached 15 min, `refresh` scans again with free APIs) |
+| `gcp_advisor` (Pro) | GCP Advisor findings from the last stored overview |
+| `kubernetes_advisor` (Pro) | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
 | `log_intelligence` | Brief of a cached log group: error rates, anomalies, similar errors, signatures, recommendations, queries |
 | `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA); `provider: "kubernetes"` searches cached Kubernetes workloads |
 | `list_kube_log_workloads` | Kubernetes workloads whose pod logs KUA caches for the current context |
 | `kube_log_intelligence` | Brief of a cached Kubernetes workload: error rates, anomalies, similar errors, recommendations, queries |
 | `list_applications` | KUApps applications |
-| `product_advisor` | Product findings of a KUApps application |
+| `product_advisor` (Pro) | Product findings of a KUApps application |
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a profile id or name and can be omitted when there is only one profile of that provider.
 

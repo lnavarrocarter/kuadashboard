@@ -917,7 +917,23 @@ test('API returns the product advisor of an application, scoped by profile', asy
       method: 'POST',
       body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
     });
-    const advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    // Free plan: only the counts of the Advisor (it is a Pro feature).
+    const previousPlan = process.env.KUA_PLAN;
+    delete process.env.KUA_PLAN;
+    const locked = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(locked.status, 200);
+    assert.equal(locked.body.locked, true);
+    assert.equal(locked.body.required, 'pro');
+    assert.deepEqual(locked.body.findings, []);
+    assert.ok(locked.body.totals.findings >= 5);
+
+    process.env.KUA_PLAN = 'pro';
+    let advisor;
+    try {
+      advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    } finally {
+      if (previousPlan === undefined) delete process.env.KUA_PLAN; else process.env.KUA_PLAN = previousPlan;
+    }
     assert.equal(advisor.status, 200);
     assert.deepEqual(advisor.body.categories, ['product']);
     const ids = advisor.body.findings.map(finding => finding.id);
