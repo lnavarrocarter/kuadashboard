@@ -169,7 +169,8 @@ let poll = null
 
 const accountPlan = computed(() => account.value?.plan || 'free')
 const upgrades = computed(() => PLAN_ORDER.slice(PLAN_ORDER.indexOf(accountPlan.value) + 1))
-const paid = computed(() => accountPlan.value === 'pro' || accountPlan.value === 'team')
+// A subscription to manage: a paid plan (a plan granted by KUA or a trial without card has no billing customer).
+const paid = computed(() => (accountPlan.value === 'pro' || accountPlan.value === 'team') && account.value?.entitlements?.source === 'subscription')
 
 async function loadAccount() {
   try {

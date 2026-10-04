@@ -166,8 +166,8 @@ describe('AccountProfile sign-in and billing', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
   function stubAccount() {
-    const state = { linked: false, plan: null, calls: [] }
-    const status = () => ({ linked: state.linked, user: state.linked ? { email: 'ana@example.com', name: 'Ana', picture: null } : null, plan: state.plan, stale: false })
+    const state = { linked: false, plan: null, source: 'subscription', calls: [] }
+    const status = () => ({ linked: state.linked, user: state.linked ? { email: 'ana@example.com', name: 'Ana', picture: null } : null, plan: state.plan, entitlements: state.linked ? { plan: state.plan, source: state.plan === 'free' ? 'default' : state.source } : null, stale: false })
     vi.stubGlobal('open', vi.fn())
     vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
       const method = options.method || 'GET'
@@ -240,6 +240,12 @@ describe('AccountProfile sign-in and billing', () => {
     await wrapper.get('[data-test="account-portal"]').trigger('click')
     await flushPromises()
     expect(window.open).toHaveBeenLastCalledWith('https://polar.example/portal', '_blank', 'noopener')
+
+    // A plan granted by KUA has no subscription to manage.
+    state.source = 'grant'
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-portal"]').exists()).toBe(false)
 
     await wrapper.get('[data-test="account-sign-out"]').trigger('click')
     await flushPromises()
