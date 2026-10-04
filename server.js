@@ -103,6 +103,12 @@ const apmScheduler = new ApmScheduler({
 apmScheduler.start();
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
 require('./lib/logAutoRefresh').getAutoRefresh().start();
+// The cache follows the plan's budget at runtime (a downgrade trims it right away).
+const logCacheBudgetWatcher = require('./lib/logCacheBudget').createBudgetWatcher({
+  store: () => require('./lib/logCacheBudget').getBudgetStore(),
+  cache: () => require('./lib/awsLogCache').getLogCache(),
+});
+logCacheBudgetWatcher.start();
 // Keeps the plan of a linked KUA account current (every 6 h; cached for offline use).
 require('./lib/account/account').getAccount().startAutoRefresh();
 // GCP resource state polling: runs only for profiles that enabled it (off by default)
@@ -3392,6 +3398,7 @@ function shutdown(signal) {
   clearInterval(apmCleanupInterval);
   apmScheduler.stop();
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
+  logCacheBudgetWatcher.stop();
   require('./lib/account/account').getAccount().stopAutoRefresh();
   syncEngine.stop();
   teamEngine.stop();
