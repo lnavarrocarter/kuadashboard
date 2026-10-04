@@ -1,12 +1,13 @@
 ---
 layout: home
-title: KUA — Kubernetes & Multi-Cloud Dashboard
+title: KUA — Open Source Kubernetes & Multi-Cloud Desktop Dashboard
+titleTemplate: false
 description: Open source Kubernetes and multi-cloud dashboard for managing AWS, GCP, Vercel, Helm, logs and infrastructure operations from one interface.
 
 hero:
   name: KUA
-  text: Know Unified Administration
-  tagline: Centralize knowledge and operations of your entire infrastructure — AWS, GCP and Kubernetes — from a single open source platform.
+  text: The Kubernetes & multi-cloud desktop dashboard
+  tagline: "Know Unified Administration: your Kubernetes clusters, AWS, GCP and Vercel in one open source app for Windows, macOS and Linux."
   actions:
     - theme: brand
       text: Get Started
@@ -43,4 +44,36 @@ features:
   - icon: 🖥️
     title: Desktop App
     details: Native experience on Windows, macOS and Linux via Electron. Integrated backend, auto-update and instant startup.
+
+faq:
+  - q: "What is KUA?"
+    a: "KUA (KuaDashboard) is a free, open source desktop dashboard for Kubernetes, AWS, GCP and Vercel. It shows clusters, pods, deployments, logs, shells, port forwards, Helm releases, CloudWatch logs and cloud costs in one app for Windows, macOS and Linux."
+  - q: "Is KUA an alternative to Lens or k9s?"
+    a: "Yes. Like Lens or k9s, KUA manages Kubernetes clusters from your kubeconfig: workloads, logs, pod exec, port forwarding, events, metrics and Helm. It also manages AWS, GCP and Vercel resources in the same window, which those tools do not."
+  - q: "Does KUA work with EKS, GKE and AKS?"
+    a: "Yes. KUA works with any cluster in your kubeconfig, including Amazon EKS, Google GKE, Azure AKS, k3s, kind and minikube, and it can import kubeconfigs for EKS and GKE from your cloud profiles."
+  - q: "Is KUA free?"
+    a: "Yes. KUA is open source under the MIT license and every local feature is free. Optional Pro and Team plans add cloud backups, sync between computers, the Advisor and team sharing."
+  - q: "Do my credentials leave my computer?"
+    a: "No. Kubeconfigs, cloud credentials, profiles and logs stay on your computer, encrypted with the operating system keychain. KUA talks to your clusters and cloud APIs directly."
 ---
+
+## A Kubernetes and cloud dashboard on your desktop
+
+KUA puts your **Kubernetes clusters**, **AWS** and **GCP** accounts and **Vercel** projects in one desktop app. Browse pods, deployments and services, read live and historical logs, open a shell in a pod or an EC2 instance, forward ports, install Helm charts, search CloudWatch logs, find recurring errors and see what your cloud API calls cost — without switching between the AWS console, the GCP console, `kubectl` and a terminal.
+
+- **Kubernetes:** multi-cluster kubeconfig, workloads, ConfigMaps and Secrets, logs, exec, port forwarding, events, metrics, Helm.
+- **AWS:** EC2, ECS, EKS, Lambda, S3, DynamoDB, RDS, Secrets Manager, CloudWatch Logs and Logs Insights, IAM-aware least privilege.
+- **GCP:** Cloud Run, GKE, Cloud SQL, Cloud Storage.
+- **Local and private:** credentials stay encrypted on your computer; the app is open source.
+
+[Download KUA](/download) · [Getting started](/guide/getting-started) · [All features](/features/)
+
+## Frequently asked questions
+
+<div class="home-faq">
+  <details v-for="item in $frontmatter.faq" :key="item.q">
+    <summary>{{ item.q }}</summary>
+    <p>{{ item.a }}</p>
+  </details>
+</div>

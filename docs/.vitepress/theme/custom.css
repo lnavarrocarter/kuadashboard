@@ -1,0 +1,6 @@
+/* Home: the text below the features (what KUA is, FAQ). */
+.VPHome .vp-doc { max-width: 960px; margin: 48px auto 0; padding: 0 24px; }
+.home-faq { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.home-faq details { border: 1px solid var(--vp-c-divider); border-radius: 8px; padding: 12px 16px; background: var(--vp-c-bg-soft); }
+.home-faq summary { cursor: pointer; font-weight: 600; }
+.home-faq p { margin: 8px 0 0; }

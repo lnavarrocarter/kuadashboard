@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
+import { isNoindex, SUMMARY } from './seo.mjs'
 
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 const docsDir = path.resolve(configDir, '..')
@@ -28,27 +29,48 @@ function hasPage(page) {
   return fs.existsSync(path.join(docsDir, page))
 }
 
-function homepageSchema(url, language) {
+const APP_VERSION = JSON.parse(fs.readFileSync(path.resolve(docsDir, '..', 'package.json'), 'utf8')).version
+
+// Structured data of the home pages: the site, the app and its FAQ (the same
+// questions the page shows, from its frontmatter).
+function homepageSchema(url, language, faq = []) {
+  const author = { '@type': 'Person', name: 'Luis Ignacio Navarro Carter', url: 'https://github.com/lnavarrocarter' }
   return JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'WebSite',
         name: 'KUA — Know Unified Administration',
-        alternateName: 'KuaDashboard',
+        alternateName: ['KuaDashboard', 'KUA Dashboard'],
         url,
         inLanguage: language,
+        publisher: author,
       },
       {
         '@type': 'SoftwareApplication',
         name: 'KUA',
+        alternateName: 'KuaDashboard',
         applicationCategory: 'DeveloperApplication',
+        applicationSubCategory: 'Kubernetes and cloud management',
         operatingSystem: 'Windows, macOS, Linux',
-        description: 'Open source Kubernetes and multi-cloud dashboard for AWS, GCP, Vercel and Helm operations.',
+        softwareVersion: APP_VERSION,
+        description: SUMMARY[language] || SUMMARY.en,
         url,
+        image: absoluteUrl('/og-image.png'),
+        screenshot: absoluteUrl('/screenshots/dashboard-main.png'),
         downloadUrl: 'https://github.com/lnavarrocarter/kuadashboard/releases',
+        installUrl: absoluteUrl(language === 'es' ? '/es/download.html' : '/download.html'),
+        license: 'https://opensource.org/licenses/MIT',
+        isAccessibleForFree: true,
+        author,
+        sameAs: ['https://github.com/lnavarrocarter/kuadashboard'],
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       },
+      ...(faq.length ? [{
+        '@type': 'FAQPage',
+        inLanguage: language,
+        mainEntity: faq.map(item => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+      }] : []),
     ],
   })
 }
@@ -159,14 +181,20 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#0f172a' }],
     ['meta', { property: 'og:site_name', content: 'KUA — Know Unified Administration' }],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:image', content: absoluteUrl('/logo.png') }],
+    // A 1200×630 card for links shared in search, chat and social networks.
+    ['meta', { property: 'og:image', content: absoluteUrl('/og-image.png') }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:image:alt', content: 'KUA — Kubernetes and multi-cloud desktop dashboard' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:image', content: absoluteUrl('/logo.png') }],
+    ['meta', { name: 'twitter:image', content: absoluteUrl('/og-image.png') }],
     ['link', { rel: 'icon', href: `${base}favicon.png` }],
   ],
 
-  transformHead({ page, title, description }) {
+  transformHead({ page, title, description, pageData }) {
     if (page === '404.md') return []
+    // Internal pages stay reachable by link but out of search results.
+    if (isNoindex(page)) return [['meta', { name: 'robots', content: 'noindex, follow' }]]
 
     const route = pageRoute(page)
     const canonical = absoluteUrl(route)
@@ -195,7 +223,7 @@ export default defineConfig({
       entries.push([
         'script',
         { type: 'application/ld+json' },
-        homepageSchema(canonical, page.startsWith('es/') ? 'es' : 'en'),
+        homepageSchema(canonical, page.startsWith('es/') ? 'es' : 'en', pageData?.frontmatter?.faq || []),
       ])
     }
 

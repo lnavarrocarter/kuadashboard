@@ -11,6 +11,7 @@ docs/.vitepress/cache/
 docs/.vitepress/.temp/
 docs/public/robots.txt
 docs/public/sitemap.xml
+docs/public/llms.txt
 
 # Env files
 .env
