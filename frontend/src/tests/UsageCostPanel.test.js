@@ -65,6 +65,13 @@ describe('UsageCostPanel', () => {
     expect(wrapper.text()).not.toContain('By feature')
   })
 
+  it('hides when the spend tracking is off', async () => {
+    stub({ enabled: false })
+    const wrapper = mount(UsageCostPanel, { props: { profileId: 'p1' } })
+    await flushPromises()
+    expect(wrapper.find('[data-test="usage-cost"]').exists()).toBe(false)
+  })
+
   it('says when nothing was billed', async () => {
     stub({ ...SUMMARY, totals: { today: { usd: 0, calls: 0 }, month: { usd: 0, calls: 0 }, window: { usd: 0, potentialUsd: 0, calls: 0 } }, byOperation: [], byFeature: [], recent: [] })
     const wrapper = mount(UsageCostPanel, { props: {} })

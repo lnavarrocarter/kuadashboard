@@ -58,6 +58,37 @@ describe('AccountProfile', () => {
   })
 })
 
+describe('AccountProfile spend tracking', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('is optional: it can be turned off (deleting the history) and on again', async () => {
+    let enabled = true
+    const calls = []
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      calls.push({ url, method: options.method || 'GET', body: options.body })
+      let body = {}
+      if (url === '/api/system/usage/disable') { enabled = false; body = { enabled } }
+      else if (url === '/api/system/usage/enable') { enabled = true; body = { enabled } }
+      else if (url.startsWith('/api/system/usage')) body = enabled ? { enabled, totals: { month: { usd: 0.0315, calls: 3 } } } : { enabled }
+      else if (url === '/api/system/plan') body = { ...PLANS.free, source: 'default', plans: PLANS, refreshChoices: [] }
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }
+    }))
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-usage-text"]').text()).toContain('USD 0.03 this month')
+
+    await wrapper.get('[data-test="account-usage-clear"]').trigger('click')
+    await flushPromises()
+    expect(calls.find(c => c.url === '/api/system/usage/disable').body).toBe(JSON.stringify({ clear: true }))
+    expect(wrapper.get('[data-test="account-usage-text"]').text()).toContain('Off')
+
+    await wrapper.get('[data-test="account-usage-enable"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-usage-text"]').text()).toContain('USD 0.03 this month')
+  })
+})
+
 describe('AccountProfile sign-in', () => {
   afterEach(() => { vi.unstubAllGlobals(); account = { linked: false, plan: 'free' } })
 
