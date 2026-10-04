@@ -5,7 +5,7 @@ const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -134,6 +134,57 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     const profile = profileId(req, res);
     if (!profile) return;
     try { res.status(201).json(await engine().add(req.params.syncId, profile)); } catch (error) { handleError(res, error); }
+  });
+
+  // ── The team's shared space (Team plan, lib/sync/teamEngine.js) ─────────
+  const teamWork = () => {
+    if (!teamEngine) throw Object.assign(new Error('Teams are not available'), { statusCode: 503 });
+    return teamEngine;
+  };
+
+  // The team, this account's role and the items it can see (all of them for owner/admin).
+  router.get('/team', async (_req, res) => {
+    try {
+      const [catalog, team] = await Promise.all([account().team.catalog(), account().team.get()]);
+      res.json({ ...catalog, members: team.members || [], seats: team.seats || null, imported: teamWork().importedHere() });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/team/refresh', async (_req, res) => {
+    try { res.json(await teamWork().pass({ force: true })); } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/team/items/:itemId/import', async (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    try {
+      const result = await teamWork().importItem(req.params.itemId, profile);
+      auditLog?.log({ category: 'kua', action: 'KUA Application imported from the team', resource: result.application.name, context: profile, details: { itemId: req.params.itemId } });
+      res.status(201).json(result);
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Owner/admin: share, access ({ mode: all|only, members }) and backup ({ frequency }).
+  router.patch('/team/items/:itemId', async (req, res) => {
+    try { res.json(await account().team.update(req.params.itemId, req.body || {})); } catch (error) { handleError(res, error); }
+  });
+
+  router.get('/team/items/:itemId/backups', async (req, res) => {
+    try { res.json(await account().team.backups(req.params.itemId)); } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/team/items/:itemId/backups', async (req, res) => {
+    try { res.status(201).json(await account().team.backupNow(req.params.itemId)); } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/team/items/:itemId/backups/:backupId/restore', async (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    try { res.status(201).json(await teamWork().restoreBackup(req.params.itemId, req.params.backupId, profile)); } catch (error) { handleError(res, error); }
+  });
+
+  router.patch('/team/members/:userId', async (req, res) => {
+    try { res.json(await account().team.setPermissions(req.params.userId, req.body?.canImport !== false)); } catch (error) { handleError(res, error); }
   });
 
   return router;

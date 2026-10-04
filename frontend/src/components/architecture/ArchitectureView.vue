@@ -13,6 +13,9 @@
         <button v-if="activeApplication" class="btn sm" :disabled="store.saving" :title="t('archView.exportHint')" @click="exportKuaApp">
           <i data-lucide="download"></i> {{ t('archView.exportBackup') }}
         </button>
+        <button v-if="teamInfo" class="btn sm" :disabled="!profileId" :title="t('teamSpace.hint')" data-test="open-team-space" @click="teamSpaceOpen = true">
+          <i data-lucide="users"></i> {{ t('teamSpace.button', { name: teamInfo.name }) }}
+        </button>
         <button class="btn sm" :disabled="!profileId" :title="t('cloudBackups.hint')" data-test="open-cloud-backups" @click="cloudBackupsOpen = true">
           <i data-lucide="cloud"></i> {{ t('cloudBackups.title') }}
         </button>
@@ -38,6 +41,7 @@
       </div>
     </header>
 
+    <TeamSpaceModal :show="teamSpaceOpen" :profile-id="profileId || ''" @close="teamSpaceOpen = false" />
     <CloudBackupsModal :show="cloudBackupsOpen" :profile-id="profileId || ''" :application-id="activeApplication?.id || ''" :application-name="activeApplication?.name || ''" @close="cloudBackupsOpen = false" />
 
     <div v-if="!profileId" class="architecture-empty architecture-application-picker">
@@ -350,6 +354,8 @@ import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
 import BaseModal from '../BaseModal.vue'
 import CloudBackupsModal from './CloudBackupsModal.vue'
+import TeamSpaceModal from './TeamSpaceModal.vue'
+import { api } from '../../composables/useApi'
 import ApmProviderMetrics from '../cloud/apm/ApmProviderMetrics.vue'
 import ApmApplicationLogs from '../cloud/apm/ApmApplicationLogs.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
@@ -379,6 +385,10 @@ const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
 const { toast } = useToast()
 const cloudBackupsOpen = ref(false)
+const teamSpaceOpen = ref(false)
+// The account's team (Team plan): the Team button shows only for members.
+const teamInfo = ref(null)
+api('GET', '/api/account').then(status => { teamInfo.value = status?.entitlements?.team || null }).catch(() => {})
 const { t } = useI18n()
 const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
