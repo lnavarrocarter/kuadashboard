@@ -32,6 +32,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: the sitemap takes each page's last change from git.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,3 +54,20 @@ jobs:
 
       - name: Deploy to Vercel
         run: npx --yes vercel@50.1.5 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      # Tell Bing, Yandex and other IndexNow engines what the sitemap lists (free).
+      # Google does not use IndexNow: it reads the sitemap from Search Console.
+      - name: Notify search engines (IndexNow)
+        continue-on-error: true
+        env:
+          INDEXNOW_KEY: 81ba56e1ca2e5ae56234d387f21c0731
+          SITE: https://kuadashboard.navarrocarter.com
+        run: |
+          curl -s "$SITE/sitemap.xml" | grep -o '<loc>[^<]*' | sed 's/<loc>//' | head -500 > urls.txt
+          node -e '
+            const fs = require("fs");
+            const urls = fs.readFileSync("urls.txt", "utf8").split("\n").filter(Boolean);
+            fs.writeFileSync("indexnow.json", JSON.stringify({ host: new URL(process.env.SITE).host, key: process.env.INDEXNOW_KEY, keyLocation: `${process.env.SITE}/${process.env.INDEXNOW_KEY}.txt`, urlList: urls }));
+            console.log(`IndexNow: ${urls.length} URLs`);
+          '
+          curl -s -o /dev/null -w 'IndexNow answered %{http_code}\n' -X POST https://api.indexnow.org/indexnow -H 'Content-Type: application/json; charset=utf-8' --data @indexnow.json
