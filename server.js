@@ -294,11 +294,21 @@ app.use('/api/architecture', createArchitectureRouter({
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
 }));
+// KUA Applications kept in step between the computers of a KUA account (Pro/Team).
+const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
+  account: require('./lib/account/account').getAccount,
+  database: architectureDatabase,
+  apmDatabase,
+  dataDir: require('./lib/account/account').resolveDataDir(),
+});
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
   apmDatabase,
   auditLog,
+  syncEngine,
 }));
+// Sync passes every 2 minutes; the cloud is only asked when something changed.
+syncEngine.start();
 app.use('/api/cloud/vercel',  vercelRoutes);
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
@@ -3373,6 +3383,7 @@ function shutdown(signal) {
   apmScheduler.stop();
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
   require('./lib/account/account').getAccount().stopAutoRefresh();
+  syncEngine.stop();
   gcpRoutes.stopStatePoller();
   console.log(`[server] ${signal} received, shutting down`);
 
