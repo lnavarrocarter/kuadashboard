@@ -294,6 +294,13 @@ app.use('/api/architecture', createArchitectureRouter({
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
 }));
+// The team's shared space (Team plan): lib/sync/teamEngine.js.
+const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
+  account: require('./lib/account/account').getAccount,
+  database: architectureDatabase,
+  apmDatabase,
+  dataDir: require('./lib/account/account').resolveDataDir(),
+});
 // KUA Applications kept in step between the computers of a KUA account (Pro/Team).
 const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
   account: require('./lib/account/account').getAccount,
@@ -306,9 +313,12 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   apmDatabase,
   auditLog,
   syncEngine,
+  teamEngine,
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
 syncEngine.start();
+// The team's shared space: publishing this computer's applications and updating imported ones.
+teamEngine.start();
 app.use('/api/cloud/vercel',  vercelRoutes);
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
@@ -3384,6 +3394,7 @@ function shutdown(signal) {
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
   require('./lib/account/account').getAccount().stopAutoRefresh();
   syncEngine.stop();
+  teamEngine.stop();
   gcpRoutes.stopStatePoller();
   console.log(`[server] ${signal} received, shutting down`);
 

@@ -314,6 +314,27 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  // The team's shared space (Team plan, lib/sync/teamEngine.js).
+  const teamCall = (path, method = 'GET', body) => apiFetch(`/api/kua-apps/team${path}`, { method, headers: headers(body !== undefined), ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
+  const teamSpace = () => teamCall('')
+  const teamRefresh = () => teamCall('/refresh', 'POST')
+  const teamUpdate = (itemId, changes) => teamCall(`/items/${encodeURIComponent(itemId)}`, 'PATCH', changes)
+  const teamBackups = itemId => teamCall(`/items/${encodeURIComponent(itemId)}/backups`)
+  const teamBackupNow = itemId => teamCall(`/items/${encodeURIComponent(itemId)}/backups`, 'POST')
+  const teamPermission = (userId, canImport) => teamCall(`/members/${encodeURIComponent(userId)}`, 'PATCH', { canImport })
+  async function teamImport(itemId) {
+    const result = await teamCall(`/items/${encodeURIComponent(itemId)}/import`, 'POST')
+    await loadApplications({ preserveSelection: false })
+    if (result.application?.id) await selectApplication(result.application.id)
+    return result
+  }
+  async function teamRestore(itemId, backupId) {
+    const result = await teamCall(`/items/${encodeURIComponent(itemId)}/backups/${encodeURIComponent(backupId)}/restore`, 'POST')
+    await loadApplications({ preserveSelection: false })
+    if (result.application?.id) await selectApplication(result.application.id)
+    return result
+  }
+
   // Sync between the account's computers (lib/sync/syncEngine.js).
   const syncCall = (path, method = 'GET', body) => apiFetch(`/api/kua-apps${path}`, { method, headers: headers(body !== undefined), ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
   const syncStatus = () => syncCall('/sync/status')
@@ -789,6 +810,14 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importKubernetesResources,
     importKuaApp,
     backupKuaAppToCloud,
+    teamSpace,
+    teamRefresh,
+    teamUpdate,
+    teamBackups,
+    teamBackupNow,
+    teamPermission,
+    teamImport,
+    teamRestore,
     syncStatus,
     enableSync,
     disableSync,
