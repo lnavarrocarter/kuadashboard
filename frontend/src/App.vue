@@ -517,7 +517,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
 import { createIcons, icons } from 'lucide'
 
 import { useKubeStore }        from './stores/useKubeStore'
@@ -537,20 +537,9 @@ import { useArchitectureContext } from './composables/useArchitectureContext'
 
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
-import HelmView         from './components/HelmView.vue'
-import KubeLogsView from './components/cloud/logs/KubeLogsView.vue'
 import KubeOverview     from './components/KubeOverview.vue'
 import { loadTableView, saveTableView } from './composables/useTableViews'
-import AuditLogView    from './components/AuditLogView.vue'
-import ConsoleWorkspaceView from './components/ConsoleWorkspaceView.vue'
-import EnvManagerView  from './components/cloud/EnvManagerView.vue'
-import GcpView         from './components/cloud/GcpView.vue'
-import AwsView         from './components/cloud/AwsView.vue'
-import VercelView      from './components/cloud/VercelView.vue'
 import VercelProjectSelector from './components/cloud/VercelProjectSelector.vue'
-import ApmObservabilityView from './components/cloud/apm/ApmObservabilityView.vue'
-import ArchitectureView from './components/architecture/ArchitectureView.vue'
-import KUAppsView       from './components/kuapps/KUAppsView.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
@@ -567,6 +556,40 @@ import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 import AwsSessionAlert  from './components/AwsSessionAlert.vue'
 import { useUpdateStore } from './stores/useUpdateStore'
+
+// The views of each section load on demand, in their own chunks: the first
+// paint only parses Kubernetes and the shell. A view that arrives after the
+// parent drew its icons gets them drawn once it renders.
+const lazyView = loader => defineAsyncComponent(() => loader().then(module => {
+  setTimeout(() => createIcons({ icons }))
+  return module
+}))
+const HelmView             = lazyView(() => import('./components/HelmView.vue'))
+const KubeLogsView         = lazyView(() => import('./components/cloud/logs/KubeLogsView.vue'))
+const AuditLogView         = lazyView(() => import('./components/AuditLogView.vue'))
+const ConsoleWorkspaceView = lazyView(() => import('./components/ConsoleWorkspaceView.vue'))
+const EnvManagerView       = lazyView(() => import('./components/cloud/EnvManagerView.vue'))
+const AwsView              = lazyView(() => import('./components/cloud/AwsView.vue'))
+const GcpView              = lazyView(() => import('./components/cloud/GcpView.vue'))
+const VercelView           = lazyView(() => import('./components/cloud/VercelView.vue'))
+const ApmObservabilityView = lazyView(() => import('./components/cloud/apm/ApmObservabilityView.vue'))
+const ArchitectureView     = lazyView(() => import('./components/architecture/ArchitectureView.vue'))
+const KUAppsView           = lazyView(() => import('./components/kuapps/KUAppsView.vue'))
+
+/** Resolves with a view's instance once it is mounted (a lazy view may still be loading). */
+function whenMounted(viewRef, timeoutMs = 15000) {
+  if (viewRef.value) return Promise.resolve(viewRef.value)
+  return new Promise(resolve => {
+    let stop = null
+    const timer = setTimeout(() => { stop?.(); resolve(null) }, timeoutMs)
+    stop = watch(viewRef, view => {
+      if (!view) return
+      clearTimeout(timer)
+      stop()
+      resolve(view)
+    }, { flush: 'post' })
+  })
+}
 
 const { t } = useI18n()
 const updateStore = useUpdateStore()
@@ -957,14 +980,14 @@ function openArchitectureAwsResource(resource) {
   if (!tab || !resource?.name) return
   activeProvider.value = 'aws'
   awsTab.value = tab
-  nextTick(() => awsViewRef.value?.focusResourceByName?.(tab, resource.name))
+  whenMounted(awsViewRef).then(view => view?.focusResourceByName?.(tab, resource.name))
 }
 
 function openArchitectureAwsLogs(resource) {
   if (resource?.resourceType !== 'lambda' || !resource?.name) return
   activeProvider.value = 'aws'
   awsTab.value = 'lambda'
-  nextTick(() => awsViewRef.value?.openLambdaLogsByName?.(resource.name))
+  whenMounted(awsViewRef).then(view => view?.openLambdaLogsByName?.(resource.name))
 }
 
 async function setProvider(p) {
@@ -1299,33 +1322,7 @@ onMounted(async () => {
   applySettings()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
-  await store.loadContexts()
-  selectedContext.value = store.currentContext
-  await store.loadNamespaces()
-  // Restaurar namespace guardado
-  const savedNs = LS.get('kubeNs', '')
-  if (savedNs && store.namespaces.includes(savedNs)) store.namespace = savedNs
-  await store.loadResources()
-  await pfStore.autoRestore()
-  await envStore.fetchProfiles()
-  await Promise.all([loadAwsLocalProfiles(), loadGcpLocalConfigs()])
-  if (activeProvider.value === 'observability' && !hasCloudConnections.value) activeProvider.value = 'kubernetes'
-  if (hasCloudConnections.value && !availableObservabilityProviders.value.some(provider => provider.id === observabilityProvider.value)) {
-    observabilityProvider.value = availableObservabilityProviders.value[0].id
-  }
-  // Restaurar perfil AWS guardado
-  if (awsProfileId.value) {
-    awsStore.setActiveProfile(awsProfileId.value)
-    if (activeProvider.value === 'aws') loadAwsLocalProfiles()
-  }
-  // Restaurar perfil GCP guardado
-  if (gcpProfileId.value) {
-    gcpStore.setActiveProfile(gcpProfileId.value)
-    if (activeProvider.value === 'gcp') loadGcpLocalConfigs()
-  }
-  // Cargar profiles locales si el proveedor activo lo necesita
-  if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
-  if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
+  // Shortcuts and listeners work right away, not after the cluster answers.
   lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
   document.addEventListener('pointerdown', markUserInteraction, { passive: true })
@@ -1333,6 +1330,35 @@ onMounted(async () => {
   document.addEventListener('touchstart', markUserInteraction, { passive: true })
   document.addEventListener('scroll', markUserInteraction, { passive: true, capture: true })
   updateStore.initListeners()
+  // Kubernetes and the cloud profiles load side by side: a slow cluster does not hold AWS/GCP back.
+  const kube = (async () => {
+    await store.loadContexts()
+    selectedContext.value = store.currentContext
+    await Promise.all([
+      (async () => {
+        await store.loadNamespaces()
+        // Restaurar namespace guardado
+        const savedNs = LS.get('kubeNs', '')
+        if (savedNs && store.namespaces.includes(savedNs)) store.namespace = savedNs
+        await store.loadResources()
+      })(),
+      pfStore.autoRestore(),
+    ])
+  })()
+  const cloud = (async () => {
+    await Promise.all([envStore.fetchProfiles(), loadAwsLocalProfiles(), loadGcpLocalConfigs()])
+    if (activeProvider.value === 'observability' && !hasCloudConnections.value) activeProvider.value = 'kubernetes'
+    if (hasCloudConnections.value && !availableObservabilityProviders.value.some(provider => provider.id === observabilityProvider.value)) {
+      observabilityProvider.value = availableObservabilityProviders.value[0].id
+    }
+    // Restaurar perfiles AWS/GCP guardados
+    if (awsProfileId.value) awsStore.setActiveProfile(awsProfileId.value)
+    if (gcpProfileId.value) gcpStore.setActiveProfile(gcpProfileId.value)
+    // A failed first read is retried when the active provider needs it
+    if (activeProvider.value === 'aws' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
+    if (activeProvider.value === 'gcp' && !gcpLocalConfigs.value.length)  loadGcpLocalConfigs()
+  })()
+  await Promise.all([kube, cloud])
   nextTick(() => createIcons({ icons }))
 })
 onUnmounted(() => {

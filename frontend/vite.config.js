@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -8,6 +9,11 @@ export default defineConfig({
     // path on Windows. Builds keep the default so Electron (base './') gets rebased URLs.
     template: { transformAssetUrls: { includeAbsolute: false } },
   } : {})],
+  // 'lucide' resolves to the icons KUA draws (src/lib/lucideIcons.js). Tests keep
+  // the real package, which several of them mock with vi.mock('lucide').
+  resolve: {
+    alias: process.env.VITEST ? [] : [{ find: /^lucide$/, replacement: fileURLToPath(new URL('./src/lib/lucideIcons.js', import.meta.url)) }],
+  },
   // In Electron production build, assets must use relative paths
   base: process.env.ELECTRON_BUILD ? './' : '/',
   build: {

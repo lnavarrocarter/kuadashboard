@@ -210,7 +210,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, h } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, defineAsyncComponent } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
 import AdvisorPanel from './advisor/AdvisorPanel.vue'
@@ -218,7 +218,8 @@ import { settings } from '../composables/useSettings'
 import { createRefreshGate } from '../composables/refreshGate'
 import { useKubeStore } from '../stores/useKubeStore'
 import { useI18n } from '../composables/useI18n'
-import CloudMetricChart from './cloud/CloudMetricChart.vue'
+// chart.js loads with the first chart, not with the app
+const CloudMetricChart = defineAsyncComponent(() => import('./cloud/CloudMetricChart.vue'))
 
 const emit = defineEmits(['navigate'])
 const store = useKubeStore()

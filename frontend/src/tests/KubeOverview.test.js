@@ -3,7 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
+// __esModule: KubeOverview imports the chart lazily, and defineAsyncComponent takes `default` from ES modules only.
 vi.mock('../components/cloud/CloudMetricChart.vue', () => ({
+  __esModule: true,
   default: { name: 'CloudMetricChart', props: ['label', 'unit', 'points', 'showDate', 'xTickLimit', 'color'], template: '<div class="chart-stub">{{ label }}|{{ unit }}|{{ points.length }}|{{ showDate }}</div>' },
 }))
 
@@ -12,6 +14,13 @@ import * as ApiModule from '../composables/useApi'
 import { useKubeStore } from '../stores/useKubeStore'
 import { RESOURCES } from '../config/resources'
 import { settings } from '../composables/useSettings'
+
+// CloudMetricChart is an async component: it renders once its import resolves.
+async function settled() {
+  await flushPromises()
+  await new Promise(resolve => setTimeout(resolve))
+  await flushPromises()
+}
 
 function overview(overrides = {}) {
   return {
@@ -168,7 +177,7 @@ describe('KubeOverview', () => {
 
   it('renders one Prometheus trend chart per series and names empty ones', async () => {
     const wrapper = mount(KubeOverview)
-    await flushPromises()
+    await settled()
     expect(apiSpy).toHaveBeenCalledWith('GET', '/api/overview/timeseries?namespace=default&range=1h')
     expect(wrapper.findAll('.chart-stub').map(c => c.text())).toEqual([
       'CPU|cores|2|false', 'Memory|bytes|2|false', 'Restarts (5 min window)|count|2|false', 'Pods not ready|count|0|false',
@@ -182,7 +191,7 @@ describe('KubeOverview', () => {
     await flushPromises()
     const btn7d = wrapper.findAll('.kov-range-btn').find(b => b.text() === '7d')
     await btn7d.trigger('click')
-    await flushPromises()
+    await settled()
     expect(apiSpy).toHaveBeenLastCalledWith('GET', '/api/overview/timeseries?namespace=default&range=7d')
     expect(localStorage.getItem('kua.kubeOverviewRange')).toBe('7d')
     expect(wrapper.find('.chart-stub').text()).toContain('|true')
@@ -207,7 +216,7 @@ describe('KubeOverview', () => {
     settings.lang = 'es'
     try {
       const wrapper = mount(KubeOverview)
-      await flushPromises()
+      await settled()
       expect(wrapper.find('.kov-tile.bad').text()).toContain('Pods con problemas')
       expect(wrapper.text()).toContain('Uso del clúster')
       expect(wrapper.findAll('.chart-stub').map(c => c.text())).toContain('Reinicios (ventana 5 min)|count|2|false')
