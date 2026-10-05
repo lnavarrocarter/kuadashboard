@@ -10,6 +10,9 @@ const stream     = require('stream');
 const request    = require('request');
 const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
+// Exec credential plugins (aws eks get-token…) run asynchronously instead of
+// client-node's spawnSync, which froze the whole server (lib/kubeExecCredentials.js).
+const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
 const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
@@ -399,6 +402,8 @@ function loadKubeConfig(contextName) {
   currentContext = context;
   currentKc = kubeConfig;
   kubeResponseCache.clear();
+  // The cluster token is ready (or loading) before the UI asks for the first list.
+  kubeExecCredentials.warm(kubeConfig);
   console.log(`[kubeconfig] Loaded ${loaded.length} file(s): ${loaded.join(', ')}`);
   console.log(`[kubeconfig] Active context: ${currentContext} (${kubeConfig.getContexts().length} contexts total)`);
   return kubeConfig;
