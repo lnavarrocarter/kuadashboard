@@ -509,9 +509,15 @@ function overviewError(err) {
   return { code: err?.code || err?.response?.status || null, message: String(err?.message || err).slice(0, 500) };
 }
 
-// The Advisor part of the overview follows the plan (lib/plans.js).
-function withAdvisorGate(payload) {
-  return payload?.advisor ? { ...payload, advisor: require('../lib/plans').gateAdvisor(payload.advisor) } : payload;
+// The Advisor part of the overview: acceptances applied, fresh scans recorded
+// (lib/advisor/posture.js), then the plan gate (lib/plans.js).
+function withAdvisorGate(payload, { profileId, projectId, fresh = false } = {}) {
+  if (!payload?.advisor) return payload;
+  const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/posture');
+  let store = null;
+  try { store = getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); }
+  const scopes = scopeKeys('gcp', { profileId, projectId: projectId || payload.advisor.scope?.projectId || '' });
+  return { ...payload, advisor: finalizeAdvisor(payload.advisor, { scopes, store, fresh }) };
 }
 
 async function gcpOverview(req, res) {
@@ -528,7 +534,7 @@ async function gcpOverview(req, res) {
     const history = cloudHistory();
     if (!force) {
       const cached = history?.readLatest(snapshotKey);
-      if (cached) return res.json(withAdvisorGate(cached.payload));
+      if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId }));
     }
 
     const restList = (url, key) => gcpFetch(url, authCtx).then(data => data[key] || []);
@@ -639,11 +645,11 @@ async function gcpOverview(req, res) {
       })(),
     };
     try { history?.putSnapshot({ ...snapshotKey, payload, ttlMs: cloudCacheTtlMs(req), metadata: { projectId } }); } catch (err) { console.warn('[gcp-cloud-history] write:', err.message); }
-    res.json(withAdvisorGate(payload));
+    res.json(withAdvisorGate(payload, { profileId, projectId, fresh: true }));
   } catch (err) {
     const history = cloudHistory();
     const cached = history?.readLatest({ provider: 'gcp', profileId, region, resourceKey: 'overview', kind: 'gcp-overview', allowExpired: true });
-    if (cached) return res.json(withAdvisorGate(cached.payload));
+    if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId: authCtx?.projectId }));
     handleErr(res, err);
   }
 }

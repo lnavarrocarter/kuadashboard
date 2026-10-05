@@ -89,6 +89,7 @@
               default-collapsed
               storage-key="advisor.kuapps"
               @refresh="loadProductAdvisor"
+              @posture-changed="loadProductAdvisor"
             />
           </div>
 

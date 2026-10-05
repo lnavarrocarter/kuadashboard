@@ -78,7 +78,7 @@
             <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.ofResponding', { p0: gcpStore.overview?.summary?.availableServices ?? 0, p1: gcpStore.overview?.summary?.services ?? 0 }) }}</small></div>
           </div>
 
-          <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" />
+          <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" @posture-changed="gcpStore.fetchOverview()" />
 
           <section class="gcp-overview-section gcp-overview-costs" data-test="overview-costs">
             <div class="gcp-overview-section-title gcp-overview-costs-title">

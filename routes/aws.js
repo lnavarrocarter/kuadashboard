@@ -178,7 +178,7 @@ const auditLog     = require('../lib/auditLog');
 const { getApmDatabase } = require('../lib/apm/database');
 const { captureLambdaCloudWatchMetrics, captureLambdaLogEvents } = require('../lib/apm/opportunisticCapture');
 const { readLocalAwsProfiles, resolveAwsConfig } = require('../lib/awsProfileResolver');
-const { gateAdvisor } = require('../lib/plans');
+const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/posture');
 const {
   GROUP_DIMENSIONS,
   METRIC_DEFINITIONS,
@@ -236,6 +236,11 @@ function handleErr(res, err) {
 
 function cloudHistory() {
   try { return getCloudHistory(); } catch (err) { console.warn('[cloud-history]', err.message); return null; }
+}
+
+// Advisor acceptances and history; without them the report is still answered (gated).
+function postureStore() {
+  try { return getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); return null; }
 }
 
 function awsRegionFromArn(arn) {
@@ -543,13 +548,15 @@ router.get('/overview/advisor', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     const key = `${profileId}|${cfg.region || ''}`;
+    // Acceptances apply on every answer (also cached ones); history records fresh scans only.
+    const posture = { scopes: scopeKeys('aws', { profileId, region: cfg.region || '' }), store: postureStore() };
     const cached = advisorCache.get(key);
     if (cached && req.query.refresh !== '1' && Date.now() - cached.at < ADVISOR_TTL_MS) {
-      return res.json({ ...gateAdvisor(cached.report), fromCache: true });
+      return res.json({ ...finalizeAdvisor(cached.report, { ...posture, fresh: false }), fromCache: true });
     }
     const report = await buildAwsAdvisor(cfg);
     advisorCache.set(key, { at: Date.now(), report });
-    res.json(gateAdvisor(report));
+    res.json(finalizeAdvisor(report, posture));
   } catch (err) { handleErr(res, err); }
 });
 
