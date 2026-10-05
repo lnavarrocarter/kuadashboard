@@ -5,7 +5,8 @@
  * Codex CLI and any other MCP client. KuaDashboard must be running: the
  * server reads it through its local API.
  *
- *   KUA_URL   where KUA runs (default http://localhost:7190)
+ *   KUA_URL   where KUA runs. Optional: without it the server finds the
+ *             running KUA (lib/mcp/runtime.js), whatever its port.
  *
  * stdout carries protocol messages only; diagnostics go to stderr.
  */
@@ -13,8 +14,7 @@
 import { createInterface } from 'node:readline'
 import { readFileSync } from 'node:fs'
 import { createKuaMcp, httpRequest } from '../lib/mcp/kuaMcp.mjs'
-
-const baseUrl = process.env.KUA_URL || 'http://localhost:7190'
+import runtime from '../lib/mcp/runtime.js'
 // The installed app runs this from app.asar.unpacked, next to (not inside) app.asar.
 function readVersion() {
   for (const candidate of ['../package.json', '../../app.asar/package.json']) {
@@ -23,7 +23,27 @@ function readVersion() {
   return '0.0.0'
 }
 const version = readVersion()
-const server = createKuaMcp({ request: httpRequest(baseUrl), version })
+
+// The KUA to read, found once and again when it stops answering (closed, or reopened on another port).
+let located = null
+function locate({ fresh = false } = {}) {
+  if (!located || fresh) located = runtime.resolveKua()
+  return located
+}
+
+async function request(path, options) {
+  const kua = await locate()
+  try {
+    return await httpRequest(kua.url)(path, options)
+  } catch (err) {
+    if (!err.unreachable || kua.source === 'env') throw err
+    const again = await locate({ fresh: true })
+    if (!again.reachable) throw err
+    return httpRequest(again.url)(path, options)
+  }
+}
+
+const server = createKuaMcp({ request, version, locate })
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`)
@@ -59,4 +79,8 @@ lines.on('close', async () => {
   process.exit(0)
 })
 
-process.stderr.write(`kua-mcp ${version}: reading KUA at ${baseUrl}\n`)
+// Diagnostics for the client's log; initialize carries the same note for the agent.
+locate().then(kua => {
+  if (!kua.reachable) process.stderr.write(`kua-mcp ${version}: KUA is not answering at ${kua.url}. Open KuaDashboard${kua.source === 'env' ? ', or check KUA_URL' : ''}.\n`)
+  else process.stderr.write(`kua-mcp ${version}: reading KUA ${kua.version || ''} at ${kua.url} (${kua.source})${kua.version && kua.version !== version ? ` — this server is ${version}, restart the agent session after updating KUA` : ''}\n`)
+})

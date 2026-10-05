@@ -2,28 +2,36 @@
 
 > **K**now · **U**nified · **A**dministration
 
-KUA es una plataforma open source para centralizar el conocimiento y la administración de infraestructura distribuida en múltiples entornos cloud y clusters Kubernetes. No es solo un dashboard: **entiende, organiza y permite operar** toda tu infraestructura desde un único punto.
+Idioma: Español · [English](README.en.md)
 
-Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (frontend). Disponible como aplicación web o app nativa de escritorio (Electron) para **Windows**, **macOS** y **Linux**.
+KUA es una plataforma open source para observar y operar infraestructura distribuida en Kubernetes y varios proveedores cloud. Reúne inventario, actividad, logs y arquitectura de aplicaciones en una sola interfaz.
 
-![KUA Dashboard](screenshots/dashboard-nodes.png)
+Versión actual: **v1.17.0**. Construido con **Node.js + Express** y **Vue 3 + Vite + Pinia**; disponible como aplicación web o escritorio con Electron para **Windows**, **macOS** y **Linux**.
+
+Consulta el [changelog](docs/changelog.md) para las entregas y el [roadmap](docs/ROADMAP.md) para el backlog y la dirección futura. Las funciones listadas abajo describen el producto disponible; las ideas del roadmap no implican que ya estén implementadas.
+
+## Capturas
+
+![Vista de Pods de KUA](screenshots/dashboard-main.png)
+
+![Vista de Deployments de KUA](screenshots/dashboard-deployments.png)
 
 ---
 
 ## ¿Por qué KUA?
 
 | Problema | Solución KUA |
-|---|---|
-| Consolas separadas para AWS, GCP y Kubernetes | **Unificación** — un solo lugar |
-| Falta de contexto global entre servicios | **Know** — entiende el estado real |
-| Operación manual repetitiva | **Administration** — actúas, no solo observas |
-| Difícil trazabilidad entre entornos | Vista cross-cloud con credentials persisted |
+| --- | --- |
+| Consolas separadas para cada entorno | Un solo lugar para Kubernetes, AWS, GCP y Vercel |
+| Recursos sin contexto de aplicación | KUApps vincula arquitectura, recursos y observabilidad |
+| Operación manual repetitiva | Acciones guiadas, consola integrada y recomendaciones con evidencia |
 
 ---
 
 ## Funcionalidades
 
-### ☸️ Kubernetes
+### Kubernetes
+
 - Gestión completa: Pods, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, ConfigMaps, Secrets, PVCs, PVs, StorageClasses, Nodes, Events y recursos de policy/RBAC/scheduling/admission
 - Tablas con selección múltiple, eliminación masiva y ordenamiento correcto por `Age` usando duración real
 - Auto-refresh por vista activa sin perder contexto
@@ -38,7 +46,8 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - Import kubeconfigs desde YAML pegado, archivo local o ruta registrada
 - Helm: búsqueda de charts, instalación en el cluster, releases instalados, desinstalación y preset para metrics-server
 
-### ☁️ AWS — 22 servicios
+### AWS
+
 - **Cómputo**: EC2 (start/stop, SSH/RDP persistente en tabs), ECS (clusters, servicios, tareas), EKS, Lambda (invoke)
 - **Almacenamiento**: S3 (file browser + download + **crear bucket** + test endpoint), ECR (**deploy directo a Kubernetes**)
 - **Red**: VPC (**details panel** — subnets, SGs, route tables, IGWs, NAT GWs), API Gateway (REST & HTTP), CloudFront, Route 53
@@ -48,7 +57,8 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - **Analítica & ETL**: Glue, Athena, Data Pipeline
 - **Seguridad**: Secrets Manager (import al Env Manager), Cognito (**grupos por user pool**)
 
-### 🌐 GCP — 25 servicios
+### GCP
+
 - **Cómputo**: Cloud Run (start/stop), Cloud Run Jobs (run + historial de ejecuciones), GKE, Compute Engine VMs (start/stop)
 - **Base de datos**: Cloud SQL (start/stop), Cloud Spanner (SQL query editor), Firestore (document browser), Memorystore Redis
 - **Almacenamiento**: Cloud Storage (file browser + preview + download), Artifact Registry (paquetes)
@@ -64,12 +74,21 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 - **IAM**: Service Accounts (lista paginada + keys)
 
 ### 🔐 Env Manager
+
 - Perfiles de credenciales cifradas (AES-256-GCM) para AWS, GCP y genéricos
 - Import/Export de archivos `.env`
 - Import de secretos directamente desde Secret Manager (AWS y GCP)
 - Credenciales seleccionadas persisten entre sesiones
 
+### Vercel, arquitectura y observabilidad
+
+- Vercel: proyectos, despliegues y sus logs.
+- KUApps reúne recursos, relaciones, arquitectura y señales de observabilidad por aplicación.
+- Resúmenes de Kubernetes, AWS y GCP incluyen Advisor determinista; los logs admiten caché local cifrada, análisis y consultas.
+- El servidor MCP permite a clientes compatibles consultar datos y resúmenes de KUA en modo de solo lectura.
+
 ### 🖥️ Desktop App (Electron)
+
 - Aplicación nativa para Windows, macOS y Linux
 - Auto-inicia el servidor backend
 - Auto-update integrado con `electron-updater`
@@ -79,30 +98,7 @@ Construido con **Node.js + Express** (backend) y **Vue 3 + Vite + Pinia** (front
 
 ## Arquitectura
 
-```
-kuadashboard/
-├── server.js            # Express + WebSocket API server
-├── electron/            # Electron main + preload (contextBridge)
-├── routes/
-│   ├── aws.js           # AWS SDK v3 — 22 servicios (+ S3 create, ECR→K8s deploy, VPC details)
-│   ├── gcp.js           # GCP REST API — 25 servicios
-│   ├── helm.js          # Helm releases
-│   ├── envManager.js    # Credential profiles CRUD
-│   ├── localShell.js    # Local terminal WebSocket
-│   └── systemTools.js   # CLI tool detection
-├── lib/
-│   ├── credentialStore.js  # Encrypted credential vault
-│   └── crypto.js           # AES-256-GCM helpers
-└── frontend/            # Vue 3 + Vite + Pinia
-    └── src/
-        ├── App.vue
-        ├── components/
-        │   ├── cloud/       # AwsView, GcpView, GcsBrowser…
-        │   └── modals/      # HelpModal, WelcomeModal, FileViewerModal…
-        ├── stores/          # useKubeStore, useAwsStore, useGcpStore, useUpdateStore…
-        ├── composables/     # useApi, useToast, useChangelog, useTerminalStreams…
-        └── locales/         # en.js, es.js
-```
+El backend Express expone las API locales y conexiones WebSocket; el frontend Vue presenta vistas por proveedor y KUApps. La app Electron empaqueta ambos para escritorio.
 
 ---
 
@@ -158,7 +154,7 @@ npm run electron:build:all
 
 ```bash
 cd frontend && npm test
-# 241 tests — useGcpStore, useKubeStore, usePortForwardStore, useTerminalStore, useTerminalStreams…
+cd .. && npm test
 ```
 
 ---
@@ -168,160 +164,18 @@ cd frontend && npm test
 - Las credenciales se almacenan cifradas con AES-256-GCM; la clave se deriva de la máquina.
 - Los valores de Secrets K8s se muestran como `[REDACTED]` en el YAML viewer.
 - El preload de Electron usa `contextBridge` — el renderer nunca accede directamente a Node.js.
-- Usar en red local o detrás de autenticación — el servidor expone acceso total al kubeconfig.
+- El servidor escucha en `127.0.0.1` por defecto. Configura `KUA_HOST` solo si necesitas exponerlo en una red confiable: la API permite operar sobre los entornos configurados y no sustituye autenticación.
 
 ---
 
 ## Changelog
 
-### v1.8.0 (2026-05-10)
-- **Kubernetes Tables** — selección múltiple, eliminación masiva y columna `Age` con formato legible (`1day 3hrs 10min`, `2min`, `30sec`) ordenada por duración real
-- **Kubernetes Resources** — menú ampliado con más recursos de workloads, networking, storage, config, policy, RBAC, scheduling, admission y cluster
-- **ConfigMaps/Secrets/Envs** — edición clave/valor para ConfigMaps y Secrets, mapeo sencillo de datos y edición de variables de entorno en workloads
-- **Helm** — búsqueda de charts, instalación directa en el cluster, releases instalados/desinstalación, estado/output visible durante install y preset compatible para `metrics-server`
-- **Observabilidad** — métricas para Pods, workloads y Nodes vía `metrics.k8s.io`, fallback Prometheus y visor de eventos/notificaciones relacionadas
-- **Kubeconfig** — importación desde YAML pegado, selector de archivo Electron y registro manual de rutas kubeconfig existentes
-- **Port Forwarding** — túneles más confiables para Services y Pods con resolución del pod objetivo, sesiones persistentes y auto-reconexión
+La versión actual es **v1.17.0**. Entre las entregas recientes están Cloud Insights y costos de AWS, dashboards de CloudWatch, servicios SQS/SNS/SES, sesiones de consola unificadas, KUApps y análisis inteligente de logs. El [changelog completo](docs/changelog.md) contiene el detalle por versión.
 
-### v1.7.0 (2026-05-05)
-- **Auto-refresh** — actualización automática por vista activa para Kubernetes, AWS, GCP y Helm sin resetear el contexto de navegación
-- **Kubernetes Resource Panel** — nuevo panel lateral ajustable al seleccionar Pods, Deployments, Services, Ingresses, Secrets, PVCs, Nodes, Events y otros recursos; muestra secciones específicas por tipo, YAML estructurado y acciones de observabilidad
-- **Métricas Kubernetes** — visualización de CPU/memoria para Pods usando `metrics.k8s.io`; detección de Prometheus y acceso a Helm cuando falta integración de monitoreo
-- **Kubernetes Logs** — streaming en tiempo real para Pods y workloads (`deployments`, `statefulsets`, `daemonsets`) resolviendo pods por selector; prefijo de pod origen en streams multi-pod
-- **Terminal Logs** — normalización ANSI/VT, buffering de fragmentos, búsqueda, filtro por fecha serializada, descarga de logs y contador de líneas filtradas
-- **YAML Editor** — búsqueda con acción de confirmación, validación/lint, botón Guardar, estado de línea/columna/total, ruta de sección editada y autocompletado con `Ctrl+Space`
-- **AWS EC2 Remote Sessions** — SSH y RDP permanecen vivos como tabs persistentes; ocultar la consola no cierra el WebSocket y la sesión puede reabrirse desde una bandeja flotante
-- **AWS Athena** — corregida advertencia de lint `vue/no-v-for-template-key` en tablas de catálogo
+## Roadmap
 
-### v1.6.2 (2026-04-29)
-- **AWS EC2 Info** — botones de copia ⧉ en campos clave: Instance ID, AMI, IP Pública/Privada, DNS Público/Privado, Key Pair y Perfil IAM
-- **AWS Lambda Info** — botones de copia ⧉ en campos clave: ARN, SHA256, VPC ID, DLQ ARN y KMS Key ARN
-- **UX** — el botón aparece al hacer hover y confirma visualmente con ✓ por 1.5 s; usa Clipboard API nativa sin dependencias externas
-
-### v1.6.1 (2026-04-24)
-- **HelpModal** — fix encoding mojibake en títulos y comentarios del componente (caracteres UTF-8 corruptos por doble codificación CP850)
-- **Helm** — contextos con nombre ARN de EKS (`arn:aws:eks:...`) ya se resuelven correctamente; `KUBECONFIG` completo (incluyendo `kuadashboard_merged.yaml`) se inyecta al invocar el CLI de helm
-
-### v1.6.0 (2026-04-24)
-- **AWS Lambda** — tab **Logs** dedicado: visualiza eventos de CloudWatch con selector de rango (15 min → 24 h) y refresh; si no existe el log group muestra opción de crearlo con selección de retención (7–365 días); tags movidos dentro de la grid de cards del tab Básico
-- **AWS ECR → Deploy to K8s** — fix en indentación YAML que causaba `error converting YAML to JSON: did not find expected '-' indicator`; nueva opción **Crear Service** (ClusterIP / NodePort / LoadBalancer) que agrega un recurso `Service` separado con `---` al manifiesto generado
-- **AWS ECR → kubectl apply** — agregado `--validate=false` para evitar error de conexión al API server durante validación de schema OpenAPI
-- **AWS Athena** — fix `sortedRows is not a function` (renombrado a `sortRows` para consistencia con el resto de tablas); límite `MaxResults` corregido de 100 → 50 en `ListTableMetadata`
-- **AWS Lex V2** — corregido `maxResults` de 100 → 50 en `ListIntents`, `ListSlots`, `ListSlotTypes` (límite máximo del API)
-- **Backend** — nuevos endpoints: `POST /lambda/:name/logging` (crear log group CW + configurar retención + actualizar loggingConfig), `GET /logs/lambda/:name` (eventos CloudWatch con filtro de tiempo)
-
-### v1.5.0 (2026-04-23)
-- **AWS S3** — modal para crear bucket (nombre, región, block public access); botón "Test" por fila con latencia y diagnóstico de acceso
-- **AWS ECR** — lista detallada de imágenes con tags/digest/fecha push; modal "Deploy to K8s" que genera manifiesto Deployment YAML (replicas, namespace, port, pull secret, context) y aplica con `kubectl apply`
-- **AWS VPC** — panel "Details" con 6 inner tabs: Overview, Subnets, Security Groups (reglas inbound), Route Tables, Internet Gateways, NAT Gateways
-- **AWS Cognito** — tab "Groups" en el panel de detalle de cada user pool (nombre, descripción, precedencia, Role ARN)
-- **Backend** — nuevos endpoints: `POST /s3`, `GET /s3/:bucket/test`, `GET /ecr/:repo/images`, `POST /k8s/apply`, `GET /cognito/userpools/:id/groups`
-
-### v1.4.3 (2026-04-10)
-- Fix icono Windows en el build de Electron
-- Corrección BOM en package.json que rompía electron-builder
-- Mejoras CI/CD: pass tag_name en workflow_dispatch
-
-### v1.4.2 (2026-04-09)
-- Panel de detalle Lambda (5 tabs: Overview, Code Viewer, Logs, Env Vars, Permissions)
-- Panel de detalle EC2 (5 tabs: Overview, Networking, Security, Storage, Tags)
-- SSH con autenticación por contraseña + PEM file picker + botones SSH/RDP según OS
-
-### v1.4.1
-- Bedrock foundation models, Amazon Lex V2 bots, AgentCore CloudFormation stacks
-- Dependencias AWS SDK: `client-bedrock`, `client-lex-models-v2`, `client-cloudformation`
-
----
+El backlog activo incluye cerrar brechas de KUA Application, ampliar los adaptadores de arquitectura y avanzar el centro de control con guardas y auditoría. Azure, DigitalOcean, CRD y otras ideas siguen siendo trabajo futuro; consulta el [roadmap actualizado](docs/ROADMAP.md) antes de tratarlas como funciones disponibles.
 
 ## Licencia
 
-MIT — Construido con ❤️ y mantenido en tiempo libre.  
-[¿Te resulta útil? Considera apoyar el proyecto →](https://github.com/sponsors/lnavarrocarter/)
-
-## Getting Started
-
-### Backend
-```bash
-npm install
-node server.js        # → http://localhost:7190
-```
-
-### Frontend (Vue dev server)
-```bash
-cd frontend
-npm install
-npm run dev           # → http://localhost:7191
-```
-
-### Production build
-```bash
-cd frontend
-npm run build         # outputs to frontend/dist/
-```
-
-## Requirements
-
-- Node.js >= 16
-- kubectl / kubeconfig configured
-
-
-Admin web de Kubernetes estilo Lens – ligero, dark-mode, sin dependencias de frontend.
-
-## Características
-
-| Función | Recursos |
-|---|---|
-| **Ver / filtrar** | Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVCs, Nodes, Events |
-| **Reiniciar** | Deployments, StatefulSets |
-| **Escalar** | Deployments, StatefulSets |
-| **Ver / editar YAML y Apply** | Todos los recursos |
-| **Ver logs en tiempo real** | Pods (streaming WebSocket, múltiples containers) |
-| **Eliminar** | Todos los recursos |
-| **Cordon / Uncordon** | Nodes |
-| **Drain** | Nodes (cordon + evict pods) |
-| **Múltiples contexts** | Switch de contexto desde la cabecera |
-| **Múltiples namespaces** | Selector global (incluye "All namespaces") |
-
-## Requisitos
-
-- Node.js ≥ 16
-- `kubectl` configurado con kubeconfig válido (`~/.kube/config`)
-
-## Instalación
-
-```bash
-cd kuadashboard
-npm install
-```
-
-## Uso
-
-```bash
-npm start
-# Dev (hot-reload):
-npm run dev
-```
-
-Abre http://localhost:7190
-
-Cambia el puerto con la variable de entorno `PORT`:
-```bash
-PORT=8080 npm start
-```
-
-## Estructura
-
-```
-kuadashboard/
-├── server.js          # API Express + WebSocket
-├── package.json
-└── public/
-    ├── index.html     # Layout HTML
-    ├── styles.css     # Dark theme
-    └── app.js         # Lógica de UI (vanilla JS)
-```
-
-## Nota de seguridad
-
-- Los valores de Secrets se muestran como `[REDACTED]` en el YAML viewer.
-- El servidor expone tu kubeconfig al navegador; úsalo en red local o detrás de autenticación.
+MIT. [Apoya el proyecto](https://github.com/sponsors/lnavarrocarter/).

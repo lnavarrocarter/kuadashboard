@@ -181,14 +181,36 @@ router.get('/storage', (_req, res) => {
 // ─── GET /mcp ─────────────────────────────────────────────────────────────────
 // How MCP clients (Claude Code, Codex…) start the KUA MCP server here.
 
-router.get('/mcp', (_req, res) => {
+function mcpLaunchHere() {
   const { mcpLaunch } = require('../lib/mcp/launch');
-  res.json(mcpLaunch({
+  return mcpLaunch({
     execPath: process.execPath,
     electron: process.versions.electron,
     rootDir: require('path').join(__dirname, '..'),
-    port: process.env.PORT || 7190,
-  }));
+  });
+}
+
+router.get('/mcp', (_req, res) => {
+  res.json(mcpLaunchHere());
+});
+
+// POST /mcp/verify: starts the MCP server like a client would and reports what it reached.
+router.post('/mcp/verify', async (_req, res) => {
+  const result = await require('../lib/mcp/clientSetup').verifyMcp({ launch: mcpLaunchHere() });
+  const port = Number(process.env.PORT || 7190);
+  // The server found another KUA (two running): say which one it will read.
+  res.json({ ...result, thisKua: `http://localhost:${port}` });
+});
+
+// POST /mcp/install { client: 'claude' | 'codex' }: adds the server to the client's config (user scope).
+router.post('/mcp/install', async (req, res) => {
+  // JSON only: another site cannot send it to this loopback API without a CORS preflight, which KUA never allows.
+  if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
+  try {
+    res.json(await require('../lib/mcp/clientSetup').installMcp({ client: req.body?.client, launch: mcpLaunchHere() }));
+  } catch (err) {
+    res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' ? 404 : 500).json({ error: err.message, code: err.code });
+  }
 });
 
 // ─── GET /usage ───────────────────────────────────────────────────────────────

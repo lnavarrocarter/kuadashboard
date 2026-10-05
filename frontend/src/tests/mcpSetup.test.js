@@ -67,4 +67,51 @@ describe('AgentConnectModal', () => {
     expect(apiFetch).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  // #133: install and verify from the modal instead of pasting commands.
+  const open = async () => {
+    const wrapper = mount(AgentConnectModal, { props: { show: true }, attachTo: document.body })
+    await flushPromises()
+    return wrapper
+  }
+  const click = async selector => { document.querySelector(selector).click(); await flushPromises() }
+  const outcome = () => document.querySelector('[data-test="agent-connect-outcome"]')?.textContent.trim()
+
+  it('installs in Claude Code, and explains a missing CLI', async () => {
+    apiFetch.mockImplementation(async (path, options) => {
+      if (path === '/api/system/mcp') return REPO
+      if (path === '/api/system/mcp/install' && JSON.parse(options.body).client === 'claude') return { client: 'claude', name: 'kua' }
+      throw Object.assign(new Error('codex is not installed or not in PATH.'), { details: { code: 'CLI_NOT_FOUND' } })
+    })
+    const wrapper = await open()
+    await click('[data-test="agent-connect-install"]')
+    expect(apiFetch).toHaveBeenCalledWith('/api/system/mcp/install', expect.objectContaining({ method: 'POST', body: JSON.stringify({ client: 'claude' }) }))
+    expect(outcome()).toBe('Added to Claude Code. Start a new agent session to load it.')
+
+    await click('[data-test="agent-connect-codex"]')
+    expect(outcome()).toBeUndefined()
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toBe('Codex CLI is not installed or not in PATH here: run the command above in the terminal where you use it.')
+
+    await click('[data-test="agent-connect-json"]')
+    expect(document.querySelector('[data-test="agent-connect-install"]')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('verifies the connection and names what fails', async () => {
+    const answers = [
+      { ok: true, tools: 11, profiles: 3, kua: { url: 'http://localhost:7192', version: '1.17.0', reachable: true }, thisKua: 'http://localhost:7192' },
+      { ok: true, tools: 11, profiles: 0, kua: { url: 'http://localhost:7190', version: '1.16.0', reachable: true }, thisKua: 'http://localhost:7192' },
+      { ok: false, error: 'KUA is not reachable at http://localhost:7190 (ECONNREFUSED).', thisKua: 'http://localhost:7192' },
+    ]
+    apiFetch.mockImplementation(async path => (path === '/api/system/mcp' ? REPO : answers.shift()))
+    const wrapper = await open()
+    await click('[data-test="agent-connect-verify"]')
+    expect(outcome()).toBe('It works: 11 tools, reading KUA 1.17.0 · http://localhost:7192 (3 cloud profiles).')
+    await click('[data-test="agent-connect-verify"]')
+    expect(outcome()).toBe('Another KUA is running at http://localhost:7190, and the agent will read that one. Close it, or set KUA_URL to http://localhost:7192.')
+    await click('[data-test="agent-connect-verify"]')
+    expect(outcome()).toBe('It does not work yet: KUA is not reachable at http://localhost:7190 (ECONNREFUSED).')
+    wrapper.unmount()
+  })
 })

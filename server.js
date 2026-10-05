@@ -358,6 +358,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
+    // The MCP server checks it reached KUA (and which version) before using a port.
+    app: 'kua',
+    version: require('./package.json').version,
     status: 'healthy',
     apm: apmDatabase.health(),
     apmScheduler: apmScheduler.health(),
@@ -3393,7 +3396,18 @@ server.listen(PORT, HOST, () => {
   console.log(`\n  KuaDashboard running → http://localhost:${PORT}`);
   if (HOST !== '127.0.0.1') console.log(`  Listening on ${HOST}: the API has no authentication, so anyone who reaches this address controls KUA.`);
   console.log(`  Context: ${currentContext}\n`);
+  // ~/.kuadashboard/run/kua-<port>.json: how the MCP server finds this KUA without KUA_URL.
+  try {
+    unregisterInstance = require('./lib/mcp/runtime').registerInstance({
+      port: server.address().port,
+      version: require('./package.json').version,
+      packaged: path.basename(__dirname) === 'app.asar',
+    });
+  } catch (err) { console.warn('[mcp] could not record this instance:', err.message); }
 });
+
+let unregisterInstance = () => {};
+process.on('exit', () => unregisterInstance());
 
 let shuttingDown = false;
 
