@@ -673,7 +673,7 @@ async function loadOperationalEvents() {
 }
 
 async function selectApplication(applicationId) {
-  if (!profileId) {
+  if (!props.profileId) {
     const application = store.applications.find(item => item.id === applicationId)
     if (application) emit('application-context', application)
     return
