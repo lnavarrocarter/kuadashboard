@@ -50,3 +50,16 @@ KUA compares each Advisor analysis with the previous one of the same scope and l
 The first analysis of a scope is the baseline and raises no alerts. The same change alerts at most once a day, and alerts are kept 90 days. Clicking one opens its overview (the AWS or GCP profile, the Kubernetes overview or the KUApps application) and marks it read.
 
 New high findings and expired acceptances also raise a **system notification** (Windows, macOS, Linux). Turn it off in **Help & Options → Options → Posture notifications**; the alerts stay in the bell. Alerts compare analyses KUA already ran: they never call a cloud provider by themselves.
+
+## Scheduled analysis
+
+Below the findings, **Scheduled analysis** makes KUA analyse that scope on its own, so the history and the posture alerts keep moving while nobody has the overview open: every 6, 12 or 24 hours on Pro, and also every hour on Team. A scheduled run calls the same route as the overview, so its results match an interactive scan.
+
+| Overview | What a run reads | Cost |
+| --- | --- | --- |
+| AWS | The same control-plane APIs as the overview | Free |
+| GCP | About 20 list calls of the overview | The Storage and Secret Manager lists are billed: about USD 0.001 a month every 6 hours |
+| Kubernetes | The cluster | Free. It runs while that context is the active one in KUA; otherwise it waits |
+| KUApps | Data KUA already has | No cloud call |
+
+The panel shows the last run, the next one, and why a run failed or is waiting. Every change of a schedule is recorded in the audit log.

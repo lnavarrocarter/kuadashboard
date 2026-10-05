@@ -11,6 +11,9 @@
  *   GET    /history?scope=&days= one summary per analysis                                 (Pro)
  *   GET    /alerts?limit=        posture alerts, newest first, with the unread count     (Pro)
  *   POST   /alerts/read          { ids } or { all: true }                                 (Pro)
+ *   GET    /schedules            scheduled analyses (lib/advisor/scheduler.js)
+ *   PUT    /schedules            { scope, intervalHours }  every 6 h at most on Pro, 1 h on Team
+ *   DELETE /schedules?scope=     stop analysing a scope on its own
  */
 
 const express = require('express');
@@ -33,7 +36,7 @@ function currentAuthor() {
   return 'local';
 }
 
-function createAdvisorRouter({ store, auditLog, plan = getPlan, author = currentAuthor } = {}) {
+function createAdvisorRouter({ store, scheduler = null, auditLog, plan = getPlan, author = currentAuthor } = {}) {
   const router = express.Router();
   const fail = (res, err) => res.status(err.statusCode || 500).json({ error: err.message, code: err.code, required: err.required });
   // Accepting findings and reading their history are part of the Advisor (Pro and Team).
@@ -88,6 +91,30 @@ function createAdvisorRouter({ store, auditLog, plan = getPlan, author = current
       const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 500) : null;
       if (!ids && req.body?.all !== true) throw Object.assign(new Error('Send ids or all: true'), { statusCode: 400 });
       res.json({ changed: store().markRead({ ids, all: req.body?.all === true }), unread: store().alerts({ limit: 1 }).unread });
+    } catch (err) { fail(res, err); }
+  });
+
+  router.get('/schedules', (_req, res) => {
+    res.json(scheduler ? scheduler.list() : []);
+  });
+
+  router.put('/schedules', (req, res) => {
+    try {
+      if (!scheduler) return res.status(503).json({ error: 'Scheduled analysis is not available' });
+      const scope = validScope(req.body?.scope);
+      const schedule = scheduler.set(scope, req.body?.intervalHours);
+      auditLog?.log({ category: 'advisor', action: 'Advisor scheduled analysis set', resource: scope, details: { intervalHours: schedule.intervalHours } });
+      res.json(schedule);
+    } catch (err) { fail(res, err); }
+  });
+
+  router.delete('/schedules', (req, res) => {
+    try {
+      if (!scheduler) return res.status(503).json({ error: 'Scheduled analysis is not available' });
+      const scope = validScope(req.query.scope);
+      if (!scheduler.remove(scope)) return res.status(404).json({ error: 'No scheduled analysis for this scope' });
+      auditLog?.log({ category: 'advisor', action: 'Advisor scheduled analysis stopped', resource: scope });
+      res.json({ removed: true });
     } catch (err) { fail(res, err); }
   });
 

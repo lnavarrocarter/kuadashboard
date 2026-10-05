@@ -189,6 +189,22 @@
           </ul>
         </div>
 
+        <!-- Scheduled analysis (lib/advisor/scheduler.js): history and alerts move without the overview open -->
+        <div v-if="canDecide && scopeKind" class="adv-schedule" data-test="advisor-schedule">
+          <label>
+            <i data-lucide="calendar-clock"></i>{{ t('advisor.schedule.label') }}
+            <select :value="schedule?.intervalHours || 0" :disabled="scheduleBusy" data-test="advisor-schedule-select" @change="setSchedule(Number($event.target.value))">
+              <option :value="0">{{ t('advisor.schedule.off') }}</option>
+              <option v-for="hours in SCHEDULE_CHOICES" :key="hours" :value="hours" :disabled="hours < minScanHours">
+                {{ t('advisor.schedule.every', { n: hours }) }}{{ hours < minScanHours ? ` · ${t('plan.name_team')}` : '' }}
+              </option>
+            </select>
+          </label>
+          <span class="adv-dim">{{ t(`advisor.schedule.cost.${scopeKind}`) }}</span>
+          <span v-if="scheduleStatus" :class="['adv-schedule-status', { 'adv-warn': schedule.lastStatus !== 'ok' }]" data-test="advisor-schedule-status">{{ scheduleStatus }}</span>
+          <span v-if="scheduleError" class="adv-warn">{{ scheduleError }}</span>
+        </div>
+
         <p v-if="report.unavailable?.length" class="adv-foot">
           <i data-lucide="eye-off"></i>
           {{ t('advisor.unavailable', { list: report.unavailable.map(u => u.action || u.source).join(', ') }) }}
@@ -208,6 +224,7 @@ import { createIcons, icons } from 'lucide'
 import { useI18n } from '../../composables/useI18n'
 import { useApi } from '../../composables/useApi'
 import { settings } from '../../composables/useSettings'
+import { usePlan } from '../../composables/usePlan'
 import { advisorBrief } from '../../shared/agentBrief.mjs'
 import AgentBriefActions from './AgentBriefActions.vue'
 // chart.js loads with the history, not with the overview that shows this panel.
@@ -295,6 +312,50 @@ async function revoke(finding) {
 
 const when = iso => (iso ? new Date(iso).toLocaleDateString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'medium' }) : '')
 
+// ── Scheduled analysis of this scope (Pro: every 6 h at most, Team: 1 h) ──────
+const SCHEDULE_CHOICES = [1, 6, 12, 24]
+const whenTime = iso => (iso ? new Date(iso).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '')
+const { plan } = usePlan()
+const minScanHours = computed(() => plan.value?.limits?.advisorScanMinHours || 6)
+const schedule = ref(null)
+const scheduleBusy = ref(false)
+const scheduleError = ref('')
+const scopeKind = computed(() => {
+  const kind = String(props.report?.posture?.historyScope || '').split(':')[0]
+  return ['aws', 'gcp', 'kubernetes', 'product'].includes(kind) ? kind : ''
+})
+const scheduleStatus = computed(() => {
+  const current = schedule.value
+  if (!current) return ''
+  if (current.lastStatus === 'skipped') return t('advisor.schedule.skipped')
+  if (current.lastStatus === 'error') return t('advisor.schedule.failed', { error: current.lastError })
+  if (current.lastRunAt) return t('advisor.schedule.last', { date: whenTime(current.lastRunAt), next: whenTime(current.nextRunAt) })
+  return t('advisor.schedule.pending')
+})
+
+async function loadSchedule() {
+  const scope = props.report?.posture?.historyScope
+  if (!scope || !canDecide.value) { schedule.value = null; return }
+  try {
+    schedule.value = (await apiFetch('/api/advisor/schedules')).find(item => item.scope === scope) || null
+  } catch { schedule.value = null }
+}
+
+async function setSchedule(hours) {
+  const scope = props.report.posture.historyScope
+  scheduleBusy.value = true
+  scheduleError.value = ''
+  try {
+    if (hours) schedule.value = await apiFetch('/api/advisor/schedules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope, intervalHours: hours }) })
+    else if (schedule.value) {
+      await apiFetch(`/api/advisor/schedules?scope=${encodeURIComponent(scope)}`, { method: 'DELETE' })
+      schedule.value = null
+    }
+  } catch (err) {
+    scheduleError.value = err.message
+  } finally { scheduleBusy.value = false }
+}
+
 // ── History: passed checks (%) and high findings per analysis ─────────────────
 const showHistory = ref(false)
 const history = ref([])
@@ -369,10 +430,11 @@ watch(() => props.report, (report, previous) => {
   if (category.value !== 'all' && !categories.value.includes(category.value)) category.value = 'all'
   // A new analysis adds a point: keep the open chart current.
   if (showHistory.value && report?.posture?.historyScope && report.generatedAt !== previous?.generatedAt) loadHistory()
+  if (report?.posture?.historyScope !== previous?.posture?.historyScope) loadSchedule()
 })
 
 const refreshIcons = () => nextTick(() => createIcons({ icons }))
-onMounted(refreshIcons)
+onMounted(() => { refreshIcons(); loadSchedule() })
 onUpdated(refreshIcons)
 </script>
 
@@ -445,6 +507,10 @@ onUpdated(refreshIcons)
 .adv-accepted-item { opacity: .85; }
 .adv-row-static { cursor: default; }
 .adv-accepted-why { margin: 0; padding: 0 12px 8px; font-size: 11px; color: var(--text-dim); line-height: 1.5; overflow-wrap: anywhere; }
+.adv-schedule { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 11px; }
+.adv-schedule label { display: flex; gap: 6px; align-items: center; color: var(--text); }
+.adv-schedule label svg { width: 14px; height: 14px; color: var(--text-dim); }
+.adv-schedule select { font: inherit; font-size: 11px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
 .adv-history { display: flex; flex-direction: column; gap: 8px; }
 .adv-history p { margin: 0; font-size: 12px; }
 .adv-history-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }

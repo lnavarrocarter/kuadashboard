@@ -3,7 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 const apiFetch = vi.fn()
-vi.mock('../composables/useApi', () => ({ useApi: () => ({ apiFetch }) }))
+// api: the plan (usePlan); apiFetch: everything the panel asks for.
+vi.mock('../composables/useApi', () => ({ useApi: () => ({ apiFetch }), api: async () => ({ plan: 'pro', features: { advisor: true }, limits: { advisorScanMinHours: 6 } }) }))
 // __esModule: the panel loads the chart lazily (defineAsyncComponent takes `default` from ES modules only).
 vi.mock('../components/cloud/CloudMetricChart.vue', () => ({
   __esModule: true,
@@ -126,7 +127,7 @@ describe('AdvisorPanel posture', () => {
   })
 
   it('accepts a finding for some resources with a reason and an expiry', async () => {
-    apiFetch.mockResolvedValue([{ id: 'new' }])
+    apiFetch.mockImplementation(async path => (path === '/api/advisor/schedules' ? [] : [{ id: 'new' }]))
     const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: POSTURE }) } })
     await wrapper.find('[data-test="advisor-finding-aws.orphan_volumes"] .adv-row').trigger('click')
     await wrapper.find('[data-test="advisor-accept-aws.orphan_volumes"]').trigger('click')
@@ -140,7 +141,7 @@ describe('AdvisorPanel posture', () => {
     await wrapper.find('[data-test="advisor-decision"]').trigger('submit')
     await flushPromises()
 
-    const [path, options] = apiFetch.mock.calls[0]
+    const [path, options] = apiFetch.mock.calls.find(([called]) => called === '/api/advisor/acceptances')
     expect(path).toBe('/api/advisor/acceptances')
     const body = JSON.parse(options.body)
     expect(body).toMatchObject({ scope: 'aws:p1', ruleId: 'aws.orphan_volumes', kind: 'accepted', reason: 'Kept for the yearly restore test', resources: [{ kind: 'EBS', name: 'vol-1', detail: '20 GiB gp3' }] })
@@ -186,5 +187,51 @@ describe('AdvisorPanel posture', () => {
     await wrapper.find('[data-test="advisor-finding-aws.root_mfa"] .adv-row').trigger('click')
     expect(wrapper.find('[data-test="advisor-accept-aws.root_mfa"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="advisor-history-toggle"]').exists()).toBe(false)
+  })
+})
+
+// Scheduled analysis of the scope (lib/advisor/scheduler.js).
+describe('AdvisorPanel scheduled analysis', () => {
+  const POSTURE = { acceptanceScope: 'aws:p1', historyScope: 'aws:p1:us-east-1', expiringSoon: 0, expired: 0 }
+
+  beforeEach(() => {
+    settings.lang = 'en'
+    apiFetch.mockReset()
+  })
+
+  it('shows the schedule of the scope with its cost, and turns it on and off', async () => {
+    const saved = { scope: 'aws:p1:us-east-1', intervalHours: 12, lastRunAt: null, nextRunAt: null, lastStatus: null }
+    apiFetch.mockImplementation(async (path, options = {}) => {
+      if (path === '/api/advisor/schedules' && !options.method) return []
+      if (options.method === 'PUT') return saved
+      return { removed: true }
+    })
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: POSTURE }) } })
+    await flushPromises()
+    const panel = wrapper.find('[data-test="advisor-schedule"]')
+    expect(panel.text()).toContain('Free AWS control-plane APIs.')
+    const select = wrapper.find('[data-test="advisor-schedule-select"]')
+    // Pro: every hour is a Team option
+    expect(select.findAll('option').map(option => [option.text(), option.attributes('disabled') !== undefined])).toEqual([
+      ['Off', false], ['Every 1 h · Team', true], ['Every 6 h', false], ['Every 12 h', false], ['Every 24 h', false],
+    ])
+
+    await select.setValue('12')
+    await flushPromises()
+    expect(apiFetch).toHaveBeenCalledWith('/api/advisor/schedules', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ scope: 'aws:p1:us-east-1', intervalHours: 12 }) }))
+    expect(wrapper.find('[data-test="advisor-schedule-status"]').text()).toBe('The first analysis runs within a few minutes.')
+
+    await select.setValue('0')
+    await flushPromises()
+    expect(apiFetch).toHaveBeenCalledWith('/api/advisor/schedules?scope=aws%3Ap1%3Aus-east-1', { method: 'DELETE' })
+  })
+
+  it('says why a Kubernetes schedule is waiting', async () => {
+    const scope = 'kubernetes:other:all'
+    apiFetch.mockResolvedValue([{ scope, intervalHours: 6, lastStatus: 'skipped', lastError: 'context not active' }])
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, historyScope: scope, acceptanceScope: 'kubernetes:other' } }) } })
+    await flushPromises()
+    expect(wrapper.find('[data-test="advisor-schedule"]').text()).toContain('It runs while this context is the active one in KUA')
+    expect(wrapper.find('[data-test="advisor-schedule-status"]').text()).toBe('Waiting: it runs when this context is the active one in KUA.')
   })
 })
