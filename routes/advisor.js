@@ -9,6 +9,8 @@
  *   POST   /acceptances          { scope, ruleId, resources?, kind, reason, expiresAt? }  (Pro)
  *   DELETE /acceptances/:id      revoke: the finding counts again
  *   GET    /history?scope=&days= one summary per analysis                                 (Pro)
+ *   GET    /alerts?limit=        posture alerts, newest first, with the unread count     (Pro)
+ *   POST   /alerts/read          { ids } or { all: true }                                 (Pro)
  */
 
 const express = require('express');
@@ -68,6 +70,24 @@ function createAdvisorRouter({ store, auditLog, plan = getPlan, author = current
       if (!revoked) return res.status(404).json({ error: 'Acceptance not found' });
       auditLog?.log({ category: 'advisor', action: 'Advisor acceptance revoked', resource: revoked.ruleId, details: { scope: revoked.scope, kind: revoked.kind, resource: revoked.resourceLabel } });
       res.json(revoked);
+    } catch (err) { fail(res, err); }
+  });
+
+  // Posture alerts: what changed between analyses, and acceptances about to expire.
+  router.get('/alerts', (req, res) => {
+    try {
+      requireAdvisor();
+      res.json(store().alerts({ limit: req.query.limit }));
+    } catch (err) { fail(res, err); }
+  });
+
+  // { ids: [..] } or { all: true }
+  router.post('/alerts/read', (req, res) => {
+    try {
+      requireAdvisor();
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 500) : null;
+      if (!ids && req.body?.all !== true) throw Object.assign(new Error('Send ids or all: true'), { statusCode: 400 });
+      res.json({ changed: store().markRead({ ids, all: req.body?.all === true }), unread: store().alerts({ limit: 1 }).unread });
     } catch (err) { fail(res, err); }
   });
 

@@ -26,6 +26,7 @@ export const SETTINGS_DEFAULTS = {
   kubePrometheusDiscoveryMin: 5, // backend reuse of the Prometheus service discovery
   gcpListRefreshSec:     30,   // GCP tables: min seconds between auto-refreshes (0 = every tick)
   vercelListRefreshSec:  30,   // Vercel tables: min seconds between auto-refreshes (0 = every tick)
+  advisorNotifications:  true, // system notifications for high posture alerts (Pro; lib/advisor/posture.js)
 }
 const DEFAULTS = SETTINGS_DEFAULTS
 
