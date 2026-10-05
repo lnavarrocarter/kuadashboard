@@ -1,0 +1,1 @@
+function e(e=()=>Date.now()){let t=new Map;return{fresh(n,r){let i=t.get(n);return Number(r)>0&&i!=null&&e()-i<Number(r)*1e3},mark(n){t.set(n,e())},clear(){t.clear()}}}export{e as t};
