@@ -41,6 +41,8 @@ Los precios están en dólares de Estados Unidos. Los impuestos se calculan en e
 
 Puedes cancelar cuando quieras desde KUA → Ayuda y opciones → Cuenta → *Administrar suscripción*, o desde el portal de cliente de Polar. Al cancelar, el plan sigue activo hasta el final del periodo ya pagado y no se renueva. Después no se cobra nada más.
 
+**Datos en la nube cuando el plan termina o cambia.** Si la cuenta (o un equipo cuyo dueño ya no tiene el plan Team) guarda en la nube más de lo que permite su nuevo plan, las subidas se detienen y todo sigue disponible para descargar o restaurar durante 30 días. Te avisamos en el portal de la cuenta, en KUA y por email 30, 7 y 1 días antes del plazo. Si después de 30 días todavía no cabe, se eliminan los respaldos y versiones sincronizadas más antiguos hasta que quepa; el plan Free no guarda datos en la nube. Las aplicaciones en tus equipos nunca se tocan.
+
 ## 6. Reembolsos
 
 Los pagos **no son reembolsables**. Esto incluye los periodos parciales y el tiempo no usado después de cancelar.

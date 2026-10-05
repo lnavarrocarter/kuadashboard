@@ -64,7 +64,7 @@ When you sign in, the KUA control plane stores the following:
 | One-time desktop sign-in codes (hashed) | To link KUA Desktop safely | 5 minutes, used once |
 | Subscription: plan, status, renewal date and Polar subscription and customer ids | To unlock your plan | Until you delete the account |
 | Ids of the payment notifications received from Polar (no personal data) | To process each one once | 90 days |
-| Cloud backups (Pro and Team): the sanitized KUA Application bundles you choose to back up, with their name, application, size, checksum and date | To restore them on any computer | Until you delete them or the account |
+| Cloud backups (Pro and Team): the sanitized KUA Application bundles you choose to back up, with their name, application, size, checksum and date | To restore them on any computer | Until you delete them or the account; when the plan no longer covers them, 30 days after the first notice (see the [terms](/terms)) |
 
 We receive only your identity from Google. We do not receive or store Google access or refresh tokens, and KUA cannot read your Gmail, Drive or any other Google data.
 
