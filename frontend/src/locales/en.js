@@ -788,6 +788,7 @@ export default {
   // ── Kubernetes tables, overview and resource detail ─────────────────────────────────────────────
   'common.loading': 'Loading…',
   'common.retry': 'Retry',
+  'common.viewLoadFailed': 'This view could not load. Reload the window to try again.',
   'common.yes': 'Yes',
   'common.no': 'No',
 

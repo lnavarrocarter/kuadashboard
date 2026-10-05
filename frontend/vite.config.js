@@ -14,6 +14,11 @@ export default defineConfig({
   resolve: {
     alias: process.env.VITEST ? [] : [{ find: /^lucide$/, replacement: fileURLToPath(new URL('./src/lib/lucideIcons.js', import.meta.url)) }],
   },
+  // Development: the section views load on demand, so Vite would only discover
+  // their dependencies (vue-flow, chart.js…) when one opens, re-bundle them and
+  // break the imports of the window already open. Scanning every component at
+  // start bundles them all up front.
+  optimizeDeps: { entries: ['index.html', 'src/**/*.vue'] },
   // In Electron production build, assets must use relative paths
   base: process.env.ELECTRON_BUILD ? './' : '/',
   build: {

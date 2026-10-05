@@ -517,7 +517,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent, h } from 'vue'
 import { createIcons, icons } from 'lucide'
 
 import { useKubeStore }        from './stores/useKubeStore'
@@ -559,11 +559,26 @@ import { useUpdateStore } from './stores/useUpdateStore'
 
 // The views of each section load on demand, in their own chunks: the first
 // paint only parses Kubernetes and the shell. A view that arrives after the
-// parent drew its icons gets them drawn once it renders.
-const lazyView = loader => defineAsyncComponent(() => loader().then(module => {
-  setTimeout(() => createIcons({ icons }))
-  return module
-}))
+// parent drew its icons gets them drawn once it renders. A chunk that cannot
+// load (Vite re-optimized its dependencies under an open window, an update
+// replaced the files) shows a reload notice instead of a blank section.
+const ViewLoadFailed = {
+  setup: () => () => h('div', { class: 'empty-state' }, [
+    h('p', t('common.viewLoadFailed')),
+    h('button', { class: 'btn sm', onClick: () => location.reload() }, t('common.retry')),
+  ]),
+}
+const lazyView = loader => defineAsyncComponent({
+  loader: () => loader().then(module => {
+    setTimeout(() => createIcons({ icons }))
+    return module
+  }),
+  errorComponent: ViewLoadFailed,
+  onError(error, retry, fail, attempts) {
+    if (attempts <= 2) setTimeout(retry, attempts * 500)
+    else { console.error('[view] could not load:', error); fail() }
+  },
+})
 const HelmView             = lazyView(() => import('./components/HelmView.vue'))
 const KubeLogsView         = lazyView(() => import('./components/cloud/logs/KubeLogsView.vue'))
 const AuditLogView         = lazyView(() => import('./components/AuditLogView.vue'))
