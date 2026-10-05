@@ -63,3 +63,14 @@ Below the findings, **Scheduled analysis** makes KUA analyse that scope on its o
 | KUApps | Data KUA already has | No cloud call |
 
 The panel shows the last run, the next one, and why a run failed or is waiting. Every change of a schedule is recorded in the audit log.
+
+## Alert webhooks (Slack and Teams)
+
+On the **Team** plan, posture alerts can also go to a Slack or Microsoft Teams channel: **Help & Options → Options → Alert webhooks**.
+
+- **Slack**: create an *Incoming Webhook* (Apps → Incoming Webhooks) and paste its `https://hooks.slack.com/…` address.
+- **Microsoft Teams**: in the channel, create a Workflow from the template *Post to a channel when a webhook request is received* and paste its address.
+
+Each webhook chooses what it receives (high findings and expired acceptances; high and medium; or everything, fixes included) and the language of the messages. The alerts of one analysis arrive as one message. **Send test** checks the channel right away, and the last error is shown under the webhook.
+
+Messages go straight from this computer to Slack or Teams, with no KUA server in between. They name the rule, its severity and the place (cluster, region, project or application), never resource names or credentials. The webhook address is a secret: it is kept in the system keychain (an encrypted file when there is none) and KUA only shows it masked. Only Slack and Teams addresses over HTTPS are accepted.

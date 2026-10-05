@@ -295,6 +295,7 @@ function reserveArchitectureAwsRequest(input) {
 app.use('/api/architecture', createArchitectureRouter({
   database: architectureDatabase,
   apmDatabase,
+  postureStore: require('./lib/advisor/posture').getPostureStore(),
   auditLog,
   deploymentReader: createAwsDeploymentReader({
     beforeRequest: reserveArchitectureAwsRequest,
@@ -350,7 +351,10 @@ const advisorScheduler = (() => {
   });
 })();
 // Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
-app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), scheduler: advisorScheduler, auditLog }));
+// Alert webhooks (Team): every new posture alert, grouped per analysis, to Slack or Teams.
+const advisorWebhooks = require('./lib/advisor/webhooks').getWebhookDispatcher();
+try { require('./lib/advisor/posture').getPostureStore().onAlert(alert => advisorWebhooks.notify(alert)); } catch (err) { console.warn('[advisor] webhooks:', err.message); }
+app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), scheduler: advisorScheduler, webhooks: advisorWebhooks, auditLog }));
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
 

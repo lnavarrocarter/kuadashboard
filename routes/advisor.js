@@ -14,6 +14,11 @@
  *   GET    /schedules            scheduled analyses (lib/advisor/scheduler.js)
  *   PUT    /schedules            { scope, intervalHours }  every 6 h at most on Pro, 1 h on Team
  *   DELETE /schedules?scope=     stop analysing a scope on its own
+ *   GET    /webhooks             Slack/Teams channels for alerts (URLs masked)
+ *   POST   /webhooks             { name, kind: slack|teams, url, minSeverity, lang }      (Team)
+ *   PATCH  /webhooks/:id         { name?, minSeverity?, lang?, enabled? }                 (Team)
+ *   DELETE /webhooks/:id
+ *   POST   /webhooks/:id/test    sends a test message now                                 (Team)
  */
 
 const express = require('express');
@@ -36,7 +41,7 @@ function currentAuthor() {
   return 'local';
 }
 
-function createAdvisorRouter({ store, scheduler = null, auditLog, plan = getPlan, author = currentAuthor } = {}) {
+function createAdvisorRouter({ store, scheduler = null, webhooks = null, auditLog, plan = getPlan, author = currentAuthor } = {}) {
   const router = express.Router();
   const fail = (res, err) => res.status(err.statusCode || 500).json({ error: err.message, code: err.code, required: err.required });
   // Accepting findings and reading their history are part of the Advisor (Pro and Team).
@@ -115,6 +120,53 @@ function createAdvisorRouter({ store, scheduler = null, auditLog, plan = getPlan
       if (!scheduler.remove(scope)) return res.status(404).json({ error: 'No scheduled analysis for this scope' });
       auditLog?.log({ category: 'advisor', action: 'Advisor scheduled analysis stopped', resource: scope });
       res.json({ removed: true });
+    } catch (err) { fail(res, err); }
+  });
+
+  // Alert webhooks (lib/advisor/webhooks.js): the URL is a secret and never comes back unmasked.
+  const webhooksOr503 = res => {
+    if (!webhooks) { res.status(503).json({ error: 'Alert webhooks are not available' }); return null; }
+    return webhooks;
+  };
+
+  router.get('/webhooks', (_req, res) => {
+    res.json(webhooks ? webhooks.list() : []);
+  });
+
+  router.post('/webhooks', (req, res) => {
+    try {
+      if (!webhooksOr503(res)) return;
+      const created = webhooks.create(req.body || {});
+      auditLog?.log({ category: 'advisor', action: 'Advisor alert webhook added', resource: created.name, details: { kind: created.kind, minSeverity: created.minSeverity } });
+      res.status(201).json(created);
+    } catch (err) { fail(res, err); }
+  });
+
+  router.patch('/webhooks/:id', (req, res) => {
+    try {
+      if (!webhooksOr503(res)) return;
+      const updated = webhooks.update(req.params.id, req.body || {});
+      if (!updated) return res.status(404).json({ error: 'Webhook not found' });
+      res.json(updated);
+    } catch (err) { fail(res, err); }
+  });
+
+  router.delete('/webhooks/:id', (req, res) => {
+    try {
+      if (!webhooksOr503(res)) return;
+      const existing = webhooks.list().find(item => item.id === req.params.id);
+      if (!existing || !webhooks.remove(req.params.id)) return res.status(404).json({ error: 'Webhook not found' });
+      auditLog?.log({ category: 'advisor', action: 'Advisor alert webhook removed', resource: existing.name, details: { kind: existing.kind } });
+      res.json({ removed: true });
+    } catch (err) { fail(res, err); }
+  });
+
+  router.post('/webhooks/:id/test', async (req, res) => {
+    try {
+      if (!webhooksOr503(res)) return;
+      const result = await webhooks.test(req.params.id);
+      if (!result) return res.status(404).json({ error: 'Webhook not found' });
+      res.json(result);
     } catch (err) { fail(res, err); }
   });
 

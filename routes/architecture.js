@@ -12,11 +12,12 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 
-function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
-  // Advisor acceptances and history live in the APM database (migration 18).
-  let posture = null;
+  // Advisor acceptances and history live in the APM database (migration 18). The server passes
+  // its shared store, so alert hooks (webhooks) also hear the product Advisor.
+  let posture = sharedPosture;
   const postureStore = () => {
     if (!posture && apmDatabase?.db) posture = new PostureStore(apmDatabase.db);
     return posture;

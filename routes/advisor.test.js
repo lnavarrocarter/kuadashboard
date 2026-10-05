@@ -119,3 +119,34 @@ test('scheduled analyses are set within the plan, listed and removed, with audit
     assert.deepEqual(audit.map(entry => entry.action), ['Advisor scheduled analysis set', 'Advisor scheduled analysis stopped']);
   } finally { server.close(); database.close(); }
 });
+
+test('webhooks: Team adds them, the URL never comes back whole, removals are audited', async () => {
+  const { createWebhookDispatcher } = require('../lib/advisor/webhooks');
+  for (const [plan, expected] of [[PLANS.pro, 403], [PLANS.team, 201]]) {
+    let secret = null;
+    const webhooks = createWebhookDispatcher({ secrets: { get: () => secret, set: value => { secret = value; } }, plan: () => plan, fetchImpl: async () => ({ ok: true }) });
+    const database = new ApmDatabase({ filePath: ':memory:' });
+    const audit = [];
+    const app = express();
+    app.use(express.json());
+    app.use('/api/advisor', createAdvisorRouter({ store: () => new PostureStore(database.db), webhooks, auditLog: { log: entry => audit.push(entry) }, plan: () => plan }));
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${server.address().port}/api/advisor`;
+    const call = async (method, path, body) => {
+      const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      return { status: response.status, text: await response.text() };
+    };
+    try {
+      const created = await call('POST', '/webhooks', { name: 'ops', kind: 'slack', url: 'https://hooks.slack.com/services/T0/B0/supersecretpath' });
+      assert.equal(created.status, expected);
+      if (expected !== 201) continue;
+      const listed = await call('GET', '/webhooks');
+      assert.doesNotMatch(created.text + listed.text, /supersecretpath/);
+      const { id } = JSON.parse(created.text);
+      assert.equal((await call('POST', `/webhooks/${id}/test`)).status, 200);
+      assert.equal((await call('DELETE', `/webhooks/${id}`)).status, 200);
+      assert.equal((await call('DELETE', `/webhooks/${id}`)).status, 404);
+      assert.deepEqual(audit.map(entry => entry.action), ['Advisor alert webhook added', 'Advisor alert webhook removed']);
+    } finally { server.close(); database.close(); }
+  }
+});

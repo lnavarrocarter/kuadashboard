@@ -63,3 +63,14 @@ Debajo de los hallazgos, **Análisis programado** hace que KUA analice ese alcan
 | KUApps | Datos que KUA ya tiene | Sin llamadas cloud |
 
 El panel muestra el último análisis, el próximo, y por qué uno falló o está en espera. Cada cambio de una programación queda en el audit log.
+
+## Webhooks de alertas (Slack y Teams)
+
+Con el plan **Team**, las alertas de postura también pueden ir a un canal de Slack o Microsoft Teams: **Ayuda y opciones → Opciones → Webhooks de alertas**.
+
+- **Slack**: crea un *Incoming Webhook* (Apps → Incoming Webhooks) y pega su dirección `https://hooks.slack.com/…`.
+- **Microsoft Teams**: en el canal, crea un Workflow con la plantilla *Publicar en un canal cuando se reciba una solicitud de webhook* y pega su dirección.
+
+Cada webhook elige qué recibe (hallazgos altos y aceptaciones vencidas; altos y medios; o todo, incluidas las correcciones) y el idioma de los mensajes. Las alertas de un mismo análisis llegan en un solo mensaje. **Enviar prueba** comprueba el canal en el momento, y el último error se muestra bajo el webhook.
+
+Los mensajes van directo desde este equipo a Slack o Teams, sin un servidor de KUA en el medio. Indican la regla, su severidad y el lugar (cluster, región, proyecto o aplicación), nunca nombres de recursos ni credenciales. La dirección del webhook es un secreto: se guarda en el llavero del sistema (en un archivo cifrado si no hay uno) y KUA solo la muestra enmascarada. Solo se aceptan direcciones de Slack y Teams por HTTPS.
