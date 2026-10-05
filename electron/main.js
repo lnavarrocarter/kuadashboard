@@ -82,7 +82,26 @@ let backendReady  = false;
 
 // ─── Backend (Express) ────────────────────────────────────────────────────────
 
-function startBackend() {
+/** True when a KUA backend already answers on BACKEND_PORT. */
+function backendAnswers() {
+  return new Promise(resolve => {
+    const request = require('http').get(`http://127.0.0.1:${BACKEND_PORT}/api/system/plan`, { timeout: 1000 }, res => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    request.on('timeout', () => request.destroy());
+    request.on('error', () => resolve(false));
+  });
+}
+
+async function startBackend() {
+  // `npm run electron:dev` already runs the backend under nodemon: a second
+  // fork on the same port dies with EADDRINUSE and the window waits the 15 s timeout.
+  if (IS_DEV && await backendAnswers()) {
+    console.log(`[electron] Using the backend already running on port ${BACKEND_PORT}`);
+    backendReady = true;
+    return;
+  }
   return new Promise((resolve, reject) => {
     const env = {
       ...process.env,

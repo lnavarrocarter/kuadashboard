@@ -787,6 +787,7 @@ export default {
   // ── Tablas, resumen y detalle de Kubernetes ─────────────────────────────────────────────
   'common.loading': 'Cargando…',
   'common.retry': 'Reintentar',
+  'common.viewLoadFailed': 'Esta vista no se pudo cargar. Recarga la ventana para intentarlo de nuevo.',
   'common.yes': 'Sí',
   'common.no': 'No',
 
