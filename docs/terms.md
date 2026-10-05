@@ -34,6 +34,8 @@ Prices are in US dollars. Taxes are calculated at checkout according to your loc
 
 You can cancel at any time from KUA → Help & Options → Account → *Manage subscription*, or from the Polar customer portal. When you cancel, the plan stays active until the end of the period already paid and does not renew. Nothing more is charged after that.
 
+**Cloud data after the plan ends or changes.** When the account (or a team whose owner no longer has the Team plan) stores more in the cloud than its new plan allows, uploads stop and everything stays available to download or restore for 30 days. We notify you in the account portal, in KUA and by email 30, 7 and 1 days before the deadline. If it still does not fit after 30 days, the oldest backups and synced versions are deleted until it does; the Free plan keeps no cloud data. Applications on your computers are never touched.
+
 ## 6. Refunds
 
 Payments are **non-refundable**. This includes partial periods and unused time after a cancellation.

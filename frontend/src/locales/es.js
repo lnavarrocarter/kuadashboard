@@ -3601,6 +3601,8 @@ export default {
   'account.notice.ends': 'Tu suscripción está cancelada y termina el {date}.',
   'account.notice.renews': 'Tu suscripción se renueva el {date}.',
   'account.notice.grantEnding': 'El plan {plan} otorgado por KUA termina el {date}.',
+  'account.notice.storageGrace': 'Tus datos en la nube ({usage}) superan lo que permite tu plan ({limit}). Las subidas están en pausa; el {date} ({n} días) se eliminarán los respaldos y versiones sincronizadas más antiguos hasta que quepa. Mejora el plan, o descarga y elimina algo antes.',
+  'account.notice.storageGraceTeam': 'El dueño del equipo ya no tiene el plan Team: las aplicaciones compartidas y los respaldos del equipo ({usage}) quedan en solo lectura y se eliminarán el {date} ({n} días) si no vuelve Team.',
   'account.linkHint': 'Vincular esta computadora a una cuenta KUA traerá el plan de la cuenta, los respaldos en la nube y el uso compartido con el equipo. Los perfiles, llaves y logs nunca salen de esta computadora.',
   'account.planTitle': 'Plan',
   'account.legal': 'Las suscripciones se renuevan automáticamente y los pagos no son reembolsables, salvo errores de cobro o cuando la ley lo exija. Polar procesa el pago como merchant of record.',
