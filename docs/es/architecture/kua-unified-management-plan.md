@@ -186,3 +186,34 @@ La puntuacion futura debe separar cobertura de topologia, salud operativa, fresc
 - Persistir logs crudos, payloads, credenciales o secretos.
 - Discovery completo GCP, Vercel o Kubernetes dentro del hito CloudFormation.
 - Remediacion generada por IA o cambios autonomos en produccion.
+
+## Unificacion KUApps y MCP — 2026-10-05
+
+Seguimiento: [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146). El [addendum del plan completo](../../architecture/kua-unified-management-plan.md#kuapps-convergence-and-mcp-addendum--2026-10-05) registra la revision del workspace y los criterios de aceptacion.
+
+Los tickets #17–#21 estan cerrados como completados. El codigo ya incorpora recursos compartidos, discovery GCP/Vercel y navegacion/overlays operativos. Esas entregas son la base; sus descripciones antiguas no representan todas las brechas actuales.
+
+La brecha restante es de producto: crear una KUApp todavia abre el setup APM y agregar recursos usa flujos distintos en Arquitectura y Observabilidad. La aplicacion debe poseer recursos, scopes y relaciones; Arquitectura y Observabilidad son vistas de esa misma identidad.
+
+Orden de entrega:
+
+1. Entrada y creacion propias de KUApps, con contexto persistido de aplicacion/proyecto/recurso.
+2. Un solo flujo Agregar recursos, reutilizando Arquitectura: proveedor/conexion/scope, preview, filtros/seleccion, resumen y agregar. La recoleccion se habilita por separado.
+3. Servicio comun de membresia para UI y MCP, con identidad estable, idempotencia, reconciliacion, auditoria y recuperacion de fallas parciales. No exigir diagrama para asociar recursos.
+4. Recursos y Relaciones a nivel aplicacion, con inspector y seleccion compartidos entre Arquitectura y Observabilidad; capacidades y estados sin datos/no soportado/deshabilitado/obsoleto/error explicitos.
+5. Compatibilidad y bundles multidiagrama: revisar el export singular y que la importacion actual no restaura membresia operativa del registro.
+6. MCP sobre el mismo contrato: consultas primero; luego crear, descubrir y asociar recursos, vincular proyectos y editar el grafo con validacion, resultados estructurados, idempotencia y control de revision.
+
+Criterios centrales: agregar desde cualquier vista produce la misma membresia; repetir discovery no duplica recursos ni altera decisiones humanas; AWS y Kubernetes coexisten con scopes propios; quitar un nodo, desvincular un recurso y eliminar infraestructura tienen significados distintos. UI y MCP deben producir resultados equivalentes. Verificar duplicados, scopes cruzados, fallas parciales, concurrencia y navegacion.
+
+La primera entrega conecta infraestructura existente. Provisioning (#48), instalacion/conectividad MCP (#133) y colaboracion cloud conservan su alcance propio.
+
+### Base de extensiones y cliente MCP
+
+Relacionado: [#147](https://github.com/lnavarrocarter/kuadashboard/issues/147). Incorporar el contrato de extensiones al inicio de #146 y entregar conexiones externas despues de estabilizar membresia/contexto.
+
+KUA mantiene dos roles distintos: servidor MCP para agentes y cliente MCP backend para consumir fuentes externas. Un manifest versionado declara identidad, capacidades, transporte y scopes. Adaptadores internos y conectores externos proyectan sus datos al mismo dominio KUApps; MCP es transporte, no el modelo de recursos.
+
+Las evidencias incluyen origen, referencias, scope, fecha y frescura, diferenciando observacion, inferencia e historial. ctx sirve como referencia de manifests/entradas normalizadas y empaquetado para agentes, y como piloto opcional de contexto historico. Verificar herramientas de una version fijada antes de integrar. El historial explica decisiones anteriores y se contrasta con codigo/estado vivo.
+
+Orden: registro de capacidades y adaptador interno, cliente MCP stdio/Streamable HTTP, UI de conexiones, adaptadores de evidencia, piloto ctx y evaluacion asistida opcional. No cargar codigo arbitrario en Electron/backend en el MVP. Los procesos usan argv explicitos sin shell; secretos permanecen en backend; scopes y herramientas se autorizan explicitamente. Fallas externas no bloquean KUApps y sus respuestas no autorizan escrituras ni se reexportan automaticamente por el servidor MCP de KUA.
