@@ -18,6 +18,15 @@
           <button class="btn sm" @click="copy(snippet)">{{ t('agentConnect.copy') }}</button>
           <pre><code data-test="agent-connect-snippet">{{ snippet }}</code></pre>
         </div>
+        <div class="acm-actions">
+          <button v-if="installable" class="btn sm primary" :disabled="!!busy" data-test="agent-connect-install" @click="install">
+            {{ busy === 'install' ? t('agentConnect.installing') : t('agentConnect.install', { client: t(`agentConnect.client.${active}`) }) }}
+          </button>
+          <button class="btn sm" :disabled="!!busy" data-test="agent-connect-verify" @click="verify">
+            {{ busy === 'verify' ? t('agentConnect.verifying') : t('agentConnect.verify') }}
+          </button>
+        </div>
+        <p v-if="outcome" :class="['acm-outcome', outcome.ok ? 'ok' : 'warn']" data-test="agent-connect-outcome">{{ outcome.text }}</p>
         <ul class="acm-notes">
           <li>{{ t('agentConnect.noteOpen') }}</li>
           <li v-if="launch.packaged">{{ t('agentConnect.notePackaged') }}</li>
@@ -60,6 +69,40 @@ const error = ref('')
 const active = ref('claude')
 
 const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id === active.value).build(launch.value) : ''))
+// Claude Code and Codex have a CLI that KUA can run for the user (POST /api/system/mcp/install).
+const installable = computed(() => active.value === 'claude' || active.value === 'codex')
+// 'install' | 'verify' while one runs; outcome: { ok, text } of the last one.
+const busy = ref('')
+const outcome = ref(null)
+watch(active, () => { outcome.value = null })
+
+async function post(path, body) {
+  return apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+}
+
+async function install() {
+  const client = t(`agentConnect.client.${active.value}`)
+  busy.value = 'install'
+  try {
+    await post('/api/system/mcp/install', { client: active.value })
+    outcome.value = { ok: true, text: t('agentConnect.installed', { client }) }
+  } catch (err) {
+    outcome.value = { ok: false, text: err.details?.code === 'CLI_NOT_FOUND' ? t('agentConnect.installMissing', { client }) : t('agentConnect.installFailed', { error: err.message }) }
+  } finally { busy.value = '' }
+}
+
+async function verify() {
+  busy.value = 'verify'
+  try {
+    const result = await post('/api/system/mcp/verify')
+    if (!result.ok) outcome.value = { ok: false, text: t('agentConnect.verifyFailed', { error: result.error }) }
+    // Two KUAs open: the MCP server reads the newest one, which may not be this window.
+    else if (result.kua?.url && result.thisKua && new URL(result.kua.url).port !== new URL(result.thisKua).port) outcome.value = { ok: false, text: t('agentConnect.verifyOtherKua', { url: result.kua.url, here: result.thisKua }) }
+    else outcome.value = { ok: true, text: t('agentConnect.verifyOk', { tools: result.tools, kua: [`KUA${result.kua?.version ? ` ${result.kua.version}` : ''}`, result.kua?.url].filter(Boolean).join(' · '), profiles: result.profiles ?? 0 }) }
+  } catch (err) {
+    outcome.value = { ok: false, text: t('agentConnect.verifyFailed', { error: err.message }) }
+  } finally { busy.value = '' }
+}
 
 async function load() {
   if (launch.value || loading.value) return
@@ -99,5 +142,9 @@ watch(() => props.show, show => { if (show) load() }, { immediate: true })
 .acm-snippet { position: relative; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); min-width: 0; }
 .acm-snippet .btn { position: absolute; top: 6px; right: 6px; }
 .acm-snippet pre { margin: 0; padding: 10px 12px; padding-right: 80px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.acm-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.acm-outcome { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.acm-outcome.ok { color: var(--green); }
+.acm-outcome.warn { color: var(--yellow); }
 .acm-notes { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); line-height: 1.5; }
 </style>

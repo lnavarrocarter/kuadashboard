@@ -6,8 +6,9 @@
 const NAME = 'kua'
 
 /**
- * Shell argument, double-quoted when it has spaces. Backslashes are kept as
- * they are: bash, zsh, cmd and PowerShell all read "C:\Program Files\…" literally.
+ * Shell argument, double-quoted when it has spaces. The backend sends Windows
+ * paths with forward slashes (lib/mcp/launch.js): unquoted, bash drops
+ * backslashes, and C:\Users\me\… arrived as C:Usersme… (#133).
  */
 function quote(value) {
   const text = String(value)
