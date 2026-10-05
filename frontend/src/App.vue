@@ -112,6 +112,7 @@
         <button class="btn btn-icon" @click="toggleTheme" :title="settings.theme === 'dark' ? t('nav.lightMode') : t('nav.darkMode')">
           <i :data-lucide="settings.theme === 'dark' ? 'sun' : 'moon'"></i>
         </button>
+        <AlertsBell :profile-name="profileNameById" />
         <button class="btn btn-icon" :class="{ primary: cloudView === 'audit' }" :title="t('nav.auditLog')" @click="toggleAuditLog"><i data-lucide="shield-check"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" :title="t('nav.help')"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" :title="t('nav.supportProject')">
@@ -534,6 +535,9 @@ import { settings, applySettings } from './composables/useSettings'
 import { syncServerCacheSettings } from './composables/serverCacheSettings'
 import { useI18n } from './composables/useI18n'
 import { useArchitectureContext } from './composables/useArchitectureContext'
+import { useAdvisorAlerts } from './composables/useAdvisorAlerts'
+import { usePlan } from './composables/usePlan'
+import { parseScope } from './lib/advisorAlerts'
 
 import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
@@ -555,6 +559,7 @@ import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 import AwsSessionAlert  from './components/AwsSessionAlert.vue'
+import AlertsBell       from './components/advisor/AlertsBell.vue'
 import { useUpdateStore } from './stores/useUpdateStore'
 
 // The views of each section load on demand, in their own chunks: the first
@@ -897,6 +902,43 @@ const kuappsObservabilityProfileId = computed(() => {
   if (kuappsObservabilityProvider.value === 'vercel') return vercelProfileId.value
   return 'local'
 })
+
+// ── Advisor posture alerts (header bell + system notifications) ──────────────
+const advisorAlerts = useAdvisorAlerts()
+const { plan: currentPlan } = usePlan()
+
+function profileNameById(id) {
+  return envStore.profiles.find(profile => profile.id === id)?.name || id
+}
+
+/** Opens the overview an alert belongs to (AWS/GCP profile, Kubernetes, KUApps application). */
+async function openAdvisorAlert(alert) {
+  const scope = parseScope(alert.scope)
+  if (scope.provider === 'aws') {
+    if (scope.profileId && awsProfileId.value !== scope.profileId) { awsProfileId.value = scope.profileId; onAwsProfileChange() }
+    awsTab.value = 'overview'
+    await setProvider('aws')
+  } else if (scope.provider === 'gcp') {
+    if (scope.profileId && gcpProfileId.value !== scope.profileId) { gcpProfileId.value = scope.profileId; onGcpProfileChange() }
+    gcpTab.value = 'overview'
+    await setProvider('gcp')
+  } else if (scope.provider === 'kubernetes') {
+    await setProvider('kubernetes')
+    cloudView.value = 'kube-overview'
+  } else if (scope.provider === 'product') {
+    try {
+      const application = (await api('GET', '/api/architecture/applications/catalog')).find(item => item.id === scope.applicationId)
+      if (application) handleKuAppsApplicationContext(application)
+    } catch { /* opens KUApps without a selection */ }
+    await setProvider('kuapps')
+  }
+}
+
+// Alerts need the Advisor (Pro and Team); polling starts again when the plan changes.
+watch(() => currentPlan.value?.features?.advisor, enabled => {
+  if (enabled) advisorAlerts.start({ t, profileName: profileNameById, onOpen: openAdvisorAlert })
+  else advisorAlerts.stop()
+}, { immediate: true })
 
 function handleKuAppsApplicationContext(application) {
   if (!application?.id) return

@@ -229,6 +229,19 @@
               </label>
             </div>
 
+            <!-- Posture alerts of the Advisor (Pro): a new high finding or an expired acceptance -->
+            <div class="opts-row">
+              <div class="opts-label">
+                <i data-lucide="bell"></i>
+                <span>{{ t('help.advisorNotificationsLabel') }}</span>
+                <span class="opts-desc">{{ t('help.advisorNotificationsDesc') }}</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.advisorNotifications" data-test="opts-advisor-notifications" @change="settings.advisorNotifications && advisorAlerts.requestPermission()" />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
             <div class="opts-row">
               <div class="opts-label">
                 <i data-lucide="refresh-cw"></i>
@@ -360,10 +373,12 @@ import { settings, applySettings, SETTINGS_DEFAULTS } from '../../composables/us
 import PlatformStorage from '../PlatformStorage.vue'
 import AccountProfile from '../account/AccountProfile.vue'
 import { useI18n } from '../../composables/useI18n.js'
+import { useAdvisorAlerts } from '../../composables/useAdvisorAlerts.js'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
 import { CHANGELOG, CHANGELOG_VERSION, localized } from '../../composables/useChangelog.js'
 
 const { t } = useI18n()
+const advisorAlerts = useAdvisorAlerts()
 const updateStore     = useUpdateStore()
 const updateAvailable  = computed(() => updateStore.updateAvailable)
 const updateDownloaded = computed(() => updateStore.updateDownloaded)

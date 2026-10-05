@@ -9,7 +9,7 @@
  */
 import {
   Activity, AlertTriangle, Archive, ArrowDown, ArrowDownLeft, ArrowDownToLine, ArrowLeft,
-  ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, BellRing, BookmarkCheck,
+  ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, Bell, BellRing, BookmarkCheck,
   BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, Camera, Cat,
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,
@@ -37,7 +37,7 @@ export { createIcons } from 'lucide/dist/esm/lucide.js'
 
 export const icons = {
   Activity, AlertTriangle, Archive, ArrowDown, ArrowDownLeft, ArrowDownToLine, ArrowLeft,
-  ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, BellRing, BookmarkCheck,
+  ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, Bell, BellRing, BookmarkCheck,
   BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, Camera, Cat,
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,

@@ -37,3 +37,16 @@ Acceptances follow the account or cluster: one taken for an AWS profile applies 
 ## Posture over time
 
 The chart button next to the score shows the **posture over time** for the last 90 days: the share of checks that pass and the number of high findings, for all categories or the selected one. Each analysis adds a point (identical results within an hour are one point, so automatic refreshes do not flood it); history is kept for a year, per profile and region, project, cluster and namespace, or application.
+
+## Posture alerts
+
+KUA compares each Advisor analysis with the previous one of the same scope and lists what changed in the **bell** of the top bar (Pro and Team):
+
+- **New finding**: a high or medium finding that was not there before.
+- **Fixed**: a finding that went away. One that left because it was accepted is not counted as fixed.
+- **Acceptance expires on…**: an acceptance that ends within 7 days.
+- **Acceptance expired**: the finding is back and counts again.
+
+The first analysis of a scope is the baseline and raises no alerts. The same change alerts at most once a day, and alerts are kept 90 days. Clicking one opens its overview (the AWS or GCP profile, the Kubernetes overview or the KUApps application) and marks it read.
+
+New high findings and expired acceptances also raise a **system notification** (Windows, macOS, Linux). Turn it off in **Help & Options → Options → Posture notifications**; the alerts stay in the bell. Alerts compare analyses KUA already ran: they never call a cloud provider by themselves.

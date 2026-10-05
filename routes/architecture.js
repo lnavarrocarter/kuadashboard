@@ -138,7 +138,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
       siblings: apmDatabase.listApplications({ profileId: profile }),
     });
     // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
-    res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id }), store: postureStore() }));
+    res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id, label: application.name }), store: postureStore() }));
   });
 
   router.post('/projects', (req, res) => {

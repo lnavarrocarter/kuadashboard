@@ -67,3 +67,21 @@ test('history returns the recorded points of a scope', async () => {
     assert.equal(history.body[0].summary.security.passed, 3);
   });
 });
+
+test('alerts are listed newest first and can be marked read; Free cannot read them', async () => {
+  await withServer({}, async ({ call, store }) => {
+    store.addAlert({ scopeKey: 'aws:p1:us-east-1', type: 'new_finding', ruleId: 'aws.root_mfa', severity: 'high', data: { count: 1 } });
+    store.addAlert({ scopeKey: 'aws:p1:us-east-1', type: 'fixed', ruleId: 'aws.public_ip', severity: 'info' });
+    const list = await call('GET', '/alerts');
+    assert.equal(list.status, 200);
+    assert.equal(list.body.unread, 2);
+    assert.deepEqual(list.body.alerts.map(a => a.ruleId).sort(), ['aws.public_ip', 'aws.root_mfa']);
+
+    assert.deepEqual((await call('POST', '/alerts/read', { ids: [list.body.alerts[0].id] })).body, { changed: 1, unread: 1 });
+    assert.deepEqual((await call('POST', '/alerts/read', { all: true })).body, { changed: 1, unread: 0 });
+    assert.equal((await call('POST', '/alerts/read', {})).status, 400);
+  });
+  await withServer({ plan: PLANS.free }, async ({ call }) => {
+    assert.equal((await call('GET', '/alerts')).status, 403);
+  });
+});

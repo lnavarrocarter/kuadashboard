@@ -37,3 +37,16 @@ Las aceptaciones siguen a la cuenta o al cluster: una tomada para un perfil de A
 ## Evolución de la postura
 
 El botón de gráfico junto al puntaje muestra la **evolución de la postura** de los últimos 90 días: el porcentaje de chequeos que pasan y la cantidad de hallazgos altos, de todas las categorías o de la seleccionada. Cada análisis suma un punto (los resultados idénticos dentro de una hora son un solo punto, así las actualizaciones automáticas no lo llenan); el historial se guarda un año, por perfil y región, proyecto, cluster y namespace, o aplicación.
+
+## Alertas de postura
+
+KUA compara cada análisis del Advisor con el anterior del mismo alcance y lista lo que cambió en la **campana** de la barra superior (Pro y Team):
+
+- **Hallazgo nuevo**: un hallazgo alto o medio que antes no estaba.
+- **Corregido**: un hallazgo que desapareció. Uno que salió porque se aceptó no cuenta como corregido.
+- **La aceptación vence el…**: una aceptación que termina dentro de 7 días.
+- **La aceptación venció**: el hallazgo volvió y cuenta de nuevo.
+
+El primer análisis de un alcance es la base y no genera alertas. El mismo cambio alerta como mucho una vez al día, y las alertas se guardan 90 días. Al hacer clic en una se abre su resumen (el perfil de AWS o GCP, el resumen de Kubernetes o la aplicación de KUApps) y queda como leída.
+
+Los hallazgos altos nuevos y las aceptaciones vencidas también generan una **notificación del sistema** (Windows, macOS, Linux). Se desactiva en **Ayuda y opciones → Opciones → Notificaciones de postura**; las alertas siguen en la campana. Las alertas comparan análisis que KUA ya hizo: nunca llaman por sí solas a un proveedor cloud.
