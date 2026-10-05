@@ -34,6 +34,18 @@ Cada decisión y revocación queda en el audit log (categoría *Advisor*) con su
 
 Las aceptaciones siguen a la cuenta o al cluster: una tomada para un perfil de AWS aplica en todas las regiones, y una para un contexto de Kubernetes en todos los namespaces. Las aceptaciones de una aplicación de KUApps viajan con ella en su KUAAppBundle (exportar, importar y sincronizar entre tus equipos).
 
+## Decisiones del equipo
+
+Con el plan **Team**, un owner o admin puede aceptar o silenciar un hallazgo **para todo el equipo**: marca *Decidir para el equipo* al aceptarlo. La decisión se aplica en el KUA de cada miembro que analiza la misma nube, se llame como se llame su perfil allí:
+
+| Resumen | Se comparte por |
+| --- | --- |
+| AWS | La cuenta de AWS (vía STS `GetCallerIdentity`, una llamada gratuita) |
+| GCP | El proyecto de GCP |
+| Kubernetes | El servidor de la API del cluster |
+
+Los miembros ven las decisiones del equipo marcadas como **Equipo**, con quién decidió y por qué; solo owners y admins pueden revocarlas. Cada decisión va firmada por el computador que la tomó y contrafirmada por la clave del equipo, y cada KUA verifica ambas firmas (con la clave del equipo que fijó) antes de aplicarla, así una decisión alterada en el camino se ignora. Las decisiones llegan a los demás computadores en menos de dos minutos. Al servicio de cuentas de KUA solo viajan la regla, el recurso elegido, el motivo y el vencimiento; las decisiones de producto de las aplicaciones de KUApps viajan con la aplicación, como antes.
+
 ## Evolución de la postura
 
 El botón de gráfico junto al puntaje muestra la **evolución de la postura** de los últimos 90 días: el porcentaje de chequeos que pasan y la cantidad de hallazgos altos, de todas las categorías o de la seleccionada. Cada análisis suma un punto (los resultados idénticos dentro de una hora son un solo punto, así las actualizaciones automáticas no lo llenan); el historial se guarda un año, por perfil y región, proyecto, cluster y namespace, o aplicación.

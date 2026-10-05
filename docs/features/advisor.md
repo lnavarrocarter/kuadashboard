@@ -34,6 +34,18 @@ Every decision and revocation is recorded in the audit log (category *Advisor*) 
 
 Acceptances follow the account or cluster: one taken for an AWS profile applies in every region, one for a Kubernetes context in every namespace. The acceptances of a KUApps application travel with it in its KUAAppBundle (export, import and sync between your computers).
 
+## Team decisions
+
+On the **Team** plan, an owner or admin can accept or silence a finding **for the whole team**: tick *Decide for the team* when accepting it. The decision applies on the KUA of every member that analyses the same cloud, whatever their profile is called there:
+
+| Overview | Shared by |
+| --- | --- |
+| AWS | The AWS account (from STS `GetCallerIdentity`, a free call) |
+| GCP | The GCP project |
+| Kubernetes | The cluster's API server |
+
+Members see team decisions marked **Team**, with who decided and why; only owners and admins can revoke them. Each decision is signed by the computer that made it and countersigned by the team's key, and every KUA checks both signatures (with the team key it pinned) before applying it, so a decision changed on the way is ignored. Decisions reach the other computers within two minutes. Only the rule, the resource chosen, the reason and the expiry go to the KUA account service; product decisions of KUApps applications travel with the application, as before.
+
 ## Posture over time
 
 The chart button next to the score shows the **posture over time** for the last 90 days: the share of checks that pass and the number of high findings, for all categories or the selected one. Each analysis adds a point (identical results within an hour are one point, so automatic refreshes do not flood it); history is kept for a year, per profile and region, project, cluster and namespace, or application.

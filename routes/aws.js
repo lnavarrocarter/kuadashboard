@@ -179,6 +179,7 @@ const { getApmDatabase } = require('../lib/apm/database');
 const { captureLambdaCloudWatchMetrics, captureLambdaLogEvents } = require('../lib/apm/opportunisticCapture');
 const { readLocalAwsProfiles, resolveAwsConfig } = require('../lib/awsProfileResolver');
 const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/posture');
+const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 const {
   GROUP_DIMENSIONS,
   METRIC_DEFINITIONS,
@@ -236,6 +237,20 @@ function handleErr(res, err) {
 
 function cloudHistory() {
   try { return getCloudHistory(); } catch (err) { console.warn('[cloud-history]', err.message); return null; }
+}
+
+// The AWS account of a profile (STS GetCallerIdentity, free), for decisions a KUA team shares
+// on that account (lib/advisor/teamAcceptances.js). Cached an hour; unknown when STS fails.
+const accountIds = new Map();
+async function awsAccountId(profileId, cfg) {
+  const cached = accountIds.get(profileId);
+  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.id;
+  try {
+    const { callerIdentity } = require('../lib/awsOverview');
+    const id = (await callerIdentity(cfg)).account || null;
+    accountIds.set(profileId, { id, at: Date.now() });
+    return id;
+  } catch { return cached?.id || null; }
 }
 
 // Advisor acceptances and history; without them the report is still answered (gated).
@@ -549,7 +564,8 @@ router.get('/overview/advisor', async (req, res) => {
     const cfg = await resolveAwsConfig(profileId);
     const key = `${profileId}|${cfg.region || ''}`;
     // Acceptances apply on every answer (also cached ones); history records fresh scans only.
-    const posture = { scopes: scopeKeys('aws', { profileId, region: cfg.region || '' }), store: postureStore() };
+    const teamScope = teamScopeOf('aws', { accountId: await awsAccountId(profileId, cfg) });
+    const posture = { scopes: scopeKeys('aws', { profileId, region: cfg.region || '', teamScope }), store: postureStore() };
     const cached = advisorCache.get(key);
     if (cached && req.query.refresh !== '1' && Date.now() - cached.at < ADVISOR_TTL_MS) {
       return res.json({ ...finalizeAdvisor(cached.report, { ...posture, fresh: false }), fromCache: true });

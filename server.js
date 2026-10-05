@@ -354,7 +354,14 @@ const advisorScheduler = (() => {
 // Alert webhooks (Team): every new posture alert, grouped per analysis, to Slack or Teams.
 const advisorWebhooks = require('./lib/advisor/webhooks').getWebhookDispatcher();
 try { require('./lib/advisor/posture').getPostureStore().onAlert(alert => advisorWebhooks.notify(alert)); } catch (err) { console.warn('[advisor] webhooks:', err.message); }
-app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), scheduler: advisorScheduler, webhooks: advisorWebhooks, auditLog }));
+// Advisor decisions shared by the KUA team (Team plan): mirrored every 2 minutes, only for team members.
+const teamAdvisor = require('./lib/advisor/teamAcceptances').getTeamAcceptances();
+const syncTeamAdvisor = () => teamAdvisor.sync().catch(err => { if (!['SIGNED_OUT', 'OFFLINE', 'NO_TEAM'].includes(err.code)) console.warn('[advisor] team decisions:', err.message); });
+const teamAdvisorFirst = setTimeout(syncTeamAdvisor, 30 * 1000);
+const teamAdvisorTimer = setInterval(syncTeamAdvisor, 2 * 60 * 1000);
+teamAdvisorFirst.unref();
+teamAdvisorTimer.unref();
+app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), scheduler: advisorScheduler, webhooks: advisorWebhooks, team: teamAdvisor, auditLog }));
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
 
@@ -1133,7 +1140,10 @@ app.get('/api/overview', async (req, res) => {
     const posture = require('./lib/advisor/posture');
     let store = null;
     try { store = posture.getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); }
-    const scopes = posture.scopeKeys('kubernetes', { context: currentContext, namespace });
+    // The cluster's API server names it for decisions a KUA team shares (lib/advisor/teamAcceptances.js).
+    const clusterServer = (() => { try { return currentKc.getCurrentCluster()?.server || null; } catch { return null; } })();
+    const teamScope = require('./lib/advisor/teamAcceptances').teamScopeOf('kubernetes', { clusterServer });
+    const scopes = posture.scopeKeys('kubernetes', { context: currentContext, namespace, teamScope });
     res.json({ ...overview, advisor: posture.finalizeAdvisor(advisor, { scopes, store }) });
   } catch (err) { handleError(res, err); }
 });
@@ -3446,6 +3456,8 @@ function shutdown(signal) {
   teamEngine.stop();
   gcpRoutes.stopStatePoller();
   advisorScheduler.stop();
+  clearTimeout(teamAdvisorFirst);
+  clearInterval(teamAdvisorTimer);
   console.log(`[server] ${signal} received, shutting down`);
 
   const forceExit = setTimeout(() => {

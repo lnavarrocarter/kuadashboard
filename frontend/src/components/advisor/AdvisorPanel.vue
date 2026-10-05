@@ -156,6 +156,11 @@
                     <option v-for="days in EXPIRY_CHOICES" :key="days" :value="days">{{ days ? t('advisor.acceptance.days', { n: days }) : t('advisor.acceptance.never') }}</option>
                   </select>
                 </label>
+                <!-- Team plan: an owner or admin decides once for every member analysing this cloud -->
+                <label v-if="report.posture?.teamScope && report.posture?.teamCanDecide" class="adv-decision-share">
+                  <input v-model="decision.share" type="checkbox" data-test="advisor-decision-share" />
+                  <span>{{ t('advisor.acceptance.shareTeam') }} <span class="adv-dim">{{ t('advisor.acceptance.shareTeamHint') }}</span></span>
+                </label>
                 <p v-if="decision.error" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ decision.error }}</p>
                 <div class="adv-detail-actions">
                   <button type="submit" class="btn sm primary" :disabled="!decisionReady || decision.saving" data-test="advisor-decision-save">{{ t(`advisor.acceptance.confirm.${decision.kind}`) }}</button>
@@ -178,7 +183,8 @@
                 <span :class="['adv-sev', finding.severity]">{{ t(`advisor.severity.${finding.severity}`) }}</span>
                 <span class="adv-row-title">{{ t(`advisor.rule.${finding.id}.title`, { count: finding.count, ...finding.params }) }}</span>
                 <span class="adv-chip">{{ t(`advisor.acceptance.kind.${finding.acceptance.kind}`) }}</span>
-                <button class="btn sm" :disabled="revoking === finding.id" :data-test="`advisor-revoke-${finding.id}`" @click="revoke(finding)">{{ t('advisor.acceptance.revoke') }}</button>
+                <span v-if="finding.acceptance.team" class="adv-chip adv-chip-team" :data-test="`advisor-team-${finding.id}`">{{ t('advisor.acceptance.teamChip') }}</span>
+                <button v-if="!finding.acceptance.team || report.posture?.teamCanDecide" class="btn sm" :disabled="revoking === finding.id" :data-test="`advisor-revoke-${finding.id}`" @click="revoke(finding)">{{ t('advisor.acceptance.revoke') }}</button>
               </div>
               <p class="adv-accepted-why">
                 “{{ finding.acceptance.reason }}” — {{ finding.acceptance.author }} · {{ when(finding.acceptance.createdAt) }} ·
@@ -273,7 +279,7 @@ const decisionReady = computed(() => !!decision.value?.reason.trim()
   && (decision.value.target === 'rule' || decision.value.selected.length > 0))
 
 function startDecision(finding, kind) {
-  decision.value = { findingId: finding.id, kind, target: 'rule', selected: [], reason: '', days: kind === 'accepted' ? 90 : 0, saving: false, error: '' }
+  decision.value = { findingId: finding.id, kind, target: 'rule', selected: [], reason: '', days: kind === 'accepted' ? 90 : 0, share: false, saving: false, error: '' }
 }
 
 const jsonPost = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -292,6 +298,7 @@ async function submitDecision() {
       reason: current.reason.trim(),
       expiresAt: current.days ? new Date(Date.now() + current.days * DAY_MS).toISOString() : null,
       resources: current.target === 'resources' ? current.selected.map(index => finding.resources[index]) : [],
+      ...(current.share ? { share: true, teamScope: props.report.posture.teamScope } : {}),
     }))
     decision.value = null
     emit('posture-changed')
@@ -496,6 +503,8 @@ onUpdated(refreshIcons)
 .adv-decision-target { display: flex; flex-direction: column; gap: 4px; }
 .adv-decision-target label, .adv-decision-list label { display: flex; gap: 6px; align-items: center; }
 .adv-decision-list { display: flex; flex-direction: column; gap: 3px; padding-left: 20px; max-height: 160px; overflow-y: auto; }
+.adv-decision-share { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; }
+.adv-chip-team { color: var(--accent); border-color: var(--accent); }
 .adv-decision-field { display: flex; flex-direction: column; gap: 4px; }
 .adv-decision-field textarea, .adv-decision-field select { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 5px 7px; }
 .adv-decision-field textarea { resize: vertical; min-height: 44px; }

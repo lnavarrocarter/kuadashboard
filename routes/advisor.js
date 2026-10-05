@@ -41,7 +41,7 @@ function currentAuthor() {
   return 'local';
 }
 
-function createAdvisorRouter({ store, scheduler = null, webhooks = null, auditLog, plan = getPlan, author = currentAuthor } = {}) {
+function createAdvisorRouter({ store, scheduler = null, webhooks = null, team = null, auditLog, plan = getPlan, author = currentAuthor } = {}) {
   const router = express.Router();
   const fail = (res, err) => res.status(err.statusCode || 500).json({ error: err.message, code: err.code, required: err.required });
   // Accepting findings and reading their history are part of the Advisor (Pro and Team).
@@ -53,7 +53,7 @@ function createAdvisorRouter({ store, scheduler = null, webhooks = null, auditLo
     try { res.json(store().list(validScope(req.query.scope))); } catch (err) { fail(res, err); }
   });
 
-  router.post('/acceptances', (req, res) => {
+  router.post('/acceptances', async (req, res) => {
     try {
       requireAdvisor();
       const body = req.body || {};
@@ -61,6 +61,13 @@ function createAdvisorRouter({ store, scheduler = null, webhooks = null, auditLo
       const resources = Array.isArray(body.resources)
         ? body.resources.slice(0, 50).map(item => ({ kind: String(item?.kind || ''), namespace: String(item?.namespace || ''), name: String(item?.name || '') })).filter(item => item.name)
         : [];
+      // share: an owner or admin decides for the whole team (signed; lib/advisor/teamAcceptances.js).
+      if (body.share === true) {
+        if (!team) return res.status(503).json({ error: 'Team decisions are not available' });
+        const count = await team.decide({ teamScope: body.teamScope, ruleId: String(body.ruleId || ''), resources, kind: body.kind || 'accepted', reason: String(body.reason || '').trim(), expiresAt: body.expiresAt || null });
+        auditLog?.log({ category: 'advisor', action: body.kind === 'silenced' ? 'Advisor finding silenced for the team' : 'Advisor risk accepted for the team', resource: String(body.ruleId || ''), details: { scope: body.teamScope, reason: body.reason, expiresAt: body.expiresAt || null, decisions: count } });
+        return res.status(201).json({ team: true, decisions: count });
+      }
       const created = store().accept({ scopeKey, ruleId: String(body.ruleId || ''), resources, kind: body.kind || 'accepted', reason: body.reason, expiresAt: body.expiresAt || null, author: author() });
       auditLog?.log({
         category: 'advisor',
@@ -72,8 +79,16 @@ function createAdvisorRouter({ store, scheduler = null, webhooks = null, auditLo
     } catch (err) { fail(res, err); }
   });
 
-  router.delete('/acceptances/:id', (req, res) => {
+  router.delete('/acceptances/:id', async (req, res) => {
     try {
+      // A team decision is revoked for the whole team, by an owner or admin.
+      const mirrored = store().get(req.params.id);
+      if (mirrored?.scope?.startsWith('team:') && !mirrored.revokedAt) {
+        if (!team) return res.status(503).json({ error: 'Team decisions are not available' });
+        await team.revoke(mirrored);
+        auditLog?.log({ category: 'advisor', action: 'Advisor team decision revoked', resource: mirrored.ruleId, details: { scope: mirrored.scope } });
+        return res.json({ ...mirrored, revokedAt: new Date().toISOString(), team: true });
+      }
       const revoked = store().revoke(req.params.id, { by: author() });
       if (!revoked) return res.status(404).json({ error: 'Acceptance not found' });
       auditLog?.log({ category: 'advisor', action: 'Advisor acceptance revoked', resource: revoked.ruleId, details: { scope: revoked.scope, kind: revoked.kind, resource: revoked.resourceLabel } });
