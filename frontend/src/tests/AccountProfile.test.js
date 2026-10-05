@@ -127,6 +127,17 @@ describe('AccountProfile billing notices', () => {
     expect(wrapper.get('[data-test="account-notice-payment_failed"]').text()).toContain('The last payment failed')
     expect(wrapper.get('[data-test="account-notice-trial_ending"]').text()).toContain('15% off your first payment')
   })
+
+  it('shows the deadline of cloud data over the plan after a downgrade', async () => {
+    account = { linked: true, plan: 'free', user: { email: 'ana@example.com', name: 'Ana' }, notices: [{ type: 'storage_grace', scope: 'personal', date: '2026-11-03T12:00:00Z', daysLeft: 30, usageBytes: 650 * 1048576, limitBytes: 0, plan: 'free' }] }
+    stub('free')
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    const text = wrapper.get('[data-test="account-notice-storage_grace"]').text()
+    expect(text).toContain('650')
+    expect(text).toContain('(30 days)')
+  })
 })
 
 describe('AccountProfile legal links', () => {

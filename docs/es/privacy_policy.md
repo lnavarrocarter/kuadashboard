@@ -71,7 +71,7 @@ Cuando inicias sesión, el control plane de KUA guarda:
 | Códigos de un solo uso para iniciar sesión en el escritorio (como hash) | Vincular KUA Desktop de forma segura | 5 minutos; se usan una vez |
 | Suscripción: plan, estado, fecha de renovación e ids de suscripción y cliente en Polar | Activar tu plan | Hasta que borres la cuenta |
 | Ids de los avisos de pago recibidos de Polar (sin datos personales) | Procesar cada aviso una sola vez | 90 días |
-| Backups en la nube (Pro y Team): los paquetes saneados de KUA Applications que elijas respaldar, con su nombre, aplicación, tamaño, checksum y fecha | Restaurarlos en cualquier equipo | Hasta que los borres o borres la cuenta |
+| Backups en la nube (Pro y Team): los paquetes saneados de KUA Applications que elijas respaldar, con su nombre, aplicación, tamaño, checksum y fecha | Restaurarlos en cualquier equipo | Hasta que los borres o borres la cuenta; si el plan ya no los cubre, 30 días después del primer aviso (ver los [términos](/es/terms)) |
 
 De Google solo recibimos tu identidad. No recibimos ni guardamos tokens de acceso o de renovación de Google, y KUA no puede leer tu Gmail, tu Drive ni ningún otro dato de Google.
 

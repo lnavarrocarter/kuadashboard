@@ -3603,6 +3603,8 @@ export default {
   'account.notice.ends': 'Your subscription is cancelled and ends on {date}.',
   'account.notice.renews': 'Your subscription renews on {date}.',
   'account.notice.grantEnding': 'The {plan} plan granted by KUA ends on {date}.',
+  'account.notice.storageGrace': 'Your cloud data ({usage}) is over what your plan allows ({limit}). Uploads are paused; on {date} ({n} days) the oldest backups and synced versions will be deleted until it fits. Upgrade, or download and delete some before then.',
+  'account.notice.storageGraceTeam': 'The team owner no longer has the Team plan: the shared applications and backups of the team ({usage}) are read only and will be deleted on {date} ({n} days) unless Team is back.',
   'account.linkHint': 'Linking this computer to a KUA account will bring the plan from the account, cloud backups and team sharing. Profiles, keys and logs never leave this computer.',
   'account.planTitle': 'Plan',
   'account.legal': 'Subscriptions renew automatically and payments are non-refundable, except billing errors or where the law requires it. Polar processes the payment as merchant of record.',

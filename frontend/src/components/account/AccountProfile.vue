@@ -229,8 +229,12 @@ const day = at => (at ? new Date(at).toLocaleDateString(settings.lang === 'es' ?
 function noticeText(notice) {
   const key = notice.type === 'trial_ending'
     ? (notice.kind === 'card' ? (notice.offerPercent ? 'trialEndingCard' : 'trialEndingCardPlain') : 'trialEndingNoCard')
+    : notice.type === 'storage_grace' ? (notice.scope === 'team' ? 'storageGraceTeam' : 'storageGrace')
     : { trial_ended: 'trialEnded', payment_failed: 'paymentFailed', ends: 'ends', renews: 'renews', grant_ending: 'grantEnding' }[notice.type]
-  return key ? t(`account.notice.${key}`, { date: day(notice.endsAt || notice.date), percent: notice.offerPercent, plan: t(`plan.name_${notice.plan || 'pro'}`) }) : ''
+  return key ? t(`account.notice.${key}`, {
+    date: day(notice.endsAt || notice.date), percent: notice.offerPercent, plan: t(`plan.name_${notice.plan || 'pro'}`),
+    n: notice.daysLeft, usage: formatBytes(notice.usageBytes || 0), limit: formatBytes(notice.limitBytes || 0),
+  }) : ''
 }
 
 async function signIn() {
