@@ -85,3 +85,37 @@ test('alerts are listed newest first and can be marked read; Free cannot read th
     assert.equal((await call('GET', '/alerts')).status, 403);
   });
 });
+
+test('scheduled analyses are set within the plan, listed and removed, with audit entries', async () => {
+  const set = new Map();
+  const scheduler = {
+    list: () => [...set.values()],
+    set: (scope, hours) => {
+      if (hours < 6) throw Object.assign(new Error('The pro plan analyses every 6 hours at most'), { statusCode: 403, code: 'PLAN_REQUIRED', required: 'team' });
+      const schedule = { scope, intervalHours: hours };
+      set.set(scope, schedule);
+      return schedule;
+    },
+    remove: scope => set.delete(scope),
+  };
+  const database = new ApmDatabase({ filePath: ':memory:' });
+  const audit = [];
+  const app = express();
+  app.use(express.json());
+  app.use('/api/advisor', createAdvisorRouter({ store: () => new PostureStore(database.db), scheduler, auditLog: { log: entry => audit.push(entry) }, plan: () => PLANS.pro }));
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}/api/advisor`;
+  const call = async (method, path, body) => {
+    const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    assert.deepEqual((await call('PUT', '/schedules', { scope: 'aws:p1:us-east-1', intervalHours: 6 })).body, { scope: 'aws:p1:us-east-1', intervalHours: 6 });
+    const tooOften = await call('PUT', '/schedules', { scope: 'aws:p1:us-east-1', intervalHours: 1 });
+    assert.deepEqual([tooOften.status, tooOften.body.required], [403, 'team']);
+    assert.equal((await call('GET', '/schedules')).body.length, 1);
+    assert.equal((await call('DELETE', '/schedules?scope=aws:p1:us-east-1')).status, 200);
+    assert.equal((await call('DELETE', '/schedules?scope=aws:p1:us-east-1')).status, 404);
+    assert.deepEqual(audit.map(entry => entry.action), ['Advisor scheduled analysis set', 'Advisor scheduled analysis stopped']);
+  } finally { server.close(); database.close(); }
+});

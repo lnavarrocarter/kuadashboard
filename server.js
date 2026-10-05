@@ -339,8 +339,18 @@ app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
+// Scheduled Advisor analysis: the same routes the overviews call, on this KUA (lib/advisor/scheduler.js).
+const advisorScheduler = (() => {
+  const { createAdvisorScheduler, ScheduleStore, loopbackRequest } = require('./lib/advisor/scheduler');
+  return createAdvisorScheduler({
+    schedules: new ScheduleStore(apmDatabase.db),
+    request: loopbackRequest(process.env.PORT || 7190),
+    application: id => apmDatabase.getApplication(id),
+    currentContext: () => currentContext,
+  });
+})();
 // Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
-app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), auditLog }));
+app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), scheduler: advisorScheduler, auditLog }));
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
 
@@ -3411,6 +3421,8 @@ server.listen(PORT, HOST, () => {
       packaged: path.basename(__dirname) === 'app.asar',
     });
   } catch (err) { console.warn('[mcp] could not record this instance:', err.message); }
+  // Starts after listening: scheduled runs call this KUA on the loopback address.
+  advisorScheduler.start();
 });
 
 let unregisterInstance = () => {};
@@ -3429,6 +3441,7 @@ function shutdown(signal) {
   syncEngine.stop();
   teamEngine.stop();
   gcpRoutes.stopStatePoller();
+  advisorScheduler.stop();
   console.log(`[server] ${signal} received, shutting down`);
 
   const forceExit = setTimeout(() => {

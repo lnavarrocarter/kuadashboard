@@ -10,7 +10,7 @@
 import {
   Activity, AlertTriangle, Archive, ArrowDown, ArrowDownLeft, ArrowDownToLine, ArrowLeft,
   ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, Bell, BellRing, BookmarkCheck,
-  BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, Camera, Cat,
+  BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, CalendarClock, Camera, Cat,
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,
   Clock, ClockAlert, Cloud, CloudCog, CloudDownload, CloudSync, CloudUpload, Code, Code2, Columns3, Command,
@@ -38,7 +38,7 @@ export { createIcons } from 'lucide/dist/esm/lucide.js'
 export const icons = {
   Activity, AlertTriangle, Archive, ArrowDown, ArrowDownLeft, ArrowDownToLine, ArrowLeft,
   ArrowRight, ArrowUpNarrowWide, ArrowUpRight, Badge, BadgeCheck, Bell, BellRing, BookmarkCheck,
-  BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, Camera, Cat,
+  BookmarkPlus, Bot, Box, Boxes, Braces, BrainCircuit, Bug, Bus, Cable, CalendarClock, Camera, Cat,
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,
   Clock, ClockAlert, Cloud, CloudCog, CloudDownload, CloudSync, CloudUpload, Code, Code2, Columns3, Command,

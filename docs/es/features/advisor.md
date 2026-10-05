@@ -50,3 +50,16 @@ KUA compara cada análisis del Advisor con el anterior del mismo alcance y lista
 El primer análisis de un alcance es la base y no genera alertas. El mismo cambio alerta como mucho una vez al día, y las alertas se guardan 90 días. Al hacer clic en una se abre su resumen (el perfil de AWS o GCP, el resumen de Kubernetes o la aplicación de KUApps) y queda como leída.
 
 Los hallazgos altos nuevos y las aceptaciones vencidas también generan una **notificación del sistema** (Windows, macOS, Linux). Se desactiva en **Ayuda y opciones → Opciones → Notificaciones de postura**; las alertas siguen en la campana. Las alertas comparan análisis que KUA ya hizo: nunca llaman por sí solas a un proveedor cloud.
+
+## Análisis programado
+
+Debajo de los hallazgos, **Análisis programado** hace que KUA analice ese alcance por su cuenta, así el historial y las alertas de postura avanzan aunque nadie tenga el resumen abierto: cada 6, 12 o 24 horas en Pro, y también cada hora en Team. Un análisis programado llama a la misma ruta que el resumen, así sus resultados coinciden con un escaneo manual.
+
+| Resumen | Qué lee cada análisis | Costo |
+| --- | --- | --- |
+| AWS | Las mismas APIs de control que el resumen | Gratis |
+| GCP | Unas 20 lecturas del resumen | Las listas de Storage y Secret Manager tienen costo: alrededor de USD 0,001 al mes cada 6 horas |
+| Kubernetes | El cluster | Gratis. Corre mientras ese contexto sea el activo en KUA; si no, espera |
+| KUApps | Datos que KUA ya tiene | Sin llamadas cloud |
+
+El panel muestra el último análisis, el próximo, y por qué uno falló o está en espera. Cada cambio de una programación queda en el audit log.
