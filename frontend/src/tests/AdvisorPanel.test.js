@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
+const apiFetch = vi.fn()
+vi.mock('../composables/useApi', () => ({ useApi: () => ({ apiFetch }) }))
+// __esModule: the panel loads the chart lazily (defineAsyncComponent takes `default` from ES modules only).
+vi.mock('../components/cloud/CloudMetricChart.vue', () => ({
+  __esModule: true,
+  default: { name: 'CloudMetricChart', props: ['label', 'unit', 'points', 'color', 'showDate'], template: '<div class="chart-stub">{{ label }}|{{ points.map(p => Math.round(p.v)).join(",") }}</div>' },
+}))
 
 import AdvisorPanel from '../components/advisor/AdvisorPanel.vue'
 import { settings } from '../composables/useSettings'
@@ -103,5 +110,81 @@ describe('AdvisorPanel', () => {
   it('shows the error when the report could not be loaded', () => {
     const wrapper = mount(AdvisorPanel, { props: { report: null, error: 'Forbidden' } })
     expect(wrapper.text()).toContain('Forbidden')
+  })
+})
+
+// #94: accept or silence findings, list them apart, chart the posture.
+describe('AdvisorPanel posture', () => {
+  const POSTURE = { acceptanceScope: 'aws:p1', historyScope: 'aws:p1:us-east-1', expiringSoon: 0, expired: 0 }
+  const ACCEPTANCE = { id: 'a1', ruleId: 'aws.public_ip', kind: 'accepted', reason: 'Bastion behind an allow list', author: 'ana@example.com', createdAt: '2026-10-01T00:00:00Z', expiresAt: '2026-12-30T00:00:00Z', expiringSoon: false }
+  const settled = async () => { await flushPromises(); await new Promise(resolve => setTimeout(resolve)); await flushPromises() }
+
+  beforeEach(() => {
+    settings.lang = 'en'
+    apiFetch.mockReset()
+    try { localStorage.clear() } catch { /* jsdom */ }
+  })
+
+  it('accepts a finding for some resources with a reason and an expiry', async () => {
+    apiFetch.mockResolvedValue([{ id: 'new' }])
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: POSTURE }) } })
+    await wrapper.find('[data-test="advisor-finding-aws.orphan_volumes"] .adv-row').trigger('click')
+    await wrapper.find('[data-test="advisor-accept-aws.orphan_volumes"]').trigger('click')
+    const save = () => wrapper.find('[data-test="advisor-decision-save"]')
+    expect(save().attributes('disabled')).toBeDefined()
+
+    await wrapper.find('[data-test="advisor-decision-resources"]').setValue()
+    await wrapper.findAll('.adv-decision-list input')[1].setValue(true)
+    await wrapper.find('[data-test="advisor-decision-reason"]').setValue('Kept for the yearly restore test')
+    expect(save().attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-test="advisor-decision"]').trigger('submit')
+    await flushPromises()
+
+    const [path, options] = apiFetch.mock.calls[0]
+    expect(path).toBe('/api/advisor/acceptances')
+    const body = JSON.parse(options.body)
+    expect(body).toMatchObject({ scope: 'aws:p1', ruleId: 'aws.orphan_volumes', kind: 'accepted', reason: 'Kept for the yearly restore test', resources: [{ kind: 'EBS', name: 'vol-1', detail: '20 GiB gp3' }] })
+    // 90 days by default for an accepted risk
+    expect(Math.round((Date.parse(body.expiresAt) - Date.now()) / 86400000)).toBe(90)
+    expect(wrapper.emitted('posture-changed')).toHaveLength(1)
+    expect(wrapper.find('[data-test="advisor-decision"]').exists()).toBe(false)
+  })
+
+  it('lists accepted findings apart, counts them next to the score, and revokes them', async () => {
+    apiFetch.mockResolvedValue({})
+    const accepted = [{ id: 'aws.public_ip', category: 'security', severity: 'high', count: 1, params: {}, resources: [], acceptance: ACCEPTANCE }]
+    const summary = { ...report().summary, security: bucket({ high: 1, findings: 1, passed: 3, checks: 4, accepted: 1 }) }
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, expiringSoon: 1, expired: 2 }, accepted, summary }) } })
+    expect(wrapper.find('.adv-score').text()).toBe('7/9 checks pass · 1 accepted')
+    expect(wrapper.find('[data-test="advisor-expired"]').text()).toContain('2 acceptance(s) expired')
+    expect(wrapper.find('[data-test="advisor-expiring"]').text()).toContain('1 acceptance(s) expire in the next 7 days')
+
+    await wrapper.find('.adv-accepted-toggle').trigger('click')
+    const item = wrapper.find('[data-test="advisor-accepted-aws.public_ip"]')
+    expect(item.text()).toContain('Accepted')
+    expect(item.text()).toContain('“Bastion behind an allow list” — ana@example.com')
+    await wrapper.find('[data-test="advisor-revoke-aws.public_ip"]').trigger('click')
+    await flushPromises()
+    expect(apiFetch).toHaveBeenCalledWith('/api/advisor/acceptances/a1', { method: 'DELETE' })
+    expect(wrapper.emitted('posture-changed')).toHaveLength(1)
+  })
+
+  it('charts passed checks and high findings of the selected category', async () => {
+    apiFetch.mockResolvedValue([
+      { capturedAt: '2026-09-01T00:00:00Z', summary: { security: bucket({ high: 2, passed: 2, checks: 4 }) } },
+      { capturedAt: '2026-09-15T00:00:00Z', summary: { security: bucket({ high: 1, passed: 3, checks: 4 }) } },
+    ])
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: POSTURE }) } })
+    await wrapper.find('[data-test="advisor-history-toggle"]').trigger('click')
+    await settled()
+    expect(apiFetch).toHaveBeenCalledWith('/api/advisor/history?scope=aws%3Ap1%3Aus-east-1&days=90')
+    expect(wrapper.findAll('.chart-stub').map(chart => chart.text())).toEqual(['Checks that pass|50,75', 'High findings|2,1'])
+  })
+
+  it('offers no decisions without posture (Free, or an older backend)', async () => {
+    const wrapper = mount(AdvisorPanel, { props: { report: report() } })
+    await wrapper.find('[data-test="advisor-finding-aws.root_mfa"] .adv-row').trigger('click')
+    expect(wrapper.find('[data-test="advisor-accept-aws.root_mfa"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="advisor-history-toggle"]').exists()).toBe(false)
   })
 })

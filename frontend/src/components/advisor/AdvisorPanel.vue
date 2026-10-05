@@ -10,8 +10,14 @@
       </div>
       <div class="adv-head-side">
         <span v-if="report && totals.checks" class="adv-score" :class="scoreLevel">
-          {{ t('advisor.passed', { passed: totals.passed, checks: totals.checks }) }}
+          {{ t('advisor.passed', { passed: totals.passed, checks: totals.checks }) }}<template v-if="totals.accepted"> · {{ t('advisor.acceptedCount', { n: totals.accepted }) }}</template>
         </span>
+        <button
+          v-if="canDecide" class="btn btn-icon" :class="{ active: showHistory }" :title="t('advisor.history.title')"
+          :aria-pressed="showHistory" data-test="advisor-history-toggle" @click="toggleHistory"
+        >
+          <i data-lucide="chart-no-axes-combined"></i>
+        </button>
         <AgentBriefActions
           v-if="report?.findings?.length" compact
           :build="buildBrief" :subject="briefSubject"
@@ -51,6 +57,27 @@
       </div>
       <p v-else-if="report?.error" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ report.error }}</p>
       <template v-else-if="report">
+        <!-- Posture over time: one point per analysis (lib/advisor/posture.js) -->
+        <div v-if="showHistory" class="adv-history" data-test="advisor-history">
+          <p v-if="historyLoading" class="adv-dim">{{ t('advisor.loading') }}</p>
+          <p v-else-if="historyError" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ historyError }}</p>
+          <p v-else-if="historySeries.passed.length < 2" class="adv-dim">{{ t('advisor.history.notEnough') }}</p>
+          <template v-else>
+            <p class="adv-dim">{{ t('advisor.history.hint', { category: t(`advisor.cat.${category}`), n: historySeries.passed.length }) }}</p>
+            <div class="adv-history-charts">
+              <CloudMetricChart :label="t('advisor.history.passed')" unit="%" :points="historySeries.passed" color="#3fb950" show-date />
+              <CloudMetricChart :label="t('advisor.history.high')" unit="count" :points="historySeries.high" color="#f85149" show-date />
+            </div>
+          </template>
+        </div>
+
+        <p v-if="report.posture?.expired" class="adv-foot adv-warn" data-test="advisor-expired">
+          <i data-lucide="clock-alert"></i>{{ t('advisor.acceptance.expiredNotice', { n: report.posture.expired }) }}
+        </p>
+        <p v-if="report.posture?.expiringSoon" class="adv-foot" data-test="advisor-expiring">
+          <i data-lucide="clock"></i>{{ t('advisor.acceptance.expiringNotice', { n: report.posture.expiringSoon }) }}
+        </p>
+
         <div v-if="categories.length > 1" class="adv-cats" role="tablist">
           <button
             :class="['adv-cat', { active: category === 'all' }]" role="tab" :aria-selected="category === 'all'"
@@ -91,10 +118,76 @@
                 </li>
                 <li v-if="finding.truncated" class="adv-dim">{{ t('advisor.more', { n: finding.count - finding.resources.length }) }}</li>
               </ul>
-              <a v-if="finding.docs" class="btn sm" :href="finding.docs" target="_blank" rel="noopener noreferrer">{{ t('advisor.docs') }} ↗</a>
+              <!-- Resources of this rule already accepted or silenced -->
+              <ul v-if="finding.acceptedResources?.length" class="adv-resources adv-accepted-resources">
+                <li v-for="item in finding.acceptedResources" :key="item.acceptance.id">
+                  <span class="adv-chip">{{ t(`advisor.acceptance.kind.${item.acceptance.kind}`) }}</span>
+                  <code>{{ item.acceptance.resourceLabel }}</code>
+                  <span class="adv-dim">{{ item.acceptance.reason }}</span>
+                </li>
+              </ul>
+              <div class="adv-detail-actions">
+                <a v-if="finding.docs" class="btn sm" :href="finding.docs" target="_blank" rel="noopener noreferrer">{{ t('advisor.docs') }} ↗</a>
+                <template v-if="canDecide && decision?.findingId !== finding.id">
+                  <button class="btn sm" :data-test="`advisor-accept-${finding.id}`" @click="startDecision(finding, 'accepted')">{{ t('advisor.acceptance.accept') }}</button>
+                  <button class="btn sm" :data-test="`advisor-silence-${finding.id}`" @click="startDecision(finding, 'silenced')">{{ t('advisor.acceptance.silence') }}</button>
+                </template>
+              </div>
+              <!-- Accept (a known, owned risk) or silence (does not apply): reason required, expiry optional -->
+              <form v-if="decision?.findingId === finding.id" class="adv-decision" data-test="advisor-decision" @submit.prevent="submitDecision">
+                <p class="adv-dim">{{ t(`advisor.acceptance.hint.${decision.kind}`) }}</p>
+                <div v-if="finding.resources?.length" class="adv-decision-target">
+                  <label><input v-model="decision.target" type="radio" value="rule" /> {{ t('advisor.acceptance.wholeRule') }}</label>
+                  <label><input v-model="decision.target" type="radio" value="resources" data-test="advisor-decision-resources" /> {{ t('advisor.acceptance.someResources') }}</label>
+                  <div v-if="decision.target === 'resources'" class="adv-decision-list">
+                    <label v-for="(resource, i) in finding.resources" :key="i">
+                      <input v-model="decision.selected" type="checkbox" :value="i" />
+                      <code>{{ resource.namespace ? `${resource.namespace}/` : '' }}{{ resource.name }}</code>
+                    </label>
+                  </div>
+                </div>
+                <label class="adv-decision-field">
+                  {{ t('advisor.acceptance.reason') }}
+                  <textarea v-model="decision.reason" rows="2" maxlength="500" required :placeholder="t(`advisor.acceptance.reasonPlaceholder.${decision.kind}`)" data-test="advisor-decision-reason"></textarea>
+                </label>
+                <label class="adv-decision-field">
+                  {{ t('advisor.acceptance.expires') }}
+                  <select v-model="decision.days">
+                    <option v-for="days in EXPIRY_CHOICES" :key="days" :value="days">{{ days ? t('advisor.acceptance.days', { n: days }) : t('advisor.acceptance.never') }}</option>
+                  </select>
+                </label>
+                <p v-if="decision.error" class="adv-notice"><i data-lucide="alert-triangle"></i>{{ decision.error }}</p>
+                <div class="adv-detail-actions">
+                  <button type="submit" class="btn sm primary" :disabled="!decisionReady || decision.saving" data-test="advisor-decision-save">{{ t(`advisor.acceptance.confirm.${decision.kind}`) }}</button>
+                  <button type="button" class="btn sm" @click="decision = null">{{ t('common.cancel') }}</button>
+                </div>
+              </form>
             </div>
           </li>
         </ul>
+
+        <!-- Accepted and silenced findings: listed apart, outside the score -->
+        <div v-if="report.accepted?.length" class="adv-accepted" data-test="advisor-accepted">
+          <button class="adv-accepted-toggle" :aria-expanded="showAccepted" @click="showAccepted = !showAccepted">
+            <i :data-lucide="showAccepted ? 'chevron-up' : 'chevron-down'"></i>
+            {{ t('advisor.acceptance.section', { n: report.accepted.length }) }}
+          </button>
+          <ul v-if="showAccepted" class="adv-list">
+            <li v-for="finding in report.accepted" :key="finding.id" class="adv-item adv-accepted-item" :data-test="`advisor-accepted-${finding.id}`">
+              <div class="adv-row adv-row-static">
+                <span :class="['adv-sev', finding.severity]">{{ t(`advisor.severity.${finding.severity}`) }}</span>
+                <span class="adv-row-title">{{ t(`advisor.rule.${finding.id}.title`, { count: finding.count, ...finding.params }) }}</span>
+                <span class="adv-chip">{{ t(`advisor.acceptance.kind.${finding.acceptance.kind}`) }}</span>
+                <button class="btn sm" :disabled="revoking === finding.id" :data-test="`advisor-revoke-${finding.id}`" @click="revoke(finding)">{{ t('advisor.acceptance.revoke') }}</button>
+              </div>
+              <p class="adv-accepted-why">
+                “{{ finding.acceptance.reason }}” — {{ finding.acceptance.author }} · {{ when(finding.acceptance.createdAt) }} ·
+                <span :class="{ 'adv-warn': finding.acceptance.expiringSoon }">{{ finding.acceptance.expiresAt ? t('advisor.acceptance.until', { date: when(finding.acceptance.expiresAt) }) : t('advisor.acceptance.never') }}</span>
+              </p>
+              <p v-if="finding.acceptedResources?.length" class="adv-dim">{{ finding.acceptedResources.map(item => item.acceptance.resourceLabel).join(', ') }}</p>
+            </li>
+          </ul>
+        </div>
 
         <p v-if="report.unavailable?.length" class="adv-foot">
           <i data-lucide="eye-off"></i>
@@ -110,11 +203,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUpdated, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUpdated, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useI18n } from '../../composables/useI18n'
+import { useApi } from '../../composables/useApi'
+import { settings } from '../../composables/useSettings'
 import { advisorBrief } from '../../shared/agentBrief.mjs'
 import AgentBriefActions from './AgentBriefActions.vue'
+// chart.js loads with the history, not with the overview that shows this panel.
+const CloudMetricChart = defineAsyncComponent(() => import('../cloud/CloudMetricChart.vue'))
 
 const props = defineProps({
   report: { type: Object, default: null },
@@ -129,9 +226,13 @@ const props = defineProps({
   // Extra Context rows of the agent brief ({ label: value }), e.g. account or profile
   briefContext: { type: Object, default: () => ({}) },
 })
-defineEmits(['refresh'])
+// posture-changed: an acceptance was added or revoked; the parent reloads the report (no new scan).
+const emit = defineEmits(['refresh', 'posture-changed'])
 
 const { t } = useI18n()
+const { apiFetch } = useApi()
+const EXPIRY_CHOICES = [0, 30, 90, 180, 365]
+const DAY_MS = 24 * 60 * 60 * 1000
 const CATEGORY_ICONS = {
   security: 'shield', infrastructure: 'server', architecture: 'network', development: 'code-2', product: 'target',
 }
@@ -144,7 +245,93 @@ const categories = computed(() => props.report?.categories || [])
 const visible = computed(() => (props.report?.findings || [])
   .filter(finding => category.value === 'all' || finding.category === category.value))
 const totals = computed(() => Object.values(props.report?.summary || {})
-  .reduce((sum, bucket) => ({ passed: sum.passed + bucket.passed, checks: sum.checks + bucket.checks }), { passed: 0, checks: 0 }))
+  .reduce((sum, bucket) => ({ passed: sum.passed + bucket.passed, checks: sum.checks + bucket.checks, accepted: sum.accepted + (bucket.accepted || 0) }), { passed: 0, checks: 0, accepted: 0 }))
+
+// ── Acceptances (Pro: the report carries `posture` and is not locked) ─────────
+const canDecide = computed(() => !!props.report?.posture && !props.report.locked && !props.report.error)
+const decision = ref(null)
+const showAccepted = ref(false)
+const revoking = ref('')
+const decisionReady = computed(() => !!decision.value?.reason.trim()
+  && (decision.value.target === 'rule' || decision.value.selected.length > 0))
+
+function startDecision(finding, kind) {
+  decision.value = { findingId: finding.id, kind, target: 'rule', selected: [], reason: '', days: kind === 'accepted' ? 90 : 0, saving: false, error: '' }
+}
+
+const jsonPost = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+async function submitDecision() {
+  const current = decision.value
+  const finding = (props.report?.findings || []).find(item => item.id === current?.findingId)
+  if (!current || !finding || !decisionReady.value) return
+  current.saving = true
+  current.error = ''
+  try {
+    await apiFetch('/api/advisor/acceptances', jsonPost({
+      scope: props.report.posture.acceptanceScope,
+      ruleId: finding.id,
+      kind: current.kind,
+      reason: current.reason.trim(),
+      expiresAt: current.days ? new Date(Date.now() + current.days * DAY_MS).toISOString() : null,
+      resources: current.target === 'resources' ? current.selected.map(index => finding.resources[index]) : [],
+    }))
+    decision.value = null
+    emit('posture-changed')
+  } catch (err) {
+    current.error = err.message
+  } finally { current.saving = false }
+}
+
+/** Revokes the acceptance of an accepted finding (or every accepted resource of it). */
+async function revoke(finding) {
+  const ids = finding.acceptedResources?.length ? finding.acceptedResources.map(item => item.acceptance.id) : [finding.acceptance.id]
+  revoking.value = finding.id
+  try {
+    for (const id of [...new Set(ids)]) await apiFetch(`/api/advisor/acceptances/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    emit('posture-changed')
+  } catch { /* the list stays as it was */ } finally { revoking.value = '' }
+}
+
+const when = iso => (iso ? new Date(iso).toLocaleDateString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'medium' }) : '')
+
+// ── History: passed checks (%) and high findings per analysis ─────────────────
+const showHistory = ref(false)
+const history = ref([])
+const historyLoading = ref(false)
+const historyError = ref('')
+
+async function loadHistory() {
+  const scope = props.report?.posture?.historyScope
+  if (!scope) return
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    history.value = await apiFetch(`/api/advisor/history?scope=${encodeURIComponent(scope)}&days=90`)
+  } catch (err) {
+    historyError.value = err.message
+  } finally { historyLoading.value = false }
+}
+
+function toggleHistory() {
+  showHistory.value = !showHistory.value
+  if (showHistory.value) loadHistory()
+}
+
+/** Series of the selected category (or all of them). */
+const historySeries = computed(() => {
+  const passed = []
+  const high = []
+  for (const point of history.value) {
+    const buckets = category.value === 'all' ? Object.values(point.summary || {}) : [point.summary?.[category.value]].filter(Boolean)
+    const sum = buckets.reduce((total, bucket) => ({ passed: total.passed + bucket.passed, checks: total.checks + bucket.checks, high: total.high + bucket.high }), { passed: 0, checks: 0, high: 0 })
+    if (!sum.checks) continue
+    const t0 = Date.parse(point.capturedAt)
+    passed.push({ t: t0, v: (sum.passed / sum.checks) * 100 })
+    high.push({ t: t0, v: sum.high })
+  }
+  return { passed, high }
+})
 const scoreLevel = computed(() => {
   const findings = props.report?.findings || []
   if (findings.some(finding => finding.severity === 'high')) return 'bad'
@@ -178,8 +365,10 @@ function toggleCollapsed() {
   try { localStorage.setItem(`kua.${props.storageKey}.collapsed`, collapsed.value ? '1' : '0') } catch { /* per-viewer convenience only */ }
 }
 
-watch(() => props.report, () => {
+watch(() => props.report, (report, previous) => {
   if (category.value !== 'all' && !categories.value.includes(category.value)) category.value = 'all'
+  // A new analysis adds a point: keep the open chart current.
+  if (showHistory.value && report?.posture?.historyScope && report.generatedAt !== previous?.generatedAt) loadHistory()
 })
 
 const refreshIcons = () => nextTick(() => createIcons({ icons }))
@@ -238,6 +427,27 @@ onUpdated(refreshIcons)
 .adv-ok svg, .adv-notice svg, .adv-foot svg { width: 14px; height: 14px; flex: none; }
 .adv-notice { color: var(--yellow); }
 .adv-foot { font-size: 11px; color: var(--text-dim); }
+.adv-warn { color: var(--yellow); }
+.adv-chip { font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-dim); flex: none; }
+.adv-detail-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.adv-decision { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.adv-decision-target { display: flex; flex-direction: column; gap: 4px; }
+.adv-decision-target label, .adv-decision-list label { display: flex; gap: 6px; align-items: center; }
+.adv-decision-list { display: flex; flex-direction: column; gap: 3px; padding-left: 20px; max-height: 160px; overflow-y: auto; }
+.adv-decision-field { display: flex; flex-direction: column; gap: 4px; }
+.adv-decision-field textarea, .adv-decision-field select { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 5px 7px; }
+.adv-decision-field textarea { resize: vertical; min-height: 44px; }
+.adv-accepted-resources code { opacity: .8; }
+.adv-accepted { display: flex; flex-direction: column; gap: 6px; }
+.adv-accepted-toggle { align-self: flex-start; display: flex; gap: 4px; align-items: center; border: 0; background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer; padding: 2px 0; }
+.adv-accepted-toggle:hover { color: var(--text); }
+.adv-accepted-toggle svg { width: 14px; height: 14px; }
+.adv-accepted-item { opacity: .85; }
+.adv-row-static { cursor: default; }
+.adv-accepted-why { margin: 0; padding: 0 12px 8px; font-size: 11px; color: var(--text-dim); line-height: 1.5; overflow-wrap: anywhere; }
+.adv-history { display: flex; flex-direction: column; gap: 8px; }
+.adv-history p { margin: 0; font-size: 12px; }
+.adv-history-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 @media (max-width: 640px) {
   .adv-head { flex-direction: column; }
   .adv-tag { display: none; }

@@ -34,6 +34,7 @@
         <option value="aws">AWS</option>
         <option value="gcp">GCP</option>
         <option value="helm">Helm</option>
+        <option value="advisor">{{ t('audit.catAdvisor') }}</option>
         <option value="envManager">{{ t('audit.catEnvManager') }}</option>
         <option value="system">{{ t('audit.catSystem') }}</option>
       </select>

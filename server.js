@@ -339,6 +339,8 @@ app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
+// Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
+app.use('/api/advisor', require('./routes/advisor').createAdvisorRouter({ store: () => require('./lib/advisor/posture').getPostureStore(), auditLog }));
 app.use('/api/local',         localShellRoutes);
 app.use('/api/audit',         auditLogRoutes);
 
@@ -1113,7 +1115,12 @@ app.get('/api/overview', async (req, res) => {
     } catch (err) {
       advisor = { error: err.message };
     }
-    res.json({ ...overview, advisor: require('./lib/plans').gateAdvisor(advisor) });
+    // Acceptances per cluster, history per cluster and namespace (lib/advisor/posture.js).
+    const posture = require('./lib/advisor/posture');
+    let store = null;
+    try { store = posture.getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); }
+    const scopes = posture.scopeKeys('kubernetes', { context: currentContext, namespace });
+    res.json({ ...overview, advisor: posture.finalizeAdvisor(advisor, { scopes, store }) });
   } catch (err) { handleError(res, err); }
 });
 

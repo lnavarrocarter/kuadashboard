@@ -10,10 +10,17 @@ const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryRe
 const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct } = require('../lib/advisor/product');
+const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 
 function createArchitectureRouter({ database, apmDatabase, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
+  // Advisor acceptances and history live in the APM database (migration 18).
+  let posture = null;
+  const postureStore = () => {
+    if (!posture && apmDatabase?.db) posture = new PostureStore(apmDatabase.db);
+    return posture;
+  };
   const service = graphService || new ArchitectureGraphService({ database });
   const discovery = discoveryService || new ArchitectureAwsDiscoveryService({
     deploymentReader,
@@ -121,7 +128,7 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
     const application = apmDatabase?.getApplication(req.params.applicationId);
     if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
     const overview = apmDatabase.getOverview(application.id);
-    res.json(require('../lib/plans').gateAdvisor(adviseProduct({
+    const report = adviseProduct({
       application,
       overview: {
         ...overview,
@@ -129,7 +136,9 @@ function createArchitectureRouter({ database, apmDatabase, auditLog, graphServic
         latestRun: apmDatabase.getLatestCollectionRun(application.id),
       },
       siblings: apmDatabase.listApplications({ profileId: profile }),
-    })));
+    });
+    // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
+    res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id }), store: postureStore() }));
   });
 
   router.post('/projects', (req, res) => {

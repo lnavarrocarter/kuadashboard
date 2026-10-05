@@ -127,6 +127,7 @@ const enSidebar = {
     { text: 'Vercel Integration', link: '/features/vercel' },
     { text: 'Port Forwarding', link: '/features/port-forwarding' },
     { text: 'Terminal & Shell', link: '/features/terminal' },
+    { text: 'Advisor', link: '/features/advisor' },
     { text: 'AI Agents', link: '/features/ai-agents' },
   ]}],
   '/architecture/': [{ text: 'Architecture', items: [
@@ -157,6 +158,7 @@ const esSidebar = {
     { text: 'Integración Vercel', link: '/es/features/vercel' },
     { text: 'Port Forwarding', link: '/es/features/port-forwarding' },
     { text: 'Terminal & Shell', link: '/es/features/terminal' },
+    { text: 'Advisor', link: '/es/features/advisor' },
     { text: 'Agentes IA', link: '/es/features/ai-agents' },
   ]}],
   '/es/architecture/': [{ text: 'Arquitectura', items: [
