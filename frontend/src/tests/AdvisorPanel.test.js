@@ -235,3 +235,38 @@ describe('AdvisorPanel scheduled analysis', () => {
     expect(wrapper.find('[data-test="advisor-schedule-status"]').text()).toBe('Waiting: it runs when this context is the active one in KUA.')
   })
 })
+
+// Team plan: decisions shared by an owner or admin (lib/advisor/teamAcceptances.js).
+describe('AdvisorPanel team decisions', () => {
+  const POSTURE = { acceptanceScope: 'aws:p1', historyScope: 'aws:p1:us-east-1', expiringSoon: 0, expired: 0, teamScope: 'aws-account:123456789012' }
+  const TEAM_ACCEPTANCE = { id: 't1', ruleId: 'aws.public_ip', kind: 'accepted', reason: 'Bastion', author: 'owner@example.com', createdAt: '2026-10-01T00:00:00Z', expiresAt: null, team: true }
+
+  beforeEach(() => {
+    settings.lang = 'en'
+    apiFetch.mockReset()
+    apiFetch.mockImplementation(async path => (path === '/api/advisor/schedules' ? [] : { team: true, decisions: 1 }))
+  })
+
+  it('an owner or admin can decide for the team', async () => {
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, teamCanDecide: true } }) } })
+    await wrapper.find('[data-test="advisor-finding-aws.root_mfa"] .adv-row').trigger('click')
+    await wrapper.find('[data-test="advisor-accept-aws.root_mfa"]').trigger('click')
+    await wrapper.find('[data-test="advisor-decision-reason"]').setValue('Break-glass account')
+    await wrapper.find('[data-test="advisor-decision-share"]').setValue(true)
+    await wrapper.find('[data-test="advisor-decision"]').trigger('submit')
+    await flushPromises()
+    const [, options] = apiFetch.mock.calls.find(([path]) => path === '/api/advisor/acceptances')
+    expect(JSON.parse(options.body)).toMatchObject({ share: true, teamScope: 'aws-account:123456789012', ruleId: 'aws.root_mfa' })
+  })
+
+  it('members see team decisions marked, without deciding or revoking them', async () => {
+    const accepted = [{ id: 'aws.public_ip', category: 'security', severity: 'high', count: 1, params: {}, resources: [], acceptance: TEAM_ACCEPTANCE }]
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, teamCanDecide: false }, accepted }) } })
+    await wrapper.find('[data-test="advisor-finding-aws.root_mfa"] .adv-row').trigger('click')
+    await wrapper.find('[data-test="advisor-accept-aws.root_mfa"]').trigger('click')
+    expect(wrapper.find('[data-test="advisor-decision-share"]').exists()).toBe(false)
+    await wrapper.find('.adv-accepted-toggle').trigger('click')
+    expect(wrapper.find('[data-test="advisor-team-aws.public_ip"]').text()).toBe('Team')
+    expect(wrapper.find('[data-test="advisor-revoke-aws.public_ip"]').exists()).toBe(false)
+  })
+})

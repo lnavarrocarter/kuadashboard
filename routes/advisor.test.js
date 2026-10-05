@@ -150,3 +150,34 @@ test('webhooks: Team adds them, the URL never comes back whole, removals are aud
     } finally { server.close(); database.close(); }
   }
 });
+
+test('share: an owner decides for the team; a team decision is revoked through the team', async () => {
+  const database = new ApmDatabase({ filePath: ':memory:' });
+  const store = new PostureStore(database.db);
+  const calls = [];
+  const team = {
+    decide: async args => { calls.push(['decide', args]); store.replaceFrom('team:aws-account:123456789012', [{ ruleId: args.ruleId, kind: args.kind, reason: args.reason, author: 'owner@example.com', createdAt: '2026-10-05T10:00:00Z' }]); return 1; },
+    revoke: async acceptance => { calls.push(['revoke', acceptance.ruleId]); store.replaceFrom(acceptance.scope, []); },
+  };
+  const audit = [];
+  const app = express();
+  app.use(express.json());
+  app.use('/api/advisor', createAdvisorRouter({ store: () => store, team, auditLog: { log: entry => audit.push(entry) }, plan: () => PLANS.team, author: () => 'owner@example.com' }));
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}/api/advisor`;
+  const call = async (method, path, body) => {
+    const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    const shared = await call('POST', '/acceptances', { scope: 'aws:p1', share: true, teamScope: 'aws-account:123456789012', ruleId: 'aws.root_mfa', kind: 'accepted', reason: 'Break-glass account' });
+    assert.deepEqual([shared.status, shared.body], [201, { team: true, decisions: 1 }]);
+    assert.equal(calls[0][1].teamScope, 'aws-account:123456789012');
+    assert.equal(store.list('aws:p1').length, 0, 'nothing local: the team holds it');
+    const [mirrored] = store.list('team:aws-account:123456789012');
+    const revoked = await call('DELETE', `/acceptances/${mirrored.id}`);
+    assert.equal(revoked.status, 200);
+    assert.deepEqual(calls[1], ['revoke', 'aws.root_mfa']);
+    assert.deepEqual(audit.map(entry => entry.action), ['Advisor risk accepted for the team', 'Advisor team decision revoked']);
+  } finally { server.close(); database.close(); }
+});

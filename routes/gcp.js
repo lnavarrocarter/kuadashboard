@@ -516,7 +516,9 @@ function withAdvisorGate(payload, { profileId, projectId, fresh = false } = {}) 
   const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/posture');
   let store = null;
   try { store = getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); }
-  const scopes = scopeKeys('gcp', { profileId, projectId: projectId || payload.advisor.scope?.projectId || '' });
+  const project = projectId || payload.advisor.scope?.projectId || '';
+  const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
+  const scopes = scopeKeys('gcp', { profileId, projectId: project, teamScope: teamScopeOf('gcp', { projectId: project }) });
   return { ...payload, advisor: finalizeAdvisor(payload.advisor, { scopes, store, fresh }) };
 }
 
