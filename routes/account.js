@@ -5,7 +5,8 @@
  * (lib/account/account.js). The session token stays in the backend.
  *
  *   GET  /            status (user, plan, entitlements; never the token)
- *   POST /login       URL to open in the browser to sign in with Google
+ *   GET  /providers   sign-in methods the account service offers (Google, GitHub, SSO)
+ *   POST /login       { provider: google|github|sso, team? } → browser sign-in URL
  *   GET  /callback    where the control plane returns the one-time code
  *   POST /refresh     read the plan again (after paying or in the portal)
  *   POST /logout
@@ -29,10 +30,15 @@ function createAccountRouter({ account = getAccount, port = () => process.env.PO
     try { res.json(await account().restore()); } catch { res.json(account().status()); }
   });
 
-  router.post('/login', (_req, res) => {
+  // Sign-in methods the account service offers now (GitHub appears once configured there).
+  router.get('/providers', async (_req, res) => {
+    res.json(await account().providers());
+  });
+
+  router.post('/login', (req, res) => {
     // KUA listens on the loopback address only (server.js), which is what the control plane accepts.
     const callbackUrl = `http://127.0.0.1:${port()}/api/account/callback`;
-    res.json(account().startLogin({ callbackUrl }));
+    try { res.json(account().startLogin({ callbackUrl, provider: req.body?.provider || 'google', team: req.body?.team || '' })); } catch (err) { fail(res, err); }
   });
 
   router.get('/callback', async (req, res) => {

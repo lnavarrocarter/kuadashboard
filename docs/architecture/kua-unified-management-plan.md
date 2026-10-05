@@ -346,3 +346,51 @@ This extends the same safety principles used by discovery: preview before mutati
 - Persisting raw logs, request/response payloads, credentials or secrets.
 - Full GCP, Vercel or Kubernetes architecture discovery in the CloudFormation sync milestone.
 - AI-generated remediation or autonomous production changes.
+
+## KUApps convergence and MCP addendum — 2026-10-05
+
+Tracking: [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146).
+
+The review of the development workspace and GitHub tickets found #17–#21 closed as completed. The code now includes the shared resources component in Observability, GCP/Vercel discovery and operational Canvas navigation/overlays. Their older problem descriptions above are historical; these delivered capabilities are the foundation for the next milestone.
+
+The remaining product gap is application-level ownership and onboarding: `KUAppsView.openObservabilitySetup()` switches to Observability and opens the APM setup modal, while Architecture has a separate resource discovery/import workflow. A shared registry alone does not make these one application experience.
+
+### Product contract
+
+A KUApp owns resource membership, connection scopes and reviewed relationships. Architecture projects are views of those resources; Observability supplies their supported operational signals. Membership must not require a diagram or an enabled collector. Removing a diagram node, detaching a resource from the application and deleting live infrastructure are distinct operations. Resolve provider/profile/account/project/context/location from each resource's scope rather than inheriting the application's hosting provider. Design the compatibility migration before changing stored identities.
+
+### Ordered delivery
+
+1. **Application context and creation:** application-first entry and a KUApps form for identity, environment, team and connections; persist application/project/resource selection. Reuse existing context persistence.
+2. **One Add resources workflow:** extract/reuse Architecture's provider/scope → preview → filtering/explicit selection → summary → add pattern from Resources, Architecture and Observability. Show existing membership and preserve relationships to existing nodes. Telemetry configuration is a separate opt-in step.
+3. **Shared membership service:** reuse existing discovery adapters and ApplicationRegistryService through common orchestration for add/update/detach, stable identities, idempotency, concurrency, audit and defined rollback/partial failure behavior. Do not require a project to associate resources.
+4. **Application workspace:** Resources and Relationships belong to KUApps. Architecture and Observability share selection and a capability-aware resource inspector for detail, relationships, metrics, logs and traces. Reuse #18/#20/#21; show unsupported, disabled, no-data, stale and failed states explicitly.
+5. **Compatibility and portability:** preserve existing applications/projects. Audit multi-project bundles: kuaAppIo currently exports the singular architectureProjectId, and local import does not restore operational registry membership. Define versioning/migration and roundtrip semantics before advertising complete portability.
+6. **MCP:** expose application/resource/graph reads first, then creation, discovery preview, resource attachment, project linking and graph operations through the same service as the UI. Extend the GET-only HTTP client, validate server-side arguments, provide structured results and preserve expectedRevision. Idempotency is required before retrying writes after a lost response. #133 remains installation/connectivity; #48 remains provisioning.
+
+### Integrated acceptance
+
+- Create an empty KUApp and add existing resources without opening APM setup.
+- Adding from any view produces the same canonical membership; repeated discovery does not duplicate resources or override human relationship decisions.
+- AWS resources and Kubernetes workloads coexist with explicit resource scopes.
+- Unsupported telemetry does not hide a resource or enable collection automatically.
+- Removing a diagram node does not detach membership or delete infrastructure.
+- Partial failure is rolled back or explicitly recoverable; concurrent graph edits preserve revision checks.
+- UI and MCP use the same service and yield equivalent results.
+- Contract/integration tests cover cross-scope inputs, duplicates, partial failure and concurrency; UI tests cover addition/navigation from each view.
+
+This milestone starts with existing infrastructure. Provisioning and cloud collaboration do not block local KUApps convergence.
+
+### Extension foundation and inbound MCP
+
+Tracking: [#147](https://github.com/lnavarrocarter/kuadashboard/issues/147), linked to #146. Establish the extension contract during domain design; deliver external connections after membership/context stabilize.
+
+KUA has two independent MCP roles: its existing server exposes KUA to agents; a new backend client consumes external MCP servers. A versioned extension manifest declares identity, contract version, capabilities, transport and allowed scopes. Internal provider adapters and external connectors normalize results through the same domain interfaces. MCP supplies transport/tool discovery, not canonical resource semantics.
+
+Evidence records carry source/extension identity, application/resource scope, references, observation/retrieval dates, freshness and explicit observed/inferred/historical classification. External history can explain past intent, but cannot certify current infrastructure or silently confirm relationships. Preserve contradictory evidence and missing-data states.
+
+Use [ctx history-source plugins](https://github.com/ctxrs/ctx/blob/main/docs/history-source-plugins.md) as a reference for manifests, normalized durable inputs and publication of verified generations; its source adapters do not load plugin code in-process. Its [agent plugin packaging](https://github.com/ctxrs/ctx/blob/main/docs/agent-skill-install.md) is a separate reference for distributing skills/integrations to agents. Keep ctx optional as a historical-context pilot, and verify a pinned release's MCP catalog before writing the adapter.
+
+Delivery: capability registry/internal adapter → backend MCP client (explicit stdio and Streamable HTTP) → connection UI/lifecycle → evidence adapters → optional ctx pilot → reviewed decision support. An LLM is optional and has a separate data-sharing/cost configuration. Do not load arbitrary third-party code in Electron/backend in the MVP.
+
+Acceptance includes source/date citations, application scopes, invalid schema/catalog-change handling, timeout/cancellation/disconnection recovery and no local workspace dependency on an external server. Commands are explicit argv without shell execution; secrets stay backend-side; selected tools and transfer scopes are enforced independently of MCP annotations. Do not automatically relay external tools through KUA's MCP server or let external content authorize writes.

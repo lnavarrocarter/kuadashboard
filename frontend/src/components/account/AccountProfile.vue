@@ -16,12 +16,19 @@
             <button class="btn sm" :disabled="busy" data-test="account-refresh" @click="refreshAccount">{{ t('account.refresh') }}</button>
             <button class="btn sm" :disabled="busy" data-test="account-sign-out" @click="signOut">{{ t('account.signOut') }}</button>
           </template>
-          <button v-else class="btn sm primary" :disabled="busy || waiting === 'login'" data-test="account-sign-in" @click="signIn">
-            {{ waiting === 'login' ? t('account.waitingBrowser') : t('account.signIn') }}
-          </button>
+          <template v-else>
+            <button class="btn sm primary" :disabled="busy || waiting === 'login'" data-test="account-sign-in" @click="signIn('google')">
+              {{ waiting === 'login' ? t('account.waitingBrowser') : t('account.signIn') }}
+            </button>
+            <button v-if="signInMethods.providers.includes('github')" class="btn sm" :disabled="busy || waiting === 'login'" data-test="account-sign-in-github" @click="signIn('github')">{{ t('account.signInGithub') }}</button>
+          </template>
         </span>
       </div>
       <p v-if="waiting === 'login'" class="acp-note" data-test="account-waiting">{{ t('account.waitingLogin') }}</p>
+      <div v-if="!account?.linked && signInMethods.sso" class="acp-note acp-actions">
+        <input v-model="ssoTeam" :placeholder="t('account.ssoTeam')" :aria-label="t('account.ssoTeam')" data-test="account-sso-team" maxlength="100" />
+        <button class="btn sm" :disabled="busy || waiting === 'login' || !ssoTeam.trim()" data-test="account-sign-in-sso" @click="signIn('sso')">{{ t('account.signInSso') }}</button>
+      </div>
       <p v-if="account?.stale" class="acp-note acp-warn">{{ t('account.stale') }}</p>
       <p v-if="account?.keyConflict" class="acp-note acp-warn" data-test="account-key-conflict">{{ t('account.keyConflict') }}</p>
       <!-- The team this account belongs to; its KUA Applications are visible to the team's owner and admins -->
@@ -80,6 +87,10 @@
             <tr>
               <td>{{ t('account.featureLocal') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">✓</td>
+            </tr>
+            <tr>
+              <td>{{ t('account.featureSso') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.sso) }}</td>
             </tr>
           </tbody>
         </table>
@@ -237,8 +248,17 @@ function noticeText(notice) {
   }) : ''
 }
 
-async function signIn() {
-  const login = await run(() => api('POST', '/api/account/login'))
+const ssoTeam = ref('')
+// What the account service offers now (GitHub appears once it is configured there).
+const signInMethods = ref({ providers: ['google'], sso: false })
+async function loadSignInMethods() {
+  try {
+    const methods = await api('GET', '/api/account/providers')
+    if (Array.isArray(methods?.providers)) signInMethods.value = { providers: methods.providers, sso: methods.sso === true }
+  } catch { /* Google only */ }
+}
+async function signIn(provider = 'google') {
+  const login = await run(() => api('POST', '/api/account/login', { provider, ...(provider === 'sso' ? { team: ssoTeam.value.trim() } : {}) }))
   if (!login?.url) return
   openExternal(login.url)
   pollAccount({ kind: 'login', everyMs: 2000, forMs: 5 * 60 * 1000, done: status => status.linked })
@@ -343,7 +363,7 @@ async function onReturn() {
 }
 
 onMounted(() => {
-  loadAccount(); loadMl(); loadUsage(); refreshIcons()
+  loadAccount(); loadSignInMethods(); loadMl(); loadUsage(); refreshIcons()
   window.addEventListener('focus', onReturn)
   document.addEventListener('visibilitychange', onReturn)
 })

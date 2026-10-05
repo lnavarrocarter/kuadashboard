@@ -219,7 +219,8 @@ describe('AccountProfile sign-in and billing', () => {
       else if (url === '/api/account' || url === '/api/account/refresh' || url === '/api/account/logout') {
         if (url === '/api/account/logout') { state.linked = false; state.plan = null }
         body = status()
-      } else if (url === '/api/account/login') body = { url: 'https://cp.example/auth/desktop/start?state=s' }
+      } else if (url === '/api/account/providers') body = { providers: state.providers || ['google', 'github'], sso: state.sso ?? true }
+      else if (url === '/api/account/login') body = { url: 'https://cp.example/auth/desktop/start?state=s' }
       else if (url === '/api/account/checkout') body = { url: 'https://polar.example/checkout' }
       else if (url === '/api/account/portal') body = { url: 'https://polar.example/portal' }
       else if (url === '/api/system/ml') body = { enabled: false, downloaded: false, downloadBytes: 1 }
@@ -249,6 +250,41 @@ describe('AccountProfile sign-in and billing', () => {
     expect(wrapper.find('[data-test="account-waiting"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="account-upgrade-pro"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="account-portal"]').exists()).toBe(false)
+  })
+
+  it('sends GitHub and SSO selections, requiring the team id for SSO', async () => {
+    vi.useFakeTimers()
+    const state = stubAccount()
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.get('[data-test="account-sign-in-sso"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="account-sign-in-github"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(state.calls.find(call => call.url === '/api/account/login').body)).toEqual({ provider: 'github' })
+    wrapper.unmount()
+    const second = stubAccount()
+    const sso = mount(AccountProfile)
+    await flushPromises()
+    await sso.get('[data-test="account-sso-team"]').setValue(' team-1 ')
+    expect(sso.get('[data-test="account-sign-in-sso"]').attributes('disabled')).toBeUndefined()
+    await sso.get('[data-test="account-sign-in-sso"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(second.calls.find(call => call.url === '/api/account/login').body)).toEqual({ provider: 'sso', team: 'team-1' })
+    sso.unmount()
+  })
+
+  it('offers only the sign-in methods the account service has (GitHub needs its OAuth app there)', async () => {
+    const state = stubAccount()
+    state.providers = ['google']
+    state.sso = false
+    const AccountProfile = await load('../components/account/AccountProfile.vue')
+    const wrapper = mount(AccountProfile)
+    await flushPromises()
+    expect(wrapper.find('[data-test="account-sign-in"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="account-sign-in-github"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="account-sign-in-sso"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('opens the checkout and waits for the payment before showing the new plan', async () => {
