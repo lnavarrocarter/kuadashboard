@@ -107,6 +107,7 @@ describe('KUApps navigation', () => {
     expect(wrapper.text()).toContain('Multi-provider')
     expect(wrapper.find('.kuapp-scopes').exists()).toBe(false)
     await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
+    await wrapper.findAll('.kuapps-settings-nav button')[1].trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('Accounts and scopes')
     expect(wrapper.find('.kuapp-scopes-warning').exists()).toBe(true)
@@ -266,6 +267,42 @@ describe('KUApps navigation', () => {
     wrapper.unmount()
   })
 
+  it('deletes an application only after typing its name, with the revision it read', async () => {
+    const application = { id: 'app-del', name: 'Orders', provider: 'aws', profileId: 'local:prod' }
+    const detail = { ...application, revision: 7, scopes: [], local: { bindings: [], legacy: null } }
+    global.fetch = vi.fn((url, options = {}) => {
+      const text = String(url)
+      let body = []
+      if (options.method === 'DELETE') body = { id: application.id, deleted: true }
+      else if (text.includes('/catalog')) body = global.fetch.mock.calls.some(([, o]) => o?.method === 'DELETE') ? [] : [application]
+      else if (text.includes('/registry')) body = { resources: [], relationships: [] }
+      else if (text.includes('/api/kua-apps/applications/app-del')) body = detail
+      return Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) })
+    })
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture' },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppScopes: true, AdvisorPanel: true } },
+    })
+    await flushPromises()
+    await wrapper.get('.kuapps-application-row').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
+    await wrapper.findAll('.kuapps-settings-nav button')[4].trigger('click')
+
+    const remove = wrapper.get('[data-test="delete-application"]')
+    expect(remove.element.disabled).toBe(true)
+    expect(wrapper.text()).toContain('infrastructure in the cloud are not deleted')
+    await wrapper.get('[data-test="delete-confirmation"]').setValue('Orders')
+    expect(remove.element.disabled).toBe(false)
+    await remove.trigger('click')
+    await flushPromises()
+
+    const call = global.fetch.mock.calls.find(([, options]) => options?.method === 'DELETE')
+    expect(call[0]).toBe('/api/kua-apps/applications/app-del?expectedRevision=7')
+    expect(wrapper.findAll('.kuapps-application-row')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('does not use the global profile for an unverified application scope', async () => {
     const application = { id: 'app-unverified', name: 'Unverified', provider: null, profileId: null }
     const detail = {
@@ -320,14 +357,20 @@ describe('KUApps navigation', () => {
     expect(map().props('workspaceSection')).toBe('routes')
 
     await tabs()[5].trigger('click')
+    const sections = () => wrapper.findAll('.kuapps-settings-nav button')
+    expect(sections().map(button => button.text())).toEqual(['Application details', 'Accounts and scopes', 'Sources and sync', 'Backups and collaboration', 'Delete application'])
+    await sections()[1].trigger('click')
+    expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
+    await sections()[2].trigger('click')
     expect(map().props('settingsOnly')).toBe(true)
+    expect(wrapper.get('.kuapps-settings-workspace').text()).toContain('compares the resources of Observability with the nodes of the map')
+    expect(wrapper.get('.kuapps-settings-workspace').text()).toContain('CloudFormation reads have no charge')
+    await sections()[3].trigger('click')
     const settings = wrapper.get('.kuapps-settings-workspace').text()
     expect(settings).toContain('Import backup')
     expect(settings).toContain('Export backup')
     expect(settings).toContain('Cloud backups')
-    expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
-
-    expect(wrapper.get('.kuapps-settings-workspace').text()).not.toContain('Add resources')
+    expect(settings).not.toContain('Add resources')
 
     await tabs()[1].trigger('click')
     expect(map().props('workspaceSection')).toBe('resources')
@@ -366,7 +409,9 @@ describe('KUApps navigation', () => {
     const patch = global.fetch.mock.calls.find(([, options]) => options?.method === 'PATCH')
     expect(JSON.parse(patch[1].body)).toMatchObject({ name: 'Orders Production', environment: 'staging', team: 'platform', expectedRevision: 4 })
     expect(wrapper.text()).toContain('Changes saved.')
+    await wrapper.findAll('.kuapps-settings-nav button')[1].trigger('click')
     expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
+    await wrapper.findAll('.kuapps-settings-nav button')[3].trigger('click')
     expect(wrapper.get('.kuapps-settings-workspace').text()).toContain('Platform')
     wrapper.unmount()
   })
@@ -398,9 +443,12 @@ describe('KUApps navigation', () => {
     await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
     await wrapper.get('.kuapps-resource-row').trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
+    expect(wrapper.get('.kuapps-signals-inspector dl').text()).toContain('lambda')
+    await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
 
     const signals = wrapper.findComponent({ name: 'ApmObservabilityView' })
     expect(signals.exists()).toBe(true)
+    expect(signals.props('section')).toBe('signals')
     expect(signals.props('focusResource').node).toMatchObject({ registryResourceId: resource.id, name: resource.displayName })
     expect(signals.props('profileId')).toBe('local:prod')
 
@@ -417,6 +465,7 @@ describe('KUApps navigation', () => {
     await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
     await wrapper.findAll('.kuapps-resource-row')[1].trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
+    await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
     expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).exists()).toBe(false)
     expect(wrapper.find('.kuapps-signals-unavailable').text()).toContain('No collectors were started.')
     wrapper.unmount()
