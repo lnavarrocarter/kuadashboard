@@ -359,6 +359,8 @@ The remaining product gap is application-level ownership and onboarding: `KUApps
 
 A KUApp owns resource membership, connection scopes and reviewed relationships. Architecture projects are views of those resources; Observability supplies their supported operational signals. Membership must not require a diagram or an enabled collector. Removing a diagram node, detaching a resource from the application and deleting live infrastructure are distinct operations. Resolve provider/profile/account/project/context/location from each resource's scope rather than inheriting the application's hosting provider. Design the compatibility migration before changing stored identities.
 
+The contract is fixed in [KUA Application Contract](./kuapps-application-contract.md) (#149): an application has no provider or profile of its own, scopes are portable, local profiles are bound per scope on each computer and never exported, and resource identity v2 excludes the profile.
+
 ### Ordered delivery
 
 1. **Application context and creation:** application-first entry and a KUApps form for identity, environment, team and connections; persist application/project/resource selection. Reuse existing context persistence.

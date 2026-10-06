@@ -195,6 +195,8 @@ Los tickets #17–#21 estan cerrados como completados. El codigo ya incorpora re
 
 La brecha restante es de producto: crear una KUApp todavia abre el setup APM y agregar recursos usa flujos distintos en Arquitectura y Observabilidad. La aplicacion debe poseer recursos, scopes y relaciones; Arquitectura y Observabilidad son vistas de esa misma identidad.
 
+El contrato queda fijado en [Contrato de KUA Application](./kuapps-application-contract.md) (#149): una aplicación no tiene provider ni perfil propios, los scopes son portables, cada computador asocia sus perfiles locales por scope sin exportarlos, y la identidad de recurso v2 no incluye el perfil.
+
 Orden de entrega:
 
 1. Entrada y creacion propias de KUApps, con contexto persistido de aplicacion/proyecto/recurso.
