@@ -49,6 +49,14 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     kubernetesAdapter,
     logCache: () => logCache,
   }));
+  // Applications without a provider are read through the generic routes (#149, #166).
+  app.use('/api/observability/generic', createApmRouter({
+    database,
+    architectureDatabase,
+    scheduler,
+    provider: 'generic',
+    logCache: () => logCache,
+  }));
   app.use('/api/architecture', createArchitectureRouter({
     database: architectureDatabase,
     apmDatabase: database,
@@ -67,6 +75,16 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
         'X-Profile-Id': profile,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
+  }
+
+  async function genericRequest(relativePath, { profile = 'local', method = 'GET', body } = {}) {
+    const response = await fetch(`${baseUrl.replace('/aws', '/generic')}${relativePath}`, {
+      method,
+      headers: { 'X-Profile-Id': profile, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await response.text();
@@ -93,6 +111,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
   }
 
   return {
+    genericRequest,
     auditEvents,
     database,
     logCache,
@@ -1147,4 +1166,25 @@ test('API returns the product advisor of an application, scoped by profile', asy
   } finally {
     await subject.close();
   }
+});
+
+test('an application without provider is read through the generic routes by local or a verified scope profile', async () => {
+  const { normalizeScope } = require('../lib/kua/applicationContract');
+  const subject = await fixture();
+  try {
+    const application = subject.database.createApplication({ name: 'App360', environment: 'dev' });
+    const kube = normalizeScope({ provider: 'kubernetes', scopeId: 'desarrollo' });
+    subject.database.addApplicationScope(application.id, kube);
+    subject.database.setScopeBinding(application.id, kube.key, { profileId: 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev', status: 'verified' });
+    subject.database.addResource(application.id, { type: 'kubernetes', key: 'desarrollo/api/deployment/api', kubeContext: 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev', namespace: 'api', kind: 'Deployment', name: 'api' });
+
+    const listed = await subject.genericRequest('/applications');
+    assert.ok(listed.body.some(item => item.id === application.id));
+    assert.equal((await subject.genericRequest(`/applications/${application.id}/topology`)).body.resources.length, 1);
+    assert.equal((await subject.genericRequest(`/applications/${application.id}/registry`, { profile: 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev' })).status, 200);
+    assert.equal((await subject.genericRequest(`/applications/${application.id}/topology`, { profile: 'local:someone-else' })).status, 404);
+    assert.equal((await subject.request(`/applications/${application.id}/topology`, { profile: 'local' })).status, 404, 'the AWS routes do not serve it');
+    const collected = await subject.genericRequest(`/applications/${application.id}/collect-now`, { method: 'POST' });
+    assert.equal(collected.status, 200);
+  } finally { await subject.close(); }
 });

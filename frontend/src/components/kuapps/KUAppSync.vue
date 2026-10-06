@@ -30,6 +30,8 @@ import { useI18n } from '../../composables/useI18n'
 const props = defineProps({
   application: { type: Object, default: null },
   provider: { type: String, default: 'generic' },
+  // The profile the Observability routes accept for this application ('local' without provider).
+  profileId: { type: String, default: '' },
 })
 const emit = defineEmits(['open-tab', 'reconciled'])
 const { t } = useI18n()
@@ -38,9 +40,10 @@ const status = ref(null)
 const running = ref(false)
 const error = ref('')
 
-const available = computed(() => !!props.application?.profileId)
+const profile = computed(() => props.profileId || props.application?.profileId || '')
+const available = computed(() => !!props.application && !!profile.value)
 const base = computed(() => `/api/observability/${props.provider}/applications/${encodeURIComponent(props.application?.id || '')}/registry`)
-const headers = computed(() => ({ 'X-Profile-Id': props.application?.profileId || '' }))
+const headers = computed(() => ({ 'X-Profile-Id': profile.value }))
 const pending = computed(() => (status.value?.divergentResourceCount || 0) + (status.value?.divergentRelationshipCount || 0))
 const pendingLabel = computed(() => pending.value
   ? t('kuapps.sync.pending', { resources: status.value?.divergentResourceCount || 0, relationships: status.value?.divergentRelationshipCount || 0 })
@@ -69,7 +72,7 @@ async function reconcile() {
   }
 }
 
-watch(() => [props.application?.id, props.application?.profileId, props.provider], load, { immediate: true })
+watch(() => [props.application?.id, profile.value, props.provider], load, { immediate: true })
 </script>
 
 <style scoped>
