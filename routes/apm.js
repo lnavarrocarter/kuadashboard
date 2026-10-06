@@ -57,8 +57,14 @@ function createApmRouter({
   function handleError(res, error) {
     const status = error.statusCode || error.$metadata?.httpStatusCode ||
       (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
-    res.status(status).json({ error: error.message || 'Internal server error' });
+    res.status(status).json({
+      error: error.message || 'Internal server error',
+      ...(error.code ? { code: error.code } : {}),
+      ...(error.revision !== undefined ? { revision: error.revision } : {}),
+    });
   }
+
+  const resourceRevisionOf = req => ({ expectedRevision: req.body?.expectedRevision ?? req.query.expectedRevision });
 
   function log(action, resource, context, details) {
     auditLog?.log({ category: 'apm', action, resource, context, details });
@@ -536,12 +542,15 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     try {
-      const resource = database.addResource(application.id, req.body);
-      reconcileRegistry(database.getApplication(application.id));
+      const result = registry
+        ? registry.attachResource(application, req.body, resourceRevisionOf(req))
+        : database.attachResource(application.id, req.body, resourceRevisionOf(req));
+      const { resource } = result;
+      if (!registry) reconcileRegistry(database.getApplication(application.id));
       log('Resource associated', `${resource.type}/${resource.name}`, application.profileId, {
-        source: resource.associationSource,
+        source: resource.associationSource, created: result.created,
       });
-      res.status(201).json(resource);
+      res.status(result.created ? 201 : 200).json(resource);
     } catch (error) { handleError(res, error); }
   });
 
@@ -551,8 +560,10 @@ function createApmRouter({
     const resource = database.getResource(req.params.resourceId);
     if (!resource || resource.applicationId !== application.id) return res.status(404).json({ error: 'Resource not found' });
     try {
-      const updated = database.updateResource(resource.id, req.body);
-      reconcileRegistry(database.getApplication(application.id));
+      const updated = registry
+        ? registry.updateResource(application, resource.id, req.body, resourceRevisionOf(req)).resource
+        : database.updateResource(resource.id, req.body, resourceRevisionOf(req));
+      if (!registry) reconcileRegistry(database.getApplication(application.id));
       log('Resource updated', `${updated.type}/${updated.name}`, application.profileId, { enabled: updated.enabled });
       res.json(updated);
     } catch (error) { handleError(res, error); }
@@ -562,10 +573,18 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     const resource = database.getResource(req.params.resourceId);
-    if (!resource || resource.applicationId !== application.id) return res.status(404).json({ error: 'Resource not found' });
-    database.removeResource(resource.id);
-    reconcileRegistry(database.getApplication(application.id));
-    log('Resource removed', `${resource.type}/${resource.name}`, application.profileId);
+    if ((!resource || resource.applicationId !== application.id) &&
+        (!registry || !database.isRegistryResourceDetached(application.id, req.params.resourceId))) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    try {
+      if (registry) registry.detachResource(application, req.params.resourceId, resourceRevisionOf(req));
+      else {
+        database.removeResource(resource.id, resourceRevisionOf(req));
+        reconcileRegistry(database.getApplication(application.id));
+      }
+    } catch (error) { return handleError(res, error); }
+    if (resource) log('Resource removed', `${resource.type}/${resource.name}`, application.profileId);
     res.status(204).end();
   });
 

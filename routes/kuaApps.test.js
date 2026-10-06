@@ -198,6 +198,37 @@ test('KUA Applications API: create without provider, add scopes, bind and resolv
   } finally { await subject.close(); }
 });
 
+test('KUA Application registry lists shared resources and relationships without local profile ids', async () => {
+  const subject = await fixture();
+  try {
+    const application = await createSource(subject);
+    const source = subject.apmDatabase.upsertRegistryResource({
+      id: 'resource:api', identityKey: 'aws:api', provider: 'aws', profileId: 'local:secret',
+      scopeId: '123456789012', location: 'us-east-1', nativeIdentifier: 'arn:aws:lambda:us-east-1:123456789012:function:api',
+      resourceType: 'lambda', displayName: 'orders-api', lineage: [],
+    });
+    const target = subject.apmDatabase.upsertRegistryResource({
+      id: 'resource:queue', identityKey: 'aws:queue', provider: 'aws', profileId: 'local:secret',
+      scopeId: '123456789012', location: 'us-east-1', nativeIdentifier: 'arn:aws:sqs:us-east-1:123456789012:orders',
+      resourceType: 'sqs', displayName: 'orders', lineage: [],
+    });
+    subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: source.id, sourceKind: 'manual', sourceReference: 'source' });
+    subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: target.id, sourceKind: 'manual', sourceReference: 'target' });
+    subject.apmDatabase.upsertRegistryRelationship({
+      id: 'relationship:api-queue', applicationId: application.id, sourceResourceId: source.id,
+      targetResourceId: target.id, relationType: 'sends-to', status: 'confirmed', evidence: [],
+    });
+
+    const registry = await subject.request(`/applications/${application.id}/registry`, { profile: '' });
+    assert.equal(registry.status, 200);
+    assert.equal(registry.body.resources.length, 2);
+    assert.equal(registry.body.resources[0].profileId, undefined);
+    assert.equal(registry.body.relationships[0].sourceName, 'orders-api');
+    assert.equal(registry.body.relationships[0].targetName, 'orders');
+    assert.equal(JSON.stringify(registry.body).includes('local:secret'), false);
+  } finally { await subject.close(); }
+});
+
 test('KUA Applications API rejects invalid input', async () => {
   const subject = await fixture();
   try {

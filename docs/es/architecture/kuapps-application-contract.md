@@ -116,6 +116,19 @@ Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, per
 
 KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). La publicación al equipo omite estas aplicaciones hasta que el bundle lleve scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps.
 
+## Membresía de recursos
+
+`ApplicationRegistryService` es el único lugar que asocia, actualiza y desvincula un recurso de una aplicación (#150). Las rutas de APM delegan en él, así que Observabilidad, Arquitectura y KUApps se comportan igual.
+
+- **Asociar es idempotente.** Asociar otra vez el mismo recurso (mismo tipo y clave) responde `200` con el recurso existente en vez de `201`, y no duplica membresía, nodo ni relación.
+- **Control de revisión.** Asociar, actualizar y desvincular aceptan `expectedRevision`. Un valor obsoleto responde `409 REVISION_CONFLICT` y no escribe nada. Asociar o desvincular con éxito mueve la `revision` de la aplicación.
+- **Una falla parcial se puede recuperar.** El recurso se guarda en una transacción. Si falla la proyección a una vista de Arquitectura, el estado de sincronización del registry guarda el error y la siguiente reconciliación termina el trabajo sin duplicados.
+- **Desvincular no es eliminar.** Desvincular quita el recurso de la aplicación y registra la desvinculación por identidad portable, así la reconciliación no lo vuelve a asociar desde un nodo de Arquitectura. El nodo sigue en el diagrama y no se elimina nada en la nube. Asociar el recurso otra vez borra la desvinculación.
+- **Las decisiones humanas se mantienen.** Las relaciones que el usuario confirmó o rechazó conservan su estado al asociar, desvincular y reconciliar.
+- **Perfiles verificados por scope.** Un perfil asociado y verificado para uno de los scopes de la aplicación puede abrir sus vistas de Arquitectura, también en una aplicación sin provider.
+
+`GET /api/kua-apps/applications/:id/registry` lista los recursos y relaciones canónicos de la aplicación con sus nombres, sin ids de perfiles locales.
+
 ## Reporte de migración
 
 `GET /api/kua-apps/migration-report` es de solo lectura y lista lo que necesita una decisión. Nombra aplicaciones, vistas y scopes, nunca perfiles.

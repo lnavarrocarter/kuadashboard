@@ -9,6 +9,7 @@ const test = require('node:test');
 const express = require('express');
 const { ApmDatabase } = require('../lib/apm/database');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
+const { normalizeScope } = require('../lib/kua/applicationContract');
 const { createApmRouter } = require('./apm');
 const { createArchitectureRouter } = require('./architecture');
 const { createLogCache } = require('../lib/awsLogCache');
@@ -456,6 +457,206 @@ test('API reconciles linked resources and relationships into one shared registry
       'checkout', 'checkout', 'checkout-worker',
     ]);
     assert.equal(subject.database.listResources(applicationId).find(resource => resource.name === 'checkout-worker').associationSource, 'architecture');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API treats attaching the same resource twice as an idempotent retry', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const path = `/applications/${application.body.id}/resources`;
+    const resource = {
+      type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:orders',
+      arn: 'arn:aws:lambda:us-east-1:123:function:orders', name: 'orders-api', associationSource: 'manual',
+    };
+
+    const first = await subject.request(path, { method: 'POST', body: resource });
+    const retry = await subject.request(path, { method: 'POST', body: resource });
+
+    assert.equal(first.status, 201);
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.id, first.body.id);
+    assert.equal(subject.database.listResources(application.body.id).length, 1);
+    assert.equal(subject.database.listRegistryResources(application.body.id).length, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('resource attach, update and detach enforce application revisions', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const resourcePath = `/applications/${application.body.id}/resources`;
+    const attached = await subject.request(resourcePath, {
+      method: 'POST',
+      body: {
+        type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:orders',
+        arn: 'arn:aws:lambda:us-east-1:123:function:orders', name: 'orders-api', expectedRevision: 0,
+      },
+    });
+    assert.equal(attached.status, 201);
+
+    const staleUpdate = await subject.request(`${resourcePath}/${attached.body.id}`, {
+      method: 'PATCH', body: { name: 'stale-name', expectedRevision: 0 },
+    });
+    assert.equal(staleUpdate.status, 409);
+    assert.equal(staleUpdate.body.code, 'REVISION_CONFLICT');
+    assert.equal(staleUpdate.body.revision, 1);
+    assert.equal(subject.database.getResource(attached.body.id).name, 'orders-api');
+
+    const updated = await subject.request(`${resourcePath}/${attached.body.id}`, {
+      method: 'PATCH', body: { name: 'orders-api-v2', expectedRevision: 1 },
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.name, 'orders-api-v2');
+
+    const detached = await subject.request(`${resourcePath}/${attached.body.id}?expectedRevision=2`, { method: 'DELETE' });
+    assert.equal(detached.status, 204);
+    assert.equal(subject.database.getResource(attached.body.id), null);
+    assert.equal(subject.database.getApplication(application.body.id).revision, 3);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('resource attach records a partial projection failure and succeeds on reconciliation retry', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.database.updateArchitectureProjectLink(application.body.id, project.id);
+    const originalSaveGraph = subject.architectureDatabase.saveGraph.bind(subject.architectureDatabase);
+    subject.architectureDatabase.saveGraph = () => { throw new Error('simulated projection failure'); };
+
+    const attached = await subject.request(`/applications/${application.body.id}/resources`, {
+      method: 'POST',
+      body: {
+        type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:orders',
+        arn: 'arn:aws:lambda:us-east-1:123:function:orders', name: 'orders-api',
+      },
+    });
+    assert.equal(attached.status, 500);
+    assert.equal(subject.database.listResources(application.body.id).length, 1);
+    assert.equal(subject.database.getRegistrySyncStatus(application.body.id).lastError, 'simulated projection failure');
+
+    subject.architectureDatabase.saveGraph = originalSaveGraph;
+    const retried = await subject.request(`/applications/${application.body.id}/registry/reconcile`, { method: 'POST' });
+    assert.equal(retried.status, 200);
+    assert.equal(retried.body.syncStatus.lastError, null);
+    assert.deepEqual(retried.body.resources[0].sources.sort(), ['apm_resource', 'architecture_node']);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('detaching a resource preserves its Architecture node without restoring application membership', async () => {
+  const subject = await fixture();
+  try {
+    const application = await subject.request('/applications', {
+      method: 'POST', body: { name: 'orders', region: 'us-east-1' },
+    });
+    const project = subject.architectureDatabase.createProject({ profileId: 'local:dev', name: 'orders-architecture' });
+    subject.database.updateArchitectureProjectLink(application.body.id, project.id);
+    const resourcePath = `/applications/${application.body.id}/resources`;
+    const payload = {
+      type: 'lambda', key: 'arn:aws:lambda:us-east-1:123:function:orders',
+      arn: 'arn:aws:lambda:us-east-1:123:function:orders', name: 'orders-api',
+    };
+    const attached = await subject.request(resourcePath, { method: 'POST', body: payload });
+    assert.equal(attached.status, 201);
+    assert.equal(subject.database.listRegistryResources(application.body.id).length, 1);
+    const graph = subject.architectureDatabase.getGraph(project.id);
+    subject.architectureDatabase.saveGraph(project.id, {
+      ...graph.document,
+      nodes: [...graph.document.nodes, {
+        id: 'orders-queue', name: 'orders-queue', provider: 'aws', resourceType: 'sqs',
+        nativeId: 'arn:aws:sqs:us-east-1:123:orders', arn: 'arn:aws:sqs:us-east-1:123:orders',
+        accountId: '123', region: 'us-east-1',
+      }],
+      edges: [{
+        id: 'orders-depends-on-queue', sourceNodeId: graph.document.nodes[0].id,
+        targetNodeId: 'orders-queue', relationType: 'depends_on', status: 'manual', decision: 'accepted',
+      }],
+    }, { expectedRevision: graph.revision });
+    await subject.request(`/applications/${application.body.id}/registry/reconcile`, { method: 'POST' });
+
+    const detached = await subject.request(`${resourcePath}/${attached.body.id}`, { method: 'DELETE' });
+    assert.equal(detached.status, 204);
+    assert.equal(subject.database.getResource(attached.body.id), null);
+    const remainingRegistryResources = subject.database.listRegistryResources(application.body.id);
+    assert.equal(remainingRegistryResources.length, 1);
+    assert.equal(remainingRegistryResources[0].displayName, 'orders-queue');
+    const graphAfterDetach = subject.architectureDatabase.getGraph(project.id).document;
+    assert.equal(graphAfterDetach.nodes.length, 2, 'detaching membership must not remove the diagram node');
+    const detachedNode = graphAfterDetach.nodes.find(node => node.id === `apm-resource:${attached.body.id}`);
+    assert.ok(detachedNode);
+    assert.equal(detachedNode.registryResourceId, undefined);
+    assert.equal(graphAfterDetach.edges[0].status, 'manual');
+    assert.equal(graphAfterDetach.edges[0].decision, 'accepted');
+    assert.equal(graphAfterDetach.edges[0].registryRelationshipId, undefined);
+
+    const repeatedDetach = await subject.request(`${resourcePath}/${attached.body.id}`, { method: 'DELETE' });
+    assert.equal(repeatedDetach.status, 204);
+
+    const reattached = await subject.request(resourcePath, { method: 'POST', body: payload });
+    assert.equal(reattached.status, 201);
+    assert.equal(subject.database.listRegistryResources(application.body.id).length, 2);
+    assert.equal(subject.architectureDatabase.getGraph(project.id).document.nodes.length, 2);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Architecture lets a verified scope profile create and list projects for a providerless application', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.database.createApplication({ name: 'Checkout' });
+    const scope = normalizeScope({ provider: 'aws', scopeId: '123456789012', location: 'us-east-1' });
+    subject.database.addApplicationScope(application.id, scope);
+    subject.database.setScopeBinding(application.id, scope.key, {
+      profileId: 'local:dev', status: 'verified', verifiedIdentity: '123456789012',
+    });
+
+    const visibleApplications = await subject.architectureRequest('/applications');
+    assert.equal(visibleApplications.status, 200);
+    assert.ok(visibleApplications.body.some(item => item.id === application.id));
+
+    const created = await subject.architectureRequest('/projects', {
+      method: 'POST', body: { name: 'Checkout view', applicationId: application.id },
+    });
+    assert.equal(created.status, 201);
+    const linkedProjects = await subject.architectureRequest(`/projects?applicationId=${application.id}`);
+    assert.deepEqual(linkedProjects.body.map(project => project.id), [created.body.id]);
+    const linkedApplications = await subject.architectureRequest(`/projects/${created.body.id}/applications`);
+    assert.ok(linkedApplications.body.some(item => item.id === application.id));
+
+    const addedNode = await subject.architectureRequest(`/projects/${created.body.id}/operations`, {
+      method: 'POST',
+      body: {
+        expectedRevision: 0,
+        operation: {
+          type: 'node.upsert',
+          value: {
+            id: 'checkout-lambda', name: 'checkout', provider: 'aws', resourceType: 'lambda',
+            nativeId: 'arn:aws:lambda:us-east-1:123456789012:function:checkout',
+            arn: 'arn:aws:lambda:us-east-1:123456789012:function:checkout',
+            accountId: '123456789012', region: 'us-east-1',
+          },
+        },
+      },
+    });
+    assert.equal(addedNode.status, 200);
+    assert.equal(subject.database.listRegistryResources(application.id).length, 1);
+    assert.deepEqual(subject.database.listRegistryResources(application.id)[0].sources.sort(), ['apm_resource', 'architecture_node']);
   } finally {
     await subject.close();
   }
