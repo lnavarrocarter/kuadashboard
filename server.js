@@ -24,6 +24,8 @@ const {
 } = require('./lib/kubePrometheus');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
 const { closeArchitectureDatabase, getArchitectureDatabase } = require('./lib/architecture/database');
+const { ApplicationRegistryService } = require('./lib/kua/applicationRegistryService');
+const { ApplicationScopeService } = require('./lib/kua/applicationScopes');
 const { captureKubernetesMetrics } = require('./lib/apm/opportunisticCapture');
 const { serializeRdpBitmap } = require('./lib/rdpBitmap');
 const {
@@ -71,6 +73,18 @@ const apmCleanupInterval = setInterval(() => {
   }
 }, 24 * 60 * 60 * 1000);
 apmCleanupInterval.unref();
+// KUA Application contract (#149): scopes and local bindings for legacy applications, and the
+// local registry moved to resource identity v2. Idempotent; runs after startup, off the request path.
+setImmediate(() => {
+  try {
+    const registry = new ApplicationRegistryService({ database: apmDatabase, architectureDatabase });
+    const result = new ApplicationScopeService({ database: apmDatabase, architectureDatabase, registry,
+      log: (...args) => console.error('[kuapps]', ...args) }).migrate();
+    if (result.scopesAdded || result.registry.migrated) console.log('[kuapps] Contract migration:', result);
+  } catch (err) {
+    console.error('[kuapps] Contract migration failed:', err.message);
+  }
+});
 const cloudResponseCaches = {
   aws: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
   gcp: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),

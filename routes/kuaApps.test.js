@@ -144,3 +144,17 @@ test('cloud backup errors from the account service keep their status and code', 
     assert.equal(refused.body.code, 'PLAN_REQUIRED');
   } finally { await subject.close(); }
 });
+
+test('the migration report lists provider-less applications and never names a profile', async () => {
+  const subject = await fixture();
+  try {
+    subject.apmDatabase.createApplication({ provider: 'aws', profileId: 'local:secret', region: 'us-east-1', name: 'Orders' });
+    subject.apmDatabase.createApplication({ name: 'Checkout' });
+    const report = await subject.request('/migration-report');
+    assert.equal(report.status, 200);
+    assert.equal(report.body.applications, 2);
+    assert.equal(report.body.providerLessApplications, 1);
+    assert.ok(report.body.findings.some(finding => finding.kind === 'application_without_view'));
+    assert.equal(JSON.stringify(report.body).includes('local:secret'), false);
+  } finally { await subject.close(); }
+});

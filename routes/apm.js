@@ -10,6 +10,7 @@ const { buildLogEvidence } = require('../lib/logIntelligenceEvidence');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
+const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { applyGraphOperation } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
@@ -34,6 +35,7 @@ function createApmRouter({
   const registry = registryService || (architectureDatabase
     ? new ApplicationRegistryService({ database, architectureDatabase })
     : null);
+  const scopes = architectureDatabase ? new ApplicationScopeService({ database, architectureDatabase }) : null;
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -187,6 +189,8 @@ function createApmRouter({
 
   function reconcileRegistry(application) {
     if (!registry || !application) return null;
+    // A resource in a new account or kube context adds that scope to the application (#149).
+    scopes?.syncLegacyScopes(application);
     return registry.reconcile(application);
   }
 
