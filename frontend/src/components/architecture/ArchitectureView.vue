@@ -266,6 +266,10 @@
               :trace-loading="traceLoading"
               :events="eventsByNode"
               :events-loading="eventsLoading"
+              :rollouts="rolloutsByNode"
+              :rollouts-loading="rolloutsLoading"
+              :security="securityByNode"
+              :security-loading="securityLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
               @resource-selected="emit('resource-selected', $event)"
@@ -273,6 +277,8 @@
               @request-metrics="loadOperationalMetrics"
               @request-trace="loadOperationalTrace"
               @request-events="loadOperationalEvents"
+              @request-rollouts="loadOperationalRollouts"
+              @request-security="loadOperationalSecurity"
             />
 
             <ArchitectureResources
@@ -360,7 +366,7 @@ import StepFnDetail from '../StepFnDetail.vue'
 import BaseModal from '../BaseModal.vue'
 import CloudBackupsModal from './CloudBackupsModal.vue'
 import TeamSpaceModal from './TeamSpaceModal.vue'
-import { api } from '../../composables/useApi'
+import { api, useApi } from '../../composables/useApi'
 import ApmProviderMetrics from '../cloud/apm/ApmProviderMetrics.vue'
 import ApmApplicationLogs from '../cloud/apm/ApmApplicationLogs.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
@@ -371,6 +377,7 @@ import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.v
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
 import { catalogFor } from '../cloud/apm/metricCatalog'
+import { awsSecurityByNode, gcpSecurityByNode, kubernetesRolloutsByNode, kubernetesSecurityByNode, mergeNodeFindings } from '../../lib/architectureOverlayProjection'
 
 const props = defineProps({
   profileId: { type: String, default: '' },
@@ -389,6 +396,7 @@ const emit = defineEmits([
   'open-aws-resource', 'open-aws-logs', 'resources-imported', 'picker-closed',
 ])
 const store = useArchitectureStore()
+const { apiFetch } = useApi()
 const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
@@ -454,6 +462,10 @@ const traceEnabled = computed(() => Boolean(
 ))
 const eventsByNode = ref({})
 const eventsLoading = ref(false)
+const rolloutsByNode = ref({})
+const rolloutsLoading = ref(false)
+const securityByNode = ref({})
+const securityLoading = ref(false)
 const inlineNode = ref(null)
 const inlineMode = ref('metrics')
 const inlineResources = computed(() => {
@@ -678,6 +690,65 @@ async function loadOperationalEvents() {
     eventsByNode.value = next
   } finally {
     eventsLoading.value = false
+  }
+}
+
+async function loadOperationalRollouts() {
+  const nodes = store.graph?.document?.nodes || []
+  const deployments = nodes.filter(node => node.provider === 'kubernetes' && node.kind === 'Deployment' && node.kubeContext)
+  const contexts = [...new Set(deployments.map(node => node.kubeContext))]
+  if (!contexts.length) return
+  rolloutsLoading.value = true
+  try {
+    const history = await store.previewKubernetesRollouts({ contexts })
+    if (!history) return
+    const byNode = kubernetesRolloutsByNode(history.rollouts || [], deployments)
+    rolloutsByNode.value = Object.fromEntries(Object.entries(byNode).map(([nodeId, rollout]) => {
+      const createdAt = rollout.createdAt ? new Date(rollout.createdAt).toLocaleString() : t('archCanvas.rollout.unknownDate')
+      return [nodeId, {
+        ...rollout,
+        detail: t('archCanvas.rollout.detail', {
+          revision: rollout.revision, createdAt, ready: rollout.readyReplicas, replicas: rollout.replicas,
+        }),
+      }]
+    }))
+  } finally {
+    rolloutsLoading.value = false
+  }
+}
+
+async function loadOperationalSecurity() {
+  const nodes = store.graph?.document?.nodes || []
+  const contexts = [...new Set(nodes
+    .filter(node => node.provider === 'kubernetes' && node.kubeContext)
+    .map(node => node.kubeContext))]
+  const awsNodes = nodes.filter(node => node.provider === 'aws')
+  const gcpNodes = nodes.filter(node => node.provider === 'gcp')
+  const profileId = activeApplication.value?.profileId || store.activeProfileId || props.profileId
+  if (!contexts.length && ((!awsNodes.length && !gcpNodes.length) || !profileId)) return
+  securityLoading.value = true
+  try {
+    let failed = false
+    const kubernetesRequest = contexts.length
+      ? store.previewKubernetesSecurity({ contexts }).then(result => { if (!result) failed = true; return result })
+      : Promise.resolve(null)
+    const awsRequest = awsNodes.length && profileId
+      ? apiFetch('/api/cloud/aws/overview/advisor', { headers: { 'X-Profile-Id': profileId } })
+        .catch(() => { failed = true; return null })
+      : Promise.resolve(null)
+    const gcpRequest = gcpNodes.length && profileId
+      ? apiFetch('/api/cloud/gcp/overview', { headers: { 'X-Profile-Id': profileId } })
+        .catch(() => { failed = true; return null })
+      : Promise.resolve(null)
+    const [kubernetesResult, awsReport, gcpOverview] = await Promise.all([kubernetesRequest, awsRequest, gcpRequest])
+    securityByNode.value = mergeNodeFindings(
+      kubernetesSecurityByNode(kubernetesResult?.reports || [], nodes),
+      awsSecurityByNode(awsReport, nodes),
+      gcpSecurityByNode(gcpOverview?.advisor, nodes),
+    )
+    if (failed) toast(t('archView.securityLoadFailed'), 'error')
+  } finally {
+    securityLoading.value = false
   }
 }
 

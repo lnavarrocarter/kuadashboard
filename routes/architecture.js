@@ -11,6 +11,7 @@ const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDisco
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
+const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 
 function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
   if (!database) throw new Error('database is required');
@@ -410,6 +411,38 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
         profileId: project.profileId,
         sources: preview.sources.map(source => ({ ...source, profileId: project.profileId })),
       });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/kubernetes/rollouts', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const history = await kubernetesAdapter.rolloutHistory({
+        provider: 'generic', contexts: req.body?.contexts,
+      });
+      res.json({ ...history, projectId: project.id });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/projects/:projectId/discovery/kubernetes/security', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const result = await kubernetesAdapter.securityFindings({
+        provider: 'generic', contexts: req.body?.contexts,
+      });
+      const contexts = new Map(kubernetesAdapter.listContexts({ provider: 'generic' }).map(context => [context.name, context]));
+      const reports = result.reports.map(({ context, report }) => {
+        const clusterServer = contexts.get(context)?.server || '';
+        const teamScope = teamScopeOf('kubernetes', { clusterServer });
+        const finalized = finalizeAdvisor(report, {
+          scopes: scopeKeys('kubernetes', { context, namespace: 'all', teamScope }),
+          store: postureStore(),
+        });
+        return { context, ...finalized, findings: finalized.findings.filter(finding => finding.category === 'security') };
+      });
+      res.json({ generatedAt: result.generatedAt, reports, failures: result.failures, projectId: project.id });
     } catch (error) { handleError(res, error); }
   });
 

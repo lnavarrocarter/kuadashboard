@@ -72,6 +72,12 @@
         <button :class="['btn', 'sm', { primary: showEventsOverlay }]" :disabled="eventsLoading || !flowNodes.length" :title="t('archCanvas.toggleEvents')" @click="toggleEventsOverlay">
           <i :data-lucide="eventsLoading ? 'loader-2' : 'triangle-alert'"></i> {{ t('archCanvas.events') }}
         </button>
+        <button :class="['btn', 'sm', { primary: showRolloutsOverlay }]" :disabled="rolloutsLoading || !hasDeployments" :title="t('archCanvas.toggleRollouts')" @click="toggleRolloutsOverlay">
+          <i :data-lucide="rolloutsLoading ? 'loader-2' : 'rocket'"></i> {{ t('archCanvas.rollouts') }}
+        </button>
+        <button :class="['btn', 'sm', { primary: showSecurityOverlay }]" :disabled="securityLoading || !hasSecurityNodes" :title="t('archCanvas.toggleSecurity')" @click="toggleSecurityOverlay">
+          <i :data-lucide="securityLoading ? 'loader-2' : 'shield-alert'"></i> {{ t('archCanvas.security') }}
+        </button>
         <button class="btn sm" :disabled="exporting || !flowNodes.length" :title="t('archCanvas.exportPdfHint')" @click="exportPdf">
           <i data-lucide="printer"></i> {{ t('archCanvas.exportPdf') }}
         </button>
@@ -135,6 +141,12 @@
             </span>
             <span v-if="data.events" class="node-events-badge" :title="data.events.detail">
               <i data-lucide="triangle-alert"></i>{{ data.events.count }}
+            </span>
+            <span v-if="data.rollout" :class="['node-rollout-badge', `node-rollout-badge--${data.rollout.status}`]" :title="data.rollout.detail">
+              <i data-lucide="rocket"></i>R{{ data.rollout.revision }}
+            </span>
+            <span v-if="data.security" :class="['node-security-badge', `node-security-badge--${data.security.severity}`]" :title="data.security.detail">
+              <i data-lucide="shield-alert"></i>{{ data.security.count }}
             </span>
           </div>
         </template>
@@ -268,8 +280,12 @@ const props = defineProps({
   traceLoading: { type: Boolean, default: false },
   events: { type: Object, default: () => ({}) },
   eventsLoading: { type: Boolean, default: false },
+  rollouts: { type: Object, default: () => ({}) },
+  rolloutsLoading: { type: Boolean, default: false },
+  security: { type: Object, default: () => ({}) },
+  securityLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'resource-selected'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'request-rollouts', 'request-security', 'resource-selected'])
 
 const { t } = useI18n()
 const nodeTypes = computed(() => [
@@ -298,6 +314,8 @@ const showMetricsOverlay = ref(false)
 const showCollectionOverlay = ref(false)
 const showTraceOverlay = ref(false)
 const showEventsOverlay = ref(false)
+const showRolloutsOverlay = ref(false)
+const showSecurityOverlay = ref(false)
 const providerFilter = ref('all')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
@@ -394,6 +412,8 @@ const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
 const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
+const hasDeployments = computed(() => (props.graph?.document?.nodes || []).some(node => node.provider === 'kubernetes' && node.kind === 'Deployment'))
+const hasSecurityNodes = computed(() => (props.graph?.document?.nodes || []).some(node => ['aws', 'kubernetes'].includes(node.provider)))
 const availableKubeContexts = computed(() => [...new Set((props.graph?.document?.nodes || [])
   .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
 const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
@@ -417,7 +437,7 @@ const filteredGraphDocument = computed(() => {
 const traceNodeIds = computed(() => new Set(props.trace?.nodeIds || []))
 const traceEdgeIds = computed(() => new Set(props.trace?.edgeIds || []))
 const smartSpacing = computed(() => {
-  const expanded = showMetricsOverlay.value || showCollectionOverlay.value || showTraceOverlay.value || showEventsOverlay.value
+  const expanded = showMetricsOverlay.value || showCollectionOverlay.value || showTraceOverlay.value || showEventsOverlay.value || showRolloutsOverlay.value || showSecurityOverlay.value
   const denseLabels = showEdgeLabels.value && flowEdges.value.length > 20
   const extraY = (showMetricsOverlay.value ? 54 : 0) + (showCollectionOverlay.value ? 28 : 0) + (showTraceOverlay.value ? 24 : 0) + (showEventsOverlay.value ? 28 : 0) + (denseLabels ? 18 : 0)
   const extraX = (showMetricsOverlay.value ? 58 : 0) + (showCollectionOverlay.value ? 34 : 0) + (showEventsOverlay.value ? 34 : 0) + (denseLabels ? 24 : 0)
@@ -520,6 +540,16 @@ function nodeEventsOverlay(node) {
   return props.events[node.id] || null
 }
 
+function nodeRolloutOverlay(node) {
+  if (!showRolloutsOverlay.value || node.provider !== 'kubernetes' || node.kind !== 'Deployment') return null
+  return props.rollouts[node.id] || null
+}
+
+function nodeSecurityOverlay(node) {
+  if (!showSecurityOverlay.value) return null
+  return props.security[node.id] || null
+}
+
 function fallbackPosition(index, columns) {
   return {
     x: 80 + (index % columns) * smartSpacing.value.gridXGap,
@@ -550,6 +580,8 @@ function syncGraph(hydrateView = true) {
     showCollectionOverlay.value = document.view.showCollectionOverlay === true
     showTraceOverlay.value = document.view.showTraceOverlay === true
     showEventsOverlay.value = document.view.showEventsOverlay === true
+    showRolloutsOverlay.value = document.view.showRolloutsOverlay === true
+    showSecurityOverlay.value = document.view.showSecurityOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
@@ -582,6 +614,8 @@ function syncGraph(hydrateView = true) {
         collection: nodeCollectionOverlay(node),
         trace: nodeTraceOverlay(node),
         events: nodeEventsOverlay(node),
+        rollout: nodeRolloutOverlay(node),
+        security: nodeSecurityOverlay(node),
       },
     }
   })
@@ -649,6 +683,8 @@ function persistView() {
       showCollectionOverlay: showCollectionOverlay.value,
       showTraceOverlay: showTraceOverlay.value,
       showEventsOverlay: showEventsOverlay.value,
+      showRolloutsOverlay: showRolloutsOverlay.value,
+      showSecurityOverlay: showSecurityOverlay.value,
       providerFilter: providerFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
@@ -694,6 +730,18 @@ function clearTraceOverlay() {
 function toggleEventsOverlay() {
   showEventsOverlay.value = !showEventsOverlay.value
   if (showEventsOverlay.value && !Object.keys(props.events).length) emit('request-events')
+  persistView()
+}
+
+function toggleRolloutsOverlay() {
+  showRolloutsOverlay.value = !showRolloutsOverlay.value
+  if (showRolloutsOverlay.value && !Object.keys(props.rollouts).length) emit('request-rollouts')
+  persistView()
+}
+
+function toggleSecurityOverlay() {
+  showSecurityOverlay.value = !showSecurityOverlay.value
+  if (showSecurityOverlay.value && !Object.keys(props.security).length) emit('request-security')
   persistView()
 }
 
@@ -951,7 +999,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading], () => syncGraph(false), { deep: true })
+watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1049,6 +1097,15 @@ onMounted(refreshIcons)
 .node-trace-badge > svg { width: 11px; height: 11px; }
 .node-events-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); font-size: 9px; font-weight: 700; }
 .node-events-badge > svg { width: 11px; height: 11px; }
+.node-rollout-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 9px; font-weight: 700; }
+.node-rollout-badge--ready { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
+.node-rollout-badge--degraded { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
+.node-rollout-badge > svg { width: 11px; height: 11px; }
+.node-security-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 9px; font-weight: 700; }
+.node-security-badge > svg { width: 11px; height: 11px; }
+.node-security-badge--high { color: #f85149; background: color-mix(in srgb, #f85149 14%, transparent); }
+.node-security-badge--medium { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
+.node-security-badge--low { color: #58a6ff; background: color-mix(in srgb, #58a6ff 14%, transparent); }
 :deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
 :deep(.vue-flow__node-resource-section) { border: 0; background: transparent; box-shadow: none; pointer-events: none; }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }

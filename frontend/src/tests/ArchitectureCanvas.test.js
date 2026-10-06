@@ -206,7 +206,7 @@ describe('ArchitectureCanvas', () => {
       {
         type: 'view.set',
         value: {
-          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
+          layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
           providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
         },
       },
@@ -335,7 +335,7 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.emitted('operation')[0][0]).toEqual({
       type: 'view.set',
       value: {
-        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
+        layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
         providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
       },
     })
@@ -404,6 +404,30 @@ describe('ArchitectureCanvas', () => {
     await wrapper.setProps({ events: { deploy: { count: 3, detail: '2× BackOff · 1× FailedMount' } } })
     const node = wrapper.getComponent(stubs.VueFlow).props('nodes').find(item => item.id === 'deploy')
     expect(node.data.events).toEqual({ count: 3, detail: '2× BackOff · 1× FailedMount' })
+  })
+
+  it('loads and displays opt-in rollout and security overlays on eligible nodes', async () => {
+    const overlayGraph = {
+      revision: 1,
+      document: {
+        nodes: [{ id: 'deploy', name: 'api', provider: 'kubernetes', kind: 'Deployment', resourceType: 'deployment' }],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: overlayGraph }, global: { stubs } })
+
+    await wrapper.get('button[title="Toggle Kubernetes Deployment rollout history"]').trigger('click')
+    expect(wrapper.emitted('request-rollouts')).toHaveLength(1)
+    expect(wrapper.emitted('operation')[0][0].value.showRolloutsOverlay).toBe(true)
+    await wrapper.setProps({ rollouts: { deploy: { revision: 7, status: 'degraded', detail: 'Revision 7 · 1/2 ready' } } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes')[0].data.rollout).toMatchObject({ revision: 7, status: 'degraded' })
+
+    await wrapper.get('button[title="Toggle security findings overlay"]').trigger('click')
+    expect(wrapper.emitted('request-security')).toHaveLength(1)
+    expect(wrapper.emitted('operation')[1][0].value.showSecurityOverlay).toBe(true)
+    await wrapper.setProps({ security: { deploy: { count: 2, severity: 'high', detail: 'k8s.privileged: api' } } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes')[0].data.security).toMatchObject({ count: 2, severity: 'high' })
   })
 
   it('expands canvas spacing when operational overlays make nodes larger', async () => {
