@@ -4844,6 +4844,8 @@ export default {
   'kuapps.viewsLabel': 'Vistas de KUApps',
   'kuapps.workspace': 'Espacio de la aplicación',
   'kuapps.signals': 'Señales',
+  'apm.error.scope_unbound': 'Algunos recursos están en una cuenta sin un perfil verificado de este computador. Asocia uno en Ajustes → Cuentas y scopes.',
+  'apm.error.scope_region_unknown': 'No se conoce la región de algunos recursos. Define la región de su scope en Ajustes → Cuentas y scopes.',
   'kuapps.explain.relation.calls': 'llama',
   'kuapps.explain.relation.invokes': 'invoca',
   'kuapps.explain.relation.depends_on': 'depende de',

@@ -642,6 +642,8 @@ const latestRunIssue = computed(() => {
   if (run?.status === 'budget_exhausted') return t('apm.error.budget_exhausted')
   if (run?.errorCode === 'metrics_api_unavailable') return t('apm.error.metrics_api_unavailable')
   if (run?.errorCode === 'credentials_expired') return t('apm.error.credentials_expired')
+  // Applications without provider: a resource whose account has no verified profile, or no region (#166).
+  if (run?.errorCode === 'scope_unbound' || run?.errorCode === 'scope_region_unknown') return t(`apm.error.${run.errorCode}`)
   if (run?.errorCode) return t('apm.error.collection_failed')
   return ''
 })
