@@ -114,7 +114,7 @@ La verificación solo usa lecturas sin costo:
 
 Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, perfil inexistente) deja el binding `unverified` con su error y nunca informa un mismatch. Un scope sin `scopeId` se completa con la identidad que revela el perfil: el scope se reemplaza, el binding se mueve con él, y la sincronización legacy no vuelve a crear el scope pendiente.
 
-Hasta que la interfaz y el bundle las soporten, las aplicaciones sin provider quedan fuera del catálogo de Arquitectura/KUApps y de la publicación al equipo ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)).
+KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). La publicación al equipo omite estas aplicaciones hasta que el bundle lleve scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps.
 
 ## Reporte de migración
 

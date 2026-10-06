@@ -75,7 +75,7 @@
         <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
           <span class="header-application-context">
             <i data-lucide="boxes"></i>
-            <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider.toUpperCase() }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
+            <span><strong>{{ activeApplicationContext.name || activeApplicationContext.id }}</strong><small>{{ activeApplicationContext.provider ? activeApplicationContext.provider.toUpperCase() : t('kuapps.multiProvider') }} · {{ activeApplicationContext.environment || 'Application' }}<template v-if="activeApplicationContext.team"> · {{ activeApplicationContext.team }}</template></small></span>
           </span>
         </template>
         <template v-else-if="activeProvider === 'kuapps'">
@@ -534,7 +534,7 @@ import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { syncServerCacheSettings } from './composables/serverCacheSettings'
 import { useI18n } from './composables/useI18n'
-import { useArchitectureContext } from './composables/useArchitectureContext'
+import { applicationContextFromView, useArchitectureContext } from './composables/useArchitectureContext'
 import { useAdvisorAlerts } from './composables/useAdvisorAlerts'
 import { usePlan } from './composables/usePlan'
 import { parseScope } from './lib/advisorAlerts'
@@ -888,7 +888,19 @@ const {
   architectureProfileId,
   openApplicationArchitecture,
   setApplicationContext,
+  urlApplicationId,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
+
+// A link with ?app=<id> opens that KUA Application in KUApps (#149).
+async function openApplicationFromUrl() {
+  if (!urlApplicationId) return
+  try {
+    const context = applicationContextFromView(await api('GET', `/api/kua-apps/applications/${encodeURIComponent(urlApplicationId)}`))
+    if (!context) return
+    handleKuAppsApplicationContext(context)
+    await setProvider('kuapps')
+  } catch { /* an unknown or deleted application keeps the stored context */ }
+}
 
 const kuappsObservabilityProvider = computed(() => {
   const provider = activeApplicationContext.value?.provider || observabilityProvider.value
@@ -1377,6 +1389,7 @@ syncServerCacheSettings()
 
 onMounted(async () => {
   applySettings()
+  openApplicationFromUrl()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
   // Shortcuts and listeners work right away, not after the cluster answers.

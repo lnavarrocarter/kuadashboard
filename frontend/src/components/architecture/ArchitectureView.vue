@@ -57,7 +57,7 @@
           @click="selectApplication(application.id)"
         >
           <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
-          <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template><template v-if="application.team"> · {{ application.team }}</template></small></span>
+          <span><strong>{{ application.name }}</strong><small>{{ application.provider ? application.provider.toUpperCase() : t('kuapps.multiProvider') }}<template v-if="application.environment"> · {{ application.environment }}</template><template v-if="application.team"> · {{ application.team }}</template></small></span>
           <i data-lucide="arrow-right"></i>
         </button>
       </div>
@@ -89,7 +89,7 @@
               @click="selectApplication(application.id)"
             >
               <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
-              <span><strong>{{ application.name }}</strong><small>{{ [application.environment, application.team].filter(Boolean).join(' / ') || application.provider.toUpperCase() }}</small></span>
+              <span><strong>{{ application.name }}</strong><small>{{ [application.environment, application.team].filter(Boolean).join(' / ') || (application.provider ? application.provider.toUpperCase() : t('kuapps.multiProvider')) }}</small></span>
             </button>
           </template>
           <div class="architecture-list-heading"><span>{{ t('archView.projects') }}</span><strong>{{ store.projects.length }}</strong></div>

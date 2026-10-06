@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ref, nextTick } from 'vue'
-import { useArchitectureContext } from '../composables/useArchitectureContext'
+import { applicationContextFromView, useArchitectureContext } from '../composables/useArchitectureContext'
 
 function memoryStorage(initial = {}) {
   const data = { ...initial }
@@ -85,6 +85,43 @@ describe('useArchitectureContext', () => {
     })
     openApplicationArchitecture('proj-1')
     expect(activeApplicationContext.value).toBeNull()
+  })
+
+  it('never takes the global AWS profile for an application without provider', () => {
+    const { openApplicationArchitecture, activeApplicationContext, architectureProfileId } = useArchitectureContext({
+      storage: memoryStorage(), awsProfileId: ref('aws-profile-1'), setProvider: vi.fn(),
+    })
+    openApplicationArchitecture({ applicationId: 'app-1' })
+    expect(activeApplicationContext.value).toMatchObject({ id: 'app-1', provider: null, profileId: null })
+    expect(architectureProfileId.value).toBe('')
+  })
+
+  it('reads ?app= and keeps it in sync with the active application', async () => {
+    const location = { href: 'http://localhost/?tab=x&app=app-9', search: '?tab=x&app=app-9' }
+    const history = { state: null, replaceState: vi.fn((_state, _title, href) => { location.href = href; location.search = new URL(href).search }) }
+    const { urlApplicationId, setApplicationContext } = useArchitectureContext({
+      storage: memoryStorage(), awsProfileId: ref(''), setProvider: vi.fn(), location, history,
+    })
+    expect(urlApplicationId).toBe('app-9')
+    setApplicationContext({ id: 'app-2', provider: null })
+    await nextTick()
+    expect(location.href).toBe('http://localhost/?tab=x&app=app-2')
+  })
+
+  it('does not ask to load the URL application when it is already the stored one', () => {
+    const location = { href: 'http://localhost/?app=app-1', search: '?app=app-1' }
+    const { urlApplicationId } = useArchitectureContext({
+      storage: memoryStorage({ architectureApplication: JSON.stringify({ id: 'app-1' }) }),
+      awsProfileId: ref(''), setProvider: vi.fn(), location, history: { replaceState: vi.fn() },
+    })
+    expect(urlApplicationId).toBe('')
+  })
+
+  it('maps an application view to the App context, legacy profile included', () => {
+    expect(applicationContextFromView({ id: 'a', name: 'Orders', views: { architectureProjectIds: ['p1'] }, local: { legacy: { provider: 'aws', profileId: 'prod', region: 'us-east-1' } } }))
+      .toMatchObject({ id: 'a', provider: 'aws', profileId: 'prod', architectureProjectId: 'p1' })
+    expect(applicationContextFromView({ id: 'b', name: 'Checkout', local: { legacy: null } }))
+      .toMatchObject({ id: 'b', provider: null, profileId: null, architectureProjectId: null })
   })
 
   it('setApplicationContext stores the application returned by the linked project', () => {
