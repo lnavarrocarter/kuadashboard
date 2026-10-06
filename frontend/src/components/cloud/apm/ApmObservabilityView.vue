@@ -1012,7 +1012,8 @@ watch(() => chartDefinitions.value.map(seriesKey).join('|'), (keys, previous) =>
 })
 watch([activeView, setupOpen, editApplicationOpen, deleteApplicationOpen, confirmCollect, thresholdsOpen, architectureLinkOpen, kubernetesPreviewOpen], renderIcons)
 onMounted(renderIcons)
-defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
+// requestCollect opens the confirmation that states what a collection reads and costs.
+defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true }, requestCollect: () => { confirmCollect.value = true } })
 </script>
 
 <style scoped>
