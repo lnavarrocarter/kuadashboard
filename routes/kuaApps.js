@@ -5,9 +5,11 @@ const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { KuaApplicationService } = require('../lib/kua/applicationService');
+const { explainRelationship } = require('../lib/kua/relationshipExplainer');
+const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -116,6 +118,37 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     applications.verifyScope(req.params.applicationId, req.params.scopeKey)));
   router.delete('/applications/:applicationId/scopes/:scopeKey/binding', (req, res) => send(res, 200, () =>
     applications.unbindScope(req.params.applicationId, req.params.scopeKey)));
+
+  // Why a relationship or suggestion exists (#172). Local only: the log cache aggregates of the
+  // pair and, when the user enabled it, the local embedding model. No cloud call, nothing changes.
+  router.post('/applications/:applicationId/relationships/explain', async (req, res) => {
+    try {
+      const application = apmDatabase.getApplication(req.params.applicationId);
+      if (!application) return res.status(404).json({ error: 'KUA Application not found' });
+      const body = req.body || {};
+      const cache = application.profileId && application.region ? logCache() : null;
+      const lookup = await loadApplicationSignals({ apmDatabase, application, cache });
+      const source = lookup.resolve(String(body.sourceResourceId || ''), body.sourceName);
+      const target = lookup.resolve(String(body.targetResourceId || ''), body.targetName);
+      const signals = lookup.hasSignals ? { source: lookup.signalFor(source), target: lookup.signalFor(target) } : null;
+      let semantic = { state: 'unavailable', matches: [] };
+      if (cache && signals?.source?.logGroup) {
+        try {
+          const matches = await cache.searchSignatures({
+            profileId: application.profileId, region: application.region, logGroup: signals.source.logGroup,
+            query: [target.name, target.type].filter(Boolean).join(' '), limit: 5,
+          });
+          semantic = { state: 'ready', matches };
+        } catch (error) {
+          semantic = { state: error.code === 'ML_DISABLED' ? 'disabled' : 'unavailable', matches: [] };
+        }
+      }
+      res.json(explainRelationship({
+        relationship: { relationType: body.relationType, status: body.status, confidence: body.confidence, evidence: body.evidence },
+        source, target, signals, semantic, thresholds: application.thresholds || {},
+      }));
+    } catch (error) { handleError(res, error); }
+  });
 
   router.get('/:applicationId/export', (req, res) => {
     const application = scopedApplication(req, res);

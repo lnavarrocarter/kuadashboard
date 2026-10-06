@@ -8,12 +8,12 @@ const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { ApmDatabase } = require('../lib/apm/database');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier } = {}) {
+async function fixture({ account, verifier, logCache } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -238,5 +238,48 @@ test('KUA Applications API rejects invalid input', async () => {
     assert.equal(invalid.status, 400);
     const missing = await subject.request(`/applications/${created.body.id}/scopes/nope/binding`, { method: 'PUT', body: { profileId: 'prod' } });
     assert.equal(missing.status, 404);
+  } finally { await subject.close(); }
+});
+
+test('explains a relationship with the pair log signals and local-ML matches, without cloud calls (#172)', async () => {
+  const searchSignatures = async ({ logGroup, query }) => {
+    assert.equal(logGroup, '/aws/lambda/checkout-api');
+    assert.match(query, /orders-db/);
+    return [{ signature: 'ProvisionedThroughputExceeded on table', occurrences: 7, category: 'throttling', score: 0.71 }];
+  };
+  const logCache = {
+    async intelligenceForScope() {
+      return {
+        '/aws/lambda/checkout-api': { last24h: { errorRatePercent: 1, errors: 2, events: 200 }, cache: { lastSyncAt: Date.now() }, recurring: [{ signature: 'timed out calling orders-db', occurrences: 12 }] },
+      };
+    },
+    searchSignatures,
+  };
+  const subject = await fixture({ logCache });
+  try {
+    const application = subject.apmDatabase.createApplication({ provider: 'aws', profileId: 'local:prod', region: 'us-east-1', name: 'Orders' });
+    const api = subject.apmDatabase.addResource(application.id, { type: 'lambda', key: 'arn:aws:lambda:us-east-1:111111111111:function:checkout-api', arn: 'arn:aws:lambda:us-east-1:111111111111:function:checkout-api', name: 'checkout-api' });
+    const db = subject.apmDatabase.addResource(application.id, { type: 'dynamodb', key: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders-db', arn: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders-db', name: 'orders-db' });
+
+    const explained = await subject.request(`/applications/${application.id}/relationships/explain`, {
+      method: 'POST', profile: '',
+      body: { sourceResourceId: api.id, targetResourceId: db.id, relationType: 'calls', status: 'suggested', confidence: 0.6, evidence: [{ type: 'shared_name_tokens', values: ['orders'] }] },
+    });
+    assert.equal(explained.status, 200);
+    assert.equal(explained.body.source.name, 'checkout-api');
+    assert.equal(explained.body.signals.semantic, 'ready');
+    assert.ok(explained.body.signals.mentions.some(item => item.match === 'semantic'));
+    assert.ok(explained.body.advice.some(item => item.id === 'inferred_only'));
+    assert.equal(JSON.stringify(explained.body).includes('local:prod'), false, 'the profile never appears in the explanation');
+
+    const disabled = await (await fixture({ logCache: { ...logCache, async searchSignatures() { throw Object.assign(new Error('off'), { code: 'ML_DISABLED' }); } } }));
+    try {
+      const app2 = disabled.apmDatabase.createApplication({ provider: 'aws', profileId: 'local:prod', region: 'us-east-1', name: 'Orders' });
+      const a = disabled.apmDatabase.addResource(app2.id, { type: 'lambda', key: 'k1', arn: 'arn:aws:lambda:us-east-1:111111111111:function:checkout-api', name: 'checkout-api' });
+      const b = disabled.apmDatabase.addResource(app2.id, { type: 'sqs', key: 'k2', name: 'orders-queue' });
+      const result = await disabled.request(`/applications/${app2.id}/relationships/explain`, { method: 'POST', body: { sourceResourceId: a.id, targetResourceId: b.id, relationType: 'publishes_to', evidence: [] } });
+      assert.deepEqual(result.body.limits, ['semantic_disabled']);
+    } finally { await disabled.close(); }
+    assert.equal((await subject.request('/applications/missing/relationships/explain', { method: 'POST', body: {} })).status, 404);
   } finally { await subject.close(); }
 });

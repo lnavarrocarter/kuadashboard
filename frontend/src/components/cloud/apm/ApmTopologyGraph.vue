@@ -129,6 +129,9 @@
           <small>{{ t('apm.confidence', { confidence: Math.round(edge.confidence * 100) }) }} · {{ evidenceLabel(edge) }}</small>
         </div>
         <span class="suggestion-actions">
+          <button v-if="reviewOnly" class="btn sm" type="button" data-test="explain-suggestion" @click="$emit('explain', edge)">
+            <i data-lucide="circle-help"></i> {{ t('kuapps.explain.button') }}
+          </button>
           <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-dependency', edge)">
             <i data-lucide="check"></i> {{ t('apm.confirmDependency') }}
           </button>
@@ -169,7 +172,7 @@ const props = defineProps({
   reviewOnly: { type: Boolean, default: false },
 })
 
-defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs'])
+defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'explain'])
 const { t } = useI18n()
 
 const resolvedEdges = computed(() => {

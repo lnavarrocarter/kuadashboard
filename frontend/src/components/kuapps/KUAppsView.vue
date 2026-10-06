@@ -223,6 +223,7 @@
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
               section="review"
               :provider="apmProvider"
+              @explain-relationship="explainRequest = $event"
               :profile-id="apmProfileId"
               :application-id="selectedApplicationId"
               :hide-application-list="true"
@@ -238,6 +239,7 @@
                   <span class="kuapps-relationship-type"><i data-lucide="arrow-right"></i>{{ relationship.relationType }}</span>
                   <button class="kuapps-relationship-endpoint" @click="selectRegistryResource(relationship.targetResourceId)"><strong>{{ relationship.targetName || relationship.targetResourceId }}</strong><small>{{ relationship.targetType || t('kuapps.resource') }}</small></button>
                   <span :class="['kuapps-relationship-status', relationship.status]">{{ t(`apm.relationshipStatus.${relationship.status}`) }}</span>
+                  <button class="btn sm" data-test="explain-registry-relationship" @click="explainRegistryRelationship(relationship)"><i data-lucide="circle-help"></i>{{ t('kuapps.explain.button') }}</button>
                 </article>
               </div>
             </template>
@@ -306,6 +308,7 @@
                   <button v-for="relationship in selectedResourceRelationships" :key="relationship.id" class="kuapps-inspector-relationship" @click="selectRegistryResource(relationship.otherId)">
                     <span>{{ relationship.outgoing ? '→' : '←' }} <strong>{{ relationship.otherName }}</strong></span>
                     <small>{{ relationship.relationType }} · {{ t(`apm.relationshipStatus.${relationship.status}`) }}</small>
+                    <span class="kuapps-inspector-why" role="button" tabindex="0" @click.stop="explainRegistryRelationship(relationship)" @keydown.enter.stop="explainRegistryRelationship(relationship)">{{ t('kuapps.explain.button') }}</span>
                   </button>
                 </div>
                 <div v-else-if="inspectorTab === 'signals' && canInspectSignals" class="kuapps-signal-panel">
@@ -328,6 +331,7 @@
             </aside>
           </div>
         </template>
+        <KUAppExplanation :application-id="selectedApplicationId" :request="explainRequest" @close="explainRequest = null" />
         <aside v-if="addResourcesOpen && selectedApplication" class="kuapps-add-panel" role="dialog" :aria-label="t('archView.addResources')">
           <header>
             <div><span class="kuapps-kicker">{{ selectedApplication.name }}</span><h3>{{ t('archView.addResources') }}</h3></div>
@@ -389,6 +393,7 @@ import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import KUAppScopes from './KUAppScopes.vue'
 import KUAppSummary from './KUAppSummary.vue'
 import KUAppSync from './KUAppSync.vue'
+import KUAppExplanation from './KUAppExplanation.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -851,6 +856,21 @@ const selectedResourceRelationships = computed(() => {
     })
 })
 
+// "Why?" for a relationship (#172): the explanation modal asks the server, which reads only local data.
+const explainRequest = ref(null)
+function explainRegistryRelationship(relationship) {
+  explainRequest.value = {
+    sourceResourceId: relationship.sourceResourceId,
+    targetResourceId: relationship.targetResourceId,
+    sourceName: relationship.sourceName,
+    targetName: relationship.targetName,
+    relationType: relationship.relationType,
+    status: relationship.status,
+    confidence: relationship.confidence,
+    evidence: relationship.evidence || [],
+  }
+}
+
 // Collect now keeps its cost confirmation: it opens Signals and asks there.
 const signalsRef = ref(null)
 async function collectFromSummary() {
@@ -976,6 +996,8 @@ defineExpose({ reloadActiveTab })
 .kuapps-inspector-relationships { padding: 8px 10px; display: grid; gap: 4px; overflow: auto; }
 .kuapps-inspector-relationship { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-inspector-relationship small { color: var(--text-dim); font-size: 10px; }
+.kuapps-inspector-why { justify-self: start; color: var(--accent); font-size: 10px; cursor: pointer; }
+.kuapps-relationship-row .btn svg { width: 12px; }
 .kuapps-settings-section { min-width: 0; margin: 0; padding: 0 0 18px; display: grid; gap: 12px; border: 0; border-bottom: 1px solid var(--border); }
 .kuapps-settings-section > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .kuapps-settings-section > header h3 { margin: 3px 0 0; font-size: 15px; }
@@ -1048,7 +1070,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-inspector-actions { margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; border-top: 1px solid var(--border); }
 .kuapps-inspector-actions > span { color: var(--text-dim); font-size: 10px; }
 .kuapps-relationship-list { border-top: 1px solid var(--border); }
-.kuapps-relationship-row { min-height: 58px; padding: 8px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+.kuapps-relationship-row { min-height: 58px; padding: 8px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
 .kuapps-relationship-endpoint { min-width: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-relationship-endpoint strong, .kuapps-relationship-endpoint small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kuapps-relationship-endpoint small, .kuapps-relationship-type, .kuapps-relationship-status { color: var(--text-dim); font-size: 10px; }
