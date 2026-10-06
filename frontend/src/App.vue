@@ -367,18 +367,6 @@
           </div>
         </nav>
 
-        <nav class="sidebar kuapps-sidebar" v-if="activeProvider === 'kuapps'">
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">KUApps</div>
-            <a :class="['sidebar-item', { active: kuappsView === 'architecture' }]" @click.prevent="setProvider('architecture')">
-              <i data-lucide="network"></i> Architecture
-            </a>
-            <a :class="['sidebar-item', { active: kuappsView === 'observability' }]" @click.prevent="setProvider('observability')">
-              <i data-lucide="square-activity"></i> Observability
-            </a>
-          </div>
-        </nav>
-
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
@@ -483,7 +471,7 @@
           activeProvider === 'aws' ? 'Amazon Web Services'
           : activeProvider === 'gcp' ? 'Google Cloud Platform'
           : activeProvider === 'vercel' ? 'Vercel'
-          : activeProvider === 'kuapps' ? `KUApps / ${kuappsView === 'architecture' ? 'Architecture' : 'Observability'}`
+          : activeProvider === 'kuapps' ? `KUApps / ${t('kuapps.applications')}`
           : activeProvider
         }}</span>
         <span class="sb-spacer"></span>

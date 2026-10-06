@@ -1,6 +1,6 @@
 <template>
-  <section class="apm-topology" :aria-label="t('apm.topologyLabel')">
-    <div class="apm-topology-lane app-lane">
+  <section :class="['apm-topology', { 'review-only': reviewOnly }]" :aria-label="t('apm.topologyLabel')">
+    <div v-if="!reviewOnly" class="apm-topology-lane app-lane">
       <button class="apm-node application-node" type="button" @click="$emit('select', null)">
         <i data-lucide="boxes"></i>
         <span>
@@ -10,7 +10,7 @@
       </button>
     </div>
 
-    <div class="membership-line" aria-hidden="true"><span>{{ t('apm.belongsTo') }}</span></div>
+    <div v-if="!reviewOnly" class="membership-line" aria-hidden="true"><span>{{ t('apm.belongsTo') }}</span></div>
 
     <section v-if="topology.analysis" class="topology-intelligence">
       <div class="analysis-score">
@@ -38,7 +38,7 @@
       </div>
     </section>
 
-    <section v-if="logs && (logs.signals.length || logs.uncachedResourceIds.length)" class="log-intelligence">
+    <section v-if="!reviewOnly && logs && (logs.signals.length || logs.uncachedResourceIds.length)" class="log-intelligence">
       <div class="dependency-title"><i data-lucide="scroll-text"></i> {{ t('apm.logs.title') }}</div>
       <div v-for="signal in logs.signals" :key="signal.resourceId + signal.logGroup" class="log-signal">
         <div class="log-signal-head">
@@ -80,6 +80,7 @@
       </div>
     </section>
 
+    <template v-if="!reviewOnly">
     <div v-if="topology.resources?.length" class="apm-resource-grid">
       <button
         v-for="resource in topology.resources"
@@ -112,6 +113,7 @@
     <div v-else class="dependency-empty">
       {{ t('apm.noDependencies') }}
     </div>
+    </template>
 
     <div v-if="resolvedSuggestions.length" class="suggestion-list">
       <div class="suggestion-heading">
@@ -126,9 +128,11 @@
           <strong>{{ edge.source }}</strong><i data-lucide="arrow-right"></i><strong>{{ edge.target }}</strong>
           <small>{{ t('apm.confidence', { confidence: Math.round(edge.confidence * 100) }) }} · {{ evidenceLabel(edge) }}</small>
         </div>
-        <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-dependency', edge)">
-          <i data-lucide="check"></i> {{ t('apm.confirmDependency') }}
-        </button>
+        <span class="suggestion-actions">
+          <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-dependency', edge)">
+            <i data-lucide="check"></i> {{ t('apm.confirmDependency') }}
+          </button>
+        </span>
       </div>
       <p class="analysis-disclaimer">{{ t('apm.analysisDisclaimer') }}</p>
     </div>
@@ -161,6 +165,8 @@ const props = defineProps({
   canAnalyzeCloud: { type: Boolean, default: false },
   analyzingCloud: { type: Boolean, default: false },
   confirmingSuggestions: { type: Boolean, default: false },
+  // Only what needs a decision: structure analysis, suggestions and unresolved references.
+  reviewOnly: { type: Boolean, default: false },
 })
 
 defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs'])
@@ -232,6 +238,7 @@ onMounted(renderIcons)
 
 <style scoped>
 .apm-topology { display: flex; flex-direction: column; min-height: 320px; padding: 18px; background: var(--bg-row); border: 1px solid var(--border); border-radius: 8px; }
+.apm-topology.review-only { min-height: 0; }
 .apm-topology-lane { display: flex; justify-content: center; }
 .apm-node { min-width: 0; min-height: 74px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); padding: 10px 12px; text-align: left; cursor: pointer; }
 .apm-node:hover, .apm-node.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
@@ -292,6 +299,7 @@ onMounted(renderIcons)
 .suggestion-list { margin-top: 14px; padding: 12px; border: 1px dashed color-mix(in srgb, #58a6ff 45%, var(--border)); display: flex; flex-direction: column; gap: 8px; }
 .suggestion-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .suggestion-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.suggestion-actions { display: flex; gap: 6px; flex: none; }
 .suggestion-path { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); align-items: center; gap: 5px; font-size: 10px; }
 .suggestion-path strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .suggestion-path svg { width: 12px; height: 12px; color: #58a6ff; }

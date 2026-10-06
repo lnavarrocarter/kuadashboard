@@ -1,6 +1,6 @@
 <template>
   <div class="architecture-view">
-    <header class="architecture-toolbar">
+    <header v-if="!props.workspaceMode" class="architecture-toolbar">
       <div class="architecture-title">
         <i data-lucide="network"></i>
         <span><strong>{{ t('archView.title') }}</strong><small>{{ t('archView.subtitle') }}</small></span>
@@ -32,7 +32,6 @@
             <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> {{ t('archView.manualResource') }}</button>
             <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
             <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
-            <button @click="emit('open-observability-setup')"><i data-lucide="square-activity"></i> {{ t('archView.observability') }}</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
@@ -69,9 +68,62 @@
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
     </div>
 
+    <div v-else-if="props.settingsOnly" class="architecture-settings-admin">
+      <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
+      <section class="architecture-settings-sync">
+        <header>
+          <div><span class="architecture-kicker">{{ t('archView.cfnSyncPreview') }}</span><strong>{{ syncSource ? syncSourceLabel : t('archView.noCfnSource') }}</strong></div>
+          <button class="btn sm" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
+            <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
+            {{ store.syncPreviewing ? t('archView.checking') : t('archView.syncPreview') }}
+          </button>
+        </header>
+        <section v-if="store.syncPreview" class="sync-preview-panel">
+          <header>
+            <span><i data-lucide="refresh-cw"></i><strong>{{ t('archView.cfnSyncPreview') }}</strong><small>{{ syncSourceLabel }}</small></span>
+            <strong>{{ t(store.syncPreview.summary.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: store.syncPreview.summary.changeCount }) }}</strong>
+            <button class="btn sm btn-icon" :title="t('archView.closeSyncPreview')" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
+          </header>
+          <div class="sync-preview-grid">
+            <div v-for="item in resourceSyncCounts" :key="`resource:${item.key}`"><span>{{ item.label }}</span><strong>{{ item.count }}</strong></div>
+          </div>
+          <div class="sync-preview-grid relationship-grid">
+            <div v-for="item in relationshipSyncCounts" :key="`relationship:${item.key}`"><span>{{ item.label }}</span><strong>{{ item.count }}</strong></div>
+          </div>
+          <div class="sync-review-lists">
+            <details v-for="section in syncResourceSections" :key="section.key" v-show="section.items.length">
+              <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
+              <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">{{ syncItemName(item) }}</span>
+            </details>
+            <details v-for="section in syncRelationshipSections" :key="section.key" v-show="section.items.length">
+              <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
+              <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">{{ syncRelationshipName(item) }}</span>
+            </details>
+          </div>
+          <footer>
+            <span>{{ t('archView.willBecomeStale', { n: store.syncPreview.summary.resources.missing }) }}</span>
+            <button class="btn sm primary" :disabled="store.saving" @click="applySync"><i data-lucide="check"></i> {{ t('archView.applySync') }}</button>
+          </footer>
+        </section>
+      </section>
+      <section class="architecture-settings-resource-section">
+        <header><div><span class="architecture-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('archView.addResources') }}</h3></div></header>
+        <div class="architecture-settings-resource-picker" role="group" :aria-label="t('archView.addResources')">
+          <button v-for="provider in ['aws', 'kubernetes', 'manual', 'gcp', 'vercel']" :key="provider" :class="['btn', 'sm', { primary: resourceProvider === provider }]" @click="resourceProvider = resourceProvider === provider ? '' : provider">
+            {{ provider === 'manual' ? t('archView.manualResource') : provider.toUpperCase() }}
+          </button>
+        </div>
+        <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
+        <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
+        <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
+        <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
+        <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
+      </section>
+    </div>
+
     <template v-else>
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
-      <form v-if="creatingProject" class="architecture-create" @submit.prevent="submitProject">
+      <form v-if="creatingProject && !props.workspaceMode" class="architecture-create" @submit.prevent="submitProject">
         <input v-model.trim="projectDraft.name" class="ctrl-input" required maxlength="120" :placeholder="t('archView.projectName')" />
         <input v-model.trim="projectDraft.description" class="ctrl-input" maxlength="500" :placeholder="t('archView.description')" />
         <button class="btn sm primary" :disabled="store.saving"><i data-lucide="arrow-right"></i> {{ t('archView.createAndConfigure') }}</button>
@@ -112,27 +164,21 @@
           <div v-else-if="!store.selectedProject" class="architecture-empty">
             <i data-lucide="waypoints"></i>
             <strong>{{ store.selectedApplication ? t('archView.noViewFor', { name: store.selectedApplication.name }) : t('archView.noneSelected') }}</strong>
-            <span>{{ store.selectedApplication ? t('archView.createViewHint') : t('archView.createProjectHint') }}</span>
-            <button v-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> {{ t('archView.createApplicationView') }}</button>
+            <span>{{ props.workspaceMode ? t('kuapps.canvasEmptyHint') : store.selectedApplication ? t('archView.createViewHint') : t('archView.createProjectHint') }}</span>
+            <button v-if="props.workspaceMode && store.selectedApplication" class="btn sm primary" @click="emit('request-resource-picker')"><i data-lucide="plus"></i> {{ t('archView.addResources') }}</button>
+            <button v-else-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> {{ t('archView.createApplicationView') }}</button>
           </div>
           <template v-else>
             <section class="architecture-project-header">
               <div>
                 <span class="architecture-kicker">{{ applicationContextLabel }} / {{ t('archView.revision', { n: store.graph?.revision ?? 0 }) }}</span>
-                <h2>{{ store.selectedProject.name }}</h2>
-                <p>{{ store.selectedProject.description || t('archView.defaultWorkspaceDescription') }}</p>
+                <h2>{{ props.workspaceMode ? activeApplication?.name || store.selectedApplication?.name : store.selectedProject.name }}</h2>
+                <p v-if="!props.workspaceMode">{{ store.selectedProject.description || t('archView.defaultWorkspaceDescription') }}</p>
               </div>
               <form class="snapshot-form" @submit.prevent="submitSnapshot">
-                <button v-if="store.linkedApplication" class="btn sm" type="button" @click="emit('open-observability', store.linkedApplication)">
-                  <i data-lucide="square-activity"></i> {{ t('archView.openObservability') }}
-                </button>
-                <button class="btn sm" type="button" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
-                  <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
-                  {{ store.syncPreviewing ? t('archView.checking') : t('archView.syncPreview') }}
-                </button>
                 <input v-model.trim="snapshotName" class="ctrl-input" required maxlength="120" :placeholder="t('archView.snapshotName')" />
                 <button class="btn sm" :disabled="store.saving"><i data-lucide="camera"></i> {{ t('archView.snapshot') }}</button>
-                <button class="btn sm btn-icon danger" type="button" :disabled="store.saving" :title="t('archView.deleteProject')" @click="deleteProject">
+                <button v-if="!props.workspaceMode" class="btn sm btn-icon danger" type="button" :disabled="store.saving" :title="t('archView.deleteProject')" @click="deleteProject">
                   <i data-lucide="trash-2"></i>
                 </button>
               </form>
@@ -152,44 +198,6 @@
               <div><span>{{ t('archView.relations') }}</span><strong>{{ store.graph?.document.edges.length || 0 }}</strong></div>
               <div><span>{{ t('archView.sources') }}</span><strong>{{ store.graph?.document.sources.length || 0 }}</strong></div>
               <div><span>{{ t('archView.snapshots') }}</span><strong>{{ store.snapshots.length }}</strong></div>
-            </section>
-
-            <section v-if="store.syncPreview" class="sync-preview-panel">
-              <header>
-                <span><i data-lucide="refresh-cw"></i><strong>{{ t('archView.cfnSyncPreview') }}</strong><small>{{ syncSourceLabel }}</small></span>
-                <strong>{{ t(store.syncPreview.summary.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: store.syncPreview.summary.changeCount }) }}</strong>
-                <button class="btn sm btn-icon" :title="t('archView.closeSyncPreview')" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
-              </header>
-              <div class="sync-preview-grid">
-                <div v-for="item in resourceSyncCounts" :key="`resource:${item.key}`">
-                  <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
-                </div>
-              </div>
-              <div class="sync-preview-grid relationship-grid">
-                <div v-for="item in relationshipSyncCounts" :key="`relationship:${item.key}`">
-                  <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
-                </div>
-              </div>
-              <div class="sync-review-lists">
-                <details v-for="section in syncResourceSections" :key="section.key" v-show="section.items.length">
-                  <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
-                  <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">
-                    {{ syncItemName(item) }}
-                  </span>
-                </details>
-                <details v-for="section in syncRelationshipSections" :key="section.key" v-show="section.items.length">
-                  <summary>{{ section.label }} <strong>{{ section.items.length }}</strong></summary>
-                  <span v-for="item in section.items" :key="syncItemId(item)" class="sync-review-item">
-                    {{ syncRelationshipName(item) }}
-                  </span>
-                </details>
-              </div>
-              <footer>
-                <span>{{ t('archView.willBecomeStale', { n: store.syncPreview.summary.resources.missing }) }}</span>
-                <button class="btn sm primary" :disabled="store.saving" @click="applySync">
-                  <i data-lucide="check"></i> {{ t('archView.applySync') }}
-                </button>
-              </footer>
             </section>
 
             <section v-if="staleResources.length" class="stale-resource-list">
@@ -229,7 +237,7 @@
               @imported="resourceProvider = ''"
             />
 
-            <div class="architecture-view-tabs">
+            <div v-if="!props.workspaceMode" class="architecture-view-tabs">
               <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
                 <i data-lucide="route"></i> {{ t('archView.routes') }}
               </button>
@@ -264,6 +272,7 @@
               :events-loading="eventsLoading"
               @operation="applyCanvasOperation"
               @inspect-workflow="openWorkflow"
+              @resource-selected="emit('resource-selected', $event)"
               @node-action="handleNodeAction"
               @request-metrics="loadOperationalMetrics"
               @request-trace="loadOperationalTrace"
@@ -372,10 +381,12 @@ const props = defineProps({
   projectId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
   hideApplicationList: { type: Boolean, default: false },
+  workspaceMode: { type: Boolean, default: false },
+  workspaceSection: { type: String, default: 'routes' },
+  settingsOnly: { type: Boolean, default: false },
 })
 const emit = defineEmits([
-  'open-observability', 'application-context',
-  'open-observability-setup',
+  'open-observability', 'application-context', 'resource-selected', 'request-resource-picker',
   'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
   'open-aws-resource', 'open-aws-logs',
 ])
@@ -394,7 +405,7 @@ const creatingProject = ref(false)
 const projectDraft = reactive({ name: '', description: '' })
 const snapshotName = ref('')
 const resourceProvider = ref('')
-const activeView = ref('routes')
+const activeView = ref(props.workspaceMode ? props.workspaceSection : 'routes')
 const selectedWorkflow = ref(null)
 const bundleInput = ref(null)
 const activeApplication = computed(() => store.linkedApplication || store.selectedApplication)
@@ -876,6 +887,28 @@ function selectResourcesView() {
   if (store.linkedApplication) store.loadRegistry()
 }
 
+async function openResourcePicker(provider = 'aws') {
+  if (props.workspaceMode && (store.activeProfileId !== props.profileId || store.selectedApplicationId !== props.applicationId)) {
+    await loadProfile(props.profileId)
+  }
+  if (!store.selectedProjectId) {
+    const applicationId = props.applicationId || store.selectedApplicationId
+    const application = store.applications.find(item => item.id === applicationId)
+    if (!application) return
+    const project = await store.createProject({
+      name: `${application.name} application map`,
+      description: 'Application resources and routes',
+      applicationId: application.id,
+    })
+    if (!project) return
+  }
+  resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel'].includes(provider) ? provider : 'aws'
+  nextTick(() => createIcons({ icons }))
+}
+
+watch(() => [props.workspaceMode, props.workspaceSection], ([workspaceMode, workspaceSection]) => {
+  if (workspaceMode && ['routes', 'canvas', 'resources'].includes(workspaceSection)) activeView.value = workspaceSection
+})
 watch(() => props.profileId, loadProfile)
 watch(() => props.applicationId, async () => loadProfile(props.profileId))
 watch(() => props.projectId, async projectId => {
@@ -889,7 +922,7 @@ watch(() => store.linkedApplication, application => {
   if (application && activeView.value === 'resources') store.loadRegistry()
 })
 onMounted(() => loadProfile(props.profileId))
-defineExpose({ refreshWorkspace })
+defineExpose({ openResourcePicker, refreshWorkspace })
 </script>
 
 <style scoped>
@@ -935,6 +968,14 @@ defineExpose({ refreshWorkspace })
 .architecture-project-header h2 { margin: 3px 0; font-size: 22px; letter-spacing: 0; }
 .architecture-project-header p { margin: 0; color: var(--text-dim); }
 .architecture-kicker { color: #2f81f7; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+.architecture-settings-admin { margin: 0 18px 18px; display: grid; align-content: start; gap: 16px; }
+.architecture-settings-sync { padding-bottom: 16px; display: grid; gap: 12px; border-bottom: 1px solid var(--border); }
+.architecture-settings-sync > header, .architecture-settings-sync-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.architecture-settings-sync > header > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.architecture-settings-sync > header > div > strong { overflow-wrap: anywhere; }
+.architecture-settings-resource-section { display: grid; gap: 10px; }
+.architecture-settings-resource-section h3 { margin: 3px 0 0; font-size: 14px; }
+.architecture-settings-resource-picker { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
 .architecture-application-context { margin: 12px 0; padding: 9px 12px; display: flex; flex-wrap: wrap; gap: 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
 .architecture-application-context span { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
 .architecture-application-context small { color: var(--text-dim); font-size: 10px; text-transform: uppercase; }

@@ -1,6 +1,6 @@
 <template>
   <div class="apm-view">
-    <header class="apm-toolbar">
+    <header v-if="!props.overviewOnly && !props.section" class="apm-toolbar">
       <div class="apm-title">
         <i data-lucide="square-activity"></i>
         <span><strong>{{ t('apm.applications') }}</strong><small>{{ t('apm.subtitle') }}</small></span>
@@ -22,6 +22,14 @@
         </button>
         <button class="btn sm primary" @click="setupOpen = true"><i data-lucide="plus"></i> {{ t('apm.addApplication') }}</button>
       </div>
+    </header>
+
+    <header v-else-if="props.section !== 'review'" class="apm-overview-toolbar">
+      <span>{{ t('apm.localStorage', { range: store.range }) }}</span>
+      <div class="range-control" :aria-label="t('apm.metricRange')">
+        <button v-for="value in ranges" :key="value" :class="{ active: store.range === value }" @click="setRange(value)">{{ value }}</button>
+      </div>
+      <button class="btn sm btn-icon" :title="t('apm.refreshLocal')" :disabled="store.loading" @click="refreshLocal"><i data-lucide="refresh-cw"></i></button>
     </header>
 
     <div v-if="store.error" class="alert-error apm-error">{{ store.error }}</div>
@@ -53,17 +61,17 @@
           <i data-lucide="square-activity"></i>
           <strong>{{ t('apm.emptyTitle') }}</strong>
           <span>{{ t('apm.emptyDescription') }}</span>
-          <button class="btn primary" @click="setupOpen = true"><i data-lucide="plus"></i> {{ t('apm.configureApplication') }}</button>
+          <button v-if="!props.overviewOnly" class="btn primary" @click="setupOpen = true"><i data-lucide="plus"></i> {{ t('apm.configureApplication') }}</button>
         </div>
 
         <template v-else>
-          <section class="application-header">
+          <section v-if="!props.section" class="application-header">
             <div>
               <div class="application-kicker">{{ store.selectedApplication.environment || t('apm.environmentUnset') }}</div>
               <h2>{{ store.selectedApplication.name }}</h2>
               <span>{{ store.selectedApplication.region }}<template v-if="store.selectedApplication.team"> / {{ store.selectedApplication.team }}</template></span>
             </div>
-            <div class="application-actions">
+            <div v-if="!props.overviewOnly" class="application-actions">
               <span :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
               <button class="btn sm btn-icon" :title="t('apm.editApplication')" @click="openEditApplication">
                 <i data-lucide="pencil"></i>
@@ -86,6 +94,13 @@
                 {{ store.collecting ? t('apm.collecting') : t('apm.collectNow') }}
               </button>
             </div>
+            <div v-else class="apm-overview-collection">
+              <span :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
+              <button class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
+                <i :data-lucide="store.collecting ? 'loader-2' : 'cloud-download'"></i>
+                {{ store.collecting ? t('apm.collecting') : t('apm.collectNow') }}
+              </button>
+            </div>
           </section>
 
           <section v-if="focusedResource" class="apm-resource-focus">
@@ -93,7 +108,7 @@
             <span><strong>{{ t('apmv.resourceFocus') }}</strong><small>{{ t('apmv.filteredTo', { name: focusedResource.name }) }}</small></span>
           </section>
 
-          <section class="apm-status-strip">
+          <section v-if="props.section !== 'review'" class="apm-status-strip">
             <span><i data-lucide="database"></i> {{ t('apm.localStorage', { range: store.range }) }}</span>
             <span><i data-lucide="layers-3"></i> {{ t('apm.resourcesCount', { count: store.topology.resources.length }) }}</span>
             <span><i data-lucide="gauge"></i> {{ usageLabel }}</span>
@@ -105,7 +120,7 @@
             <span v-else-if="latestRunIssue" class="partial"><i data-lucide="circle-alert"></i> {{ latestRunIssue }}</span>
           </section>
 
-          <section v-if="hasArchitectureLink" class="registry-sync-status">
+          <section v-if="hasArchitectureLink && !props.overviewOnly && !props.section" class="registry-sync-status">
             <span class="registry-sync-title"><i data-lucide="git-merge"></i> {{ t('apmv.registrySync') }}</span>
             <span v-if="store.syncStatus?.lastSuccessAt" class="registry-sync-item">
               <i data-lucide="check-circle-2"></i> {{ t('apmv.lastSync', { date: new Date(store.syncStatus.lastSuccessAt).toLocaleString() }) }}
@@ -132,7 +147,19 @@
             </button>
           </section>
 
-          <div class="apm-view-tabs">
+          <div v-if="props.section === 'signals'" class="apm-signals-bar">
+            <div class="apm-view-tabs">
+              <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> {{ t('apmv.metrics') }}</button>
+              <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
+              <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
+            </div>
+            <span :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
+            <button class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
+              <i :data-lucide="store.collecting ? 'loader-2' : 'cloud-download'"></i>
+              {{ store.collecting ? t('apm.collecting') : t('apm.collectNow') }}
+            </button>
+          </div>
+          <div v-if="!props.overviewOnly && !props.section" class="apm-view-tabs">
             <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> {{ t('apmv.metrics') }}</button>
             <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
@@ -144,7 +171,22 @@
             </button>
           </div>
 
-          <template v-if="activeView === 'overview'">
+          <template v-if="props.section === 'review'">
+            <ApmTopologyGraph
+              review-only
+              :topology="store.topology"
+              :selected-resource-id="selectedResourceId"
+              :can-analyze-cloud="canAnalyzeCloudTopology"
+              :analyzing-cloud="store.analyzingTopology"
+              :confirming-suggestions="confirmingSuggestions"
+              @confirm-dependency="confirmDependency"
+              @confirm-all-dependencies="confirmAllDependencies"
+              @analyze-cloud="analyzeCloudTopology"
+              @add-cloud-resource="addCloudResource"
+            />
+          </template>
+
+          <template v-else-if="activeView === 'overview'">
             <ApmProviderMetrics
               :provider="provider"
               :profile-id="profileId"
@@ -181,7 +223,7 @@
 
             <!-- Types with no collector are kept visible as inventory, but must not take a full
                  section each: that space belongs to resources that actually report something. -->
-            <section v-if="topologyOnlySections.length" class="topology-only-strip">
+            <section v-if="!props.overviewOnly && topologyOnlySections.length" class="topology-only-strip">
               <i data-lucide="shapes"></i>
               <span class="topology-only-title">{{ t('apm.topologyOnlyTitle') }}</span>
               <span v-for="section in topologyOnlySections" :key="section.key" class="topology-only-item">
@@ -228,7 +270,7 @@
             @trace="traceProcess"
           />
 
-          <section v-else-if="activeView === 'relationships'" class="relationship-review">
+          <section v-if="activeView === 'relationships' || props.section === 'review'" class="relationship-review">
             <p class="relationship-intro">{{ t('apm.relationshipsIntro') }}</p>
             <div v-if="!store.registry" class="apm-empty compact">
               <i data-lucide="git-merge"></i>
@@ -278,7 +320,7 @@
           </section>
 
           <ArchitectureResources
-            v-else-if="activeView === 'resources'"
+            v-if="activeView === 'resources' && !props.section"
             :graph="null"
             :registry="store.registry"
             :fallback-resources="store.topology.resources"
@@ -505,6 +547,10 @@ const props = defineProps({
   profileId: { type: String, default: '' },
   applicationId: { type: String, default: '' },
   hideApplicationList: { type: Boolean, default: false },
+  overviewOnly: { type: Boolean, default: false },
+  // KUApps renders one part of this view per workspace tab: 'review' (structure analysis,
+  // suggestions and relationship decisions) or 'signals' (metrics, logs and traces).
+  section: { type: String, default: '', validator: value => ['', 'review', 'signals'].includes(value) },
   focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
@@ -926,7 +972,7 @@ async function applyResourceFocus() {
 
   selectedResourceId.value = focusedResource.value?.id || ''
 
-  if (focus.view === 'traces' && hasTraceResources.value) {
+  if (!props.overviewOnly && focus.view === 'traces' && hasTraceResources.value) {
     activeView.value = 'traces'
   }
 
@@ -975,6 +1021,10 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true } })
 .apm-resource-focus span { display: flex; flex-direction: column; gap: 2px; }
 .apm-resource-focus small { color: var(--text-dim); font-size: 10px; }
 .apm-toolbar { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border); padding: 8px 12px; }
+.apm-overview-toolbar { min-height: 40px; padding: 6px 12px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: 10px; }
+.apm-overview-collection { display: flex; align-items: center; gap: 8px; }
+.apm-signals-bar { display: flex; align-items: center; gap: 10px; }
+.apm-signals-bar .apm-view-tabs { flex: 1; margin: 0; }
 .apm-title, .apm-title span { min-width: 0; display: flex; align-items: center; gap: 9px; }
 .apm-title > svg { width: 21px; height: 21px; color: #3fb950; }
 .apm-title span { align-items: flex-start; flex-direction: column; gap: 1px; }

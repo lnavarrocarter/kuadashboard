@@ -269,7 +269,7 @@ const props = defineProps({
   events: { type: Object, default: () => ({}) },
   eventsLoading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events'])
+const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'resource-selected'])
 
 const { t } = useI18n()
 const nodeTypes = computed(() => [
@@ -733,6 +733,7 @@ function persistPosition({ node }) {
 function selectNode({ node }) {
   selectedEdge.value = null
   selectedNode.value = props.graph.document.nodes.find(item => item.id === node.id) || null
+  if (selectedNode.value) emit('resource-selected', selectedNode.value)
   editDraft.name = selectedNode.value?.name || selectedNode.value?.label || ''
   editDraft.resourceType = selectedNode.value?.resourceType || 'service'
   const flowNode = flowNodes.value.find(item => item.id === node.id)
