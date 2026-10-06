@@ -104,22 +104,28 @@ const { createAwsTemplateRelationshipReader } = require('./lib/architecture/awsT
 const vercelRoutes      = require('./routes/vercel');
 const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
+const { createBackgroundTaskRegistry } = require('./lib/backgroundTaskRegistry');
+const { createBackgroundTasksRouter } = require('./routes/backgroundTasks');
+const backgroundTaskRegistry = createBackgroundTaskRegistry();
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
 const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
-const { ApmScheduler } = require('./lib/apm/scheduler');
+const { ApmScheduler, POLL_INTERVAL_MS } = require('./lib/apm/scheduler');
+const apmTask = backgroundTaskRegistry.register({ id: 'apm.collection', name: 'Observability collection', type: 'scheduler', intervalMs: POLL_INTERVAL_MS });
 const apmScheduler = new ApmScheduler({
   database: apmDatabase,
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
-apmScheduler.start();
+apmScheduler.start({ task: apmTask });
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
-require('./lib/logAutoRefresh').getAutoRefresh().start();
+const logAutoRefreshModule = require('./lib/logAutoRefresh');
+const logRefreshTask = backgroundTaskRegistry.register({ id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', intervalMs: logAutoRefreshModule.TICK_MS });
+logAutoRefreshModule.getAutoRefresh().start({ task: logRefreshTask });
 // The cache follows the plan's budget at runtime (a downgrade trims it right away).
 const logCacheBudgetWatcher = require('./lib/logCacheBudget').createBudgetWatcher({
   store: () => require('./lib/logCacheBudget').getBudgetStore(),
@@ -325,6 +331,7 @@ const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
   apmDatabase,
   dataDir: require('./lib/account/account').resolveDataDir(),
 });
+const teamSyncTask = backgroundTaskRegistry.register({ id: 'team.sync', name: 'Team application sync', type: 'scheduler', intervalMs: require('./lib/sync/teamEngine').PASS_EVERY_MS });
 // KUA Applications kept in step between the computers of a KUA account (Pro/Team).
 const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
   account: require('./lib/account/account').getAccount,
@@ -332,6 +339,7 @@ const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
   apmDatabase,
   dataDir: require('./lib/account/account').resolveDataDir(),
 });
+const applicationSyncTask = backgroundTaskRegistry.register({ id: 'apps.sync', name: 'Application sync', type: 'scheduler', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS });
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
   apmDatabase,
@@ -340,9 +348,9 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   teamEngine,
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
-syncEngine.start();
+syncEngine.start({ task: applicationSyncTask });
 // The team's shared space: publishing this computer's applications and updating imported ones.
-teamEngine.start();
+teamEngine.start(undefined, { task: teamSyncTask });
 app.use('/api/cloud/vercel',  vercelRoutes);
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
@@ -352,16 +360,19 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 }));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
+app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry }));
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
 // Scheduled Advisor analysis: the same routes the overviews call, on this KUA (lib/advisor/scheduler.js).
 const advisorScheduler = (() => {
-  const { createAdvisorScheduler, ScheduleStore, loopbackRequest } = require('./lib/advisor/scheduler');
+  const { createAdvisorScheduler, ScheduleStore, loopbackRequest, TICK_MS } = require('./lib/advisor/scheduler');
+  const advisorTask = backgroundTaskRegistry.register({ id: 'advisor.scan', name: 'Scheduled Advisor analysis', type: 'scheduler', intervalMs: TICK_MS });
   return createAdvisorScheduler({
     schedules: new ScheduleStore(apmDatabase.db),
     request: loopbackRequest(process.env.PORT || 7190),
     application: id => apmDatabase.getApplication(id),
     currentContext: () => currentContext,
+    task: advisorTask,
   });
 })();
 // Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
