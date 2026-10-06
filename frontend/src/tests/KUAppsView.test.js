@@ -509,6 +509,8 @@ describe('KUApps navigation', () => {
     expect(wrapper.get('.kuapps-review-group').text()).toContain('reaches another account')
     expect(wrapper.find('.kuapps-relationship-row').exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).exists()).toBe(false)
+    await wrapper.get('[data-test="explain-registry-relationship"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'KUAppExplanation' }).props('request')).toMatchObject({ sourceResourceId: 'a', targetResourceId: 'b', relationType: 'publishes_to', status: 'suggested' })
     wrapper.unmount()
   })
 })

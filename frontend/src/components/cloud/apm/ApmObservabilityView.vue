@@ -183,6 +183,7 @@
               @confirm-all-dependencies="confirmAllDependencies"
               @analyze-cloud="analyzeCloudTopology"
               @add-cloud-resource="addCloudResource"
+              @explain="edge => emit('explain-relationship', { sourceResourceId: edge.sourceResourceId, targetResourceId: edge.targetResourceId, sourceName: edge.source, targetName: edge.target, relationType: edge.relationType, status: 'suggested', confidence: edge.confidence, evidence: edge.evidence || [] })"
             />
           </template>
 
@@ -302,6 +303,9 @@
                       <td><small>{{ relationshipEvidence(item) }}</small></td>
                       <td><span :class="['relationship-status', item.status]">{{ relationshipStatusLabel(item.status) }}</span></td>
                       <td class="relationship-actions">
+                        <button v-if="props.section === 'review'" class="btn sm" data-test="explain-relationship" @click="emit('explain-relationship', { sourceResourceId: item.sourceResourceId, targetResourceId: item.targetResourceId, sourceName: item.sourceName, targetName: item.targetName, relationType: item.relationType, status: item.status, confidence: item.confidence, evidence: item.evidence || [] })">
+                          <i data-lucide="circle-help"></i> {{ t('kuapps.explain.button') }}
+                        </button>
                         <template v-if="item.divergent">
                           <button class="btn sm primary" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'accept')">
                             <i data-lucide="check"></i> {{ t('apm.accept') }}
@@ -310,7 +314,7 @@
                             <i data-lucide="x"></i> {{ t('apm.reject') }}
                           </button>
                         </template>
-                        <span v-else class="relationship-reviewed">&mdash;</span>
+                        <span v-else-if="props.section !== 'review'" class="relationship-reviewed">&mdash;</span>
                       </td>
                     </tr>
                   </tbody>
@@ -559,7 +563,7 @@ const props = defineProps({
   stepFunctions: { type: Array, default: () => [] },
   loadInventory: { type: Function, default: null },
 })
-const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context'])
+const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context', 'explain-relationship'])
 const store = useApmStore()
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']

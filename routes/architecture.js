@@ -12,7 +12,7 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 
-function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   // Advisor acceptances and history live in the APM database (migration 18). The server passes
@@ -129,25 +129,37 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     res.json(apmDatabase.listApplications());
   });
 
+  // Confirmed dependencies with the error rate of their target in the local log cache (#172).
+  async function advisorDependencies(application) {
+    if (!application.profileId || !application.region) return [];
+    try {
+      const { dependencySignals } = require('../lib/kua/relationshipSignals');
+      return await dependencySignals({ apmDatabase, application, cache: logCache() });
+    } catch (_) { return []; }
+  }
+
   // Product lens of the Advisor for a KUApps application (any provider):
   // objectives, ownership, release path and telemetry. No cloud calls.
-  router.get('/applications/:applicationId/advisor', (req, res) => {
-    const profile = profileId(req, res);
-    if (!profile) return;
-    const application = apmDatabase?.getApplication(req.params.applicationId);
-    if (!applicationAvailableToProfile(application, profile)) return res.status(404).json({ error: 'KUA Application not found' });
-    const overview = apmDatabase.getOverview(application.id);
-    const report = adviseProduct({
-      application,
-      overview: {
-        ...overview,
-        health: evaluateThresholds(overview.metrics, application.thresholds),
-        latestRun: apmDatabase.getLatestCollectionRun(application.id),
-      },
-      siblings: apmDatabase.listApplications({ profileId: profile }),
-    });
-    // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
-    res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id, label: application.name }), store: postureStore() }));
+  router.get('/applications/:applicationId/advisor', async (req, res) => {
+    try {
+      const profile = profileId(req, res);
+      if (!profile) return;
+      const application = apmDatabase?.getApplication(req.params.applicationId);
+      if (!applicationAvailableToProfile(application, profile)) return res.status(404).json({ error: 'KUA Application not found' });
+      const overview = apmDatabase.getOverview(application.id);
+      const report = adviseProduct({
+        application,
+        overview: {
+          ...overview,
+          health: evaluateThresholds(overview.metrics, application.thresholds),
+          latestRun: apmDatabase.getLatestCollectionRun(application.id),
+        },
+        siblings: apmDatabase.listApplications({ profileId: profile }),
+        dependencies: await advisorDependencies(application),
+      });
+      // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
+      res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id, label: application.name }), store: postureStore() }));
+    } catch (error) { handleError(res, error); }
   });
 
   router.post('/projects', (req, res) => {
