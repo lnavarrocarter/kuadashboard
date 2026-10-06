@@ -500,7 +500,7 @@ describe('KUApps navigation', () => {
     }))
     const wrapper = mount(KUAppsView, {
       props: { activeView: 'architecture', applicationId: 'app-k' },
-      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppExplanation: true } },
     })
     await flushPromises()
 
