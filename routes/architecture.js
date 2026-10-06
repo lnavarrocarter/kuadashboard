@@ -118,7 +118,9 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
   // supplied the profile scope needed by the rest of the workspace.
   router.get('/applications/catalog', (req, res) => {
     if (!apmDatabase) return res.json([]);
-    res.json(apmDatabase.listApplications());
+    // Applications without a provider are served by /api/kua-apps/applications (#149); these
+    // screens still assume one provider and profile per application.
+    res.json(apmDatabase.listApplications().filter(application => application.profileId));
   });
 
   // Product lens of the Advisor for a KUApps application (any provider):

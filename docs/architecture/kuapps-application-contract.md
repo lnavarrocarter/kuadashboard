@@ -79,6 +79,43 @@ An application created without provider, profile or region is valid. It is not l
 
 At every start, and whenever an application's resources change, legacy applications get the scopes their resources live in and a binding to their profile where none exists. A binding chosen by the user is never replaced, and scopes are never removed automatically.
 
+## API
+
+`/api/kua-apps/applications` serves KUA Applications through `lib/kua/applicationService.js`. The MCP tools of #154 and #155 must use the same service. The API is not scoped by `X-Profile-Id`, because an application has no profile of its own.
+
+| Method and path | Effect |
+| --- | --- |
+| `GET /applications` | every application, legacy ones included |
+| `POST /applications` | create from `{ name, environment, team, scopes[] }`, with no provider or profile |
+| `GET /applications/:id` | one application |
+| `PATCH /applications/:id` | edit `name`, `environment`, `team` |
+| `DELETE /applications/:id` | delete the application and its local data; architecture projects and live infrastructure stay |
+| `POST /applications/:id/scopes` | add a scope: `201` when new, `200` when it already existed |
+| `DELETE /applications/:id/scopes/:scopeKey` | remove a scope; `409 SCOPE_IN_USE` while legacy resources live in it |
+| `PUT /applications/:id/scopes/:scopeKey/binding` | bind a local profile `{ profileId }` and verify it |
+| `POST /applications/:id/scopes/:scopeKey/binding/verify` | verify the binding again |
+| `DELETE /applications/:id/scopes/:scopeKey/binding` | remove the binding |
+
+Writes that change the application accept `expectedRevision`, in the body or the query. A stale value answers `409 REVISION_CONFLICT` with the current `revision`, and nothing is written. Bindings are local, so they do not move the revision.
+
+A response has the contract fields, `warnings` (`scope_unbound`, `scope_unverified`, `scope_mismatch`, `duplicate_name`) and `local`. `local` holds the bindings and the legacy provider/profile/region, and must never be exported or synced.
+
+### Verification
+
+Verification only uses reads that have no charge:
+
+| Provider | Read | Verified when |
+| --- | --- | --- |
+| AWS | `sts:GetCallerIdentity` | the account equals `scopeId` |
+| GCP | the project of the gcloud configuration or service account | the project equals `scopeId` |
+| Vercel | the team of the stored profile | the team equals `scopeId` |
+| Kubernetes | the kube contexts of this computer | the context exists (context names differ between computers) |
+| others (plugins) | none | stays `unverified` |
+
+A different identity is `mismatch`. A failed read (expired session, missing profile) leaves the binding `unverified` with its error and never reports a mismatch. A scope without `scopeId` is completed with the identity the profile reveals: the scope is replaced and the binding moves with it, and legacy synchronization does not bring the pending scope back.
+
+Until the UI and the bundle know about them, applications without a provider are left out of the Architecture/KUApps catalog and of team publishing ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)).
+
 ## Migration report
 
 `GET /api/kua-apps/migration-report` is read-only and lists what needs a decision. It names applications, views and scopes, never profiles.

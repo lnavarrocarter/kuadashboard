@@ -8,12 +8,12 @@ const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { ApmDatabase } = require('../lib/apm/database');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account } = {}) {
+async function fixture({ account, verifier } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -156,5 +156,56 @@ test('the migration report lists provider-less applications and never names a pr
     assert.equal(report.body.providerLessApplications, 1);
     assert.ok(report.body.findings.some(finding => finding.kind === 'application_without_view'));
     assert.equal(JSON.stringify(report.body).includes('local:secret'), false);
+  } finally { await subject.close(); }
+});
+
+test('KUA Applications API: create without provider, add scopes, bind and resolve revision conflicts', async () => {
+  const { createScopeVerifier } = require('../lib/kua/scopeVerifier');
+  const verifier = createScopeVerifier({ resolvers: { async aws(profileId) { return { identity: profileId === 'prod' ? '111111111111' : '999999999999' }; } } });
+  const subject = await fixture({ verifier });
+  try {
+    const created = await subject.request('/applications', { method: 'POST', body: { name: 'Orders', environment: 'production' } });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.local.legacy, null);
+    const id = created.body.id;
+
+    const scope = await subject.request(`/applications/${id}/scopes`, { method: 'POST', body: { provider: 'aws', scopeId: '111111111111', location: 'us-east-1', expectedRevision: 0 } });
+    assert.equal(scope.status, 201);
+    const again = await subject.request(`/applications/${id}/scopes`, { method: 'POST', body: { provider: 'aws', scopeId: '111111111111', location: 'us-east-1' } });
+    assert.equal(again.status, 200);
+
+    const stale = await subject.request(`/applications/${id}`, { method: 'PATCH', body: { team: 'Platform', expectedRevision: 0 } });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'REVISION_CONFLICT');
+    assert.equal(stale.body.revision, 1);
+
+    const key = encodeURIComponent(scope.body.scope.key);
+    const bound = await subject.request(`/applications/${id}/scopes/${key}/binding`, { method: 'PUT', body: { profileId: 'prod' } });
+    assert.equal(bound.status, 200);
+    assert.equal(bound.body.status, 'verified');
+    const mismatch = await subject.request(`/applications/${id}/scopes/${key}/binding`, { method: 'PUT', body: { profileId: 'dev' } });
+    assert.equal(mismatch.body.status, 'mismatch');
+    assert.deepEqual(mismatch.body.application.warnings.map(warning => warning.kind), ['scope_mismatch']);
+
+    const list = await subject.request('/applications', { profile: '' });
+    assert.equal(list.status, 200, 'not scoped by X-Profile-Id');
+    assert.equal(list.body.length, 1);
+
+    assert.equal((await subject.request(`/applications/${id}/scopes/${key}/binding`, { method: 'DELETE' })).body.local.bindings.length, 0);
+    assert.equal((await subject.request(`/applications/${id}/scopes/${key}`, { method: 'DELETE' })).body.scopes.length, 0);
+    assert.equal((await subject.request(`/applications/${id}`, { method: 'DELETE' })).body.deleted, true);
+    assert.equal((await subject.request(`/applications/${id}`)).status, 404);
+  } finally { await subject.close(); }
+});
+
+test('KUA Applications API rejects invalid input', async () => {
+  const subject = await fixture();
+  try {
+    assert.equal((await subject.request('/applications', { method: 'POST', body: { name: ' ' } })).status, 400);
+    const created = await subject.request('/applications', { method: 'POST', body: { name: 'Orders' } });
+    const invalid = await subject.request(`/applications/${created.body.id}/scopes`, { method: 'POST', body: { provider: 'Not A Provider' } });
+    assert.equal(invalid.status, 400);
+    const missing = await subject.request(`/applications/${created.body.id}/scopes/nope/binding`, { method: 'PUT', body: { profileId: 'prod' } });
+    assert.equal(missing.status, 404);
   } finally { await subject.close(); }
 });
