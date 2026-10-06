@@ -41,6 +41,10 @@ Guarda las credenciales en variables de entorno y archivos JSON. Funciona en tod
 ### `keytar` (Electron)
 Usa el llavero del sistema operativo (Windows Credential Store, macOS Keychain, Linux Secret Service). Se activa automáticamente al ejecutar como app de escritorio Electron.
 
+## Comportamiento de Escritorio en Segundo Plano
+
+Al cerrar la ventana de KuaDashboard, se oculta en la bandeja del sistema por defecto y el backend sigue ejecutándose. Usa **Mostrar KuaDashboard** para recuperarla o **Salir** para detener el backend ordenadamente. La opción **Cerrar ventana en la bandeja** del menú se guarda localmente. Si el escritorio Linux no ofrece una bandeja compatible, vuelve a iniciar KuaDashboard para recuperar la instancia existente; usa **Salir** en el menú de la app para cerrar.
+
 ## Proxy de Desarrollo Vite
 
 Durante el desarrollo, el servidor Vite proxia las peticiones API al backend:

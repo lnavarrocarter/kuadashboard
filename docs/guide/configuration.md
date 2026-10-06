@@ -41,6 +41,10 @@ Stores credentials in environment variables and JSON files. Works everywhere.
 ### `keytar` (Electron)
 Uses the OS keychain (Windows Credential Store, macOS Keychain, Linux Secret Service). Automatically enabled when running as an Electron desktop app.
 
+## Desktop Background Behavior
+
+Closing the KuaDashboard window hides it to the system tray by default; the backend keeps running. Use **Show KuaDashboard** to restore it or **Quit** to stop the backend cleanly. The tray menu's **Close window to tray** option is saved locally. If the Linux desktop does not provide a compatible tray, launch KuaDashboard again to restore the existing instance; use **Quit** from the app menu to exit.
+
 ## Vite Development Proxy
 
 During development, the Vite dev server proxies API requests to the backend:

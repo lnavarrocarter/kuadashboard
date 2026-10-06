@@ -20,10 +20,12 @@
  *     All Node/Electron access goes through preload.js contextBridge.
  */
 
-const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, Tray, nativeImage } = require('electron');
 const path        = require('path');
 const { fork }    = require('child_process');
 const { execSync } = require('child_process');
+const fs = require('fs');
+const { createDesktopLifecycle } = require('./desktopLifecycle');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ const IS_DEV       = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const BACKEND_PORT = process.env.PORT || 7190;
 const BACKEND_URL  = `http://localhost:${BACKEND_PORT}`;
 const SERVER_PATH  = path.join(__dirname, '..', 'server.js');
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 // ─── Deep-link protocol (kua://) ──────────────────────────────────────────────
 // Register the kua:// custom URL scheme so Vercel OAuth can redirect back to
@@ -79,6 +82,8 @@ function expandMacPath() {
 let mainWindow    = null;
 let backendProcess = null;
 let backendReady  = false;
+let desktopLifecycle = null;
+let appTray = null;
 
 // ─── Backend (Express) ────────────────────────────────────────────────────────
 
@@ -160,6 +165,57 @@ function stopBackend() {
   }
 }
 
+function readDesktopPreferences() {
+  const filePath = path.join(app.getPath('userData'), 'desktop-preferences.json');
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveCloseToTray(enabled) {
+  const filePath = path.join(app.getPath('userData'), 'desktop-preferences.json');
+  let preferences = {};
+  try {
+    preferences = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch { /* start with defaults */ }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify({ ...preferences, closeToTray: enabled }, null, 2));
+}
+
+function setupTray() {
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  const iconPath = path.join(__dirname, '..', 'assets', iconFile);
+  try {
+    let image = nativeImage.createFromPath(iconPath);
+    if (image.isEmpty()) throw new Error(`Tray icon could not be loaded: ${iconPath}`);
+    image = image.resize({ width: process.platform === 'darwin' ? 16 : 24, height: process.platform === 'darwin' ? 16 : 24 });
+    if (process.platform === 'darwin') image.setTemplateImage(true);
+    appTray = new Tray(image);
+    appTray.setToolTip('KuaDashboard');
+    const updateMenu = () => appTray?.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show KuaDashboard', click: () => desktopLifecycle.showWindow() },
+      { type: 'separator' },
+      {
+        label: 'Close window to tray',
+        type: 'checkbox',
+        checked: desktopLifecycle.closeToTray,
+        click: item => {
+          desktopLifecycle.setCloseToTray(item.checked);
+          updateMenu();
+        },
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => desktopLifecycle.quit() },
+    ]));
+    updateMenu();
+    appTray.on('click', () => desktopLifecycle.showWindow());
+  } catch (err) {
+    console.warn('[electron] System tray unavailable; launch KuaDashboard again to restore its window:', err.message);
+  }
+}
+
 // ─── Browser Window ───────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -183,6 +239,7 @@ function createWindow() {
       webSecurity:        true,
     },
   });
+  desktopLifecycle?.attachWindow(mainWindow);
 
   // Load app — in dev, you can optionally load the Vite dev server instead
   const loadUrl = IS_DEV
@@ -247,13 +304,13 @@ function buildMenu() {
         { role: 'hideOthers' },
         { role: 'unhide' },
         { type: 'separator' },
-        { role: 'quit' },
+        { label: 'Quit KuaDashboard', accelerator: 'Command+Q', click: () => desktopLifecycle?.quit() },
       ],
     }] : []),
     {
       label: 'File',
       submenu: [
-        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+        process.platform === 'darwin' ? { role: 'close' } : { label: 'Quit', click: () => desktopLifecycle?.quit() },
       ],
     },
     {
@@ -422,6 +479,7 @@ ipcMain.on('app:install-update', () => {
   }
   try {
     const { autoUpdater } = require('electron-updater');
+    desktopLifecycle?.allowQuit();
     // Primary: quit + install + relaunch
     autoUpdater.quitAndInstall(false, true);
   } catch (err) {
@@ -430,7 +488,7 @@ ipcMain.on('app:install-update', () => {
     try {
       console.log('[updater] Falling back to app.quit() — update will install on exit');
       if (mainWindow) mainWindow.webContents.send('update:error', 'quitAndInstall falló. La app se cerrará e instalará la actualización.');
-      setTimeout(() => app.quit(), 1500);
+      setTimeout(() => desktopLifecycle?.quit(), 1500);
     } catch (e2) {
       console.error('[updater] app.quit() also failed:', e2.message);
       if (mainWindow) mainWindow.webContents.send('update:error', err.message);
@@ -440,7 +498,9 @@ ipcMain.on('app:install-update', () => {
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
-app.whenReady().then(async () => {
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else app.whenReady().then(async () => {
   // Set App User Model ID on Windows so the taskbar and notifications show
   // the correct icon instead of the default Electron icon.
   if (process.platform === 'win32') {
@@ -450,6 +510,20 @@ app.whenReady().then(async () => {
   // Expand PATH on macOS before anything else so the backend and all child
   // processes can find Homebrew-installed CLI tools (kubectl, aws, gcloud…)
   expandMacPath();
+
+  const preferences = readDesktopPreferences();
+  desktopLifecycle = createDesktopLifecycle({
+    app,
+    getWindow: () => mainWindow,
+    createWindow,
+    stopBackend,
+    closeToTray: preferences.closeToTray !== false,
+    persistCloseToTray: saveCloseToTray,
+    destroyTray: () => {
+      appTray?.destroy();
+      appTray = null;
+    },
+  });
 
   buildMenu();
 
@@ -463,23 +537,15 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  setupTray();
 
   // Check for updates after window is ready (production only)
   if (!IS_DEV) setupAutoUpdater();
 
   app.on('activate', () => {
-    // macOS: re-create window when dock icon is clicked and no windows are open
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    desktopLifecycle.showWindow();
   });
 });
-
-app.on('window-all-closed', () => {
-  stopBackend();
-  // On macOS, keep the app running in the dock (standard behavior)
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('before-quit', stopBackend);
 
 // ─── Deep-link handler ────────────────────────────────────────────────────────
 // Handles kua://vercel/callback?code=…&state=… after Vercel OAuth redirect.
@@ -585,10 +651,7 @@ app.on('second-instance', (_event, argv) => {
   if (deepLink) handleDeepLink(deepLink);
 
   // Bring the existing window to the foreground
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
+  desktopLifecycle?.showWindow();
 });
 
 // Prevent navigation to arbitrary URLs (security hardening)
