@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 describe('APM collection controls', () => {
-  it('can render embedded without its internal application sidebar', async () => {
+  it('renders a read-only observability summary without application CRUD or secondary tabs', async () => {
     global.fetch = vi.fn((url) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
       if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
@@ -48,14 +48,82 @@ describe('APM collection controls', () => {
     })
     const wrapper = mount(ApmObservabilityView, {
       attachTo: document.body,
-      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true },
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true, overviewOnly: true },
       global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
     })
     await flushPromises()
 
     expect(wrapper.find('.application-list').exists()).toBe(false)
     expect(wrapper.get('.apm-layout').classes()).toContain('apm-layout--embedded')
+    expect(wrapper.find('.apm-overview-toolbar').exists()).toBe(true)
+    expect(wrapper.find('.apm-toolbar').exists()).toBe(false)
+    expect(wrapper.find('.application-actions').exists()).toBe(false)
+    expect(wrapper.find('.apm-view-tabs').exists()).toBe(false)
     expect(wrapper.text()).toContain('orders')
+    wrapper.unmount()
+  })
+
+  it('renders only what needs a decision in the KUApps review section', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1', architectureProjectIds: ['p1'] }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-a', name: 'orders' },
+        resources: [{ id: 'api', type: 'lambda', name: 'api', enabled: true }, { id: 'queue', type: 'sqs', name: 'queue', enabled: true }],
+        edges: [],
+        analysis: { score: 64, coveragePercent: 50, counts: { suggestions: 1 }, findings: [{ code: 'isolated_resources', severity: 'warning', resourceIds: ['queue'] }],
+          suggestions: [{ sourceResourceId: 'api', targetResourceId: 'queue', relationType: 'publishes_to', confidence: 0.9, evidence: [{ type: 'shared_name_tokens', values: ['orders'] }] }] },
+      })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/registry')) return response({ resources: [], relationships: [] })
+      if (url.includes('/sync-status')) return response({})
+      if (url.includes('/series?')) return response([])
+      return response({})
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true, section: 'review' },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.apm-toolbar').exists()).toBe(false)
+    expect(wrapper.find('.apm-overview-toolbar').exists()).toBe(false)
+    expect(wrapper.find('.application-header').exists()).toBe(false)
+    expect(wrapper.find('.apm-view-tabs').exists()).toBe(false)
+    const graph = wrapper.getComponent(ApmTopologyGraph)
+    expect(graph.props('reviewOnly')).toBe(true)
+    expect(wrapper.get('.analysis-score').text()).toContain('64')
+    expect(wrapper.find('.suggestion-row').exists()).toBe(true)
+    expect(wrapper.find('.apm-resource-grid').exists()).toBe(false)
+    expect(wrapper.find('.relationship-review').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps metrics, logs and traces and Collect now in the KUApps signals section', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [{ id: 'api', type: 'lambda', name: 'api', enabled: true }], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 1, monthlyRequestsMaximum: 0 })
+      if (url.includes('/series?')) return response([])
+      return response({})
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true, section: 'signals' },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true, ApmProviderMetrics: true } },
+    })
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.apm-signals-bar .apm-view-tabs button').map(button => button.text())
+    expect(tabs).toEqual(['Metrics', 'Logs'])
+    expect(wrapper.findAll('.apm-view-tabs')).toHaveLength(1)
+    expect(wrapper.find('.apm-signals-bar').text()).toContain('Collect now')
+    expect(wrapper.find('.application-actions').exists()).toBe(false)
+    expect(wrapper.find('.registry-sync-status').exists()).toBe(false)
     wrapper.unmount()
   })
 

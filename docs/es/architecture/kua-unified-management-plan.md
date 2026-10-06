@@ -193,18 +193,20 @@ Seguimiento: [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146). 
 
 Los tickets #17–#21 estan cerrados como completados. El codigo ya incorpora recursos compartidos, discovery GCP/Vercel y navegacion/overlays operativos. Esas entregas son la base; sus descripciones antiguas no representan todas las brechas actuales.
 
-La brecha restante es de producto: crear una KUApp todavia abre el setup APM y agregar recursos usa flujos distintos en Arquitectura y Observabilidad. La aplicacion debe poseer recursos, scopes y relaciones; Arquitectura y Observabilidad son vistas de esa misma identidad.
+El workspace de KUApps tiene seis vistas de aplicación y cada una responde una pregunta: **Resumen** (cómo está; la vista por defecto), **Recursos** (qué tiene), **Mapa** (cómo se conecta; Canvas con Rutas como alternador), **Señales** (qué está pasando: métricas, logs y trazas), **Revisión** (qué necesita una decisión: score y hallazgos de estructura, relaciones sugeridas para aceptar o rechazar, referencias fuera de la aplicación y cuentas sin un perfil usable) y **Ajustes**. Crear una KUApp ya no requiere setup APM. Señales y Revisión muestran cada una una sección de la vista de Observabilidad (`section="signals" | "review"`) en vez de ocultar partes con CSS. Siguientes pasos: un solo panel para agregar recursos desde Recursos y el Mapa (#151), un Resumen compacto (#171), Ajustes por secciones, syncs explicados e inspector propio del Mapa (#152), y explicaciones para cada relación y sugerencia (#172).
 
 El contrato queda fijado en [Contrato de KUA Application](./kuapps-application-contract.md) (#149): una aplicación no tiene provider ni perfil propios, los scopes son portables, cada computador asocia sus perfiles locales por scope sin exportarlos, y la identidad de recurso v2 no incluye el perfil.
 
-Orden de entrega:
+Orden de trabajo por dependencias (issues abiertos bajo #146):
 
-1. Entrada y creacion propias de KUApps, con contexto persistido de aplicacion/proyecto/recurso.
-2. Un solo flujo Agregar recursos, reutilizando Arquitectura: proveedor/conexion/scope, preview, filtros/seleccion, resumen y agregar. La recoleccion se habilita por separado.
-3. Servicio comun de membresia para UI y MCP, con identidad estable, idempotencia, reconciliacion, auditoria y recuperacion de fallas parciales. No exigir diagrama para asociar recursos.
-4. Recursos y Relaciones a nivel aplicacion, con inspector y seleccion compartidos entre Arquitectura y Observabilidad; capacidades y estados sin datos/no soportado/deshabilitado/obsoleto/error explicitos.
-5. Compatibilidad y bundles multidiagrama: revisar el export singular y que la importacion actual no restaura membresia operativa del registro.
-6. MCP sobre el mismo contrato: consultas primero; luego crear, descubrir y asociar recursos, vincular proyectos y editar el grafo con validacion, resultados estructurados, idempotencia y control de revision.
+1. **#149 — Contrato canonico y migracion.** Completar el contrato versionado de aplicacion/scope/recurso, bindings locales y mapeo legacy reversible. Es la base; las decisiones de diseno ya estan registradas en el issue.
+2. **#150 — Servicio de membresia.** Centralizar attach/update/detach, idempotencia, revision esperada, reconciliacion y recuperacion de fallas parciales. Depende de #149.
+3. **#151 — Flujo unico para agregar recursos.** Reutilizar preview, seleccion y contrato de membresia desde cada punto de entrada. Depende de #149 y #150.
+4. **#152 — Contexto compartido entre vistas.** Completar inspector de recursos/relaciones, seleccion entre vistas, restauracion de enlaces directos y estados explicitos de capacidad/frescura/error. Depende de #149–#151.
+5. **#153 — Compatibilidad de bundles.** Versionar import/export para membresia y multiples vistas Architecture, conservando bundles legacy y excluyendo credenciales/telemetria local. Depende de #149 y #150.
+6. **#166 — APM por scope del recurso.** Resolver credenciales y presupuesto de recoleccion por scope despues de #149; coordinar semantica del registro con #150.
+7. **#171 — Resumen compacto de Observability.** Mantener `Collect now` y el rango temporal, reemplazando el inventario completo por tipo de recurso por un resumen conciso. Relacionado con #152; no bloquea la base del dominio.
+8. **#154/#155 — MCP local: consultas y luego escrituras protegidas.** Reutilizar el servicio despues de #150; mantener el cliente MCP externo separado bajo #147. #133 sigue cubriendo instalacion/conectividad y #48 provisioning.
 
 Criterios centrales: agregar desde cualquier vista produce la misma membresia; repetir discovery no duplica recursos ni altera decisiones humanas; AWS y Kubernetes coexisten con scopes propios; quitar un nodo, desvincular un recurso y eliminar infraestructura tienen significados distintos. UI y MCP deben producir resultados equivalentes. Verificar duplicados, scopes cruzados, fallas parciales, concurrencia y navegacion.
 

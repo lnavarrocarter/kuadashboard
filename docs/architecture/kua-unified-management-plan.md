@@ -179,14 +179,11 @@ Provider, context and namespace filters exist, but nodes only project `label`, `
 
 Exit criteria: a degraded or stale resource is visually distinguishable on the Canvas without opening the inspector.
 
-### Phase 12: Canonical resources view
+### Phase 12: Canonical resources view — delivered
 
-The shared registry is reconciled and queryable, but the UX still fragments it across the APM table, Architecture Canvas nodes and a limited link-modal summary.
+KUApps now has application-level `Resources` and `Relationships` views backed by the shared registry. The workspace exposes resource identity/provider and an inspector; cross-view selection, capability states and freshness remain tracked by #152.
 
-- Add a `Resources` view under the KUA Application that lists the canonical registry entries: provider, identity, sources, lineage, operational status, relationships and divergences.
-- Reuse the registry read APIs already used for reconciliation instead of building a new data path.
-
-Exit criteria: a user can see every resource owned by a KUA Application, its provider identity and its divergences from one place, regardless of whether it was discovered via APM or Architecture.
+Status: the canonical registry list is delivered. Complete the remaining shared-context and state presentation under #152 rather than creating another resources view or registry.
 
 ### Phase 13: One action, one revision
 
@@ -206,13 +203,11 @@ There is no persisted state of the last reconciliation (success time, duration, 
 
 Exit criteria: sync health is visible without triggering a manual reconciliation, and a failed sync surfaces a retry action in the same panel.
 
-### Phase 15: Routes/Canvas filter parity
+### Phase 15: Routes/Canvas filter parity — delivered
 
-Routes already supports Kubernetes (`Ingress -> Service -> Pod`) but has no own provider/context/namespace controls, so a Canvas filter does not necessarily constrain Routes.
+Routes exposes provider, context and namespace controls and reads/writes the persisted `document.view` filter state used by Canvas. This keeps both views on the same scope without a second filter model.
 
-- Share the existing Canvas filter state (provider, context, namespace) with the Routes view instead of duplicating filter UI.
-
-Exit criteria: applying a Canvas filter narrows Routes to the same scope without extra configuration.
+Status: delivered. Keep a regression check for filter parity as Routes and Canvas evolve.
 
 ### Phase 16: Observed-log relationship analysis
 
@@ -353,7 +348,7 @@ Tracking: [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146).
 
 The review of the development workspace and GitHub tickets found #17–#21 closed as completed. The code now includes the shared resources component in Observability, GCP/Vercel discovery and operational Canvas navigation/overlays. Their older problem descriptions above are historical; these delivered capabilities are the foundation for the next milestone.
 
-The remaining product gap is application-level ownership and onboarding: `KUAppsView.openObservabilitySetup()` switches to Observability and opens the APM setup modal, while Architecture has a separate resource discovery/import workflow. A shared registry alone does not make these one application experience.
+The KUApps workspace has six application views, and each one answers one question: **Overview** (how is it; the default view), **Resources** (what does it have), **Map** (how does it connect; Canvas with Routes as a toggle), **Signals** (what is happening: metrics, logs and traces), **Review** (what needs a decision: structure score and findings, suggested relationships to accept or reject, references outside the application and accounts without a usable profile) and **Settings**. Application creation no longer requires APM setup. Signals and Review render one section of the Observability view each (`section="signals" | "review"`) instead of hiding parts of it with CSS. Follow-ups: one Add resources panel from Resources and the Map (#151), a compact Overview (#171), Settings sections, explained syncs and an own Map inspector (#152), and explanations for every relationship and suggestion (#172).
 
 ### Product contract
 
@@ -363,12 +358,16 @@ The contract is fixed in [KUA Application Contract](./kuapps-application-contrac
 
 ### Ordered delivery
 
-1. **Application context and creation:** application-first entry and a KUApps form for identity, environment, team and connections; persist application/project/resource selection. Reuse existing context persistence.
-2. **One Add resources workflow:** extract/reuse Architecture's provider/scope → preview → filtering/explicit selection → summary → add pattern from Resources, Architecture and Observability. Show existing membership and preserve relationships to existing nodes. Telemetry configuration is a separate opt-in step.
-3. **Shared membership service:** reuse existing discovery adapters and ApplicationRegistryService through common orchestration for add/update/detach, stable identities, idempotency, concurrency, audit and defined rollback/partial failure behavior. Do not require a project to associate resources.
-4. **Application workspace:** Resources and Relationships belong to KUApps. Architecture and Observability share selection and a capability-aware resource inspector for detail, relationships, metrics, logs and traces. Reuse #18/#20/#21; show unsupported, disabled, no-data, stale and failed states explicitly.
-5. **Compatibility and portability:** preserve existing applications/projects. Audit multi-project bundles: kuaAppIo currently exports the singular architectureProjectId, and local import does not restore operational registry membership. Define versioning/migration and roundtrip semantics before advertising complete portability.
-6. **MCP:** expose application/resource/graph reads first, then creation, discovery preview, resource attachment, project linking and graph operations through the same service as the UI. Extend the GET-only HTTP client, validate server-side arguments, provide structured results and preserve expectedRevision. Idempotency is required before retrying writes after a lost response. #133 remains installation/connectivity; #48 remains provisioning.
+Track the remaining implementation through the open children of #146; do not reopen delivered workspace views or duplicate the shared registry:
+
+1. **#149 — canonical contract and migration.** Complete the versioned application/scope/resource contract, local bindings and reversible legacy mapping. This is the foundation; design decisions are recorded on the issue.
+2. **#150 — membership service.** Centralize attach/update/detach, idempotency, revision checks, reconciliation and recoverable partial failures. Depends on #149.
+3. **#151 — one resource onboarding flow.** Reuse one preview/selection/membership contract from each entry point. Depends on #149 and #150.
+4. **#152 — shared application views/context.** Finish resource/relationship inspection, cross-view selection, direct-link restoration and explicit capability/freshness/error states. Depends on #149–#151.
+5. **#153 — bundle compatibility.** Version import/export for membership and multiple Architecture views; preserve legacy bundles and exclude local credentials/telemetry. Depends on #149 and #150.
+6. **#166 — APM by resource scope.** Resolve collection credentials and request budgets per scope after #149; coordinate registry semantics with #150.
+7. **#171 — compact Overview Observability.** Keep `Collect now` and the time range while replacing the full per-resource-type inventory with a concise application summary. Related to #152; it does not block the domain foundation.
+8. **#154/#155 — local MCP reads, then guarded writes.** Use the same service after #150; keep external MCP client work under #147 separate. #133 remains installation/connectivity and #48 remains provisioning.
 
 ### Integrated acceptance
 
