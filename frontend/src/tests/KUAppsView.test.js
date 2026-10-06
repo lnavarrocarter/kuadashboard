@@ -170,15 +170,68 @@ describe('KUApps navigation', () => {
     })
     await flushPromises()
 
+    // The panel opens from the header without changing tab and asks for the account first.
     const addResources = wrapper.get('[data-test="kuapps-add-resources"]')
-    expect(addResources.element.disabled).toBe(true)
-    await wrapper.get('.kuapps-scope-selector').setValue('scope-kube')
     expect(addResources.element.disabled).toBe(false)
     await addResources.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.kuapps-add-panel').exists()).toBe(true)
+    expect(wrapper.find('.kuapps-overview-content').exists()).toBe(true)
+    expect(wrapper.find('.kuapps-add-providers').exists()).toBe(false)
+
+    await wrapper.get('.kuapps-scope-selector').setValue('scope-kube')
+    const providers = wrapper.findAll('.kuapps-add-providers button')
+    expect(providers.map(button => button.text())).toEqual(['Kubernetes', 'Manual resource'])
+    await providers[0].trigger('click')
     await flushPromises()
 
     expect(openResourcePicker).toHaveBeenCalledWith('kubernetes')
     expect(wrapper.findComponent(ArchitectureStub).props('profileId')).toBe('local:kube-prod')
+    wrapper.unmount()
+  })
+
+  it('keeps a legacy application on its own profile after migration gave it unverified scopes', async () => {
+    const application = { id: 'app-legacy', name: 'cobranza-ia', provider: 'aws', profileId: 'local:prod', region: 'us-east-1' }
+    const detail = {
+      id: application.id, name: application.name, revision: 2,
+      scopes: [{ key: 'scope-aws', provider: 'aws', scopeId: '', location: 'us-east-1', label: '' }],
+      warnings: [{ kind: 'scope_unverified', scopeKey: 'scope-aws' }],
+      local: { bindings: [{ scopeKey: 'scope-aws', profileId: 'local:prod', status: 'migrated' }], legacy: { provider: 'aws', profileId: 'local:prod', region: 'us-east-1' } },
+    }
+    global.fetch = vi.fn(url => {
+      const body = String(url).includes('/catalog') ? [application]
+        : String(url).includes('/api/kua-apps/applications/app-legacy') && !String(url).includes('/registry') ? detail
+          : String(url).includes('/registry') ? { resources: [], relationships: [] } : []
+      return Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) })
+    })
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppScopes: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="kuapps-add-resources"]').element.disabled).toBe(false)
+    await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
+    expect(wrapper.findComponent({ name: 'ArchitectureView' }).props('profileId')).toBe('local:prod')
+    wrapper.unmount()
+  })
+
+  it('keeps every application in the sidebar when a hosted Architecture view loads one profile', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const apps = [
+      { id: 'app-a', name: 'cobranza-ia', provider: 'aws', profileId: 'local:prod' },
+      { id: 'app-b', name: 'J360-kubernetes', provider: 'generic', profileId: 'local' },
+    ]
+    global.fetch = vi.fn(url => Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: () => Promise.resolve(String(url).includes('/catalog') ? apps : []) }))
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: 'app-a' },
+      global: { plugins: [pinia], stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppScopes: true } },
+    })
+    await flushPromises()
+    useArchitectureStore().applications = [apps[0]]
+    await flushPromises()
+    expect(wrapper.findAll('.kuapps-application-row')).toHaveLength(2)
     wrapper.unmount()
   })
 
@@ -243,12 +296,16 @@ describe('KUApps navigation', () => {
     expect(settings).toContain('Cloud backups')
     expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
 
+    expect(wrapper.get('.kuapps-settings-workspace').text()).not.toContain('Add resources')
+
     await tabs()[1].trigger('click')
     expect(map().props('workspaceSection')).toBe('resources')
-    await wrapper.get('[data-test="kuapps-add-resources"]').trigger('click')
+    await wrapper.get('[data-test="kuapps-resources-add"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.kuapps-settings-workspace').exists()).toBe(true)
-    expect(map().props('settingsOnly')).toBe(true)
+    expect(wrapper.find('.kuapps-registry-workspace').exists()).toBe(true)
+    const picker = wrapper.findAllComponents({ name: 'ArchitectureView' }).find(view => view.props('resourcePickerOnly'))
+    expect(picker.props('profileId')).toBe('local')
+    expect(wrapper.get('.kuapps-add-explain').text()).toContain('metric collection stays off')
     wrapper.unmount()
   })
 
