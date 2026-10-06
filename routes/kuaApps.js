@@ -3,12 +3,14 @@
 const express = require('express');
 const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
+const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { getAccount } = require('../lib/account/account');
 
 function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
+  const scopes = new ApplicationScopeService({ database: apmDatabase, architectureDatabase: database });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -44,6 +46,12 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       }
     } catch (error) { handleError(res, error); }
   }
+
+  // Read-only: what needs a decision before applications drop their legacy provider/profile (#149).
+  // It names applications, views and scopes, never profiles.
+  router.get('/migration-report', (_req, res) => {
+    try { res.json(scopes.migrationReport()); } catch (error) { handleError(res, error); }
+  });
 
   router.get('/:applicationId/export', (req, res) => {
     const application = scopedApplication(req, res);

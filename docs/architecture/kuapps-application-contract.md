@@ -1,6 +1,6 @@
 # KUA Application Contract
 
-Tracking: [#149](https://github.com/lnavarrocarter/kuadashboard/issues/149), part of [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146). Code: `lib/kua/applicationContract.js`.
+Tracking: [#149](https://github.com/lnavarrocarter/kuadashboard/issues/149), part of [#146](https://github.com/lnavarrocarter/kuadashboard/issues/146). Code: `lib/kua/applicationContract.js` (contract), `lib/kua/applicationScopes.js` (migration and report).
 
 A KUA Application (KUApp) is the context that owns identity, provider scopes, resources and architecture views. It has **no provider and no profile of its own**: one application can hold AWS accounts, GCP projects, Kubernetes contexts, Vercel teams and, later, plugin providers.
 
@@ -49,20 +49,52 @@ id = "kua-resource:" + sha256(identityKey)[0..24]
 
 The identity does not include the profile or the display name. The same resource therefore has the same id on every computer, and an exported id does not reveal a credential name. The same native identifier in different scopes (for example a deployment in `staging` and in `production`) keeps two identities. Relationship ids are built from the portable ids of their two resources and their type.
 
-The local registry (`kua_registry_resources`) still uses identity v1, which includes the profile. Moving it to v2 needs a migration that reports resources whose v1 identities collapse into one v2 identity. That migration is the next step of #149.
+The local registry (`kua_registry_resources`) uses identity v2 too. At startup, KUA drops the rows still keyed by identity v1 and reconciles every application again. The registry is derived from APM resources and architecture graphs, where human decisions live, so nothing is lost; graphs get one `registry.reconcile` revision with the new ids. Resources that v1 kept apart only by profile become one, and each merge is recorded for the migration report.
 
 ## Legacy mapping
 
-`legacyApplicationContext(application, { resources, architectureProjectIds })` maps an existing APM application (one provider, profile and region) to the contract without losing anything:
+`legacyApplicationContext(application, { resources, architectureProjectIds })` in `lib/kua/applicationScopes.js` maps an existing APM application (one provider, profile and region) to the contract without losing anything:
 
 | Today | Contract |
 | --- | --- |
 | `provider` + `region` | primary scope, `scopeId` empty (unverified) unless a resource names it |
 | resources' ARN account/region, kube context | one scope per distinct provider scope |
+| resources of the application's provider without an account (no ARN, global S3 bucket) | the primary scope |
+| `generic` provider | a scope only while the application has no resources |
 | `profile_id` | local binding of the scopes of the application's own provider (`migrated`, or `unverified` when `scopeId` is empty) |
 | `architecture_project_id` and the project link table | `views.architectureProjectIds` |
 
 A Kubernetes workload inside an AWS application gets a Kubernetes scope with no binding: it is reached through its kube context, not the AWS profile.
+
+## Storage
+
+| Table | Travels | Content |
+| --- | --- | --- |
+| `apm_applications` | yes (no profile) | identity, `revision`; `provider`, `profile_id` and `region` are now optional and only describe a legacy application |
+| `kua_application_scopes` | yes | portable scopes per application |
+| `kua_scope_bindings` | **never** | scope → local profile, with `status` (`migrated`, `unverified`, `verified`, `mismatch`) and the verified identity |
+| `kua_registry_identity_merges` | no | resources that identity v2 merged, for the report |
+
+An application created without provider, profile or region is valid. It is not listed under any profile in Observability, and the scheduler does not collect it: collection per scope binding is [#166](https://github.com/lnavarrocarter/kuadashboard/issues/166). Application names are no longer unique. Adding or removing a scope or a view, or editing the identity, moves `revision`.
+
+At every start, and whenever an application's resources change, legacy applications get the scopes their resources live in and a binding to their profile where none exists. A binding chosen by the user is never replaced, and scopes are never removed automatically.
+
+## Migration report
+
+`GET /api/kua-apps/migration-report` is read-only and lists what needs a decision. It names applications, views and scopes, never profiles.
+
+| Finding | Severity | Suggested resolution |
+| --- | --- | --- |
+| `scope_mismatch` | error | bind a profile whose session matches the scope |
+| `scope_unbound` | warning | bind a local profile |
+| `broken_view_link` | warning | unlink the missing architecture project |
+| `view_profile_mismatch` | warning | the project belongs to another profile; reconciliation skips it today |
+| `view_shared_by_applications` | warning | review which application owns the view |
+| `registry_identity_v1` | warning | reconcile (startup does it) |
+| `scope_unverified` | info | verify the scope against the session |
+| `application_without_view` / `view_without_application` | info | create or link a view |
+| `duplicate_name` | info | optional rename; the id is the identity |
+| `resource_identities_merged` | info | none, recorded for traceability |
 
 ## Export (KUAAppBundle)
 
