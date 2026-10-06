@@ -53,13 +53,7 @@
               <small>{{ providerLabel(selectedApplication) }}<template v-if="selectedApplication.environment"> · {{ selectedApplication.environment }}</template><template v-if="selectedApplication.team"> · {{ selectedApplication.team }}</template></small>
             </div>
             <div class="kuapps-header-actions">
-              <select v-if="verifiedResourceScopes.length > 1" v-model="activeResourceScopeKey" class="ctrl-select kuapps-scope-selector" :aria-label="t('kuapps.scopes.discoveryScope')">
-                <option value="">{{ t('kuapps.scopes.chooseDiscoveryScope') }}</option>
-                <option v-for="scope in verifiedResourceScopes" :key="scope.key" :value="scope.key">
-                  {{ scope.provider.toUpperCase() }} · {{ scope.label || scope.scopeId || t('kuapps.scopes.pendingAccount') }}<template v-if="scope.location"> · {{ scope.location }}</template>
-                </option>
-              </select>
-              <button class="btn sm primary" data-test="kuapps-add-resources" :disabled="!selectedProfileId" @click="openUnifiedResourcePicker"><i data-lucide="plus"></i>{{ t('archView.addResources') }}</button>
+              <button class="btn sm primary" data-test="kuapps-add-resources" :disabled="!canAddResources" :title="canAddResources ? '' : t('kuapps.add.needsProfile')" @click="openUnifiedResourcePicker"><i data-lucide="plus"></i>{{ t('archView.addResources') }}</button>
             </div>
           </div>
 
@@ -160,7 +154,10 @@
           <section v-else-if="workspaceView === 'resources'" class="kuapps-registry-workspace">
             <header class="kuapps-section-heading">
               <div><span class="kuapps-kicker">{{ t('kuapps.workspace') }}</span><h3>{{ t('kuapps.resources') }}</h3></div>
-              <button class="btn sm btn-icon" :title="t('kuapps.refreshRegistry')" :disabled="registryLoading" @click="loadApplicationRegistry()"><i data-lucide="refresh-cw"></i></button>
+              <span class="kuapps-section-actions">
+                <button class="btn sm" data-test="kuapps-resources-add" :disabled="!canAddResources" @click="openUnifiedResourcePicker"><i data-lucide="plus"></i>{{ t('archView.addResources') }}</button>
+                <button class="btn sm btn-icon" :title="t('kuapps.refreshRegistry')" :disabled="registryLoading" @click="loadApplicationRegistry()"><i data-lucide="refresh-cw"></i></button>
+              </span>
             </header>
             <div v-if="registryLoading" class="kuapps-empty-state compact">{{ t('kuapps.loadingRegistry') }}</div>
             <div v-else-if="registryError" class="kuapps-empty-state compact"><strong>{{ t('kuapps.registryUnavailable') }}</strong><span>{{ registryError }}</span></div>
@@ -300,6 +297,49 @@
             </aside>
           </div>
         </template>
+        <aside v-if="addResourcesOpen && selectedApplication" class="kuapps-add-panel" role="dialog" :aria-label="t('archView.addResources')">
+          <header>
+            <div><span class="kuapps-kicker">{{ selectedApplication.name }}</span><h3>{{ t('archView.addResources') }}</h3></div>
+            <button class="btn btn-icon" :title="t('action.close')" @click="closeAddResources"><i data-lucide="x"></i></button>
+          </header>
+          <ol class="kuapps-add-steps">
+            <li :class="{ active: !addResourcesProvider, done: !!addResourcesProvider }">{{ t('kuapps.add.stepAccount') }}</li>
+            <li :class="{ active: !!addResourcesProvider }">{{ t('kuapps.add.stepDiscover') }}</li>
+            <li>{{ t('kuapps.add.stepConfirm') }}</li>
+          </ol>
+          <section class="kuapps-add-account">
+            <label v-if="verifiedResourceScopes.length > 1">{{ t('kuapps.scopes.discoveryScope') }}
+              <select v-model="activeResourceScopeKey" class="ctrl-select kuapps-scope-selector" :aria-label="t('kuapps.scopes.discoveryScope')">
+                <option value="">{{ t('kuapps.scopes.chooseDiscoveryScope') }}</option>
+                <option v-for="scope in verifiedResourceScopes" :key="scope.key" :value="scope.key">
+                  {{ scope.provider.toUpperCase() }} · {{ scope.label || scope.scopeId || t('kuapps.scopes.pendingAccount') }}<template v-if="scope.location"> · {{ scope.location }}</template>
+                </option>
+              </select>
+            </label>
+            <p v-else-if="selectedProfileId" class="kuapps-add-using">{{ t('kuapps.add.using', { account: addResourcesAccountLabel }) }}</p>
+            <div v-if="selectedProfileId" class="kuapps-add-providers" role="group" :aria-label="t('kuapps.add.source')">
+              <button v-for="provider in addResourcesProviders" :key="provider" :class="['btn', 'sm', { primary: addResourcesProvider === provider }]" @click="chooseAddResourcesProvider(provider)">
+                {{ provider === 'manual' ? t('archView.manualResource') : providerName(provider) }}
+              </button>
+            </div>
+            <p v-else class="kuapps-add-using">{{ t('kuapps.add.chooseAccount') }}</p>
+          </section>
+          <p class="kuapps-add-explain"><i data-lucide="info"></i>{{ t('kuapps.add.explain') }}</p>
+          <div class="kuapps-add-body">
+            <ArchitectureView
+              v-if="addResourcesProvider && selectedProfileId"
+              ref="pickerRef"
+              :key="`picker:${selectedApplicationId}:${selectedProfileId}`"
+              :profile-id="selectedProfileId"
+              :application-id="selectedApplicationId"
+              hide-application-list
+              workspace-mode
+              resource-picker-only
+              @resources-imported="handleResourcesImported"
+              @picker-closed="addResourcesProvider = ''"
+            />
+          </div>
+        </aside>
       </main>
     </div>
   </div>
@@ -352,7 +392,10 @@ const settingsError = ref('')
 const settingsSaved = ref(false)
 const settingsDraft = reactive({ name: '', environment: '', team: '' })
 const localApplicationId = ref(props.applicationId)
-const applications = computed(() => architectureStore.applications || [])
+// KUApps keeps its own catalog: the Architecture views it hosts replace the shared store's
+// list with the applications of one profile, which would hide the others from the sidebar.
+const catalog = ref([])
+const applications = computed(() => catalog.value)
 // Overview first: it says how the application is and what is waiting for a decision.
 const workspaceView = ref('overview')
 const mapMode = ref('canvas')
@@ -411,8 +454,10 @@ const activeResourceScope = computed(() => verifiedResourceScopes.value.length =
   : verifiedResourceScopes.value.find(scope => scope.key === activeResourceScopeKey.value) || null)
 const architectureProfileId = computed(() => {
   if (!selectedApplication.value) return props.profileId || ''
-  if (selectedApplicationDetail.value?.scopes?.length) return activeResourceScope.value?.profileId || ''
+  // A legacy application reaches its views through its own profile, even after the
+  // migration gave it scopes whose bindings are not verified yet (#149).
   if (selectedApplication.value.profileId) return selectedApplication.value.profileId
+  if (selectedApplicationDetail.value?.scopes?.length) return activeResourceScope.value?.profileId || ''
   const verifiedProfiles = [...new Set((selectedApplicationDetail.value?.local?.bindings || [])
     .filter(binding => binding.status === 'verified')
     .map(binding => binding.profileId)
@@ -527,7 +572,9 @@ function clearResourceSelection() {
 
 async function loadCatalog() {
   catalogLoading.value = true
-  try { await architectureStore.loadApplicationCatalog() } finally { catalogLoading.value = false }
+  try {
+    catalog.value = await api('GET', '/api/architecture/applications/catalog').then(list => Array.isArray(list) ? list : []).catch(() => catalog.value)
+  } finally { catalogLoading.value = false }
   await loadSelectedApplicationDetail()
   nextTick(() => createIcons({ icons }))
 }
@@ -593,7 +640,7 @@ async function saveApplicationSettings() {
       expectedRevision: selectedApplicationDetail.value?.revision,
     })
     selectedApplicationDetail.value = updated
-    architectureStore.applications = architectureStore.applications.map(item => item.id === application.id
+    catalog.value = catalog.value.map(item => item.id === application.id
       ? { ...item, name: updated.name, environment: updated.environment, team: updated.team }
       : item)
     syncSettingsDraft(updated)
@@ -658,11 +705,53 @@ async function openResourcePicker() {
   await architectureRef.value?.openResourcePicker?.()
 }
 
+// One Add resources panel for the header, Resources and the Map (#151). It does not change tab.
+const addResourcesOpen = ref(false)
+const addResourcesProvider = ref('')
+const pickerRef = ref(null)
+const canAddResources = computed(() => !!selectedApplication.value?.profileId || verifiedResourceScopes.value.length > 0)
+const addResourcesProviders = computed(() => {
+  const scopeProvider = activeResourceScope.value?.provider
+  const own = scopeProvider || selectedApplication.value?.provider
+  const providers = [own, selectedApplication.value?.profileId ? 'kubernetes' : null, 'manual']
+  return [...new Set(providers.filter(provider => ['aws', 'kubernetes', 'gcp', 'vercel', 'manual'].includes(provider)))]
+})
+const addResourcesAccountLabel = computed(() => {
+  const scope = activeResourceScope.value
+  if (scope) return [providerName(scope.provider), scope.label || scope.scopeId, scope.location].filter(Boolean).join(' · ')
+  const application = selectedApplication.value
+  return [providerName(application?.provider), application?.region].filter(Boolean).join(' · ')
+})
+
+function providerName(provider) {
+  return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
+}
+
 async function openUnifiedResourcePicker() {
-  if (!selectedProfileId.value) return
-  workspaceView.value = 'settings'
+  if (!canAddResources.value) return
+  addResourcesOpen.value = true
+  addResourcesProvider.value = ''
+  if (selectedProfileId.value && addResourcesProviders.value.length === 2) await chooseAddResourcesProvider(addResourcesProviders.value[0])
+  nextTick(() => createIcons({ icons }))
+}
+
+async function chooseAddResourcesProvider(provider) {
+  addResourcesProvider.value = provider
   await nextTick()
-  await architectureRef.value?.openResourcePicker?.(activeResourceScope.value?.provider || selectedApplication.value?.provider || 'aws')
+  await pickerRef.value?.openResourcePicker?.(provider)
+  nextTick(() => createIcons({ icons }))
+}
+
+function closeAddResources() {
+  addResourcesOpen.value = false
+  addResourcesProvider.value = ''
+}
+
+async function handleResourcesImported() {
+  closeAddResources()
+  toast(t('kuapps.add.done'), 'success')
+  await loadApplicationRegistry()
+  await architectureRef.value?.refreshWorkspace?.()
 }
 
 function openObservability(application, focus = null) {
@@ -821,6 +910,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-registry-workspace > :deep(.architecture-view) { min-height: 420px; border-top: 1px solid var(--border); }
 .kuapps-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .kuapps-section-heading h3 { margin: 3px 0 0; font-size: 16px; }
+.kuapps-section-actions { display: flex; align-items: center; gap: 6px; }
 .kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 11px; }
 .kuapps-registry-split { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
@@ -862,6 +952,22 @@ defineExpose({ reloadActiveTab })
 .kuapps-create-form input { height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .kuapps-create-form .kuapps-create-error { color: var(--red); }
 .kuapps-create-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.kuapps-workspace { position: relative; }
+.kuapps-add-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; width: min(520px, 100%); display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--surface); box-shadow: -8px 0 24px rgba(0, 0, 0, .25); }
+.kuapps-add-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.kuapps-add-panel h3 { margin: 3px 0 0; font-size: 15px; }
+.kuapps-add-steps { margin: 0; padding: 8px 14px; display: flex; gap: 6px; list-style: none; border-bottom: 1px solid var(--border); }
+.kuapps-add-steps li { padding: 2px 9px; border-radius: 10px; background: var(--bg-hover); color: var(--text-dim); font-size: 10px; }
+.kuapps-add-steps li.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.kuapps-add-steps li.done { color: var(--green); }
+.kuapps-add-account { padding: 10px 14px; display: grid; gap: 8px; }
+.kuapps-add-account label { display: grid; gap: 4px; color: var(--text-dim); font-size: 11px; }
+.kuapps-add-using { margin: 0; color: var(--text-dim); font-size: 11px; }
+.kuapps-add-providers { display: flex; flex-wrap: wrap; gap: 6px; }
+.kuapps-add-explain { margin: 0 14px; padding: 7px 10px; display: flex; gap: 7px; align-items: flex-start; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 11px; }
+.kuapps-add-explain svg { width: 13px; flex: none; color: var(--accent); }
+.kuapps-add-body { min-height: 0; flex: 1; overflow: auto; padding: 10px 14px; }
+.kuapps-add-body > :deep(.architecture-view) { height: auto; }
 .kuapps-advisor { flex: none; max-height: 42vh; overflow: auto; padding: 10px 18px 0; }
 .kuapps-complementary-grid { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(310px, 365px); overflow: hidden; }
 .kuapps-topology-pane { min-width: 0; min-height: 0; display: flex; overflow: hidden; }

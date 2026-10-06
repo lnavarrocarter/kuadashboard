@@ -68,6 +68,15 @@
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
     </div>
 
+    <div v-else-if="props.resourcePickerOnly" class="architecture-resource-picker-only">
+      <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
+      <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="closePicker" @imported="pickerImported" />
+    </div>
+
     <div v-else-if="props.settingsOnly" class="architecture-settings-admin">
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
       <section class="architecture-settings-sync">
@@ -105,19 +114,6 @@
             <button class="btn sm primary" :disabled="store.saving" @click="applySync"><i data-lucide="check"></i> {{ t('archView.applySync') }}</button>
           </footer>
         </section>
-      </section>
-      <section class="architecture-settings-resource-section">
-        <header><div><span class="architecture-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('archView.addResources') }}</h3></div></header>
-        <div class="architecture-settings-resource-picker" role="group" :aria-label="t('archView.addResources')">
-          <button v-for="provider in ['aws', 'kubernetes', 'manual', 'gcp', 'vercel']" :key="provider" :class="['btn', 'sm', { primary: resourceProvider === provider }]" @click="resourceProvider = resourceProvider === provider ? '' : provider">
-            {{ provider === 'manual' ? t('archView.manualResource') : provider.toUpperCase() }}
-          </button>
-        </div>
-        <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
-        <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
-        <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
-        <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
-        <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="resourceProvider = ''" @imported="resourceProvider = ''" />
       </section>
     </div>
 
@@ -384,11 +380,13 @@ const props = defineProps({
   workspaceMode: { type: Boolean, default: false },
   workspaceSection: { type: String, default: 'routes' },
   settingsOnly: { type: Boolean, default: false },
+  // Only the discovery panel of one provider: the KUApps Add resources panel hosts it (#151).
+  resourcePickerOnly: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'open-observability', 'application-context', 'resource-selected', 'request-resource-picker',
   'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
-  'open-aws-resource', 'open-aws-logs',
+  'open-aws-resource', 'open-aws-logs', 'resources-imported', 'picker-closed',
 ])
 const store = useArchitectureStore()
 const apmStore = useApmStore()
@@ -902,7 +900,7 @@ async function openResourcePicker(provider = 'aws') {
     })
     if (!project) return
   }
-  resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel'].includes(provider) ? provider : 'aws'
+  resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel', 'manual'].includes(provider) ? provider : 'aws'
   nextTick(() => createIcons({ icons }))
 }
 
@@ -922,6 +920,16 @@ watch(() => store.linkedApplication, application => {
   if (application && activeView.value === 'resources') store.loadRegistry()
 })
 onMounted(() => loadProfile(props.profileId))
+function closePicker() {
+  resourceProvider.value = ''
+  emit('picker-closed')
+}
+
+function pickerImported(result) {
+  resourceProvider.value = ''
+  emit('resources-imported', result)
+}
+
 defineExpose({ openResourcePicker, refreshWorkspace })
 </script>
 

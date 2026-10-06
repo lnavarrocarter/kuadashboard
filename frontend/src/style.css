@@ -2,6 +2,8 @@
 :root {
   --bg:         #1e1e1e;
   --bg-panel:   #252526;
+  /* Many components paint panels with --surface; without it they were transparent. */
+  --surface:    var(--bg-panel);
   --bg-row:     #2a2d2e;
   --bg-hover:   #2d3035;
   --bg-sel:     #094771;
