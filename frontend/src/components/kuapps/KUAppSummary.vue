@@ -59,6 +59,8 @@ import { buildResourceMetricSections } from '../cloud/apm/metricCatalog'
 const props = defineProps({
   application: { type: Object, default: null },
   provider: { type: String, default: 'generic' },
+  // The profile the Observability routes accept for this application ('local' without provider).
+  profileId: { type: String, default: '' },
   registry: { type: Object, default: () => ({ resources: [], relationships: [] }) },
   scopeWarnings: { type: Array, default: () => [] },
   reviewCount: { type: Number, default: 0 },
@@ -81,7 +83,7 @@ const overview = ref(null)
 const topology = ref(null)
 let request = 0
 
-const hasSignals = computed(() => !!props.application?.profileId)
+const hasSignals = computed(() => !!props.application && !!(props.profileId || props.application.profileId))
 const resources = computed(() => topology.value?.resources || [])
 const analysis = computed(() => topology.value?.analysis || null)
 const registryTotal = computed(() => props.registry?.resources?.length || resources.value.length)
@@ -161,12 +163,13 @@ async function load() {
   topology.value = null
   error.value = ''
   emit('suggestions', 0)
-  if (!application?.id || !application.profileId) return
+  const profile = props.profileId || application?.profileId
+  if (!application?.id || !profile) return
   loading.value = true
   const to = Date.now()
   const from = to - RANGE_MS[range.value]
   const base = `/api/observability/${props.provider}/applications/${encodeURIComponent(application.id)}`
-  const headers = { 'X-Profile-Id': application.profileId }
+  const headers = { 'X-Profile-Id': profile }
   try {
     const [nextOverview, nextTopology] = await Promise.all([
       apiFetch(`${base}/overview?from=${from}&to=${to}`, { headers }),
@@ -184,7 +187,7 @@ async function load() {
   }
 }
 
-watch(() => [props.application?.id, props.application?.profileId, props.provider, range.value], load, { immediate: true })
+watch(() => [props.application?.id, props.profileId, props.provider, range.value], load, { immediate: true })
 defineExpose({ reload: load })
 </script>
 

@@ -73,6 +73,7 @@
               :key="`summary:${selectedApplicationId}`"
               :application="selectedApplication"
               :provider="apmProvider"
+              :profile-id="apmProfileId"
               :registry="applicationRegistry"
               :scope-warnings="scopeWarnings"
               :review-count="reviewCount"
@@ -81,7 +82,7 @@
               @suggestions="analysisSuggestionCount = $event"
             />
             <div v-if="registryError" class="kuapps-registry-error">{{ registryError }}</div>
-            <div v-if="selectedApplication && !providerLess" class="kuapps-advisor">
+            <div v-if="selectedApplication && advisorProfileId" class="kuapps-advisor">
               <AdvisorPanel
                 lens="product"
                 :report="productAdvisor"
@@ -122,7 +123,7 @@
 
               <template v-else-if="settingsSection === 'sources'">
                 <header class="kuapps-section-heading"><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.sync.title') }}</h3><small>{{ t('kuapps.sync.hint') }}</small></div></header>
-                <KUAppSync :application="selectedApplication" :provider="apmProvider" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" />
+                <KUAppSync :application="selectedApplication" :provider="apmProvider" :profile-id="apmProfileId" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" />
                 <section class="kuapp-cfn-sync">
                   <h4>{{ t('kuapps.sync.cfnTitle') }}</h4>
                   <p class="kuapps-add-explain"><i data-lucide="info"></i><span><strong>{{ t('kuapps.sync.what') }}</strong> {{ t('kuapps.sync.cfnExplain') }}</span></p>
@@ -468,8 +469,10 @@ function scopeLabel(scopeKey) {
 const selectedApplicationId = computed(() => props.applicationId || localApplicationId.value)
 const selectedApplication = computed(() => applications.value.find(application => application.id === selectedApplicationId.value) || null)
 const selectedResource = computed(() => applicationRegistry.value.resources.find(resource => resource.id === selectedResourceId.value) || selectedCanvasResource.value)
-const canInspectSignals = computed(() => !!selectedApplication.value?.profileId
-  && selectedResource.value?.provider === selectedApplication.value.provider)
+// Every resource of the application can show its signals: Kubernetes workloads of an AWS
+// application are collected through their kube context, and an application without provider
+// reaches each resource through its scope (#166).
+const canInspectSignals = computed(() => canOpenApplicationObservability.value && !!selectedResource.value)
 const selectedResourceFocus = computed(() => selectedResource.value ? {
   node: {
     registryResourceId: selectedResource.value.id,
@@ -526,12 +529,18 @@ watch(verifiedResourceScopes, scopes => {
   if (scopes.length === 1) activeResourceScopeKey.value = scopes[0].key
   else if (!scopes.some(scope => scope.key === activeResourceScopeKey.value)) activeResourceScopeKey.value = ''
 }, { immediate: true, deep: true })
+// An application without provider is served by the generic Observability routes with the local
+// placeholder profile; each resource is reached through its scope binding (#166).
 const apmProvider = computed(() => {
+  if (selectedApplication.value && !selectedApplication.value.profileId) return 'generic'
   const provider = selectedApplication.value?.provider || props.observabilityProvider
   return ['aws', 'gcp', 'vercel', 'generic'].includes(provider) ? provider : 'generic'
 })
-const apmProfileId = computed(() => selectedApplication.value?.profileId || props.observabilityProfileId || (apmProvider.value === 'generic' ? 'local' : ''))
-const canOpenApplicationObservability = computed(() => !!selectedApplication.value?.profileId
+const apmProfileId = computed(() => {
+  if (selectedApplication.value && !selectedApplication.value.profileId) return 'local'
+  return selectedApplication.value?.profileId || props.observabilityProfileId || (apmProvider.value === 'generic' ? 'local' : '')
+})
+const canOpenApplicationObservability = computed(() => !!selectedApplication.value
   && ['aws', 'gcp', 'vercel', 'generic'].includes(apmProvider.value))
 // Providerless applications use local scope bindings. APM collection must route by resource scope (#166).
 const providerLess = computed(() => !!selectedApplication.value && !selectedApplication.value.profileId)
@@ -553,14 +562,18 @@ let productAdvisorRequest = 0
 let registryRequest = 0
 let detailRequest = 0
 
+// The product Advisor route reads an application through its profile, or a verified scope
+// profile for an application without provider.
+const advisorProfileId = computed(() => selectedApplication.value?.profileId || architectureProfileId.value || '')
+
 async function loadProductAdvisor() {
   const application = selectedApplication.value
   const id = ++productAdvisorRequest
-  if (!application?.profileId) { productAdvisor.value = null; return }
+  if (!application || !advisorProfileId.value) { productAdvisor.value = null; return }
   productAdvisorLoading.value = true
   try {
     const report = await apiFetch(`/api/architecture/applications/${encodeURIComponent(application.id)}/advisor`, {
-      headers: { 'X-Profile-Id': application.profileId },
+      headers: { 'X-Profile-Id': advisorProfileId.value },
     })
     if (id === productAdvisorRequest) { productAdvisor.value = report; productAdvisorError.value = '' }
   } catch (error) {
@@ -931,7 +944,7 @@ watch(() => props.activeView, value => {
   if (value === 'observability') workspaceView.value = 'signals'
   else if (value === 'architecture') workspaceView.value = 'map'
 })
-watch(() => selectedApplication.value?.id, () => { productAdvisor.value = null; loadProductAdvisor() }, { immediate: true })
+watch(() => [selectedApplication.value?.id, advisorProfileId.value], () => { productAdvisor.value = null; loadProductAdvisor() }, { immediate: true })
 watch(() => [props.activeView, props.observabilityProvider], () => nextTick(() => createIcons({ icons })))
 onMounted(async () => {
   await Promise.all([

@@ -4845,6 +4845,8 @@ export default {
   'kuapps.viewsLabel': 'KUApps views',
   'kuapps.workspace': 'Application workspace',
   'kuapps.signals': 'Signals',
+  'apm.error.scope_unbound': 'Some resources live in an account without a verified profile of this computer. Bind one in Settings → Accounts and scopes.',
+  'apm.error.scope_region_unknown': 'The region of some resources is unknown. Set the region of their scope in Settings → Accounts and scopes.',
   'kuapps.explain.relation.calls': 'calls',
   'kuapps.explain.relation.invokes': 'invokes',
   'kuapps.explain.relation.depends_on': 'depends on',

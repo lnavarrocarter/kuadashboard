@@ -466,8 +466,10 @@ describe('KUApps navigation', () => {
     await wrapper.findAll('.kuapps-resource-row')[1].trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
     await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
-    expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).exists()).toBe(false)
-    expect(wrapper.find('.kuapps-signals-unavailable').text()).toContain('No collectors were started.')
+    // A Kubernetes workload of an AWS application has signals too (collected through its kube context).
+    const workload = wrapper.findComponent({ name: 'ApmObservabilityView' })
+    expect(workload.exists()).toBe(true)
+    expect(workload.props('focusResource').node).toMatchObject({ provider: 'kubernetes', name: 'orders-pods' })
     wrapper.unmount()
   })
 
@@ -498,7 +500,7 @@ describe('KUApps navigation', () => {
     }))
     const wrapper = mount(KUAppsView, {
       props: { activeView: 'architecture', applicationId: 'app-k' },
-      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppExplanation: true } },
     })
     await flushPromises()
 
@@ -507,9 +509,13 @@ describe('KUApps navigation', () => {
     await review.trigger('click')
     expect(wrapper.get('.kuapps-review-group').text()).toContain('AWS · Orders · us-east-1')
     expect(wrapper.get('.kuapps-review-group').text()).toContain('reaches another account')
-    expect(wrapper.find('.kuapps-relationship-row').exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).exists()).toBe(false)
-    await wrapper.get('[data-test="explain-registry-relationship"]').trigger('click')
+    // Without a provider, Review is served by the generic Observability routes (#166).
+    const reviewView = wrapper.findComponent({ name: 'ApmObservabilityView' })
+    expect(reviewView.props('section')).toBe('review')
+    expect(reviewView.props('provider')).toBe('generic')
+    expect(reviewView.props('profileId')).toBe('local')
+    reviewView.vm.$emit('explain-relationship', { sourceResourceId: 'a', targetResourceId: 'b', relationType: 'publishes_to', status: 'suggested' })
+    await flushPromises()
     expect(wrapper.findComponent({ name: 'KUAppExplanation' }).props('request')).toMatchObject({ sourceResourceId: 'a', targetResourceId: 'b', relationType: 'publishes_to', status: 'suggested' })
     wrapper.unmount()
   })

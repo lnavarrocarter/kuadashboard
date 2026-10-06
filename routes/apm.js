@@ -11,6 +11,7 @@ const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
+const { profilesForApplication } = require('../lib/kua/scopeCredentials');
 const { applyGraphOperation } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
@@ -43,11 +44,18 @@ function createApmRouter({
     return value;
   }
 
+  // A legacy application is read through its own provider and profile. One without a provider
+  // (#149) is read through the generic routes by the local placeholder or a verified scope profile.
+  function readableBy(application, profile) {
+    if (application.profileId) return application.profileId === profile && application.provider === provider;
+    return provider === 'generic' && profilesForApplication(database, application).has(profile);
+  }
+
   function scopedApplication(req, res) {
     const profile = profileId(req, res);
     if (!profile) return null;
     const application = database.getApplication(req.params.applicationId);
-    if (!application || application.profileId !== profile || application.provider !== provider) {
+    if (!application || !readableBy(application, profile)) {
       res.status(404).json({ error: 'Application not found' });
       return null;
     }
@@ -180,7 +188,11 @@ function createApmRouter({
   router.get('/applications', (req, res) => {
     const profile = profileId(req, res);
     if (!profile) return;
-    res.json(database.listApplications({ provider, profileId: profile, region: req.query.region || undefined }));
+    const own = database.listApplications({ provider, profileId: profile, region: req.query.region || undefined });
+    const providerLess = provider === 'generic'
+      ? database.listApplications().filter(application => !application.profileId && readableBy(application, profile))
+      : [];
+    res.json([...own, ...providerLess]);
   });
 
   router.post('/applications', (req, res) => {
