@@ -79,6 +79,43 @@ Una aplicación creada sin provider, perfil ni región es válida. No aparece ba
 
 En cada arranque, y cada vez que cambian los recursos de una aplicación, las aplicaciones legacy reciben los scopes donde viven sus recursos y un binding a su perfil donde no haya uno. Un binding elegido por el usuario nunca se reemplaza, y los scopes nunca se quitan automáticamente.
 
+## API
+
+`/api/kua-apps/applications` sirve las KUA Applications a través de `lib/kua/applicationService.js`. Las herramientas MCP de #154 y #155 deben usar el mismo servicio. La API no se limita por `X-Profile-Id`, porque una aplicación no tiene perfil propio.
+
+| Método y ruta | Efecto |
+| --- | --- |
+| `GET /applications` | todas las aplicaciones, incluidas las legacy |
+| `POST /applications` | crear desde `{ name, environment, team, scopes[] }`, sin provider ni perfil |
+| `GET /applications/:id` | una aplicación |
+| `PATCH /applications/:id` | editar `name`, `environment`, `team` |
+| `DELETE /applications/:id` | eliminar la aplicación y sus datos locales; los proyectos de arquitectura y la infraestructura real se mantienen |
+| `POST /applications/:id/scopes` | agregar un scope: `201` si es nuevo, `200` si ya existía |
+| `DELETE /applications/:id/scopes/:scopeKey` | quitar un scope; `409 SCOPE_IN_USE` mientras tenga recursos legacy |
+| `PUT /applications/:id/scopes/:scopeKey/binding` | asociar un perfil local `{ profileId }` y verificarlo |
+| `POST /applications/:id/scopes/:scopeKey/binding/verify` | volver a verificar el binding |
+| `DELETE /applications/:id/scopes/:scopeKey/binding` | quitar el binding |
+
+Las escrituras que cambian la aplicación aceptan `expectedRevision`, en el body o en la query. Un valor obsoleto responde `409 REVISION_CONFLICT` con la `revision` actual, y no se escribe nada. Los bindings son locales, así que no mueven la revisión.
+
+Una respuesta tiene los campos del contrato, `warnings` (`scope_unbound`, `scope_unverified`, `scope_mismatch`, `duplicate_name`) y `local`. `local` contiene los bindings y el provider/perfil/región legacy, y nunca debe exportarse ni sincronizarse.
+
+### Verificación
+
+La verificación solo usa lecturas sin costo:
+
+| Provider | Lectura | Verificado cuando |
+| --- | --- | --- |
+| AWS | `sts:GetCallerIdentity` | la cuenta es igual a `scopeId` |
+| GCP | el proyecto de la configuración de gcloud o de la service account | el proyecto es igual a `scopeId` |
+| Vercel | el team del perfil guardado | el team es igual a `scopeId` |
+| Kubernetes | los contextos de kube de este computador | el contexto existe (los nombres de contexto cambian entre computadores) |
+| otros (plugins) | ninguna | queda `unverified` |
+
+Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, perfil inexistente) deja el binding `unverified` con su error y nunca informa un mismatch. Un scope sin `scopeId` se completa con la identidad que revela el perfil: el scope se reemplaza, el binding se mueve con él, y la sincronización legacy no vuelve a crear el scope pendiente.
+
+Hasta que la interfaz y el bundle las soporten, las aplicaciones sin provider quedan fuera del catálogo de Arquitectura/KUApps y de la publicación al equipo ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)).
+
 ## Reporte de migración
 
 `GET /api/kua-apps/migration-report` es de solo lectura y lista lo que necesita una decisión. Nombra aplicaciones, vistas y scopes, nunca perfiles.

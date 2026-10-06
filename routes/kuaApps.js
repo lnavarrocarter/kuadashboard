@@ -4,13 +4,19 @@ const express = require('express');
 const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
+const { KuaApplicationService } = require('../lib/kua/applicationService');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
   const scopes = new ApplicationScopeService({ database: apmDatabase, architectureDatabase: database });
+  const applications = new KuaApplicationService({
+    database: apmDatabase,
+    ...(verifier ? { verifier } : {}),
+    audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'kuapps', details }),
+  });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -31,7 +37,11 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
 
   function handleError(res, error) {
     const status = error.statusCode || (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
-    res.status(status).json({ error: error.message || 'Internal server error', ...(error.code ? { code: error.code } : {}) });
+    res.status(status).json({
+      error: error.message || 'Internal server error',
+      ...(error.code ? { code: error.code } : {}),
+      ...(error.revision !== undefined ? { revision: error.revision } : {}),
+    });
   }
 
   function importInto(res, profile, bundle) {
@@ -52,6 +62,42 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   router.get('/migration-report', (_req, res) => {
     try { res.json(scopes.migrationReport()); } catch (error) { handleError(res, error); }
   });
+
+  // ── KUA Applications (#149) ────────────────────────────────────────────────
+  // Not scoped by X-Profile-Id: an application has no profile of its own. Writes take an
+  // optional expectedRevision and answer 409 REVISION_CONFLICT when the application moved.
+  // Everything under `local` in a response (bindings, legacy profile) stays on this computer.
+  const send = (res, status, work) => {
+    try { res.status(status).json(work()); } catch (error) { handleError(res, error); }
+  };
+  const sendAsync = async (res, status, work) => {
+    try { res.status(status).json(await work()); } catch (error) { handleError(res, error); }
+  };
+  const revisionOf = req => ({ expectedRevision: req.body?.expectedRevision ?? req.query.expectedRevision });
+
+  router.get('/applications', (_req, res) => send(res, 200, () => applications.list()));
+  router.post('/applications', (req, res) => send(res, 201, () => applications.create(req.body || {})));
+  router.get('/applications/:applicationId', (req, res) => send(res, 200, () => applications.get(req.params.applicationId)));
+  router.patch('/applications/:applicationId', (req, res) => send(res, 200, () =>
+    applications.update(req.params.applicationId, req.body || {}, revisionOf(req))));
+  router.delete('/applications/:applicationId', (req, res) => send(res, 200, () =>
+    applications.remove(req.params.applicationId, revisionOf(req))));
+
+  router.post('/applications/:applicationId/scopes', (req, res) => {
+    try {
+      const result = applications.addScope(req.params.applicationId, req.body || {}, revisionOf(req));
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) { handleError(res, error); }
+  });
+  router.delete('/applications/:applicationId/scopes/:scopeKey', (req, res) => send(res, 200, () =>
+    applications.removeScope(req.params.applicationId, req.params.scopeKey, revisionOf(req))));
+  // Binding verifies with free reads only (AWS STS GetCallerIdentity, local GCP/Vercel profile, kube contexts).
+  router.put('/applications/:applicationId/scopes/:scopeKey/binding', (req, res) => sendAsync(res, 200, () =>
+    applications.bindScope(req.params.applicationId, req.params.scopeKey, req.body?.profileId)));
+  router.post('/applications/:applicationId/scopes/:scopeKey/binding/verify', (req, res) => sendAsync(res, 200, () =>
+    applications.verifyScope(req.params.applicationId, req.params.scopeKey)));
+  router.delete('/applications/:applicationId/scopes/:scopeKey/binding', (req, res) => send(res, 200, () =>
+    applications.unbindScope(req.params.applicationId, req.params.scopeKey)));
 
   router.get('/:applicationId/export', (req, res) => {
     const application = scopedApplication(req, res);
