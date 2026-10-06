@@ -95,7 +95,14 @@
             </div>
           </div>
 
-          <section v-else-if="workspaceView === 'settings'" class="kuapps-settings-workspace">
+          <section v-else-if="workspaceView === 'settings'" class="kuapps-settings-layout">
+            <nav class="kuapps-settings-nav" :aria-label="t('kuapps.settings')">
+              <button v-for="item in settingsSections" :key="item.id" :class="{ active: settingsSection === item.id, danger: item.id === 'danger' }" @click="settingsSection = item.id">
+                <i :data-lucide="item.icon"></i>{{ t(item.label) }}
+              </button>
+            </nav>
+            <div class="kuapps-settings-workspace">
+              <template v-if="settingsSection === 'details'">
             <form class="kuapps-settings-section" @submit.prevent="saveApplicationSettings">
               <header><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.settings.details') }}</h3><small>{{ t('kuapps.settings.detailsHint') }}</small></div></header>
               <div class="kuapps-settings-fields">
@@ -109,9 +116,32 @@
                 <button class="btn sm primary" type="submit" :disabled="settingsBusy || !settingsDraft.name">{{ settingsBusy ? t('kuapps.saving') : t('action.save') }}</button>
               </div>
             </form>
+              </template>
 
-            <KUAppScopes :key="selectedApplication.id" :application-id="selectedApplication.id" @changed="handleScopesChanged" />
+              <KUAppScopes v-else-if="settingsSection === 'accounts'" :key="selectedApplication.id" :application-id="selectedApplication.id" @changed="handleScopesChanged" />
 
+              <template v-else-if="settingsSection === 'sources'">
+                <header class="kuapps-section-heading"><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.sync.title') }}</h3><small>{{ t('kuapps.sync.hint') }}</small></div></header>
+                <KUAppSync :application="selectedApplication" :provider="apmProvider" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" />
+                <section class="kuapp-cfn-sync">
+                  <h4>{{ t('kuapps.sync.cfnTitle') }}</h4>
+                  <p class="kuapps-add-explain"><i data-lucide="info"></i><span><strong>{{ t('kuapps.sync.what') }}</strong> {{ t('kuapps.sync.cfnExplain') }}</span></p>
+                  <ArchitectureView
+                    v-if="architectureProfileId"
+                    ref="architectureRef"
+                    :profile-id="architectureProfileId"
+                    :application-id="selectedApplicationId"
+                    hide-application-list
+                    workspace-mode
+                    settings-only
+                    workspace-section="canvas"
+                    @request-resource-picker="openUnifiedResourcePicker"
+                  />
+                  <p v-else class="kuapps-review-note">{{ t('kuapps.sync.unavailable') }}</p>
+                </section>
+              </template>
+
+              <template v-else-if="settingsSection === 'backups'">
             <section class="kuapps-settings-section">
               <header><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.settings.backups') }}</h3><small>{{ t('kuapps.settings.backupsHint') }}</small></div></header>
               <input ref="bundleInput" class="kuapps-bundle-input" type="file" accept=".kuaapp.json,application/json" @change="importApplicationBackup" />
@@ -123,17 +153,21 @@
                 <button class="btn sm btn-icon" :title="t('archView.refreshApplication')" :disabled="registryLoading" @click="reloadActiveTab()"><i data-lucide="refresh-cw"></i></button>
               </div>
             </section>
-            <ArchitectureView
-              v-if="architectureProfileId"
-              ref="architectureRef"
-              :profile-id="architectureProfileId"
-              :application-id="selectedApplicationId"
-              hide-application-list
-              workspace-mode
-              settings-only
-              workspace-section="canvas"
-              @request-resource-picker="openUnifiedResourcePicker"
-            />
+              </template>
+
+              <section v-else-if="settingsSection === 'danger'" class="kuapps-settings-section kuapps-danger-zone">
+                <header><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.delete.title') }}</h3><small>{{ t('kuapps.delete.hint') }}</small></div></header>
+                <label class="kuapps-delete-confirm">{{ t('kuapps.delete.typeName', { name: selectedApplication.name }) }}
+                  <input v-model="deleteConfirmation" :placeholder="selectedApplication.name" data-test="delete-confirmation" />
+                </label>
+                <p v-if="deleteError" class="kuapps-settings-error" role="alert">{{ deleteError }}</p>
+                <div class="kuapps-settings-footer">
+                  <button class="btn sm danger" data-test="delete-application" :disabled="deleteBusy || deleteConfirmation !== selectedApplication.name" @click="deleteApplication">
+                    <i data-lucide="trash-2"></i>{{ t('kuapps.delete.submit') }}
+                  </button>
+                </div>
+              </section>
+            </div>
           </section>
 
           <section v-else-if="workspaceView === 'resources'" class="kuapps-registry-workspace">
@@ -263,10 +297,21 @@
             <aside class="kuapps-signals-inspector">
               <header><div><span class="kuapps-kicker">{{ t('kuapps.resourceInspector') }}</span><h3>{{ selectedResource?.displayName || t('kuapps.selectResourceForSignals') }}</h3></div><button v-if="selectedResource" class="btn btn-icon" :title="t('action.close')" @click="clearResourceSelection"><i data-lucide="x"></i></button></header>
               <template v-if="selectedResource">
-                <dl><div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div><div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div><div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div></dl>
-                <div v-if="canInspectSignals" class="kuapps-signal-panel">
+                <div class="kuapps-inspector-tabs" role="tablist">
+                  <button v-for="tab in inspectorTabs" :key="tab" :class="{ active: inspectorTab === tab }" role="tab" :aria-selected="inspectorTab === tab" @click="inspectorTab = tab">{{ t(`kuapps.inspector.${tab}`) }}</button>
+                </div>
+                <dl v-if="inspectorTab === 'detail'"><div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div><div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div><div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div></dl>
+                <div v-if="inspectorTab === 'relationships'" class="kuapps-inspector-relationships">
+                  <p v-if="!selectedResourceRelationships.length" class="kuapps-review-note">{{ t('kuapps.inspector.noRelationships') }}</p>
+                  <button v-for="relationship in selectedResourceRelationships" :key="relationship.id" class="kuapps-inspector-relationship" @click="selectRegistryResource(relationship.otherId)">
+                    <span>{{ relationship.outgoing ? '→' : '←' }} <strong>{{ relationship.otherName }}</strong></span>
+                    <small>{{ relationship.relationType }} · {{ t(`apm.relationshipStatus.${relationship.status}`) }}</small>
+                  </button>
+                </div>
+                <div v-else-if="inspectorTab === 'signals' && canInspectSignals" class="kuapps-signal-panel">
                   <ApmObservabilityView
                     ref="observabilityRef"
+                    section="signals"
                     :provider="apmProvider"
                     :profile-id="selectedApplication.profileId || apmProfileId"
                     :application-id="selectedApplicationId"
@@ -277,7 +322,7 @@
                     @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
                   />
                 </div>
-                <div v-else class="kuapps-signals-unavailable"><i data-lucide="circle-help"></i><strong>{{ t('kuapps.signalsUnavailable') }}</strong><span>{{ t('kuapps.signalsStatus.pending') }}</span></div>
+                <div v-else-if="inspectorTab === 'signals'" class="kuapps-signals-unavailable"><i data-lucide="circle-help"></i><strong>{{ t('kuapps.signalsUnavailable') }}</strong><span>{{ t('kuapps.signalsStatus.pending') }}</span></div>
               </template>
               <div v-else class="kuapps-inspector-empty"><i data-lucide="mouse-pointer-2"></i><span>{{ t('kuapps.selectResourceForSignalsHint') }}</span><button class="btn sm" @click="workspaceView = 'resources'">{{ t('kuapps.resources') }}</button></div>
             </aside>
@@ -343,6 +388,7 @@ import { useToast } from '../../composables/useToast'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import KUAppScopes from './KUAppScopes.vue'
 import KUAppSummary from './KUAppSummary.vue'
+import KUAppSync from './KUAppSync.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -378,6 +424,9 @@ const settingsBusy = ref(false)
 const settingsError = ref('')
 const settingsSaved = ref(false)
 const settingsDraft = reactive({ name: '', environment: '', team: '' })
+const deleteConfirmation = ref('')
+const deleteBusy = ref(false)
+const deleteError = ref('')
 const localApplicationId = ref(props.applicationId)
 // KUApps keeps its own catalog: the Architecture views it hosts replace the shared store's
 // list with the applications of one profile, which would hide the others from the sidebar.
@@ -462,6 +511,8 @@ function syncSettingsDraft(source = selectedApplication.value) {
 }
 watch(() => selectedApplicationId.value, () => {
   activeResourceScopeKey.value = ''
+  deleteConfirmation.value = ''
+  deleteError.value = ''
   syncSettingsDraft()
   settingsError.value = ''
   settingsSaved.value = false
@@ -751,6 +802,55 @@ function openObservability(application, focus = null) {
   selectView('observability')
 }
 
+// Settings has its own navigation; Add resources is not here (#151).
+const settingsSections = [
+  { id: 'details', label: 'kuapps.settings.details', icon: 'file-text' },
+  { id: 'accounts', label: 'kuapps.scopes.title', icon: 'key-round' },
+  { id: 'sources', label: 'kuapps.sync.title', icon: 'git-merge' },
+  { id: 'backups', label: 'kuapps.settings.backups', icon: 'archive' },
+  { id: 'danger', label: 'kuapps.delete.title', icon: 'trash-2' },
+]
+const settingsSection = ref('details')
+
+// Deleting removes the application and its local data. Architecture projects and live
+// infrastructure stay; the name must be typed to confirm.
+async function deleteApplication() {
+  const application = selectedApplication.value
+  if (!application || deleteConfirmation.value !== application.name) return
+  deleteBusy.value = true
+  deleteError.value = ''
+  try {
+    const revision = selectedApplicationDetail.value?.revision
+    await api('DELETE', `/api/kua-apps/applications/${encodeURIComponent(application.id)}${revision != null ? `?expectedRevision=${revision}` : ''}`)
+    toast(t('kuapps.delete.done', { name: application.name }), 'success')
+    localApplicationId.value = ''
+    deleteConfirmation.value = ''
+    settingsSection.value = 'details'
+    workspaceView.value = 'overview'
+    await loadCatalog()
+  } catch (error) {
+    deleteError.value = error.message
+  } finally {
+    deleteBusy.value = false
+  }
+}
+
+// The Map inspector shows one resource: its detail, its signals and its relationships.
+const inspectorTabs = ['detail', 'signals', 'relationships']
+const inspectorTab = ref('detail')
+const selectedResourceRelationships = computed(() => {
+  const resource = selectedResource.value
+  if (!resource) return []
+  const names = new Map(applicationRegistry.value.resources.map(item => [item.id, item.displayName]))
+  return applicationRegistry.value.relationships
+    .filter(relationship => relationship.sourceResourceId === resource.id || relationship.targetResourceId === resource.id)
+    .map(relationship => {
+      const outgoing = relationship.sourceResourceId === resource.id
+      const otherId = outgoing ? relationship.targetResourceId : relationship.sourceResourceId
+      return { ...relationship, outgoing, otherId, otherName: names.get(otherId) || (outgoing ? relationship.targetName : relationship.sourceName) || otherId }
+    })
+})
+
 // Collect now keeps its cost confirmation: it opens Signals and asks there.
 const signalsRef = ref(null)
 async function collectFromSummary() {
@@ -856,7 +956,26 @@ defineExpose({ reloadActiveTab })
 .kuapps-workspace-tab svg { width: 15px; }
 .kuapps-workspace-tab b { min-width: 19px; padding: 1px 5px; border-radius: 9px; background: var(--bg-hover); color: var(--text-dim); font-size: 10px; text-align: center; }
 .kuapps-overview-content { min-height: 0; flex: 1; overflow: auto; padding-bottom: 18px; }
-.kuapps-settings-workspace { min-height: 0; flex: 1; display: grid; align-content: start; gap: 18px; overflow: auto; padding: 20px 22px; }
+.kuapps-settings-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: 210px minmax(0, 1fr); overflow: hidden; }
+.kuapps-settings-nav { padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--border); background: var(--bg-panel); }
+.kuapps-settings-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text-dim); text-align: left; cursor: pointer; }
+.kuapps-settings-nav button:hover { background: var(--bg-hover); color: var(--text); }
+.kuapps-settings-nav button.active { background: var(--bg-hover); color: var(--text); font-weight: 600; box-shadow: inset 2px 0 var(--accent); }
+.kuapps-settings-nav button.danger { margin-top: auto; color: var(--red); }
+.kuapps-settings-nav svg { width: 14px; }
+.kuapps-settings-workspace { min-height: 0; display: grid; align-content: start; gap: 14px; overflow: auto; padding: 20px 22px; }
+.kuapp-cfn-sync { display: grid; gap: 8px; }
+.kuapp-cfn-sync h4 { margin: 4px 0 0; font-size: 13px; }
+.kuapp-cfn-sync .kuapps-add-explain { margin: 0; }
+.kuapps-delete-confirm { display: grid; gap: 5px; max-width: 420px; color: var(--text-dim); font-size: 11px; }
+.kuapps-delete-confirm input { height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-panel); color: var(--text); }
+.kuapps-danger-zone { border: 1px solid var(--red); border-radius: 7px; padding: 14px; }
+.kuapps-inspector-tabs { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); }
+.kuapps-inspector-tabs button { padding: 6px 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); font-size: 11px; cursor: pointer; }
+.kuapps-inspector-tabs button.active { border-bottom-color: var(--accent); color: var(--text); }
+.kuapps-inspector-relationships { padding: 8px 10px; display: grid; gap: 4px; overflow: auto; }
+.kuapps-inspector-relationship { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.kuapps-inspector-relationship small { color: var(--text-dim); font-size: 10px; }
 .kuapps-settings-section { min-width: 0; margin: 0; padding: 0 0 18px; display: grid; gap: 12px; border: 0; border-bottom: 1px solid var(--border); }
 .kuapps-settings-section > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .kuapps-settings-section > header h3 { margin: 3px 0 0; font-size: 15px; }
@@ -977,7 +1096,6 @@ defineExpose({ reloadActiveTab })
 .kuapps-signals-inspector dd { margin: 0; overflow-wrap: anywhere; }
 .kuapps-signal-panel { min-height: 0; flex: 1; overflow: hidden; }
 .kuapps-signal-panel > :deep(.apm-view) { height: 100%; min-height: 0; overflow: hidden; }
-.kuapps-signal-panel :deep(.apm-toolbar), .kuapps-signal-panel :deep(.application-header), .kuapps-signal-panel :deep(.apm-status-strip), .kuapps-signal-panel :deep(.registry-sync-status), .kuapps-signal-panel :deep(.apm-view-tabs) { display: none; }
 .kuapps-signal-panel :deep(.apm-layout) { height: 100%; min-height: 0; display: flex; }
 .kuapps-signal-panel :deep(.apm-main) { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: 8px; }
 .kuapps-signal-panel :deep(.apm-resource-focus) { margin: 0 0 8px; }
@@ -987,5 +1105,5 @@ defineExpose({ reloadActiveTab })
 .kuapps-inspector-empty { margin: auto; align-items: center; text-align: center; }
 @media (max-width: 900px) { .kuapps-complementary-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); } }
 @media (max-width: 700px) { .kuapps-workspace-nav { overflow-x: auto; }.kuapps-workspace-tab { flex: 0 0 auto; }.kuapps-registry-split { grid-template-columns: minmax(0, 1fr); }.kuapps-resource-inspector { border-top: 1px solid var(--border); border-left: 0; }.kuapps-relationship-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }.kuapps-relationship-status { grid-column: 1 / -1; justify-self: end; }.kuapps-complementary-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 1fr) minmax(320px, 44vh); overflow: auto; }.kuapps-signals-inspector { border-top: 1px solid var(--border); border-left: 0; } }
-@media (max-width: 760px) { .kuapps-application-shell { grid-template-columns: 175px minmax(0, 1fr); }.kuapps-application-header { align-items: flex-start; flex-direction: column; }.kuapps-overview-strip { margin-inline: 10px; flex-wrap: wrap; }.kuapps-overview-strip > div { min-width: 90px; flex: 1; }.kuapps-observability-summary { margin-inline: 10px; }.kuapps-registry-workspace { padding: 12px 10px; }.kuapps-settings-workspace { padding: 14px 12px; }.kuapps-settings-fields { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .kuapps-settings-layout { grid-template-columns: minmax(0, 1fr); }.kuapps-settings-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .kuapps-application-shell { grid-template-columns: 175px minmax(0, 1fr); }.kuapps-application-header { align-items: flex-start; flex-direction: column; }.kuapps-overview-strip { margin-inline: 10px; flex-wrap: wrap; }.kuapps-overview-strip > div { min-width: 90px; flex: 1; }.kuapps-observability-summary { margin-inline: 10px; }.kuapps-registry-workspace { padding: 12px 10px; }.kuapps-settings-workspace { padding: 14px 12px; }.kuapps-settings-fields { grid-template-columns: minmax(0, 1fr); } }
 </style>
