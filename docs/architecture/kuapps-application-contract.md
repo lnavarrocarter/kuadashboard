@@ -114,7 +114,7 @@ Verification only uses reads that have no charge:
 
 A different identity is `mismatch`. A failed read (expired session, missing profile) leaves the binding `unverified` with its error and never reports a mismatch. A scope without `scopeId` is completed with the identity the profile reveals: the scope is replaced and the binding moves with it, and legacy synchronization does not bring the pending scope back.
 
-Until the UI and the bundle know about them, applications without a provider are left out of the Architecture/KUApps catalog and of team publishing ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)).
+KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Team publishing skips these applications until the bundle carries scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
 
 ## Migration report
 

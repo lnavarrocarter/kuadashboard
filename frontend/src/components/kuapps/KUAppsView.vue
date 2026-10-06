@@ -25,7 +25,7 @@
       <aside class="kuapps-applications">
         <div class="kuapps-list-heading">
           <span>{{ t('kuapps.applications') }}</span><strong>{{ applications.length }}</strong>
-          <button class="btn btn-icon" :title="t('kuapps.createApplication')" @click="openObservabilitySetup"><i data-lucide="plus"></i></button>
+          <button class="btn btn-icon" :title="t('kuapps.createApplication')" @click="startCreate"><i data-lucide="plus"></i></button>
           <button class="btn btn-icon" :title="t('kuapps.refreshApplications')" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
         </div>
         <div v-for="application in applications" :key="application.id" class="kuapps-application-item">
@@ -34,7 +34,7 @@
             @click="selectApplication(application)"
           >
             <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
-            <span><strong>{{ application.name }}</strong><small>{{ application.provider.toUpperCase() }}<template v-if="application.environment"> · {{ application.environment }}</template></small></span>
+            <span><strong>{{ application.name }}</strong><small>{{ providerLabel(application) }}<template v-if="application.environment"> · {{ application.environment }}</template></small></span>
             <b>{{ application.architectureProjectIds?.length || (application.architectureProjectId ? 1 : 0) }}</b>
           </button>
           <div v-if="activeView === 'architecture' && selectedApplicationId === application.id" class="kuapps-project-sublist">
@@ -54,16 +54,31 @@
         <div v-if="catalogLoading" class="kuapps-empty-list">{{ t('kuapps.loading') }}</div>
         <template v-else-if="!applications.length">
           <div class="kuapps-empty-list">{{ t('kuapps.noApplications') }}</div>
-          <button class="btn sm kuapps-create-btn" @click="openObservabilitySetup"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
+          <button class="btn sm kuapps-create-btn" @click="startCreate"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
         </template>
       </aside>
 
       <main class="kuapps-workspace">
-        <div v-if="!selectedApplication && activeView !== 'observability'" class="kuapps-empty-state">
+        <form v-if="creating" class="kuapps-create-form" @submit.prevent="createApplication">
+          <span class="kuapps-kicker">{{ t('kuapps.kicker') }}</span>
+          <h2>{{ t('kuapps.create.title') }}</h2>
+          <p>{{ t('kuapps.create.hint') }}</p>
+          <label>{{ t('kuapps.create.name') }}<input v-model.trim="draft.name" required maxlength="120" /></label>
+          <label>{{ t('kuapps.create.environment') }}<input v-model.trim="draft.environment" maxlength="60" :placeholder="t('kuapps.create.environmentHint')" /></label>
+          <label>{{ t('kuapps.create.team') }}<input v-model.trim="draft.team" maxlength="80" /></label>
+          <p v-if="createError" class="kuapps-create-error">{{ createError }}</p>
+          <div class="kuapps-create-actions">
+            <button class="btn sm primary" type="submit" :disabled="createBusy || !draft.name">{{ t('kuapps.create.submit') }}</button>
+            <button class="btn sm" type="button" @click="creating = false">{{ t('kuapps.create.cancel') }}</button>
+            <button class="btn sm" type="button" :title="t('kuapps.create.observabilitySetupHint')" @click="openObservabilitySetup">{{ t('kuapps.create.observabilitySetup') }}</button>
+          </div>
+        </form>
+
+        <div v-else-if="!selectedApplication && activeView !== 'observability'" class="kuapps-empty-state">
           <i data-lucide="boxes"></i>
           <strong>{{ t('kuapps.selectApplication') }}</strong>
           <span>{{ t('kuapps.selectApplicationHint') }}</span>
-          <button class="btn sm primary" @click="openObservabilitySetup"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
+          <button class="btn sm primary" @click="startCreate"><i data-lucide="plus"></i> {{ t('kuapps.createApplication') }}</button>
         </div>
 
         <template v-else>
@@ -71,7 +86,7 @@
             <div>
               <span class="kuapps-kicker">{{ t('kuapps.kicker') }}</span>
               <h2>{{ selectedApplication.name }}</h2>
-              <small>{{ selectedApplication.provider.toUpperCase() }}<template v-if="selectedApplication.environment"> · {{ selectedApplication.environment }}</template><template v-if="selectedApplication.team"> · {{ selectedApplication.team }}</template></small>
+              <small>{{ providerLabel(selectedApplication) }}<template v-if="selectedApplication.environment"> · {{ selectedApplication.environment }}</template><template v-if="selectedApplication.team"> · {{ selectedApplication.team }}</template></small>
             </div>
             <div class="kuapps-associations">
               <span><strong>{{ architectureCount }}</strong><small>{{ architectureCount === 1 ? t('kuapps.architecture') : t('kuapps.architectures') }}</small></span>
@@ -79,7 +94,9 @@
             </div>
           </div>
 
-          <div v-if="selectedApplication" class="kuapps-advisor">
+          <KUAppScopes v-if="selectedApplication" :key="selectedApplication.id" :application-id="selectedApplication.id" @changed="loadCatalog" />
+
+          <div v-if="selectedApplication && !providerLess" class="kuapps-advisor">
             <AdvisorPanel
               lens="product"
               :report="productAdvisor"
@@ -93,8 +110,14 @@
             />
           </div>
 
+          <div v-if="providerLess" class="kuapps-empty-state">
+            <i data-lucide="layers"></i>
+            <strong>{{ t('kuapps.providerLess.title') }}</strong>
+            <span>{{ t('kuapps.providerLess.hint') }}</span>
+          </div>
+
           <ArchitectureView
-            v-if="activeView === 'architecture'"
+            v-else-if="activeView === 'architecture'"
             ref="architectureRef"
             :profile-id="profileId"
             :application-id="applicationId"
@@ -137,6 +160,8 @@ import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
+import KUAppScopes from './KUAppScopes.vue'
+import { api } from '../../composables/useApi'
 
 const props = defineProps({
   activeView: { type: String, default: 'architecture' },
@@ -171,6 +196,17 @@ const apmProvider = computed(() => ['aws', 'gcp', 'vercel', 'generic'].includes(
   ? props.observabilityProvider
   : 'generic')
 const apmProfileId = computed(() => props.observabilityProfileId || (apmProvider.value === 'generic' ? 'local' : ''))
+// A KUA Application created in KUApps (#149) has no legacy provider/profile: its accounts are
+// its scopes, and Architecture/Observability still need one profile, so they wait for #151.
+const providerLess = computed(() => !!selectedApplication.value && !selectedApplication.value.profileId)
+const creating = ref(false)
+const createBusy = ref(false)
+const createError = ref('')
+const draft = ref({ name: '', environment: '', team: '' })
+
+function providerLabel(application) {
+  return application?.provider ? application.provider.toUpperCase() : t('kuapps.multiProvider')
+}
 
 // Product lens of the Advisor (the technical one lives in each provider overview).
 const { apiFetch } = useApi()
@@ -182,7 +218,7 @@ let productAdvisorRequest = 0
 async function loadProductAdvisor() {
   const application = selectedApplication.value
   const id = ++productAdvisorRequest
-  if (!application) { productAdvisor.value = null; return }
+  if (!application?.profileId) { productAdvisor.value = null; return }
   productAdvisorLoading.value = true
   try {
     const report = await apiFetch(`/api/architecture/applications/${encodeURIComponent(application.id)}/advisor`, {
@@ -223,7 +259,31 @@ function openObservability(application, focus = null) {
   selectView('observability')
 }
 
+function startCreate() {
+  draft.value = { name: '', environment: '', team: '' }
+  createError.value = ''
+  creating.value = true
+  nextTick(() => createIcons({ icons }))
+}
+
+async function createApplication() {
+  createBusy.value = true
+  createError.value = ''
+  try {
+    const created = await api('POST', '/api/kua-apps/applications', { ...draft.value })
+    creating.value = false
+    await loadCatalog()
+    const application = applications.value.find(item => item.id === created.id) || { id: created.id, name: created.name, provider: null, profileId: null }
+    selectApplication(application)
+  } catch (err) {
+    createError.value = err.message
+  } finally {
+    createBusy.value = false
+  }
+}
+
 function openObservabilitySetup() {
+  creating.value = false
   selectView('observability')
   nextTick(() => observabilityRef.value?.openSetup?.())
 }
@@ -297,6 +357,13 @@ defineExpose({ reloadActiveTab, openObservabilitySetup })
 .kuapps-empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-dim); text-align: center; }
 .kuapps-empty-state svg { width: 34px; color: var(--accent); }
 .kuapps-empty-state strong { color: var(--text); }
+.kuapps-create-form { max-width: 460px; margin: 28px auto; padding: 0 18px; display: flex; flex-direction: column; gap: 9px; }
+.kuapps-create-form h2 { margin: 0; font-size: 18px; }
+.kuapps-create-form p { margin: 0; color: var(--text-dim); font-size: 11px; }
+.kuapps-create-form label { display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); font-size: 11px; }
+.kuapps-create-form input { height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.kuapps-create-form .kuapps-create-error { color: var(--red); }
+.kuapps-create-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .kuapps-advisor { flex: none; max-height: 42vh; overflow: auto; padding: 10px 18px 0; }
 .kuapps-workspace > :deep(.architecture-view), .kuapps-workspace > :deep(.apm-view) { flex: 1; min-height: 0; }
 @media (max-width: 700px) { .kuapps-tabs { overflow-x: auto; }.kuapps-tab { min-width: 165px; } }

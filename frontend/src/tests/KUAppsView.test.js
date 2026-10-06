@@ -13,7 +13,7 @@ describe('KUApps navigation', () => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       headers: { get: () => 'application/json' },
-      json: () => Promise.resolve([{ id: 'app-a', name: 'Orders', provider: 'generic' }]),
+      json: () => Promise.resolve([{ id: 'app-a', name: 'Orders', provider: 'generic', profileId: 'local' }]),
     }))
   })
 
@@ -62,8 +62,50 @@ describe('KUApps navigation', () => {
     const createButtons = wrapper.findAll('button').filter(b => b.text().includes('Create application'))
     expect(createButtons.length).toBeGreaterThan(0)
 
+    // Creating an application no longer goes through the APM setup (#149).
     await createButtons[0].trigger('click')
-    expect(wrapper.emitted('update-view')).toEqual([['observability']])
+    expect(wrapper.emitted('update-view')).toBeUndefined()
+    expect(wrapper.find('.kuapps-create-form').exists()).toBe(true)
+
+    global.fetch = vi.fn((url, options = {}) => Promise.resolve({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(options.method === 'POST'
+        ? { id: 'app-new', name: 'Checkout', scopes: [], warnings: [], local: { bindings: [], legacy: null } }
+        : url.includes('/catalog') ? [{ id: 'app-new', name: 'Checkout', provider: null, profileId: null }]
+          : { id: 'app-new', name: 'Checkout', revision: 0, scopes: [], warnings: [], local: { bindings: [], legacy: null } }),
+    }))
+    await wrapper.find('.kuapps-create-form input').setValue('Checkout')
+    await wrapper.find('.kuapps-create-form').trigger('submit')
+    await flushPromises()
+
+    const post = global.fetch.mock.calls.find(([, options]) => options?.method === 'POST')
+    expect(post[0]).toBe('/api/kua-apps/applications')
+    expect(JSON.parse(post[1].body)).toMatchObject({ name: 'Checkout' })
+    expect(wrapper.emitted('application-context').at(-1)[0]).toMatchObject({ id: 'app-new' })
+    wrapper.unmount()
+  })
+
+  it('shows an application without provider with its scopes instead of the profile-bound views', async () => {
+    global.fetch = vi.fn(url => Promise.resolve({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(url.includes('/catalog')
+        ? [{ id: 'app-k', name: 'Checkout', provider: null, profileId: null }]
+        : !url.startsWith('/api/kua-apps/') ? []
+        : { id: 'app-k', name: 'Checkout', revision: 1, scopes: [{ key: 'kua-scope:1', provider: 'aws', scopeId: '', location: 'us-east-1', label: '' }], warnings: [{ kind: 'scope_unbound', scopeKey: 'kua-scope:1' }], local: { bindings: [], legacy: null } }),
+    }))
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: 'app-k' },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Multi-provider')
+    expect(wrapper.text()).toContain('Accounts and scopes')
+    expect(wrapper.find('.kuapp-scopes-warning').exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ArchitectureView' }).exists()).toBe(false)
+    expect(global.fetch.mock.calls.some(([url]) => url.includes('/advisor'))).toBe(false)
     wrapper.unmount()
   })
 
@@ -76,7 +118,7 @@ describe('KUApps navigation', () => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       headers: { get: () => 'application/json' },
-      json: () => Promise.resolve([{ id: 'app-a', name: 'Orders', provider: 'generic', architectureProjectIds: ['project-a'] }]),
+      json: () => Promise.resolve([{ id: 'app-a', name: 'Orders', provider: 'generic', profileId: 'local', architectureProjectIds: ['project-a'] }]),
     }))
 
     const wrapper = mount(KUAppsView, {
