@@ -235,6 +235,37 @@ describe('KUApps navigation', () => {
     wrapper.unmount()
   })
 
+  it('sends Collect now from the Overview to the Signals confirmation', async () => {
+    const requestCollect = vi.fn()
+    const SignalsStub = defineComponent({
+      props: ['section'],
+      setup(_, { expose }) {
+        expose({ requestCollect })
+        return () => h('div', { class: 'signals-stub' })
+      },
+    })
+    const application = { id: 'app-a', name: 'orders', provider: 'aws', profileId: 'local:prod' }
+    global.fetch = vi.fn(url => {
+      const text = String(url)
+      const body = text.includes('/catalog') ? [application]
+        : text.includes('/topology') ? { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: null }
+          : text.includes('/overview') ? { health: { status: 'unknown', signals: [] }, latestRun: null }
+            : text.includes('/registry') ? { resources: [], relationships: [] } : []
+      return Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) })
+    })
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: SignalsStub, KUAppScopes: true, AdvisorPanel: true } },
+    })
+    await flushPromises()
+    await wrapper.get('[data-test="summary-collect"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.kuapps-observability-workspace').exists()).toBe(true)
+    expect(requestCollect).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('does not use the global profile for an unverified application scope', async () => {
     const application = { id: 'app-unverified', name: 'Unverified', provider: null, profileId: null }
     const detail = {

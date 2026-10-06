@@ -69,45 +69,30 @@
           <CloudBackupsModal v-if="selectedApplication" :show="cloudBackupsOpen" :profile-id="selectedProfileId || ''" :application-id="selectedApplication.id" :application-name="selectedApplication.name" @close="cloudBackupsOpen = false" />
 
           <div v-if="workspaceView === 'overview'" class="kuapps-overview-content">
-            <section v-if="selectedApplication" class="kuapps-overview-strip">
-              <div><span>{{ t('kuapps.resources') }}</span><strong>{{ applicationRegistry.resources.length }}</strong></div>
-              <div><span>{{ t('kuapps.relationships') }}</span><strong>{{ applicationRegistry.relationships.length }}</strong></div>
-              <div><span>{{ t('kuapps.scopes.title') }}</span><strong>{{ selectedApplicationDetail?.scopes?.length || 0 }}</strong></div>
-              <button class="btn sm" :disabled="registryLoading" @click="loadApplicationRegistry()"><i data-lucide="refresh-cw"></i>{{ t('kuapps.refreshRegistry') }}</button>
-            </section>
+            <KUAppSummary
+              :key="`summary:${selectedApplicationId}`"
+              :application="selectedApplication"
+              :provider="apmProvider"
+              :registry="applicationRegistry"
+              :scope-warnings="scopeWarnings"
+              :review-count="reviewCount"
+              @open-tab="selectWorkspaceTab"
+              @collect="collectFromSummary"
+              @suggestions="analysisSuggestionCount = $event"
+            />
             <div v-if="registryError" class="kuapps-registry-error">{{ registryError }}</div>
             <div v-if="selectedApplication && !providerLess" class="kuapps-advisor">
-            <AdvisorPanel
-              lens="product"
-              :report="productAdvisor"
-              :loading="productAdvisorLoading"
-              :error="productAdvisorError"
-              refreshable
-              default-collapsed
-              storage-key="advisor.kuapps"
-              @refresh="loadProductAdvisor"
-              @posture-changed="loadProductAdvisor"
-            />
-            </div>
-            <section v-if="selectedApplication" class="kuapps-observability-summary">
-              <header><div><span class="kuapps-kicker">{{ t('kuapps.overview') }}</span><h3>{{ t('kuapps.observability') }}</h3></div></header>
-              <ApmObservabilityView
-                v-if="canOpenApplicationObservability"
-                :key="`${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
-                :provider="apmProvider"
-                :profile-id="apmProfileId"
-                :application-id="selectedApplicationId"
-                :hide-application-list="true"
-                overview-only
-                :focus-resource="selectedResource ? selectedResourceFocus : props.focusResource"
-                @open-architecture="openArchitecture"
-                @application-context="forwardApplicationContext"
-                @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+              <AdvisorPanel
+                lens="product"
+                :report="productAdvisor"
+                :loading="productAdvisorLoading"
+                :error="productAdvisorError"
+                refreshable
+                storage-key="advisor.kuapps"
+                @refresh="loadProductAdvisor"
+                @posture-changed="loadProductAdvisor"
               />
-              <div v-else class="kuapps-observability-unavailable">
-                <i data-lucide="square-activity"></i><strong>{{ t('kuapps.signalsUnavailable') }}</strong><span>{{ t('kuapps.signalsStatus.pending') }}</span>
-              </div>
-            </section>
+            </div>
           </div>
 
           <section v-else-if="workspaceView === 'settings'" class="kuapps-settings-workspace">
@@ -227,6 +212,7 @@
           <section v-else-if="workspaceView === 'signals'" class="kuapps-observability-workspace">
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
+              ref="signalsRef"
               :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
               section="signals"
               :provider="apmProvider"
@@ -356,6 +342,7 @@ import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import KUAppScopes from './KUAppScopes.vue'
+import KUAppSummary from './KUAppSummary.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -415,7 +402,8 @@ const workspaceViews = [
 const scopeWarnings = computed(() => (selectedApplicationDetail.value?.warnings || []).filter(warning => warning.scopeKey))
 const suggestedRelationships = computed(() => applicationRegistry.value.relationships.filter(relationship => relationship.status === 'suggested'))
 // What the Review tab holds: relationships to decide and scopes without a usable profile.
-const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length)
+const analysisSuggestionCount = ref(0)
+const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length + analysisSuggestionCount.value)
 
 function scopeLabel(scopeKey) {
   const scope = (selectedApplicationDetail.value?.scopes || []).find(item => item.key === scopeKey)
@@ -761,6 +749,14 @@ function openObservability(application, focus = null) {
     resource.id === node?.registryResourceId || resource.nativeIdentifier === node?.nativeId || resource.nativeIdentifier === node?.arn)
   if (match) selectedResourceId.value = match.id
   selectView('observability')
+}
+
+// Collect now keeps its cost confirmation: it opens Signals and asks there.
+const signalsRef = ref(null)
+async function collectFromSummary() {
+  workspaceView.value = 'signals'
+  for (let attempt = 0; attempt < 20 && !signalsRef.value?.requestCollect; attempt += 1) await nextTick()
+  signalsRef.value?.requestCollect?.()
 }
 
 function startCreate() {
