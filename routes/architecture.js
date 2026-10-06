@@ -54,6 +54,13 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     return project;
   }
 
+  function applicationAvailableToProfile(application, profile) {
+    if (!application || !profile) return false;
+    if (application.profileId === profile) return true;
+    return (apmDatabase?.listScopeBindings(application.id) || []).some(binding =>
+      binding.profileId === profile && binding.status === 'verified');
+  }
+
   function handleError(res, error) {
     const status = error.statusCode || error.$metadata?.httpStatusCode ||
       (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
@@ -69,7 +76,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
       : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
     if (!registry) return null;
-    applications.filter(application => application.profileId === project.profileId)
+    applications.filter(application => applicationAvailableToProfile(application, project.profileId))
       .forEach(application => registry.reconcile(application));
     return applications.length ? database.getGraph(project.id) : null;
   }
@@ -97,7 +104,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const applicationId = String(req.query.applicationId || '').trim();
     if (applicationId) {
       const application = apmDatabase?.getApplication(applicationId);
-      if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
+      if (!applicationAvailableToProfile(application, profile)) return res.status(404).json({ error: 'KUA Application not found' });
       const projectIds = apmDatabase?.listArchitectureProjectsByApplicationId
         ? apmDatabase.listArchitectureProjectsByApplicationId(application.id)
         : [application.architectureProjectId].filter(Boolean);
@@ -111,7 +118,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const profile = profileId(req, res);
     if (!profile) return;
     if (!apmDatabase) return res.json([]);
-    res.json(apmDatabase.listApplications({ profileId: profile }));
+    res.json(apmDatabase.listApplications().filter(application => applicationAvailableToProfile(application, profile)));
   });
 
   // Used only by the first Architecture screen, before a KUA Application has
@@ -128,7 +135,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const profile = profileId(req, res);
     if (!profile) return;
     const application = apmDatabase?.getApplication(req.params.applicationId);
-    if (!application || application.profileId !== profile) return res.status(404).json({ error: 'KUA Application not found' });
+    if (!applicationAvailableToProfile(application, profile)) return res.status(404).json({ error: 'KUA Application not found' });
     const overview = apmDatabase.getOverview(application.id);
     const report = adviseProduct({
       application,
@@ -149,7 +156,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     try {
       const applicationId = String(req.body?.applicationId || '').trim();
       const application = applicationId ? apmDatabase?.getApplication(applicationId) : null;
-      if (applicationId && (!application || application.profileId !== profile)) {
+      if (applicationId && !applicationAvailableToProfile(application, profile)) {
         return res.status(404).json({ error: 'KUA Application not found' });
       }
       const project = database.createProject({ ...req.body, profileId: profile });
@@ -173,7 +180,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const applications = apmDatabase?.listApplicationsByArchitectureProjectId
       ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
       : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
-    const scopedApplications = applications.filter(application => application.profileId === project.profileId);
+    const scopedApplications = applications.filter(application => applicationAvailableToProfile(application, project.profileId));
     res.json({ application: scopedApplications[0] || null, applications: scopedApplications });
   });
 
@@ -183,7 +190,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const applications = apmDatabase?.listApplicationsByArchitectureProjectId
       ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
       : [apmDatabase?.getApplicationByArchitectureProjectId(project.id)].filter(Boolean);
-    res.json(applications.filter(application => application.profileId === project.profileId));
+    res.json(applications.filter(application => applicationAvailableToProfile(application, project.profileId)));
   });
 
   router.post('/projects/:projectId/applications', (req, res) => {
@@ -192,7 +199,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     try {
       const applicationId = String(req.body?.applicationId || '').trim();
       const application = apmDatabase?.getApplication(applicationId);
-      if (!application || application.profileId !== project.profileId) {
+      if (!applicationAvailableToProfile(application, project.profileId)) {
         return res.status(404).json({ error: 'KUA Application not found' });
       }
       const updated = apmDatabase.updateArchitectureProjectLink(application.id, project.id);
@@ -206,7 +213,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     if (!project) return;
     try {
       const application = apmDatabase?.getApplication(req.params.applicationId);
-      if (!application || application.profileId !== project.profileId) return res.status(404).json({ error: 'KUA Application not found' });
+      if (!applicationAvailableToProfile(application, project.profileId)) return res.status(404).json({ error: 'KUA Application not found' });
       const updated = apmDatabase.unlinkArchitectureProject(application.id, project.id);
       registry?.reconcile(updated);
       res.status(200).json({ application: updated });

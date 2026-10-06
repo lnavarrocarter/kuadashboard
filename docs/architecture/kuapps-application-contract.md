@@ -116,6 +116,19 @@ A different identity is `mismatch`. A failed read (expired session, missing prof
 
 KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Team publishing skips these applications until the bundle carries scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
 
+## Resource membership
+
+`ApplicationRegistryService` is the one place that attaches, updates and detaches a resource of an application (#150). The APM routes delegate to it, so Observability, Architecture and KUApps get the same behaviour.
+
+- **Attach is idempotent.** Attaching the same resource again (same type and key) answers `200` with the existing resource instead of `201`, and creates no duplicate membership, node or relationship.
+- **Revision checks.** Attach, update and detach accept `expectedRevision`. A stale value answers `409 REVISION_CONFLICT` and writes nothing. A successful attach or detach moves the application `revision`.
+- **Partial failure is recoverable.** The resource is stored in one transaction. If projecting it into an Architecture view fails, the registry sync status records the error and the next reconciliation finishes the work without duplicates.
+- **Detach is not delete.** Detaching removes the resource from the application and records the detachment by portable identity, so reconciliation does not attach it again from an Architecture node. The node stays in the diagram, and nothing is deleted in the cloud. Attaching the resource again clears the detachment.
+- **Human decisions survive.** Relationships the user confirmed or rejected keep their status through attach, detach and reconciliation.
+- **Verified scope profiles.** A profile bound and verified for one of the application's scopes can open the application's Architecture views, also for an application without a provider.
+
+`GET /api/kua-apps/applications/:id/registry` lists the application's canonical resources and relationships with names, without local profile ids.
+
 ## Migration report
 
 `GET /api/kua-apps/migration-report` is read-only and lists what needs a decision. It names applications, views and scopes, never profiles.

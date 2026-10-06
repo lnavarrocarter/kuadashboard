@@ -78,6 +78,24 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   router.get('/applications', (_req, res) => send(res, 200, () => applications.list()));
   router.post('/applications', (req, res) => send(res, 201, () => applications.create(req.body || {})));
   router.get('/applications/:applicationId', (req, res) => send(res, 200, () => applications.get(req.params.applicationId)));
+  router.get('/applications/:applicationId/registry', (req, res) => {
+    try {
+      const application = apmDatabase.getApplication(req.params.applicationId);
+      if (!application) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404 });
+      const resources = apmDatabase.listRegistryResources(application.id);
+      const resourcesById = new Map(resources.map(resource => [resource.id, resource]));
+      res.json({
+        resources: resources.map(({ id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt }) => ({
+          id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt,
+        })),
+        relationships: apmDatabase.listRegistryRelationships(application.id).map(relationship => ({
+          ...relationship,
+          sourceName: resourcesById.get(relationship.sourceResourceId)?.displayName || '',
+          targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
+        })),
+      });
+    } catch (error) { handleError(res, error); }
+  });
   router.patch('/applications/:applicationId', (req, res) => send(res, 200, () =>
     applications.update(req.params.applicationId, req.body || {}, revisionOf(req))));
   router.delete('/applications/:applicationId', (req, res) => send(res, 200, () =>
