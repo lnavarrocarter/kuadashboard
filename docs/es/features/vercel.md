@@ -131,6 +131,34 @@ Lista las funciones serverless y edge incluidas en un deployment seleccionado.
 
 ---
 
+## Resumen
+
+**Overview** es la primera entrada de la barra lateral y la vista con la que abre Vercel. Resume la cuenta o el team del perfil activo a partir de un solo análisis:
+
+- **Salud:** saludable, requiere atención (proyectos pausados, dominios sin verificar o datos que no se pudieron leer) o producción fallando (un proyecto cuyo último deploy a producción falló).
+- **Proyectos** (pausados, con Git), **Producción** (sanos, fallidos, construyendo, sin producción), **Tasa de fallos reciente** (últimos 10 deployments por proyecto) y **Dominios** (sin verificar).
+- **Proyectos por último deployment:** framework, Node.js, estado de producción, último deploy, fallos recientes y dominios de cada proyecto; el nombre lo deja como proyecto activo. Las variables de entorno se cuentan por tipo.
+
+El análisis se comparte con el Advisor y queda en caché 15 minutos; **Analizar de nuevo** fuerza uno nuevo.
+
+### Advisor
+
+El Advisor, dentro del Resumen, revisa cada proyecto de la cuenta o el team contra buenas prácticas. Requiere el plan Pro o Team; en Free muestra cuántos hallazgos hay.
+
+| Categoría | Chequeos |
+|---|---|
+| Seguridad | Credenciales en variables de tipo **Plain** · secretos de producción compartidos con todas las previews · secretos de producción que no son **Sensitive** · previews sin Deployment Protection · Git Fork Protection apagado |
+| Infraestructura | Último deploy a producción fallido · dominios sin verificar · proyectos pausados · proyectos sin deployment de producción |
+| Arquitectura | Proyectos que despliegan directo a producción, sin previews |
+| Desarrollo | Node.js fuera de soporte · la mitad o más de los deployments recientes fallaron · proyectos sin Git conectado |
+
+- **Qué lee:** los proyectos (hasta 100), sus últimos 10 deployments, sus dominios y el **nombre, tipo y target** de sus variables de entorno. Los valores se descartan al llegar y nunca se guardan. Una variable cuenta como credencial por su nombre (password, secret, token, API key…).
+- **Costo:** lecturas gratuitas de la API de Vercel, unas 3 por proyecto. El análisis queda en caché 15 minutos; **Analizar de nuevo** fuerza uno nuevo.
+- **Decisiones e historial:** acepta un riesgo o silencia un chequeo que no aplica, revisa la postura en el tiempo y programa el análisis, igual que en los Advisors de AWS y GCP. Un perfil agregado solo con un token (`local:<token>`) se guarda con un hash del token y no se puede programar.
+- **Agentes IA:** la herramienta MCP `vercel_advisor` devuelve los mismos hallazgos (ver [Agentes IA](./ai-agents.md)).
+
+---
+
 ## Cambiar de Perfil y Proyecto
 
 El header funciona como **Cluster → Namespace** en Kubernetes: eliges un **perfil** y después un **proyecto**.

@@ -33,6 +33,8 @@
  *   GET  /edge-config/:id/items                         → list items in an edge config store
  *   GET  /domains/:domain/dns                           → list DNS records for a domain
  *   GET  /projects/:projectId/cron                      → list cron jobs for a project
+ *   GET  /overview                                      → account summary + Advisor (one scan, cached 15 min, ?refresh=1)
+ *   GET  /advisor                                       → good-practice checks only (same scan and cache)
  *
  * OAuth endpoints (requires VERCEL_OAUTH_CLIENT_ID + VERCEL_OAUTH_CLIENT_SECRET in process.env):
  *   GET  /oauth/start                                  → redirect to Vercel authorization URL
@@ -45,6 +47,9 @@ const express      = require('express');
 const crypto       = require('crypto');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
+const { adviseVercel, collectVercel } = require('../lib/advisor/vercel');
+const { summarizeVercel } = require('../lib/vercelOverview');
+const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/posture');
 
 const router = express.Router();
 const VERCEL_API   = 'https://api.vercel.com';
@@ -602,6 +607,79 @@ router.get('/projects/:projectId/cron', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /overview and GET /advisor ───────────────────────────────────────────
+// One scan of free Vercel API reads (lib/advisor/vercel.js collectVercel) feeds
+// both the Overview summary (lib/vercelOverview.js) and the Advisor checks.
+// Cached 15 min per profile and team; ?refresh=1 forces a new scan, and
+// concurrent requests share the scan in flight.
+
+const SCAN_TTL_MS = 15 * 60 * 1000;
+const scanCache = new Map();
+const scansInFlight = new Map();
+
+/** Profile id safe to store: a "local:<token>" id carries the token, so it becomes a hash of it. */
+function advisorProfileKey(profileId) {
+  if (!profileId.startsWith('local:')) return profileId;
+  return `local-${crypto.createHash('sha256').update(profileId).digest('hex').slice(0, 16)}`;
+}
+
+function postureStore() {
+  try { return getPostureStore(); } catch (err) { console.warn('[advisor] posture:', err.message); return null; }
+}
+
+/** Acceptances apply on every answer (also cached ones); history records fresh scans only. */
+function finalizeVercelAdvisor({ report, profileKey, teamId, fresh }) {
+  const scopes = scopeKeys('vercel', { profileId: profileKey, teamId: teamId || '' });
+  return finalizeAdvisor(report, { scopes, store: postureStore(), fresh });
+}
+
+/** Returns { scan: { at, overview, report }, profileKey, teamId, fresh }. */
+async function scanVercelAccount(profileId, { refresh = false, resolveAuth = resolveVercelAuth } = {}) {
+  const { token, teamId } = await resolveAuth(profileId);
+  const profileKey = advisorProfileKey(profileId);
+  const cacheKey = `${profileKey}|${teamId || ''}`;
+  const cached = scanCache.get(cacheKey);
+  if (cached && !refresh && Date.now() - cached.at < SCAN_TTL_MS) return { scan: cached, profileKey, teamId, fresh: false };
+  if (!scansInFlight.has(cacheKey)) {
+    const pending = (async () => {
+      const collected = await collectVercel({ fetchJson: path => vercelFetch(withTeam(path, teamId), token), endpoints: VERCEL_ENDPOINTS });
+      const scan = { at: Date.now(), overview: summarizeVercel(collected), report: adviseVercel({ ...collected, teamId }) };
+      scanCache.set(cacheKey, scan);
+      return scan;
+    })().finally(() => scansInFlight.delete(cacheKey));
+    scansInFlight.set(cacheKey, pending);
+    return { scan: await pending, profileKey, teamId, fresh: true };
+  }
+  // Another request started this scan: it records the history.
+  return { scan: await scansInFlight.get(cacheKey), profileKey, teamId, fresh: false };
+}
+
+router.get('/overview', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { scan, profileKey, teamId, fresh } = await scanVercelAccount(profileId, { refresh: req.query.refresh === '1' });
+    res.json({
+      provider: 'vercel',
+      generatedAt: new Date(scan.at).toISOString(),
+      teamId: teamId || null,
+      ...scan.overview,
+      unavailable: scan.report.unavailable,
+      advisor: finalizeVercelAdvisor({ report: scan.report, profileKey, teamId, fresh }),
+      fromCache: !fresh,
+    });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/advisor', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const { scan, profileKey, teamId, fresh } = await scanVercelAccount(profileId, { refresh: req.query.refresh === '1' });
+    res.json({ ...finalizeVercelAdvisor({ report: scan.report, profileKey, teamId, fresh }), ...(fresh ? {} : { fromCache: true }) });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── OAuth: GET /oauth/start ──────────────────────────────────────────────────
 //
 // Redirects the browser to Vercel's OAuth authorization URL.
@@ -733,3 +811,5 @@ module.exports.vercelFetch = vercelFetch;
 module.exports.cronDefinitions = cronDefinitions;
 module.exports.resolveVercelAuth = resolveVercelAuth;
 module.exports.withTeam = withTeam;
+module.exports.advisorProfileKey = advisorProfileKey;
+module.exports.scanVercelAccount = scanVercelAccount;

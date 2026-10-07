@@ -42,6 +42,9 @@ export const useVercelStore = defineStore('vercel', () => {
   const selectedDeploymentForChecks    = ref(null)
   const logsDeployment                 = ref(null)
   const deploymentTarget               = ref('')
+  const overview        = ref(null)   // GET /overview: account summary + Advisor, apart from the table loading state
+  const overviewLoading = ref(false)
+  const overviewError   = ref('')
   const loading         = ref(false)
   const projectsLoading = ref(false)
   const error           = ref(null)
@@ -121,6 +124,8 @@ export const useVercelStore = defineStore('vercel', () => {
     selectedDeploymentForChecks.value    = null
     logsDeployment.value                 = null
     deploymentTarget.value               = ''
+    overview.value                       = null
+    overviewError.value                  = ''
     error.value           = null
   }
 
@@ -174,6 +179,20 @@ export const useVercelStore = defineStore('vercel', () => {
     const remembered = rememberedProject(activeProfileId.value)
     const project = remembered && projects.value.find(p => p.id === remembered)
     if (project) selectProject(project)
+  }
+
+  // The backend caches the scan 15 min; refresh forces a new one (free Vercel API reads).
+  async function fetchOverview({ refresh = false } = {}) {
+    const requestId = profileChangeRequestId
+    overviewLoading.value = true; overviewError.value = ''
+    try {
+      const data = await apiFetch(`/api/cloud/vercel/overview${refresh ? '?refresh=1' : ''}`, { headers: headers() })
+      if (requestId === profileChangeRequestId) overview.value = data
+    } catch (e) {
+      if (requestId === profileChangeRequestId) overviewError.value = e?.message || String(e)
+    } finally {
+      if (requestId === profileChangeRequestId) overviewLoading.value = false
+    }
   }
 
   async function fetchProjects() {
@@ -431,6 +450,9 @@ export const useVercelStore = defineStore('vercel', () => {
     selectedDeploymentForChecks,
     logsDeployment,
     deploymentTarget,
+    overview,
+    overviewLoading,
+    overviewError,
     loading,
     error,
     // actions
@@ -439,6 +461,7 @@ export const useVercelStore = defineStore('vercel', () => {
     selectProject,
     fetchTeams,
     fetchProjects,
+    fetchOverview,
     selectProjectById,
     fetchDeployments,
     fetchDomains,

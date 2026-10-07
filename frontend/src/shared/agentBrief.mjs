@@ -74,6 +74,7 @@ function scopeContext(t, scope) {
     [t('agentBrief.field.provider')]: scope.provider,
     [t('agentBrief.field.region')]: scope.region,
     [t('agentBrief.field.project')]: scope.projectId,
+    [t('agentBrief.field.team')]: scope.teamId,
     [t('agentBrief.field.namespace')]: scope.namespace,
     [t('agentBrief.field.application')]: scope.applicationId,
     [t('agentBrief.field.excludes')]: scope.excludes,

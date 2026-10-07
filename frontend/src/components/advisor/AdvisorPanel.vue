@@ -329,7 +329,7 @@ const scheduleBusy = ref(false)
 const scheduleError = ref('')
 const scopeKind = computed(() => {
   const kind = String(props.report?.posture?.historyScope || '').split(':')[0]
-  return ['aws', 'gcp', 'kubernetes', 'product'].includes(kind) ? kind : ''
+  return ['aws', 'gcp', 'vercel', 'kubernetes', 'product'].includes(kind) ? kind : ''
 })
 const scheduleStatus = computed(() => {
   const current = schedule.value

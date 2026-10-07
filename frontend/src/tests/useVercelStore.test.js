@@ -141,3 +141,38 @@ describe('useVercelStore — race condition protection', () => {
     expect(store.domains).toEqual([{ name: 'domain-b.com' }])
   })
 })
+
+describe('useVercelStore — Overview', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('loads the overview with its Advisor, forcing a scan on refresh', async () => {
+    const apiFetch = vi.fn(async () => ({ health: 'healthy', advisor: { findings: [] } }))
+    vi.spyOn(ApiModule, 'useApi').mockReturnValue({ apiFetch })
+    const store = useVercelStore()
+    store.setActiveProfile('profile-1')
+
+    await store.fetchOverview({ refresh: true })
+
+    expect(apiFetch.mock.calls[0][0]).toBe('/api/cloud/vercel/overview?refresh=1')
+    expect(apiFetch.mock.calls[0][1].headers).toEqual({ 'X-Profile-Id': 'profile-1' })
+    expect(store.overview).toEqual({ health: 'healthy', advisor: { findings: [] } })
+    expect(store.overviewLoading).toBe(false)
+  })
+
+  it('drops an overview that arrives after the profile changed', async () => {
+    const resolvers = []
+    vi.spyOn(ApiModule, 'useApi').mockReturnValue({
+      apiFetch: vi.fn(() => new Promise(resolve => resolvers.push(resolve))),
+    })
+    const store = useVercelStore()
+    store.setActiveProfile('profile-1')
+    const pending = store.fetchOverview()
+    store.setActiveProfile('profile-2')
+    resolvers[0]({ health: 'critical' })
+    await pending
+    expect(store.overview).toBe(null)
+  })
+})
