@@ -84,6 +84,12 @@ test('overview and advisor share one cached scan; refresh scans again', async t 
   assert.equal(calls, 8);
 });
 test('project Advisor caches metadata and never returns environment variable values', async t => {
+  const previousPlan = process.env.KUA_PLAN;
+  process.env.KUA_PLAN = 'pro';
+  t.after(() => {
+    if (previousPlan === undefined) delete process.env.KUA_PLAN;
+    else process.env.KUA_PLAN = previousPlan;
+  });
   const upstreamPaths = [];
   t.mock.method(global, 'fetch', async url => {
     const path = new URL(url).pathname;

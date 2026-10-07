@@ -1173,8 +1173,11 @@ test('API returns the product advisor of an application, scoped by profile', asy
 });
 
 test('product advisor reads cached AWS and Kubernetes logs from each resource scope', async () => {
-  const subject = await fixture();
+  const previousPlan = process.env.KUA_PLAN;
+  process.env.KUA_PLAN = 'pro';
+  let subject;
   try {
+    subject = await fixture();
     const application = subject.database.createApplication({ name: 'checkout', environment: 'production', thresholds: { errorRatePercent: 2 } });
     const awsScope = normalizeScope({ provider: 'aws', scopeId: '111111111111', location: 'us-east-1' });
     const kubeScope = normalizeScope({ provider: 'kubernetes', scopeId: 'orders-prod' });
@@ -1238,7 +1241,9 @@ test('product advisor reads cached AWS and Kubernetes logs from each resource sc
     assert.equal(advisor.body.technical.dora.available, false);
     assert.ok(advisor.body.recommendations.some(item => item.id === 'error_budget_and_technical_risk'));
   } finally {
-    await subject.close();
+    await subject?.close();
+    if (previousPlan === undefined) delete process.env.KUA_PLAN;
+    else process.env.KUA_PLAN = previousPlan;
   }
 });
 
