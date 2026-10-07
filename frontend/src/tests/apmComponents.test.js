@@ -149,6 +149,10 @@ describe('APM collection controls', () => {
       if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
       if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [{ id: 'api', type: 'lambda', name: 'api', enabled: true }], edges: [] })
       if (url.endsWith('/forecast')) return response({ lambdaCount: 1, monthlyRequestsMaximum: 0 })
+      if (url.includes('/log-series?')) return response({
+        points: [],
+        coverage: { lastSyncAt: null, limitedToDays: 7, uncachedResources: [], unavailableScopeResources: [] },
+      })
       if (url.includes('/series?')) return response([])
       return response({})
     })
