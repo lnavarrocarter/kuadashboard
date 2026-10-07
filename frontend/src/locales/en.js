@@ -904,6 +904,7 @@ export default {
   'gcpv.lit.noWorkflows': 'No Cloud Workflows found.',
   'gcpv.lit.noVms': 'No Compute Engine VMs found.',
   'gcpv.lit.noDns': 'No DNS zones found.',
+  'gcpv.kinds': 'Entity kinds',
   'gcpv.lit.noFirestore': 'No Firestore databases found.',
   'gcpv.lit.noBuckets': 'No GCS buckets found.',
   'gcpv.lit.noGke': 'No GKE clusters found.',

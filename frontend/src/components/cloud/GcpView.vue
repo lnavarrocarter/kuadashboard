@@ -1092,7 +1092,7 @@
               <td><span :class="db.state === 'READY' ? 'status-ok' : 'status-warn'">{{ db.state }}</span></td>
               <td class="text-dim">{{ db.created ? new Date(db.created).toLocaleDateString() : '--' }}</td>
               <td>
-                <button class="btn sm" @click="openFsCollections(db)"><i data-lucide="database"></i> {{ t('gcpv.collections') }}</button>
+                <button class="btn sm" @click="openFsCollections(db)"><i data-lucide="database"></i> {{ db.type === 'DATASTORE_MODE' ? t('gcpv.kinds') : t('gcpv.collections') }}</button>
               </td>
             </tr>
           </tbody>
@@ -1363,7 +1363,7 @@
             <option value="24">{{ t('awsv.last24h') }}</option>
             <option value="48">{{ t('gcpv.last48h') }}</option>
           </select>
-          <button class="btn sm primary" :disabled="gcpStore.tabs.logging.loading" @click="runLogQuery">
+          <button class="btn sm primary" :disabled="gcpStore.tabs.logging.loading || gcpStore.tabs.logging.loadingMore" @click="runLogQuery">
             {{ gcpStore.tabs.logging.loading ? t('gcpv.lit.querying') : t('gcpv.lit.query') }}
           </button>
         </div>
@@ -1377,6 +1377,11 @@
             <span class="text-dim" style="flex-shrink:0;font-size:10px;width:90px;overflow:hidden;text-overflow:ellipsis">{{ e.logName }}</span>
             <span class="gcp-log-msg">{{ e.message }}</span>
           </div>
+        </div>
+        <div v-if="gcpStore.tabs.logging.nextPageToken" class="fs-load-more">
+          <button class="btn sm" :disabled="gcpStore.tabs.logging.loadingMore" @click="gcpStore.queryLogs('', 100, 3, { append: true })">
+            {{ gcpStore.tabs.logging.loadingMore ? t('state.loading') : t('gcpv.loadMore') }}
+          </button>
         </div>
       </div>
 
@@ -1728,9 +1733,9 @@
           <table v-else class="cloud-table">
             <thead><tr><th>{{ t('gcpv.collectionId') }}</th><th>{{ t('gcpv.estDocs') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
             <tbody>
-              <tr v-for="col in fsColList" :key="col.id">
-                <td>{{ col.id }}</td>
-                <td class="text-dim">{{ col.count != null ? col.count.toLocaleString() : '--' }}</td>
+              <tr v-for="col in fsColList" :key="`${col.namespace || ''}:${col.id}`">
+                <td>{{ col.id }}<span v-if="col.namespace" class="text-dim"> ({{ col.namespace }})</span></td>
+                <td class="text-dim">{{ col.docCount != null ? col.docCount.toLocaleString() : '--' }}</td>
                 <td>
                   <button class="btn sm" @click="openFsDocuments(fsColDb, col)"><i data-lucide="file-text"></i> {{ t('awsv.browse') }}</button>
                 </td>
@@ -3436,7 +3441,7 @@ async function openFsDocuments(db, col, pageToken = null) {
   }
   fsDocsLoading.value = true
   try {
-    const res = await gcpStore.fetchFirestoreDocuments(db.name, col.id, pageToken ? { pageToken } : {})
+    const res = await gcpStore.fetchFirestoreDocuments(db.name, col.id, { ...(pageToken ? { pageToken } : {}), namespace: col.namespace })
     fsDocsList.value.push(...(res.docs || []))
     fsDocsNext.value = res.nextPageToken || null
   } catch (e) { fsDocsError.value = e.message }

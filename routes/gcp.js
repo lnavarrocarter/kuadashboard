@@ -30,6 +30,10 @@
  */
 
 const express  = require('express');
+const { createDatastoreReader } = require('../lib/gcpDatastore');
+const { createKmsReader } = require('../lib/gcpKms');
+const { listWorkflows, mapWorkflow } = require('../lib/gcpWorkflows');
+const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
 const { getStore } = require('../lib/credentialStore');
@@ -555,7 +559,7 @@ async function gcpOverview(req, res) {
       { id: 'secrets', label: 'Secret Manager', tab: 'secrets', load: () => restList(`https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`, 'secrets') },
       { id: 'artifact', label: 'Artifact Registry', tab: 'artifact', load: () => restList(`https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/-/repositories`, 'repositories') },
       { id: 'bigquery', label: 'BigQuery', tab: 'bigquery', load: () => restList(`https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/datasets`, 'datasets') },
-      { id: 'workflows', label: 'Workflows', tab: 'workflows', load: () => restList(`https://workflows.googleapis.com/v1/projects/${projectId}/locations/-/workflows`, 'workflows') },
+      { id: 'workflows', label: 'Workflows', tab: 'workflows', load: () => listWorkflows(gcpFetch, authCtx) },
       { id: 'dns', label: 'Cloud DNS', tab: 'dns', load: () => restList(`https://dns.googleapis.com/dns/v1/projects/${projectId}/managedZones`, 'managedZones') },
       { id: 'firestore', label: 'Firestore', tab: 'firestore', load: () => restList(`https://firestore.googleapis.com/v1/projects/${projectId}/databases`, 'databases') },
       { id: 'spanner', label: 'Spanner', tab: 'spanner', load: () => restList(`https://spanner.googleapis.com/v1/projects/${projectId}/instances`, 'instances') },
@@ -567,7 +571,7 @@ async function gcpOverview(req, res) {
       { id: 'cloudrunJobs', label: 'Cloud Run Jobs', tab: 'cloudrunJobs', load: () => restList(`https://run.googleapis.com/v2/projects/${projectId}/locations/-/jobs`, 'jobs') },
       { id: 'pubsubSubs', label: 'Pub/Sub Subs', tab: 'pubsubSubs', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions`, 'subscriptions') },
       { id: 'vpc', label: 'VPC Networks', tab: 'vpc', load: () => restList(`https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`, 'items') },
-      { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => restList(`https://cloudkms.googleapis.com/v1/projects/${projectId}/locations/-/keyRings`, 'keyRings') },
+      { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => createKmsReader(gcpFetch, authCtx).keyRings() },
     ];
     const settled = await Promise.allSettled(collectors.map(collector => collector.load()));
     const collectedRows = new Map(collectors.map((collector, index) => {
@@ -769,7 +773,7 @@ router.get('/cloudrun/:region/:service/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -807,7 +811,7 @@ router.get('/gke/:location/:cluster/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -908,7 +912,7 @@ router.get('/compute/vms/:zone/:name/serial-log', async (req, res) => {
  * Make an authenticated GCP REST call.
  * authCtx = { auth, accessToken? } as returned by resolveGcpAuth().
  */
-async function gcpFetch(url, authCtx, method = 'GET', body = undefined) {
+async function gcpFetch(url, authCtx, method = 'GET', body = undefined, requestHeaders = {}) {
   let token = authCtx.accessToken;
   if (!token) {
     const client = await authCtx.auth.getClient();
@@ -917,7 +921,7 @@ async function gcpFetch(url, authCtx, method = 'GET', body = undefined) {
   }
   const opts = {
     method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { ...requestHeaders, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res  = await fetch(url, opts);
@@ -1017,7 +1021,7 @@ router.get('/sql/:instance/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -1270,7 +1274,7 @@ router.get('/functions/:location/:name/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -1679,20 +1683,7 @@ router.get('/workflows', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://workflows.googleapis.com/v1/projects/${projectId}/locations/-/workflows`,
-      authCtx
-    );
-    res.json((data.workflows || []).map(w => ({
-      name:        w.name?.split('/').pop(),
-      location:    w.name?.split('/')[5],
-      state:       w.state,
-      description: w.description || '',
-      updated:     w.updateTime,
-      created:     w.createTime,
-      serviceAccount: w.serviceAccount?.split('/').pop() || w.serviceAccount || '',
-      labels:      w.labels || {},
-    })));
+    res.json((await listWorkflows(gcpFetch, authCtx)).map(mapWorkflow));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1776,7 +1767,7 @@ router.get('/workflows/:location/:name/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -1875,6 +1866,10 @@ router.get('/firestore/databases/:db/collections', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    const database = await gcpFetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}`, authCtx);
+    if (database.type === 'DATASTORE_MODE') {
+      return res.json(await createDatastoreReader(gcpFetch, authCtx, dbId).collections());
+    }
     const data = await gcpFetch(
       `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents:listCollectionIds`,
       authCtx, 'POST', { pageSize: 100 }
@@ -1919,7 +1914,13 @@ router.get('/firestore/databases/:db/collections/:collection/documents', async (
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
     const pageToken = req.query.pageToken || '';
-    const pageSize  = Math.min(parseInt(req.query.pageSize) || 25, 100);
+    const pageSize  = Math.max(1, Math.min(parseInt(req.query.pageSize) || 25, 100));
+    const database = await gcpFetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${db}`, authCtx);
+    if (database.type === 'DATASTORE_MODE') {
+      return res.json(await createDatastoreReader(gcpFetch, authCtx, db).documents(collection, {
+        pageSize, pageToken, namespace: typeof req.query.namespace === 'string' ? req.query.namespace : '',
+      }));
+    }
     const params    = new URLSearchParams({ pageSize: String(pageSize) });
     if (pageToken) params.append('pageToken', pageToken);
     const data = await gcpFetch(
@@ -2600,39 +2601,15 @@ router.get('/monitoring/uptime-checks', async (req, res) => {
 router.post('/logging/query', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
-  const { filter = '', limit = 100, hours = 3 } = req.body || {};
-  if (typeof filter !== 'string') return res.status(400).json({ error: 'filter must be a string' });
-  const safeLimit = Math.min(Math.max(parseInt(limit) || 100, 1), 500);
-  const safeHours = Math.min(Math.max(parseInt(hours) || 3, 1), 168);
+
   try {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const since = new Date(Date.now() - safeHours * 3600 * 1000).toISOString();
-    const combinedFilter = [
-      filter ? `(${filter})` : '',
-      `timestamp>="${since}"`,
-    ].filter(Boolean).join(' ');
-    const data = await gcpFetch(
-      'https://logging.googleapis.com/v2/entries:list',
-      authCtx, 'POST', {
-        resourceNames: [`projects/${projectId}`],
-        filter: combinedFilter,
-        orderBy: 'timestamp desc',
-        pageSize: safeLimit,
-      }
-    );
-    res.json({
-      entries: (data.entries || []).map(e => ({
-        timestamp:  e.timestamp,
-        severity:   e.severity || 'DEFAULT',
-        resource:   e.resource?.type || '',
-        logName:    e.logName?.split('/').pop() || '',
-        message:    e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : '') || (e.protoPayload ? '[proto]' : ''),
-        labels:     e.labels || {},
-      })),
-      nextPageToken: data.nextPageToken || null,
-    });
+    const query = loggingRequest(projectId, req.body || {});
+    const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', query.body);
+    res.json({ entries: (data.entries || []).map(mapLogEntry), nextPageToken: data.nextPageToken || null,
+      since: query.since, until: query.until });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2698,13 +2675,10 @@ router.get('/kms/keyrings', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://cloudkms.googleapis.com/v1/projects/${projectId}/locations/-/keyRings`,
-      authCtx
-    );
-    const keyrings = (data.keyRings || []).map(k => ({
+    const rings = await createKmsReader(gcpFetch, authCtx).keyRings();
+    const keyrings = rings.map(k => ({
       name:     k.name?.split('/').pop(),
-      location: k.name?.split('/')[5],
+      location: k.name?.split('/')[3],
       created:  k.createTime,
     }));
     res.json(keyrings);
@@ -3166,7 +3140,7 @@ router.get('/compute/vms/:zone/:name/logs', async (req, res) => {
       entries: (data.entries || []).map(e => ({
         timestamp: e.timestamp,
         severity:  e.severity || 'DEFAULT',
-        message:   e.textPayload || (e.jsonPayload ? JSON.stringify(e.jsonPayload) : ''),
+        message:   logMessage(e),
       })),
     });
   } catch (err) { handleErr(res, err); }
@@ -3248,11 +3222,8 @@ router.get('/kms/keyrings/:location/:keyring/keys', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://cloudkms.googleapis.com/v1/projects/${projectId}/locations/${location}/keyRings/${keyring}/cryptoKeys?pageSize=100`,
-      authCtx
-    );
-    const keys = (data.cryptoKeys || []).map(k => ({
+    const cryptoKeys = await createKmsReader(gcpFetch, authCtx).keys(location, keyring);
+    const keys = cryptoKeys.map(k => ({
       name:        k.name?.split('/').pop(),
       purpose:     k.purpose,
       algorithm:   k.primary?.algorithm || null,

@@ -620,6 +620,14 @@ describe('Firestore actions', () => {
     expect(url).toContain('pageSize=25')
   })
 
+  it('fetchFirestoreDocuments() preserves the Datastore namespace during pagination', async () => {
+    mockFetchOk({ docs: [] })
+    await store.fetchFirestoreDocuments('kua-control-plane', 'Users', { namespace: 'tenant/a', pageToken: 'next' })
+    const [url] = global.fetch.mock.calls[0]
+    expect(url).toContain('namespace=tenant%2Fa')
+    expect(url).toContain('pageToken=next')
+  })
+
   it('fetchFirestoreDocuments() works without optional params', async () => {
     mockFetchOk({ documents: [] })
     await store.fetchFirestoreDocuments('(default)', 'orders')
@@ -882,6 +890,29 @@ describe('queryLogs()', () => {
       '/api/cloud/gcp/logging/query',
       expect.objectContaining({ method: 'POST' })
     )
+  })
+
+  it('appends pages using the original filter and exact time window', async () => {
+    const since = '2026-10-07T00:00:00Z'
+    const until = '2026-10-07T03:00:00Z'
+    mockFetchOk({ entries: [{ message: 'first' }], nextPageToken: 'next', since, until })
+    await store.queryLogs('severity>=ERROR', 50, 3)
+    mockFetchOk({ entries: [{ message: 'second' }], nextPageToken: null, since, until })
+    await store.queryLogs('', 100, 3, { append: true })
+    const body = JSON.parse(global.fetch.mock.calls.at(-1)[1].body)
+    expect(body).toEqual({ filter: 'severity>=ERROR', limit: 50, hours: 3, since, until, pageToken: 'next' })
+    expect(store.tabs.logging.data.map(e => e.message)).toEqual(['first', 'second'])
+    expect(store.tabs.logging.nextPageToken).toBeNull()
+    expect(store.tabs.logging.loadingMore).toBe(false)
+  })
+
+  it('clears old errors on a successful retry', async () => {
+    mockFetchError('Logging API disabled', 403)
+    await store.queryLogs('')
+    mockFetchOk({ entries: [], nextPageToken: null })
+    await store.queryLogs('')
+    expect(store.tabs.logging.error).toBeNull()
+    expect(store.tabs.logging.loading).toBe(false)
   })
 
   it('sets error on failure', async () => {
