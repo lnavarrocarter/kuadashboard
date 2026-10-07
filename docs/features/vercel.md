@@ -89,6 +89,9 @@ Click **Logs** on any deployment to open the log panel. Logs stream in real time
 - **Clear** — wipe the current log buffer
 - Line coloring by event type: `stdout` (white), `stderr` (red), `command` (yellow), deployment state (blue)
 
+### Runtime log intelligence in KUA Applications
+The build-log stream above is separate from runtime logs. In **Signals → Logs**, select a Vercel project and choose **Cache for log intelligence** to estimate up to two API requests per sync (latest production deployment lookup plus its runtime-log request) before confirming. KUA reads only runtime logs from the latest production deployment, respects Vercel rate limits and `Retry-After`, and marks a response partial if its bounded 2 MiB/5,000-event read is reached. Events enter the same encrypted local cache, sanitizer and analyzer as other providers, and observed evidence is linked to the project in the KUA Application.
+
 ---
 
 ## Domains

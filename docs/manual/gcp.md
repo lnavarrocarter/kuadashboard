@@ -172,6 +172,8 @@ Alert policies y uptime checks con estado habilitado/deshabilitado. Las **métri
 
 Panel de query interactivo: filtro de Cloud Logging, rango de horas y resultados en vivo con severidad coloreada.
 
+Desde **KUA Applications → Señales → Logs**, Cloud Run y Cloud Functions también pueden activarse por recurso para la inteligencia de logs. KUA muestra antes una estimación máxima de cinco solicitudes `entries.list` por sync; no tienen costo de lectura, pero consumen la cuota del proyecto. Solo se leen tras confirmar y se conservan en la caché local cifrada.
+
 ### Service Accounts
 
 Cuentas de servicio IAM con sus claves (paginado).

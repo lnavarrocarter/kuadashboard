@@ -145,6 +145,7 @@ async function vercelFetch(path, token, options = {}) {
       status: res.status,
       code,
       upstreamPath: path,
+      retryAfter: Number(res.headers?.get?.('retry-after')) || null,
     });
   }
 

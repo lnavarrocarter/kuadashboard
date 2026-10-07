@@ -137,6 +137,9 @@ KuaDashboard ofrece una gestión completa de Google Cloud Platform accesible des
 - **Panel de consulta interactivo** — introduce un filtro avanzado, elige un rango de horas (1–72) y ejecuta
 - Los resultados muestran timestamp, severidad (código de color), tipo de recurso, nombre del log y payload de texto
 
+### Inteligencia de logs en KUA Applications
+En **Señales → Logs**, selecciona un servicio de Cloud Run o una Cloud Function y elige **Cachear para inteligencia de logs**. Antes de pedir confirmación, KUA muestra una estimación local de hasta cinco solicitudes `entries.list` por sync; las lecturas de Cloud Logging no se cobran, pero consumen la cuota de solicitudes del proyecto. Tras confirmar, las entradas pasan por el sanitizador y analizador compartidos hacia la caché local cifrada, con el mismo presupuesto de disco y retención máxima que los otros proveedores. Las señales cacheadas se vinculan al proyecto y ubicación GCP verificados del recurso. El refresco automático sigue siendo optativo y respeta el intervalo del plan.
+
 ## Crear, iniciar y eliminar recursos de forma segura
 
 Cloud Run, las VMs de Compute Engine y Cloud SQL muestran sus recursos en una tabla con las acciones en la misma fila (**Start**, **Stop**, **🗑 Eliminar**), y un botón **＋ Nuevo** para crear. Al hacer clic en una fila se abre su detalle debajo de la tabla. Toda acción que genera costos o no se puede deshacer pide confirmación antes:

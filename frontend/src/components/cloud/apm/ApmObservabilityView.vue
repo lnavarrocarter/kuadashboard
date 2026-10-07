@@ -294,6 +294,7 @@
             :application="store.selectedApplication"
             :resources="visibleResources"
             @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+            @cache-updated="store.loadLogHistory"
           />
 
           <ApmProcessTrace

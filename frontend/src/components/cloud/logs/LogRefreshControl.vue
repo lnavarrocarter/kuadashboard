@@ -28,8 +28,11 @@ import { formatTime } from '../../../lib/awsLogs'
 import { useLogApi } from './logApi'
 
 const props = defineProps({
-  group: { type: String, required: true },
+  group: { type: String, default: '' },
   profileId: { type: String, default: '' },
+  endpoint: { type: String, default: '' },
+  resourceId: { type: String, default: '' },
+  provider: { type: String, default: '' },
   // Current interval of the group (null = off)
   minutes: { type: Number, default: null },
   lastSyncAt: { type: Number, default: null },
@@ -53,17 +56,23 @@ const choices = computed(() => (plan.value?.refreshChoices || [1, 5, 15, 30, 60]
 const effective = computed(() => (props.minutes ? Math.max(props.minutes, plan.value?.limits.logRefreshMinMinutes || props.minutes) : null))
 const requestsPerDay = computed(() => (effective.value ? Math.ceil((24 * 60) / effective.value) * Math.max(1, props.pagesPerSync) : 0))
 const nextAt = computed(() => (effective.value && props.lastSyncAt && plan.value?.features.logAutoRefresh ? props.lastSyncAt + effective.value * 60000 : null))
-const hint = computed(() => t(logApi.provider === 'kubernetes' ? 'logRefresh.hintKube' : 'logRefresh.hintAws'))
+const hint = computed(() => {
+  const suffix = ({ aws: 'Aws', kubernetes: 'Kube', gcp: 'Gcp', vercel: 'Vercel' })[props.provider || logApi.provider] || 'Aws'
+  return t(`logRefresh.hint${suffix}`)
+})
 
 async function change(value) {
   busy.value = true
   try {
-    const group = await apiFetch(`${logApi.base}/log-cache`, {
+    const group = await apiFetch(props.endpoint || `${logApi.base}/log-cache`, {
       method: 'PATCH',
       headers: { 'X-Profile-Id': props.profileId, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ group: props.group, refreshMinutes: value === 'off' ? null : Number(value) }),
+      body: JSON.stringify({
+        ...(props.endpoint ? { resourceId: props.resourceId } : { group: props.group }),
+        refreshMinutes: value === 'off' ? null : Number(value),
+      }),
     })
-    emit('updated', group)
+    emit('updated', props.endpoint ? group.results?.[0]?.cache : group)
     toast(value === 'off' ? t('logRefresh.turnedOff') : t('logRefresh.turnedOn', { n: value }), 'success')
   } catch (err) {
     toast(err.message, 'error')
