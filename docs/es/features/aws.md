@@ -231,6 +231,16 @@ Inspecciona Virtual Private Clouds:
   - **Internet Gateways** — ID del gateway, estado, estado de adjunto
   - **NAT Gateways** — ID del gateway, subnet, IP pública/privada, estado, fecha de creación
 
+### Load Balancers
+
+Todos los load balancers de la región: Application (ALB), Network (NLB), Gateway (GWLB) y Classic.
+
+- Nombre, **Público** (internet-facing) o **Interno**, tipo, nombre DNS (con botón para copiarlo), listeners y targets sanos sobre targets registrados
+- **Salud** — estado fallido, target groups sin targets sanos, targets no sanos, sin targets registrados, listeners HTTP públicos que no redirigen a HTTPS y listeners cuya política TLS todavía acepta TLS 1.0/1.1
+- **Detalles** — esquema, VPC, zonas, security groups, protección contra borrado, access logs, manejo de headers inválidos, idle timeout, balanceo entre zonas, tags, cada listener con su acción por defecto, política TLS, certificados y **reglas** (host, path, header… → reenvía, redirige o respuesta fija), y cada target group con su health check y los targets no sanos con su motivo
+- **Costo** — las llamadas `Describe*` de Elastic Load Balancing no tienen costo. Cada carga lee los listeners de cada load balancer y la salud de cada target group asociado; el detalle lee reglas, atributos y tags de uno
+- Requiere permisos de lectura `elasticloadbalancing:Describe*`; si falta un permiso (por ejemplo para los load balancers Classic) solo se oculta esa parte y se ofrece una solicitud de acceso
+
 ### CloudFront
 
 Gestiona distribuciones CDN:

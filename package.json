@@ -51,6 +51,8 @@
     "@aws-sdk/client-ecr": "^3.1032.0",
     "@aws-sdk/client-ecs": "^3.0.0",
     "@aws-sdk/client-eks": "^3.0.0",
+    "@aws-sdk/client-elastic-load-balancing": "^3.1032.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.1032.0",
     "@aws-sdk/client-eventbridge": "^3.1032.0",
     "@aws-sdk/client-glue": "^3.1033.0",
     "@aws-sdk/client-iam": "^3.1120.0",

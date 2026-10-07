@@ -1581,6 +1581,11 @@
       </div>
 
       <!-- ══ CloudFront ═════════════════════════════════════════════════════ -->
+      <!-- ══ Elastic Load Balancing ═════════════════════════════════════════ -->
+      <div v-show="activeTab === 'elb'" class="tab-panel">
+        <AwsLoadBalancersTab :search="search.elb" @request-access="activityAccess = $event" />
+      </div>
+
       <div v-show="activeTab === 'cloudfront'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
           <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="cfCreateModal.open = true; cfCreateModal.result = null; cfCreateModal.error = null">{{ t('awsv.createFromS3') }}</button>
@@ -3829,6 +3834,7 @@ import { useSortable }  from '../../composables/useSortable'
 import { settings as appSettings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
 import AwsSqsTab from './messaging/AwsSqsTab.vue'
+import AwsLoadBalancersTab from './networking/AwsLoadBalancersTab.vue'
 import AwsSnsTab from './messaging/AwsSnsTab.vue'
 import AwsSesTab from './messaging/AwsSesTab.vue'
 import StepFnDiagram       from '../StepFnDiagram.vue'
@@ -3905,6 +3911,7 @@ const TABS = [
   { id: 'bedrock',      label: 'Bedrock'        },
   { id: 'lex',          label: 'Amazon Lex'     },
   { id: 'agentcorecfn', label: 'AgentCore CFN'  },
+  { id: 'elb',          label: 'Load Balancers' },
   { id: 'cloudfront',   label: 'CloudFront'     },
   { id: 'route53',      label: 'Route 53'       },
   { id: 'cognito',      label: 'Cognito'        },
@@ -4141,6 +4148,7 @@ const tabFilteredMap = {
   dynamodb: filteredDynamo, rds: filteredRds, glue: filteredGlue,
   athena: filteredAthena, datapipeline: filteredPipelines,
   bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,
+  elb: computed(() => filterRows(awsStore.loadBalancers, search.elb)),
   cloudfront: filteredCloudfront, route53: filteredRoute53,
   cognito: filteredCognito, secrets: filteredSecrets,
   cwdashboards: filteredCwDashboards,
@@ -4162,6 +4170,7 @@ function tabCount(id) {
     glue: awsStore.glueJobs, athena: awsStore.athenaWorkgroups,
     datapipeline: awsStore.dataPipelines,
     bedrock: awsStore.bedrockModels, lex: awsStore.lexBots, agentcorecfn: awsStore.cfnStacks,
+    elb: awsStore.loadBalancers,
     cloudfront: awsStore.cloudfrontDists,
     route53: awsStore.route53Zones, cognito: awsStore.cognitoUserPools,
     secrets: awsStore.secrets,
@@ -4198,6 +4207,7 @@ const fetchMap = {
   bedrock:      () => awsStore.fetchBedrockModels(),
   lex:          () => awsStore.fetchLexBots(),
   agentcorecfn: () => awsStore.fetchCloudformationStacks(true),
+  elb:          () => awsStore.fetchLoadBalancers(),
   cloudfront:   () => awsStore.fetchCloudfrontDists(),
   route53:      () => awsStore.fetchRoute53Zones(),
   cognito:      () => awsStore.fetchCognitoUserPools(),

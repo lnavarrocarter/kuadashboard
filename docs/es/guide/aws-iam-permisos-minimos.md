@@ -362,6 +362,29 @@ Extra requerido frecuente:
 
 ---
 
+## Elastic Load Balancing
+
+ARN recomendados:
+
+- `*` (las acciones `Describe*` de Elastic Load Balancing no admiten restricción por recurso)
+
+Lectura:
+
+- `elasticloadbalancing:DescribeLoadBalancers`
+- `elasticloadbalancing:DescribeListeners`
+- `elasticloadbalancing:DescribeTargetGroups`
+- `elasticloadbalancing:DescribeTargetHealth`
+- `elasticloadbalancing:DescribeRules`
+- `elasticloadbalancing:DescribeLoadBalancerAttributes`
+- `elasticloadbalancing:DescribeTags`
+- `elasticloadbalancing:DescribeInstanceHealth` (load balancers Classic)
+
+Nota:
+
+- Las llamadas `Describe*` no tienen costo.
+
+---
+
 ## CloudFront
 
 ARN recomendados:
