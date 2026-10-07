@@ -18,11 +18,109 @@
         :platform-resources="apmPlatformResources"
         @open-architecture="context => emit('open-architecture', context)"
       />
+      <!-- Overview: summary of the account or team and its Advisor, from one scan (GET /overview) -->
+      <div v-if="activeService === 'overview'" class="tab-panel vercel-ov" data-test="vercel-overview">
+        <div class="vercel-ov-toolbar">
+          <div>
+            <div class="vercel-ov-title">{{ t('vercel.overview.title') }}</div>
+            <div class="text-dim vercel-ov-subtitle">
+              {{ overview?.teamId || t('vercel.overview.personal') }}
+              <span v-if="overview?.generatedAt"> · {{ t('vercel.overview.updated', { date: formatDate(overview.generatedAt) }) }}</span>
+            </div>
+          </div>
+          <button class="btn sm" :disabled="vercelStore.overviewLoading" :title="t('vercel.overview.scanHint')" @click="vercelStore.fetchOverview({ refresh: true })">
+            <i data-lucide="refresh-cw"></i> {{ vercelStore.overviewLoading ? t('vercel.loading') : t('vercel.overview.scan') }}
+          </button>
+        </div>
+        <div v-if="vercelStore.overviewError" class="alert-error">{{ vercelStore.overviewError }}</div>
+        <div v-if="vercelStore.overviewLoading && !overview" class="empty-row">{{ t('vercel.overview.loading') }}</div>
+        <template v-else-if="overview">
+          <section :class="['vercel-ov-health', overview.health]" data-test="vercel-overview-health">
+            <span class="vercel-ov-dot"></span>
+            <strong>{{ t(`vercel.overview.health.${overview.health}`) }}</strong>
+            <span class="text-dim">{{ t('vercel.overview.healthDetail', { healthy: overview.production.healthy, total: overview.projects.total }) }}</span>
+          </section>
+
+          <div class="vercel-ov-metrics">
+            <div class="vercel-ov-metric">
+              <span class="text-dim">{{ t('vercel.overview.projects') }}</span>
+              <strong>{{ overview.projects.total }}</strong>
+              <small>{{ t('vercel.overview.projectsDetail', { paused: overview.projects.paused, git: overview.projects.withGit }) }}</small>
+            </div>
+            <div class="vercel-ov-metric">
+              <span class="text-dim">{{ t('vercel.overview.production') }}</span>
+              <strong :class="overview.production.failed ? 'state-error' : ''">{{ overview.production.healthy }}/{{ overview.projects.total }}</strong>
+              <small>{{ t('vercel.overview.productionDetail', { failed: overview.production.failed, building: overview.production.building, none: overview.production.none }) }}</small>
+            </div>
+            <div class="vercel-ov-metric">
+              <span class="text-dim">{{ t('vercel.overview.failureRate') }}</span>
+              <strong :class="overview.deployments.failureRate >= 50 ? 'state-error' : ''">{{ overview.deployments.failureRate == null ? '—' : `${overview.deployments.failureRate}%` }}</strong>
+              <small>{{ t('vercel.overview.failureRateDetail', { failed: overview.deployments.error, total: overview.deployments.ready + overview.deployments.error }) }}</small>
+            </div>
+            <div class="vercel-ov-metric">
+              <span class="text-dim">{{ t('vercel.overview.domains') }}</span>
+              <strong>{{ overview.domains.total }}</strong>
+              <small>{{ t('vercel.overview.domainsDetail', { n: overview.domains.unverified }) }}</small>
+            </div>
+          </div>
+
+          <AdvisorPanel
+            :report="overview.advisor || null"
+            :loading="vercelStore.overviewLoading"
+            refreshable
+            storage-key="advisor.vercel"
+            :brief-context="advisorBriefContext"
+            @refresh="vercelStore.fetchOverview({ refresh: true })"
+            @posture-changed="vercelStore.fetchOverview()"
+          />
+
+          <section class="vercel-ov-section">
+            <div class="vercel-ov-section-title">
+              <span>{{ t('vercel.overview.projectsTitle') }}</span>
+              <span class="text-dim">{{ envSummary }}</span>
+            </div>
+            <div v-if="!overview.rows.length" class="empty-row">{{ t('vercel.noProjects') }}</div>
+            <table v-else class="cloud-table">
+              <thead><tr>
+                <th>{{ t('vercel.col.name') }}</th>
+                <th>{{ t('vercel.col.framework') }}</th>
+                <th>Node.js</th>
+                <th>{{ t('vercel.overview.production') }}</th>
+                <th>{{ t('vercel.overview.lastDeploy') }}</th>
+                <th>{{ t('vercel.overview.recentFailures') }}</th>
+                <th>{{ t('vercel.overview.domains') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="row in overview.rows" :key="row.id" :class="{ 'row-selected': vercelStore.selectedProject?.id === row.id }">
+                  <td>
+                    <a href="#" class="fw-medium" :title="t('vercel.overview.selectProject')" @click.prevent="vercelStore.selectProjectById(row.id)">{{ row.name }}</a>
+                    <span v-if="row.paused" class="badge-warn vercel-ov-tag">{{ t('vercel.overview.paused') }}</span>
+                    <span v-if="!row.git" class="badge-preview vercel-ov-tag">{{ t('vercel.overview.noGit') }}</span>
+                  </td>
+                  <td>{{ row.framework || '—' }}</td>
+                  <td class="mono-xs">{{ row.nodeVersion || '—' }}</td>
+                  <td>
+                    <span v-if="row.production" :class="stateClass(row.production.state)">{{ row.production.state }}</span>
+                    <span v-else class="text-dim">{{ t('vercel.overview.noProduction') }}</span>
+                  </td>
+                  <td class="text-dim">{{ row.lastDeployAt ? formatDate(row.lastDeployAt) : '—' }}</td>
+                  <td :class="row.recent.failed ? 'state-error' : 'text-dim'">{{ row.recent.finished ? `${row.recent.failed}/${row.recent.finished}` : '—' }}</td>
+                  <td>
+                    {{ row.domains }}
+                    <span v-if="row.unverifiedDomains" class="badge-warn vercel-ov-tag">{{ t('vercel.overview.unverified', { n: row.unverifiedDomains }) }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </template>
+      </div>
+
       <!-- Error banner -->
-      <div v-if="activeService !== 'apm' && vercelStore.error" class="alert-error">{{ vercelStore.error }}</div>
+      <div v-if="!['apm', 'overview'].includes(activeService) && vercelStore.error" class="alert-error">{{ vercelStore.error }}</div>
 
       <!-- Toolbar -->
-      <div v-if="activeService !== 'apm'" class="aws-toolbar">
+      <div v-if="!['apm', 'overview'].includes(activeService)" class="aws-toolbar">
         <input
           v-model="search"
           class="ctrl-input aws-search"
@@ -607,15 +705,17 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useVercelStore } from '../../stores/useVercelStore'
+import { useEnvStore }    from '../../stores/useEnvStore'
 import { useI18n }        from '../../composables/useI18n.js'
 import { settings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
 import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
+import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 
 const props = defineProps({
-  activeService: { type: String, default: 'projects' },
+  activeService: { type: String, default: 'overview' },
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
@@ -625,6 +725,7 @@ const emit = defineEmits(['open-architecture'])
 
 const { t }       = useI18n()
 const vercelStore = useVercelStore()
+const envStore    = useEnvStore()
 // Auto-refresh reloads a table at most every `vercelListRefreshSec` (Options),
 // which keeps the token far from Vercel's API rate limits; manual reloads always run.
 const refreshGate = createRefreshGate()
@@ -635,6 +736,18 @@ const search                      = ref('')
 const confirmAction               = ref(null)
 const actionPending               = ref(false)
 const apmViewRef                  = ref(null)
+const overview = computed(() => vercelStore.overview)
+// "12 env vars · encrypted 8 · plain 2 …" (counted by type: values are never read)
+const envSummary = computed(() => {
+  const env = overview.value?.env
+  if (!env?.total) return ''
+  const types = Object.entries(env.byType).sort((a, b) => b[1] - a[1]).map(([type, n]) => `${type} ${n}`)
+  return [t('vercel.overview.envSummary', { n: env.total }), ...types].join(' · ')
+})
+const advisorBriefContext = computed(() => {
+  const profile = envStore.vercelProfiles.find(item => item.id === vercelStore.activeProfileId)
+  return profile ? { [t('agentBrief.field.profile')]: profile.name } : {}
+})
 const apmPlatformResources = computed(() => vercelStore.projects.map(project => ({
   type: 'vercel-project',
   key: project.id,
@@ -672,6 +785,7 @@ function reload(service, options = {}) {
     await apmViewRef.value?.refreshLocal?.()
   }
   else if (svc === 'projects') load = () => vercelStore.fetchProjects()
+  else if (svc === 'overview') load = () => vercelStore.fetchOverview()
   else if (svc === 'deployments' && vercelStore.selectedProject)
     load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: vercelStore.deploymentTarget })
   else if (svc === 'domains' && vercelStore.selectedProject)
@@ -1013,6 +1127,32 @@ function formatBytes(value) {
 </script>
 
 <style scoped>
+/* Overview */
+.vercel-ov-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.vercel-ov-title { font-size: 15px; font-weight: 600; }
+.vercel-ov-subtitle { font-size: 12px; margin-top: 2px; }
+.vercel-ov-health { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); margin-bottom: 12px; font-size: 12px; }
+.vercel-ov-health.healthy { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.vercel-ov-health.degraded { border-color: color-mix(in srgb, var(--yellow) 55%, var(--border)); }
+.vercel-ov-health.critical { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); }
+.vercel-ov-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-dim); }
+.vercel-ov-health.healthy .vercel-ov-dot { background: var(--green); }
+.vercel-ov-health.degraded .vercel-ov-dot { background: var(--yellow); }
+.vercel-ov-health.critical .vercel-ov-dot { background: var(--red); }
+.vercel-ov-metrics { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.vercel-ov-metric { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; }
+.vercel-ov-metric span { font-size: 11px; }
+.vercel-ov-metric strong { font-size: 20px; line-height: 1; }
+.vercel-ov-metric small { color: var(--text-dim); font-size: 10px; }
+.vercel-ov-section { margin-top: 12px; }
+.vercel-ov-section-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.vercel-ov-section-title .text-dim { font-size: 11px; font-weight: 400; }
+.vercel-ov-tag { margin-left: 6px; font-size: 10px; }
+@media (max-width: 720px) {
+  .vercel-ov-metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .vercel-ov-section { overflow-x: auto; }
+}
+
 .fw-medium   { font-weight: 500; }
 .mono-xs     { font-family: monospace; font-size: 11px; }
 .link-dim    { color: var(--accent, #7c9ef8); text-decoration: none; font-size: 12px; }

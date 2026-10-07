@@ -41,3 +41,42 @@ test('preserves the upstream Vercel error code and request path', async t => {
     }
   );
 });
+test('advisor scopes never carry the token of a token-only profile', () => {
+  const { advisorProfileKey } = require('./vercel');
+  assert.equal(advisorProfileKey('3f2c-profile'), '3f2c-profile');
+  const key = advisorProfileKey('local:secret-token-value');
+  assert.match(key, /^local-[a-f0-9]{16}$/);
+  assert.doesNotMatch(key, /secret-token-value/);
+  assert.equal(advisorProfileKey('local:secret-token-value'), key);
+});
+
+test('overview and advisor share one cached scan; refresh scans again', async t => {
+  const { scanVercelAccount } = require('./vercel');
+  let calls = 0;
+  t.mock.method(global, 'fetch', async url => {
+    calls += 1;
+    const body = String(url).includes('/v10/projects') ? { projects: [{ id: 'p1', name: 'shop' }] } : {};
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => body };
+  });
+  const resolveAuth = async () => ({ token: 'redacted-token', teamId: 'team_1' });
+  const profileId = 'local:scan-test-token';
+
+  const [first, second] = await Promise.all([
+    scanVercelAccount(profileId, { resolveAuth }),
+    scanVercelAccount(profileId, { resolveAuth }),
+  ]);
+  assert.equal(calls, 4); // projects + deployments, env and domains of one project
+  assert.equal(first.scan, second.scan);
+  assert.deepEqual([first.fresh, second.fresh].sort(), [false, true]);
+  assert.match(first.profileKey, /^local-[a-f0-9]{16}$/);
+  assert.equal(first.scan.overview.projects.total, 1);
+  assert.equal(first.scan.report.scope.provider, 'vercel');
+
+  const cached = await scanVercelAccount(profileId, { resolveAuth });
+  assert.equal(cached.fresh, false);
+  assert.equal(calls, 4);
+
+  const refreshed = await scanVercelAccount(profileId, { resolveAuth, refresh: true });
+  assert.equal(refreshed.fresh, true);
+  assert.equal(calls, 8);
+});

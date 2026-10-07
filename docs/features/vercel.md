@@ -131,6 +131,34 @@ Lists the serverless and edge functions included in a selected deployment.
 
 ---
 
+## Overview
+
+**Overview** is the first entry of the sidebar and the view Vercel opens on. It summarizes the account or team of the active profile from one scan:
+
+- **Health:** healthy, needs attention (paused projects, unverified domains or data that could not be read) or production failing (a project whose last production deploy failed).
+- **Projects** (paused, with Git), **Production** (healthy, failed, building, without production), **Recent failure rate** (last 10 deployments per project) and **Domains** (not verified).
+- **Projects by last deployment:** framework, Node.js, production state, last deploy, recent failures and domains of each project; the name sets it as the active project. Env vars are counted by type.
+
+The scan is shared with the Advisor and cached 15 minutes; **Scan again** forces a new one.
+
+### Advisor
+
+The Advisor, inside the Overview, checks every project of the account or team against good practices. It needs the Pro or Team plan; on Free it shows how many findings there are.
+
+| Category | Checks |
+|---|---|
+| Security | Credentials in **Plain** env vars · production secrets shared with every preview · production secrets that are not **Sensitive** · previews without Deployment Protection · Git Fork Protection off |
+| Infrastructure | Last production deploy failed · unverified domains · paused projects · projects without a production deployment |
+| Architecture | Projects that deploy straight to production, without previews |
+| Development | End-of-life Node.js · half or more of the recent deployments failed · projects not connected to Git |
+
+- **What it reads:** the projects (up to 100), their last 10 deployments, their domains and the **name, type and target** of their env vars. Env var values are dropped as they arrive and never stored. A variable counts as a credential by its name (password, secret, token, API key…).
+- **Cost:** free Vercel API reads, about 3 per project. The scan is cached 15 minutes; **Scan again** forces a new one.
+- **Decisions and history:** accept a risk or silence a check that does not apply, see the posture over time and schedule the analysis, as in the AWS and GCP Advisors. A profile added with a bare token (`local:<token>`) is stored under a hash of the token and cannot be scheduled.
+- **AI agents:** the MCP tool `vercel_advisor` returns the same findings (see [AI agents](./ai-agents.md)).
+
+---
+
 ## Switching Profiles and Projects
 
 The header works like **Cluster → Namespace** in Kubernetes: pick a **profile**, then a **project**.

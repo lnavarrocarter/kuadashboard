@@ -25,6 +25,8 @@ describe('advisor alert texts', () => {
     expect(scopeLabel({ scope: 'aws:local:prod:us-east-1' }, { t })).toBe('AWS · prod · us-east-1')
     expect(scopeLabel({ scope: 'aws:p-1:eu-west-1' }, { t, profileName: () => 'billing' })).toBe('AWS · billing · eu-west-1')
     expect(scopeLabel({ scope: 'product:app-1', data: { scopeLabel: 'Orders' } }, { t })).toBe('KUApps · Orders')
+    expect(parseScope('vercel:p-2:team_abc')).toEqual({ provider: 'vercel', profileId: 'p-2', teamId: 'team_abc' })
+    expect(scopeLabel({ scope: 'vercel:p-2:personal' }, { t, profileName: () => 'web' })).toBe('Vercel · web · personal')
     expect(scopeLabel({ scope: `kubernetes:${EKS}:all` }, { t })).toBe('Kubernetes · shop · all namespaces')
   })
 

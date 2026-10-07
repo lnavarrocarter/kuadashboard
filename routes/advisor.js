@@ -24,7 +24,7 @@
 const express = require('express');
 const { getPlan, planError } = require('../lib/plans');
 
-const SCOPE_RE = /^(aws|gcp|kubernetes|product):.+/;
+const SCOPE_RE = /^(aws|gcp|vercel|kubernetes|product):.+/;
 
 function validScope(value) {
   const scope = String(value || '');
