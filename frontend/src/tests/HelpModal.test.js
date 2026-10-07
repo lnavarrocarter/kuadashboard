@@ -22,7 +22,10 @@ describe('HelpModal release history', () => {
     })
 
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
-    const firstRelease = wrapper.get('.release-block')
+    const releases = wrapper.findAll('.release-block')
+    expect(releases[0].text()).toContain('Unreleased')
+    expect(releases[0].text()).toContain('live elapsed runtime')
+    const firstRelease = releases[1]
 
     expect(firstRelease.text()).toContain('1.17.0')
     expect(firstRelease.findAll('.release-summary-pill').length).toBeGreaterThan(1)
@@ -31,7 +34,7 @@ describe('HelpModal release history', () => {
 
     await firstRelease.get('.release-toggle').trigger('click')
 
-    expect(wrapper.get('.release-block').findAll('.change-item').length).toBeGreaterThan(8)
-    expect(wrapper.get('.release-block .release-toggle').text()).toContain('fewer')
+    expect(wrapper.findAll('.release-block')[1].findAll('.change-item').length).toBeGreaterThan(8)
+    expect(wrapper.findAll('.release-block')[1].get('.release-toggle').text()).toContain('fewer')
   })
 })

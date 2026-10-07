@@ -9,6 +9,7 @@ const BASE = '/api/system/tasks'
 function task(overrides = {}) {
   return {
     id: 'logs.scan.4', name: 'Log scan #4', type: 'scan', state: 'running', intervalMs: null,
+    provider: 'aws',
     startedAt: '2026-10-06T11:00:00.000Z', lastRunAt: '2026-10-06T11:00:00.000Z',
     lastFinishedAt: null, nextRunAt: null, lastRunStatus: null, progress: 0.45, errorCode: null,
     supportedActions: ['pause', 'resume', 'cancel'], availableActions: ['pause', 'cancel'],
@@ -74,7 +75,7 @@ describe('BackgroundTasksPanel', () => {
     await flushPromises()
 
     expect(calls.filter(call => call.method === 'POST')).toEqual([{ url: `${BASE}/logs.scan.4/pause`, method: 'POST' }])
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(2)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(2)
     wrapper.unmount()
   })
 
@@ -101,19 +102,19 @@ describe('BackgroundTasksPanel', () => {
     const calls = stubFetch(async () => jsonResponse(snapshot()))
     const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 5000 } })
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(1)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(1)
 
     await vi.advanceTimersByTimeAsync(5000)
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(2)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(2)
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(3)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(3)
 
     wrapper.unmount()
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(3)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(3)
   })
 
   it('does not request or poll while hidden, then starts and stops with visibility', async () => {
@@ -126,12 +127,12 @@ describe('BackgroundTasksPanel', () => {
 
     await wrapper.setProps({ show: true })
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(1)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(1)
     await wrapper.setProps({ show: false })
     await vi.advanceTimersByTimeAsync(10000)
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
-    expect(calls.filter(call => call.method === 'GET')).toHaveLength(1)
+    expect(calls.filter(call => call.url === BASE && call.method === 'GET')).toHaveLength(1)
     wrapper.unmount()
   })
 
@@ -142,6 +143,58 @@ describe('BackgroundTasksPanel', () => {
     await flushPromises()
     expect(wrapper.get('[data-test="task-apm.collection"]').text()).toContain('Recolección de Observabilidad')
     expect(wrapper.get('[data-test="task-apm.collection"]').text()).toContain('Programada')
+    wrapper.unmount()
+  })
+
+  it('shows AWS activity costs for the last 30 days without implying per-run attribution', async () => {
+    stubFetch(async url => url === BASE
+      ? jsonResponse(snapshot([task()]))
+      : jsonResponse({ enabled: true, byFeature: [{ feature: 'log-scans', usd: 0.00012, potentialUsd: 0.004 }] }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('AWS')
+    expect(wrapper.get('[data-test="task-cost-logs.scan.4"]').text()).toContain('AWS · 30d: $0.00012')
+    expect(wrapper.get('[data-test="task-cost-logs.scan.4"]').text()).toContain('$0.004 potential beyond free tier')
+    expect(wrapper.text()).toContain('not an individual run')
+    wrapper.unmount()
+  })
+
+  it('does not show a zero cloud cost for a provider without metering', async () => {
+    stubFetch(async url => url === BASE
+      ? jsonResponse(snapshot([task({ provider: 'kubernetes' })]))
+      : jsonResponse({ enabled: true, byFeature: [] }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Kubernetes')
+    expect(wrapper.get('[data-test="task-cost-logs.scan.4"]').text()).toContain('Provider cost is not tracked')
+    wrapper.unmount()
+  })
+
+  it('labels known scheduler providers when the backend snapshot predates provider metadata', async () => {
+    stubFetch(async url => url === BASE
+      ? jsonResponse(snapshot([task({ id: 'apps.sync', name: 'Application sync', provider: null, type: 'scheduler', state: 'scheduled', progress: null })]))
+      : jsonResponse({ enabled: true, byFeature: [] }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="task-apps.sync"]').text()).toContain('KUA')
+    wrapper.unmount()
+  })
+
+  it('updates elapsed runtime every second without waiting for the API poll', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(new Date('2026-10-07T12:00:30.000Z'))
+    stubFetch(async url => url === BASE
+      ? jsonResponse(snapshot([task({ startedAt: '2026-10-07T12:00:00.000Z', lastRunAt: '2026-10-07T12:00:00.000Z' })]))
+      : jsonResponse({ enabled: true, byFeature: [] }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Elapsed: 0 min 30 s')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Elapsed: 0 min 31 s')
     wrapper.unmount()
   })
 })

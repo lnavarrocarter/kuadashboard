@@ -1,4 +1,5 @@
 <template>
+  <Transition name="tasks-drawer" appear>
   <div v-if="show" class="background-tasks-backdrop" data-test="background-tasks" @click.self="emit('close')">
     <aside class="background-tasks-drawer" role="dialog" aria-modal="false" :aria-label="t('tasks.title')">
       <header class="tasks-header">
@@ -6,6 +7,7 @@
           <div>
             <h2>{{ t('tasks.title') }}</h2>
             <p>{{ t('tasks.processNote') }}</p>
+            <p class="tasks-cost-note">{{ t('tasks.costNote') }}</p>
           </div>
           <div class="tasks-header-actions">
             <button class="btn btn-icon" :disabled="loading" :title="t('tasks.refresh')" :aria-label="t('tasks.refresh')" data-test="tasks-refresh" @click="load()">
@@ -43,12 +45,14 @@
           <template v-for="section in sections" :key="section.key">
             <section v-if="section.items.length" class="tasks-section" :data-test="`tasks-section-${section.key}`">
               <h3>{{ t(section.title) }}<span>{{ section.items.length }}</span></h3>
+              <TransitionGroup name="task-list" tag="div" class="task-list">
               <article v-for="task in section.items" :key="task.id" class="task-row" :data-test="`task-${task.id}`">
                 <div class="task-main">
                   <div class="task-heading">
                     <div class="task-identity">
                       <strong>{{ taskName(task) }}</strong>
                       <span :class="['task-state-chip', `state-${task.state}`]">{{ t(`tasks.state.${task.state}`) }}</span>
+                      <span class="task-provider">{{ providerLabel(taskProvider(task)) }}</span>
                     </div>
                     <div class="task-actions">
                       <button
@@ -62,8 +66,12 @@
                     </div>
                   </div>
                   <div class="task-meta">
-                    <span>{{ t('tasks.lastRun') }}: {{ formatTime(task.lastFinishedAt || task.lastRunAt) }}</span>
-                    <span v-if="task.startedAt && (ACTIVE_STATES.includes(task.state) || task.lastFinishedAt)">{{ t('tasks.duration') }}: {{ taskDuration(task) }}</span>
+                    <span>{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.startedAt' : 'tasks.lastRun') }}: {{ formatTime(ACTIVE_STATES.includes(task.state) ? task.startedAt : (task.lastFinishedAt || task.lastRunAt)) }}</span>
+                    <span v-if="task.startedAt && (ACTIVE_STATES.includes(task.state) || task.lastFinishedAt)">{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.elapsed' : 'tasks.duration') }}: {{ taskDuration(task) }}</span>
+                  </div>
+                  <div class="task-cost" :data-test="`task-cost-${task.id}`">
+                    <span>{{ taskCost(task).label }}</span>
+                    <small v-if="taskCost(task).potential">{{ taskCost(task).potential }}</small>
                   </div>
                   <div v-if="task.progress !== null && task.progress !== undefined && ACTIVE_STATES.includes(task.state)" class="task-progress">
                     <div role="progressbar" :aria-label="t('tasks.progress')" :aria-valuenow="Math.round(task.progress * 100)" aria-valuemin="0" aria-valuemax="100">
@@ -74,12 +82,14 @@
                   <div v-if="task.errorCode" class="task-error-code"><i data-lucide="circle-alert"></i><span>{{ t('tasks.errorCode') }}: <code>{{ task.errorCode }}</code></span></div>
                 </div>
               </article>
+              </TransitionGroup>
             </section>
           </template>
         </template>
       </main>
     </aside>
   </div>
+  </Transition>
 </template>
 
 <script setup>
@@ -97,9 +107,11 @@ const emit = defineEmits(['close'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const snapshot = ref(null)
+const usage = ref(null)
 const loading = ref(false)
 const error = ref('')
 const busyAction = ref('')
+const clock = ref(Date.now())
 const ACTIVE_STATES = ['running', 'pause_requested', 'cancellation_requested']
 const ACTION_ICONS = { pause: 'pause', resume: 'play', cancel: 'x' }
 const NAME_KEYS = {
@@ -108,6 +120,21 @@ const NAME_KEYS = {
   'apps.sync': 'tasks.task.appsSync',
   'team.sync': 'tasks.task.teamSync',
   'advisor.scan': 'tasks.task.advisor',
+}
+const PROVIDER_LABELS = {
+  aws: 'AWS', gcp: 'Google Cloud', kubernetes: 'Kubernetes', vercel: 'Vercel',
+  mixed: 'AWS + Kubernetes', kua: 'KUA', local: 'Local',
+}
+const LEGACY_TASK_PROVIDERS = {
+  'apm.collection': 'mixed',
+  'logs.refresh': 'mixed',
+  'apps.sync': 'kua',
+  'team.sync': 'kua',
+  'advisor.scan': 'mixed',
+}
+const COST_FEATURES = {
+  'apm.collection': 'observability',
+  'logs.refresh': 'log-refresh',
 }
 const sections = computed(() => {
   const tasks = snapshot.value?.tasks || []
@@ -123,11 +150,43 @@ let request = null
 let disposed = false
 let mounted = false
 let listenersAttached = false
+let clockTimer = null
+let usageLoadedAt = 0
+let usageRequest = null
 
 function taskName(task) {
   if (task.type === 'scan') return t('tasks.task.scan', { id: task.id.split('.').at(-1) })
   const key = NAME_KEYS[task.id]
   return key ? t(key) : task.name
+}
+
+function providerLabel(provider) {
+  return PROVIDER_LABELS[provider] || t('tasks.providerUnknown')
+}
+
+function taskProvider(task) {
+  return task.provider || LEGACY_TASK_PROVIDERS[task.id] || null
+}
+
+function formatUsd(value) {
+  const amount = Number(value) || 0
+  return new Intl.NumberFormat(settings.lang === 'es' ? 'es' : 'en-US', {
+    style: 'currency', currency: 'USD', maximumSignificantDigits: 4,
+  }).format(amount)
+}
+
+function taskCost(task) {
+  const feature = task.type === 'scan' ? 'log-scans' : COST_FEATURES[task.id]
+  if (!feature || !['aws', 'mixed'].includes(taskProvider(task))) return { label: t('tasks.costNotTracked'), potential: '' }
+  if (!usage.value) return { label: t('tasks.costLoading'), potential: '' }
+  if (usage.value.enabled === false) return { label: t('tasks.costDisabled'), potential: '' }
+  if (usage.value.unavailable) return { label: t('tasks.costUnavailable'), potential: '' }
+  const row = usage.value.byFeature?.find(item => item.feature === feature)
+  if (!row) return { label: t('tasks.costNoRecorded'), potential: '' }
+  return {
+    label: t('tasks.costEstimate', { usd: formatUsd(row.usd) }),
+    potential: Number(row.potentialUsd) > 0 ? t('tasks.costPotential', { usd: formatUsd(row.potentialUsd) }) : '',
+  }
 }
 
 function formatDuration(milliseconds) {
@@ -152,7 +211,7 @@ function formatTime(value) {
 
 function taskDuration(task) {
   const started = Date.parse(task.startedAt)
-  const finished = ACTIVE_STATES.includes(task.state) ? Date.now() : Date.parse(task.lastFinishedAt)
+  const finished = ACTIVE_STATES.includes(task.state) ? clock.value : Date.parse(task.lastFinishedAt)
   return Number.isFinite(started) && Number.isFinite(finished) ? formatDuration(finished - started) : t('tasks.never')
 }
 
@@ -179,6 +238,25 @@ async function load() {
   })()
   await request
   request = null
+  if (!disposed && (!usage.value || Date.now() - usageLoadedAt >= 60000)) loadUsage()
+}
+
+async function loadUsage() {
+  if (usageRequest) return usageRequest
+  usageRequest = (async () => {
+    try {
+      const data = await apiFetch('/api/system/usage?days=30')
+      if (!disposed) usage.value = data?.enabled === false
+        ? data
+        : data && typeof data === 'object' && Array.isArray(data.byFeature) ? data : { unavailable: true }
+    } catch {
+      if (!disposed) usage.value = { unavailable: true }
+    } finally {
+      usageLoadedAt = Date.now()
+      usageRequest = null
+    }
+  })()
+  return usageRequest
 }
 
 async function control(task, action) {
@@ -214,6 +292,7 @@ function start() {
   timer = window.setInterval(() => {
     if (document.visibilityState !== 'hidden') load()
   }, Math.max(5000, props.pollMs))
+  clockTimer = window.setInterval(() => { clock.value = Date.now() }, 1000)
   document.addEventListener('visibilitychange', refreshOnRestore)
   window.addEventListener('focus', refreshOnRestore)
   listenersAttached = true
@@ -222,7 +301,9 @@ function start() {
 function stop() {
   disposed = true
   window.clearInterval(timer)
+  window.clearInterval(clockTimer)
   timer = null
+  clockTimer = null
   document.removeEventListener('visibilitychange', refreshOnRestore)
   window.removeEventListener('focus', refreshOnRestore)
   listenersAttached = false
@@ -243,11 +324,16 @@ onUnmounted(() => {
 <style scoped>
 .background-tasks-backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; background: rgba(0, 0, 0, .42); }
 .background-tasks-drawer { width: min(520px, 100vw); height: 100%; display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: var(--bg-panel); border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgba(0, 0, 0, .28); }
+.tasks-drawer-enter-active, .tasks-drawer-leave-active { transition: opacity .18s ease; }
+.tasks-drawer-enter-from, .tasks-drawer-leave-to { opacity: 0; }
+.tasks-drawer-enter-active .background-tasks-drawer, .tasks-drawer-leave-active .background-tasks-drawer { transition: transform .22s cubic-bezier(.2, .75, .25, 1); }
+.tasks-drawer-enter-from .background-tasks-drawer, .tasks-drawer-leave-to .background-tasks-drawer { transform: translateX(24px); }
 .tasks-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
 .tasks-title-row, .task-heading, .task-identity, .tasks-header-actions, .tasks-process-heading { display: flex; align-items: center; }
 .tasks-title-row { justify-content: space-between; gap: 16px; }
 .tasks-title-row h2 { font-size: 16px; font-weight: 650; }
 .tasks-title-row p { margin-top: 5px; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
+.tasks-title-row .tasks-cost-note { margin-top: 4px; font-size: 11px; }
 .tasks-header-actions { gap: 4px; flex-shrink: 0; }
 .tasks-process { padding: 14px 20px; background: var(--bg-row); border-bottom: 1px solid var(--border); }
 .tasks-process-heading { gap: 8px; margin-bottom: 12px; color: var(--accent); }
@@ -262,12 +348,18 @@ onUnmounted(() => {
 .tasks-section { padding-top: 18px; }
 .tasks-section h3 { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; color: var(--text-dim); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 650; text-transform: uppercase; }
 .tasks-section h3 span { color: var(--text); font-variant-numeric: tabular-nums; }
+.task-list { position: relative; display: block; }
 .task-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.task-list-enter-active, .task-list-leave-active, .task-list-move { transition: opacity .18s ease, transform .18s ease; }
+.task-list-enter-from, .task-list-leave-to { opacity: 0; transform: translateY(6px); }
+.task-list-leave-active { position: absolute; width: 100%; }
 .task-heading { justify-content: space-between; gap: 12px; }
 .task-identity { min-width: 0; flex-wrap: wrap; gap: 8px; }
 .task-identity strong { overflow-wrap: anywhere; font-size: 13px; }
+.task-provider { padding: 2px 6px; color: var(--text-dim); border: 1px solid var(--border); font-size: 10px; white-space: nowrap; }
 .task-state-chip { padding: 2px 6px; border: 1px solid var(--border); color: var(--text-dim); font-size: 10px; white-space: nowrap; }
-.state-running, .state-pause_requested { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.state-running, .state-pause_requested { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.state-running::before, .state-pause_requested::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ''; animation: task-pulse 1.8s ease-out infinite; }
 .state-scheduled { color: var(--teal); }
 .state-paused, .state-cancellation_requested { color: var(--yellow); }
 .state-error { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
@@ -275,6 +367,8 @@ onUnmounted(() => {
 .task-actions { display: flex; flex-shrink: 0; gap: 2px; }
 .task-actions :deep(.btn-icon) { width: 30px; height: 30px; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; color: var(--text-dim); font-size: 11px; }
+.task-cost { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 6px; color: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+.task-cost small { color: var(--yellow); font-size: inherit; }
 .task-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .task-progress > div { height: 5px; flex: 1; overflow: hidden; background: var(--border); }
 .task-progress span { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
@@ -283,6 +377,13 @@ onUnmounted(() => {
 .task-error-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tasks-spinner { animation: tasks-spin 1s linear infinite; }
 @keyframes tasks-spin { to { transform: rotate(360deg); } }
+@keyframes task-pulse { 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) {
+  .tasks-drawer-enter-active, .tasks-drawer-leave-active,
+  .tasks-drawer-enter-active .background-tasks-drawer, .tasks-drawer-leave-active .background-tasks-drawer,
+  .task-list-enter-active, .task-list-leave-active, .task-list-move,
+  .task-progress span, .tasks-spinner, .state-running::before, .state-pause_requested::before { animation: none; transition: none; }
+}
 @media (max-width: 600px) {
   .background-tasks-drawer { width: 100vw; }
   .tasks-header { padding: 14px 14px 12px; }

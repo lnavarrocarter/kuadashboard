@@ -117,7 +117,7 @@
             <div v-for="rel in CHANGELOG" :key="rel.version" class="release-block">
               <div class="release-head">
                 <div class="release-title">
-                  <span class="release-ver">v{{ rel.version }}</span>
+                  <span class="release-ver">{{ rel.version === 'Unreleased' ? rel.version : `v${rel.version}` }}</span>
                   <span v-if="rel.version === VERSION" class="release-current">{{ t('help.current') }}</span>
                   <span class="release-date text-dim">{{ localized(rel.date, settings.lang) }}</span>
                 </div>
@@ -458,7 +458,7 @@ function installUpdate() {
 }
 
 const VERSION = window.kuaElectron?.getVersion?.() || CHANGELOG_VERSION
-const latestReleaseHighlights = computed(() => (CHANGELOG[0]?.items || []).slice(0, 4).map(i => i.text))
+const latestReleaseHighlights = computed(() => (CHANGELOG.find(release => release.version === CHANGELOG_VERSION)?.items || []).slice(0, 4).map(i => i.text))
 const RELEASE_ITEM_LIMIT = 8
 
 const props = defineProps({

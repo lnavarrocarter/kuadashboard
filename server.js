@@ -122,7 +122,7 @@ const apmScheduler = new ApmScheduler({
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
 });
 const apmTask = backgroundTaskRegistry.register({
-  id: 'apm.collection', name: 'Observability collection', type: 'scheduler', intervalMs: POLL_INTERVAL_MS,
+  id: 'apm.collection', name: 'Observability collection', type: 'scheduler', provider: 'mixed', intervalMs: POLL_INTERVAL_MS,
 });
 apmTask.setControls(createPeriodicTaskControls(apmScheduler, apmTask));
 apmScheduler.start({ task: apmTask });
@@ -130,7 +130,7 @@ apmScheduler.start({ task: apmTask });
 const logAutoRefreshModule = require('./lib/logAutoRefresh');
 const logAutoRefresh = logAutoRefreshModule.getAutoRefresh();
 const logRefreshTask = backgroundTaskRegistry.register({
-  id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', intervalMs: logAutoRefreshModule.TICK_MS,
+  id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', provider: 'mixed', intervalMs: logAutoRefreshModule.TICK_MS,
 });
 logRefreshTask.setControls(createPeriodicTaskControls(logAutoRefresh, logRefreshTask));
 logAutoRefresh.start({ task: logRefreshTask });
@@ -340,7 +340,7 @@ const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
   dataDir: require('./lib/account/account').resolveDataDir(),
 });
 const teamSyncTask = backgroundTaskRegistry.register({
-  id: 'team.sync', name: 'Team application sync', type: 'scheduler', intervalMs: require('./lib/sync/teamEngine').PASS_EVERY_MS,
+  id: 'team.sync', name: 'Team application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/teamEngine').PASS_EVERY_MS,
 });
 teamSyncTask.setControls(createPeriodicTaskControls(teamEngine, teamSyncTask));
 // KUA Applications kept in step between the computers of a KUA account (Pro/Team).
@@ -351,7 +351,7 @@ const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
   dataDir: require('./lib/account/account').resolveDataDir(),
 });
 const applicationSyncTask = backgroundTaskRegistry.register({
-  id: 'apps.sync', name: 'Application sync', type: 'scheduler', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
+  id: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
 });
 applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask));
 app.use('/api/kua-apps', createKuaAppsRouter({
@@ -388,7 +388,7 @@ const advisorScheduler = (() => {
   });
 })();
 const advisorTask = backgroundTaskRegistry.register({
-  id: 'advisor.scan', name: 'Scheduled Advisor analysis', type: 'scheduler', intervalMs: require('./lib/advisor/scheduler').TICK_MS,
+  id: 'advisor.scan', name: 'Scheduled Advisor analysis', type: 'scheduler', provider: 'mixed', intervalMs: require('./lib/advisor/scheduler').TICK_MS,
 });
 advisorTask.setControls(createPeriodicTaskControls(advisorScheduler, advisorTask));
 // Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
