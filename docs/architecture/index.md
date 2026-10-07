@@ -68,6 +68,7 @@ kuadashboard/
 
 ## Product Architecture
 
+- [Desktop Background Task Isolation Evaluation](./desktop-background-workers)
 - [KUA Unified Management Plan](./kua-unified-management-plan)
 - [Architecture Workspace Phase 3](./workspace-phase-3)
 - [Architecture Workspace Phase 4](./workspace-phase-4)
