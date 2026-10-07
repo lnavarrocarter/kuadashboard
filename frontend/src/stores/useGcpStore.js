@@ -116,6 +116,7 @@ export const useGcpStore = defineStore('gcp', () => {
       t.enableUrl = null
       t.nextPageToken = null
       t.loadingMore = false
+      t.query = null
     })
   }
 
@@ -327,6 +328,7 @@ export const useGcpStore = defineStore('gcp', () => {
     const params = new URLSearchParams()
     if (opts.pageToken) params.append('pageToken', opts.pageToken)
     if (opts.pageSize) params.append('pageSize', opts.pageSize)
+    if (opts.namespace !== undefined) params.append('namespace', opts.namespace)
     const qs = params.toString()
     return apiFetch(`/api/cloud/gcp/firestore/databases/${encodeURIComponent(db)}/collections/${encodeURIComponent(collection)}/documents${qs ? '?' + qs : ''}`, { headers: headers() })
   }
@@ -405,12 +407,27 @@ export const useGcpStore = defineStore('gcp', () => {
   async function fetchJobExecutions(location, job) {
     return apiFetch(`/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/executions`, { headers: headers() })
   }
-  async function queryLogs(filter, limit = 100, hours = 3) {
+  async function queryLogs(filter, limit = 100, hours = 3, opts = {}) {
+    const tab = tabs.value.logging
+    const profileId = activeProfileId.value
+    const append = opts.append === true
+    if (tab.loading || tab.loadingMore || (append && !tab.nextPageToken)) return null
+    const query = append ? { ...tab.query, pageToken: tab.nextPageToken } : { filter, limit, hours }
+    if (append) tab.loadingMore = true
+    else { tab.loading = true; tab.nextPageToken = null; tab.data = [] }
+    tab.error = null
+    tab.enableUrl = null
     try {
-      const res = await apiFetch('/api/cloud/gcp/logging/query', { method: 'POST', headers: headers(), body: JSON.stringify({ filter, limit, hours }) })
-      tabs.value.logging.data = res?.entries || []
+      const res = await apiFetch('/api/cloud/gcp/logging/query', { method: 'POST', headers: headers(), body: JSON.stringify(query) })
+      if (activeProfileId.value !== profileId) return null
+      tab.data = append ? [...tab.data, ...(res?.entries || [])] : res?.entries || []
+      tab.nextPageToken = res?.nextPageToken || null
+      tab.query = { filter: query.filter, limit: query.limit, hours: query.hours, since: res?.since, until: res?.until }
       return res
-    } catch (e) { setError(e, 'logging'); return null }
+    } catch (e) {
+      if (activeProfileId.value === profileId) setError(e, 'logging')
+      return null
+    } finally { tab.loading = false; tab.loadingMore = false }
   }
 
   // ─── Fase 1: Logs por recurso ──────────────────────────────────────────────

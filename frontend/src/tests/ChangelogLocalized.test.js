@@ -17,8 +17,9 @@ describe('bilingual changelog', () => {
     expect(localized({ en: 'Hello', es: 'Hola' }, 'es')).toBe('Hola')
     expect(localized({ en: 'Hello' }, 'es')).toBe('Hello')
     expect(localized('Texto antiguo', 'en')).toBe('Texto antiguo')
-    expect(CHANGELOG[0].version).toBe(CHANGELOG_VERSION)
-    expect(CHANGELOG[0].items.every(item => item.text.en && item.text.es)).toBe(true)
+    expect(CHANGELOG[0].version).toBe('Unreleased')
+    expect(CHANGELOG[1].version).toBe(CHANGELOG_VERSION)
+    expect(CHANGELOG.every(release => release.items.every(item => item.text.en && item.text.es))).toBe(true)
   })
 
   it('every release has its date and items in English and Spanish', () => {
@@ -31,11 +32,14 @@ describe('bilingual changelog', () => {
     settings.lang = 'en'
     const wrapper = mount(HelpModal, { props: { show: true }, global: { stubs: { BaseModal: BaseModalStub } } })
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
-    const first = wrapper.get('.release-block')
-    expect(first.text()).toContain('September 2026')
-    expect(first.text()).toContain('AWS Overview: active account')
+    const releases = wrapper.findAll('.release-block')
+    expect(releases[0].text()).toContain('Unreleased')
+    const currentRelease = releases[1]
+    expect(currentRelease.text()).toContain('September 2026')
+    expect(currentRelease.text()).toContain('AWS Overview: active account')
     settings.lang = 'es'
     await wrapper.vm.$nextTick()
-    expect(wrapper.get('.release-block').text()).toContain('Resumen de AWS: cuenta activa')
+    expect(currentRelease.text()).toContain('Septiembre 2026')
+    expect(currentRelease.text()).toContain('Resumen de AWS: cuenta activa')
   })
 })

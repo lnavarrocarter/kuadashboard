@@ -15,6 +15,13 @@ export const CHANGELOG_VERSION = '1.17.0'
 
 export const CHANGELOG = [
   {
+    version: 'Unreleased',
+    date: { en: 'In development', es: 'En desarrollo' },
+    items: [
+      { type: 'better', text: { en: 'Background tasks panel — live elapsed runtime, provider labels, and 30-day AWS cost by activity where metered; costs are not attributed to individual runs, other providers remain untracked, and transitions respect reduced-motion settings', es: 'Panel de tareas en segundo plano — tiempo transcurrido en vivo, proveedor y costo AWS de 30 días por actividad cuando se mide; el costo no se atribuye a ejecuciones individuales, otros proveedores quedan sin medir y las transiciones respetan movimiento reducido' } },
+    ],
+  },
+  {
     version: '1.17.0',
     date: { en: 'September 2026', es: 'Septiembre 2026' },
     items: [

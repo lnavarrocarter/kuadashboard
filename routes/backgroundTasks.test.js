@@ -26,7 +26,7 @@ test('GET /tasks returns a snapshot without changing task state', async () => {
 
 test('scan bindings publish per-scan capabilities and route controls to that scan only', async () => {
   const registry = createBackgroundTaskRegistry();
-  let scan = { id: 7, status: 'running', startedAt: Date.now(), progress: 0.4 };
+  let scan = { id: 7, profileId: 'k8s:prod', status: 'running', startedAt: Date.now(), progress: 0.4 };
   const calls = [];
   let binding;
   const runner = {
@@ -46,6 +46,7 @@ test('scan bindings publish per-scan capabilities and route controls to that sca
 
   try {
     const taskId = 'logs.scan.7';
+    assert.equal(registry.get(taskId).provider, 'kubernetes');
     assert.deepEqual(registry.get(taskId).availableActions, ['pause', 'cancel']);
     const paused = await call(taskId, 'pause');
     assert.equal(paused.status, 200);
