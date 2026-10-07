@@ -171,8 +171,9 @@ describe('VercelProjectSelector + VercelView (#76)', () => {
 
     expect(header.find('select').element.value).toBe('p-b')
     expect(betaRow.classes()).toContain('row-selected')
-    // Picking a project does not refetch (and flash) the project list itself
-    expect(api.calls).toEqual([])
+    // The selected project's Advisor refreshes, but the project list itself does not flash.
+    expect(api.calls.some(call => call.path === '/api/cloud/vercel/projects/p-b/advisor')).toBe(true)
+    expect(api.calls.some(call => call.path === '/api/cloud/vercel/projects')).toBe(false)
   })
 
   it('choosing a project in the header highlights it in the Projects table', async () => {

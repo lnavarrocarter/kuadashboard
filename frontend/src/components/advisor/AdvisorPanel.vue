@@ -78,6 +78,34 @@
           <i data-lucide="clock"></i>{{ t('advisor.acceptance.expiringNotice', { n: report.posture.expiringSoon }) }}
         </p>
 
+        <section v-if="lens === 'product' && report.errorBudget?.objectives?.length" class="adv-budget" data-test="advisor-error-budget">
+          <h4>{{ t('advisor.errorBudget.title') }}</h4>
+          <div v-for="objective in report.errorBudget.objectives" :key="objective.source" class="adv-budget-row">
+            <strong>{{ t(`advisor.errorBudget.source.${objective.source}`) }}</strong>
+            <span>{{ t('advisor.errorBudget.measure', { rate: objective.errorRatePercent.toFixed(2), target: objective.targetPercent.toFixed(2) }) }}</span>
+            <span>{{ t('advisor.errorBudget.usage', { consumed: objective.consumedPercent.toFixed(1), remaining: objective.remainingPercent.toFixed(1), burn: objective.burnRate.toFixed(2) }) }}</span>
+          </div>
+        </section>
+
+        <section v-if="lens === 'product' && report.technical" class="adv-product-insights" data-test="advisor-technical">
+          <h4>{{ t('advisor.technical.title') }}</h4>
+          <p v-if="report.technical.analyzedAt" class="adv-dim">{{ t('advisor.technical.analyzedAt', { date: when(report.technical.analyzedAt) }) }}</p>
+          <p v-else class="adv-dim">{{ t('advisor.technical.empty') }}</p>
+          <ul v-if="report.technical.findings?.length" class="adv-insight-list">
+            <li v-for="finding in report.technical.findings" :key="finding.id">
+              <span>{{ t(`advisor.rule.${finding.id}.title`, { count: finding.count }) }}</span>
+              <span class="adv-dim">{{ finding.resources.map(resource => resource.name).join(', ') }}</span>
+            </li>
+          </ul>
+          <h4>{{ t('advisor.dora.title') }}</h4>
+          <p class="adv-dim">{{ t(`advisor.dora.${report.technical.dora?.reason || 'unavailable'}`) }}</p>
+          <ul v-if="report.recommendations?.length" class="adv-insight-list" data-test="advisor-cross-recommendations">
+            <li v-for="recommendation in report.recommendations" :key="recommendation.id">
+              {{ t(`advisor.recommendation.${recommendation.id}`, { resources: recommendation.resources?.join(', ') || '', sources: recommendation.sources?.join(', ') || '' }) }}
+            </li>
+          </ul>
+        </section>
+
         <div v-if="categories.length > 1" class="adv-cats" role="tablist">
           <button
             :class="['adv-cat', { active: category === 'all' }]" role="tab" :aria-selected="category === 'all'"
@@ -458,6 +486,13 @@ onUpdated(refreshIcons)
 .adv-score.warn { color: var(--yellow); border-color: var(--yellow); }
 .adv-score.bad { color: var(--red); border-color: var(--red); }
 .adv-cats { display: flex; gap: 4px; flex-wrap: wrap; }
+.adv-budget, .adv-product-insights { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px solid var(--border); }
+.adv-budget h4, .adv-product-insights h4 { margin: 0; font-size: 11px; color: var(--text-dim); }
+.adv-budget-row { display: grid; grid-template-columns: minmax(70px, 0.35fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: baseline; font-size: 11px; }
+.adv-budget-row strong { color: var(--text); }
+.adv-budget-row span { color: var(--text-dim); overflow-wrap: anywhere; }
+.adv-insight-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+.adv-insight-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
 .adv-cat { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 14px; background: transparent; color: var(--text-dim); font-size: 11px; cursor: pointer; }
 .adv-cat svg { width: 12px; height: 12px; }
 .adv-cat:hover { background: var(--bg-hover); color: var(--text); }
@@ -527,4 +562,5 @@ onUpdated(refreshIcons)
   .adv-head { flex-direction: column; }
   .adv-tag { display: none; }
 }
+@media (max-width: 560px) { .adv-budget-row { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 </style>

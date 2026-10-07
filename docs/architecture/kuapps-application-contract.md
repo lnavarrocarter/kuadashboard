@@ -117,6 +117,52 @@ A different identity is `mismatch`. A failed read (expired session, missing prof
 KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Team publishing skips these applications until the bundle carries scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
 
 ## Resource membership
+## Extension sources and evidence (#156)
+
+`lib/kua/extensionContract.js` defines strict JSON Schemas and runtime normalizers for manifest version 1 and evidence schema version 1. Manifests identify the source, publisher, semantic version, contract version, transport/runtime, supported scopes and declared permissions. Every capability is present as an explicit boolean: `discovery`, `enrichment`, `relationshipEvidence`, `telemetry`, `historicalSearch` and `findings`. A declaration describes a source; it does not authorize remote calls or replace a user's per-connection/tool selection.
+
+Example manifest:
+
+```json
+{
+  "manifestVersion": 1,
+  "id": "kua.internal",
+  "version": "1.0.0",
+  "contractVersion": 1,
+  "source": { "kind": "builtin", "publisher": "KUA", "name": "KUA internal registry" },
+  "capabilities": { "discovery": false, "enrichment": true, "relationshipEvidence": true, "telemetry": false, "historicalSearch": true, "findings": false },
+  "transport": { "kind": "internal", "runtime": "node" },
+  "scopes": ["application", "resource"],
+  "permissions": ["kua.registry.read", "kua.architecture.history.read"]
+}
+```
+
+`GET /api/kua-apps/applications/:id/extensions` lists the manifests, and `GET /api/kua-apps/applications/:id/evidence` returns evidence records plus per-source availability. An evidence record carries a source id, a safe reference, application/resource scope, observed/retrieved timestamps, optional revision/generation, freshness (`current`, `stale` or `unknown`) and class (`observation`, `inference` or `history`). Unknown schema versions, unsupported URI schemes, cross-application/resource scopes and source-id spoofing are rejected. Duplicate records from the same source collapse by id.
+
+The initial `kua.internal` adapter is read-only. It maps existing registry resources to observations, suggested relationships to inferences, human relationship decisions to history, and Architecture changes to historical references. It does not copy snapshots, change payloads, credentials or raw evidence into a second store. Registry timestamps do not prove that cloud state was freshly observed, so the adapter reports freshness as `unknown`. A source failure is isolated in the evidence response; local resources and normal KUApps editing remain available. Evidence is not membership and never confirms a relationship.
+
+Example evidence record:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "evidence:7f52d6b8",
+  "sourceId": "kua.internal",
+  "reference": { "kind": "kua_resource", "uri": "kua://applications/app-orders/registry/resources/resource-orders-api", "label": "orders-api" },
+  "scope": { "applicationId": "app-orders", "resourceId": "resource-orders-api", "scopeKey": "kua-scope:prod" },
+  "observedAt": "2026-10-06T12:00:00.000Z",
+  "retrievedAt": "2026-10-06T12:01:00.000Z",
+  "revision": 12,
+  "generation": null,
+  "freshness": "unknown",
+  "class": "observation",
+  "summary": "Resource is present in the local registry via apm_resource."
+}
+```
+
+Evolution is fail-closed: additive or semantic changes to either strict schema increment its schema version; changes to shared adapter/runtime behavior increment `contractVersion`. A reader that encounters an unknown version marks only that source unavailable and preserves local KUApps data. Existing versions remain supported until a separately reviewed migration removes them.
+
+## Resource membership
 
 `ApplicationRegistryService` is the one place that attaches, updates and detaches a resource of an application (#150). The APM routes delegate to it, so Observability, Architecture and KUApps get the same behaviour.
 

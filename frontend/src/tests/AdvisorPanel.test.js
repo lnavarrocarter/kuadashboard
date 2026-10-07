@@ -85,12 +85,23 @@ describe('AdvisorPanel', () => {
           categories: ['product'],
           summary: { product: bucket({ medium: 1, findings: 1, passed: 4, checks: 5 }) },
           findings: [{ id: 'product.no_owner', category: 'product', severity: 'medium', count: 1, params: {}, resources: [{ kind: 'Application', name: 'checkout' }] }],
+          errorBudget: { objectives: [{ source: 'logs', errorRatePercent: 10, targetPercent: 5, consumedPercent: 200, remainingPercent: 0, burnRate: 2 }] },
+          technical: {
+            analyzedAt: '2026-10-01T12:00:00.000Z',
+            findings: [{ id: 'aws.lambda_plain_secrets', severity: 'high', count: 1, resources: [{ name: 'checkout-api' }] }],
+            dora: { available: false, reason: 'deployment_history_unavailable' },
+          },
+          recommendations: [{ id: 'error_budget_and_technical_risk', resources: ['checkout-api'] }],
           unavailable: [],
         }),
       },
     })
     expect(wrapper.text()).toContain('Advisor de producto')
     expect(wrapper.text()).toContain('La aplicación no tiene equipo dueño')
+    expect(wrapper.text()).toContain('Presupuesto de error de 24 horas')
+    expect(wrapper.text()).toContain('200.0% consumido')
+      expect(wrapper.text()).toContain('El consumo del presupuesto y el riesgo técnico alto coinciden en checkout-api')
+      expect(wrapper.text()).toContain('No hay historial de releases para calcular métricas DORA')
     expect(wrapper.find('.adv-cats').exists()).toBe(false)
     expect(wrapper.find('.adv-score').classes()).toContain('warn')
   })

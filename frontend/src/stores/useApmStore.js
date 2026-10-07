@@ -25,6 +25,7 @@ export const useApmStore = defineStore('apm', () => {
   const usage = ref(null)
   const forecast = ref(null)
   const series = ref({})
+  const logHistory = ref(null)
   const range = ref('24h')
   const environment = ref('')
   const team = ref('')
@@ -78,6 +79,7 @@ export const useApmStore = defineStore('apm', () => {
     cloudSuggestionsByApplication.value = {}
     forecast.value = null
     series.value = {}
+    logHistory.value = null
     processTrace.value = null
     architectureLink.value = null
     architectureProjects.value = []
@@ -168,6 +170,7 @@ export const useApmStore = defineStore('apm', () => {
   async function selectApplication(applicationId) {
     selectedApplicationId.value = applicationId || null
     series.value = {}
+    logHistory.value = null
     return loadSelectedApplication()
   }
 
@@ -201,6 +204,20 @@ export const useApmStore = defineStore('apm', () => {
     } catch (requestError) {
       error.value = requestError.message
       return []
+    }
+  }
+
+  async function loadLogHistory() {
+    if (!selectedApplicationId.value) { logHistory.value = null; return null }
+    const { from, to } = rangeBounds.value
+    const params = new URLSearchParams({ from: String(from), to: String(to) })
+    try {
+      logHistory.value = await request(`/applications/${selectedApplicationId.value}/log-series?${params}`, { headers: headers() })
+      return logHistory.value
+    } catch (requestError) {
+      logHistory.value = null
+      error.value = requestError.message
+      return null
     }
   }
 
@@ -597,6 +614,7 @@ export const useApmStore = defineStore('apm', () => {
     usage,
     forecast,
     series,
+    logHistory,
     range,
     environment,
     team,
@@ -624,6 +642,7 @@ export const useApmStore = defineStore('apm', () => {
     selectApplication,
     refreshLocal,
     loadSeries,
+    loadLogHistory,
     createApplication,
     updateApplication,
     loadArchitectureLink,

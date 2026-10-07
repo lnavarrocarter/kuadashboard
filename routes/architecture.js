@@ -9,7 +9,7 @@ const { ArchitectureCloudDiscoveryService } = require('../lib/architecture/cloud
 const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryReader');
 const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
-const { adviseProduct } = require('../lib/advisor/product');
+const { adviseProduct, summarizeTechnicalFindings, crossRecommendations } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 
@@ -131,12 +131,33 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
   });
 
   // Confirmed dependencies with the error rate of their target in the local log cache (#172).
-  async function advisorDependencies(application) {
-    if (!application.profileId || !application.region) return [];
+  async function advisorLogAnalysis(application) {
+    if (!application) return { dependencies: [], resourceLogs: [], uncachedLogResources: [], unavailableLogScopeResources: [] };
     try {
-      const { dependencySignals } = require('../lib/kua/relationshipSignals');
-      return await dependencySignals({ apmDatabase, application, cache: logCache() });
-    } catch (_) { return []; }
+      const { productLogAnalysis } = require('../lib/kua/relationshipSignals');
+      return await productLogAnalysis({ apmDatabase, application, cache: logCache() });
+    } catch (_) { return { dependencies: [], resourceLogs: [], uncachedLogResources: [], unavailableLogScopeResources: [] }; }
+  }
+
+  function advisorTechnicalAnalysis(application) {
+    const store = postureStore();
+    const reports = [];
+    const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+    for (const scope of apmDatabase.listApplicationScopes(application.id)) {
+      const binding = apmDatabase.getScopeBinding(application.id, scope.key);
+      if (binding?.status !== 'verified') continue;
+      let historyScope;
+      if (scope.provider === 'aws' && scope.location) historyScope = `aws:${binding.profileId}:${scope.location}`;
+      else if (scope.provider === 'gcp' && scope.scopeId) historyScope = `gcp:${binding.profileId}:${scope.scopeId}`;
+      else if (scope.provider === 'kubernetes' && scope.scopeId) historyScope = `kubernetes:${scope.scopeId}:all`;
+      if (!historyScope) continue;
+      const latest = store.latest(historyScope, { maxAgeMs });
+      if (latest) reports.push({ ...latest, provider: scope.provider, scopeId: scope.scopeId, location: scope.location });
+    }
+    return {
+      ...summarizeTechnicalFindings(reports, apmDatabase.listRegistryResources(application.id)),
+      dora: { available: false, reason: 'deployment_history_unavailable' },
+    };
   }
 
   // Product lens of the Advisor for a KUApps application (any provider):
@@ -148,16 +169,23 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       const application = apmDatabase?.getApplication(req.params.applicationId);
       if (!applicationAvailableToProfile(application, profile)) return res.status(404).json({ error: 'KUA Application not found' });
       const overview = apmDatabase.getOverview(application.id);
+      const logAnalysis = await advisorLogAnalysis(application);
       const report = adviseProduct({
         application,
         overview: {
           ...overview,
-          health: evaluateThresholds(overview.metrics, application.thresholds),
+          health: evaluateThresholds(overview.metrics, application.thresholds, logAnalysis.logHealth),
+          logHealth: logAnalysis.logHealth,
           latestRun: apmDatabase.getLatestCollectionRun(application.id),
         },
         siblings: apmDatabase.listApplications({ profileId: profile }),
-        dependencies: await advisorDependencies(application),
+        dependencies: logAnalysis.dependencies || [],
+        resourceLogs: logAnalysis.resourceLogs || [],
+        uncachedLogResources: logAnalysis.uncachedLogResources || [],
+        unavailableLogScopeResources: logAnalysis.unavailableLogScopeResources || [],
       });
+      report.technical = advisorTechnicalAnalysis(application);
+      report.recommendations = crossRecommendations(report.errorBudget, report.technical);
       // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
       res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id, label: application.name }), store: postureStore() }));
     } catch (error) { handleError(res, error); }

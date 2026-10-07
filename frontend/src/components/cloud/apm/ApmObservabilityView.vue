@@ -222,6 +222,37 @@
               </div>
             </section>
 
+            <section v-if="store.logHistory" class="resource-metric-section apm-log-history" data-test="apm-log-history">
+              <header class="resource-metric-header">
+                <i data-lucide="scroll-text"></i>
+                <h3>{{ t('apm.logs.historyTitle') }}</h3>
+                <span class="resource-metric-count">{{ t('apm.logs.historyWindow', { days: store.logHistory.coverage.limitedToDays }) }}</span>
+              </header>
+              <div v-if="store.logHistory.points?.length" class="chart-grid">
+                <CloudMetricChart
+                  :label="t('apm.logs.errorRateSeries')" unit="%" :points="logErrorRatePoints"
+                  color="#f85149" show-date :freshness="logHistoryFreshness"
+                />
+                <CloudMetricChart
+                  :label="t('apm.logs.warningRateSeries')" unit="%" :points="logWarningRatePoints"
+                  color="#d29922" show-date :freshness="logHistoryFreshness"
+                />
+              </div>
+              <div v-else class="apm-empty compact"><span>{{ t('apm.logs.noHistory') }}</span></div>
+              <details v-if="store.logHistory.coverage.uncachedResources.length" class="analysis-disclaimer resource-coverage">
+                <summary>{{ t('apm.logs.uncached', { count: store.logHistory.coverage.uncachedResources.length }) }}</summary>
+                <ul class="resource-coverage-list">
+                  <li v-for="resource in store.logHistory.coverage.uncachedResources" :key="resource.id || resource.name">{{ resource.name }}</li>
+                </ul>
+              </details>
+              <details v-if="store.logHistory.coverage.unavailableScopeResources.length" class="analysis-disclaimer resource-coverage">
+                <summary>{{ t('apm.logs.scopeUnavailable', { count: store.logHistory.coverage.unavailableScopeResources.length }) }}</summary>
+                <ul class="resource-coverage-list">
+                  <li v-for="resource in store.logHistory.coverage.unavailableScopeResources" :key="resource.id || resource.name">{{ resource.name }}</li>
+                </ul>
+              </details>
+            </section>
+
             <!-- Types with no collector are kept visible as inventory, but must not take a full
                  section each: that space belongs to resources that actually report something. -->
             <section v-if="!props.overviewOnly && topologyOnlySections.length" class="topology-only-strip">
@@ -253,6 +284,7 @@
             @analyze-cloud="analyzeCloudTopology"
             @add-cloud-resource="addCloudResource"
             @open-lambda-logs="emit('open-lambda-logs', $event)"
+            @open-kubernetes-logs="emit('open-kubernetes-logs', $event)"
           />
 
           <ApmApplicationLogs
@@ -583,8 +615,8 @@ const kubernetesPreviewOpen = ref(false)
 const kubernetesContextId = ref('')
 const savingThresholds = ref(false)
 const thresholdError = ref('')
-const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyPodsPercent: 100, restartDelta: 1 })
-const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true })
+const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyPodsPercent: 100, restartDelta: 1, recurringSignatureGrowthPercent: 100 })
+const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true, recurringSignatureGrowthPercent: true })
 const activeView = ref('overview')
 const selectedResourceId = ref('')
 const confirmingSuggestions = ref(false)
@@ -594,9 +626,20 @@ const thresholdDefinitions = computed(() => [
   { key: 'durationMs', label: t('apm.threshold.duration'), description: t('apm.threshold.durationHint'), min: 0, step: 1 },
   { key: 'readyPodsPercent', label: t('apm.threshold.readyPods'), description: t('apm.threshold.readyPodsHint'), min: 0, max: 100, step: 0.1 },
   { key: 'restartDelta', label: t('apm.threshold.restarts'), description: t('apm.threshold.restartsHint'), min: 0, step: 1 },
+  { key: 'recurringSignatureGrowthPercent', label: t('apm.threshold.signatureGrowth'), description: t('apm.threshold.signatureGrowthHint'), min: 0, max: 1000, step: 1 },
 ])
 
 const metrics = computed(() => Object.fromEntries((store.overview?.metrics || []).map(metric => [metric.metricName, metric])))
+const logErrorRatePoints = computed(() => (store.logHistory?.points || []).map(point => ({ t: point.t, v: point.partial ? null : point.errorRatePercent })))
+const logWarningRatePoints = computed(() => (store.logHistory?.points || []).map(point => ({ t: point.t, v: point.partial ? null : point.warningRatePercent })))
+const logHistoryFreshness = computed(() => {
+  const syncedAt = store.logHistory?.coverage?.lastSyncAt
+  if (!syncedAt) return t('apm.logs.neverSynced')
+  const minutes = Math.max(0, Math.round((Date.now() - syncedAt) / 60_000))
+  if (minutes < 60) return t('apm.logs.minutesAgo', { n: minutes })
+  const hours = Math.round(minutes / 60)
+  return hours < 48 ? t('apm.logs.hoursAgo', { n: hours }) : t('apm.logs.daysAgo', { n: Math.round(hours / 24) })
+})
 const applicationResources = computed(() => store.topology.resources || [])
 const focusNode = computed(() => props.focusResource?.node || null)
 const focusedResource = computed(() => {
@@ -722,12 +765,12 @@ function kpiDetail(item) {
 async function loadCharts() {
   if (!store.selectedApplicationId) return
   const resourceId = focusedResource.value?.id || ''
-  await Promise.all(chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
+  await Promise.all([...chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
     resourceId,
     resourceType: chart.resourceType,
     kind: chart.kind,
     key: seriesKey(chart),
-  })))
+  })), store.loadLogHistory()])
 }
 
 function kubernetesLogResource(resource) {
@@ -1093,6 +1136,10 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true }, reques
 .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(105px, 1fr)); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 12px; }
 .kpi-grid.compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .resource-metric-section { margin-bottom: 18px; }
+.resource-coverage { min-width: 0; padding-top: 5px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 10px; }
+.resource-coverage summary { cursor: pointer; line-height: 1.4; }
+.resource-coverage-list { max-height: 130px; overflow: auto; overflow-wrap: anywhere; margin: 5px 0 0; padding: 0 8px 0 20px; }
+.resource-coverage-list li { padding: 2px 0; }
 .resource-metric-header { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
 .resource-metric-header h3 { font-size: 12px; font-weight: 650; margin: 0; }
 .resource-metric-header i { width: 14px; height: 14px; color: var(--text-dim); }

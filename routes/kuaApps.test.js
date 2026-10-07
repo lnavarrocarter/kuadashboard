@@ -97,6 +97,40 @@ test('local KUAAppBundle import rejects non-sanitized bundles', async () => {
   }
 });
 
+test('KUApps exposes versioned extension capabilities and attributed historical evidence', async () => {
+  const subject = await fixture();
+  try {
+    const application = await createSource(subject);
+    const sources = await subject.request(`/applications/${application.id}/extensions`);
+    assert.equal(sources.status, 200);
+    const internal = sources.body.sources.find(source => source.id === 'kua.internal');
+    assert.equal(internal.manifestVersion, 1);
+    assert.equal(internal.capabilities.discovery, false);
+    assert.equal(internal.capabilities.historicalSearch, true);
+    assert.ok(internal.permissions.includes('kua.architecture.history.read'));
+
+    const response = await subject.request(`/applications/${application.id}/evidence`);
+    assert.equal(response.status, 200);
+    assert.equal(response.body.sources[0].state, 'available');
+    const history = response.body.evidence.find(item => item.class === 'history');
+    assert.equal(history.scope.applicationId, application.id);
+    assert.equal(history.reference.kind, 'architecture_change');
+    assert.equal(JSON.stringify(response.body).includes('must-not-export'), false);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('KUApps extension endpoints return not found for unknown applications', async () => {
+  const subject = await fixture();
+  try {
+    assert.equal((await subject.request('/applications/missing/extensions')).status, 404);
+    assert.equal((await subject.request('/applications/missing/evidence')).status, 404);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('cloud backups upload the sanitized bundle and restore it as a new application', async () => {
   const stored = new Map();
   const account = {

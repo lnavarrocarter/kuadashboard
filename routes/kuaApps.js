@@ -5,11 +5,12 @@ const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { KuaApplicationService } = require('../lib/kua/applicationService');
+const { createKuaExtensionRegistry } = require('../lib/kua/extensionRegistry');
 const { explainRelationship } = require('../lib/kua/relationshipExplainer');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -19,6 +20,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     ...(verifier ? { verifier } : {}),
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'kuapps', details }),
   });
+  const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -96,6 +98,20 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
           targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
         })),
       });
+    } catch (error) { handleError(res, error); }
+  });
+  router.get('/applications/:applicationId/extensions', (req, res) => {
+    try {
+      if (!apmDatabase.getApplication(req.params.applicationId)) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404 });
+      res.json({ sources: extensions.listSources() });
+    } catch (error) { handleError(res, error); }
+  });
+  router.get('/applications/:applicationId/evidence', async (req, res) => {
+    try {
+      const applicationId = req.params.applicationId;
+      if (!apmDatabase.getApplication(applicationId)) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404 });
+      const resourceIds = apmDatabase.listRegistryResources(applicationId).map(resource => resource.id);
+      res.json(await extensions.queryEvidence({ applicationId, resourceIds }));
     } catch (error) { handleError(res, error); }
   });
   router.patch('/applications/:applicationId', (req, res) => send(res, 200, () =>

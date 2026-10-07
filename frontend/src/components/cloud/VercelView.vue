@@ -206,6 +206,15 @@
             </tr>
           </tbody>
         </table>
+        <AdvisorPanel
+          v-if="vercelStore.selectedProject"
+          :report="vercelStore.projectAdvisor"
+          :loading="vercelStore.projectAdvisorLoading"
+          :error="vercelStore.projectAdvisorError"
+          refreshable
+          storage-key="advisor.vercel"
+          @refresh="vercelStore.fetchProjectAdvisor(vercelStore.selectedProject.id, { force: true })"
+        />
       </div>
 
       <!-- ── Deployments ──────────────────────────────────────────────────── -->
@@ -711,8 +720,8 @@ import { settings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
 import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
-import { useTerminalStore } from '../../stores/useTerminalStore'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
+import { useTerminalStore } from '../../stores/useTerminalStore'
 
 const props = defineProps({
   activeService: { type: String, default: 'overview' },
@@ -768,6 +777,10 @@ watch(
     // A project change alone (from the header or the Projects table) only matters to
     // project-scoped views; reloading others (e.g. Projects) would just flash the table.
     const onlyProjectChanged = previous && service === previous[0] && profileId === previous[1]
+    if (onlyProjectChanged && service === 'projects') {
+      if (vercelStore.selectedProject?.id) vercelStore.fetchProjectAdvisor(vercelStore.selectedProject.id)
+      return
+    }
     if (onlyProjectChanged && !PROJECT_SCOPED_SERVICES.has(service)) return
     reload(service)
   },
@@ -784,7 +797,10 @@ function reload(service, options = {}) {
     await vercelStore.fetchProjects()
     await apmViewRef.value?.refreshLocal?.()
   }
-  else if (svc === 'projects') load = () => vercelStore.fetchProjects()
+  else if (svc === 'projects') load = async () => {
+    await vercelStore.fetchProjects()
+    if (vercelStore.selectedProject?.id) await vercelStore.fetchProjectAdvisor(vercelStore.selectedProject.id)
+  }
   else if (svc === 'overview') load = () => vercelStore.fetchOverview()
   else if (svc === 'deployments' && vercelStore.selectedProject)
     load = () => vercelStore.fetchDeployments(vercelStore.selectedProject.id, { target: vercelStore.deploymentTarget })
