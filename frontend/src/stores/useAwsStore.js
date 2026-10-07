@@ -33,6 +33,7 @@ export const useAwsStore = defineStore('aws', () => {
   const overview         = ref(null)
   const overviewInsights = ref(null)
   const overviewAdvisor  = ref(null)
+  const s3Advisor        = ref(null)
   const regions          = ref([])
   const eksClusters      = ref([])
   const ecsServices      = ref([])
@@ -129,6 +130,7 @@ export const useAwsStore = defineStore('aws', () => {
     overview.value         = null
     overviewInsights.value = null
     overviewAdvisor.value  = null
+    s3Advisor.value        = null
     regions.value          = []
     eksClusters.value      = []
     ecsServices.value      = []
@@ -206,6 +208,24 @@ export const useAwsStore = defineStore('aws', () => {
     if (key !== activeProfileId.value) return data
     markFetched('advisor', key)
     overviewAdvisor.value = data
+    return data
+  }
+
+  async function fetchS3AdvisorCache() {
+    const key = activeProfileId.value
+    const data = await apiFetch('/api/cloud/aws/overview/advisor/s3', { headers: headers() })
+    if (key === activeProfileId.value) s3Advisor.value = data.report ? { ...data, ...data.report } : null
+    return data
+  }
+
+  async function scanS3Advisor(expectedBucketCount, { refresh = false } = {}) {
+    const key = activeProfileId.value
+    const data = await apiFetch('/api/cloud/aws/overview/advisor/s3', {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed: true, expectedBucketCount, refresh }),
+    })
+    if (key === activeProfileId.value) s3Advisor.value = { ...data, ...data.report }
     return data
   }
 
@@ -1344,7 +1364,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, overview, overviewInsights, overviewAdvisor, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, overview, overviewInsights, overviewAdvisor, s3Advisor, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
@@ -1355,7 +1375,7 @@ export const useAwsStore = defineStore('aws', () => {
     bedrockModels, lexBots, cfnStacks,
     loading, error, accessRequest,
     setActiveProfile, runInBackground,
-    fetchOverview, fetchOverviewInsights, fetchOverviewAdvisor, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
+    fetchOverview, fetchOverviewInsights, fetchOverviewAdvisor, fetchS3AdvisorCache, scanS3Advisor, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
     fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
     fetchEc2Instances, startEc2Instance, stopEc2Instance,

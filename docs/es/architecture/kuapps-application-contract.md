@@ -117,6 +117,52 @@ Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, per
 KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). La publicación al equipo omite estas aplicaciones hasta que el bundle lleve scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps.
 
 ## Membresía de recursos
+## Fuentes de extensiones y evidencia (#156)
+
+`lib/kua/extensionContract.js` define JSON Schemas estrictos y normalizadores en runtime para manifest versión 1 y evidencia versión 1. Cada manifest identifica la fuente, publisher, versión semántica, versión del contrato, transporte/runtime, scopes admitidos y permisos declarados. Todas las capacidades aparecen como booleanos explícitos: `discovery`, `enrichment`, `relationshipEvidence`, `telemetry`, `historicalSearch` y `findings`. La declaración describe la fuente; no autoriza llamadas remotas ni reemplaza la selección explícita de conexiones/herramientas de la persona usuaria.
+
+Ejemplo de manifest:
+
+```json
+{
+  "manifestVersion": 1,
+  "id": "kua.internal",
+  "version": "1.0.0",
+  "contractVersion": 1,
+  "source": { "kind": "builtin", "publisher": "KUA", "name": "KUA internal registry" },
+  "capabilities": { "discovery": false, "enrichment": true, "relationshipEvidence": true, "telemetry": false, "historicalSearch": true, "findings": false },
+  "transport": { "kind": "internal", "runtime": "node" },
+  "scopes": ["application", "resource"],
+  "permissions": ["kua.registry.read", "kua.architecture.history.read"]
+}
+```
+
+`GET /api/kua-apps/applications/:id/extensions` lista los manifests y `GET /api/kua-apps/applications/:id/evidence` devuelve registros de evidencia más la disponibilidad de cada fuente. Cada registro conserva source id, referencia segura, scope de aplicación/recurso, fechas de observación/consulta, revisión/generación opcionales, frescura (`current`, `stale` o `unknown`) y clase (`observation`, `inference` o `history`). Se rechazan versiones desconocidas, esquemas de URI no admitidos, scopes de otra aplicación/recurso y la suplantación de source id. Los duplicados de una misma fuente se colapsan por id.
+
+El adaptador inicial `kua.internal` es de solo lectura. Proyecta recursos del registry como observaciones, relaciones sugeridas como inferencias, decisiones humanas sobre relaciones como historial y cambios de Architecture como referencias históricas. No copia snapshots, payloads de cambios, credenciales ni evidencia cruda a otro store. Las fechas del registry no prueban que el estado cloud se haya observado recientemente, por eso la frescura se informa como `unknown`. Las fallas de una fuente se aíslan en la respuesta de evidencia; los recursos locales y la edición normal de KUApps siguen disponibles. La evidencia no es membresía ni confirma relaciones.
+
+Ejemplo de registro de evidencia:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "evidence:7f52d6b8",
+  "sourceId": "kua.internal",
+  "reference": { "kind": "kua_resource", "uri": "kua://applications/app-orders/registry/resources/resource-orders-api", "label": "orders-api" },
+  "scope": { "applicationId": "app-orders", "resourceId": "resource-orders-api", "scopeKey": "kua-scope:prod" },
+  "observedAt": "2026-10-06T12:00:00.000Z",
+  "retrievedAt": "2026-10-06T12:01:00.000Z",
+  "revision": 12,
+  "generation": null,
+  "freshness": "unknown",
+  "class": "observation",
+  "summary": "Resource is present in the local registry via apm_resource."
+}
+```
+
+La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de los schemas estrictos incrementan su versión; los cambios al comportamiento compartido de adaptadores/runtime incrementan `contractVersion`. Si un lector recibe una versión desconocida, marca solo esa fuente como no disponible y conserva los datos locales de KUApps. Las versiones existentes siguen soportadas hasta que una migración revisada por separado las retire.
+
+## Membresía de recursos
 
 `ApplicationRegistryService` es el único lugar que asocia, actualiza y desvincula un recurso de una aplicación (#150). Las rutas de APM delegan en él, así que Observabilidad, Arquitectura y KUApps se comportan igual.
 

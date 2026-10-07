@@ -36,6 +36,47 @@ afterEach(() => {
 })
 
 describe('APM collection controls', () => {
+  it('renders historical log rates with freshness and explicit cache coverage', async () => {
+    const syncedAt = Date.now() - 5 * 60_000
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [] })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/log-series?')) return response({
+        points: [{ t: Date.now() - 30 * 60_000, errorRatePercent: 25, warningRatePercent: 10, partial: true }],
+        coverage: {
+          lastSyncAt: syncedAt,
+          limitedToDays: 7,
+          uncachedResources: Array.from({ length: 134 }, (_, index) => ({ id: `resource-${index}`, name: `worker-${index}` })),
+          unavailableScopeResources: [],
+        },
+      })
+      if (url.includes('/series?')) return response([])
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', applicationId: 'app-a', hideApplicationList: true, overviewOnly: true },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true, ApmTopologyGraph: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="apm-log-history"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Historical log rates')
+    const coverage = wrapper.get('.resource-coverage')
+    expect(coverage.element.open).toBe(false)
+    expect(coverage.get('summary').text()).toBe('Without cached logs: 134 resources.')
+    expect(coverage.findAll('li')).toHaveLength(134)
+    expect(coverage.text()).toContain('worker-133')
+    const charts = wrapper.get('[data-test="apm-log-history"]').findAllComponents({ name: 'CloudMetricChart' })
+    expect(charts).toHaveLength(2)
+    expect(charts[0].props('points')).toEqual([{ t: expect.any(Number), v: null }])
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/log-series?'), expect.any(Object))
+    wrapper.unmount()
+  })
+
   it('renders a read-only observability summary without application CRUD or secondary tabs', async () => {
     global.fetch = vi.fn((url) => {
       if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])

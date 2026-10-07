@@ -6,7 +6,7 @@ const { createAwsDeploymentReader } = require('../lib/apm/awsDeploymentReader');
 const { createEksWorkloadReader } = require('../lib/apm/eksWorkloadReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
-const { buildLogEvidence } = require('../lib/logIntelligenceEvidence');
+const { applicationLogHistory, loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
@@ -600,13 +600,11 @@ function createApmRouter({
     res.status(204).end();
   });
 
-  // Observed evidence from cached log groups of the application's profile/region
-  // (local reads only). A failure here never blocks the structural assessment.
+  // Observed evidence from each resource's local CloudWatch/Kubernetes cache scope.
+  // A failure here never blocks the structural assessment.
   async function logEvidenceFor(application, resources, edges) {
-    if (!application.profileId || !application.region) return null;
     try {
-      const intelligenceByGroup = await logCache().intelligenceForScope({ profileId: application.profileId, region: application.region });
-      return buildLogEvidence({ application, resources, edges, intelligenceByGroup });
+      return (await loadApplicationSignals({ apmDatabase: database, application, cache: logCache() })).evidence;
     } catch (error) {
       console.warn('[apm] log evidence:', error.message);
       return null;
@@ -685,15 +683,30 @@ function createApmRouter({
     res.status(204).end();
   });
 
-  router.get('/applications/:applicationId/overview', (req, res) => {
+  router.get('/applications/:applicationId/overview', async (req, res) => {
     const application = scopedApplication(req, res);
     if (!application) return;
     const overview = database.getOverview(application.id, { from: req.query.from, to: req.query.to });
+    const now = Date.now();
+    const logHistory = await applicationLogHistory({
+      apmDatabase: database, application, cache: logCache(), from: now - 2 * 24 * 60 * 60 * 1000, to: now,
+    });
     res.json({
       ...overview,
-      health: evaluateThresholds(overview.metrics, application.thresholds),
+      health: evaluateThresholds(overview.metrics, application.thresholds, logHistory.health),
+      logHealth: logHistory.health,
       latestRun: database.getLatestCollectionRun(application.id),
     });
+  });
+
+  router.get('/applications/:applicationId/log-series', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    const end = Number(req.query.to) || Date.now();
+    const start = Number(req.query.from) || end - 24 * 60 * 60 * 1000;
+    res.json(await applicationLogHistory({
+      apmDatabase: database, application, cache: logCache(), from: start, to: end,
+    }));
   });
 
   router.get('/applications/:applicationId/series', (req, res) => {

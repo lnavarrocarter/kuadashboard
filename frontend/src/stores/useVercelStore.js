@@ -27,6 +27,9 @@ export const useVercelStore = defineStore('vercel', () => {
   const deployments     = ref([])
   const domains         = ref([])
   const envVars         = ref([])
+  const projectAdvisor  = ref(null)
+  const projectAdvisorLoading = ref(false)
+  const projectAdvisorError = ref('')
   const functions       = ref([])
   const checks          = ref([])
   const events          = ref([])
@@ -109,6 +112,9 @@ export const useVercelStore = defineStore('vercel', () => {
     deployments.value     = []
     domains.value         = []
     envVars.value         = []
+    projectAdvisor.value  = null
+    projectAdvisorLoading.value = false
+    projectAdvisorError.value = ''
     functions.value       = []
     checks.value          = []
     events.value          = []
@@ -130,12 +136,18 @@ export const useVercelStore = defineStore('vercel', () => {
   }
 
   function selectProject(project) {
-    projectChangeRequestId++
+    const projectChanged = selectedProject.value?.id !== project?.id
+    if (projectChanged) projectChangeRequestId++
     selectedProject.value = project
     rememberProject(activeProfileId.value, project?.id || null)
     deployments.value     = []
     domains.value         = []
     envVars.value         = []
+    if (projectChanged) {
+      projectAdvisor.value  = null
+      projectAdvisorLoading.value = false
+      projectAdvisorError.value = ''
+    }
     functions.value       = []
     checks.value          = []
     dnsRecords.value      = []
@@ -270,6 +282,23 @@ export const useVercelStore = defineStore('vercel', () => {
       setError(e)
     } finally {
       if (!shouldIgnoreResponse(requestId)) loading.value = false
+    }
+  }
+
+  async function fetchProjectAdvisor(projectId, { force = false } = {}) {
+    const requestId = projectChangeRequestId
+    projectAdvisorLoading.value = true
+    projectAdvisorError.value = ''
+    try {
+      const path = `/api/cloud/vercel/projects/${encodeURIComponent(projectId)}/advisor${force ? '?refresh=1' : ''}`
+      const report = await apiFetch(path, { headers: headers() })
+      if (shouldIgnoreResponse(requestId)) return
+      projectAdvisor.value = report
+    } catch (e) {
+      if (shouldIgnoreResponse(requestId)) return
+      projectAdvisorError.value = e?.message || String(e)
+    } finally {
+      if (!shouldIgnoreResponse(requestId)) projectAdvisorLoading.value = false
     }
   }
 
@@ -435,6 +464,9 @@ export const useVercelStore = defineStore('vercel', () => {
     deployments,
     domains,
     envVars,
+    projectAdvisor,
+    projectAdvisorLoading,
+    projectAdvisorError,
     functions,
     checks,
     events,
@@ -466,6 +498,7 @@ export const useVercelStore = defineStore('vercel', () => {
     fetchDeployments,
     fetchDomains,
     fetchEnvVars,
+    fetchProjectAdvisor,
     fetchFunctions,
     fetchChecks,
     redeployDeployment,

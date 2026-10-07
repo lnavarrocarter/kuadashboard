@@ -71,6 +71,14 @@ function cronDefinitions(project) {
 
 // In-memory PKCE / state store (per-process, short-lived)
 const oauthStates = new Map(); // state → { createdAt, profileName }
+const projectAdvisorCache = new Map();
+const PROJECT_ADVISOR_TTL_MS = 15 * 60 * 1000;
+
+function vercelAdvisorResponse(profileId, projectId, report, fresh = false) {
+  let store = null;
+  try { store = getPostureStore(); } catch (error) { console.warn('[advisor] posture:', error.message); }
+  return finalizeAdvisor(report, { scopes: scopeKeys('vercel', { profileId, projectId }), store, fresh });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -205,6 +213,36 @@ router.get('/projects', async (req, res) => {
         : null,
     })));
   } catch (err) { handleErr(res, err); }
+});
+
+router.get('/projects/:projectId/advisor', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const cacheKey = `${profileId}|${req.params.projectId}`;
+  const cached = projectAdvisorCache.get(cacheKey);
+  if (!req.query.refresh && cached && Date.now() - cached.at < PROJECT_ADVISOR_TTL_MS) {
+    return res.json({ ...vercelAdvisorResponse(profileId, req.params.projectId, cached.report), fromCache: true });
+  }
+  try {
+    const { token, teamId } = await resolveVercelAuth(profileId);
+    const projectPath = withTeam(VERCEL_ENDPOINTS.project(req.params.projectId), teamId);
+    const envPath = withTeam(`/v9/projects/${encodeURIComponent(req.params.projectId)}/env`, teamId);
+    const [project, envData] = await Promise.all([
+      vercelFetch(projectPath, token),
+      vercelFetch(envPath, token),
+    ]);
+    const envVars = (envData.envs || []).map(({ key, type, target }) => ({ key, type, target }));
+    const scopedProject = { ...project, id: project.id || req.params.projectId };
+    const report = adviseVercel({
+      projects: [scopedProject],
+      envs: new Map([[scopedProject.id, envVars]]),
+      unavailable: [{ source: 'deployments' }, { source: 'domains' }],
+      teamId,
+    });
+    if (projectAdvisorCache.size >= 500) projectAdvisorCache.delete(projectAdvisorCache.keys().next().value);
+    projectAdvisorCache.set(cacheKey, { at: Date.now(), report });
+    res.json(vercelAdvisorResponse(profileId, req.params.projectId, report, true));
+  } catch (error) { handleErr(res, error); }
 });
 
 // ─── GET /projects/:projectId/deployments ─────────────────────────────────────

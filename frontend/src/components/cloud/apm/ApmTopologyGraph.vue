@@ -38,7 +38,7 @@
       </div>
     </section>
 
-    <section v-if="!reviewOnly && logs && (logs.signals.length || logs.uncachedResourceIds.length)" class="log-intelligence">
+    <section v-if="!reviewOnly && logs && (logs.signals.length || logs.uncachedResourceIds.length || logs.unavailableScopeResourceIds?.length)" class="log-intelligence">
       <div class="dependency-title"><i data-lucide="scroll-text"></i> {{ t('apm.logs.title') }}</div>
       <div v-for="signal in logs.signals" :key="signal.resourceId + signal.logGroup" class="log-signal">
         <div class="log-signal-head">
@@ -49,6 +49,9 @@
           </span>
           <button v-if="resourceType(signal.resourceId) === 'lambda'" class="btn sm" type="button" @click="$emit('open-lambda-logs', signal.resourceName)">
             <i data-lucide="file-search"></i> {{ t('apm.openLogs') }}
+          </button>
+          <button v-else-if="resourceType(signal.resourceId) === 'kubernetes'" class="btn sm" type="button" @click="$emit('open-kubernetes-logs', resourceById(signal.resourceId))">
+            <i data-lucide="scroll-text"></i> {{ t('apm.openLogs') }}
           </button>
         </div>
         <div v-if="Object.keys(signal.severeKeywords).length" class="log-keywords">
@@ -69,9 +72,18 @@
         </ul>
         <small class="log-freshness">{{ t('apm.logs.freshness', { synced: formatAge(signal.lastSyncAt), last: formatAge(signal.lastEventAt) }) }}</small>
       </div>
-      <p v-if="logs.uncachedResourceIds.length" class="analysis-disclaimer">
-        {{ t('apm.logs.uncached', { names: logs.uncachedResourceIds.map(resourceName).join(', ') }) }}
-      </p>
+      <details v-if="logs.uncachedResourceIds.length" class="analysis-disclaimer resource-coverage">
+        <summary>{{ t('apm.logs.uncached', { count: logs.uncachedResourceIds.length }) }}</summary>
+        <ul class="resource-coverage-list">
+          <li v-for="resourceId in logs.uncachedResourceIds" :key="resourceId">{{ resourceName(resourceId) }}</li>
+        </ul>
+      </details>
+      <details v-if="logs.unavailableScopeResourceIds?.length" class="analysis-disclaimer resource-coverage">
+        <summary>{{ t('apm.logs.scopeUnavailable', { count: logs.unavailableScopeResourceIds.length }) }}</summary>
+        <ul class="resource-coverage-list">
+          <li v-for="resourceId in logs.unavailableScopeResourceIds" :key="resourceId">{{ resourceName(resourceId) }}</li>
+        </ul>
+      </details>
       <div v-if="logs.unresolvedReferences?.length" class="log-unresolved">
         <small>{{ t('apm.logs.referencedOutside') }}</small>
         <span v-for="ref in logs.unresolvedReferences" :key="`${ref.type}:${ref.name}`" class="finding info" :title="ref.target">
@@ -172,7 +184,7 @@ const props = defineProps({
   reviewOnly: { type: Boolean, default: false },
 })
 
-defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'explain'])
+defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'open-kubernetes-logs', 'explain'])
 const { t } = useI18n()
 
 const resolvedEdges = computed(() => {
@@ -267,6 +279,10 @@ onMounted(renderIcons)
 .analysis-heading button { text-transform: none; }
 .cloud-scan-summary { color: #58a6ff !important; }
 .analysis-copy p, .analysis-disclaimer { margin: 0; color: var(--text-dim); font-size: 10px; }
+.resource-coverage { min-width: 0; padding-top: 5px; border-top: 1px solid var(--border); }
+.resource-coverage summary { cursor: pointer; line-height: 1.4; }
+.resource-coverage-list { max-height: 130px; overflow: auto; overflow-wrap: anywhere; margin: 5px 0 0; padding: 0 8px 0 20px; }
+.resource-coverage-list li { padding: 2px 0; }
 .finding-list { display: flex; flex-wrap: wrap; gap: 5px; }
 .finding { padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 9px; }
 .finding.critical { color: #f85149; border-color: color-mix(in srgb, #f85149 45%, var(--border)); }

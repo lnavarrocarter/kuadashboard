@@ -249,22 +249,24 @@ Exit criteria for the AWS slice: a cached Lambda's errors, recurring signatures 
 
 Delivered first slice. The overviews answer "what is running and how is it doing"; the Advisor adds "what should change". Two lenses, kept apart on purpose:
 
-- **Technical lens in each provider overview** (Kubernetes, AWS, GCP): security, infrastructure, architecture and development. These are properties of resources and accounts, so they live where those resources are listed.
+- **Technical lens in each provider overview** (Kubernetes, AWS, GCP, Vercel): security, infrastructure, architecture and development. These are properties of resources and accounts, so they live where those resources are listed.
 - **Product lens in KUApps**: objectives (breached, or left at KUA defaults), ownership, environment and release path (production without a pre-production stage), architecture of the user journeys, and telemetry coverage and freshness. These are properties of an application, so they live on the application.
 
 Design rules, shared with the log recommendations of Phase 18:
 
 - **Deterministic and evidence-first.** Every finding names its rule, severity, the affected resources (first 10 and the real count) and the provider documentation. No model calls; an AI slice must keep this shape (#93).
-- **No billed reads.** Kubernetes reuses the overview lists plus NetworkPolicies, PodDisruptionBudgets and HPAs. AWS reads only free control-plane APIs (IAM credential report, CloudTrail, EC2/RDS/EKS Describe, Lambda List), cached 15 minutes per profile and region; no Cost Explorer, CloudWatch metrics or S3 requests. GCP reuses the rows the overview already collected. The product lens reads the KUApps registry only.
+- **No billed reads by default.** Kubernetes reuses the overview lists plus NetworkPolicies, PodDisruptionBudgets and HPAs. AWS's regular scan reads control-plane APIs and is cached 15 minutes per profile and region; S3 runs separately only after the bucket count and conservative request-cost estimate are shown and the user confirms, then caches for 15 minutes. No Cost Explorer or CloudWatch metrics are added. GCP reuses the rows the overview already collected. The product lens reads the KUApps registry only.
 - **Partial data is explicit.** Each source settles on its own; a source that cannot be read is listed as not checked, with the IAM actions it needs, and its rules are skipped instead of reported as passing.
 - **Pure rules, thin adapters.** `lib/advisor/{kubernetes,aws,gcp,product}.js` turn collected data into one report shape (`lib/advisor/core.js`); the frontend renders it with one component (`AdvisorPanel.vue`) and i18n keys `advisor.rule.<id>.title/body`.
 - **Provider-neutral endpoint for the product lens** (`GET /api/architecture/applications/:id/advisor`), so applications of every provider, Kubernetes included, are covered.
 
-Next slices:
+Implemented follow-up (#96): error budget and burn rate from existing APM/log aggregates; recent technical Advisor reports are reused by verified application scopes, then filtered against registry membership before appearing in the product lens. Cross-recommendations connect high registered technical risk with budget burn. The deployment reader exposes active snapshots, not release/commit history, so DORA is explicitly unavailable rather than inferred from collection timestamps. No additional scans or billed reads are made.
+
+Implemented coverage (#95): AWS adds IAM wildcard/unused-role/password-policy checks, SQS/SNS encryption, DynamoDB PITR and CloudFront TLS. S3 checks are an explicit cost-confirmed scan with per-account cache; failed reads are reported as unavailable. Kubernetes adds cluster-admin bindings, Pod Security Admission labels and Secrets referenced by many pods. Vercel checks Preview protection and credential-like environment variable names without including values. AWS collector caps are surfaced as partial results, and deprecated-runtime catalogs carry a review date.
+
+Next slice:
 
 1. **Accept or mute findings, and score history (#94).** Accepted risk with reason and expiry, audited; posture trend stored in the snapshot history.
-2. **Coverage (#95).** S3 (billed requests, shown before scanning), IAM policies, Kubernetes RBAC and Pod Security Admission, a Vercel overview, and a freshness check for the hand-maintained deprecated-runtime lists.
-3. **Product lens v2 (#96).** Error budget and burn rate, DORA metrics from deployments, and the technical findings that affect the application's own resources (filtered by registry membership).
 
 Exit criteria for the first slice: every overview shows its Advisor with no additional cost, and every KUA Application shows its product lens.
 

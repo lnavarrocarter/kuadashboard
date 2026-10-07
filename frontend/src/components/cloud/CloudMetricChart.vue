@@ -4,6 +4,7 @@
       <span>{{ label }}</span>
       <strong>{{ formattedLatest }}</strong>
     </div>
+    <small v-if="freshness" class="cmc-freshness">{{ freshness }}</small>
     <div v-if="!points.length" class="cmc-empty">No data in this range</div>
     <div v-else class="cmc-canvas"><canvas ref="canvasEl"></canvas></div>
   </div>
@@ -32,6 +33,7 @@ const props = defineProps({
   xTickLimit: { type: Number, default: 7 },
   // Include the day in x labels, for ranges longer than a day.
   showDate: { type: Boolean, default: false },
+  freshness: { type: String, default: '' },
 })
 
 const canvasEl = ref(null)
@@ -115,6 +117,7 @@ onBeforeUnmount(() => chart?.destroy())
 .cmc-wrap { min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-row); padding: 10px 12px; }
 .cmc-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--text-dim); font-size: 11px; }
 .cmc-heading strong { color: var(--text); font-size: 15px; }
+.cmc-freshness { display: block; margin-top: 3px; color: var(--text-dim); font-size: 10px; }
 .cmc-canvas { position: relative; height: 138px; margin-top: 8px; }
 .cmc-empty { height: 138px; display: grid; place-items: center; color: var(--text-dim); font-size: 11px; }
 </style>

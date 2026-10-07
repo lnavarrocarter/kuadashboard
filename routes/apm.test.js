@@ -13,6 +13,9 @@ const { normalizeScope } = require('../lib/kua/applicationContract');
 const { createApmRouter } = require('./apm');
 const { createArchitectureRouter } = require('./architecture');
 const { createLogCache } = require('../lib/awsLogCache');
+const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+const { PostureStore } = require('../lib/advisor/posture');
+const { buildReport, check } = require('../lib/advisor/core');
 
 async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter } = {}) {
   // In-memory log cache: tests never touch the user's data directory.
@@ -62,6 +65,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     apmDatabase: database,
     auditLog: { log(event) { auditEvents.push(event); } },
     kubernetesAdapter,
+    logCache: () => logCache,
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -1163,6 +1167,76 @@ test('API returns the product advisor of an application, scoped by profile', asy
     }
     const otherProfile = await subject.architectureRequest(`/applications/${created.body.id}/advisor`, { profile: 'local:other' });
     assert.equal(otherProfile.status, 404);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('product advisor reads cached AWS and Kubernetes logs from each resource scope', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.database.createApplication({ name: 'checkout', environment: 'production', thresholds: { errorRatePercent: 2 } });
+    const awsScope = normalizeScope({ provider: 'aws', scopeId: '111111111111', location: 'us-east-1' });
+    const kubeScope = normalizeScope({ provider: 'kubernetes', scopeId: 'orders-prod' });
+    subject.database.addApplicationScope(application.id, awsScope);
+    subject.database.addApplicationScope(application.id, kubeScope);
+    subject.database.setScopeBinding(application.id, awsScope.key, { profileId: 'aws:production', status: 'verified' });
+    subject.database.setScopeBinding(application.id, kubeScope.key, { profileId: 'kube:production', status: 'verified' });
+    subject.database.addResource(application.id, {
+      type: 'lambda', key: 'arn:aws:lambda:us-east-1:111111111111:function:checkout-api',
+      arn: 'arn:aws:lambda:us-east-1:111111111111:function:checkout-api', name: 'checkout-api',
+    });
+    subject.database.addResource(application.id, {
+      type: 'kubernetes', key: 'orders-prod/payments/deployment/orders-worker',
+      kubeContext: 'orders-prod', namespace: 'payments', kind: 'Deployment', name: 'orders-worker',
+    });
+    new ApplicationRegistryService({ database: subject.database, architectureDatabase: subject.architectureDatabase }).reconcile(application);
+    new PostureStore(subject.database.db).cacheLatest('aws:aws:production:us-east-1', buildReport([
+      check({ id: 'aws.public_ip', category: 'security', severity: 'high' }, [
+        { kind: 'Lambda', name: 'checkout-api', detail: 'public endpoint' },
+        { kind: 'Lambda', name: 'unregistered-function' },
+      ]),
+    ], { now: Date.now() }));
+
+    const now = Date.now();
+    const groups = [
+      { profileId: 'aws:production', region: 'us-east-1', logGroup: '/aws/lambda/checkout-api' },
+      { profileId: 'k8s:orders-prod', region: 'payments', logGroup: 'payments/deployments/orders-worker' },
+    ];
+    for (const scope of groups) {
+      subject.logCache.enable(scope);
+      await subject.logCache.ingest({ ...scope, events: [
+        ...[1, 2, 3, 4].map(index => ({ eventId: `${scope.profileId}-${index}`, timestamp: now - index * 1000, message: 'ERROR timeout processing checkout' })),
+        { eventId: `${scope.profileId}-ok`, timestamp: now - 500, message: 'INFO checkout completed' },
+      ] });
+      await subject.logCache.syncGroup({
+        ...scope,
+        client: { async send() { return { events: [] }; } },
+        FilterLogEventsCommand: class { constructor(input) { this.input = input; } },
+      });
+    }
+
+    const history = await subject.genericRequest(`/applications/${application.id}/log-series?from=${now - 24 * 60 * 60 * 1000}&to=${now}`);
+    assert.equal(history.status, 200);
+    assert.equal(history.body.coverage.sources.length, 2);
+    assert.ok(history.body.points.some(point => point.errorRatePercent === 80));
+
+    const overview = await subject.genericRequest(`/applications/${application.id}/overview`);
+    assert.equal(overview.body.health.status, 'degraded');
+    assert.ok(overview.body.health.signals.some(signal => signal.metric === 'logErrorRatePercent'));
+
+    const advisor = await subject.architectureRequest(`/applications/${application.id}/advisor`, { profile: 'aws:production' });
+    assert.equal(advisor.status, 200);
+    const highRate = advisor.body.findings.find(finding => finding.id === 'product.resource_log_rate_high');
+    assert.deepEqual(highRate.resources.map(resource => resource.name).sort(), ['checkout-api', 'orders-worker']);
+    const recurring = advisor.body.findings.find(finding => finding.id === 'product.resource_recurring_log_errors');
+    assert.deepEqual(recurring.resources.map(resource => resource.name).sort(), ['checkout-api', 'orders-worker']);
+    const breached = advisor.body.findings.find(finding => finding.id === 'product.slo_breached');
+    assert.ok(breached?.resources.some(resource => resource.name === 'Log error rate' && resource.detail === '80 vs ≤ 5'), JSON.stringify(breached));
+    assert.ok(advisor.body.errorBudget.objectives.some(objective => objective.source === 'logs' && objective.burnRate > 1));
+    assert.deepEqual(advisor.body.technical.findings[0].resources.map(resource => resource.name), ['checkout-api']);
+    assert.equal(advisor.body.technical.dora.available, false);
+    assert.ok(advisor.body.recommendations.some(item => item.id === 'error_budget_and_technical_risk'));
   } finally {
     await subject.close();
   }

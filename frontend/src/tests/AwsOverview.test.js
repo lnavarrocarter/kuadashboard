@@ -117,6 +117,35 @@ describe('AwsOverview', () => {
       settings.lang = 'en'
     }
   })
+
+  it('shows the S3 request estimate and requires confirmation before scanning', async () => {
+    store.overview = overview({ services: [
+      { id: 's3', tab: 's3', label: 'S3', scope: 'global', status: 'active', count: 2 },
+    ] })
+    const scan = vi.spyOn(store, 'scanS3Advisor').mockResolvedValue({ report: { findings: [] } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const wrapper = mount(AwsOverview, { props: { profileId: 'local:dev', profileName: 'dev' } })
+    const button = wrapper.find('[data-test="s3-advisor-preflight"] button')
+
+    expect(wrapper.find('[data-test="s3-advisor-preflight"]').text()).toContain('2 bucket(s)')
+    expect(wrapper.find('[data-test="s3-advisor-preflight"]').text()).toContain('12 API requests')
+    await button.trigger('click')
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('USD 0.00000480'))
+    expect(scan).not.toHaveBeenCalled()
+
+    confirm.mockReturnValue(true)
+    await button.trigger('click')
+    expect(scan).toHaveBeenCalledWith(2, { refresh: false })
+  })
+
+  it('does not offer an S3 scan when the bucket inventory is truncated', () => {
+    const wrapper = mountWith(overview({ services: [
+      { id: 's3', tab: 's3', label: 'S3', scope: 'global', status: 'active', count: 10, truncated: true },
+    ] }))
+
+    expect(wrapper.find('[data-test="s3-advisor-preflight"]').text()).toContain('incomplete estimate')
+    expect(wrapper.find('[data-test="s3-advisor-preflight"] button').exists()).toBe(false)
+  })
 })
 
 describe('useAwsStore.fetchOverview', () => {

@@ -96,6 +96,38 @@ describe('useVercelStore — race condition protection', () => {
     expect(store.deploymentTarget).toBe('')
   })
 
+  it('keeps the project Advisor when selecting the active project again', () => {
+    const store = useVercelStore()
+    store.setActiveProfile('profile-1')
+    store.selectProject({ id: 'proj-a', name: 'Project A' })
+    store.projectAdvisor = { findings: [{ id: 'vercel.preview_credentials' }] }
+
+    store.selectProject({ id: 'proj-a', name: 'Project A' })
+
+    expect(store.projectAdvisor.findings[0].id).toBe('vercel.preview_credentials')
+  })
+
+  it('fetches project Advisor metadata without accepting a stale project response', async () => {
+    const resolvers = []
+    const apiFetch = vi.fn(() => new Promise(resolve => resolvers.push(resolve)))
+    vi.spyOn(ApiModule, 'useApi').mockReturnValue({ apiFetch })
+    const store = useVercelStore()
+    store.setActiveProfile('profile-1')
+    store.selectProject({ id: 'proj-a' })
+    const first = store.fetchProjectAdvisor('proj-a')
+    store.selectProject({ id: 'proj-b' })
+    const second = store.fetchProjectAdvisor('proj-b')
+
+    resolvers[1]({ findings: [{ id: 'vercel.preview_credentials' }] })
+    await second
+    resolvers[0]({ findings: [{ id: 'stale' }] })
+    await first
+
+    expect(apiFetch).toHaveBeenNthCalledWith(1, '/api/cloud/vercel/projects/proj-a/advisor', expect.any(Object))
+    expect(apiFetch).toHaveBeenNthCalledWith(2, '/api/cloud/vercel/projects/proj-b/advisor', expect.any(Object))
+    expect(store.projectAdvisor.findings[0].id).toBe('vercel.preview_credentials')
+  })
+
   it('clears context selections when profile changes', async () => {
     const store = useVercelStore()
 

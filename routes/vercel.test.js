@@ -1,8 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const test = require('node:test');
-const { VERCEL_ENDPOINTS, cronDefinitions, vercelFetch } = require('./vercel');
+const express = require('express');
+const vercelRouter = require('./vercel');
+const { VERCEL_ENDPOINTS, cronDefinitions, vercelFetch } = vercelRouter;
 
 test('uses the current public Vercel API versions', () => {
   assert.equal(VERCEL_ENDPOINTS.projects, '/v10/projects');
@@ -79,4 +82,46 @@ test('overview and advisor share one cached scan; refresh scans again', async t 
   const refreshed = await scanVercelAccount(profileId, { resolveAuth, refresh: true });
   assert.equal(refreshed.fresh, true);
   assert.equal(calls, 8);
+});
+test('project Advisor caches metadata and never returns environment variable values', async t => {
+  const upstreamPaths = [];
+  t.mock.method(global, 'fetch', async url => {
+    const path = new URL(url).pathname;
+    upstreamPaths.push(path);
+    const payload = path.endsWith('/env')
+      ? { envs: [{ key: 'DATABASE_PASSWORD', type: 'plain', target: ['preview'], value: 'do-not-return-this' }] }
+      : { id: 'advisor-route-project', name: 'checkout' };
+    return { ok: true, headers: { get: () => 'application/json' }, json: async () => payload };
+  });
+
+  const app = express();
+  app.use('/api/cloud/vercel', vercelRouter);
+  const server = app.listen(0);
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => server.close());
+  const port = server.address().port;
+  const getReport = path => new Promise((resolve, reject) => {
+    http.get({ port, path, headers: { 'X-Profile-Id': 'local:test-token' } }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body: JSON.parse(body) }));
+    }).on('error', reject);
+  });
+
+  const url = '/api/cloud/vercel/projects/advisor-route-project/advisor';
+  const first = await getReport(url);
+  assert.equal(first.status, 200);
+  assert.ok(first.body.findings.some(finding => finding.id === 'vercel.preview_unprotected'));
+  assert.ok(first.body.findings.some(finding => finding.id === 'vercel.plain_secret_env'));
+  assert.deepEqual(first.body.unavailable.map(source => source.source), ['deployments', 'domains']);
+  assert.doesNotMatch(JSON.stringify(first.body), /do-not-return-this/);
+  assert.equal(upstreamPaths.length, 2);
+
+  const cached = await getReport(url);
+  assert.equal(cached.body.fromCache, true);
+  assert.equal(upstreamPaths.length, 2);
+
+  await getReport(`${url}?refresh=1`);
+  assert.equal(upstreamPaths.length, 4);
 });

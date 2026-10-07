@@ -203,7 +203,7 @@ const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
-const { buildAwsAdvisor } = require('../lib/advisor/aws');
+const { buildAwsAdvisor, collectS3Advisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
 const {
   dashboardRangeSeconds, fetchMetricWidget, fetchAlarmWidget, splitLogQuery, logGroupIdentifier, logGroupName,
@@ -559,6 +559,14 @@ router.get('/overview/insights', async (req, res) => {
 
 const ADVISOR_TTL_MS = 15 * 60 * 1000;
 const advisorCache = new Map();
+const S3_ADVISOR_TTL_MS = 15 * 60 * 1000;
+const s3AdvisorCache = new Map();
+
+function s3AdvisorResponse(profileId, cached, fresh = false) {
+  const teamScope = teamScopeOf('aws', { accountId: cached.accountId });
+  const posture = { scopes: scopeKeys('aws', { profileId, region: 'global', teamScope }), store: postureStore() };
+  return { ...cached.result, report: finalizeAdvisor(cached.report, { ...posture, fresh }) };
+}
 
 router.get('/overview/advisor', async (req, res) => {
   const profileId = requireProfileId(req, res);
@@ -576,6 +584,40 @@ router.get('/overview/advisor', async (req, res) => {
     const report = await buildAwsAdvisor(cfg);
     advisorCache.set(key, { at: Date.now(), report });
     res.json(finalizeAdvisor(report, posture));
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/overview/advisor/s3', (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const cached = s3AdvisorCache.get(profileId);
+  if (!cached || Date.now() - cached.at >= S3_ADVISOR_TTL_MS) return res.json({ report: null, cached: false });
+  res.json({ ...s3AdvisorResponse(profileId, cached), cached: true });
+});
+
+router.post('/overview/advisor/s3', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  const expectedBucketCount = Number(req.body?.expectedBucketCount);
+  if (req.body?.confirmed !== true || !Number.isInteger(expectedBucketCount) || expectedBucketCount < 0) {
+    return res.status(400).json({ error: 'Explicit confirmation and a valid expectedBucketCount are required' });
+  }
+  const cached = s3AdvisorCache.get(profileId);
+  if (cached && !req.body?.refresh && Date.now() - cached.at < S3_ADVISOR_TTL_MS) {
+    return res.json({ ...s3AdvisorResponse(profileId, cached), cached: true });
+  }
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const accountId = await awsAccountId(profileId, cfg);
+    const collection = await collectS3Advisor(cfg, { accountId, expectedBucketCount });
+    if (collection.inventoryChanged) {
+      return res.status(409).json({ error: 'S3 bucket inventory changed or could not be read completely; review the updated estimate before scanning', ...collection });
+    }
+    const { report, ...result } = collection;
+    if (s3AdvisorCache.size >= 500) s3AdvisorCache.delete(s3AdvisorCache.keys().next().value);
+    const entry = { at: Date.now(), accountId, report, result };
+    s3AdvisorCache.set(profileId, entry);
+    res.json(s3AdvisorResponse(profileId, entry, true));
   } catch (err) { handleErr(res, err); }
 });
 

@@ -112,6 +112,38 @@
         @posture-changed="loadAdvisor()"
       />
 
+      <section class="aov-s3-advisor" data-test="s3-advisor-preflight">
+        <div class="aov-s3-advisor-copy">
+          <h3>{{ t('awsOverview.s3Advisor.title') }}</h3>
+          <p v-if="s3Inventory?.status === 'unavailable' || s3Inventory?.truncated" class="aov-dim">{{ t(s3Inventory.truncated ? 'awsOverview.s3Advisor.countTruncated' : 'awsOverview.s3Advisor.countUnavailable') }}</p>
+          <p v-else-if="s3Estimate">
+            {{ t('awsOverview.s3Advisor.estimate', { buckets: s3Inventory.count, requests: s3Estimate.requestCount, cost: s3Estimate.cost }) }}
+          </p>
+          <p v-else class="aov-dim">{{ t('awsOverview.s3Advisor.waitingForOverview') }}</p>
+          <p v-if="awsStore.s3Advisor?.report" class="aov-s3-cached">{{ t('awsOverview.s3Advisor.cached') }}</p>
+          <p v-if="s3AdvisorError" class="aov-error">{{ s3AdvisorError }}</p>
+        </div>
+        <button
+          v-if="s3Estimate && !awsStore.s3Advisor?.report"
+          class="btn sm primary"
+          :disabled="s3AdvisorLoading"
+          @click="scanS3Advisor()"
+        >{{ t(s3AdvisorLoading ? 'awsOverview.s3Advisor.scanning' : 'awsOverview.s3Advisor.analyze') }}</button>
+        <button
+          v-else-if="s3Estimate && awsStore.s3Advisor?.report"
+          class="btn sm"
+          :disabled="s3AdvisorLoading"
+          @click="scanS3Advisor({ refresh: true })"
+        >{{ t(s3AdvisorLoading ? 'awsOverview.s3Advisor.scanning' : 'awsOverview.s3Advisor.rescan') }}</button>
+      </section>
+      <AdvisorPanel
+        v-if="awsStore.s3Advisor?.report"
+        :report="awsStore.s3Advisor.report"
+        :loading="s3AdvisorLoading"
+        :error="s3AdvisorError"
+        storage-key="advisor.aws.s3"
+      />
+
       <!-- What KUA itself spent on billed AWS APIs (lib/usage) -->
       <UsageCostPanel :profile-id="profileId" />
 
@@ -190,6 +222,8 @@ const insightsError = ref(null)
 const refreshingCosts = ref(false)
 const advisorLoading = ref(false)
 const advisorError = ref(null)
+const s3AdvisorLoading = ref(false)
+const s3AdvisorError = ref('')
 let insightsRequestId = 0
 
 function openAccess(service) {
@@ -202,6 +236,12 @@ let clock = null
 const data = computed(() => awsStore.overview)
 const identity = computed(() => data.value?.identity || {})
 const resourceCounts = computed(() => Object.fromEntries((data.value?.services || []).map(s => [s.id, s.count || 0])))
+const s3Inventory = computed(() => data.value?.services?.find(service => service.id === 's3') || null)
+const s3Estimate = computed(() => {
+  if (s3Inventory.value?.status === 'unavailable' || s3Inventory.value?.truncated || !Number.isInteger(s3Inventory.value?.count)) return null
+  const requestCount = 1 + Math.max(1, Math.ceil(s3Inventory.value.count / 1000)) + 5 * s3Inventory.value.count
+  return { requestCount, cost: (requestCount * 0.0004 / 1000).toFixed(8) }
+})
 const totalResources = computed(() => (data.value?.services || []).reduce((sum, s) => sum + (s.count || 0), 0))
 
 const IDENTITY_TYPES = { user: 'awsOverview.typeUser', role: 'awsOverview.typeRole', sso: 'awsOverview.typeSso', root: 'awsOverview.typeRoot', federated: 'awsOverview.typeFederated' }
@@ -276,11 +316,38 @@ async function loadAdvisor({ refresh = false } = {}) {
   }
 }
 
+async function loadS3AdvisorCache() {
+  try { await awsStore.fetchS3AdvisorCache() }
+  catch (e) { s3AdvisorError.value = e.message }
+}
+
+async function scanS3Advisor({ refresh = false } = {}) {
+  if (!s3Inventory.value || !s3Estimate.value || s3AdvisorLoading.value) return
+  const confirmed = window.confirm(t('awsOverview.s3Advisor.confirm', {
+    buckets: s3Inventory.value.count,
+    requests: s3Estimate.value.requestCount,
+    cost: s3Estimate.value.cost,
+  }))
+  if (!confirmed) return
+  s3AdvisorLoading.value = true
+  s3AdvisorError.value = ''
+  try {
+    await awsStore.scanS3Advisor(s3Inventory.value.count, { refresh })
+  } catch (e) {
+    s3AdvisorError.value = e.message
+    if (e.status === 409) await load({ force: true })
+  } finally {
+    s3AdvisorLoading.value = false
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
 // Background refreshes reuse cached data (overview 5 min, costs/activity 15 min);
 // the refresh button forces a new read.
 async function load({ force = false } = {}) {
   loadInsights({ force })
   loadAdvisor({ refresh: force })
+  loadS3AdvisorCache()
   const id = ++requestId
   loading.value = true
   try {
@@ -357,8 +424,15 @@ defineExpose({ load })
 .aov-request svg { width: 11px; height: 11px; }
 .aov-action { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .aov-note { margin: 0; font-size: 11px; color: var(--text-dim); }
+.aov-s3-advisor { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.aov-s3-advisor-copy { min-width: 0; }
+.aov-s3-advisor h3 { margin: 0 0 4px; font-size: 14px; }
+.aov-s3-advisor p { margin: 0; color: var(--text-dim); font-size: 12px; }
+.aov-s3-advisor .aov-s3-cached { margin-top: 4px; color: var(--accent); }
+.aov-s3-advisor .aov-error { margin-top: 4px; color: var(--red); }
 
 @media (max-width: 800px) {
   .aov-env { grid-template-columns: minmax(0, 1fr); }
+  .aov-s3-advisor { align-items: flex-start; flex-direction: column; }
 }
 </style>
