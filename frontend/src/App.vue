@@ -641,7 +641,7 @@ const AWS_SIDEBAR = {
 }
 
 const VERCEL_SIDEBAR = {
-  projects:    [{ id: 'projects',    label: 'Projects' }],
+  projects:    [{ id: 'overview',    label: 'Overview' }, { id: 'projects', label: 'Projects' }],
   deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Deployment Files' }, { id: 'checks', label: 'Checks' }],
   config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records' }, { id: 'env-vars', label: 'Env Variables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs' }],
   advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
@@ -710,7 +710,7 @@ const gcpViewRef      = ref(null)
 const vercelViewRef   = ref(null)
 const observabilityViewRef = ref(null)
 const kuappsViewRef = ref(null)
-const vercelTab       = ref('projects')
+const vercelTab       = ref('overview')
 const clock           = ref('')
 let clockTimer
 let autoRefreshTimer
@@ -915,7 +915,7 @@ function profileNameById(id) {
   return envStore.profiles.find(profile => profile.id === id)?.name || id
 }
 
-/** Opens the overview an alert belongs to (AWS/GCP profile, Kubernetes, KUApps application). */
+/** Opens the overview an alert belongs to (AWS/GCP/Vercel profile, Kubernetes, KUApps application). */
 async function openAdvisorAlert(alert) {
   const scope = parseScope(alert.scope)
   if (scope.provider === 'aws') {
@@ -926,6 +926,12 @@ async function openAdvisorAlert(alert) {
     if (scope.profileId && gcpProfileId.value !== scope.profileId) { gcpProfileId.value = scope.profileId; onGcpProfileChange() }
     gcpTab.value = 'overview'
     await setProvider('gcp')
+  } else if (scope.provider === 'vercel') {
+    // Token-only profiles are keyed by a hash (local-…): open the Overview of the current profile.
+    const known = envStore.vercelProfiles.some(profile => profile.id === scope.profileId)
+    if (known && vercelProfileId.value !== scope.profileId) { vercelProfileId.value = scope.profileId; onVercelProfileChange() }
+    vercelTab.value = 'overview'
+    await setProvider('vercel')
   } else if (scope.provider === 'kubernetes') {
     await setProvider('kubernetes')
     cloudView.value = 'kube-overview'

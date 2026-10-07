@@ -35,6 +35,7 @@ All tools are read-only.
 | `list_profiles` | AWS, GCP and Vercel profiles (id, name, provider). When KUA has no AWS or GCP profile, it also lists the AWS CLI profiles (`~/.aws/config`) and gcloud configurations of this computer as `local:<name>`. Credentials are never returned |
 | `aws_advisor` (Pro) | AWS Advisor findings for a profile (cached 15 min, `refresh` scans again with free APIs) |
 | `gcp_advisor` (Pro) | GCP Advisor findings from the last stored overview |
+| `vercel_advisor` (Pro) | Vercel Advisor findings for a profile's account or team (cached 15 min, `refresh` scans again with free Vercel API reads). Env var values are never read |
 | `kubernetes_advisor` (Pro) | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
 | `log_intelligence` | Brief of a cached log group: error rates, anomalies, similar errors, signatures, recommendations, queries |
