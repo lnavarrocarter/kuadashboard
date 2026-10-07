@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-10-03
+Last updated: 2026-10-07
 
 This Privacy Policy explains how KuaDashboard handles information when you use the desktop application, the web interface, the cloud integrations and the optional KUA account.
 
@@ -60,11 +60,16 @@ When you sign in, the KUA control plane stores the following:
 | Data | Why | How long |
 |---|---|---|
 | Google account id, email, name and profile picture URL | To identify your account | Until you delete the account |
+| Sign-in identities you link (Google, GitHub or your team's single sign-on): provider, issuer, the provider's stable account id and email | To let you sign in with each of them | Until you unlink them or delete the account |
+| The public key of each signed-in KUA Desktop (the private key stays in its keychain) | To verify that your backups and team items come from your computers | Until that computer signs out |
 | Sessions: a one-way hash of the session token, the client (web or desktop), creation, last activity and expiry dates and, for KUA Desktop, an opaque device id (a hash, so signing in again on the same computer replaces its session), the computer name, operating system, architecture and KUA version | To keep you signed in and to show the signed-in devices of the account | 30 days, or until you sign out |
 | One-time desktop sign-in codes (hashed) | To link KUA Desktop safely | 5 minutes, used once |
 | Subscription: plan, status, renewal date and Polar subscription and customer ids | To unlock your plan | Until you delete the account |
 | Ids of the payment notifications received from Polar (no personal data) | To process each one once | 90 days |
-| Cloud backups (Pro and Team): the sanitized KUA Application bundles you choose to back up, with their name, application, size, checksum and date | To restore them on any computer | Until you delete them or the account; when the plan no longer covers them, 30 days after the first notice (see the [terms](/terms)) |
+| Cloud backups and synced applications (Pro and Team): the sanitized KUA Application bundles you choose to back up or sync, with their name, application, size, checksum, signature, computer and date | To restore them on any computer | Until you delete them or the account; a synced application keeps its last 10 versions; when the plan no longer covers them, 30 days after the first notice (see the [terms](/terms)) |
+| Emails sent to you (type and date, not the content) | To never send the same notice twice | About 13 months |
+
+**Teams (Team plan).** When you create or join a team, the control plane also stores: the team name and its public signing key (the private key stays in Google Cloud KMS); each member's role and who invited them; pending invitations (the invited email, role and who sent it) for 7 days; the KUA Applications members publish to the team, with the team's automatic backups (the last 10 per application); the team's Advisor decisions with their author; the team's single sign-on settings, with the client secret encrypted; and an activity log of the team (who did what, by email) for about 13 months. The team owner and admins see the team's members, items and log.
 
 We receive only your identity from Google. We do not receive or store Google access or refresh tokens, and KUA cannot read your Gmail, Drive or any other Google data.
 
@@ -78,11 +83,11 @@ The plan and the account name are cached on your computer for up to 7 days of of
 
 ## Your Rights
 
-You can ask to access, correct, export or delete your KUA account data, or object to its processing. These rights come from the Chilean data protection law (Law 19,628 and its amendments) and, where they apply to you, from laws such as the GDPR. Write to [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) and we will answer within 30 days. Deleting the account removes your user record, subscription record, all sessions and all cloud backups. If a paid subscription is active, cancel it first so it is not renewed.
+You can ask to access, correct, export or delete your KUA account data, or object to its processing. These rights come from the Chilean data protection law (Law 19,628 and its amendments) and, where they apply to you, from laws such as the GDPR. Write to [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) and we will answer within 30 days. Deleting the account removes your user record, linked identities, subscription record, all sessions and all cloud backups and synced applications. If a paid subscription is active, cancel it first so it is not renewed. If you own a team, delete the team first. If you are a member, you leave the team: the applications you published stop being shared and stay with the team until its owner or an admin deletes them, and your email stays in the team's activity log and on the Advisor decisions you made, which belong to the team. You can also export your account data from the account portal.
 
 ## Data Sharing
 
-KuaDashboard does not broker or sell personal data. Data is shared only when required to execute actions you request against third-party providers (for example AWS, GCP, Vercel, Kubernetes APIs). For the KUA account, the processors are Google (sign-in and hosting) and Polar (payments).
+KuaDashboard does not broker or sell personal data. Data is shared only when required to execute actions you request against third-party providers (for example AWS, GCP, Vercel, Kubernetes APIs). For the KUA account, the processors are Google (sign-in, hosting and key management), GitHub (sign-in, if you use it), Polar (payments) and Resend (account emails). Team single sign-on uses the identity provider your team configures.
 
 ## Telemetry
 

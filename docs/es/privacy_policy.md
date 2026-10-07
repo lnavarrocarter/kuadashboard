@@ -1,6 +1,6 @@
 # Política de privacidad
 
-Última actualización: 2026-10-03
+Última actualización: 2026-10-07
 
 Esta política explica cómo KuaDashboard trata la información cuando usas la aplicación de escritorio, la interfaz web, las integraciones cloud y la cuenta KUA, que es opcional.
 
@@ -67,11 +67,16 @@ Cuando inicias sesión, el control plane de KUA guarda:
 | Dato | Para qué | Cuánto tiempo |
 |---|---|---|
 | Id de la cuenta de Google, email, nombre y URL de la foto de perfil | Identificar tu cuenta | Hasta que borres la cuenta |
+| Las identidades de inicio de sesión que vincules (Google, GitHub o el inicio de sesión único de tu equipo): proveedor, emisor, el id estable de la cuenta en ese proveedor y el email | Que puedas iniciar sesión con cada una | Hasta que las desvincules o borres la cuenta |
+| La clave pública de cada KUA Desktop con sesión iniciada (la privada se queda en su llavero) | Verificar que tus backups y los ítems del equipo vienen de tus equipos | Hasta que ese equipo cierre sesión |
 | Sesiones: un hash del token, el cliente (web o escritorio), las fechas de creación, última actividad y vencimiento y, en KUA Desktop, un id de dispositivo opaco (un hash, para que volver a iniciar sesión en el mismo equipo reemplace su sesión), el nombre del equipo, el sistema operativo, la arquitectura y la versión de KUA | Mantener tu sesión abierta y mostrar los dispositivos con sesión iniciada en la cuenta | 30 días, o hasta que cierres sesión |
 | Códigos de un solo uso para iniciar sesión en el escritorio (como hash) | Vincular KUA Desktop de forma segura | 5 minutos; se usan una vez |
 | Suscripción: plan, estado, fecha de renovación e ids de suscripción y cliente en Polar | Activar tu plan | Hasta que borres la cuenta |
 | Ids de los avisos de pago recibidos de Polar (sin datos personales) | Procesar cada aviso una sola vez | 90 días |
-| Backups en la nube (Pro y Team): los paquetes saneados de KUA Applications que elijas respaldar, con su nombre, aplicación, tamaño, checksum y fecha | Restaurarlos en cualquier equipo | Hasta que los borres o borres la cuenta; si el plan ya no los cubre, 30 días después del primer aviso (ver los [términos](/es/terms)) |
+| Backups en la nube y aplicaciones sincronizadas (Pro y Team): los paquetes saneados de KUA Applications que elijas respaldar o sincronizar, con su nombre, aplicación, tamaño, checksum, firma, equipo y fecha | Restaurarlos en cualquier equipo | Hasta que los borres o borres la cuenta; una aplicación sincronizada conserva sus últimas 10 versiones; si el plan ya no los cubre, 30 días después del primer aviso (ver los [términos](/es/terms)) |
+| Emails que te enviamos (tipo y fecha, no el contenido) | No repetir nunca el mismo aviso | Unos 13 meses |
+
+**Equipos (plan Team).** Si creas un equipo o te unes a uno, el control plane guarda además: el nombre del equipo y su clave pública de firma (la privada se queda en Google Cloud KMS); el rol de cada miembro y quién lo invitó; las invitaciones pendientes (el email invitado, el rol y quién la envió) durante 7 días; las KUA Applications que los miembros publican en el equipo, con los backups automáticos del equipo (los últimos 10 por aplicación); las decisiones del Advisor del equipo con su autor; la configuración de inicio de sesión único del equipo, con el client secret cifrado; y un registro de actividad del equipo (quién hizo qué, por email) durante unos 13 meses. El dueño y los administradores del equipo ven sus miembros, ítems y registro.
 
 De Google solo recibimos tu identidad. No recibimos ni guardamos tokens de acceso o de renovación de Google, y KUA no puede leer tu Gmail, tu Drive ni ningún otro dato de Google.
 
@@ -87,11 +92,11 @@ Tu plan y el nombre de tu cuenta quedan guardados en tu equipo para hasta 7 día
 
 Puedes pedir acceso a los datos de tu cuenta KUA, y también corregirlos, exportarlos o borrarlos, u oponerte a su tratamiento. Estos derechos vienen de la ley chilena de protección de datos (Ley 19.628 y sus modificaciones) y, cuando te correspondan, de normas como el RGPD. Escribe a [support@kuadashboard.navarrocarter.com](mailto:support@kuadashboard.navarrocarter.com) y te responderemos en un plazo de 30 días.
 
-Al borrar la cuenta se eliminan tu registro de usuario, tu suscripción, todas tus sesiones y todos tus backups en la nube. Si tienes una suscripción de pago activa, cancélala primero para que no se renueve.
+Al borrar la cuenta se eliminan tu registro de usuario, tus identidades vinculadas, tu suscripción, todas tus sesiones y todos tus backups y aplicaciones sincronizadas en la nube. Si tienes una suscripción de pago activa, cancélala primero para que no se renueve. Si eres dueño de un equipo, bórralo primero. Si eres miembro, sales del equipo: las aplicaciones que publicaste dejan de compartirse y quedan en el equipo hasta que su dueño o un administrador las borre, y tu email se mantiene en el registro de actividad del equipo y en las decisiones del Advisor que tomaste, que son del equipo. También puedes exportar los datos de tu cuenta desde el portal de la cuenta.
 
 ## Datos compartidos
 
-KuaDashboard no intermedia ni vende datos personales. Solo se comparten datos cuando hace falta para ejecutar lo que pides a proveedores externos (por ejemplo las APIs de AWS, GCP, Vercel o Kubernetes). Para la cuenta KUA, los encargados del tratamiento son Google (inicio de sesión y hosting) y Polar (pagos).
+KuaDashboard no intermedia ni vende datos personales. Solo se comparten datos cuando hace falta para ejecutar lo que pides a proveedores externos (por ejemplo las APIs de AWS, GCP, Vercel o Kubernetes). Para la cuenta KUA, los encargados del tratamiento son Google (inicio de sesión, hosting y gestión de claves), GitHub (inicio de sesión, si lo usas), Polar (pagos) y Resend (emails de la cuenta). El inicio de sesión único de un equipo usa el proveedor de identidad que configure el equipo.
 
 ## Telemetría
 
