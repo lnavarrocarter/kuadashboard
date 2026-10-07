@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Background tasks panel:** the shared header opens a live view of active, scheduled and recent tasks, with progress, duration, safe controls announced by the API, and process-wide CPU/memory metrics clearly separated from task usage. It polls only while open, refreshes when KUA returns to the foreground, and shows loading, empty and recoverable error states in English and Spanish.
 - **Per-task background controls:** `POST /api/system/tasks/:id/:action` exposes only the actions supported by each task. Log scans can be paused, resumed or cancelled independently; an in-flight request finishes its page before applying the control, and progress survives restart as paused. Periodic schedulers pause only their own timer and let active work finish safely.
 - **Background task status API:** `GET /api/system/tasks` reports the scheduled, running, completed or failed state of APM collection, automatic log refresh, application/team sync and Advisor, together with process-wide uptime, CPU time counters and memory use. It is read-only; errors are reduced to validated codes and CPU/memory are not attributed to individual tasks.
 - **Desktop background mode:** closing the window keeps KUA and its backend running in the system tray; restore it from the tray or choose Quit for an orderly shutdown. The close-to-tray preference is local, and launching KUA again restores the existing instance when a Linux desktop has no compatible tray.
