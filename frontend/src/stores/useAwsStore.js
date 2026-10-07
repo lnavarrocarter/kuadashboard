@@ -61,6 +61,10 @@ export const useAwsStore = defineStore('aws', () => {
   // When each cached block was fetched, and for which profile/resource set.
   const sqsQueues        = ref([])
   const sqsTruncated     = ref(false)
+  // Elastic Load Balancing (GET /elb): ALB/NLB/GWLB/Classic with listeners and target health
+  const loadBalancers            = ref([])
+  const loadBalancersTruncated   = ref(false)
+  const loadBalancersUnavailable = ref([])
   const sqsActivity      = ref(null)
   const snsTopics        = ref([])
   const snsTruncated     = ref(false)
@@ -149,6 +153,9 @@ export const useAwsStore = defineStore('aws', () => {
     dynamoTables.value     = []
     athenaWorkgroups.value = []
     cloudfrontDists.value  = []
+    loadBalancers.value    = []
+    loadBalancersTruncated.value   = false
+    loadBalancersUnavailable.value = []
     route53Zones.value     = []
     cognitoUserPools.value = []
     secrets.value          = []
@@ -1066,6 +1073,22 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  async function fetchLoadBalancers() {
+    loading.value = true; error.value = null
+    try {
+      const data = await apiFetch('/api/cloud/aws/elb', { headers: headers() })
+      loadBalancers.value = data.loadBalancers || []
+      loadBalancersTruncated.value = !!data.truncated
+      loadBalancersUnavailable.value = data.unavailable || []
+    } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  /** Listener rules, attributes and tags of one load balancer (ELBv2 by ARN, Classic by name). */
+  async function fetchLoadBalancerDetail(lb) {
+    const query = lb.arn ? `arn=${encodeURIComponent(lb.arn)}` : `name=${encodeURIComponent(lb.name)}`
+    return apiFetch(`/api/cloud/aws/elb/detail?${query}`, { headers: headers() })
+  }
+
   async function fetchSnsTopics() {
     loading.value = true; error.value = null
     try {
@@ -1325,6 +1348,7 @@ export const useAwsStore = defineStore('aws', () => {
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
+    loadBalancers, loadBalancersTruncated, loadBalancersUnavailable, fetchLoadBalancers, fetchLoadBalancerDetail,
     sqsQueues, sqsTruncated, sqsActivity, snsTopics, snsTruncated, snsActivity, sesData, sesMetrics,
     fetchSqsQueues, fetchSnsTopics, fetchSes, fetchSqsActivity, fetchSnsActivity, fetchSesMetrics, fetchSesSeries, fetchSqsQueueMetrics, fetchSnsTopicMetrics,
     fetchSqsQueueDetails, fetchSnsTopicDetails, fetchSnsDeliveryLogs, fetchSesSuppression, fetchSesSetMetrics,

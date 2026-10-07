@@ -412,6 +412,19 @@
     "athena:GetQueryExecution",
     "athena:GetQueryResults"
   ],
+  "GET /elb": [
+    "elasticloadbalancing:DescribeInstanceHealth",
+    "elasticloadbalancing:DescribeListeners",
+    "elasticloadbalancing:DescribeLoadBalancers",
+    "elasticloadbalancing:DescribeTargetGroups",
+    "elasticloadbalancing:DescribeTargetHealth"
+  ],
+  "GET /elb/detail": [
+    "elasticloadbalancing:DescribeListeners",
+    "elasticloadbalancing:DescribeLoadBalancerAttributes",
+    "elasticloadbalancing:DescribeRules",
+    "elasticloadbalancing:DescribeTags"
+  ],
   "GET /cloudfront": [
     "cloudfront:ListDistributions"
   ],

@@ -27,6 +27,8 @@
  *   POST /cloudwatch/dashboards/:name/widgets/:index/logs/query    → start a log widget's Logs Insights query
  *   GET  /cloudwatch/logs-query/:queryId                           → Logs Insights query status and results
  *   GET  /eks                               → list EKS clusters
+ *   GET  /elb                               → load balancers (ALB/NLB/GWLB/Classic) with listeners and target health
+ *   GET  /elb/detail?arn=|name=             → listener rules, attributes and tags of one load balancer
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
  *   POST /ecs/:cluster/:service/stop        → scale ECS service to desiredCount 0
@@ -196,6 +198,7 @@ const {
   sesOverview, sesSeries, sesSuppression, sesConfigurationSetMetrics,
 } = require('../lib/awsMessaging');
 const { sesHealth } = require('../lib/awsMessagingCatalog');
+const { listLoadBalancers, describeLoadBalancer } = require('../lib/awsLoadBalancers');
 const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
@@ -4281,6 +4284,54 @@ router.get('/athena/query/:id', async (req, res) => {
       results = r.ResultSet;
     }
     res.json({ execution: exec.QueryExecution, results });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── ELASTIC LOAD BALANCING ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Describe* calls have no per-call charge (lib/awsLoadBalancers.js).
+
+// GET /elb  → every load balancer of the region with listeners and target health
+router.get('/elb', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeListenersCommand,
+      DescribeTargetGroupsCommand, DescribeTargetHealthCommand,
+    } = require('@aws-sdk/client-elastic-load-balancing-v2');
+    const {
+      ElasticLoadBalancingClient, DescribeLoadBalancersCommand: DescribeClassicLoadBalancersCommand, DescribeInstanceHealthCommand,
+    } = require('@aws-sdk/client-elastic-load-balancing');
+    const sdk = pkg => (pkg === 'client-elastic-load-balancing-v2'
+      ? { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeListenersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand }
+      : { ElasticLoadBalancingClient, DescribeLoadBalancersCommand: DescribeClassicLoadBalancersCommand, DescribeInstanceHealthCommand });
+    res.json({ region: cfg.region || null, ...(await listLoadBalancers(cfg, { sdk })) });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /elb/detail?arn=<ELBv2 ARN> | ?name=<Classic name>  → rules, attributes and tags
+router.get('/elb/detail', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const {
+      ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand,
+      DescribeLoadBalancerAttributesCommand, DescribeTagsCommand,
+    } = require('@aws-sdk/client-elastic-load-balancing-v2');
+    const {
+      ElasticLoadBalancingClient, DescribeLoadBalancerAttributesCommand: DescribeClassicAttributesCommand, DescribeTagsCommand: DescribeClassicTagsCommand,
+    } = require('@aws-sdk/client-elastic-load-balancing');
+    const sdk = pkg => (pkg === 'client-elastic-load-balancing-v2'
+      ? { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand, DescribeLoadBalancerAttributesCommand, DescribeTagsCommand }
+      : { ElasticLoadBalancingClient, DescribeLoadBalancerAttributesCommand: DescribeClassicAttributesCommand, DescribeTagsCommand: DescribeClassicTagsCommand });
+    const arn = typeof req.query.arn === 'string' ? req.query.arn : null;
+    const name = typeof req.query.name === 'string' ? req.query.name : null;
+    if (!arn && !name) return res.status(400).json({ error: 'arn or name is required' });
+    res.json(await describeLoadBalancer(cfg, { arn, name }, { sdk }));
   } catch (err) { handleErr(res, err); }
 });
 
