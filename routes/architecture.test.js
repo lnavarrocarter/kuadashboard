@@ -107,6 +107,75 @@ test('API reports revision conflicts without overwriting the graph', async () =>
   }
 });
 
+test('Kubernetes security scan is profile-scoped and finalizes findings per cluster context', async () => {
+  const calls = [];
+  const kubernetesAdapter = {
+    listContexts: () => [{ name: 'orders-context', server: 'https://cluster.example' }],
+    async securityFindings(options) {
+      calls.push(options);
+      return {
+        generatedAt: '2026-10-06T12:00:00Z', failures: [],
+        reports: [{
+          context: 'orders-context',
+          report: {
+            generatedAt: '2026-10-06T12:00:00Z', scope: { provider: 'kubernetes', namespace: 'all' },
+            categories: ['security'],
+            summary: { security: { high: 1, medium: 0, low: 0, findings: 1, passed: 0, checks: 1 } },
+            findings: [{ id: 'k8s.privileged', category: 'security', severity: 'high', resources: [{ kind: 'Deployment', name: 'api', namespace: 'orders' }] }],
+            unavailable: [],
+          },
+        }],
+      };
+    },
+  };
+  const subject = await fixture({ kubernetesAdapter });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'orders' } });
+    const hidden = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/security`, {
+      profile: 'local:other', method: 'POST', body: { contexts: ['orders-context'] },
+    });
+    assert.equal(hidden.status, 404);
+    assert.equal(calls.length, 0);
+
+    const result = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/security`, {
+      method: 'POST', body: { contexts: ['orders-context'] },
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(calls, [{ provider: 'generic', contexts: ['orders-context'] }]);
+    assert.equal(result.body.reports[0].context, 'orders-context');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Kubernetes rollout history is profile-scoped and limited to requested contexts', async () => {
+  const calls = [];
+  const kubernetesAdapter = {
+    async rolloutHistory(options) {
+      calls.push(options);
+      return { generatedAt: '2026-10-06T12:00:00Z', rollouts: [], failures: [] };
+    },
+  };
+  const subject = await fixture({ kubernetesAdapter });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'orders' } });
+    const hidden = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/rollouts`, {
+      profile: 'local:other', method: 'POST', body: { contexts: ['orders-context'] },
+    });
+    assert.equal(hidden.status, 404);
+    assert.equal(calls.length, 0);
+
+    const result = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/rollouts`, {
+      method: 'POST', body: { contexts: ['orders-context'] },
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(calls, [{ provider: 'generic', contexts: ['orders-context'] }]);
+    assert.equal(result.body.projectId, created.body.id);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API deletes a profile-scoped project with its graph history', async () => {
   const subject = await fixture();
   try {

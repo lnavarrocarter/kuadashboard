@@ -106,6 +106,7 @@
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
         <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'console' }" :title="t('nav.console')" @click="toggleConsole"><i data-lucide="square-terminal"></i></button>
+        <button class="btn btn-icon" :class="{ primary: backgroundTasksVisible }" :title="t('nav.backgroundTasks')" :aria-label="t('nav.backgroundTasks')" data-test="open-background-tasks" @click="backgroundTasksVisible = !backgroundTasksVisible"><i data-lucide="list-checks"></i></button>
         <button class="btn btn-icon btn-lang" @click="toggleLang" :title="settings.lang === 'es' ? 'Switch to English' : 'Cambiar a Español'">
           <span class="lang-flag">{{ settings.lang === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
         </button>
@@ -457,6 +458,7 @@
     </div>
 
     <PortForwardPanel :visible="pfPanelVisible" @close="pfPanelVisible = false" @add="openPfManual" />
+    <BackgroundTasksPanel v-if="backgroundTasksVisible" :show="backgroundTasksVisible" @close="backgroundTasksVisible = false" />
 
     <div class="statusbar">
       <template v-if="activeProvider === 'kubernetes'">
@@ -548,6 +550,7 @@ import UpdateNotice     from './components/UpdateNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 import AwsSessionAlert  from './components/AwsSessionAlert.vue'
 import AlertsBell       from './components/advisor/AlertsBell.vue'
+import BackgroundTasksPanel from './components/BackgroundTasksPanel.vue'
 import { useUpdateStore } from './stores/useUpdateStore'
 
 // The views of each section load on demand, in their own chunks: the first
@@ -688,6 +691,7 @@ const LS = {
 }
 
 const pfPanelVisible  = ref(false)
+const backgroundTasksVisible = ref(false)
 const storedProvider = LS.get('provider', 'kubernetes')
 const activeProvider  = ref(['architecture', 'observability'].includes(storedProvider) ? 'kuapps' : storedProvider)
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
@@ -1371,7 +1375,11 @@ function toggleTheme() {
   applySettings()
 }
 
-function onKey(e) { if (e.key === 'Escape') Object.keys(modals).forEach(k => modals[k] = false) }
+function onKey(e) {
+  if (e.key !== 'Escape') return
+  if (backgroundTasksVisible.value) backgroundTasksVisible.value = false
+  else Object.keys(modals).forEach(k => modals[k] = false)
+}
 
 syncServerCacheSettings()
 

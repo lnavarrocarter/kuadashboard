@@ -607,6 +607,30 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  async function previewKubernetesRollouts({ contexts }) {
+    if (!selectedProjectId.value || !contexts?.length) return null
+    try {
+      return await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/kubernetes/rollouts`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({ contexts }) },
+      )
+    } catch {
+      return null
+    }
+  }
+
+  async function previewKubernetesSecurity({ contexts }) {
+    if (!selectedProjectId.value || !contexts?.length) return null
+    try {
+      return await apiFetch(
+        `/api/architecture/projects/${selectedProjectId.value}/discovery/kubernetes/security`,
+        { method: 'POST', headers: headers(true), body: JSON.stringify({ contexts }) },
+      )
+    } catch {
+      return null
+    }
+  }
+
   async function previewCloudResources(provider) {
     if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
     discovering.value = true
@@ -841,6 +865,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     previewAwsResources,
     previewKubernetesResources,
     previewKubernetesEvents,
+    previewKubernetesRollouts,
+    previewKubernetesSecurity,
     previewCloudResources,
     importCloudResources,
     previewAwsSync,

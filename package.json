@@ -11,7 +11,7 @@
     "native:node": "node scripts/ensure-node-native.js",
     "prestart": "npm run native:node",
     "pretest": "npm run native:node",
-    "test": "node --test \"lib/**/*.test.js\" \"routes/**/*.test.js\" \"scripts/**/*.test.js\"",
+    "test": "node --test \"lib/**/*.test.js\" \"routes/**/*.test.js\" \"scripts/**/*.test.js\" \"electron/**/*.test.js\"",
     "start": "cross-env PORT=7190 node server.js",
     "mcp": "node mcp/server.mjs",
     "predev": "npm run native:node",
