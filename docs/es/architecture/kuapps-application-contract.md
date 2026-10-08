@@ -185,7 +185,7 @@ La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de lo
 | `partial` | la última recolección leyó solo parte de los datos |
 | `current` | datos recientes |
 
-**Agregar recursos** (el encabezado, Recursos y el Mapa abren el mismo panel) marca los recursos descubiertos que ya están en la aplicación ("Ya está en <aplicación>"), que no se pueden volver a seleccionar, y muestra la identidad nativa de cada uno. Una escritura sobre una vista que cambió mientras tanto responde `409`: el panel recarga la vista, conserva la selección y pide volver a agregar los recursos; no se escribió nada. En el Mapa, **Quitar del diagrama** pide confirmación y aclara que no se borra nada en la nube; un recurso que llegó a la aplicación solo por ese diagrama también sale de la aplicación.
+**Agregar recursos** (el encabezado, Recursos y el Mapa abren el mismo panel) marca los recursos descubiertos que ya están en la aplicación ("Ya está en" seguido del nombre de la aplicación), que no se pueden volver a seleccionar, y muestra la identidad nativa de cada uno. Una escritura sobre una vista que cambió mientras tanto responde `409`: el panel recarga la vista, conserva la selección y pide volver a agregar los recursos; no se escribió nada. En el Mapa, **Quitar del diagrama** pide confirmación y aclara que no se borra nada en la nube; un recurso que llegó a la aplicación solo por ese diagrama también sale de la aplicación.
 
 ## Reporte de migración
 

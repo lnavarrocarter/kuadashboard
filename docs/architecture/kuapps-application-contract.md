@@ -185,7 +185,7 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 | `partial` | the last collection read only part of the data |
 | `current` | recent data |
 
-**Add resources** (header, Resources and Map open the same panel) marks discovered resources already in the application ("Already in <application>"), which cannot be selected again, and shows each one's native identity. A write against a view that changed meanwhile answers `409`: the panel reloads the view, keeps the selection and says to add the resources again; nothing was written. In the Map, **Remove from diagram** asks for confirmation and says that nothing is deleted in the cloud; a resource that joined the application only through that diagram also leaves the application.
+**Add resources** (header, Resources and Map open the same panel) marks discovered resources already in the application ("Already in" followed by the application name), which cannot be selected again, and shows each one's native identity. A write against a view that changed meanwhile answers `409`: the panel reloads the view, keeps the selection and says to add the resources again; nothing was written. In the Map, **Remove from diagram** asks for confirmation and says that nothing is deleted in the cloud; a resource that joined the application only through that diagram also leaves the application.
 
 ## Migration report
 
