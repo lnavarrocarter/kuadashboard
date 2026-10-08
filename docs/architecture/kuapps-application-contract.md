@@ -114,7 +114,7 @@ Verification only uses reads that have no charge:
 
 A different identity is `mismatch`. A failed read (expired session, missing profile) leaves the binding `unverified` with its error and never reports a mismatch. A scope without `scopeId` is completed with the identity the profile reveals: the scope is replaced and the binding moves with it, and legacy synchronization does not bring the pending scope back.
 
-KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Team publishing skips these applications until the bundle carries scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
+KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). They export and import with their scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)); team publishing skips them until the account service accepts bundles without provider. A link with `?app=<id>` opens an application in KUApps.
 
 ## Resource membership
 ## Extension sources and evidence (#156)
@@ -192,14 +192,57 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 | `duplicate_name` | info | optional rename; the id is the identity |
 | `resource_identities_merged` | info | none, recorded for traceability |
 
-## Export (KUAAppBundle)
+## Export and import (KUAAppBundle)
 
-The bundle carries portable data only:
+Tracking: [#153](https://github.com/lnavarrocarter/kuadashboard/issues/153). Code: `lib/kua/kuaAppBundle.js` (format), `lib/kua/kuaAppIo.js` (export, preview, import, sync).
 
-- `registry.resources[]` uses identity v2: `sourceId`, `identityKey` and `identityVersion: 2`. The local `id` and the v1 `identityKey` are never copied. Both are recomputed on import, so an older bundle loses its v1 keys when it is read again.
-- `registry.relationships[]` point to portable resource ids. A relationship to a resource that is not in the bundle is left out.
-- `architecture.changes[].author` is `local` when the author was a local profile.
+### Format
 
-Older versions exported `identityKey` with the profile id in plain text. Cloud backups and team copies made before this change keep that value until the application is uploaded again.
+The envelope stays `kind: "KUAAppBundle"`, `version: 1`, `mode: "sanitized"`, because the account service (cloud backups, sync and team) and older KUA versions only accept version 1. New content is added inside it and announced by `contentVersion` (now `2`; a bundle without it is content version 1).
 
-Restoring registry membership on import, several architecture projects per bundle, and the report-style export (Advisor, resource references, routes and communications) are part of [#153](https://github.com/lnavarrocarter/kuadashboard/issues/153).
+| Field | Content |
+| --- | --- |
+| `application` | `name`, `environment`, `team`, `pollingEnabled` and `scopes[]` (`provider`, `scopeId`, `location`, `label`). `provider` and `region` only appear for a legacy application, never for one created without provider. |
+| `architecture` | the first architecture view: `project`, `graph`, `snapshots`, `changes` |
+| `additionalViews[]` | the other views, with the same shape |
+| `registry.resources[]` | identity v2 (`sourceId`, `identityKey`, `identityVersion: 2`) and, for a resource of the application, `apm`: how to observe it again (`type`, `key`, `name`, `arn`, `kind`, `service`, `logGroup`, `kubeContext`, `namespace`, `scopeId`, `location`, `enabled`, `associationSource`) |
+| `registry.relationships[]` | portable resource ids, status (`confirmed`, `rejected`, `suggested`, `automatic`) and evidence type and origin only |
+| `registry.detachments[]` | identity v2 keys of resources the user detached |
+| `advisor.acceptances[]` | product Advisor findings accepted or silenced |
+
+Never in a bundle: profiles or scope bindings, credentials, kubeconfigs, tokens, secrets, change payloads, raw evidence values, telemetry, logs, metric data or thresholds. The local `id` and the v1 `identityKey` are never copied; both are recomputed when a bundle is read, so an older bundle loses its v1 keys when it is read again. `architecture.changes[].author` is `local` when the author was a local profile. Older versions exported `identityKey` with the profile id in plain text; cloud backups and team copies made before that fix keep it until the application is uploaded again.
+
+An older KUA reads a content version 2 bundle as a legacy one: it imports the first view and ignores scopes, additional views, membership and detachments. It cannot read a bundle of an application without provider.
+
+### Reading a bundle
+
+Every bundle (file, cloud backup, sync, team) is checked and sanitized again on this computer. What is left out is reported, not dropped silently:
+
+| Issue | Meaning |
+| --- | --- |
+| `newer_content` | made by a newer KUA; what this version does not know is ignored |
+| `resource_invalid` | a resource without a valid identity |
+| `relationship_dangling` | a relationship to a resource that is not in the bundle |
+| `detachment_invalid` | a detachment that is not an identity v2 key |
+| `view_invalid` / `views_truncated` | a view without project, or more than 100 views |
+
+An unknown `kind` or `version`, a non-sanitized bundle or an invalid `contentVersion` is refused.
+
+### Preview and import
+
+`POST /api/kua-apps/import/preview` (header `X-Profile-Id`) answers what an import would do and writes nothing: the name the application gets, whether it already exists here (same source id) or shares its name, the scopes to bind (and whether this KUA supports their provider), the views and the names they get, the resources that come back, the ones that cannot and why (`no_source`, `unsupported_type`, `unsupported_provider`), resources this computer already has in other applications, resources outside the application scopes, relationship counts by status, detachments, Advisor decisions and the issues above. KUApps shows it before **Import**.
+
+`POST /api/kua-apps/import` creates a **new** application; it never merges into an existing one:
+
+- A bundle with `provider` and `region` becomes a legacy application of the selected profile, renamed `Name (imported)` when that profile already has the name. A bundle without them becomes a KUA Application without provider, with its own name.
+- Scopes are added without bindings: each person binds a profile of their computer (see Local bindings above).
+- Every view becomes an architecture project of the selected profile, with its graph and snapshots. Human decisions (rejected and confirmed relationships, manual nodes) come back with the graph.
+- Detachments are restored first, so reconciling the views does not attach those resources again.
+- Resources with `apm` become members again through `ApplicationRegistryService.attachResources` (#150), which is idempotent and reconciles once. A resource that joined from a view comes back with that view. Relationships drawn between members are restored. Nothing is created in the cloud and restoring a resource does not turn on collection.
+- The response lists `skipped` resources with their reason. A failure rolls back the application and the projects it created.
+
+Exporting an application without provider works from any profile. Cloud backups, sync and team publishing still need the account service to accept bundles without `provider`/`region`, so they keep using legacy applications only for now.
+
+Sync between computers (`applyBundle`) takes the details, adds missing scopes (it never removes one), and updates each view, matched by name (ignoring an `(imported)` suffix) and then in order; a missing view is created once. The sync hash only includes additional views, and the scopes of an application without provider, when there are some, so existing applications keep their hash. A legacy application's scopes are derived from its resources on each computer and are not part of the hash.
+
+The report-style export (Advisor findings, resource references, routes and communications) is not part of this format.

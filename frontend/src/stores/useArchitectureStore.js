@@ -332,12 +332,18 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function importKuaApp(file) {
-    if (!file) return null
+  // What importing a bundle would do; nothing is written (#153).
+  async function previewKuaApp(bundle) {
+    return apiFetch('/api/kua-apps/import/preview', { method: 'POST', headers: headers(true), body: JSON.stringify(bundle) })
+  }
+
+  // A .kuaapp.json File, or a bundle already read from one.
+  async function importKuaApp(source) {
+    if (!source) return null
     saving.value = true
     error.value = null
     try {
-      const bundle = JSON.parse(await file.text())
+      const bundle = typeof source.text === 'function' ? JSON.parse(await source.text()) : source
       const result = await apiFetch('/api/kua-apps/import', {
         method: 'POST',
         headers: headers(true),
@@ -896,6 +902,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importAwsResources,
     importKubernetesResources,
     importKuaApp,
+    previewKuaApp,
     backupKuaAppToCloud,
     teamSpace,
     teamRefresh,

@@ -86,6 +86,34 @@ test('local KUAAppBundle export/import restores app, graph and snapshots by prof
   }
 });
 
+test('an application without provider exports from any profile, and the preview writes nothing (#153)', async () => {
+  const subject = await fixture();
+  try {
+    const created = await subject.request('/applications', {
+      method: 'POST', body: { name: 'Checkout', scopes: [{ provider: 'kubernetes', scopeId: 'prod-cluster' }] },
+    });
+    const exported = await subject.request(`/${created.body.id}/export`, { profile: 'local:other' });
+    assert.equal(exported.status, 200);
+    assert.equal(exported.body.application.provider, undefined);
+    assert.deepEqual(exported.body.application.scopes.map(scope => scope.scopeId), ['prod-cluster']);
+
+    const before = subject.apmDatabase.listApplications().length;
+    const preview = await subject.request('/import/preview', { method: 'POST', body: exported.body });
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.equal(preview.body.application.alreadyHere, true);
+    assert.equal(preview.body.scopes.length, 1);
+    assert.equal(subject.apmDatabase.listApplications().length, before);
+
+    const imported = await subject.request('/import', { method: 'POST', body: exported.body });
+    assert.equal(imported.status, 201, JSON.stringify(imported.body));
+    assert.equal(imported.body.application.profileId, null);
+    const unknown = await subject.request('/import/preview', { method: 'POST', body: { ...exported.body, version: 3 } });
+    assert.equal(unknown.status, 400);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('local KUAAppBundle import rejects non-sanitized bundles', async () => {
   const subject = await fixture();
   try {

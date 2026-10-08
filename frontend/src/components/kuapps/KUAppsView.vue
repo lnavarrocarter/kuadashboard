@@ -69,6 +69,7 @@
           </nav>
 
           <TeamSpaceModal v-if="selectedApplication" :show="teamSpaceOpen" :profile-id="selectedProfileId || ''" @close="teamSpaceOpen = false" />
+          <KUAppImportPreview :show="!!importPreview" :preview="importPreview" :busy="importBusy" @close="closeImportPreview" @confirm="confirmImport" />
           <CloudBackupsModal v-if="selectedApplication" :show="cloudBackupsOpen" :profile-id="selectedProfileId || ''" :application-id="selectedApplication.id" :application-name="selectedApplication.name" @close="cloudBackupsOpen = false" />
 
           <div v-if="workspaceView === 'overview'" class="kuapps-overview-content">
@@ -455,6 +456,7 @@ import KUAppScopes from './KUAppScopes.vue'
 import KUAppSummary from './KUAppSummary.vue'
 import KUAppSync from './KUAppSync.vue'
 import KUAppExplanation from './KUAppExplanation.vue'
+import KUAppImportPreview from './KUAppImportPreview.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -486,6 +488,9 @@ const bundleInput = ref(null)
 const architectureStore = useArchitectureStore()
 const catalogLoading = ref(false)
 const importBusy = ref(false)
+// The bundle being imported and what importing it would do (#153).
+const importPreview = ref(null)
+const pendingBundle = ref(null)
 const teamInfo = ref(null)
 const teamSpaceOpen = ref(false)
 const cloudBackupsOpen = ref(false)
@@ -861,9 +866,33 @@ async function importApplicationBackup(event) {
   importBusy.value = true
   try {
     await activateSelectedProfile()
-    const result = await architectureStore.importKuaApp(file)
+    let bundle
+    try { bundle = JSON.parse(await file.text()) } catch { throw new Error(t('kuapps.import.invalidFile')) }
+    importPreview.value = await architectureStore.previewKuaApp(bundle)
+    pendingBundle.value = bundle
+  } catch (error) {
+    toast(error.message, 'error')
+  } finally {
+    importBusy.value = false
+  }
+}
+
+function closeImportPreview() {
+  importPreview.value = null
+  pendingBundle.value = null
+}
+
+async function confirmImport() {
+  if (!pendingBundle.value) return
+  importBusy.value = true
+  try {
+    const result = await architectureStore.importKuaApp(pendingBundle.value)
     if (!result) throw new Error(architectureStore.error || t('common.error'))
-    toast(t('archView.imported', { name: result.application.name }), 'success')
+    closeImportPreview()
+    const skipped = result.skipped?.length || 0
+    toast(skipped
+      ? t('kuapps.import.doneWithSkipped', { name: result.application.name, count: skipped })
+      : t('archView.imported', { name: result.application.name }), skipped ? 'warn' : 'success')
     await loadCatalog()
   } catch (error) {
     toast(error.message, 'error')
