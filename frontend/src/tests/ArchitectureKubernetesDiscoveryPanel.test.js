@@ -50,4 +50,30 @@ describe('ArchitectureKubernetesDiscoveryPanel', () => {
     expect(store.importKubernetesResources).toHaveBeenCalledWith({ selectedNodeIds: ['deployment'] })
     expect(wrapper.emitted('imported')).toHaveLength(1)
   })
+
+  it('shows the native identity and marks resources already in the application, which cannot be selected twice (#151)', async () => {
+    const store = useArchitectureStore()
+    store.linkedApplication = { id: 'app-a', name: 'Orders' }
+    store.loadKubernetesContexts = vi.fn(async () => { store.kubernetesContexts = [{ id: 'orders-eks', name: 'orders-eks' }] })
+    store.previewKubernetesResources = vi.fn(async () => {
+      store.kubernetesPreview = {
+        nodes: [
+          { id: 'api', name: 'api', kind: 'Deployment', namespace: 'orders', discoveryKey: 'orders-eks/orders/deployment/api', alreadyInGraph: true },
+          { id: 'worker', name: 'worker', kind: 'Deployment', namespace: 'orders', discoveryKey: 'orders-eks/orders/deployment/worker', health: { status: 'healthy' } },
+        ],
+        relationships: [], health: [], failures: [],
+      }
+    })
+    const wrapper = mount(ArchitectureKubernetesDiscoveryPanel)
+    await flushPromises()
+    await wrapper.get('select').setValue('orders-eks')
+    await wrapper.findAll('button').find(button => button.text().includes('Preview resources')).trigger('click')
+    await flushPromises()
+
+    const [existing, fresh] = wrapper.findAll('.kubernetes-resource-row')
+    expect(existing.text()).toContain('Already in Orders')
+    expect(existing.get('input').element.disabled).toBe(true)
+    expect(existing.get('.native-identity').text()).toBe('orders-eks/orders/deployment/api')
+    expect(fresh.get('input').element.disabled).toBe(false)
+  })
 })

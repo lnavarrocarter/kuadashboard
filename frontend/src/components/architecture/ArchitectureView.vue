@@ -69,7 +69,8 @@
     </div>
 
     <div v-else-if="props.resourcePickerOnly" class="architecture-resource-picker-only">
-      <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
+      <div v-if="store.writeConflict" class="alert-error architecture-error" role="alert" data-test="picker-conflict">{{ t('archView.writeConflict') }}</div>
+      <div v-else-if="store.error" class="alert-error architecture-error" role="alert" data-test="picker-error">{{ t('archView.writeFailed', { error: store.error }) }}</div>
       <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />

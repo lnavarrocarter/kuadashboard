@@ -400,6 +400,16 @@ describe('KUApps navigation', () => {
     const picker = wrapper.findAllComponents({ name: 'ArchitectureView' }).find(view => view.props('resourcePickerOnly'))
     expect(picker.props('profileId')).toBe('local')
     expect(wrapper.get('.kuapps-add-explain').text()).toContain('metric collection stays off')
+
+    // The Map opens the same panel (#151): one picker, whichever entry point asked for it.
+    await wrapper.get('.kuapps-add-panel header button').trigger('click')
+    expect(wrapper.find('.kuapps-add-panel').exists()).toBe(false)
+    await tabs()[2].trigger('click')
+    map().vm.$emit('request-resource-picker')
+    await flushPromises()
+    expect(wrapper.findAll('.kuapps-add-panel')).toHaveLength(1)
+    expect(wrapper.findAllComponents({ name: 'ArchitectureView' }).filter(view => view.props('resourcePickerOnly'))).toHaveLength(1)
+    expect(wrapper.findAll('.kuapps-workspace-tab.active').map(tab => tab.text())[0]).toContain('Map')
     wrapper.unmount()
   })
 

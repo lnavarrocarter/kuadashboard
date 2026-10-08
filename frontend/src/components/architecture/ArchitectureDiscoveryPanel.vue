@@ -138,8 +138,8 @@
           </header>
           <label v-for="node in group.nodes" :key="node.id" class="discovery-row resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
             <input v-model="selectedNodes" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
-            <span><strong>{{ node.name }}</strong><small>{{ resourceOrigin(node) }}</small></span>
-            <span v-if="node.alreadyInGraph" class="evidence-badge already-badge"><i data-lucide="check-circle-2"></i> {{ t('archDisc.alreadyInProject') }}</span>
+            <span><strong>{{ node.name }}</strong><small>{{ resourceOrigin(node) }}</small><small v-if="nativeIdentity(node)" class="native-identity" :title="nativeIdentity(node)">{{ nativeIdentity(node) }}</small></span>
+            <span v-if="node.alreadyInGraph" class="evidence-badge already-badge"><i data-lucide="check-circle-2"></i> {{ alreadyAddedLabel(t, store.linkedApplication) }}</span>
             <span v-else class="evidence-badge"><i data-lucide="shield-check"></i> {{ evidenceLabel(node) }}</span>
           </label>
         </section>
@@ -185,6 +185,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useI18n } from '../../composables/useI18n'
+import { alreadyAddedLabel, nativeIdentity } from '../../lib/discoveryMembership'
 
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
@@ -566,4 +567,5 @@ onMounted(refreshIcons)
   .stack-resource-summary { align-items: flex-start; flex-wrap: wrap; }
   .stack-resource-summary .btn { width: 100%; margin-left: 0; }
 }
+.native-identity { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 10px; color: var(--text-dim); }
 </style>

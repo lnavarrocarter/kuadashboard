@@ -21,6 +21,31 @@ beforeEach(() => {
 })
 
 describe('architecture workspace', () => {
+  it('reloads the graph after a stale-revision write and keeps the selection to try again (#151)', async () => {
+    store.activeProfileId = 'local:dev'
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 3, document: { nodes: [], edges: [] } }
+    store.gcpPreview = { nodes: [{ id: 'run' }], relationships: [], failures: [] }
+    const calls = []
+    global.fetch = vi.fn((url, options = {}) => {
+      calls.push([options.method || 'GET', url])
+      if (options.method === 'POST') return response({ error: 'Architecture graph revision conflict' }, 409)
+      return response({ revision: 5, document: { nodes: [{ id: 'other' }], edges: [] } })
+    })
+
+    await expect(store.importCloudResources({ provider: 'gcp', selectedNodeIds: ['run'] })).resolves.toBeNull()
+    expect(store.writeConflict).toBe(true)
+    expect(store.graph.revision).toBe(5)
+    expect(store.gcpPreview.nodes).toHaveLength(1)
+    expect(calls.at(-1)).toEqual(['GET', '/api/architecture/projects/project-a/graph'])
+
+    // Any other failure is reported without reloading or claiming a conflict.
+    global.fetch = vi.fn(() => response({ error: 'disk full' }, 500))
+    await store.importCloudResources({ provider: 'gcp', selectedNodeIds: ['run'] })
+    expect(store.writeConflict).toBe(false)
+    expect(store.error).toBe('disk full')
+  })
+
   it('loads the cross-provider application catalog without a profile header', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(url).toBe('/api/architecture/applications/catalog')
