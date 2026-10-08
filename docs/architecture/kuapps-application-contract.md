@@ -114,7 +114,7 @@ Verification only uses reads that have no charge:
 
 A different identity is `mismatch`. A failed read (expired session, missing profile) leaves the binding `unverified` with its error and never reports a mismatch. A scope without `scopeId` is completed with the identity the profile reveals: the scope is replaced and the binding moves with it, and legacy synchronization does not bring the pending scope back.
 
-KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). They export, import, back up and publish to the team with their scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
+KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). They export, import, back up and publish to the team with their scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps, and `&tab=resources` (or `map`, `signals`, `review`, `settings`) opens that workspace tab; the tab is kept in the URL when it changes. A scope whose provider has no connector in this KUA (a plugin provider, #156) shows as **Not supported**, offers no profile and raises no binding warning.
 
 ## Extension sources and evidence (#156)
 
@@ -172,7 +172,20 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 - **Human decisions survive.** Relationships the user confirmed or rejected keep their status through attach, detach and reconciliation.
 - **Verified scope profiles.** A profile bound and verified for one of the application's scopes can open the application's Architecture views, also for an application without a provider.
 
-`GET /api/kua-apps/applications/:id/registry` lists the application's canonical resources and relationships with names, without local profile ids.
+`GET /api/kua-apps/applications/:id/registry` lists the application's canonical resources and relationships with names, without local profile ids. Each resource has `signals: { state, lastDataAt, reason }` (`lib/kua/resourceSignalState.js`, local tables only), shown as a badge in Resources and in the inspector so a resource without data never looks empty or healthy:
+
+| State | Meaning |
+| --- | --- |
+| `unsupported` | KUA cannot collect signals for this provider or resource type |
+| `no_connection` | no verified profile of this computer reaches the resource's scope |
+| `disabled` | collection is off for the application or the resource |
+| `error` | the last collection of the application failed |
+| `no_data` | nothing collected yet |
+| `stale` | latest data older than three collection intervals (at least 2 hours) |
+| `partial` | the last collection read only part of the data |
+| `current` | recent data |
+
+**Add resources** (header, Resources and Map open the same panel) marks discovered resources already in the application ("Already in <application>"), which cannot be selected again, and shows each one's native identity. A write against a view that changed meanwhile answers `409`: the panel reloads the view, keeps the selection and says to add the resources again; nothing was written. In the Map, **Remove from diagram** asks for confirmation and says that nothing is deleted in the cloud; a resource that joined the application only through that diagram also leaves the application.
 
 ## Migration report
 

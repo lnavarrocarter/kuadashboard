@@ -8,6 +8,21 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import KUAppsView from '../components/kuapps/KUAppsView.vue'
 import { useArchitectureStore } from '../stores/useArchitectureStore'
 
+// The setup file replaces window.location with a plain object: a small fake that follows replaceState.
+function fakeUrl(search) {
+  const previous = { location: window.location, replaceState: window.history.replaceState }
+  const set = href => {
+    const url = new URL(href)
+    window.location = { ...previous.location, href: url.href, search: url.search }
+  }
+  set(`http://localhost:7190/${search}`)
+  window.history.replaceState = (_state, _title, href) => set(href)
+  return {
+    params: () => new URLSearchParams(window.location.search),
+    restore() { window.location = previous.location; window.history.replaceState = previous.replaceState },
+  }
+}
+
 describe('KUApps navigation', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -523,6 +538,76 @@ describe('KUApps navigation', () => {
     expect(workload.exists()).toBe(true)
     expect(workload.props('focusResource').node).toMatchObject({ provider: 'kubernetes', name: 'orders-pods' })
     wrapper.unmount()
+  })
+
+  it('lists every resource with an explicit signal state, never empty or healthy by default (#152)', async () => {
+    const application = { id: 'app-s', name: 'Checkout', provider: null, profileId: null }
+    const resource = (id, provider, state) => ({
+      id, provider, scopeId: 'scope', location: '', nativeIdentifier: id, resourceType: provider === 'zabbix' ? 'host' : 'lambda',
+      displayName: id, sources: ['apm_resource'], ...(state ? { signals: { state, lastDataAt: null } } : {}),
+    })
+    const resources = [
+      resource('fresh', 'aws', 'current'), resource('waiting', 'aws', 'no_data'), resource('old', 'aws', 'stale'),
+      resource('unbound', 'aws', 'no_connection'), resource('host', 'zabbix', 'unsupported'), resource('older-backend', 'aws', null),
+    ]
+    global.fetch = vi.fn(url => Promise.resolve({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(url.includes('/catalog') ? [application]
+        : url.includes('/registry') ? { resources, relationships: [] }
+          : { ...application, revision: 1, scopes: [], local: { bindings: [], legacy: null } }),
+    }))
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-test="resource-signal-state"]').map(badge => badge.text()))
+      .toEqual(['Current', 'No data yet', 'Stale', 'No connection', 'Not supported', 'Unknown'])
+    await wrapper.findAll('.kuapps-resource-row')[3].trigger('click')
+    expect(wrapper.get('[data-test="inspector-signal-state"]').text()).toContain('No verified profile of this computer reaches its scope')
+    wrapper.unmount()
+  })
+
+  it('keeps the workspace tab in the URL next to ?app= and restores it on reload (#152)', async () => {
+    const url = fakeUrl('?app=app-a&tab=resources')
+    try {
+      const wrapper = mount(KUAppsView, {
+        props: { activeView: 'architecture', applicationId: 'app-a' },
+        global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+      })
+      await flushPromises()
+      expect(wrapper.get('.kuapps-workspace-tab.active').text()).toContain('Resources')
+
+      await wrapper.findAll('.kuapps-workspace-tab')[4].trigger('click')
+      expect(url.params().get('tab')).toBe('review')
+      expect(url.params().get('app')).toBe('app-a')
+      await wrapper.findAll('.kuapps-workspace-tab')[0].trigger('click')
+      expect(url.params().has('tab')).toBe(false)
+      wrapper.unmount()
+    } finally {
+      url.restore()
+    }
+  })
+
+  it('a link to an application that no longer exists, or to an unknown tab, opens nothing stale (#152)', async () => {
+    const url = fakeUrl('?app=deleted-app&tab=nonsense')
+    try {
+      const wrapper = mount(KUAppsView, {
+        props: { activeView: 'architecture', applicationId: 'deleted-app' },
+        global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+      })
+      await flushPromises()
+      // The catalog only has app-a: nothing of the deleted application is shown as if it existed.
+      expect(wrapper.text()).not.toContain('deleted-app')
+      expect(wrapper.find('.kuapps-workspace-tab.active').exists() ? wrapper.get('.kuapps-workspace-tab.active').text() : 'Overview').toContain('Overview')
+      wrapper.unmount()
+    } finally {
+      url.restore()
+    }
   })
 
   it('shows one removable sync definition per registry resource when Architecture is unavailable', async () => {

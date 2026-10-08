@@ -50,6 +50,21 @@ describe('KUApp scopes', () => {
     wrapper.unmount()
   })
 
+  it('shows a plugin provider scope as not supported instead of asking for a profile (#152)', async () => {
+    const plugin = { key: 'kua-scope:zabbix', provider: 'zabbix', scopeId: 'monitoring', location: '', label: '' }
+    respond(url => {
+      if (url.startsWith('/api/kua-apps/')) return { body: view({ scopes: [plugin], warnings: [] }) }
+      return { body: [] }
+    })
+    const wrapper = mount(KUAppScopes, { props: { applicationId: 'app-1' } })
+    await flushPromises()
+
+    expect(wrapper.find('.kuapp-scope-status').text()).toBe('Not supported')
+    expect(wrapper.find('.kuapp-scope-binding select').exists()).toBe(false)
+    expect(wrapper.find('.kuapp-scope-unsupported').text()).toContain('no connector for this provider')
+    wrapper.unmount()
+  })
+
   it('binds the chosen profile and shows the verification result', async () => {
     respond((url, options) => {
       if (options.method === 'PUT') {

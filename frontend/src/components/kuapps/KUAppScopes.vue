@@ -38,6 +38,8 @@
         </span>
         <span :class="['kuapp-scope-status', statusOf(scope)]" :title="bindingOf(scope)?.lastError || ''">{{ t(`kuapps.scopes.status.${statusOf(scope)}`) }}</span>
         <span class="kuapp-scope-binding">
+          <small v-if="statusOf(scope) === 'unsupported'" class="kuapp-scope-unsupported">{{ t('kuapps.scopes.unsupportedHint') }}</small>
+          <template v-else>
           <select v-model="selection[scope.key]" :aria-label="t('kuapps.scopes.profile')" :disabled="busy">
             <option value="">{{ t('kuapps.scopes.chooseProfile') }}</option>
             <option v-for="option in profileOptions(scope.provider)" :key="option.id" :value="option.id">{{ option.name }}</option>
@@ -45,6 +47,7 @@
           <button class="btn sm" :disabled="busy || !selection[scope.key]" @click="bind(scope)">{{ t('kuapps.scopes.bind') }}</button>
           <button v-if="bindingOf(scope)" class="btn sm" :disabled="busy" :title="t('kuapps.scopes.verify')" @click="verify(scope)"><i data-lucide="refresh-cw"></i></button>
           <button v-if="bindingOf(scope)" class="btn sm" :disabled="busy" :title="t('kuapps.scopes.unbind')" @click="unbind(scope)"><i data-lucide="unlink"></i></button>
+          </template>
           <button class="btn sm danger" :disabled="busy" :title="t('kuapps.scopes.remove')" @click="removeScope(scope)"><i data-lucide="trash-2"></i></button>
         </span>
       </li>
@@ -90,7 +93,9 @@ function bindingOf(scope) {
   return view.value?.local?.bindings?.find(binding => binding.scopeKey === scope.key) || null
 }
 
+// A provider added by a plugin (#156) has no connector here yet: say so instead of "No profile".
 function statusOf(scope) {
+  if (!PROVIDERS.includes(scope.provider)) return 'unsupported'
   return bindingOf(scope)?.status === 'migrated' ? 'unverified' : (bindingOf(scope)?.status || 'unbound')
 }
 

@@ -114,7 +114,7 @@ La verificación solo usa lecturas sin costo:
 
 Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, perfil inexistente) deja el binding `unverified` con su error y nunca informa un mismatch. Un scope sin `scopeId` se completa con la identidad que revela el perfil: el scope se reemplaza, el binding se mueve con él, y la sincronización legacy no vuelve a crear el scope pendiente.
 
-KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Se exportan, importan, respaldan y publican al equipo con sus scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps.
+KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Se exportan, importan, respaldan y publican al equipo con sus scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps, y `&tab=resources` (o `map`, `signals`, `review`, `settings`) abre esa pestaña del workspace; la pestaña se conserva en la URL cuando cambia. Un scope cuyo provider no tiene conector en esta versión de KUA (un provider de plugin, #156) aparece como **No soportado**, no ofrece perfiles y no genera advertencias de asociación.
 
 ## Fuentes de extensiones y evidencia (#156)
 
@@ -172,7 +172,20 @@ La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de lo
 - **Las decisiones humanas se mantienen.** Las relaciones que el usuario confirmó o rechazó conservan su estado al asociar, desvincular y reconciliar.
 - **Perfiles verificados por scope.** Un perfil asociado y verificado para uno de los scopes de la aplicación puede abrir sus vistas de Arquitectura, también en una aplicación sin provider.
 
-`GET /api/kua-apps/applications/:id/registry` lista los recursos y relaciones canónicos de la aplicación con sus nombres, sin ids de perfiles locales.
+`GET /api/kua-apps/applications/:id/registry` lista los recursos y relaciones canónicos de la aplicación con sus nombres, sin ids de perfiles locales. Cada recurso tiene `signals: { state, lastDataAt, reason }` (`lib/kua/resourceSignalState.js`, solo tablas locales), que se muestra como etiqueta en Recursos y en el inspector para que un recurso sin datos nunca parezca vacío o sano:
+
+| Estado | Significado |
+| --- | --- |
+| `unsupported` | KUA no puede recolectar señales de este provider o tipo de recurso |
+| `no_connection` | ningún perfil verificado de este computador llega al scope del recurso |
+| `disabled` | la recolección está apagada para la aplicación o el recurso |
+| `error` | la última recolección de la aplicación falló |
+| `no_data` | todavía no se recolectó nada |
+| `stale` | los últimos datos tienen más de tres intervalos de recolección (al menos 2 horas) |
+| `partial` | la última recolección leyó solo parte de los datos |
+| `current` | datos recientes |
+
+**Agregar recursos** (el encabezado, Recursos y el Mapa abren el mismo panel) marca los recursos descubiertos que ya están en la aplicación ("Ya está en <aplicación>"), que no se pueden volver a seleccionar, y muestra la identidad nativa de cada uno. Una escritura sobre una vista que cambió mientras tanto responde `409`: el panel recarga la vista, conserva la selección y pide volver a agregar los recursos; no se escribió nada. En el Mapa, **Quitar del diagrama** pide confirmación y aclara que no se borra nada en la nube; un recurso que llegó a la aplicación solo por ese diagrama también sale de la aplicación.
 
 ## Reporte de migración
 
