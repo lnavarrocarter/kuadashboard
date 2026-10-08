@@ -201,6 +201,13 @@
           <strong>{{ t('apm.costGuard') }}</strong>
           <p>{{ t('apm.costForecast', { count: selectedLambdaCount, maximum: formatNumber(maximumForecast) }) }}</p>
           <p>{{ t('apm.costDisclaimer') }}</p>
+          <p v-if="cloudWatchEstimate.metricsPerCollection" data-test="cloudwatch-cost-estimate">
+            {{ t('apm.cloudWatchMonthlyEstimate', {
+              metrics: formatNumber(cloudWatchEstimate.metricsPerCollection),
+              requests: formatNumber(cloudWatchEstimate.requestsPerMonth),
+              usd: formatNumber(cloudWatchEstimate.monthlyUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            }) }}
+          </p>
         </div>
         <label class="poll-toggle"><input v-model="form.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
       </section>
@@ -211,7 +218,7 @@
         <label class="poll-toggle"><input v-model="form.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
       </section>
 
-      <label v-if="form.pollingEnabled && selectedLambdaCount" class="cost-ack">
+      <label v-if="form.pollingEnabled && hasBillableCollection" class="cost-ack">
         <input v-model="form.costAcknowledged" type="checkbox" />
         {{ t('apm.costConsent') }}
       </label>
@@ -235,6 +242,7 @@ import BaseModal from '../../BaseModal.vue'
 import { useApmStore } from '../../../stores/useApmStore'
 import { formatNumber, useI18n } from '../../../composables/useI18n'
 import { apmResourceIcon, apmResourceLabel, apmResourceLocation } from './resourcePresentation'
+import { estimateCloudWatchMonthlyCost } from './metricCatalog'
 
 const props = defineProps({
   show: Boolean,
@@ -242,6 +250,7 @@ const props = defineProps({
   profileId: { type: String, default: '' },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
+  loadBalancers: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
   eventBridgeRules: { type: Array, default: () => [] },
   stepFunctions: { type: Array, default: () => [] },
@@ -337,6 +346,16 @@ const inventoryResources = computed(() => [
     kind: 'AWS::StepFunctions::StateMachine',
     associationSource: 'manual',
   })),
+  ...props.loadBalancers.filter(resource => resource.arn).map(resource => ({
+    type: 'elb',
+    key: resource.arn,
+    arn: resource.arn,
+    name: resource.name,
+    service: resource.dnsName || '',
+    kind: 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+    metadata: { targetGroups: (resource.targetGroups || []).map(targetGroup => targetGroup.arn).filter(Boolean) },
+    associationSource: 'manual',
+  })),
 ].filter(resource => resource.key && resource.name))
 const filteredInventoryResources = computed(() => {
   const query = inventorySearch.value.toLowerCase()
@@ -371,11 +390,17 @@ const selectedLambdaCount = computed(() => new Set([
 const selectedResourceCount = computed(() =>
   form.lambdaNames.length + selectedAssociatedResources.value.length + selectedEksWorkloads.value.length)
 const maximumForecast = computed(() => selectedLambdaCount.value * 48 * 30 * 2)
+const cloudWatchEstimate = computed(() => estimateCloudWatchMonthlyCost(selectedAssociatedResources.value))
+const hasBillableCollection = computed(() => selectedLambdaCount.value > 0 || cloudWatchEstimate.value.monthlyUsd > 0)
 const canSubmit = computed(() =>
   !!props.profileId && !!form.name && !!form.region &&
   (selectedResourceCount.value > 0 || form.includeKubernetes) &&
   (!form.includeKubernetes || (!!form.kubeContext && !!form.namespace && !!form.workloadName)) &&
-  (!form.pollingEnabled || !selectedLambdaCount.value || form.costAcknowledged))
+  (!form.pollingEnabled || !hasBillableCollection.value || form.costAcknowledged))
+
+watch(() => [form.pollingEnabled, selectedLambdaCount.value, cloudWatchEstimate.value.metricsPerCollection], () => {
+  form.costAcknowledged = false
+})
 
 const resourceIcon = apmResourceIcon
 const resourceLabel = apmResourceLabel
@@ -586,6 +611,7 @@ async function submit() {
         name: resource.name,
         service: resource.service,
         kind: resource.kind,
+        metadata: resource.metadata,
         logGroup: resource.type === 'lambda' ? `/aws/lambda/${resource.name}` : null,
         associationSource: resource.associationSource,
       })

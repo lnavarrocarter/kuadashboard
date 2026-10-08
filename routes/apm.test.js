@@ -436,6 +436,32 @@ test('API links an application to a profile-scoped Architecture project without 
   }
 });
 
+test('providerless KUA applications can create a local Architecture map and reconcile Kubernetes sources in one pass', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.database.createApplication({ name: 'APP TEST - Desarrollo' });
+    subject.database.addResource(application.id, {
+      provider: 'kubernetes', type: 'kubernetes', key: 'dev-eks/orders/Deployment/api',
+      kubeContext: 'dev-eks', namespace: 'orders', kind: 'Deployment', name: 'api', associationSource: 'manual',
+    });
+
+    const created = await subject.genericRequest(`/applications/${application.id}/architecture-link/project`, {
+      profile: 'local', method: 'POST',
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.project.profileId, 'local');
+    assert.equal(created.body.graph.document.nodes[0].namespace, 'orders');
+    assert.equal(created.body.graph.document.nodes[0].kubeContext, 'dev-eks');
+
+    const registry = await subject.genericRequest(`/applications/${application.id}/registry`, { profile: 'local' });
+    assert.equal(registry.status, 200);
+    assert.deepEqual(registry.body.resources[0].sources.sort(), ['apm_resource', 'architecture_node']);
+    assert.equal(registry.body.syncStatus.divergentResourceCount, 0);
+  } finally {
+    await subject.close();
+  }
+});
+
 test('API reconciles linked resources and relationships into one shared registry', async () => {
   const subject = await fixture();
   try {
@@ -545,6 +571,24 @@ test('resource attach, update and detach enforce application revisions', async (
     assert.equal(detached.status, 204);
     assert.equal(subject.database.getResource(attached.body.id), null);
     assert.equal(subject.database.getApplication(application.body.id).revision, 3);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('generic Observability route updates local polling for a providerless application', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.database.createApplication({ name: 'Orders' });
+    assert.equal(application.pollingEnabled, false);
+
+    const updated = await subject.genericRequest(`/applications/${application.id}`, {
+      method: 'PATCH', body: { pollingEnabled: true },
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.pollingEnabled, true);
+    assert.equal(updated.body.revision, application.revision);
+    assert.equal(subject.database.getApplication(application.id).pollingEnabled, true);
   } finally {
     await subject.close();
   }

@@ -8,8 +8,8 @@ const graph = {
   revision: 1,
   document: {
     nodes: [
-      { id: 'node-a', name: 'orders-api', resourceType: 'deployment', registryResourceId: 'resource-a', health: { status: 'degraded' } },
-      { id: 'node-b', name: 'legacy-queue', resourceType: 'sqs', registryResourceId: 'resource-b', syncState: 'stale' },
+      { id: 'node-a', name: 'orders-api', resourceType: 'deployment', registryResourceId: 'resource-a', kubeContext: 'orders-eks', namespace: 'orders', health: { status: 'degraded' } },
+      { id: 'node-b', name: 'legacy-queue', resourceType: 'sqs', registryResourceId: 'resource-b', stackName: 'legacy-stack', syncState: 'stale' },
     ],
     edges: [],
   },
@@ -63,6 +63,24 @@ describe('ArchitectureResources', () => {
     const wrapper = mount(ArchitectureResources, { props: { graph, registry, loading: false } })
     await wrapper.get('button[title="Refresh resources"]').trigger('click')
     expect(wrapper.emitted('refresh')).toHaveLength(1)
+  })
+
+  it('filters only the resources in the selected CloudFormation stack or Kubernetes namespace', async () => {
+    const wrapper = mount(ArchitectureResources, { props: { graph, registry, loading: false } })
+    const scopeFilter = wrapper.get('[data-test="resource-scope-filter"]')
+    const options = scopeFilter.findAll('option').map(option => option.text())
+    expect(options).toContain('CloudFormation · legacy-stack')
+    expect(options).toContain('Kubernetes · orders')
+
+    await scopeFilter.setValue('namespace:orders')
+    expect(wrapper.findAll('.resources-table tbody tr').map(row => row.text())).toHaveLength(1)
+    expect(wrapper.find('.resources-table').text()).toContain('orders-api')
+    expect(wrapper.find('.resources-table').text()).not.toContain('legacy-queue')
+
+    await scopeFilter.setValue('cloudformation:legacy-stack')
+    expect(wrapper.findAll('.resources-table tbody tr')).toHaveLength(1)
+    expect(wrapper.find('.resources-table').text()).toContain('legacy-queue')
+    expect(wrapper.emitted('operation')).toHaveLength(2)
   })
 
   it('never flags a structurally single-source resource type as divergent, and surfaces divergent relationships per resource', () => {

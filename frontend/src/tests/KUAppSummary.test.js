@@ -69,9 +69,15 @@ describe('KUApp summary (#171)', () => {
     wrapper.unmount()
   })
 
-  it('shows a running collection, refetches on range change and asks Signals to collect', async () => {
-    respond({ overview: { health: { status: 'healthy', signals: [] }, latestRun: { status: 'running', startedAt: Date.now() } }, topology: { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: { score: 90, coveragePercent: 100, findings: [] } } })
-    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
+  it('shows a running collection, refetches on range change and confirms collection in place', async () => {
+    respond({ overview: { health: { status: 'healthy', signals: [] }, latestRun: { status: 'running', startedAt: Date.now() } }, topology: { resources: [
+      { id: 'api', type: 'lambda', name: 'api' },
+      { id: 'alb', type: 'elb', name: 'orders', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abcdef0123456789' },
+    ], analysis: { score: 90, coveragePercent: 100, findings: [] } } })
+    const wrapper = mount(KUAppSummary, {
+      props: { application: legacy, provider: 'aws' },
+      global: { stubs: { BaseModal: { props: ['show'], template: '<div v-if="show"><slot name="title"/><slot/><slot name="footer"/></div>' } } },
+    })
     await flushPromises()
 
     expect(wrapper.text()).toContain('Last collection running')
@@ -84,6 +90,12 @@ describe('KUApp summary (#171)', () => {
     expect(Number(to) - Number(from)).toBe(7 * 24 * 3600e3)
 
     await wrapper.get('[data-test="summary-collect"]').trigger('click')
+    expect(wrapper.find('[data-test="summary-confirm-collect"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="summary-confirm-collect"]').element.disabled).toBe(false)
+    expect(wrapper.get('[data-test="summary-cloudwatch-cost"]').text()).toContain('$0.07/month')
+    expect(wrapper.text()).toContain('does not download logs again')
+    expect(wrapper.emitted('collect')).toBeUndefined()
+    await wrapper.get('[data-test="summary-confirm-collect"]').trigger('click')
     expect(wrapper.emitted('collect')).toHaveLength(1)
     await card(wrapper, 'structure').trigger('click')
     expect(wrapper.emitted('open-tab').at(-1)).toEqual(['review'])

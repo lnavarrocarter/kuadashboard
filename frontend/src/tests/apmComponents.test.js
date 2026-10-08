@@ -593,6 +593,52 @@ describe('APM setup cost consent', () => {
     wrapper.unmount()
   })
 
+  it('associates an inventory load balancer with its target groups', async () => {
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/applications') && options.method === 'POST') {
+        return response({ id: 'app-new', name: 'orders', region: 'us-east-1' })
+      }
+      if (url.endsWith('/applications/app-new/resources') && options.method === 'POST') {
+        return response({ id: 'resource-new' })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    const targetGroupArn = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders-api/0123456789abcdef'
+    const wrapper = mount(ApmSetupModal, {
+      attachTo: document.body,
+      props: {
+        show: true,
+        profileId: 'local:dev',
+        loadBalancers: [{
+          name: 'orders',
+          arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abcdef0123456789',
+          dnsName: 'orders.example.com',
+          targetGroups: [{ arn: targetGroupArn }],
+        }],
+      },
+      global: { stubs: { teleport: true } },
+    })
+    await wrapper.get('input[placeholder="orders"]').setValue('orders-app')
+    await wrapper.get('.inventory-resources .resource-option input').setValue(true)
+    expect(wrapper.get('[data-test="cloudwatch-cost-estimate"]').text()).toContain('7 metrics per collection')
+    expect(wrapper.get('[data-test="cloudwatch-cost-estimate"]').text()).toContain('1,440 GetMetricData reads/month')
+    await wrapper.find('.poll-toggle input').setValue(true)
+    expect(findButton('Create application').disabled).toBe(true)
+    await wrapper.get('.cost-ack input').setValue(true)
+    expect(findButton('Create application').disabled).toBe(false)
+    findButton('Create application').click()
+    await flushPromises()
+
+    const association = global.fetch.mock.calls.find(([url, options = {}]) =>
+      url.endsWith('/applications/app-new/resources') && options.method === 'POST')
+    expect(JSON.parse(association[1].body)).toMatchObject({
+      type: 'elb',
+      arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abcdef0123456789',
+      metadata: { targetGroups: [targetGroupArn] },
+    })
+    wrapper.unmount()
+  })
+
   it('previews deployment resources without selecting them and persists only explicit choices', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.includes('/deployments?')) return response({

@@ -213,7 +213,7 @@
                 <CloudMetricChart
                   v-for="chart in section.charts"
                   :key="seriesKey(chart)"
-                  :label="t(chart.labelKey)"
+                  :label="t(chart.labelKey, chart.params)"
                   :unit="chart.unit"
                   :points="store.series[seriesKey(chart)] || []"
                   :color="chart.color"
@@ -379,6 +379,7 @@
       :profile-id="profileId"
       :platform-resources="platformResources"
       :lambdas="lambdas"
+      :load-balancers="loadBalancers"
       :ecs-services="ecsServices"
       :event-bridge-rules="eventBridgeRules"
       :step-functions="stepFunctions"
@@ -394,11 +395,21 @@
         <label>{{ t('apm.environment') }}<input v-model.trim="applicationForm.environment" class="ctrl-input" /></label>
         <label>{{ t('apm.team') }}<input v-model.trim="applicationForm.team" class="ctrl-input" /></label>
         <label class="application-polling"><input v-model="applicationForm.pollingEnabled" type="checkbox" /> {{ t('apm.polling') }}</label>
+        <p v-if="applicationCloudWatchEstimate.metricsPerCollection" data-test="cloudwatch-cost-estimate">
+          {{ t('apm.cloudWatchMonthlyEstimate', {
+            metrics: formatNumber(applicationCloudWatchEstimate.metricsPerCollection),
+            requests: formatNumber(applicationCloudWatchEstimate.requestsPerMonth),
+            usd: formatNumber(applicationCloudWatchEstimate.monthlyUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          }) }}
+        </p>
+        <label v-if="applicationForm.pollingEnabled && applicationCloudWatchEstimate.monthlyUsd > 0" class="cost-ack">
+          <input v-model="applicationCostAcknowledged" type="checkbox" /> {{ t('apm.costConsent') }}
+        </label>
         <div v-if="applicationError" class="alert-error">{{ applicationError }}</div>
       </form>
       <template #footer>
         <button class="btn" @click="editApplicationOpen = false">{{ t('action.cancel') }}</button>
-        <button class="btn primary" :disabled="savingApplication || !applicationForm.name" @click="saveApplication">
+        <button class="btn primary" :disabled="savingApplication || !applicationForm.name || (applicationForm.pollingEnabled && applicationCloudWatchEstimate.monthlyUsd > 0 && !applicationCostAcknowledged)" @click="saveApplication">
           <i :data-lucide="savingApplication ? 'loader-2' : 'check'"></i>
           {{ savingApplication ? t('apm.savingApplication') : t('action.save') }}
         </button>
@@ -577,7 +588,7 @@ import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
 import ApmApplicationLogs from './ApmApplicationLogs.vue'
 import ApmProviderMetrics from './ApmProviderMetrics.vue'
 import { apmResourceLabel, apmResourceLocation } from './resourcePresentation'
-import { buildResourceMetricSections, seriesKey } from './metricCatalog'
+import { buildResourceMetricSections, estimateCloudWatchMonthlyCost, seriesKey } from './metricCatalog'
 
 const props = defineProps({
   provider: { type: String, default: 'aws' },
@@ -591,6 +602,7 @@ const props = defineProps({
   focusResource: { type: Object, default: null },
   platformResources: { type: Array, default: () => [] },
   lambdas: { type: Array, default: () => [] },
+  loadBalancers: { type: Array, default: () => [] },
   ecsServices: { type: Array, default: () => [] },
   eventBridgeRules: { type: Array, default: () => [] },
   stepFunctions: { type: Array, default: () => [] },
@@ -607,6 +619,7 @@ const savingApplication = ref(false)
 const deletingApplication = ref(false)
 const applicationError = ref('')
 const applicationForm = reactive({ name: '', environment: '', team: '', pollingEnabled: false })
+const applicationCostAcknowledged = ref(false)
 const confirmCollect = ref(false)
 const thresholdsOpen = ref(false)
 const architectureLinkOpen = ref(false)
@@ -616,8 +629,8 @@ const kubernetesPreviewOpen = ref(false)
 const kubernetesContextId = ref('')
 const savingThresholds = ref(false)
 const thresholdError = ref('')
-const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, readyPodsPercent: 100, restartDelta: 1, recurringSignatureGrowthPercent: 100 })
-const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, readyPodsPercent: true, restartDelta: true, recurringSignatureGrowthPercent: true })
+const thresholdValues = reactive({ errorRatePercent: 5, durationMs: 1000, elb5xxRatePercent: 5, elbLatencyP95Ms: 1000, readyPodsPercent: 100, restartDelta: 1, recurringSignatureGrowthPercent: 100 })
+const thresholdEnabled = reactive({ errorRatePercent: true, durationMs: true, elb5xxRatePercent: true, elbLatencyP95Ms: true, readyPodsPercent: true, restartDelta: true, recurringSignatureGrowthPercent: true })
 const activeView = ref('overview')
 const selectedResourceId = ref('')
 const confirmingSuggestions = ref(false)
@@ -625,6 +638,8 @@ const mainEl = ref(null)
 const thresholdDefinitions = computed(() => [
   { key: 'errorRatePercent', label: t('apm.threshold.errorRate'), description: t('apm.threshold.errorRateHint'), min: 0, max: 100, step: 0.1 },
   { key: 'durationMs', label: t('apm.threshold.duration'), description: t('apm.threshold.durationHint'), min: 0, step: 1 },
+  { key: 'elb5xxRatePercent', label: t('apm.threshold.elb5xx'), description: t('apm.threshold.elb5xxHint'), min: 0, max: 100, step: 0.1 },
+  { key: 'elbLatencyP95Ms', label: t('apm.threshold.elbLatency'), description: t('apm.threshold.elbLatencyHint'), min: 0, step: 1 },
   { key: 'readyPodsPercent', label: t('apm.threshold.readyPods'), description: t('apm.threshold.readyPodsHint'), min: 0, max: 100, step: 0.1 },
   { key: 'restartDelta', label: t('apm.threshold.restarts'), description: t('apm.threshold.restartsHint'), min: 0, step: 1 },
   { key: 'recurringSignatureGrowthPercent', label: t('apm.threshold.signatureGrowth'), description: t('apm.threshold.signatureGrowthHint'), min: 0, max: 1000, step: 1 },
@@ -642,6 +657,7 @@ const logHistoryFreshness = computed(() => {
   return hours < 48 ? t('apm.logs.hoursAgo', { n: hours }) : t('apm.logs.daysAgo', { n: Math.round(hours / 24) })
 })
 const applicationResources = computed(() => store.topology.resources || [])
+const applicationCloudWatchEstimate = computed(() => estimateCloudWatchMonthlyCost(applicationResources.value))
 const focusNode = computed(() => props.focusResource?.node || null)
 const focusedResource = computed(() => {
   const node = focusNode.value
@@ -660,7 +676,7 @@ const visibleResources = computed(() => focusedResource.value ? [focusedResource
 const hasLambdaResources = computed(() => applicationResources.value.some(resource => resource.type === 'lambda'))
 const hasKubernetesResources = computed(() => applicationResources.value.some(resource => resource.type === 'kubernetes'))
 // These are read from CloudWatch, which bills per request, so the confirmation must say so.
-const hasCloudWatchResources = computed(() => applicationResources.value.some(resource => ['ec2', 's3'].includes(resource.type)))
+const hasCloudWatchResources = computed(() => applicationResources.value.some(resource => ['ec2', 's3', 'elb'].includes(resource.type)))
 const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
   resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
@@ -833,11 +849,13 @@ function openEditApplication() {
     pollingEnabled: !!application.pollingEnabled,
   })
   applicationError.value = ''
+  applicationCostAcknowledged.value = false
   editApplicationOpen.value = true
 }
 
 async function saveApplication() {
   if (!store.selectedApplicationId || !applicationForm.name || savingApplication.value) return
+  if (applicationForm.pollingEnabled && applicationCloudWatchEstimate.value.monthlyUsd > 0 && !applicationCostAcknowledged.value) return
   savingApplication.value = true
   applicationError.value = ''
   try {

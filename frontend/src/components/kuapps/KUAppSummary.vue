@@ -6,12 +6,13 @@
         <button v-for="value in RANGES" :key="value" :class="{ active: range === value }" @click="range = value">{{ value }}</button>
       </div>
       <button class="btn sm btn-icon" :title="t('apm.refreshLocal')" :disabled="loading" @click="load"><i data-lucide="refresh-cw"></i></button>
-      <button class="btn sm" data-test="summary-collect" :disabled="!hasSignals || !resources.length" @click="$emit('collect')">
-        <i data-lucide="cloud-download"></i>{{ t('apm.collectNow') }}
+      <button class="btn sm" data-test="summary-collect" :disabled="!hasSignals || !resources.length || collecting" @click="confirmCollect = true">
+        <i :data-lucide="collecting ? 'loader-2' : 'cloud-download'"></i>{{ collecting ? t('apm.collecting') : t('apm.collectNow') }}
       </button>
     </header>
 
     <p v-if="error" class="kuapp-summary-error" role="alert">{{ error }}</p>
+    <p v-if="collectError" class="kuapp-summary-error" role="alert">{{ collectError }}</p>
 
     <div class="kuapp-summary-cards">
       <button :class="['kuapp-card', healthTone]" data-test="summary-health" @click="$emit('open-tab', 'signals')">
@@ -43,19 +44,48 @@
         <small>{{ coverageDetail }}</small>
       </button>
     </div>
+
+    <BaseModal :show="confirmCollect" @close="confirmCollect = false">
+      <template #title><i data-lucide="cloud-download"></i> {{ t('apm.collectTitle') }}</template>
+      <div class="kuapp-collect-confirm">
+        <p>{{ collectionDescription }}</p>
+        <dl>
+          <div v-if="lambdaCount"><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ formatNumber(lambdaCount) }}</dd></div>
+          <div v-if="lambdaCount"><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ formatNumber(lambdaCount * 2) }}</dd></div>
+          <div v-if="kubernetesCount"><dt>Kubernetes</dt><dd>{{ formatNumber(kubernetesCount) }}</dd></div>
+        </dl>
+        <p v-if="lambdaCount">{{ t('apm.costForecast', { count: formatNumber(lambdaCount), maximum: formatNumber(lambdaMonthlyMaximum) }) }}</p>
+        <p v-if="cloudWatchEstimate.metricsPerCollection" data-test="summary-cloudwatch-cost">
+          {{ t('apm.cloudWatchMonthlyEstimate', {
+            metrics: formatNumber(cloudWatchEstimate.metricsPerCollection),
+            requests: formatNumber(cloudWatchEstimate.requestsPerMonth),
+            usd: formatNumber(cloudWatchEstimate.monthlyUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          }) }}
+        </p>
+        <p>{{ t('apm.cachedSignalsIncluded') }}</p>
+        <small>{{ t('apm.collectionCostScope') }}</small>
+      </div>
+      <template #footer>
+        <button class="btn" :disabled="collecting" @click="confirmCollect = false">{{ t('action.cancel') }}</button>
+        <button class="btn primary" data-test="summary-confirm-collect" :disabled="collecting" @click="confirmCollection">
+          <i :data-lucide="collecting ? 'loader-2' : 'cloud-download'"></i>{{ collecting ? t('apm.collecting') : t('apm.confirmCollection') }}
+        </button>
+      </template>
+    </BaseModal>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
+import BaseModal from '../BaseModal.vue'
 import { useApi } from '../../composables/useApi'
-import { useI18n } from '../../composables/useI18n'
-import { buildResourceMetricSections } from '../cloud/apm/metricCatalog'
+import { formatNumber, useI18n } from '../../composables/useI18n'
+import { buildResourceMetricSections, estimateCloudWatchMonthlyCost } from '../cloud/apm/metricCatalog'
 
 // Compact Overview of a KUA Application (#171): four answers, each leading to the tab
 // that has the detail. It reads the existing APM endpoints and never starts a collection
-// itself: Collect now goes through the Signals confirmation, which states its cost.
+// itself: collection is confirmed here so starting it does not change workspace tabs.
 const props = defineProps({
   application: { type: Object, default: null },
   provider: { type: String, default: 'generic' },
@@ -64,8 +94,10 @@ const props = defineProps({
   registry: { type: Object, default: () => ({ resources: [], relationships: [] }) },
   scopeWarnings: { type: Array, default: () => [] },
   reviewCount: { type: Number, default: 0 },
+  collecting: { type: Boolean, default: false },
+  collectError: { type: String, default: '' },
 })
-const emit = defineEmits(['open-tab', 'collect', 'suggestions'])
+const emit = defineEmits(['open-tab', 'collect', 'suggestions', 'collection-estimate'])
 
 const RANGES = ['6h', '24h', '7d']
 const RANGE_MS = { '6h': 6 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3 }
@@ -77,6 +109,7 @@ const THRESHOLD_LABELS = {
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const range = ref('24h')
+const confirmCollect = ref(false)
 const loading = ref(false)
 const error = ref('')
 const overview = ref(null)
@@ -85,6 +118,21 @@ let request = 0
 
 const hasSignals = computed(() => !!props.application && !!(props.profileId || props.application.profileId))
 const resources = computed(() => topology.value?.resources || [])
+const lambdaCount = computed(() => resources.value.filter(resource => resource.type === 'lambda' && resource.enabled !== false).length)
+const kubernetesCount = computed(() => resources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false).length)
+const lambdaMonthlyMaximum = computed(() => lambdaCount.value * 48 * 30 * 2)
+const cloudWatchEstimate = computed(() => estimateCloudWatchMonthlyCost(resources.value))
+watch([lambdaCount, cloudWatchEstimate], () => emit('collection-estimate', {
+  lambdaCount: lambdaCount.value,
+  lambdaMonthlyMaximum: lambdaMonthlyMaximum.value,
+  ...cloudWatchEstimate.value,
+  hasBillableReads: lambdaCount.value > 0 || cloudWatchEstimate.value.monthlyUsd > 0,
+}), { immediate: true })
+const collectionDescription = computed(() => [
+  lambdaCount.value ? t('apm.collectDescriptionAws') : '',
+  cloudWatchEstimate.value.metricsPerCollection ? t('apm.collectDescriptionCloudWatch') : '',
+  kubernetesCount.value ? t('apm.collectDescriptionKubernetes') : '',
+].filter(Boolean).join(' ') || t('apm.collectDescription'))
 const analysis = computed(() => topology.value?.analysis || null)
 const registryTotal = computed(() => props.registry?.resources?.length || resources.value.length)
 
@@ -152,6 +200,11 @@ const freshnessLabel = computed(() => {
   return t('kuapps.summary.lastCollection', { status: t(`apm.status.${run.status}`), date: new Date(run.finishedAt || run.startedAt).toLocaleString() })
 })
 
+function confirmCollection() {
+  confirmCollect.value = false
+  emit('collect')
+}
+
 function round(value) {
   return Number.isFinite(Number(value)) ? Math.round(Number(value) * 100) / 100 : value
 }
@@ -197,6 +250,12 @@ defineExpose({ reload: load })
 .kuapp-summary-freshness { margin-right: auto; color: var(--text-dim); font-size: 11px; }
 .kuapp-summary-bar svg { width: 13px; }
 .kuapp-summary-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapp-collect-confirm { display: grid; gap: 10px; max-width: 560px; }
+.kuapp-collect-confirm p, .kuapp-collect-confirm small { margin: 0; line-height: 1.5; }
+.kuapp-collect-confirm dl { margin: 0; display: grid; gap: 5px; }
+.kuapp-collect-confirm dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.kuapp-collect-confirm dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kuapp-collect-confirm small { color: var(--text-dim); }
 .range-control { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .range-control button { height: 27px; min-width: 35px; border: 0; border-right: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 10px; cursor: pointer; }
 .range-control button:last-child { border-right: 0; }

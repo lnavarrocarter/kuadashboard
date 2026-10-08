@@ -14,6 +14,30 @@ export const METRIC_FORMATS = Object.freeze({
   pair: 'pair',
 })
 
+const CLOUDWATCH_COLLECTIONS_PER_MONTH = 48 * 30
+
+export function cloudWatchMetricCount(resource) {
+  if (resource?.type === 'ec2') return 4
+  if (resource?.type === 's3') return 2
+  if (resource?.type !== 'elb') return 0
+  const arn = String(resource.arn || resource.key || '')
+  const type = /:loadbalancer\/(app|net)\//.exec(arn)?.[1]
+  if (!type) return 0
+  const targetGroups = Array.isArray(resource.metadata?.targetGroups) ? resource.metadata.targetGroups : []
+  const validGroups = targetGroups.filter(group => /:targetgroup\//.test(typeof group === 'string' ? group : group?.arn || '')).length
+  return (type === 'app' ? 5 + validGroups * 2 : 4 + validGroups)
+}
+
+export function estimateCloudWatchMonthlyCost(resources = []) {
+  const metricCount = resources.reduce((total, resource) => total + cloudWatchMetricCount(resource), 0)
+  const requestableResources = resources.filter(resource => cloudWatchMetricCount(resource) > 0).length
+  return {
+    metricsPerCollection: metricCount,
+    requestsPerMonth: requestableResources * CLOUDWATCH_COLLECTIONS_PER_MONTH,
+    monthlyUsd: metricCount * CLOUDWATCH_COLLECTIONS_PER_MONTH * 0.01 / 1000,
+  }
+}
+
 const LAMBDA_CATALOG = {
   kpis: [
     {
@@ -186,11 +210,28 @@ const S3_CATALOG = {
   ],
 }
 
+const ELB_CATALOG = {
+  kpis: [
+    { id: 'requests', labelKey: 'apm.elbRequests', metric: 'elb_request_count', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.cloudWatchSource' },
+    { id: 'errorRate', labelKey: 'apm.elb5xxRate', metric: 'elb_target_5xx_count', additionalMetrics: ['elb_5xx_count'], overMetric: 'elb_request_count', aggregate: 'ratio', format: METRIC_FORMATS.percent, detailKey: 'apm.cloudWatchSource' },
+    { id: 'targetErrors', labelKey: 'apm.elbTarget5xx', metric: 'elb_target_5xx_count', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.cloudWatchSource' },
+    { id: 'elbErrors', labelKey: 'apm.elbGenerated5xx', metric: 'elb_5xx_count', aggregate: 'sum', format: METRIC_FORMATS.number, detailKey: 'apm.cloudWatchSource' },
+    { id: 'latencyP95', labelKey: 'apm.elbLatencyP95', metric: 'elb_target_response_time_p95_ms', aggregate: 'average', format: METRIC_FORMATS.ms, detailKey: 'apm.cloudWatchSource' },
+  ],
+  charts: [
+    { metric: 'elb_request_count', labelKey: 'apm.elbRequests', unit: '', color: '#58a6ff' },
+    { metric: 'elb_target_5xx_count', labelKey: 'apm.elbTarget5xx', unit: '', color: '#f85149' },
+    { metric: 'elb_5xx_count', labelKey: 'apm.elbGenerated5xx', unit: '', color: '#d29922' },
+    { metric: 'elb_target_response_time_p95_ms', labelKey: 'apm.elbLatencyP95', unit: 'ms', color: '#3fb950' },
+  ],
+}
+
 export const RESOURCE_METRIC_CATALOG = Object.freeze({
   lambda: LAMBDA_CATALOG,
   kubernetes: KUBERNETES_WORKLOAD_CATALOG,
   ec2: EC2_CATALOG,
   s3: S3_CATALOG,
+  elb: ELB_CATALOG,
   sqs: TOPOLOGY_ONLY,
   eventbridge: TOPOLOGY_ONLY,
   stepfunctions: TOPOLOGY_ONLY,
@@ -247,7 +288,8 @@ function metricValue(metricsByName, name, aggregate) {
 function kpiValue(kpi, metricsByName) {
   if (kpi.aggregate === 'ratio') {
     const over = metricValue(metricsByName, kpi.overMetric, 'sum')
-    const value = metricValue(metricsByName, kpi.metric, 'sum')
+    const value = (metricValue(metricsByName, kpi.metric, 'sum') || 0) +
+      (kpi.additionalMetrics || []).reduce((sum, metric) => sum + (metricValue(metricsByName, metric, 'sum') || 0), 0)
     if (!over) return null
     return ((value || 0) / over) * 100
   }
@@ -301,6 +343,32 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
       const catalog = catalogFor(group.resourceType, group.kind)
       const metricsByName = metricsByKey.get(key) || {}
       const collectsMetrics = catalog.kpis.length > 0 || catalog.charts.length > 0
+      const targetGroupKpis = group.resourceType === 'elb'
+        ? Object.keys(metricsByName).filter(metric => /^elb_healthy_host_count_/.test(metric)).map(metric => ({
+          id: metric,
+          labelKey: 'apm.elbHealthyHosts',
+          params: { targetGroup: metric.replace('elb_healthy_host_count_', '').replace(/_/g, ' ') },
+          metric,
+          aggregate: 'average',
+          format: METRIC_FORMATS.number,
+          detailKey: 'apm.cloudWatchSource',
+        }))
+        : []
+      const targetGroupCharts = group.resourceType === 'elb'
+        ? Object.keys(metricsByName).flatMap(metric => {
+          const healthy = /^elb_healthy_host_count_(.+)$/.exec(metric)
+          const unhealthy = /^elb_unhealthy_host_count_(.+)$/.exec(metric)
+          const match = healthy || unhealthy
+          if (!match) return []
+          return [{
+            metric,
+            labelKey: healthy ? 'apm.elbHealthyHosts' : 'apm.elbUnhealthyHosts',
+            params: { targetGroup: match[1].replace(/_/g, ' ') },
+            unit: '',
+            color: healthy ? '#3fb950' : '#f85149',
+          }]
+        })
+        : []
       // Every section leads with how many resources of this type the application has: that count
       // comes from the inventory, so it is answerable even when no collector reports the type.
       const kpis = [
@@ -321,6 +389,11 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
             value: kpi.aggregate === 'pair' ? (value ?? '-') : formatMetricValue(value, kpi.format),
           }
         }),
+        ...targetGroupKpis.map(kpi => ({
+          ...kpi,
+          detailValue: null,
+          value: formatMetricValue(kpiValue(kpi, metricsByName), kpi.format),
+        })),
       ]
       return {
         key,
@@ -332,7 +405,7 @@ export function buildResourceMetricSections({ resources = [], metricsByResourceT
         collectsMetrics,
         hasData: Object.keys(metricsByName).length > 0,
         kpis,
-        charts: catalog.charts.map(chart => ({ ...chart, resourceType: group.resourceType, kind: group.kind })),
+        charts: [...catalog.charts, ...targetGroupCharts].map(chart => ({ ...chart, resourceType: group.resourceType, kind: group.kind })),
       }
     })
     .sort((left, right) => {

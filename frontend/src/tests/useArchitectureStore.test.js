@@ -33,6 +33,53 @@ describe('architecture workspace', () => {
     expect(store.selectedApplicationId).toBeNull()
   })
 
+  it('tracks synchronization independently for each application and overlapping runs', () => {
+    store.beginApplicationSync('application-a', 'cloudformation:project-a')
+    store.beginApplicationSync('application-b', 'registry:application-b')
+    store.beginApplicationSync('application-a', 'registry:application-a')
+
+    expect(store.isApplicationSyncing('application-a')).toBe(true)
+    expect(store.isApplicationSyncing('application-b')).toBe(true)
+
+    store.endApplicationSync('application-a', 'cloudformation:project-a')
+    expect(store.isApplicationSyncing('application-a')).toBe(true)
+    store.endApplicationSync('application-a', 'registry:application-a')
+    expect(store.isApplicationSyncing('application-a')).toBe(false)
+    expect(store.isApplicationSyncing('application-b')).toBe(true)
+  })
+
+  it('keeps concurrent CloudFormation previews isolated when applications finish out of order', async () => {
+    let resolveProjectA
+    let resolveProjectB
+    global.fetch = vi.fn(url => new Promise(resolve => {
+      if (url.includes('/projects/project-a/')) resolveProjectA = resolve
+      else if (url.includes('/projects/project-b/')) resolveProjectB = resolve
+      else throw new Error(`Unexpected URL: ${url}`)
+    }))
+    store.setActiveProfile('local:dev')
+    store.selectedProjectId = 'project-a'
+    store.linkedApplication = { id: 'application-a' }
+    const projectAPreview = store.previewAwsSync({ region: 'us-east-1', accountId: '123456789012', stackNames: ['orders'] })
+
+    store.selectedProjectId = 'project-b'
+    store.linkedApplication = { id: 'application-b' }
+    const projectBPreview = store.previewAwsSync({ region: 'us-east-1', accountId: '123456789012', stackNames: ['billing'] })
+    expect(store.isApplicationSyncing('application-a')).toBe(true)
+    expect(store.isApplicationSyncing('application-b')).toBe(true)
+
+    resolveProjectB(await response({ id: 'preview-b', summary: { changeCount: 2 } }))
+    await projectBPreview
+    expect(store.syncStateForProject('project-b').preview.id).toBe('preview-b')
+    expect(store.isApplicationSyncing('application-a')).toBe(true)
+
+    resolveProjectA(await response({ id: 'preview-a', summary: { changeCount: 1 } }))
+    await projectAPreview
+    expect(store.syncStateForProject('project-a').preview.id).toBe('preview-a')
+    expect(store.syncStateForProject('project-b').preview.id).toBe('preview-b')
+    expect(store.isApplicationSyncing('application-a')).toBe(false)
+    expect(store.isApplicationSyncing('application-b')).toBe(false)
+  })
+
   it('loads the KUA Application catalog and scopes projects to the selected application', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       expect(options.headers['X-Profile-Id']).toBe('local:dev')
@@ -278,7 +325,7 @@ describe('architecture workspace', () => {
     })
 
     expect(preview.summary.changeCount).toBe(2)
-    expect(store.syncPreview.summary.resources.new).toBe(1)
+    expect(store.syncStateForProject('project-a').preview.summary.resources.new).toBe(1)
     expect(store.graph.revision).toBe(7)
     expect(store.syncPreviewing).toBe(false)
   })

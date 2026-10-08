@@ -36,6 +36,7 @@ describe('KUApps navigation', () => {
     expect(wrapper.emitted('update-view')).toEqual([['observability']])
     await flushPromises()
     expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).props('section')).toBe('signals')
+    expect(wrapper.find('.kuapps-complementary-grid').exists()).toBe(true)
 
     await tabs[4].trigger('click')
     await flushPromises()
@@ -86,6 +87,21 @@ describe('KUApps navigation', () => {
     expect(post[0]).toBe('/api/kua-apps/applications')
     expect(JSON.parse(post[1].body)).toMatchObject({ name: 'Checkout' })
     expect(wrapper.emitted('application-context').at(-1)[0]).toMatchObject({ id: 'app-new' })
+    wrapper.unmount()
+  })
+
+  it('marks only applications with an active synchronization in the application menu', async () => {
+    const architectureStore = useArchitectureStore()
+    architectureStore.beginApplicationSync('app-a', 'cloudformation:project-a')
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: 'app-a' },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, TeamSpaceModal: true, CloudBackupsModal: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.kuapps-application-row').get('.kuapps-app-sync-state').text()).toContain('Syncing')
+    expect(wrapper.get('.kuapps-app-sync-state').attributes('role')).toBe('status')
+    architectureStore.endApplicationSync('app-a', 'cloudformation:project-a')
     wrapper.unmount()
   })
 
@@ -236,7 +252,7 @@ describe('KUApps navigation', () => {
     wrapper.unmount()
   })
 
-  it('sends Collect now from the Overview to the Signals confirmation', async () => {
+  it('starts collection from the Overview without navigating to Signals', async () => {
     const requestCollect = vi.fn()
     const SignalsStub = defineComponent({
       props: ['section'],
@@ -261,9 +277,13 @@ describe('KUApps navigation', () => {
     await flushPromises()
     await wrapper.get('[data-test="summary-collect"]').trigger('click')
     await flushPromises()
+    document.body.querySelector('[data-test="summary-confirm-collect"]').click()
+    await flushPromises()
 
-    expect(wrapper.find('.kuapps-observability-workspace').exists()).toBe(true)
-    expect(requestCollect).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.kuapps-overview-content').exists()).toBe(true)
+    expect(wrapper.find('.kuapps-observability-workspace').exists()).toBe(false)
+    expect(requestCollect).not.toHaveBeenCalled()
+    expect(global.fetch.mock.calls.some(([url, options]) => String(url).includes('/collect-now') && options?.method === 'POST')).toBe(true)
     wrapper.unmount()
   })
 
@@ -384,15 +404,23 @@ describe('KUApps navigation', () => {
   })
 
   it('saves editable application details from Settings using its current revision', async () => {
-    const application = { id: 'app-settings', name: 'Orders', provider: 'aws', profileId: 'local:prod' }
+    const application = { id: 'app-settings', name: 'Orders', provider: 'aws', profileId: 'local:prod', pollingEnabled: false }
     const detail = { ...application, environment: 'staging', team: 'platform', revision: 4, scopes: [], local: { bindings: [], legacy: null } }
+    let localPollingEnabled = false
     global.fetch = vi.fn((url, options = {}) => {
+      const text = String(url)
       let body
-      if (options.method === 'PATCH') body = { ...detail, ...JSON.parse(options.body), revision: 5 }
-      else if (String(url).includes('/catalog')) body = [application]
-      else if (String(url).includes('/registry')) body = { resources: [], relationships: [] }
-      else if (String(url).includes('/api/kua-apps/applications/app-settings')) body = detail
-      else if (String(url).includes('/api/account')) body = { entitlements: { team: { name: 'Platform' } } }
+      if (text.includes('/api/observability/') && options.method === 'PATCH') {
+        localPollingEnabled = JSON.parse(options.body).pollingEnabled
+        body = { ...application, pollingEnabled: localPollingEnabled }
+      } else if (options.method === 'PATCH') body = { ...detail, ...JSON.parse(options.body), revision: 5 }
+      else if (text.includes('/catalog')) body = [application]
+      else if (text.includes('/topology')) body = { resources: [{ id: 'alb', type: 'elb', name: 'orders', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abcdef0123456789' }], analysis: null }
+      else if (text.includes('/overview')) body = { health: { status: 'unknown', signals: [] }, latestRun: null }
+      else if (text.includes('/registry')) body = { resources: [], relationships: [] }
+      else if (text.includes('/api/observability/')) body = { ...application, pollingEnabled: localPollingEnabled }
+      else if (text.includes('/api/kua-apps/applications/app-settings')) body = detail
+      else if (text.includes('/api/account')) body = { entitlements: { team: { name: 'Platform' } } }
       else body = []
       return Promise.resolve({ ok: true, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) })
     })
@@ -402,12 +430,23 @@ describe('KUApps navigation', () => {
     })
     await flushPromises()
     await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
-    await wrapper.get('.kuapps-settings-fields input').setValue('Orders Production')
+    const schedule = wrapper.get('[data-test="kuapps-collection-schedule"]')
+    await schedule.setValue(true)
+    expect(wrapper.get('[data-test="kuapps-collection-estimate"]').text()).toContain('$0.07/month')
+    expect(wrapper.get('[data-test="kuapps-collection-cost-ack"]').exists()).toBe(true)
+    expect(wrapper.get('form.kuapps-settings-section button[type="submit"]').element.disabled).toBe(true)
+    await wrapper.get('[data-test="kuapps-collection-cost-ack"]').setValue(true)
+    await wrapper.get('.kuapps-settings-fields input:not([type="checkbox"])').setValue('Orders Production')
     await wrapper.get('form.kuapps-settings-section').trigger('submit')
     await flushPromises()
 
-    const patch = global.fetch.mock.calls.find(([, options]) => options?.method === 'PATCH')
-    expect(JSON.parse(patch[1].body)).toMatchObject({ name: 'Orders Production', environment: 'staging', team: 'platform', expectedRevision: 4 })
+    const patches = global.fetch.mock.calls.filter(([, options]) => options?.method === 'PATCH')
+    const portablePatch = patches.find(([url]) => String(url).includes('/api/kua-apps/'))
+    const localPatch = patches.find(([url]) => String(url).includes('/api/observability/'))
+    expect(JSON.parse(portablePatch[1].body)).toMatchObject({ name: 'Orders Production', environment: 'staging', team: 'platform', expectedRevision: 4 })
+    expect(JSON.parse(portablePatch[1].body)).not.toHaveProperty('pollingEnabled')
+    expect(JSON.parse(localPatch[1].body)).toEqual({ pollingEnabled: true })
+    expect(localPatch[1].headers['X-Profile-Id']).toBe('local:prod')
     expect(wrapper.text()).toContain('Changes saved.')
     await wrapper.findAll('.kuapps-settings-nav button')[1].trigger('click')
     expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
@@ -440,6 +479,9 @@ describe('KUApps navigation', () => {
       global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
     })
     await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
+    expect(wrapper.get('.kuapps-complementary-grid').classes()).not.toContain('has-resource-inspector')
+    expect(wrapper.find('.kuapps-signals-inspector').exists()).toBe(false)
     await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
     await wrapper.get('.kuapps-resource-row').trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
@@ -470,6 +512,96 @@ describe('KUApps navigation', () => {
     const workload = wrapper.findComponent({ name: 'ApmObservabilityView' })
     expect(workload.exists()).toBe(true)
     expect(workload.props('focusResource').node).toMatchObject({ provider: 'kubernetes', name: 'orders-pods' })
+    wrapper.unmount()
+  })
+
+  it('shows one removable sync definition per registry resource when Architecture is unavailable', async () => {
+    const application = { id: 'app-k', name: 'Development', provider: null, profileId: null }
+    const resource = {
+      id: 'registry:api', provider: 'aws', scopeId: '123456789012', location: 'us-east-1',
+      nativeIdentifier: 'arn:aws:lambda:us-east-1:123456789012:function:api', resourceType: 'lambda',
+      displayName: 'api', sources: ['apm_resource'],
+    }
+    global.fetch = vi.fn((url, options = {}) => {
+      const removed = global.fetch.mock.calls.some(([, request]) => request?.method === 'DELETE')
+      const body = url.includes('/catalog') ? [application]
+        : url.includes('/registry') ? { resources: removed ? [] : [resource], relationships: [] }
+          : { ...application, revision: 3, scopes: [], local: { bindings: [], legacy: null } }
+      return Promise.resolve({
+        ok: true,
+        status: options.method === 'DELETE' ? 204 : 200,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve(body),
+      })
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
+    await wrapper.findAll('.kuapps-settings-nav button')[2].trigger('click')
+
+    expect(wrapper.findAll('.kuapps-sync-resource-row')).toHaveLength(1)
+    expect(wrapper.get('.kuapps-sync-resource-row').text()).toContain(resource.nativeIdentifier)
+    await wrapper.get('[data-test="stop-resource-sync-registry:api"]').trigger('click')
+    await flushPromises()
+
+    const deletion = global.fetch.mock.calls.find(([, request]) => request?.method === 'DELETE')
+    expect(deletion[0]).toContain(`/registry/resources/${encodeURIComponent(resource.id)}?expectedRevision=3`)
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining(resource.displayName))
+    expect(wrapper.findAll('.kuapps-sync-resource-row')).toHaveLength(0)
+    confirm.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('groups Kubernetes sync entries by context and namespace and shows full registry details', async () => {
+    const application = { id: 'app-k8s', name: 'Development', provider: null, profileId: null }
+    const resources = [
+      {
+        id: 'registry:orders-api', provider: 'kubernetes', scopeId: 'dev-eks', kubeContext: 'dev-eks', namespace: 'orders',
+        nativeIdentifier: 'dev-eks/orders/Deployment/api', resourceType: 'deployment', displayName: 'api',
+        sources: ['apm_resource'], updatedAt: '2026-10-08T08:00:00.000Z',
+      },
+      {
+        id: 'registry:orders-service', provider: 'kubernetes', scopeId: 'dev-eks', kubeContext: 'dev-eks', namespace: 'orders',
+        nativeIdentifier: 'dev-eks/orders/Service/api', resourceType: 'service', displayName: 'api',
+        sources: ['architecture_node'],
+      },
+      {
+        id: 'registry:payments-api', provider: 'kubernetes', scopeId: 'dev-eks', kubeContext: 'dev-eks', namespace: 'payments',
+        nativeIdentifier: 'dev-eks/payments/Deployment/api', resourceType: 'deployment', displayName: 'api', sources: ['apm_resource'],
+      },
+    ]
+    global.fetch = vi.fn(url => Promise.resolve({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(String(url).includes('/catalog') ? [application]
+        : String(url).includes('/registry') ? { resources, relationships: [] }
+          : { ...application, revision: 1, scopes: [], local: { bindings: [], legacy: null } }),
+    }))
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
+    await wrapper.findAll('.kuapps-settings-nav button')[2].trigger('click')
+
+    const namespaceGroups = wrapper.findAll('.kuapps-sync-source-group[data-source-type="kubernetes"]')
+    expect(namespaceGroups).toHaveLength(2)
+    expect(namespaceGroups[0].text()).toContain('orders')
+    expect(namespaceGroups[0].findAll('.kuapps-sync-resource-row')).toHaveLength(2)
+    expect(namespaceGroups[1].text()).toContain('payments')
+
+    await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
+    await wrapper.findAll('.kuapps-resource-row')[0].trigger('click')
+    const inspector = wrapper.get('.kuapps-resource-inspector')
+    expect(inspector.text()).toContain('dev-eks')
+    expect(inspector.text()).toContain('orders')
+    expect(inspector.get('.kuapps-resource-source-list').text()).toContain('Observability')
+    expect(inspector.get('.kuapps-resource-identity').text()).toContain(resources[0].nativeIdentifier)
     wrapper.unmount()
   })
 
