@@ -91,8 +91,9 @@ function createApmRouter({
     if (!architectureDatabase) {
       throw Object.assign(new Error('Architecture integration is unavailable'), { statusCode: 503 });
     }
+    const allowedProfiles = application.profileId ? new Set([application.profileId]) : profilesForApplication(database, application);
     const projects = projectIds.map(projectId => architectureDatabase.getProject(projectId))
-      .filter(project => project && project.profileId === application.profileId);
+      .filter(project => project && allowedProfiles.has(project.profileId));
     if (!projects.length) return { linked: false, status: 'missing', project: null, projects: [], resources: emptyResources };
     const graphs = projects.map(project => ({ project, graph: architectureDatabase.getGraph(project.id) }));
     const resources = database.listResources(application.id);
@@ -142,7 +143,7 @@ function createApmRouter({
     }[kind] || 'kubernetes';
   }
 
-  function architectureDocumentFromApplication(application, projectId) {
+  function architectureDocumentFromApplication(application, projectId, projectProfileId = application.profileId) {
     const resources = database.listResources(application.id);
     const nodeIdByResourceId = new Map();
     const nodes = resources.map(resource => {
@@ -180,10 +181,20 @@ function createApmRouter({
         evidence: [{ type: 'apm_confirmed_dependency', sourceId: `apm:application:${application.id}`, values: [edge.id] }],
       }];
     });
+    const bindings = new Map(database.listScopeBindings(application.id).map(binding => [binding.scopeKey, binding]));
+    const scopes = application.profileId
+      ? [{ id: `apm:application:${application.id}`, provider: application.provider, profileId: projectProfileId, region: application.region }]
+      : database.listApplicationScopes(application.id).map(scope => ({
+        id: scope.key,
+        provider: scope.provider,
+        scopeId: scope.scopeId,
+        location: scope.location,
+        profileId: bindings.get(scope.key)?.profileId || projectProfileId,
+      }));
     return {
       projectId,
-      scopes: [{ id: `apm:application:${application.id}`, provider: application.provider, profileId: application.profileId, region: application.region }],
-      sources: [{ id: `apm:application:${application.id}`, type: 'apm_application', provider: application.provider, profileId: application.profileId, name: application.name, readOnly: true }],
+      scopes: scopes.length ? scopes : [{ id: `apm:application:${application.id}`, provider: application.provider || 'generic', profileId: projectProfileId }],
+      sources: [{ id: `apm:application:${application.id}`, type: 'apm_application', provider: application.provider || 'generic', profileId: projectProfileId, name: application.name, readOnly: true }],
       nodes,
       edges,
     };
@@ -369,7 +380,12 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     try {
-      const updated = database.updateApplication(application.id, req.body);
+      const changes = req.body || {};
+      const localPollingOnly = Object.keys(changes).length === 1
+        && Object.prototype.hasOwnProperty.call(changes, 'pollingEnabled');
+      const updated = localPollingOnly
+        ? database.setApplicationPollingEnabled(application.id, changes.pollingEnabled)
+        : database.updateApplication(application.id, changes);
       log('Application updated', updated.name, updated.profileId, {
         pollingEnabled: updated.pollingEnabled,
       });
@@ -416,12 +432,14 @@ function createApmRouter({
     if (!application) return;
     try {
       if (!architectureDatabase) throw Object.assign(new Error('Architecture integration is unavailable'), { statusCode: 503 });
+      const projectProfileId = application.profileId || profileId(req, res);
+      if (!projectProfileId) return;
       const project = architectureDatabase.createProject({
-        profileId: application.profileId,
+        profileId: projectProfileId,
         name: String(req.body?.name || application.name).trim(),
         description: String(req.body?.description || `Architecture view for ${application.name}`).trim(),
       });
-      const document = architectureDocumentFromApplication(application, project.id);
+      const document = architectureDocumentFromApplication(application, project.id, projectProfileId);
       const graph = architectureDatabase.saveGraph(project.id, document, {
         expectedRevision: 0,
         change: {

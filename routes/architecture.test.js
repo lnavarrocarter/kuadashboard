@@ -366,7 +366,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     assert.deepEqual(reloaded.body.document.view, {
       layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
       showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
-      providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
+      providerFilter: 'all', systemDomainFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       relationTypeFilter: 'all', relationStatusFilter: 'all',
     });
     assert.equal(calls.filter(([type]) => type === 'preview').length, 1);

@@ -37,6 +37,29 @@ const RESOURCE_STAGE = {
   policy: 7,
 }
 
+export const SYSTEM_DOMAIN_ORDER = ['entry', 'integration', 'compute', 'data', 'platform', 'security', 'observability', 'other']
+
+const SYSTEM_DOMAIN_BY_TYPE = {
+  apigateway: 'entry', apigatewayv2: 'entry', 'api-route': 'entry', ingress: 'entry', service: 'entry',
+  loadbalancer: 'entry', targetgroup: 'entry', cloudfront: 'entry', 'gcp-api-gateway': 'entry', 'gcp-load-balancer': 'entry',
+  eventbridge: 'integration', sqs: 'integration', sns: 'integration', pubsub: 'integration', eventarc: 'integration',
+  lambda: 'compute', stepfunctions: 'compute', ecs: 'compute', ec2: 'compute', 'gcp-cloud-run': 'compute',
+  'gcp-function': 'compute', 'gcp-compute-instance': 'compute', deployment: 'compute', statefulset: 'compute',
+  daemonset: 'compute', pod: 'compute', function: 'compute',
+  s3: 'data', dynamodb: 'data', rds: 'data', elasticache: 'data', pvc: 'data', database: 'data',
+  'gcp-cloud-sql': 'data', 'gcp-storage': 'data', 'gcp-bigquery': 'data',
+  eks: 'platform', node: 'platform', cluster: 'platform', configmap: 'platform',
+  iam: 'security', 'iam-policy': 'security', policy: 'security', secret: 'security', 'gcp-secret-manager': 'security',
+  logs: 'observability', loggroup: 'observability', cloudwatch: 'observability', monitoring: 'observability',
+}
+
+export function systemDomainForNode(node = {}) {
+  const explicit = String(node.systemDomain || '').trim().toLowerCase()
+  if (SYSTEM_DOMAIN_ORDER.includes(explicit)) return explicit
+  const resourceType = String(node.resourceType || '').trim().toLowerCase()
+  return SYSTEM_DOMAIN_BY_TYPE[resourceType] || 'other'
+}
+
 function nodeProvider(node) {
   if (node.provider) return node.provider
   const type = node.resourceType || ''
@@ -330,6 +353,36 @@ export function providerResourceLayout(document = {}, options = {}) {
       zIndex: -2,
     }, ...providerSections)
     sectionY += 34
+  }
+  return { layout, sections }
+}
+
+export function systemDomainLayout(document = {}, options = {}) {
+  const spacing = layoutSpacing(options)
+  const relationshipSort = compareByRelationships(relationIndexes(document))
+  const groups = new Map(SYSTEM_DOMAIN_ORDER.map(domain => [domain, []]))
+  for (const node of [...(document.nodes || [])].sort(relationshipSort)) {
+    groups.get(systemDomainForNode(node)).push(node)
+  }
+
+  const layout = {}
+  const sections = []
+  let sectionX = 50
+  for (const domain of SYSTEM_DOMAIN_ORDER) {
+    const nodes = groups.get(domain)
+    if (!nodes.length) continue
+    const columns = Math.min(4, nodes.length)
+    const rows = Math.ceil(nodes.length / columns)
+    const width = Math.max(300, 86 + columns * spacing.laneXGap)
+    const height = 76 + rows * spacing.laneYGap
+    nodes.forEach((node, index) => {
+      layout[node.id] = {
+        x: sectionX + 60 + (index % columns) * spacing.laneXGap,
+        y: 100 + Math.floor(index / columns) * spacing.laneYGap,
+      }
+    })
+    sections.push({ domain, type: `system-domain:${domain}`, count: nodes.length, x: sectionX, y: 50, width, height })
+    sectionX += width + 28
   }
   return { layout, sections }
 }

@@ -6,6 +6,7 @@ const test = require('node:test');
 const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { ApmDatabase } = require('../lib/apm/database');
+const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
 async function fixture({ account, verifier, logCache } = {}) {
@@ -246,8 +247,15 @@ test('KUA Application registry lists shared resources and relationships without 
       scopeId: '123456789012', location: 'us-east-1', nativeIdentifier: 'arn:aws:sqs:us-east-1:123456789012:orders',
       resourceType: 'sqs', displayName: 'orders', lineage: [],
     });
+    const workload = subject.apmDatabase.upsertRegistryResource({
+      id: 'resource:workload', identityKey: 'kubernetes:workload', provider: 'kubernetes', profileId: 'local:secret',
+      scopeId: 'dev-eks', location: '', nativeIdentifier: 'dev-eks/orders/Deployment/api',
+      resourceType: 'deployment', displayName: 'api',
+      lineage: [{ kind: 'architecture_node', id: 'node-api', kubeContext: 'dev-eks', namespace: 'orders' }],
+    });
     subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: source.id, sourceKind: 'manual', sourceReference: 'source' });
     subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: target.id, sourceKind: 'manual', sourceReference: 'target' });
+    subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: workload.id, sourceKind: 'architecture_node', sourceReference: 'node-api' });
     subject.apmDatabase.upsertRegistryRelationship({
       id: 'relationship:api-queue', applicationId: application.id, sourceResourceId: source.id,
       targetResourceId: target.id, relationType: 'sends-to', status: 'confirmed', evidence: [],
@@ -255,11 +263,40 @@ test('KUA Application registry lists shared resources and relationships without 
 
     const registry = await subject.request(`/applications/${application.id}/registry`, { profile: '' });
     assert.equal(registry.status, 200);
-    assert.equal(registry.body.resources.length, 2);
+    assert.equal(registry.body.resources.length, 3);
     assert.equal(registry.body.resources[0].profileId, undefined);
+    assert.equal(registry.body.resources.find(resource => resource.id === workload.id).kubeContext, 'dev-eks');
+    assert.equal(registry.body.resources.find(resource => resource.id === workload.id).namespace, 'orders');
     assert.equal(registry.body.relationships[0].sourceName, 'orders-api');
     assert.equal(registry.body.relationships[0].targetName, 'orders');
     assert.equal(JSON.stringify(registry.body).includes('local:secret'), false);
+  } finally { await subject.close(); }
+});
+
+test('removing a registry resource stops future reconciliation without deleting its source resource', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({
+      profileId: 'local:test', provider: 'aws', region: 'us-east-1', name: 'Development',
+    });
+    const { resource } = subject.apmDatabase.attachResource(application.id, {
+      type: 'lambda', key: 'arn:aws:lambda:us-east-1:123456789012:function:orders-api',
+      arn: 'arn:aws:lambda:us-east-1:123456789012:function:orders-api', name: 'orders-api',
+    });
+    const registryService = new ApplicationRegistryService({ database: subject.apmDatabase, architectureDatabase: subject.database });
+    registryService.reconcile(application);
+    const [registryResource] = subject.apmDatabase.listRegistryResources(application.id);
+    assert.ok(registryResource);
+
+    const removed = await subject.request(`/applications/${application.id}/registry/resources/${registryResource.id}`, {
+      method: 'DELETE', profile: '',
+    });
+    assert.equal(removed.status, 204);
+    assert.equal(subject.apmDatabase.getResource(resource.id).name, 'orders-api');
+    assert.equal(subject.apmDatabase.listRegistryResources(application.id).length, 0);
+
+    registryService.reconcile(application);
+    assert.equal(subject.apmDatabase.listRegistryResources(application.id).length, 0);
   } finally { await subject.close(); }
 });
 

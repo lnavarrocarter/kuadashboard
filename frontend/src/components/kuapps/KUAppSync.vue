@@ -10,6 +10,9 @@
     <p v-if="error" class="kuapp-sync-error" role="alert">{{ error }}</p>
     <footer v-if="available">
       <span class="kuapp-sync-pending">{{ pendingLabel }}</span>
+      <button v-if="canCreateArchitectureView" class="btn sm primary" data-test="sync-create-architecture" :disabled="running" @click="createArchitectureView">
+        <i :data-lucide="running ? 'loader-2' : 'network'"></i>{{ running ? t('apmv.reconciling') : t('kuapps.sync.createArchitectureView') }}
+      </button>
       <button v-if="pending" class="btn sm" @click="$emit('open-tab', 'review')">{{ t('kuapps.sync.openReview') }}</button>
       <button class="btn sm" data-test="sync-run" :disabled="running" @click="reconcile">
         <i :data-lucide="running ? 'loader-2' : 'git-merge'"></i>{{ running ? t('apmv.reconciling') : t('kuapps.sync.runNow') }}
@@ -24,6 +27,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
+import { useArchitectureStore } from '../../stores/useArchitectureStore'
 
 // The local join between Observability resources and Architecture nodes (the shared
 // registry reconciliation), with what it does in plain words. No cloud call.
@@ -32,11 +36,14 @@ const props = defineProps({
   provider: { type: String, default: 'generic' },
   // The profile the Observability routes accept for this application ('local' without provider).
   profileId: { type: String, default: '' },
+  architectureProfileId: { type: String, default: '' },
 })
 const emit = defineEmits(['open-tab', 'reconciled'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
+const architectureStore = useArchitectureStore()
 const status = ref(null)
+const registryInfo = ref(null)
 const running = ref(false)
 const error = ref('')
 
@@ -45,6 +52,11 @@ const available = computed(() => !!props.application && !!profile.value)
 const base = computed(() => `/api/observability/${props.provider}/applications/${encodeURIComponent(props.application?.id || '')}/registry`)
 const headers = computed(() => ({ 'X-Profile-Id': profile.value }))
 const pending = computed(() => (status.value?.divergentResourceCount || 0) + (status.value?.divergentRelationshipCount || 0))
+const linkedProjectIds = computed(() => {
+  const value = registryInfo.value?.projectId
+  return Array.isArray(value) ? value : value ? [value] : []
+})
+const canCreateArchitectureView = computed(() => available.value && pending.value > 0 && !linkedProjectIds.value.length)
 const pendingLabel = computed(() => pending.value
   ? t('kuapps.sync.pending', { resources: status.value?.divergentResourceCount || 0, relationships: status.value?.divergentRelationshipCount || 0 })
   : t('kuapps.sync.nothingPending'))
@@ -54,7 +66,8 @@ async function load() {
   error.value = ''
   if (!available.value) return
   try {
-    status.value = (await apiFetch(base.value, { headers: headers.value }))?.syncStatus || null
+    registryInfo.value = await apiFetch(base.value, { headers: headers.value })
+    status.value = registryInfo.value?.syncStatus || null
   } catch (err) { error.value = err.message }
   nextTick(() => createIcons({ icons }))
 }
@@ -62,12 +75,39 @@ async function load() {
 async function reconcile() {
   running.value = true
   error.value = ''
+  const applicationId = props.application?.id
+  const operationToken = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const operationId = `registry:${applicationId}:${operationToken}`
+  architectureStore.beginApplicationSync(applicationId, operationId)
   try {
     const result = await apiFetch(`${base.value}/reconcile`, { method: 'POST', headers: headers.value })
     status.value = result?.syncStatus || status.value
     emit('reconciled', result)
   } catch (err) { error.value = err.message } finally {
     running.value = false
+    architectureStore.endApplicationSync(applicationId, operationId)
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
+async function createArchitectureView() {
+  const applicationId = props.application?.id
+  const projectProfileId = props.architectureProfileId || profile.value
+  if (!applicationId || !projectProfileId || !canCreateArchitectureView.value) return
+  if (!window.confirm(t('kuapps.sync.createArchitectureViewConfirm', { name: props.application.name, count: pending.value }))) return
+  running.value = true
+  error.value = ''
+  const operationId = `registry-project:${applicationId}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+  architectureStore.beginApplicationSync(applicationId, operationId)
+  try {
+    await apiFetch(`${base.value.replace(/\/registry$/, '')}/architecture-link/project`, {
+      method: 'POST', headers: { 'X-Profile-Id': projectProfileId }, body: JSON.stringify({}),
+    })
+    await load()
+    emit('reconciled')
+  } catch (err) { error.value = err.message } finally {
+    running.value = false
+    architectureStore.endApplicationSync(applicationId, operationId)
     nextTick(() => createIcons({ icons }))
   }
 }

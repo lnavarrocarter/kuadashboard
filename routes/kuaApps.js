@@ -5,6 +5,7 @@ const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { KuaApplicationService } = require('../lib/kua/applicationService');
+const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaExtensionRegistry } = require('../lib/kua/extensionRegistry');
 const { explainRelationship } = require('../lib/kua/relationshipExplainer');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
@@ -20,6 +21,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     ...(verifier ? { verifier } : {}),
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'kuapps', details }),
   });
+  const applicationRegistry = new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database });
   const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database });
 
   function profileId(req, res) {
@@ -89,15 +91,30 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       const resources = apmDatabase.listRegistryResources(application.id);
       const resourcesById = new Map(resources.map(resource => [resource.id, resource]));
       res.json({
-        resources: resources.map(({ id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt }) => ({
-          id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt,
-        })),
+        resources: resources.map(({ id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, lineage, updatedAt }) => {
+          const kubernetesOrigin = lineage.find(item => item.kubeContext || item.namespace) || {};
+          const identityParts = String(nativeIdentifier || '').split('/');
+          return {
+            id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt,
+            kubeContext: kubernetesOrigin.kubeContext || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[0] : ''),
+            namespace: kubernetesOrigin.namespace || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[1] : ''),
+          };
+        }),
         relationships: apmDatabase.listRegistryRelationships(application.id).map(relationship => ({
           ...relationship,
           sourceName: resourcesById.get(relationship.sourceResourceId)?.displayName || '',
           targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
         })),
       });
+    } catch (error) { handleError(res, error); }
+  });
+  router.delete('/applications/:applicationId/registry/resources/:resourceId', (req, res) => {
+    const application = apmDatabase.getApplication(req.params.applicationId);
+    if (!application) return res.status(404).json({ error: 'KUA Application not found' });
+    try {
+      const result = applicationRegistry.detachRegistryResource(application, req.params.resourceId, revisionOf(req));
+      auditLog?.log({ category: 'kua', action: 'Resource stopped syncing and removed from application', resource: result.id, context: 'kuapps', details: { applicationId: application.id } });
+      res.status(204).end();
     } catch (error) { handleError(res, error); }
   });
   router.get('/applications/:applicationId/extensions', (req, res) => {

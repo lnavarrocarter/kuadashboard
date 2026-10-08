@@ -59,6 +59,17 @@ describe('Load Balancers tab', () => {
     expect(rows[1].find('.status-err').text()).toBe('0/1')
   })
 
+  it('offers an add action for an ELB when a KUApp scope is active', async () => {
+    store.loadBalancers = [WEB]
+    const wrapper = mount(AwsLoadBalancersTab, {
+      props: { applicationId: 'app-orders', profileId: 'p1' },
+    })
+    const addButton = wrapper.findAll('tbody button').find(button => button.text().includes('Add to APM'))
+    expect(addButton).toBeTruthy()
+    await addButton.trigger('click')
+    expect(wrapper.emitted('add-to-application')[0][0]).toMatchObject({ arn: ARN, name: 'web' })
+  })
+
   it('opens the detail with rules, attributes, unhealthy targets and tags', async () => {
     store.loadBalancers = [WEB]
     const fetch = vi.fn(async () => ({

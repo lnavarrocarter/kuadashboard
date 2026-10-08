@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
-import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout } from '../lib/architectureLayout'
+import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout, systemDomainForNode, systemDomainLayout } from '../lib/architectureLayout'
 import { architectureResourcePresentation } from '../lib/architectureResourcePresentation'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
@@ -71,14 +71,16 @@ describe('ArchitectureCanvas', () => {
     expect(flowNodes[9].position).toEqual({ x: 80, y: 220 })
   })
 
-  it('groups canvas controls into creation, filter/layout and action rows', () => {
+  it('groups canvas controls into creation, view, filters and map layers', () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
 
     expect(wrapper.find('.canvas-create-controls').exists()).toBe(true)
     expect(wrapper.find('.canvas-layout-controls').exists()).toBe(true)
+    expect(wrapper.find('.canvas-filter-controls').exists()).toBe(true)
     expect(wrapper.find('.canvas-action-controls').exists()).toBe(true)
     expect(wrapper.get('.canvas-create-controls').text()).toContain('Add component')
-    expect(wrapper.get('.canvas-layout-controls').text()).toContain('All providers')
+    expect(wrapper.get('.canvas-layout-controls').text()).toContain('System domains')
+    expect(wrapper.get('.canvas-filter-controls').text()).toContain('All providers')
     expect(wrapper.get('.canvas-action-controls').text()).toContain('Export Mermaid')
   })
 
@@ -207,7 +209,7 @@ describe('ArchitectureCanvas', () => {
         type: 'view.set',
         value: {
           layoutMode: 'resource-type', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
-          providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
+          providerFilter: 'all', systemDomainFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
         },
       },
       'Update canvas view',
@@ -297,6 +299,60 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.getComponent(stubs.VueFlow).props('edges')[0].type).toBe('step')
   })
 
+  it('groups AWS, GCP, Kubernetes and explicit extension domains in shared system zones', async () => {
+    const document = {
+      nodes: [
+        { id: 'aws-lb', name: 'Public edge', provider: 'aws', resourceType: 'loadbalancer' },
+        { id: 'gcp-gateway', name: 'API gateway', provider: 'gcp', resourceType: 'gcp-api-gateway' },
+        { id: 'future-job', name: 'Batch job', provider: 'future-cloud', resourceType: 'batch-job', systemDomain: 'compute' },
+        { id: 'sql', name: 'Orders database', provider: 'gcp', resourceType: 'gcp-cloud-sql' },
+      ],
+      edges: [{ id: 'gateway-lb', sourceNodeId: 'gcp-gateway', targetNodeId: 'aws-lb', status: 'automatic' }],
+      layout: {},
+    }
+    const arranged = systemDomainLayout(document)
+    expect(systemDomainForNode(document.nodes[2])).toBe('compute')
+    expect(arranged.sections.map(section => [section.domain, section.count])).toEqual([
+      ['entry', 2], ['compute', 1], ['data', 1],
+    ])
+    expect(arranged.layout['aws-lb'].x).toBeLessThan(arranged.layout['future-job'].x)
+    expect(arranged.layout['gcp-gateway'].x).toBeLessThan(arranged.layout['future-job'].x)
+
+    const wrapper = mount(ArchitectureCanvas, {
+      props: { graph: { revision: 1, document } },
+      global: { stubs },
+    })
+    await wrapper.get('select[title="Canvas arrangement"]').setValue('system-domains')
+    await wrapper.get('.canvas-layout-controls button').trigger('click')
+    expect(wrapper.emitted('operation').at(-1)).toEqual([
+      { type: 'layout.set', value: arranged.layout },
+      'Arrange system domains',
+    ])
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').filter(node => node.type === 'resource-section').map(node => node.data.label)).toEqual([
+      'Entry points', 'Execution', 'Data',
+    ])
+  })
+
+  it('filters by system domain across providers and searches visible resource names', async () => {
+    const filterGraph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'aws-edge', name: 'Public edge', provider: 'aws', resourceType: 'loadbalancer' },
+          { id: 'gcp-edge', name: 'Orders gateway', provider: 'gcp', resourceType: 'gcp-api-gateway' },
+          { id: 'worker', name: 'Orders worker', provider: 'kubernetes', resourceType: 'pod' },
+        ],
+        edges: [], layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: filterGraph }, global: { stubs } })
+    await wrapper.get('select[title="Filter system domain"]').setValue('entry')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').map(node => node.id)).toEqual(['aws-edge', 'gcp-edge'])
+    await wrapper.get('.canvas-search input').setValue('ORDERS')
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes').map(node => node.id)).toEqual(['gcp-edge'])
+    expect(wrapper.emitted('operation').at(-1)[0].value).toMatchObject({ systemDomainFilter: 'entry' })
+  })
+
   it('restores persisted canvas view preferences on reload', () => {
     const document = {
       nodes: [{ id: 'worker', name: 'Worker', resourceType: 'lambda' }],
@@ -336,7 +392,7 @@ describe('ArchitectureCanvas', () => {
       type: 'view.set',
       value: {
         layoutMode: 'request-flow', layoutDirection: 'horizontal', showEdgeLabels: false, showHealthOverlay: true, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
-        providerFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
+        providerFilter: 'all', systemDomainFilter: 'all', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all',
       },
     })
     const nodes = wrapper.getComponent(stubs.VueFlow).props('nodes')

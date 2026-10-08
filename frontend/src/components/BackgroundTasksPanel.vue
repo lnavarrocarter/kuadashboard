@@ -65,6 +65,8 @@
                       </button>
                     </div>
                   </div>
+                  <p v-if="taskDescription(task)" class="task-description">{{ t(taskDescription(task)) }}</p>
+                  <p v-if="task.detail" class="task-detail">{{ t('tasks.context', { detail: task.detail }) }}</p>
                   <div class="task-meta">
                     <span>{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.startedAt' : 'tasks.lastRun') }}: {{ formatTime(ACTIVE_STATES.includes(task.state) ? task.startedAt : (task.lastFinishedAt || task.lastRunAt)) }}</span>
                     <span v-if="task.startedAt && (ACTIVE_STATES.includes(task.state) || task.lastFinishedAt)">{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.elapsed' : 'tasks.duration') }}: {{ taskDuration(task) }}</span>
@@ -121,6 +123,13 @@ const NAME_KEYS = {
   'team.sync': 'tasks.task.teamSync',
   'advisor.scan': 'tasks.task.advisor',
 }
+const DESCRIPTION_KEYS = {
+  'apm.collection': 'tasks.description.apm',
+  'logs.refresh': 'tasks.description.logsRefresh',
+  'apps.sync': 'tasks.description.appsSync',
+  'team.sync': 'tasks.description.teamSync',
+  'advisor.scan': 'tasks.description.advisor',
+}
 const PROVIDER_LABELS = {
   aws: 'AWS', gcp: 'Google Cloud', kubernetes: 'Kubernetes', vercel: 'Vercel',
   mixed: 'AWS + Kubernetes', kua: 'KUA', local: 'Local',
@@ -155,9 +164,15 @@ let usageLoadedAt = 0
 let usageRequest = null
 
 function taskName(task) {
+  if (task.type === 'collection') return t('tasks.task.applicationCollection', { name: task.name })
   if (task.type === 'scan') return t('tasks.task.scan', { id: task.id.split('.').at(-1) })
   const key = NAME_KEYS[task.id]
   return key ? t(key) : task.name
+}
+
+function taskDescription(task) {
+  if (task.type === 'collection') return 'tasks.description.applicationCollection'
+  return DESCRIPTION_KEYS[task.id] || ''
 }
 
 function providerLabel(provider) {
@@ -176,7 +191,7 @@ function formatUsd(value) {
 }
 
 function taskCost(task) {
-  const feature = task.type === 'scan' ? 'log-scans' : COST_FEATURES[task.id]
+  const feature = task.type === 'scan' ? 'log-scans' : task.type === 'collection' ? 'observability' : COST_FEATURES[task.id]
   if (!feature || !['aws', 'mixed'].includes(taskProvider(task))) return { label: t('tasks.costNotTracked'), potential: '' }
   if (!usage.value) return { label: t('tasks.costLoading'), potential: '' }
   if (usage.value.enabled === false) return { label: t('tasks.costDisabled'), potential: '' }
@@ -356,6 +371,8 @@ onUnmounted(() => {
 .task-heading { justify-content: space-between; gap: 12px; }
 .task-identity { min-width: 0; flex-wrap: wrap; gap: 8px; }
 .task-identity strong { overflow-wrap: anywhere; font-size: 13px; }
+.task-description, .task-detail { margin-top: 5px; color: var(--text-dim); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.task-detail { color: var(--text); }
 .task-provider { padding: 2px 6px; color: var(--text-dim); border: 1px solid var(--border); font-size: 10px; white-space: nowrap; }
 .task-state-chip { padding: 2px 6px; border: 1px solid var(--border); color: var(--text-dim); font-size: 10px; white-space: nowrap; }
 .state-running, .state-pause_requested { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }

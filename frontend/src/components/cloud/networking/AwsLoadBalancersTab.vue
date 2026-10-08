@@ -46,7 +46,19 @@
                 <span :class="targetTone(lb)">{{ lb.targets.healthy }}/{{ lb.targets.total }}</span>
                 <span v-if="lb.targets.unhealthy" class="text-dim"> · {{ t('elb.unhealthyCount', { n: lb.targets.unhealthy }) }}</span>
               </td>
-              <td><button class="btn sm" :aria-expanded="selected === lb.id" @click="toggle(lb)">{{ selected === lb.id ? t('awsMsg.hide') : t('awsMsg.details') }}</button></td>
+              <td class="elb-actions">
+                <button
+                  v-if="props.applicationId && props.profileId && lb.arn"
+                  class="btn sm"
+                  :disabled="props.addingResourceId === lb.arn"
+                  :title="t('apm.addToApplication')"
+                  @click="emit('add-to-application', lb)"
+                >
+                  <i :data-lucide="props.addingResourceId === lb.arn ? 'loader-2' : 'plus'"></i>
+                  {{ t('apm.addToApplication') }}
+                </button>
+                <button class="btn sm" :aria-expanded="selected === lb.id" @click="toggle(lb)">{{ selected === lb.id ? t('awsMsg.hide') : t('awsMsg.details') }}</button>
+              </td>
             </tr>
             <tr v-if="selected === lb.id" class="msg-detail-row">
               <td colspan="7">
@@ -149,8 +161,13 @@ import { settings } from '../../../composables/useSettings'
 import HealthBadge from '../messaging/HealthBadge.vue'
 import { filterRows, formatDate, HEALTH_RANK } from '../messaging/messagingFormat'
 
-const props = defineProps({ search: { type: String, default: '' } })
-const emit = defineEmits(['request-access'])
+const props = defineProps({
+  search: { type: String, default: '' },
+  applicationId: { type: String, default: '' },
+  profileId: { type: String, default: '' },
+  addingResourceId: { type: String, default: '' },
+})
+const emit = defineEmits(['request-access', 'add-to-application'])
 const awsStore = useAwsStore()
 const { t } = useI18n()
 const { sortBy, sortRows, sortIcon, thClass } = useSortable()
@@ -246,6 +263,7 @@ async function copy(text) {
 
 <style scoped>
 .elb-summary { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); }
+.elb-actions { display: flex; gap: 6px; }
 .elb-dns { max-width: 340px; }
 .elb-dns .mono-xs { display: inline-block; max-width: 290px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .elb-unhealthy { padding-left: 18px !important; font-size: 11px; }

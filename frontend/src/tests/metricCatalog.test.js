@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildResourceMetricSections, catalogFor, formatMetricValue } from '../components/cloud/apm/metricCatalog'
+import { buildResourceMetricSections, catalogFor, estimateCloudWatchMonthlyCost, formatMetricValue } from '../components/cloud/apm/metricCatalog'
 import { settings } from '../composables/useSettings'
 
 describe('metricCatalog', () => {
@@ -134,6 +134,42 @@ describe('metricCatalog', () => {
 
     const s3 = sections.find(section => section.resourceType === 's3')
     expect(s3.kpis.find(kpi => kpi.id === 'storage').value).toBe('2.00 GiB')
+  })
+
+  it('estimates CloudWatch charges and reads per month at a 30-minute collection interval', () => {
+    const estimate = estimateCloudWatchMonthlyCost([
+      {
+        type: 'elb',
+        arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abcdef0123456789',
+        metadata: { targetGroups: ['arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders/0123456789abcdef'] },
+      },
+      { type: 'elb', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/edge/abcdef0123456789' },
+    ])
+
+    expect(estimate.metricsPerCollection).toBe(11)
+    expect(estimate.requestsPerMonth).toBe(2880)
+    expect(estimate.monthlyUsd).toBeCloseTo(0.1584)
+  })
+
+  it('shows ELB request, error, latency and per-target-group health metrics', () => {
+    const [section] = buildResourceMetricSections({
+      resources: [{ type: 'elb' }],
+      metricsByResourceType: [
+        { resourceType: 'elb', kind: '', metricName: 'elb_request_count', sum: 100, count: 1 },
+        { resourceType: 'elb', kind: '', metricName: 'elb_target_5xx_count', sum: 4, count: 1 },
+        { resourceType: 'elb', kind: '', metricName: 'elb_5xx_count', sum: 1, count: 1 },
+        { resourceType: 'elb', kind: '', metricName: 'elb_target_response_time_p95_ms', sum: 800, count: 1 },
+        { resourceType: 'elb', kind: '', metricName: 'elb_healthy_host_count_orders_api', sum: 3, count: 1 },
+        { resourceType: 'elb', kind: '', metricName: 'elb_unhealthy_host_count_orders_api', sum: 1, count: 1 },
+      ],
+    })
+
+    expect(section.collectsMetrics).toBe(true)
+    expect(section.kpis.find(kpi => kpi.id === 'errorRate').value).toBe('5.0%')
+    expect(section.kpis.find(kpi => kpi.id === 'latencyP95').value).toBe('800 ms')
+    expect(section.kpis.find(kpi => kpi.id === 'elb_healthy_host_count_orders_api').value).toBe('3')
+    expect(section.charts.map(chart => chart.metric)).toContain('elb_healthy_host_count_orders_api')
+    expect(section.charts.map(chart => chart.metric)).toContain('elb_unhealthy_host_count_orders_api')
   })
 
   it('never reports a value when the metric is missing, instead of showing a misleading zero', () => {

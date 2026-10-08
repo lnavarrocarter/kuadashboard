@@ -146,11 +146,11 @@ describe('AwsOverviewInsights', () => {
     expect(byTitle.CloudFront.find('.aoi-kpi-facts').text()).toContain('Downloaded 463 KB')
   })
 
-  it('flags load balancers answering 5xx themselves and marks them outside KUA', async () => {
+  it('flags load balancers answering 5xx without claiming they are outside KUA', async () => {
     const wrapper = mountWith(insights())
     const elb = wrapper.findAll('.aoi-kpi').find(c => c.text().includes('Load balancers'))
     expect(elb.classes()).toContain('warn')
-    expect(elb.find('.aoi-tag').text()).toBe('Not in KUA')
+    expect(elb.find('.aoi-tag').exists()).toBe(false)
     expect(elb.find('.aoi-kpi-note').text()).toContain('1,202 5xx came from the load balancer itself')
     expect(elb.attributes('disabled')).toBeDefined()
     expect(elb.find('.aoi-kpi-facts').text()).toContain('5xx 1,208')

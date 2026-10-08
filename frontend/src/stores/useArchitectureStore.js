@@ -22,6 +22,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const snapshotDiff = ref(null)
   const syncPreview = ref(null)
   const syncPreviewing = ref(false)
+  const syncStatesByProject = ref({})
+  const applicationSyncs = ref({})
   const discoveryCatalog = ref(null)
   const discoveryPreview = ref(null)
   const kubernetesContexts = ref([])
@@ -38,6 +40,44 @@ export const useArchitectureStore = defineStore('architecture', () => {
     applications.value.find(application => application.id === selectedApplicationId.value) || null)
   const selectedProject = computed(() =>
     projects.value.find(project => project.id === selectedProjectId.value) || null)
+
+  function beginApplicationSync(applicationId, operationId) {
+    if (!applicationId || !operationId) return
+    applicationSyncs.value = {
+      ...applicationSyncs.value,
+      [applicationId]: { ...(applicationSyncs.value[applicationId] || {}), [operationId]: true },
+    }
+  }
+
+  function endApplicationSync(applicationId, operationId) {
+    if (!applicationId || !operationId) return
+    const operations = { ...(applicationSyncs.value[applicationId] || {}) }
+    delete operations[operationId]
+    const next = { ...applicationSyncs.value }
+    if (Object.keys(operations).length) next[applicationId] = operations
+    else delete next[applicationId]
+    applicationSyncs.value = next
+  }
+
+  function isApplicationSyncing(applicationId) {
+    return Object.keys(applicationSyncs.value[applicationId] || {}).length > 0
+  }
+
+  function syncStateForProject(projectId) {
+    return syncStatesByProject.value[projectId] || { preview: null, previewing: false, applying: false, error: null }
+  }
+
+  function clearProjectSyncPreview(projectId) {
+    updateProjectSyncState(projectId, { preview: null })
+    if (selectedProjectId.value === projectId) syncPreview.value = null
+  }
+
+  function updateProjectSyncState(projectId, changes) {
+    syncStatesByProject.value = {
+      ...syncStatesByProject.value,
+      [projectId]: { ...syncStateForProject(projectId), ...changes },
+    }
+  }
 
   function headers(json = false) {
     if (!activeProfileId.value) throw new Error(t('store.noApplicationProfile'))
@@ -444,7 +484,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       })
       await loadChanges()
       snapshotDiff.value = null
-      syncPreview.value = null
+      clearProjectSyncPreview(selectedProjectId.value)
       return graph.value
     } catch (requestError) {
       error.value = requestError.message
@@ -454,15 +494,16 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function loadChanges() {
-    if (!selectedProjectId.value) return []
+  async function loadChanges(projectId = selectedProjectId.value, profileId = activeProfileId.value) {
+    if (!projectId) return []
     try {
-      changes.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/changes?limit=50`, {
-        headers: headers(),
+      const nextChanges = await apiFetch(`/api/architecture/projects/${projectId}/changes?limit=50`, {
+        headers: { 'X-Profile-Id': profileId },
       })
-      return changes.value
+      if (selectedProjectId.value === projectId) changes.value = nextChanges
+      return nextChanges
     } catch (requestError) {
-      error.value = requestError.message
+      if (selectedProjectId.value === projectId) error.value = requestError.message
       return []
     }
   }
@@ -730,51 +771,73 @@ export const useArchitectureStore = defineStore('architecture', () => {
 
   async function previewAwsSync({ region, accountId, stackNames }) {
     if (!selectedProjectId.value) return null
+    const projectId = selectedProjectId.value
+    const profileId = activeProfileId.value
+    const applicationId = linkedApplication.value?.id || selectedApplicationId.value
+    const operationId = `cloudformation-preview:${projectId}`
+    beginApplicationSync(applicationId, operationId)
+    updateProjectSyncState(projectId, { previewing: true, error: null })
     syncPreviewing.value = true
     error.value = null
     try {
-      syncPreview.value = await apiFetch(
-        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/sync-preview`,
+      const preview = await apiFetch(
+        `/api/architecture/projects/${projectId}/discovery/aws/sync-preview`,
         {
           method: 'POST',
-          headers: headers(true),
+          headers: { 'X-Profile-Id': profileId, 'Content-Type': 'application/json' },
           body: JSON.stringify({ region, accountId, stackNames }),
         },
       )
-      return syncPreview.value
+      updateProjectSyncState(projectId, { preview, error: null })
+      if (selectedProjectId.value === projectId) syncPreview.value = preview
+      return preview
     } catch (requestError) {
-      error.value = requestError.message
+      updateProjectSyncState(projectId, { error: requestError.message })
+      if (selectedProjectId.value === projectId) error.value = requestError.message
       return null
     } finally {
-      syncPreviewing.value = false
+      updateProjectSyncState(projectId, { previewing: false })
+      if (selectedProjectId.value === projectId) syncPreviewing.value = false
+      endApplicationSync(applicationId, operationId)
     }
   }
 
   async function applyAwsSync({ region, accountId, stackNames }) {
     if (!selectedProjectId.value || !graph.value) return null
-    saving.value = true
-    error.value = null
+    const projectId = selectedProjectId.value
+    const projectGraph = graph.value
+    const profileId = activeProfileId.value
+    const applicationId = linkedApplication.value?.id || selectedApplicationId.value
+    const operationId = `cloudformation-apply:${projectId}`
+    beginApplicationSync(applicationId, operationId)
+    updateProjectSyncState(projectId, { applying: true, error: null })
     try {
-      graph.value = await apiFetch(
-        `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/sync-apply`,
+      const nextGraph = await apiFetch(
+        `/api/architecture/projects/${projectId}/discovery/aws/sync-apply`,
         {
           method: 'POST',
-          headers: headers(true),
+          headers: { 'X-Profile-Id': profileId, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             region, accountId, stackNames,
-            expectedRevision: graph.value.revision,
+            expectedRevision: projectGraph.revision,
             reason: `Synchronize ${stackNames.length} CloudFormation stack${stackNames.length === 1 ? '' : 's'}`,
           }),
         },
       )
-      syncPreview.value = null
-      await loadChanges()
-      return graph.value
+      updateProjectSyncState(projectId, { preview: null, error: null })
+      if (selectedProjectId.value === projectId) {
+        graph.value = nextGraph
+        await loadChanges(projectId, profileId)
+      }
+      if (selectedProjectId.value === projectId) syncPreview.value = null
+      return nextGraph
     } catch (requestError) {
-      error.value = requestError.message
+      updateProjectSyncState(projectId, { error: requestError.message })
+      if (selectedProjectId.value === projectId) error.value = requestError.message
       return null
     } finally {
-      saving.value = false
+      updateProjectSyncState(projectId, { applying: false })
+      endApplicationSync(applicationId, operationId)
     }
   }
 
@@ -796,7 +859,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
         },
       )
       discoveryPreview.value = null
-      syncPreview.value = null
+      clearProjectSyncPreview(selectedProjectId.value)
       await loadChanges()
       return graph.value
     } catch (requestError) {
@@ -880,6 +943,11 @@ export const useArchitectureStore = defineStore('architecture', () => {
     snapshots,
     syncPreview,
     syncPreviewing,
+    syncStateForProject,
+    clearProjectSyncPreview,
+    beginApplicationSync,
+    endApplicationSync,
+    isApplicationSyncing,
     revertSnapshot,
   }
 })

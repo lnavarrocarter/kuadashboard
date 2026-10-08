@@ -148,13 +148,13 @@ describe('ArchitectureRoutes', () => {
     await wrapper.get('select[title="Filter providers"]').setValue('kubernetes')
     expect(wrapper.text()).not.toContain('worker')
     expect(wrapper.emitted('operation')[0]).toEqual([
-      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: '', stackFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
       'Update canvas view',
     ])
 
     await wrapper.get('select[title="Filter Kubernetes namespace"]').setValue('orders')
     expect(wrapper.emitted('operation')[1]).toEqual([
-      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: 'orders', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
+      { type: 'view.set', value: { providerFilter: 'kubernetes', kubeContextFilter: '', namespaceFilter: 'orders', stackFilter: '', relationTypeFilter: 'all', relationStatusFilter: 'all' } },
       'Update canvas view',
     ])
   })

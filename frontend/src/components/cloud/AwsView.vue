@@ -55,6 +55,7 @@
         :application-id="applicationId"
         :focus-resource="apmFocusResource"
         :lambdas="awsStore.lambdas"
+        :load-balancers="awsStore.loadBalancers"
         :ecs-services="awsStore.ecsServices"
         :event-bridge-rules="awsStore.eventBridgeRules"
         :step-functions="awsStore.stepFunctions"
@@ -1583,7 +1584,14 @@
       <!-- ══ CloudFront ═════════════════════════════════════════════════════ -->
       <!-- ══ Elastic Load Balancing ═════════════════════════════════════════ -->
       <div v-show="activeTab === 'elb'" class="tab-panel">
-        <AwsLoadBalancersTab :search="search.elb" @request-access="activityAccess = $event" />
+        <AwsLoadBalancersTab
+          :search="search.elb"
+          :application-id="applicationId"
+          :profile-id="selectedProfileId"
+          :adding-resource-id="addingLoadBalancerId"
+          @request-access="activityAccess = $event"
+          @add-to-application="addLoadBalancerToApplication"
+        />
       </div>
 
       <div v-show="activeTab === 'cloudfront'" class="tab-panel">
@@ -3828,6 +3836,7 @@ import { createIcons, icons } from 'lucide'
 import jsYaml from 'js-yaml'
 import { useEnvStore }  from '../../stores/useEnvStore'
 import { useAwsStore }  from '../../stores/useAwsStore'
+import { useApmStore } from '../../stores/useApmStore'
 import { useToast }     from '../../composables/useToast'
 import { useApi }       from '../../composables/useApi'
 import { useSortable }  from '../../composables/useSortable'
@@ -3876,6 +3885,7 @@ const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
+const apmStore = useApmStore()
 const termStore = useTerminalStore()
 const { toast }    = useToast()
 const { apiFetch } = useApi()
@@ -3925,6 +3935,7 @@ const activeTab  = ref('overview')
 const apmViewRef = ref(null)
 const overviewRef = ref(null)
 const accessModalOpen = ref(false)
+const addingLoadBalancerId = ref('')
 const { t } = useI18n()
 // Tabs that render their own header, loading and error states.
 const SELF_LOADING_TABS = new Set(['apm', 'overview', 'cwlogs', 'cloudformation'])
@@ -4218,10 +4229,36 @@ const fetchMap = {
 async function loadApmInventory() {
   await Promise.all([
     awsStore.fetchLambdas(),
+    awsStore.fetchLoadBalancers(),
     awsStore.fetchEcsServices(),
     awsStore.fetchEventBridgeRules(),
     awsStore.fetchStepFunctions(),
   ])
+}
+
+async function addLoadBalancerToApplication(loadBalancer) {
+  if (!props.applicationId || !selectedProfileId.value || !loadBalancer?.arn || addingLoadBalancerId.value) return
+  addingLoadBalancerId.value = loadBalancer.arn
+  try {
+    apmStore.setActiveProfile(selectedProfileId.value, 'aws')
+    await apmStore.addResource(props.applicationId, {
+      provider: 'aws',
+      type: 'elb',
+      key: loadBalancer.arn,
+      arn: loadBalancer.arn,
+      name: loadBalancer.name,
+      service: loadBalancer.dnsName || '',
+      kind: 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+      metadata: { targetGroups: (loadBalancer.targetGroups || []).map(group => group.arn).filter(Boolean) },
+      associationSource: 'manual',
+    })
+    await apmStore.selectApplication(props.applicationId)
+    toast(t('kuapps.add.done'), 'success')
+  } catch (error) {
+    toast(error.message || String(error), 'error')
+  } finally {
+    addingLoadBalancerId.value = ''
+  }
 }
 
 async function loadTab(id, options = {}) {

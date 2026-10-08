@@ -158,6 +158,41 @@ describe('explicit writes', () => {
     expect(global.fetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(1)
   })
 
+  it('treats an already-running manual collection as a skipped result, not an error', async () => {
+    global.fetch = vi.fn((url) => {
+      if (url.endsWith('/collect-now')) {
+        return response({ skipped: true, reason: 'collection_in_progress' }, 409)
+      }
+      if (url.includes('/overview')) return response({ metrics: [], resources: [] })
+      if (url.endsWith('/topology')) return response({ application: {}, resources: [], edges: [] })
+      if (url.endsWith('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/usage')) return response({ total: 1 })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const result = await store.collectNow()
+
+    expect(result).toEqual({ skipped: true, reason: 'collection_in_progress' })
+    expect(store.error).toBeNull()
+    expect(global.fetch.mock.calls.some(([url]) => String(url).includes('/overview'))).toBe(true)
+  })
+
+  it('clears the collecting state when manual collection fails', async () => {
+    global.fetch = vi.fn(url => url.endsWith('/collect-now')
+      ? response({ error: 'Collection failed' }, 500)
+      : response({}))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+
+    const result = await store.collectNow()
+
+    expect(result).toBeNull()
+    expect(store.error).toBe('Collection failed')
+    expect(store.collecting).toBe(false)
+  })
+
   it('runs candidate analysis and threshold updates only when explicitly requested', async () => {
     global.fetch = vi.fn((url, options = {}) => {
       if (url.endsWith('/candidates')) {

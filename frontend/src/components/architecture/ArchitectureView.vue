@@ -79,19 +79,38 @@
 
     <div v-else-if="props.settingsOnly" class="architecture-settings-admin">
       <div v-if="store.error" class="alert-error architecture-error">{{ store.error }}</div>
-      <section class="architecture-settings-sync">
+      <section v-if="syncSourceMappings.length" class="architecture-sync-mapping" data-test="sync-source-mapping">
+        <header>
+          <div><strong>{{ t('archView.sync.mappingTitle') }}</strong><small>{{ t('archView.sync.mappingHint') }}</small></div>
+          <span>{{ t('archView.sync.mappingCount', { n: syncSourceMappings.length }) }}</span>
+        </header>
+        <article v-for="mapping in syncSourceMappings" :key="mapping.id" class="architecture-sync-mapping-row" :data-source-type="mapping.type">
+          <span class="architecture-sync-mapping-icon"><i :data-lucide="mapping.type === 'cloudformation' ? 'layers' : mapping.type === 'kubernetes' ? 'boxes' : 'box'"></i></span>
+          <span class="architecture-sync-mapping-copy">
+            <small>{{ t(`archView.sync.source.${mapping.type}`) }}</small>
+            <strong>{{ mapping.name }}</strong>
+            <small v-if="mapping.detail">{{ mapping.detail }}</small>
+          </span>
+          <details v-if="mapping.resources.length" class="architecture-sync-mapping-resources">
+            <summary>{{ t('archView.sync.mappingResources', { n: mapping.resources.length }) }}</summary>
+            <span v-for="resource in mapping.resources" :key="resource.id">{{ resource.name }} · {{ resource.resourceType || resource.kind }}</span>
+          </details>
+        </article>
+      </section>
+      <section v-if="syncSource" class="architecture-settings-sync">
         <header>
           <div><span class="architecture-kicker">{{ t('archView.cfnSyncPreview') }}</span><strong>{{ syncSource ? syncSourceLabel : t('archView.noCfnSource') }}</strong></div>
-          <button class="btn sm" :disabled="!syncSource || store.syncPreviewing" @click="previewSync">
-            <i :data-lucide="store.syncPreviewing ? 'loader-2' : 'refresh-cw'"></i>
-            {{ store.syncPreviewing ? t('archView.checking') : t('archView.syncPreview') }}
+          <button class="btn sm" :disabled="currentSyncState.previewing || currentSyncState.applying" @click="previewSync">
+            <i :data-lucide="currentSyncState.previewing ? 'loader-2' : 'refresh-cw'"></i>
+            {{ currentSyncState.previewing ? t('archView.checking') : t('archView.syncPreview') }}
           </button>
         </header>
-        <section v-if="store.syncPreview" class="sync-preview-panel">
+        <p v-if="currentSyncState.error" class="alert-error architecture-error" role="alert">{{ currentSyncState.error }}</p>
+        <section v-if="currentSyncState.preview" class="sync-preview-panel">
           <header>
             <span><i data-lucide="refresh-cw"></i><strong>{{ t('archView.cfnSyncPreview') }}</strong><small>{{ syncSourceLabel }}</small></span>
-            <strong>{{ t(store.syncPreview.summary.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: store.syncPreview.summary.changeCount }) }}</strong>
-            <button class="btn sm btn-icon" :title="t('archView.closeSyncPreview')" @click="store.syncPreview = null"><i data-lucide="x"></i></button>
+            <strong>{{ t(currentSyncState.preview.summary.changeCount === 1 ? 'archView.change' : 'archView.changes', { n: currentSyncState.preview.summary.changeCount }) }}</strong>
+            <button class="btn sm btn-icon" :title="t('archView.closeSyncPreview')" @click="store.clearProjectSyncPreview(store.selectedProjectId)"><i data-lucide="x"></i></button>
           </header>
           <div class="sync-preview-grid">
             <div v-for="item in resourceSyncCounts" :key="`resource:${item.key}`"><span>{{ item.label }}</span><strong>{{ item.count }}</strong></div>
@@ -110,8 +129,8 @@
             </details>
           </div>
           <footer>
-            <span>{{ t('archView.willBecomeStale', { n: store.syncPreview.summary.resources.missing }) }}</span>
-            <button class="btn sm primary" :disabled="store.saving" @click="applySync"><i data-lucide="check"></i> {{ t('archView.applySync') }}</button>
+            <span>{{ t('archView.willBecomeStale', { n: currentSyncState.preview.summary.resources.missing }) }}</span>
+            <button class="btn sm primary" :disabled="currentSyncState.applying || currentSyncState.previewing" @click="applySync"><i data-lucide="check"></i> {{ t('archView.applySync') }}</button>
           </footer>
         </section>
       </section>
@@ -165,7 +184,7 @@
             <button v-else-if="store.selectedApplication" class="btn sm primary" @click="creatingProject = true"><i data-lucide="plus"></i> {{ t('archView.createApplicationView') }}</button>
           </div>
           <template v-else>
-            <section class="architecture-project-header">
+            <section v-if="!props.workspaceMode" class="architecture-project-header">
               <div>
                 <span class="architecture-kicker">{{ applicationContextLabel }} / {{ t('archView.revision', { n: store.graph?.revision ?? 0 }) }}</span>
                 <h2>{{ props.workspaceMode ? activeApplication?.name || store.selectedApplication?.name : store.selectedProject.name }}</h2>
@@ -180,7 +199,7 @@
               </form>
             </section>
 
-            <section v-if="store.selectedApplication || store.linkedApplications.length" class="architecture-application-context">
+            <section v-if="!props.workspaceMode && (store.selectedApplication || store.linkedApplications.length)" class="architecture-application-context">
               <span class="architecture-application-context-wide"><small>{{ t('archView.applications') }}</small><strong>{{ linkedApplicationLabel }}</strong></span>
               <span><small>{{ t('archView.provider') }}</small><strong>{{ activeApplication?.provider?.toUpperCase() || '—' }}</strong></span>
               <span><small>{{ t('archView.environment') }}</small><strong>{{ activeApplication?.environment || '—' }}</strong></span>
@@ -189,14 +208,14 @@
               <span :class="(store.linkedApplications.length || activeApplication?.architectureProjectId) ? 'linked' : 'unlinked'"><small>{{ t('archView.title') }}</small><strong>{{ (store.linkedApplications.length || activeApplication?.architectureProjectId) ? t('archView.linked') : t('archView.notLinked') }}</strong></span>
             </section>
 
-            <section class="architecture-stats">
+            <section v-if="!props.workspaceMode" class="architecture-stats">
               <div><span>{{ t('archView.nodes') }}</span><strong>{{ store.graph?.document.nodes.length || 0 }}</strong></div>
               <div><span>{{ t('archView.relations') }}</span><strong>{{ store.graph?.document.edges.length || 0 }}</strong></div>
               <div><span>{{ t('archView.sources') }}</span><strong>{{ store.graph?.document.sources.length || 0 }}</strong></div>
               <div><span>{{ t('archView.snapshots') }}</span><strong>{{ store.snapshots.length }}</strong></div>
             </section>
 
-            <section v-if="staleResources.length" class="stale-resource-list">
+            <section v-if="!props.workspaceMode && staleResources.length" class="stale-resource-list">
               <header><span>{{ t('archView.staleResources') }}</span><small>{{ t('archView.needDecision', { n: staleResources.length }) }}</small></header>
               <div v-for="node in staleResources" :key="node.id" class="stale-resource-row">
                 <span><strong>{{ node.name }}</strong><small>{{ node.kind || node.resourceType }}</small></span>
@@ -233,61 +252,72 @@
               @imported="resourceProvider = ''"
             />
 
-            <div v-if="!props.workspaceMode" class="architecture-view-tabs">
-              <button :class="['btn', 'sm', { primary: activeView === 'routes' }]" @click="activeView = 'routes'">
-                <i data-lucide="route"></i> {{ t('archView.routes') }}
-              </button>
-              <button :class="['btn', 'sm', { primary: activeView === 'canvas' }]" @click="activeView = 'canvas'">
-                <i data-lucide="network"></i> {{ t('archView.canvas') }}
-              </button>
-              <button :class="['btn', 'sm', { primary: activeView === 'resources' }]" :disabled="!store.linkedApplication" @click="selectResourcesView">
-                <i data-lucide="database"></i> {{ t('archView.resources') }}
-              </button>
-            </div>
-
-            <ArchitectureRoutes
-              v-if="store.graph && activeView === 'routes'"
-              :graph="store.graph"
-              @inspect-workflow="openWorkflow"
-              @operation="applyCanvasOperation"
-            />
-
-            <ArchitectureCanvas
-              v-if="store.graph && activeView === 'canvas'"
+            <ArchitectureGraphAdvisor
+              v-if="store.graph"
               :graph="store.graph"
               :saving="store.saving"
-              :observability-enabled="Boolean(store.linkedApplication)"
-              :metrics="metricsByNode"
-              :metrics-loading="metricsLoading"
-              :collection="collectionByNode"
-              :collection-loading="metricsLoading"
-              :trace-enabled="traceEnabled"
-              :trace="traceOverlay"
-              :trace-loading="traceLoading"
-              :events="eventsByNode"
-              :events-loading="eventsLoading"
-              :rollouts="rolloutsByNode"
-              :rollouts-loading="rolloutsLoading"
-              :security="securityByNode"
-              :security-loading="securityLoading"
               @operation="applyCanvasOperation"
-              @inspect-workflow="openWorkflow"
-              @resource-selected="emit('resource-selected', $event)"
-              @node-action="handleNodeAction"
-              @request-metrics="loadOperationalMetrics"
-              @request-trace="loadOperationalTrace"
-              @request-events="loadOperationalEvents"
-              @request-rollouts="loadOperationalRollouts"
-              @request-security="loadOperationalSecurity"
             />
 
-            <ArchitectureResources
-              v-if="activeView === 'resources'"
-              :graph="store.graph"
-              :registry="store.registry"
-              :loading="store.registryLoading"
-              @refresh="store.loadRegistry"
-            />
+            <nav v-if="!props.workspaceMode" class="architecture-view-tabs" role="tablist" :aria-label="t('archView.viewTabs')">
+              <button type="button" role="tab" :aria-selected="activeView === 'routes'" :tabindex="activeView === 'routes' ? 0 : -1" :class="['architecture-view-tab', { active: activeView === 'routes' }]" @keydown="handleArchitectureTabKeydown" @click="activeView = 'routes'">
+                <i data-lucide="route"></i> {{ t('archView.routes') }}
+              </button>
+              <button type="button" role="tab" :aria-selected="activeView === 'canvas'" :tabindex="activeView === 'canvas' ? 0 : -1" :class="['architecture-view-tab', { active: activeView === 'canvas' }]" @keydown="handleArchitectureTabKeydown" @click="activeView = 'canvas'">
+                <i data-lucide="network"></i> {{ t('archView.canvas') }}
+              </button>
+              <button type="button" role="tab" :aria-selected="activeView === 'resources'" :tabindex="activeView === 'resources' ? 0 : -1" :class="['architecture-view-tab', { active: activeView === 'resources' }]" :disabled="!store.linkedApplication" @keydown="handleArchitectureTabKeydown" @click="selectResourcesView">
+                <i data-lucide="database"></i> {{ t('archView.resources') }}
+              </button>
+            </nav>
+
+            <section v-if="store.graph && activeView === 'routes'" class="architecture-view-panel" role="tabpanel" :aria-label="t('archView.routes')">
+              <ArchitectureRoutes
+                :graph="store.graph"
+                @inspect-workflow="openWorkflow"
+                @operation="applyCanvasOperation"
+              />
+            </section>
+
+            <section v-if="store.graph && activeView === 'canvas'" class="architecture-view-panel" role="tabpanel" :aria-label="t('archView.canvas')">
+              <ArchitectureCanvas
+                :graph="store.graph"
+                :saving="store.saving"
+                :observability-enabled="Boolean(store.linkedApplication)"
+                :metrics="metricsByNode"
+                :metrics-loading="metricsLoading"
+                :collection="collectionByNode"
+                :collection-loading="metricsLoading"
+                :trace-enabled="traceEnabled"
+                :trace="traceOverlay"
+                :trace-loading="traceLoading"
+                :events="eventsByNode"
+                :events-loading="eventsLoading"
+                :rollouts="rolloutsByNode"
+                :rollouts-loading="rolloutsLoading"
+                :security="securityByNode"
+                :security-loading="securityLoading"
+                @operation="applyCanvasOperation"
+                @inspect-workflow="openWorkflow"
+                @resource-selected="emit('resource-selected', $event)"
+                @node-action="handleNodeAction"
+                @request-metrics="loadOperationalMetrics"
+                @request-trace="loadOperationalTrace"
+                @request-events="loadOperationalEvents"
+                @request-rollouts="loadOperationalRollouts"
+                @request-security="loadOperationalSecurity"
+              />
+            </section>
+
+            <section v-if="activeView === 'resources'" class="architecture-view-panel" role="tabpanel" :aria-label="t('archView.resources')">
+              <ArchitectureResources
+                :graph="store.graph"
+                :registry="store.registry"
+                :loading="store.registryLoading"
+                @refresh="store.loadRegistry"
+                @operation="applyCanvasOperation"
+              />
+            </section>
 
             <StepFnDetail
               :open="Boolean(selectedWorkflow)"
@@ -376,6 +406,7 @@ import ArchitectureCloudDiscoveryPanel from './ArchitectureCloudDiscoveryPanel.v
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
+import ArchitectureGraphAdvisor from './ArchitectureGraphAdvisor.vue'
 import { catalogFor } from '../cloud/apm/metricCatalog'
 import { awsSecurityByNode, gcpSecurityByNode, kubernetesRolloutsByNode, kubernetesSecurityByNode, mergeNodeFindings } from '../../lib/architectureOverlayProjection'
 
@@ -422,6 +453,7 @@ const linkedApplicationLabel = computed(() => {
 const applicationContextLabel = computed(() => store.linkedApplication
   ? `${store.linkedApplication.name} · ${String(store.linkedApplication.provider || 'application').toUpperCase()}`
   : t('archView.title'))
+const currentSyncState = computed(() => store.syncStateForProject(store.selectedProjectId))
 const syncSource = computed(() => {
   const sources = store.graph?.document?.sources?.filter(source => source.type === 'cloudformation') || []
   if (!sources.length) return null
@@ -434,21 +466,68 @@ const syncSource = computed(() => {
       .map(source => source.name),
   }
 })
+const syncSourceMappings = computed(() => {
+  const nodes = store.graph?.document?.nodes || []
+  const sources = store.graph?.document?.sources || []
+  const mappedNodeIds = new Set()
+  const mappings = []
+
+  for (const source of sources.filter(item => item.type === 'cloudformation')) {
+    const resources = nodes.filter(node => node.stackName === source.name || node.sourceId === source.id)
+    resources.forEach(node => mappedNodeIds.add(node.id))
+    mappings.push({
+      id: source.id || `cloudformation:${source.accountId}:${source.region}:${source.name}`,
+      type: 'cloudformation',
+      name: source.name,
+      detail: [source.accountId, source.region].filter(Boolean).join(' · '),
+      resources,
+    })
+  }
+
+  const namespaces = new Map()
+  for (const node of nodes) {
+    if (node.provider !== 'kubernetes' || !node.namespace) continue
+    const key = `${node.kubeContext || ''}:${node.namespace}`
+    const mapping = namespaces.get(key) || {
+      id: `namespace:${key}`,
+      type: 'kubernetes',
+      name: node.namespace,
+      detail: node.kubeContext || '',
+      resources: [],
+    }
+    mapping.resources.push(node)
+    mappedNodeIds.add(node.id)
+    namespaces.set(key, mapping)
+  }
+  mappings.push(...namespaces.values())
+
+  for (const node of nodes) {
+    if (mappedNodeIds.has(node.id)) continue
+    mappings.push({
+      id: `resource:${node.id}`,
+      type: 'resource',
+      name: node.name || node.id,
+      detail: [node.provider || '', node.resourceType || node.kind || ''].filter(Boolean).join(' · '),
+      resources: [node],
+    })
+  }
+  return mappings
+})
 const syncSourceLabel = computed(() => syncSource.value
   ? t('archView.stackCount', { n: syncSource.value.stackNames.length, region: syncSource.value.region })
   : t('archView.noCfnSource'))
-const resourceSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.resources, {
+const resourceSyncCounts = computed(() => syncCountItems(currentSyncState.value.preview?.summary?.resources, {
   new: t('archView.sync.new'), changed: t('archView.sync.changed'), unchanged: t('archView.sync.unchanged'), missing: t('archView.sync.missing'), stale: t('archView.sync.stale'), manual: t('archView.sync.manual'),
 }))
-const relationshipSyncCounts = computed(() => syncCountItems(store.syncPreview?.summary?.relationships, {
+const relationshipSyncCounts = computed(() => syncCountItems(currentSyncState.value.preview?.summary?.relationships, {
   new: t('archView.sync.newRelationships'), reinforced: t('archView.sync.reinforced'), unchanged: t('archView.sync.unchanged'), missingEvidence: t('archView.sync.missingEvidence'), rejected: t('archView.sync.rejected'), manual: t('archView.sync.manual'),
 }))
 const syncResourceSections = computed(() => [
   ['new', t('archView.sync.newResources')], ['changed', t('archView.sync.changedResources')], ['missing', t('archView.sync.missingResources')], ['stale', t('archView.sync.alreadyStale')], ['manual', t('archView.sync.manualResources')],
-].map(([key, label]) => ({ key, label, items: store.syncPreview?.resources?.[key] || [] })))
+].map(([key, label]) => ({ key, label, items: currentSyncState.value.preview?.resources?.[key] || [] })))
 const syncRelationshipSections = computed(() => [
   ['new', t('archView.sync.newRelationships')], ['reinforced', t('archView.sync.reinforcedRelationships')], ['missingEvidence', t('archView.sync.relationshipsMissingEvidence')], ['rejected', t('archView.sync.rejectedRelationships')], ['manual', t('archView.sync.manualRelationships')],
-].map(([key, label]) => ({ key: `relationship:${key}`, label, items: store.syncPreview?.relationships?.[key] || [] })))
+].map(([key, label]) => ({ key: `relationship:${key}`, label, items: currentSyncState.value.preview?.relationships?.[key] || [] })))
 const staleResources = computed(() => store.graph?.document?.nodes?.filter(node => node.syncState === 'stale') || [])
 const metricsByNode = ref({})
 const metricsLoading = ref(false)
@@ -956,6 +1035,17 @@ function selectResourcesView() {
   if (store.linkedApplication) store.loadRegistry()
 }
 
+function handleArchitectureTabKeydown(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const tabs = [...event.currentTarget.closest('[role="tablist"]').querySelectorAll('[role="tab"]:not(:disabled)')]
+  const currentIndex = tabs.indexOf(event.currentTarget)
+  const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+    : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  tabs[nextIndex]?.focus()
+  tabs[nextIndex]?.click()
+}
+
 async function openResourcePicker(provider = 'aws') {
   if (props.workspaceMode && (store.activeProfileId !== props.profileId || store.selectedApplicationId !== props.applicationId)) {
     await loadProfile(props.profileId)
@@ -1048,6 +1138,18 @@ defineExpose({ openResourcePicker, refreshWorkspace })
 .architecture-project-header p { margin: 0; color: var(--text-dim); }
 .architecture-kicker { color: #2f81f7; font-size: 11px; text-transform: uppercase; font-weight: 700; }
 .architecture-settings-admin { margin: 0 18px 18px; display: grid; align-content: start; gap: 16px; }
+.architecture-sync-mapping { display: grid; gap: 0; border-bottom: 1px solid var(--border); }
+.architecture-sync-mapping > header { padding: 0 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.architecture-sync-mapping > header > div, .architecture-sync-mapping-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.architecture-sync-mapping > header > div > small, .architecture-sync-mapping > header > span { color: var(--text-dim); font-size: 11px; }
+.architecture-sync-mapping-row { min-height: 52px; padding: 8px 0; display: grid; grid-template-columns: 26px minmax(160px, 1fr) minmax(220px, 1.4fr); align-items: center; gap: 10px; border-top: 1px solid var(--border); }
+.architecture-sync-mapping-icon { width: 25px; height: 25px; display: grid; place-items: center; color: var(--accent); }
+.architecture-sync-mapping-icon :deep(svg) { width: 15px; height: 15px; }
+.architecture-sync-mapping-copy > small { color: var(--text-dim); font-size: 10px; }
+.architecture-sync-mapping-copy > strong { overflow-wrap: anywhere; font-size: 12px; }
+.architecture-sync-mapping-resources { min-width: 0; color: var(--text-dim); font-size: 11px; }
+.architecture-sync-mapping-resources summary { cursor: pointer; }
+.architecture-sync-mapping-resources > span { display: block; padding: 4px 0 0 12px; overflow-wrap: anywhere; color: var(--text); }
 .architecture-settings-sync { padding-bottom: 16px; display: grid; gap: 12px; border-bottom: 1px solid var(--border); }
 .architecture-settings-sync > header, .architecture-settings-sync-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .architecture-settings-sync > header > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1092,7 +1194,13 @@ defineExpose({ openResourcePicker, refreshWorkspace })
 .stale-resource-row:last-child { border-bottom: 0; }
 .stale-resource-row > span { display: flex; flex: 1; min-width: 0; flex-direction: column; }
 .stale-resource-row small { color: var(--text-dim); }
-.architecture-view-tabs { margin-bottom: 8px; display: flex; gap: 6px; }
+.architecture-view-tabs { margin-bottom: 10px; display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.architecture-view-tab { min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; }
+.architecture-view-tab:hover:not(:disabled) { color: var(--text); }
+.architecture-view-tab.active { border-bottom-color: var(--accent); color: var(--text); }
+.architecture-view-tab:disabled { opacity: .45; cursor: not-allowed; }
+.architecture-view-tab :deep(svg) { width: 14px; height: 14px; }
+.architecture-view-panel { min-width: 0; }
 .canvas-message, .architecture-empty { position: relative; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-dim); }
 .canvas-message i, .architecture-empty i { width: 32px; height: 32px; color: #2f81f7; }
 .canvas-message strong, .architecture-empty strong { color: var(--text); }
@@ -1120,6 +1228,8 @@ defineExpose({ openResourcePicker, refreshWorkspace })
   .architecture-stats { grid-template-columns: repeat(2, 1fr); }
   .sync-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sync-preview-panel footer { align-items: flex-start; flex-direction: column; }
+  .architecture-sync-mapping-row { grid-template-columns: 26px minmax(0, 1fr); }
+  .architecture-sync-mapping-resources { grid-column: 2; }
   .architecture-stats div:nth-child(2) { border-right: 0; }
   .architecture-stats div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
 }
