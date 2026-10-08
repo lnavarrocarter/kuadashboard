@@ -20,6 +20,7 @@ Activa **Mostrar request/response sanitizados** para inspeccionar entradas, par�
 - **Topología Vercel**: los proyectos Vercel pueden asociarse con aplicaciones Vercel. Como Vercel no ofrece un Kubernetes administrado, enlazar un contexto Kubernetes siempre es explícito.
 - **Métricas de plataforma**: los recursos de plataforma GCP y Vercel permanecen sólo como topología hasta habilitar un colector específico. KUA no presenta el estado del inventario como métrica APM.
 - **Buckets**: las mediciones se reducen a buckets UTC de 30 minutos que contienen sólo valores `count`, `sum`, `min`, `max` y `last`.
+- **Tasas históricas de logs**: los grupos de logs cacheados explícitamente que se asocian con recursos de una aplicación aportan tasas de errores y warnings en buckets de 30 minutos, desde agregados locales sanitizados que se conservan hasta 30 días. Los gráficos muestran la última sincronización e identifican scopes sin caché o no disponibles; nunca incluyen líneas de log crudas.
 
 KUA no persiste líneas de log raw, payloads de solicitud o respuesta, credenciales, secretos, variables de entorno ni tags arbitrarios de recursos en la base APM.
 
@@ -47,7 +48,7 @@ KUA nunca invoca una Lambda, modifica un workload, crea una métrica ni provisio
 
 Cada aplicación tiene umbrales locales para tasa de error observada, duración Lambda promedio, porcentaje de pods listos y delta de reinicios. Las señales pueden deshabilitarse de forma independiente. La salud es `unknown` hasta que al menos un umbral habilitado tenga datos, `healthy` cuando todos los valores evaluados cumplen y `degraded` cuando algún valor vulnera su umbral.
 
-La evaluación usa sólo agregados guardados y no inicia solicitudes cloud.
+El motor compartido de umbrales también evalúa la tasa reciente de errores de logs cacheados y el crecimiento de firmas sanitizadas recurrentes frente a las 24 horas anteriores. Los incumplimientos de logs contribuyen a la salud de la aplicación y a los hallazgos SLO del Advisor de producto de KUApps. La evaluación usa sólo agregados guardados y no inicia solicitudes cloud.
 
 ## Retención y Almacenamiento Local
 

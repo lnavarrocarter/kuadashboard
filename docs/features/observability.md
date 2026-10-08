@@ -20,6 +20,7 @@ Enable **Show sanitized request/response** to inspect execution-level and per-st
 - **Vercel topology**: Vercel Projects can be associated with Vercel applications. Because Vercel does not provide a managed Kubernetes service, linking a Kubernetes context is always explicit.
 - **Platform metrics**: GCP and Vercel platform resources are topology-only until a provider-specific metric collector is enabled. KUA does not present inventory state as an APM metric.
 - **Buckets**: measurements are reduced to 30-minute UTC buckets containing only `count`, `sum`, `min`, `max`, and `last` values.
+- **Historical log rates**: explicitly cached log groups that map to application resources contribute 30-minute error and warning rates from sanitized local aggregates, retained for up to 30 days. The charts show the last sync and identify uncached or unavailable scopes; raw log lines are never included.
 
 KUA does not persist raw log lines, request or response payloads, credentials, secrets, environment variables, or arbitrary resource tags in the APM database.
 
@@ -47,7 +48,7 @@ KUA never invokes a Lambda, modifies a workload, creates a metric, or provisions
 
 Each application has local thresholds for observed error rate, average Lambda duration, ready pod percentage, and restart delta. Signals can be disabled independently. Health is `unknown` until at least one enabled threshold has data, `healthy` when all evaluated values pass, and `degraded` when any value breaches its threshold.
 
-Threshold evaluation uses only stored aggregates and does not initiate cloud requests.
+The shared threshold engine also evaluates the recent cached log error rate and the growth of recurring sanitized signatures against the previous 24 hours. Log breaches contribute to application health and the KUApps Product Advisor's SLO findings. Threshold evaluation uses only stored aggregates and does not initiate cloud requests.
 
 ## Retention and Local Storage
 
