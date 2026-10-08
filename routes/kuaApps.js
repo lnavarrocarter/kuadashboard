@@ -42,8 +42,8 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return application;
   }
 
-  // Export and cloud backup read a KUA Application without provider from any profile: it has no
-  // profile of its own (#149). A legacy application stays scoped to its profile.
+  // Export, cloud backup and sync reach a KUA Application without provider from any profile: it
+  // has no profile of its own (#149). A legacy application stays scoped to its profile.
   function exportableApplication(req, res) {
     const profile = profileId(req, res);
     if (!profile) return null;
@@ -273,25 +273,25 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
 
   router.post('/:applicationId/sync', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
-    try { res.status(201).json(await engine().enable(application)); } catch (error) { handleError(res, error); }
+    try { res.status(201).json(await engine().enable(application, { profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // ?everywhere=1 also stops it on the other computers (the local copies stay).
   router.delete('/:applicationId/sync', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
-    try { res.json(await engine().disable(application, { everywhere: req.query.everywhere === '1' })); } catch (error) { handleError(res, error); }
+    try { res.json(await engine().disable(application, { everywhere: req.query.everywhere === '1', profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // { choice: "mine" | "theirs" }: the version not chosen is kept as a snapshot.
   router.post('/:applicationId/sync/resolve', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
     const choice = String(req.body?.choice || '');
     if (!['mine', 'theirs'].includes(choice)) return res.status(400).json({ error: 'choice must be mine or theirs' });
-    try { res.json(await engine().resolve(application, choice)); } catch (error) { handleError(res, error); }
+    try { res.json(await engine().resolve(application, choice, { profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // An application synced from another computer, added to this profile.
