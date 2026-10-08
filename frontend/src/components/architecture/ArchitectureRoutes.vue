@@ -10,6 +10,10 @@
           <option value="all">{{ t('archCanvas.allProviders') }}</option>
           <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ provider }}</option>
         </select>
+        <select v-if="availableCloudFormationStacks.length" v-model="stackFilter" class="ctrl-select cloudformation-filter" :title="stackFilter || t('archRoutes.filterCloudFormation')" data-test="routes-cloudformation-filter" @change="persistView">
+          <option value="">{{ t('archRoutes.allCloudFormation') }}</option>
+          <option v-for="stack in availableCloudFormationStacks" :key="stack" :value="stack">{{ stack }}</option>
+        </select>
         <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" :title="t('archCanvas.filterKubeContext')" @change="persistView">
           <option value="">{{ t('archCanvas.allKubeContexts') }}</option>
           <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
@@ -110,6 +114,7 @@ const { t } = useI18n()
 
 const sortMode = ref('sequence')
 const providerFilter = ref('all')
+const stackFilter = ref('')
 const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
 const relationTypeFilter = ref('all')
@@ -121,6 +126,7 @@ watch(() => props.graph?.document?.view, view => {
   providerFilter.value = view?.providerFilter || 'all'
   kubeContextFilter.value = view?.kubeContextFilter || ''
   namespaceFilter.value = view?.namespaceFilter || ''
+  stackFilter.value = view?.stackFilter || ''
   relationTypeFilter.value = view?.relationTypeFilter || 'all'
   relationStatusFilter.value = view?.relationStatusFilter || 'all'
 }, { immediate: true, deep: true })
@@ -128,6 +134,10 @@ watch(() => props.graph?.document?.view, view => {
 const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
 const availableKubeContexts = computed(() => [...new Set((props.graph?.document?.nodes || [])
   .filter(node => node.provider === 'kubernetes' && node.kubeContext).map(node => node.kubeContext))].sort())
+const availableCloudFormationStacks = computed(() => [...new Set([
+  ...(props.graph?.document?.sources || []).filter(source => source.type === 'cloudformation').map(source => source.name),
+  ...(props.graph?.document?.nodes || []).map(node => node.stackName),
+].filter(Boolean))].sort())
 const availableNamespaces = computed(() => [...new Set((props.graph?.document?.nodes || [])
   .filter(node => node.provider === 'kubernetes' && node.namespace).map(node => node.namespace))].sort())
 const availableRelationTypes = computed(() => [...new Set((props.graph?.document?.edges || [])
@@ -140,6 +150,7 @@ function persistView() {
     type: 'view.set',
     value: {
       providerFilter: providerFilter.value,
+      stackFilter: stackFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
       relationTypeFilter: relationTypeFilter.value,
@@ -152,6 +163,7 @@ const filteredDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
   const nodes = (document.nodes || []).filter(node =>
     (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
+    (!stackFilter.value || node.stackName === stackFilter.value) &&
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
     (!namespaceFilter.value || node.namespace === namespaceFilter.value))
   const ids = new Set(nodes.map(node => node.id))
@@ -230,18 +242,20 @@ onMounted(refreshIcons)
 <style scoped>
 .architecture-routes { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-panel); }
 .routes-header, .route-group > header { min-height: 56px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
-.routes-header { justify-content: space-between; }
+.routes-header { flex-direction: column; align-items: stretch; }
 .routes-title { display: flex; align-items: center; gap: 9px; }
 .routes-title > span:last-child, .route-group > header > span:nth-child(3) { display: flex; flex-direction: column; }
 .routes-title-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
 .routes-title-icon :deep(svg) { width: 17px; height: 17px; }
 .routes-header small, .route-group header small, .route-count { color: var(--text-dim); }
 .routes-actions, .route-order-control { display: flex; align-items: center; gap: 8px; }
-.routes-actions { margin-left: auto; }
+.routes-actions { margin-left: 0; flex-wrap: wrap; justify-content: flex-start; }
+.routes-actions > .ctrl-select { min-width: 150px; max-width: 230px; }
+.routes-actions > .cloudformation-filter { width: 270px; min-width: 240px; max-width: 320px; }
 .route-order-control { color: var(--text-dim); font-size: 11px; }
 .route-order-control :deep(svg) { width: 14px; height: 14px; }
 .route-order-control .ctrl-select { width: 140px; }
-.route-count { white-space: nowrap; }
+.route-count { margin-left: auto; white-space: nowrap; }
 .route-count strong { color: var(--text); font-size: 15px; }
 .route-group { border-bottom: 1px solid var(--border); }
 .route-group:last-child { border-bottom: 0; }
@@ -292,8 +306,9 @@ onMounted(refreshIcons)
 .routes-empty { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--text-dim); }
 .routes-empty strong { color: var(--text); }
 @media (max-width: 760px) {
-  .routes-header { align-items: flex-start; flex-wrap: wrap; }
-  .routes-actions { width: 100%; justify-content: space-between; }
+  .routes-header { align-items: stretch; }
+  .routes-actions { width: 100%; }
+  .routes-actions > .ctrl-select, .routes-actions > .cloudformation-filter { width: auto; min-width: min(100%, 200px); max-width: 100%; }
   .route-count { white-space: normal; text-align: right; }
   .event-order { width: 62px; }
   .route-node { width: 184px; }

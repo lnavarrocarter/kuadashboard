@@ -18,28 +18,9 @@
         <span class="canvas-hint">{{ t('archCanvas.dragHint') }}</span>
       </div>
       <div class="canvas-toolbar-row canvas-layout-controls">
-        <select v-model="providerFilter" class="ctrl-select provider-filter" :title="t('archCanvas.filterProviders')" @change="persistView">
-          <option value="all">{{ t('archCanvas.allProviders') }}</option>
-          <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ providerLabel(provider) }}</option>
-        </select>
-        <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" :title="t('archCanvas.filterKubeContext')" @change="persistView">
-          <option value="">{{ t('archCanvas.allKubeContexts') }}</option>
-          <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
-        </select>
-        <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" :title="t('archCanvas.filterNamespace')" @change="persistView">
-          <option value="">{{ t('archCanvas.allNamespaces') }}</option>
-          <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
-        </select>
-        <select v-model="relationTypeFilter" class="ctrl-select" :title="t('archCanvas.filterRelationType')" @change="persistView">
-          <option value="all">{{ t('archCanvas.allRelationTypes') }}</option>
-          <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationshipLabel(type) }}</option>
-        </select>
-        <select v-model="relationStatusFilter" class="ctrl-select" :title="t('archCanvas.filterRelationStatus')" @change="persistView">
-          <option value="all">{{ t('archCanvas.allRelationStatuses') }}</option>
-          <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
-        </select>
         <select v-model="layoutMode" class="ctrl-select" :title="t('archCanvas.arrangement')" @change="persistView">
           <option value="request-flow">{{ t('archCanvas.layout.requestFlow') }}</option>
+          <option value="system-domains">{{ t('archCanvas.layout.systemDomains') }}</option>
           <option value="resource-type">{{ t('archCanvas.layout.resourceType') }}</option>
           <option value="provider-lanes">{{ t('archCanvas.layout.providerLanes') }}</option>
           <option value="provider-resource">{{ t('archCanvas.layout.providerResource') }}</option>
@@ -49,11 +30,43 @@
           <option value="vertical">{{ t('archCanvas.flowTopBottom') }}</option>
         </select>
         <button class="btn sm" :disabled="saving || !flowNodes.length" @click="arrangeFlow">
-          <i :data-lucide="layoutMode === 'resource-type' || layoutMode === 'provider-resource' ? 'rows-3' : layoutMode === 'provider-lanes' ? 'columns-3' : 'layout-dashboard'"></i>
-          {{ layoutMode === 'resource-type' ? t('archCanvas.arrangeByType') : layoutMode === 'provider-resource' ? t('archCanvas.arrangeSections') : layoutMode === 'provider-lanes' ? t('archCanvas.arrangeLanes') : t('archCanvas.arrangeFlow') }}
+          <i :data-lucide="['resource-type', 'provider-resource', 'system-domains'].includes(layoutMode) ? 'rows-3' : layoutMode === 'provider-lanes' ? 'columns-3' : 'layout-dashboard'"></i>
+          {{ layoutMode === 'system-domains' ? t('archCanvas.arrangeDomains') : layoutMode === 'resource-type' ? t('archCanvas.arrangeByType') : layoutMode === 'provider-resource' ? t('archCanvas.arrangeSections') : layoutMode === 'provider-lanes' ? t('archCanvas.arrangeLanes') : t('archCanvas.arrangeFlow') }}
         </button>
       </div>
-      <div class="canvas-toolbar-row canvas-action-controls">
+      <details class="canvas-control-disclosure" :open="activeFilterCount > 0">
+        <summary><i data-lucide="filter"></i><span>{{ t('archCanvas.filters') }}</span><strong>{{ activeFilterCount || t('archCanvas.allResources') }}</strong></summary>
+        <div class="canvas-toolbar-row canvas-filter-controls">
+          <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" /></label>
+          <select v-model="systemDomainFilter" class="ctrl-select" :title="t('archCanvas.filterSystemDomain')" @change="persistView">
+            <option value="all">{{ t('archCanvas.allSystemDomains') }}</option>
+            <option v-for="domain in availableSystemDomains" :key="domain" :value="domain">{{ systemDomainLabel(domain) }}</option>
+          </select>
+          <select v-model="providerFilter" class="ctrl-select provider-filter" :title="t('archCanvas.filterProviders')" @change="persistView">
+            <option value="all">{{ t('archCanvas.allProviders') }}</option>
+            <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ providerLabel(provider) }}</option>
+          </select>
+          <select v-if="availableKubeContexts.length" v-model="kubeContextFilter" class="ctrl-select" :title="t('archCanvas.filterKubeContext')" @change="persistView">
+            <option value="">{{ t('archCanvas.allKubeContexts') }}</option>
+            <option v-for="context in availableKubeContexts" :key="context" :value="context">{{ context }}</option>
+          </select>
+          <select v-if="availableNamespaces.length" v-model="namespaceFilter" class="ctrl-select" :title="t('archCanvas.filterNamespace')" @change="persistView">
+            <option value="">{{ t('archCanvas.allNamespaces') }}</option>
+            <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
+          </select>
+          <select v-model="relationTypeFilter" class="ctrl-select" :title="t('archCanvas.filterRelationType')" @change="persistView">
+            <option value="all">{{ t('archCanvas.allRelationTypes') }}</option>
+            <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationshipLabel(type) }}</option>
+          </select>
+          <select v-model="relationStatusFilter" class="ctrl-select" :title="t('archCanvas.filterRelationStatus')" @change="persistView">
+            <option value="all">{{ t('archCanvas.allRelationStatuses') }}</option>
+            <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
+          </select>
+        </div>
+      </details>
+      <details class="canvas-control-disclosure">
+        <summary><i data-lucide="layers-3"></i><span>{{ t('archCanvas.mapLayers') }}</span><strong>{{ activeLayerCount }}</strong></summary>
+        <div class="canvas-toolbar-row canvas-action-controls">
         <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" :title="t('archCanvas.toggleLabels')" @click="toggleEdgeLabels">
           <i data-lucide="tags"></i> {{ t('archCanvas.labels') }}
         </button>
@@ -88,7 +101,8 @@
           <i data-lucide="route"></i> {{ trace.executionName || t('archCanvas.latestTrace') }} · {{ t('archCanvas.traceNodes', { n: trace.nodeIds.length }) }}
           <button class="btn sm" type="button" @click="clearTraceOverlay">{{ t('archCanvas.clear') }}</button>
         </span>
-      </div>
+        </div>
+      </details>
     </header>
 
     <div ref="canvasBodyRef" class="canvas-body">
@@ -261,7 +275,7 @@ import { toPng } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { useToast } from '../../composables/useToast'
 import { useI18n } from '../../composables/useI18n'
-import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout } from '../../lib/architectureLayout'
+import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout, SYSTEM_DOMAIN_ORDER, systemDomainForNode, systemDomainLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -321,6 +335,8 @@ const kubeContextFilter = ref('')
 const namespaceFilter = ref('')
 const relationTypeFilter = ref('all')
 const relationStatusFilter = ref('all')
+const systemDomainFilter = ref('all')
+const nodeSearch = ref('')
 const exporting = ref(false)
 const canvasBodyRef = ref(null)
 const { fitView, setCenter, setViewport, getNodes } = useVueFlow()
@@ -412,6 +428,8 @@ const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
 const availableProviders = computed(() => [...new Set((props.graph?.document?.nodes || []).map(node => node.provider).filter(Boolean))].sort())
+const availableSystemDomains = computed(() => SYSTEM_DOMAIN_ORDER.filter(domain =>
+  (props.graph?.document?.nodes || []).some(node => systemDomainForNode(node) === domain)))
 const hasDeployments = computed(() => (props.graph?.document?.nodes || []).some(node => node.provider === 'kubernetes' && node.kind === 'Deployment'))
 const hasSecurityNodes = computed(() => (props.graph?.document?.nodes || []).some(node => ['aws', 'kubernetes'].includes(node.provider)))
 const availableKubeContexts = computed(() => [...new Set((props.graph?.document?.nodes || [])
@@ -422,12 +440,29 @@ const availableRelationTypes = computed(() => [...new Set((props.graph?.document
   .map(edge => edge.relationType || 'depends_on'))].sort((left, right) => relationshipLabel(left).localeCompare(relationshipLabel(right))))
 const availableRelationStatuses = computed(() => [...new Set((props.graph?.document?.edges || [])
   .map(edge => edge.status || 'automatic'))].sort())
+const activeFilterCount = computed(() => [
+  nodeSearch.value.trim(),
+  providerFilter.value !== 'all',
+  systemDomainFilter.value !== 'all',
+  Boolean(kubeContextFilter.value),
+  Boolean(namespaceFilter.value),
+  relationTypeFilter.value !== 'all',
+  relationStatusFilter.value !== 'all',
+].filter(Boolean).length)
+const activeLayerCount = computed(() => [
+  showEdgeLabels.value, showHealthOverlay.value, showMetricsOverlay.value, showCollectionOverlay.value,
+  showTraceOverlay.value, showEventsOverlay.value, showRolloutsOverlay.value, showSecurityOverlay.value,
+].filter(Boolean).length)
 const filteredGraphDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
+  const query = nodeSearch.value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
   const nodes = (document.nodes || []).filter(node =>
     (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
+    (systemDomainFilter.value === 'all' || systemDomainForNode(node) === systemDomainFilter.value) &&
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
-    (!namespaceFilter.value || node.namespace === namespaceFilter.value))
+    (!namespaceFilter.value || node.namespace === namespaceFilter.value) &&
+    (!query || `${node.name || ''} ${node.label || ''} ${node.kind || ''} ${node.resourceType || ''} ${node.provider || ''}`
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().includes(query)))
   const ids = new Set(nodes.map(node => node.id))
   return { ...document, nodes, edges: (document.edges || []).filter(edge =>
     ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId) &&
@@ -455,7 +490,7 @@ const smartSpacing = computed(() => {
     expanded,
   }
 })
-const sectionNodes = computed(() => ['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value) ? resourceSections.value.map(section => ({
+const sectionNodes = computed(() => ['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(layoutMode.value) ? resourceSections.value.map(section => ({
   id: `section:${section.type}`,
   type: 'resource-section',
   position: { x: section.x, y: section.y },
@@ -558,6 +593,7 @@ function fallbackPosition(index, columns) {
 }
 
 function computedLayout(document, visibleDocument) {
+  if (layoutMode.value === 'system-domains') return systemDomainLayout(visibleDocument, smartSpacing.value).layout
   if (layoutMode.value === 'resource-type') return resourceTypeLayout(visibleDocument, smartSpacing.value).layout
   if (layoutMode.value === 'provider-lanes') return providerLaneLayout(visibleDocument, smartSpacing.value).layout
   if (layoutMode.value === 'provider-resource') return providerResourceLayout(visibleDocument, smartSpacing.value).layout
@@ -568,7 +604,7 @@ function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
   if (hydrateView && document.view && typeof document.view === 'object') {
-    if (['resource-type', 'request-flow', 'provider-lanes', 'provider-resource'].includes(document.view.layoutMode)) {
+    if (['resource-type', 'request-flow', 'provider-lanes', 'provider-resource', 'system-domains'].includes(document.view.layoutMode)) {
       layoutMode.value = document.view.layoutMode
     }
     if (document.view.layoutDirection === 'horizontal' || document.view.layoutDirection === 'vertical') {
@@ -583,6 +619,7 @@ function syncGraph(hydrateView = true) {
     showRolloutsOverlay.value = document.view.showRolloutsOverlay === true
     showSecurityOverlay.value = document.view.showSecurityOverlay === true
     providerFilter.value = document.view.providerFilter || 'all'
+    systemDomainFilter.value = document.view.systemDomainFilter || 'all'
     kubeContextFilter.value = document.view.kubeContextFilter || ''
     namespaceFilter.value = document.view.namespaceFilter || ''
     relationTypeFilter.value = document.view.relationTypeFilter || 'all'
@@ -591,7 +628,8 @@ function syncGraph(hydrateView = true) {
   const visibleDocument = filteredGraphDocument.value
   const visibleNodes = visibleDocument.nodes
   const visibleEdges = visibleDocument.edges
-  resourceSections.value = layoutMode.value === 'resource-type'
+  resourceSections.value = layoutMode.value === 'system-domains' ? systemDomainLayout(visibleDocument, smartSpacing.value).sections
+    : layoutMode.value === 'resource-type'
     ? resourceTypeLayout(visibleDocument, smartSpacing.value).sections
     : layoutMode.value === 'provider-lanes' ? providerLaneLayout(visibleDocument, smartSpacing.value).sections
       : layoutMode.value === 'provider-resource' ? providerResourceLayout(visibleDocument, smartSpacing.value).sections : []
@@ -626,12 +664,12 @@ function syncGraph(hydrateView = true) {
     label: showEdgeLabels.value ? relationshipLabel(edge.relationType) : undefined,
     markerEnd: MarkerType.ArrowClosed,
     animated: edge.status === 'suggested',
-    type: ['provider-lanes', 'provider-resource'].includes(layoutMode.value) ? 'step' : layoutMode.value === 'resource-type' ? 'straight' : 'default',
+    type: ['provider-lanes', 'provider-resource', 'system-domains'].includes(layoutMode.value) ? 'step' : layoutMode.value === 'resource-type' ? 'straight' : 'default',
     style: {
       ...(edge.status === 'suggested'
         ? { stroke: '#d29922', strokeDasharray: '6 4' }
         : edge.status === 'automatic' ? { stroke: '#2f81f7' } : {}),
-      ...(['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value) ? { strokeOpacity: 0.28, strokeWidth: 1.2 } : {}),
+      ...(['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(layoutMode.value) ? { strokeOpacity: 0.28, strokeWidth: 1.2 } : {}),
     },
   }))
   if (selectedNode.value) selectedNode.value = document.nodes.find(node => node.id === selectedNode.value.id) || null
@@ -648,16 +686,17 @@ function syncGraph(hydrateView = true) {
 function arrangeFlow() {
   if (props.saving || !props.graph?.document?.nodes?.length) return
   fitAfterSync.value = true
-  if (['resource-type', 'provider-lanes', 'provider-resource'].includes(layoutMode.value)) {
+  if (['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(layoutMode.value)) {
     const result = layoutMode.value === 'provider-lanes'
       ? providerLaneLayout(filteredGraphDocument.value, smartSpacing.value)
-      : layoutMode.value === 'provider-resource' ? providerResourceLayout(filteredGraphDocument.value, smartSpacing.value) : resourceTypeLayout(filteredGraphDocument.value, smartSpacing.value)
+      : layoutMode.value === 'provider-resource' ? providerResourceLayout(filteredGraphDocument.value, smartSpacing.value)
+        : layoutMode.value === 'system-domains' ? systemDomainLayout(filteredGraphDocument.value, smartSpacing.value) : resourceTypeLayout(filteredGraphDocument.value, smartSpacing.value)
     resourceSections.value = result.sections
     clearSelection()
     emit('operation', {
       type: 'layout.set',
       value: result.layout,
-    }, layoutMode.value === 'provider-lanes' ? t('archCanvas.op.arrangeLanes') : layoutMode.value === 'provider-resource' ? t('archCanvas.op.arrangeSections') : t('archCanvas.op.arrangeByType'))
+    }, layoutMode.value === 'provider-lanes' ? t('archCanvas.op.arrangeLanes') : layoutMode.value === 'provider-resource' ? t('archCanvas.op.arrangeSections') : layoutMode.value === 'system-domains' ? t('archCanvas.op.arrangeDomains') : t('archCanvas.op.arrangeByType'))
     return
   }
   resourceSections.value = []
@@ -669,6 +708,7 @@ function arrangeFlow() {
 
 function persistView() {
   if (props.saving) return
+  if (layoutMode.value === 'system-domains') resourceSections.value = systemDomainLayout(filteredGraphDocument.value, smartSpacing.value).sections
   if (layoutMode.value === 'resource-type') resourceSections.value = resourceTypeLayout(props.graph.document, smartSpacing.value).sections
   if (layoutMode.value === 'provider-lanes') resourceSections.value = providerLaneLayout(props.graph.document, smartSpacing.value).sections
   if (layoutMode.value === 'provider-resource') resourceSections.value = providerResourceLayout(props.graph.document, smartSpacing.value).sections
@@ -686,6 +726,7 @@ function persistView() {
       showRolloutsOverlay: showRolloutsOverlay.value,
       showSecurityOverlay: showSecurityOverlay.value,
       providerFilter: providerFilter.value,
+      systemDomainFilter: systemDomainFilter.value,
       kubeContextFilter: kubeContextFilter.value,
       namespaceFilter: namespaceFilter.value,
       relationTypeFilter: relationTypeFilter.value,
@@ -855,7 +896,8 @@ function referenceMeta(reference) {
 function typeLabel(resourceType) {
   return nodeTypes.value.find(option => option.value === resourceType)?.label || {
     lambda: 'Lambda', layer: 'Lambda layer', sqs: t('archCanvas.type.sqs'), eventbridge: t('archCanvas.type.eventbridge'), stepfunctions: 'Step Functions',
-    ecs: 'ECS', s3: t('archCanvas.type.s3'), iam: t('archCanvas.type.iam'), 'iam-policy': t('archCanvas.type.iamPolicy'), policy: t('archCanvas.type.policy'),
+    ecs: 'ECS', loadbalancer: t('archCanvas.type.loadBalancer'), targetgroup: t('archCanvas.type.targetGroup'),
+    s3: t('archCanvas.type.s3'), iam: t('archCanvas.type.iam'), 'iam-policy': t('archCanvas.type.iamPolicy'), policy: t('archCanvas.type.policy'),
     sns: 'SNS', dynamodb: 'DynamoDB', logs: 'CloudWatch Logs', secret: t('archCanvas.type.secret'),
     kubernetes: t('archCanvas.type.kubernetes'), deployment: 'Kubernetes Deployment', statefulset: 'Kubernetes StatefulSet',
     daemonset: 'Kubernetes DaemonSet', pod: 'Kubernetes Pod', service: 'Kubernetes Service', ingress: 'Kubernetes Ingress',
@@ -869,9 +911,14 @@ function providerLabel(provider) {
 }
 
 function sectionLabel(section) {
+  if (section.domain) return systemDomainLabel(section.domain)
   return section.provider && section.resourceType
     ? `${providerLabel(section.provider)} / ${sectionResourceLabel(section.provider, section.resourceType)}`
     : section.label || typeLabel(section.type)
+}
+
+function systemDomainLabel(domain) {
+  return t(`archCanvas.domain.${domain}`)
 }
 
 function sectionResourceLabel(provider, resourceType) {
@@ -996,10 +1043,10 @@ function exportMermaid() {
 
 watch(() => props.graph, () => syncGraph(), { deep: true, immediate: true })
 watch(layoutMode, mode => {
-  if (!['resource-type', 'provider-lanes', 'provider-resource'].includes(mode)) resourceSections.value = []
+  if (!['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([providerFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading], () => syncGraph(false), { deep: true })
+watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1012,6 +1059,21 @@ onMounted(refreshIcons)
 .canvas-create-controls { min-height: 30px; }
 .canvas-layout-controls { flex-wrap: wrap; }
 .canvas-action-controls { flex-wrap: wrap; }
+.canvas-control-disclosure { border-top: 1px solid var(--border); }
+.canvas-control-disclosure summary { min-height: 34px; padding: 5px 9px; display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: 11px; cursor: pointer; list-style: none; }
+.canvas-control-disclosure summary::-webkit-details-marker { display: none; }
+.canvas-control-disclosure summary::before { content: '›'; width: 12px; color: var(--text-dim); font-size: 17px; line-height: 1; transition: transform .16s ease; }
+.canvas-control-disclosure[open] summary::before { transform: rotate(90deg); }
+.canvas-control-disclosure summary :deep(svg) { width: 14px; height: 14px; }
+.canvas-control-disclosure summary strong { margin-left: auto; color: var(--text); font-size: 10px; font-weight: 600; }
+.canvas-filter-controls, .canvas-action-controls { padding: 8px 9px; }
+.canvas-filter-controls { flex-wrap: wrap; }
+.canvas-filter-controls .ctrl-select { flex: 1 1 160px; }
+.canvas-search { min-height: 32px; padding: 0 8px; display: flex; flex: 1 1 220px; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text-dim); }
+.canvas-search:focus-within { border-color: #2f81f7; }
+.canvas-search :deep(svg) { width: 14px; height: 14px; flex: none; }
+.canvas-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; }
+.canvas-search input::placeholder { color: var(--text-dim); }
 .canvas-layout-controls .ctrl-select { flex-basis: 168px; }
 .canvas-layout-controls .direction-select { width: 166px; }
 .canvas-toolbar-row .btn { flex: 0 0 auto; white-space: nowrap; }
@@ -1128,6 +1190,10 @@ onMounted(refreshIcons)
   .canvas-create-controls .btn { grid-column: 1 / -1; justify-content: center; }
   .canvas-layout-controls, .canvas-action-controls { flex-wrap: nowrap; padding-bottom: 3px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
   .canvas-layout-controls .ctrl-select { flex: 0 0 166px; }
+  .canvas-filter-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .canvas-filter-controls .ctrl-select { width: 100%; min-width: 0; }
+  .canvas-search { grid-column: 1 / -1; min-width: 0; }
+  .canvas-action-controls { flex-wrap: wrap; overflow: visible; }
   .canvas-hint { display: none; }
 }
 </style>

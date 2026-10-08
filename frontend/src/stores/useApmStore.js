@@ -586,10 +586,19 @@ export const useApmStore = defineStore('apm', () => {
     collecting.value = true
     error.value = null
     try {
-      const result = await request(`/applications/${selectedApplicationId.value}/collect-now`, {
-        method: 'POST',
-        headers: headers(),
-      })
+      let result
+      try {
+        result = await request(`/applications/${selectedApplicationId.value}/collect-now`, {
+          method: 'POST',
+          headers: headers(),
+        })
+      } catch (requestError) {
+        if (requestError.status === 409 && requestError.details?.skipped === true && requestError.details?.reason === 'collection_in_progress') {
+          result = requestError.details
+        } else {
+          throw requestError
+        }
+      }
       await Promise.all([loadSelectedApplication(), loadUsage()])
       return result
     } catch (requestError) {

@@ -54,4 +54,27 @@ describe('ArchitectureView: choosing an application', () => {
     expect(wrapper.emitted('application-context')).toBeUndefined()
     wrapper.unmount()
   })
+
+  it('hides Architecture summary chrome when embedded in the KUApps map', async () => {
+    store.applications = APPLICATIONS
+    store.selectedApplicationId = 'app-a'
+    store.projects = [{ id: 'project-a', name: 'Orders map' }]
+    store.selectedProjectId = 'project-a'
+    store.graph = { revision: 1, document: { nodes: [], edges: [], sources: [], scopes: [], layout: {}, view: {} } }
+    store.loading = false
+
+    const wrapper = mount(ArchitectureView, {
+      props: {
+        profileId: 'aws-dev', applicationId: 'app-a', workspaceMode: true,
+        workspaceSection: 'canvas', hideApplicationList: true,
+      },
+      shallow: true,
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.architecture-project-header').exists()).toBe(false)
+    expect(wrapper.find('.architecture-application-context').exists()).toBe(false)
+    expect(wrapper.find('.architecture-stats').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

@@ -116,6 +116,41 @@ describe('ArchitectureDiscoveryPanel', () => {
     })
   })
 
+  it('filters CloudFormation deployments by name or status without clearing hidden selections', async () => {
+    const store = useArchitectureStore()
+    store.discoveryCatalog = {
+      scope: { accountId: '123456789012', region: 'us-east-1' },
+      estimate: { awsRequests: 2 },
+      deployments: [
+        { id: 'stack:orders', name: 'orders-api', status: 'CREATE_COMPLETE', updatedAt: null },
+        { id: 'stack:billing', name: 'billing-worker', status: 'UPDATE_COMPLETE', updatedAt: null },
+      ],
+    }
+    store.previewAwsResources = vi.fn(async input => {
+      store.discoveryPreview = { scope: { accountId: input.accountId, region: input.region }, estimate: {}, nodes: [], relationshipSuggestions: [] }
+    })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+    const rows = wrapper.findAll('.deployment-list .discovery-row')
+    await rows[0].get('input').setValue(true)
+
+    await wrapper.get('.deployment-search input').setValue('BILLING')
+      expect(wrapper.findAll('.deployment-list .discovery-row').map(row => row.text())[0]).toContain('billing-worker')
+    expect(wrapper.get('.selection-count').text()).toBe('1 selected')
+
+    await wrapper.get('.deployment-search input').setValue('update_complete')
+    expect(wrapper.findAll('.deployment-list .discovery-row')).toHaveLength(1)
+    await wrapper.get('.deployment-search input').setValue('not-found')
+    expect(wrapper.get('.discovery-empty').text()).toBe('No stacks match your search.')
+
+    await wrapper.get('.deployment-search input').setValue('')
+    expect(wrapper.findAll('.deployment-list input')[0].element.checked).toBe(true)
+    await wrapper.get('.discovery-next-actions .primary').trigger('click')
+    await flushPromises()
+    expect(store.previewAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: ['orders-api'],
+    })
+  })
+
   it('reviews suggested relationships after selecting unlinked resources', async () => {
     const store = useArchitectureStore()
     store.discoveryPreview = {
@@ -148,6 +183,56 @@ describe('ArchitectureDiscoveryPanel', () => {
       region: 'us-east-1', accountId: '123456789012', stackNames: [],
       selectedNodeIds: ['node:api', 'node:worker', 'node:bucket'],
     })
+  })
+
+  it('looks up a mapped AWS resource by ARN and opens relationship review before importing', async () => {
+    const store = useArchitectureStore()
+    store.previewAwsResources = vi.fn(async input => {
+      store.discoveryPreview = {
+        scope: { accountId: input.accountId, region: input.region },
+        estimate: { truncated: false },
+        nodes: [{ id: 'node:alb', name: 'public-alb', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/public/abc', resourceType: 'loadbalancer', evidence: [] }],
+        applicationCandidates: [], relationshipSuggestions: [],
+      }
+      return store.discoveryPreview
+    })
+    store.importAwsResources = vi.fn().mockResolvedValue({ revision: 1 })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+
+    await wrapper.get('[data-test="aws-arn-input"]').setValue('arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/public/abc')
+    await wrapper.get('[data-test="aws-arn-search"]').trigger('submit')
+    await flushPromises()
+
+    expect(store.previewAwsResources).toHaveBeenCalledWith({ region: 'us-east-1', accountId: '123456789012', stackNames: [] })
+    expect(wrapper.get('.discovery-steps .active strong').text()).toBe('Diagram')
+    await wrapper.get('.review-actions .primary').trigger('click')
+    expect(store.importAwsResources).toHaveBeenCalledWith({
+      region: 'us-east-1', accountId: '123456789012', stackNames: [], selectedNodeIds: ['node:alb'],
+    })
+  })
+
+  it('allows adding a valid ARN that is not in the mapped inventory as an unverified reference', async () => {
+    const store = useArchitectureStore()
+    store.previewAwsResources = vi.fn(async input => {
+      store.discoveryPreview = { scope: { accountId: input.accountId, region: input.region }, estimate: {}, nodes: [], relationshipSuggestions: [] }
+      return store.discoveryPreview
+    })
+    store.applyOperation = vi.fn().mockResolvedValue({ revision: 2 })
+    const wrapper = mount(ArchitectureDiscoveryPanel)
+    const arn = 'arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0'
+
+    await wrapper.get('[data-test="aws-arn-input"]').setValue(arn)
+    await wrapper.get('[data-test="aws-arn-search"]').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[data-test="aws-arn-add-manual"]').trigger('click')
+
+    expect(store.applyOperation).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'node.upsert', value: expect.objectContaining({
+        provider: 'aws', resourceType: 'ec2', arn, manual: true,
+        evidence: [{ type: 'manual_resource', values: [arn], unverified: true }],
+      }),
+    }), expect.objectContaining({ reason: expect.stringContaining('i-0123456789abcdef0') }))
+    expect(wrapper.emitted('imported')).toEqual([[{ revision: 2 }]])
   })
 
   it('draws all resources when more than one stack is selected', async () => {

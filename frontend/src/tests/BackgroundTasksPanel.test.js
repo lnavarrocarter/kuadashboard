@@ -10,6 +10,7 @@ function task(overrides = {}) {
   return {
     id: 'logs.scan.4', name: 'Log scan #4', type: 'scan', state: 'running', intervalMs: null,
     provider: 'aws',
+    detail: '/aws/lambda/orders · us-east-1',
     startedAt: '2026-10-06T11:00:00.000Z', lastRunAt: '2026-10-06T11:00:00.000Z',
     lastFinishedAt: null, nextRunAt: null, lastRunStatus: null, progress: 0.45, errorCode: null,
     supportedActions: ['pause', 'resume', 'cancel'], availableActions: ['pause', 'cancel'],
@@ -46,7 +47,8 @@ describe('BackgroundTasksPanel', () => {
   it('shows only available actions and labels CPU/memory as process aggregates', async () => {
     const calls = stubFetch(async url => jsonResponse(url === BASE ? snapshot([
       task(),
-      task({ id: 'apps.sync', name: 'Application sync', type: 'scheduler', state: 'scheduled', progress: null, supportedActions: ['pause', 'resume'], availableActions: ['pause'] }),
+      task({ id: 'apm.collect.app-a', name: 'Orders', type: 'collection', provider: 'mixed', detail: 'Orders · api', supportedActions: [], availableActions: [] }),
+      task({ id: 'apps.sync', name: 'Application sync', type: 'scheduler', state: 'scheduled', progress: null, detail: 'Payments API', supportedActions: ['pause', 'resume'], availableActions: ['pause'] }),
       task({ id: 'team.sync', name: 'Team sync', type: 'scheduler', state: 'scheduled', progress: null, supportedActions: ['pause', 'resume'], availableActions: [] }),
       task({ id: 'logs.scan.3', type: 'scan', state: 'error', progress: null, errorCode: 'scan_failed', availableActions: ['resume', 'cancel'] }),
     ]) : { task: task(), changed: true }))
@@ -57,6 +59,12 @@ describe('BackgroundTasksPanel', () => {
     expect(wrapper.find('[data-test="task-apps.sync"]').findAll('button').map(button => button.attributes('aria-label'))).toEqual(['Pause'])
     expect(wrapper.find('[data-test="task-team.sync"]').findAll('button')).toHaveLength(0)
     expect(wrapper.find('[data-test="task-logs.scan.3"]').findAll('button').map(button => button.attributes('aria-label'))).toEqual(['Resume', 'Cancel'])
+    expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Targets: /aws/lambda/orders · us-east-1')
+    expect(wrapper.get('[data-test="task-apps.sync"]').text()).toContain('Checks linked KUApps in this KUA account.')
+    expect(wrapper.get('[data-test="task-apps.sync"]').text()).toContain('Targets: Payments API')
+    expect(wrapper.get('[data-test="task-apm.collect.app-a"]').text()).toContain('Collection · Orders')
+    expect(wrapper.get('[data-test="task-apm.collect.app-a"]').text()).toContain('Collects this application’s metrics')
+    expect(wrapper.get('[data-test="task-apm.collect.app-a"]').text()).toContain('Targets: Orders · api')
     expect(wrapper.find('[data-test="task-logs.scan.4"] [role="progressbar"]').attributes('aria-valuenow')).toBe('45')
     expect(wrapper.text()).toContain('process-wide totals, not per-task usage')
     expect(wrapper.get('[data-test="process-metrics"]').text()).toContain('RSS')
@@ -143,6 +151,7 @@ describe('BackgroundTasksPanel', () => {
     await flushPromises()
     expect(wrapper.get('[data-test="task-apm.collection"]').text()).toContain('Recolección de Observabilidad')
     expect(wrapper.get('[data-test="task-apm.collection"]').text()).toContain('Programada')
+    expect(wrapper.get('[data-test="task-apm.collection"]').text()).toContain('Recolecta señales de las KUApps')
     wrapper.unmount()
   })
 

@@ -120,6 +120,7 @@ const apmScheduler = new ApmScheduler({
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
+  taskRegistry: backgroundTaskRegistry,
 });
 const apmTask = backgroundTaskRegistry.register({
   id: 'apm.collection', name: 'Observability collection', type: 'scheduler', provider: 'mixed', intervalMs: POLL_INTERVAL_MS,

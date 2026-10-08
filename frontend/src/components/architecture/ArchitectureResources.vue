@@ -11,11 +11,36 @@
       </span>
     </header>
 
+    <div v-if="!loading && resources.length" class="resources-filters">
+      <label v-if="availableProviders.length > 1">
+        <span>{{ t('archRes.providerFilter') }}</span>
+        <select v-model="providerFilter" class="ctrl-select" data-test="resource-provider-filter" @change="providerChanged">
+          <option value="all">{{ t('archRes.allProviders') }}</option>
+          <option v-for="provider in availableProviders" :key="provider" :value="provider">{{ provider.toUpperCase() }}</option>
+        </select>
+      </label>
+      <label v-if="availableScopes.length">
+        <span>{{ t('archRes.scopeFilter') }}</span>
+        <select v-model="scopeFilter" class="ctrl-select" data-test="resource-scope-filter" @change="persistView">
+          <option value="">{{ t('archRes.allCloudScopes') }}</option>
+          <option v-for="scope in availableScopes" :key="scope.value" :value="scope.value">{{ scope.label }}</option>
+        </select>
+      </label>
+      <span class="resources-filter-count">
+        {{ t('archRes.showingCount', { shown: filteredResources.length, total: resources.length }) }}
+      </span>
+    </div>
+
     <div v-if="loading" class="resources-empty">{{ t('archRes.loading') }}</div>
     <div v-else-if="!resources.length" class="resources-empty">
       <i data-lucide="database-zap"></i>
       <strong>{{ t('archRes.emptyTitle') }}</strong>
       <span>{{ t('archRes.emptyHint') }}</span>
+    </div>
+    <div v-else-if="!filteredResources.length" class="resources-empty" data-test="resources-filter-empty">
+      <i data-lucide="filter-x"></i>
+      <strong>{{ t('archRes.filteredEmptyTitle') }}</strong>
+      <span>{{ t('archRes.filteredEmptyHint') }}</span>
     </div>
 
     <table v-else class="resources-table">
@@ -31,7 +56,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="resource in resources" :key="resource.id">
+        <tr v-for="resource in filteredResources" :key="resource.id">
           <td class="resource-name-cell">
             <div class="resource-name-meta">
               <strong>{{ resource.displayName }}</strong>
@@ -68,7 +93,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
 
 const props = defineProps({
@@ -77,8 +102,10 @@ const props = defineProps({
   fallbackResources: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
 })
-defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'operation'])
 const { t } = useI18n()
+const providerFilter = ref('all')
+const scopeFilter = ref('')
 
 const resources = computed(() => props.registry
   ? props.registry.resources || []
@@ -95,6 +122,55 @@ const resources = computed(() => props.registry
     sourceResource: resource,
   })))
 const relationships = computed(() => props.registry?.relationships || [])
+const availableProviders = computed(() => [...new Set(resources.value.map(resource => resource.provider).filter(Boolean))].sort())
+
+// Stack and namespace membership live on Architecture nodes, while the registry owns stable IDs.
+function scopeFor(resource) {
+  const node = nodesByRegistryId.value.get(resource.id)
+  return {
+    stackName: node?.stackName || resource.stackName || '',
+    namespace: node?.namespace || resource.namespace || resource.sourceResource?.namespace || '',
+  }
+}
+
+const availableScopes = computed(() => {
+  const options = new Map()
+  for (const resource of resources.value) {
+    if (providerFilter.value !== 'all' && resource.provider !== providerFilter.value) continue
+    const { stackName, namespace } = scopeFor(resource)
+    if (stackName) options.set(`cloudformation:${stackName}`, { value: `cloudformation:${stackName}`, label: `${t('archRes.cloudformation')} · ${stackName}` })
+    if (resource.provider === 'kubernetes' && namespace) options.set(`namespace:${namespace}`, { value: `namespace:${namespace}`, label: `${t('archRes.kubernetesNamespace')} · ${namespace}` })
+  }
+  return [...options.values()].sort((left, right) => left.label.localeCompare(right.label))
+})
+
+const filteredResources = computed(() => resources.value.filter(resource => {
+  if (providerFilter.value !== 'all' && resource.provider !== providerFilter.value) return false
+  if (!scopeFilter.value) return true
+  const [kind, ...parts] = scopeFilter.value.split(':')
+  const selectedScope = parts.join(':')
+  const scope = scopeFor(resource)
+  if (kind === 'cloudformation') return scope.stackName === selectedScope
+  if (kind === 'namespace') return resource.provider === 'kubernetes' && scope.namespace === selectedScope
+  return true
+}))
+
+watch(() => props.graph?.document?.view, view => {
+  providerFilter.value = view?.resourceProviderFilter || 'all'
+  scopeFilter.value = view?.resourceScopeFilter || ''
+}, { immediate: true, deep: true })
+
+function persistView() {
+  emit('operation', {
+    type: 'view.set',
+    value: { resourceProviderFilter: providerFilter.value, resourceScopeFilter: scopeFilter.value },
+  }, t('archCanvas.op.updateView'))
+}
+
+function providerChanged() {
+  scopeFilter.value = ''
+  persistView()
+}
 
 // Cross-reference registry resources with their live Architecture node for an operational status,
 // reusing the health/staleness already available on the graph (see Phase 11) instead of new telemetry.
@@ -137,6 +213,10 @@ function scopeLabel(resource) {
 <style scoped>
 .architecture-resources { display: flex; flex-direction: column; gap: 12px; }
 .resources-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.resources-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
+.resources-filters label { display: grid; gap: 4px; color: var(--text-dim); font-size: 10px; }
+.resources-filters .ctrl-select { min-width: 180px; }
+.resources-filter-count { margin-left: auto; padding-bottom: 6px; color: var(--text-dim); font-size: 11px; }
 .resources-title { display: flex; align-items: center; gap: 9px; }
 .resources-title-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: color-mix(in srgb, #58a6ff 20%, transparent); color: #58a6ff; }
 .resources-title small { display: block; color: var(--text-dim); font-size: 11px; }
@@ -173,4 +253,11 @@ function scopeLabel(resource) {
 .relationship-divergence :deep(svg) { width: 12px; height: 12px; }
 .resource-actions-cell { width: 130px; }
 .resource-actions-cell > * { display: flex; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .resources-header { align-items: flex-start; }
+  .resources-filters { align-items: stretch; }
+  .resources-filters label, .resources-filters .ctrl-select { width: 100%; min-width: 0; max-width: 100%; }
+  .resources-filter-count { margin-left: 0; padding-bottom: 0; }
+  .resources-table { display: block; overflow-x: auto; }
+}
 </style>
