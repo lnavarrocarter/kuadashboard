@@ -46,8 +46,8 @@
           <label v-for="node in group.nodes" :key="node.id" class="kubernetes-resource-row" :class="{ 'already-in-project': node.alreadyInGraph }">
             <input v-model="selectedNodeIds" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" />
             <i :data-lucide="resourceIcon(node.resourceType)"></i>
-            <span><strong>{{ node.name }}</strong><small>{{ node.kind }} · {{ node.namespace || t('archK8s.clusterScope') }}</small></span>
-            <span v-if="node.alreadyInGraph" class="health already-badge">{{ t('archK8s.alreadyInProject') }}</span>
+            <span><strong>{{ node.name }}</strong><small>{{ node.kind }} · {{ node.namespace || t('archK8s.clusterScope') }}</small><small v-if="nativeIdentity(node)" class="native-identity" :title="nativeIdentity(node)">{{ nativeIdentity(node) }}</small></span>
+            <span v-if="node.alreadyInGraph" class="health already-badge">{{ alreadyAddedLabel(t, store.linkedApplication) }}</span>
             <span v-else :class="['health', node.health?.status]">{{ node.health?.status || t('archK8s.unknown') }}</span>
           </label>
         </section>
@@ -67,6 +67,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useI18n } from '../../composables/useI18n'
+import { alreadyAddedLabel, nativeIdentity } from '../../lib/discoveryMembership'
 
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
@@ -184,4 +185,5 @@ onMounted(async () => { await loadContexts(); refreshIcons() })
 .kubernetes-discovery-panel footer { justify-content: space-between; border-bottom: 0; color: var(--text-dim); font-size: 11px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 650px) { .kubernetes-controls { align-items: stretch; flex-direction: column; } }
+.native-identity { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 10px; color: var(--text-dim); }
 </style>

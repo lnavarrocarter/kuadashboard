@@ -122,7 +122,7 @@ const byOwner = computed(() => {
   return [...groups.values()]
 })
 const when = at => (at ? new Date(at).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '')
-const describe = item => t('teamSpace.itemLine', { owner: item.owner.email, version: item.version, when: when(item.updatedAt), provider: item.provider, region: item.region })
+const describe = item => t('teamSpace.itemLine', { owner: item.owner.email, version: item.version, when: when(item.updatedAt), provider: item.provider || t('teamSpace.noProvider'), region: item.region || '' })
 const otherMembers = item => (data.value?.members || []).filter(member => member.id !== item.owner.id && member.role !== 'owner' && member.role !== 'admin')
 
 async function run(action, message) {

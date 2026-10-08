@@ -69,6 +69,7 @@
           </nav>
 
           <TeamSpaceModal v-if="selectedApplication" :show="teamSpaceOpen" :profile-id="selectedProfileId || ''" @close="teamSpaceOpen = false" />
+          <KUAppImportPreview :show="!!importPreview" :preview="importPreview" :busy="importBusy" @close="closeImportPreview" @confirm="confirmImport" />
           <CloudBackupsModal v-if="selectedApplication" :show="cloudBackupsOpen" :profile-id="selectedProfileId || ''" :application-id="selectedApplication.id" :application-name="selectedApplication.name" @close="cloudBackupsOpen = false" />
 
           <div v-if="workspaceView === 'overview'" class="kuapps-overview-content">
@@ -237,6 +238,7 @@
                   <span class="kuapps-resource-mark"><i :data-lucide="resource.provider === 'kubernetes' ? 'box' : 'cloud' "></i></span>
                   <span class="kuapps-resource-copy"><strong>{{ resource.displayName }}</strong><small>{{ resource.provider }} · {{ resource.resourceType }}<template v-if="resource.provider === 'kubernetes'"> · {{ resource.namespace || t('kuapps.sync.clusterScope') }}</template></small></span>
                   <span class="kuapps-resource-scope">{{ resource.provider === 'kubernetes' ? resource.kubeContext || t('kuapps.sync.contextUnknown') : resource.scopeId || resource.location || t('kuapps.scopeUnknown') }}</span>
+                  <span :class="['kuapps-signal-badge', signalStateOf(resource)]" data-test="resource-signal-state" :title="t(`kuapps.signalState.${signalStateOf(resource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(resource)}`) }}</span>
                 </button>
               </div>
               <aside v-if="selectedResource" class="kuapps-resource-inspector">
@@ -249,6 +251,7 @@
                   <template v-if="selectedResource.provider === 'kubernetes'"><div><dt>{{ t('kuapps.sync.namespace') }}</dt><dd>{{ selectedResource.namespace || t('kuapps.sync.clusterScope') }}</dd></div><div><dt>{{ t('kuapps.sync.context') }}</dt><dd>{{ selectedResource.kubeContext || t('kuapps.sync.contextUnknown') }}</dd></div></template>
                   <div><dt>{{ t('kuapps.sources') }}</dt><dd class="kuapps-resource-source-list"><span v-for="source in selectedResource.sources || []" :key="source">{{ t(`kuapps.source.${source}`, source) }}</span></dd></div>
                   <div v-if="selectedResource.updatedAt"><dt>{{ t('kuapps.sync.updated') }}</dt><dd>{{ new Date(selectedResource.updatedAt).toLocaleString() }}</dd></div>
+                  <div data-test="inspector-signal-state"><dt>{{ t('kuapps.signalState.title') }}</dt><dd><span :class="['kuapps-signal-badge', signalStateOf(selectedResource)]">{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}`) }}</span> <small>{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}.hint`) }}</small><small v-if="selectedResource.signals?.lastDataAt"> · {{ t('kuapps.signalState.lastData', { when: new Date(selectedResource.signals.lastDataAt).toLocaleString() }) }}</small></dd></div>
                 </dl>
                 <div class="kuapps-resource-identity"><small>{{ t('kuapps.identity') }}</small><code>{{ selectedResource.nativeIdentifier || t('kuapps.scopeUnknown') }}</code></div>
                 <div class="kuapps-inspector-actions"><button class="btn sm primary" @click="workspaceView = 'map'"><i data-lucide="network"></i>{{ t('kuapps.openComplementary') }}</button><span>{{ canInspectSignals ? t('kuapps.signalsStatus.openInspector') : t('kuapps.signalsStatus.pending') }}</span></div>
@@ -455,6 +458,7 @@ import KUAppScopes from './KUAppScopes.vue'
 import KUAppSummary from './KUAppSummary.vue'
 import KUAppSync from './KUAppSync.vue'
 import KUAppExplanation from './KUAppExplanation.vue'
+import KUAppImportPreview from './KUAppImportPreview.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -486,6 +490,9 @@ const bundleInput = ref(null)
 const architectureStore = useArchitectureStore()
 const catalogLoading = ref(false)
 const importBusy = ref(false)
+// The bundle being imported and what importing it would do (#153).
+const importPreview = ref(null)
+const pendingBundle = ref(null)
 const teamInfo = ref(null)
 const teamSpaceOpen = ref(false)
 const cloudBackupsOpen = ref(false)
@@ -508,7 +515,21 @@ const localApplicationId = ref(props.applicationId)
 const catalog = ref([])
 const applications = computed(() => catalog.value)
 // Overview first: it says how the application is and what is waiting for a decision.
-const workspaceView = ref('overview')
+// The tab also travels in the URL next to ?app= (#152), so a reload or a link opens the same tab.
+const WORKSPACE_TABS = new Set(['overview', 'resources', 'map', 'signals', 'review', 'settings'])
+function readUrlWorkspaceTab() {
+  try { return new URLSearchParams(globalThis.location?.search || '').get('tab') || '' } catch { return '' }
+}
+function writeUrlWorkspaceTab(view) {
+  try {
+    const url = new URL(globalThis.location.href)
+    if (view && view !== 'overview') url.searchParams.set('tab', view)
+    else url.searchParams.delete('tab')
+    if (url.href !== globalThis.location.href) globalThis.history.replaceState(globalThis.history.state, '', url.href)
+  } catch { /* non-http locations keep working without the param */ }
+}
+const workspaceView = ref(WORKSPACE_TABS.has(readUrlWorkspaceTab()) ? readUrlWorkspaceTab() : 'overview')
+watch(workspaceView, writeUrlWorkspaceTab)
 const mapMode = ref('canvas')
 const mapVisited = ref(false)
 watch(workspaceView, view => {
@@ -861,9 +882,33 @@ async function importApplicationBackup(event) {
   importBusy.value = true
   try {
     await activateSelectedProfile()
-    const result = await architectureStore.importKuaApp(file)
+    let bundle
+    try { bundle = JSON.parse(await file.text()) } catch { throw new Error(t('kuapps.import.invalidFile')) }
+    importPreview.value = await architectureStore.previewKuaApp(bundle)
+    pendingBundle.value = bundle
+  } catch (error) {
+    toast(error.message, 'error')
+  } finally {
+    importBusy.value = false
+  }
+}
+
+function closeImportPreview() {
+  importPreview.value = null
+  pendingBundle.value = null
+}
+
+async function confirmImport() {
+  if (!pendingBundle.value) return
+  importBusy.value = true
+  try {
+    const result = await architectureStore.importKuaApp(pendingBundle.value)
     if (!result) throw new Error(architectureStore.error || t('common.error'))
-    toast(t('archView.imported', { name: result.application.name }), 'success')
+    closeImportPreview()
+    const skipped = result.skipped?.length || 0
+    toast(skipped
+      ? t('kuapps.import.doneWithSkipped', { name: result.application.name, count: skipped })
+      : t('archView.imported', { name: result.application.name }), skipped ? 'warn' : 'success')
     await loadCatalog()
   } catch (error) {
     toast(error.message, 'error')
@@ -911,6 +956,13 @@ const addResourcesAccountLabel = computed(() => {
   const application = selectedApplication.value
   return [providerName(application?.provider), application?.region].filter(Boolean).join(' · ')
 })
+
+// The state the registry API computed (#152); an older backend without it is "unknown", never healthy.
+const SIGNAL_STATES = new Set(['unsupported', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])
+function signalStateOf(resource) {
+  const state = resource?.signals?.state
+  return SIGNAL_STATES.has(state) ? state : 'unknown'
+}
 
 function providerName(provider) {
   return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
@@ -1223,7 +1275,11 @@ defineExpose({ reloadActiveTab })
 .kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 11px; }
 .kuapps-registry-split { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
-.kuapps-resource-row { width: 100%; min-height: 52px; padding: 7px 10px; display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(120px, .7fr); align-items: center; gap: 10px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.kuapps-signal-badge { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+.kuapps-signal-badge.current { color: var(--success, #16a34a); border-color: currentColor; }
+.kuapps-signal-badge.stale, .kuapps-signal-badge.partial, .kuapps-signal-badge.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
+.kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
+.kuapps-resource-row { width: 100%; min-height: 52px; padding: 7px 10px; display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(90px, .7fr) auto; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-resource-row:hover, .kuapps-resource-row.active { background: var(--bg-hover); }
 .kuapps-resource-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 5px; background: var(--bg-hover); color: var(--accent); }
 .kuapps-resource-mark svg { width: 15px; }

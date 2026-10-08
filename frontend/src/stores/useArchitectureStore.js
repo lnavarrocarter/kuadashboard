@@ -35,6 +35,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const loading = ref(false)
   const saving = ref(false)
   const error = ref(null)
+  const writeConflict = ref(false)
 
   const selectedApplication = computed(() =>
     applications.value.find(application => application.id === selectedApplicationId.value) || null)
@@ -332,12 +333,18 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function importKuaApp(file) {
-    if (!file) return null
+  // What importing a bundle would do; nothing is written (#153).
+  async function previewKuaApp(bundle) {
+    return apiFetch('/api/kua-apps/import/preview', { method: 'POST', headers: headers(true), body: JSON.stringify(bundle) })
+  }
+
+  // A .kuaapp.json File, or a bundle already read from one.
+  async function importKuaApp(source) {
+    if (!source) return null
     saving.value = true
     error.value = null
     try {
-      const bundle = JSON.parse(await file.text())
+      const bundle = typeof source.text === 'function' ? JSON.parse(await source.text()) : source
       const result = await apiFetch('/api/kua-apps/import', {
         method: 'POST',
         headers: headers(true),
@@ -472,10 +479,23 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  // A write against a stale revision (the view changed elsewhere) reloads the graph and keeps
+  // the preview and selection, so the same import can simply be tried again (#151). Nothing
+  // was written by the failed request.
+  async function handleWriteError(requestError) {
+    error.value = requestError.message
+    writeConflict.value = requestError.status === 409
+    if (!writeConflict.value || !selectedProjectId.value) return
+    try {
+      graph.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/graph`, { headers: headers() })
+    } catch { /* the error above stays visible */ }
+  }
+
   async function applyOperation(operation, { reason = '' } = {}) {
     if (!selectedProjectId.value || !graph.value) return null
     saving.value = true
     error.value = null
+    writeConflict.value = false
     try {
       graph.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/operations`, {
         method: 'POST',
@@ -487,7 +507,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       clearProjectSyncPreview(selectedProjectId.value)
       return graph.value
     } catch (requestError) {
-      error.value = requestError.message
+      await handleWriteError(requestError)
       return null
     } finally {
       saving.value = false
@@ -699,6 +719,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     if (!target.value || !(selectedNodeIds || []).length) return null
     saving.value = true
     error.value = null
+    writeConflict.value = false
     try {
       graph.value = await apiFetch(
         `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/import`,
@@ -716,7 +737,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       await loadChanges()
       return graph.value
     } catch (requestError) {
-      error.value = requestError.message
+      await handleWriteError(requestError)
       return null
     } finally {
       saving.value = false
@@ -737,6 +758,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     const importedCount = nodes.filter(node => selected.has(node.id)).length
     saving.value = true
     error.value = null
+    writeConflict.value = false
     try {
       graph.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/operations`, {
         method: 'POST',
@@ -762,7 +784,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       await loadChanges()
       return graph.value
     } catch (requestError) {
-      error.value = requestError.message
+      await handleWriteError(requestError)
       return null
     } finally {
       saving.value = false
@@ -845,6 +867,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     if (!selectedProjectId.value || !graph.value) return null
     saving.value = true
     error.value = null
+    writeConflict.value = false
     try {
       graph.value = await apiFetch(
         `/api/architecture/projects/${selectedProjectId.value}/discovery/aws/import`,
@@ -863,7 +886,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
       await loadChanges()
       return graph.value
     } catch (requestError) {
-      error.value = requestError.message
+      await handleWriteError(requestError)
       return null
     } finally {
       saving.value = false
@@ -896,6 +919,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
     importAwsResources,
     importKubernetesResources,
     importKuaApp,
+    writeConflict,
+    previewKuaApp,
     backupKuaAppToCloud,
     teamSpace,
     teamRefresh,

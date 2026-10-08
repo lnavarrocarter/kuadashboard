@@ -235,9 +235,17 @@
             @click="emit('node-action', { action: action.key, node: selectedNode })"
           ><i :data-lucide="action.icon"></i> {{ action.label }}</button>
         </section>
-        <div class="inspector-actions">
+        <!-- Removing a node only edits this diagram: it never deletes infrastructure (#151). -->
+        <div v-if="confirmingRemoval" class="inspector-confirm" data-test="remove-node-confirm" role="alert">
+          <p>{{ t('archCanvas.removeNodeExplain') }}</p>
+          <div class="inspector-actions">
+            <button class="btn sm" :disabled="saving" @click="confirmingRemoval = false">{{ t('common.cancel') }}</button>
+            <button class="btn sm danger" :disabled="saving" data-test="remove-node-confirmed" @click="removeNode">{{ t('archCanvas.removeNode') }}</button>
+          </div>
+        </div>
+        <div v-else class="inspector-actions">
           <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> {{ t('archCanvas.save') }}</button>
-          <button class="btn sm danger" :disabled="saving" @click="removeNode"><i data-lucide="trash-2"></i> {{ t('archCanvas.delete') }}</button>
+          <button class="btn sm danger" :disabled="saving" data-test="remove-node" @click="confirmingRemoval = true"><i data-lucide="x-circle"></i> {{ t('archCanvas.removeNode') }}</button>
         </div>
       </aside>
 
@@ -850,9 +858,13 @@ function saveNode() {
   }, t('archCanvas.op.update', { name: editDraft.name }))
 }
 
+const confirmingRemoval = ref(false)
+watch(selectedNode, () => { confirmingRemoval.value = false })
+
 function removeNode() {
   if (!selectedNode.value || props.saving) return
-  emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, t('archCanvas.op.delete', { name: nodeName(selectedNode.value.id) }))
+  emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, t('archCanvas.op.removeNode', { name: nodeName(selectedNode.value.id) }))
+  confirmingRemoval.value = false
   clearSelection()
 }
 
@@ -1146,6 +1158,8 @@ onMounted(refreshIcons)
 .component-reference strong, .component-reference small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .component-reference small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
 .inspector-actions { display: flex; justify-content: space-between; gap: 7px; }
+.inspector-confirm { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--warning, #d97706); border-radius: 6px; padding: 8px; }
+.inspector-confirm p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .relationship-direction { padding: 3px 0; }
 .relationship-status { width: fit-content; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
 .relationship-status.automatic { color: #58a6ff; background: color-mix(in srgb, #2f81f7 14%, transparent); }

@@ -1169,6 +1169,18 @@ test('a CloudFormation stack links to an application once and is found from the 
     assert.deepEqual([again.body.added, again.body.alreadyLinked], [0, 2]);
     assert.equal(subject.database.listResources(id).length, 2);
 
+    // Through the common membership service (#150): a stale revision writes nothing, and linking
+    // the stack again brings back a resource the user had detached.
+    const stale = await subject.request(`/applications/${id}/link-stack`, { method: 'POST', body: { stackName: 'orders', region: 'us-east-1', expectedRevision: 0 } });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'REVISION_CONFLICT');
+    const queue = subject.database.listResources(id).find(r => r.name === 'orders-q');
+    assert.equal((await subject.request(`/applications/${id}/resources/${queue.id}`, { method: 'DELETE' })).status, 204);
+    assert.equal(subject.database.listRegistryDetachmentKeys(id).length, 1);
+    const relinked = await subject.request(`/applications/${id}/link-stack`, { method: 'POST', body: { stackName: 'orders', region: 'us-east-1' } });
+    assert.equal(relinked.body.added, 1);
+    assert.equal(subject.database.listRegistryDetachmentKeys(id).length, 0);
+
     const links = await subject.request('/stack-applications?stackName=orders&region=us-east-1');
     assert.equal(links.body.linkable, 2);
     assert.deepEqual(links.body.applications.map(a => [a.name, a.matched]), [['orders', 2]]);

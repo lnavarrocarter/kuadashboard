@@ -57,6 +57,20 @@ describe('ArchitectureCanvas', () => {
     ])
   })
 
+  it('removes a node from the diagram only after a confirmation that says nothing is deleted in the cloud (#151)', async () => {
+    const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('[data-test="remove-node"]').trigger('click')
+    expect(wrapper.emitted('operation')).toBeUndefined()
+    expect(wrapper.get('[data-test="remove-node-confirm"]').text()).toContain('Nothing is deleted in the cloud')
+
+    await wrapper.get('[data-test="remove-node-confirmed"]').trigger('click')
+    expect(wrapper.emitted('operation')[0]).toEqual([
+      { type: 'node.remove', subjectId: 'manual:node:api' },
+      'Remove Orders API from the diagram',
+    ])
+  })
+
   it('uses a wider fallback layout for large imported diagrams', () => {
     const nodes = Array.from({ length: 45 }, (_, index) => ({
       id: `node:${index}`, name: `Resource ${index}`, resourceType: 'lambda',

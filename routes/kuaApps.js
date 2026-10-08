@@ -1,13 +1,14 @@
 'use strict';
 
 const express = require('express');
-const { validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
+const { readKuaAppBundle, validateKuaAppBundle } = require('../lib/kua/kuaAppBundle');
 const { createKuaAppIo } = require('../lib/kua/kuaAppIo');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { KuaApplicationService } = require('../lib/kua/applicationService');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaExtensionRegistry } = require('../lib/kua/extensionRegistry');
 const { explainRelationship } = require('../lib/kua/relationshipExplainer');
+const { resourceSignalStates } = require('../lib/kua/resourceSignalState');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
@@ -41,6 +42,19 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return application;
   }
 
+  // Export and cloud backup read a KUA Application without provider from any profile: it has no
+  // profile of its own (#149). A legacy application stays scoped to its profile.
+  function exportableApplication(req, res) {
+    const profile = profileId(req, res);
+    if (!profile) return null;
+    const application = apmDatabase.getApplication(req.params.applicationId);
+    if (!application || (application.profileId && application.profileId !== profile)) {
+      res.status(404).json({ error: 'KUA Application not found' });
+      return null;
+    }
+    return application;
+  }
+
   function handleError(res, error) {
     const status = error.statusCode || (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
     res.status(status).json({
@@ -54,12 +68,13 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     try {
       const result = io.importBundle(profile, bundle);
       res.status(201).json(result);
-      if (result.project) {
-        auditLog?.log({
-          category: 'kua', action: 'KUAAppBundle imported', resource: result.application.name,
-          context: profile, details: { applicationId: result.application.id, projectId: result.project.id },
-        });
-      }
+      auditLog?.log({
+        category: 'kua', action: 'KUAAppBundle imported', resource: result.application.name,
+        context: profile, details: {
+          applicationId: result.application.id, projectIds: result.projects.map(project => project.id),
+          restoredMembers: result.restoredMembers, skipped: result.skipped.length,
+        },
+      });
     } catch (error) { handleError(res, error); }
   }
 
@@ -90,12 +105,14 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       if (!application) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404 });
       const resources = apmDatabase.listRegistryResources(application.id);
       const resourcesById = new Map(resources.map(resource => [resource.id, resource]));
+      const signals = resourceSignalStates({ database: apmDatabase, application, resources });
       res.json({
         resources: resources.map(({ id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, lineage, updatedAt }) => {
           const kubernetesOrigin = lineage.find(item => item.kubeContext || item.namespace) || {};
           const identityParts = String(nativeIdentifier || '').split('/');
           return {
             id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt,
+            signals: signals.get(id),
             kubeContext: kubernetesOrigin.kubeContext || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[0] : ''),
             namespace: kubernetesOrigin.namespace || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[1] : ''),
           };
@@ -184,13 +201,23 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
 
   router.get('/:applicationId/export', (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
     try {
       const bundle = io.exportBundle(application);
       const filename = `${application.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'kua-app'}.kuaapp.json`;
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.json(bundle);
+    } catch (error) { handleError(res, error); }
+  });
+
+  // What an import would do (#153): nothing is written. The same checks run again on import.
+  router.post('/import/preview', (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    try {
+      const { bundle, issues, contentVersion } = readKuaAppBundle(req.body?.bundle || req.body);
+      res.json(io.previewImport(profile, bundle, { issues, contentVersion }));
     } catch (error) { handleError(res, error); }
   });
 
@@ -208,7 +235,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
 
   // Cloud backups (KUA account, Pro and Team): the same sanitized bundle as the export.
   router.post('/:applicationId/cloud-backup', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
     try {
       const backup = await account().backups.create(io.exportBundle(application));

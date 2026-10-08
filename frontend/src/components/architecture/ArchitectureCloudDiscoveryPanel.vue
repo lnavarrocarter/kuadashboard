@@ -13,7 +13,7 @@
       <div class="cloud-discovery-resource-list">
         <label v-for="node in sortedNodes" :key="node.id" class="cloud-discovery-row" :class="{ 'already-in-project': node.alreadyInGraph }">
           <input v-model="selectedNodeIds" type="checkbox" :value="node.id" :disabled="node.alreadyInGraph" /><i :data-lucide="resourceIcon(node.resourceType)"></i>
-          <span><strong>{{ node.name }}</strong><small>{{ resourceDetail(node) }}</small></span><span v-if="node.alreadyInGraph" class="already-badge">already in project</span><span v-else class="resource-state">{{ resourceState(node) }}</span>
+          <span><strong>{{ node.name }}</strong><small>{{ resourceDetail(node) }}</small><small v-if="nativeIdentity(node)" class="native-identity" :title="nativeIdentity(node)">{{ nativeIdentity(node) }}</small></span><span v-if="node.alreadyInGraph" class="already-badge">{{ alreadyAddedLabel(t, store.linkedApplication) }}</span><span v-else class="resource-state">{{ resourceState(node) }}</span>
         </label>
       </div>
       <footer><span>{{ selectedNodeIds.length }} selected</span><button class="btn sm primary" :disabled="store.saving || !selectedNodeIds.length" @click="importResources"><i :data-lucide="store.saving ? 'loader-2' : 'download'"></i>{{ store.saving ? 'Importing…' : 'Add to diagram' }}</button></footer>
@@ -25,10 +25,13 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
+import { useI18n } from '../../composables/useI18n'
+import { alreadyAddedLabel, nativeIdentity } from '../../lib/discoveryMembership'
 
 const props = defineProps({ provider: { type: String, required: true } })
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
+const { t } = useI18n()
 const selectedNodeIds = ref([])
 const preview = computed(() => props.provider === 'gcp' ? store.gcpPreview : store.vercelPreview)
 const providerLabel = computed(() => props.provider === 'gcp' ? 'GCP' : 'Vercel')
@@ -53,4 +56,5 @@ onMounted(async () => { await loadPreview(); refreshIcons() })
 .cloud-discovery-summary strong { color: var(--text); }.cloud-discovery-summary .btn { margin-left: auto; }.cloud-discovery-summary .warning { color: #d29922; }.cloud-discovery-resource-list { max-height: 300px; overflow: auto; }
 .cloud-discovery-row { min-height: 50px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); cursor: pointer; }.cloud-discovery-row:hover { background: var(--bg-hover); }.cloud-discovery-row > span:not(.already-badge):not(.resource-state) { display: flex; flex: 1; min-width: 0; flex-direction: column; }.cloud-discovery-row > i { width: 17px; height: 17px; color: #2f81f7; }.cloud-discovery-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.resource-state, .already-badge { font-size: 10px; text-transform: capitalize; }.already-badge { color: var(--text-dim); text-transform: none; }.cloud-discovery-row.already-in-project { opacity: .65; cursor: default; }
 .cloud-discovery-panel footer { justify-content: space-between; border-bottom: 0; font-size: 11px; } @keyframes spin { to { transform: rotate(360deg); } } @media (max-width: 650px) { .cloud-discovery-empty { align-items: flex-start; flex-direction: column; } }
+.native-identity { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 10px; color: var(--text-dim); }
 </style>
