@@ -414,6 +414,47 @@ describe('Application provider logs', () => {
     )
     wrapper.unmount()
   })
+
+  it('estimates GCP cache requests before opting in from a generic multicloud application', async () => {
+    let enabled = false
+    const group = 'gcp:cloudrun:project-1:us-central1:checkout'
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/api/cloud/gcp/cloudrun/us-central1/checkout/logs')) return response({ entries: [{ timestamp: '2026-08-04T12:00:00Z', severity: 'ERROR', message: 'boom' }] })
+      if (url.includes('/api/observability/generic/applications/app-multi/log-cache/estimate')) return response({ estimatedRequestsPerSync: 5, cloudReads: false })
+      if (url.includes('/api/observability/generic/applications/app-multi/log-cache?')) {
+        return response({ groups: [{ logGroup: group, cache: enabled ? { events: 2, refreshMinutes: null, lastSyncAt: null } : null }] })
+      }
+      if (url.endsWith('/api/observability/generic/applications/app-multi/log-cache') && options.method === 'POST') {
+        enabled = true
+        return response({ results: [{ logGroup: group, result: { status: 'ok' } }] })
+      }
+      if (url === '/api/system/plan') return response({ features: { logAutoRefresh: false }, limits: { logRefreshMinMinutes: null }, refreshChoices: [] })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+
+    const wrapper = mount(ApmApplicationLogs, {
+      props: {
+        provider: 'generic', profileId: 'gcp-profile', application: { id: 'app-multi' },
+        resources: [{ id: 'run-1', type: 'gcp-cloud-run', provider: 'gcp', key: 'us-central1/checkout', scopeId: 'project-1', location: 'us-central1', name: 'checkout', enabled: true }],
+      },
+      global: { stubs: { teleport: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Cloud Logging')
+    await wrapper.get('.logs-cache-tools button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Estimated maximum: 5 provider API requests per sync')
+    expect(global.fetch.mock.calls.some(([, options = {}]) => options.method === 'POST')).toBe(false)
+
+    await wrapper.findAll('button').find(button => button.text().includes('Enable and sync')).trigger('click')
+    await flushPromises()
+    expect(global.fetch.mock.calls.find(([url, options = {}]) => url.endsWith('/log-cache') && options.method === 'POST')[1].body)
+      .toContain('"resourceId":"run-1"')
+    expect(wrapper.text()).toContain('Local cache enabled')
+    expect(wrapper.text()).toContain('2 events')
+    wrapper.unmount()
+  })
 })
 
 describe('APM process traces', () => {

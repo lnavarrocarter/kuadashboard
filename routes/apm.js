@@ -6,7 +6,10 @@ const { createAwsDeploymentReader } = require('../lib/apm/awsDeploymentReader');
 const { createEksWorkloadReader } = require('../lib/apm/eksWorkloadReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { analyzeTopology } = require('../lib/apm/topologyAnalysis');
-const { applicationLogHistory, loadApplicationSignals } = require('../lib/kua/relationshipSignals');
+const { applicationLogHistory, loadApplicationSignals, logScopeForResource } = require('../lib/kua/relationshipSignals');
+const { logGroupsForResource } = require('../lib/logIntelligenceEvidence');
+const { createLogProviderSync, parseProviderLogGroup, estimateLogSyncRequests } = require('../lib/logProviderSync');
+const { checkRefreshMinutes } = require('../lib/plans');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
@@ -30,6 +33,7 @@ function createApmRouter({
   topologyReader = createAwsTopologyReader(),
   processTracer = createAwsProcessTracer(),
   logCache = () => require('../lib/awsLogCache').getLogCache(),
+  syncProviderLogs = null,
 }) {
   if (!database || !scheduler) throw new Error('database and scheduler are required');
   const router = express.Router();
@@ -707,6 +711,94 @@ function createApmRouter({
     res.json(await applicationLogHistory({
       apmDatabase: database, application, cache: logCache(), from: start, to: end,
     }));
+  });
+
+  function logCacheTarget(application, resourceId) {
+    const resource = database.listResources(application.id).find(item => item.id === resourceId);
+    if (!resource || !resource.enabled) throw Object.assign(new Error('Enabled application resource not found'), { statusCode: 404 });
+    const scope = logScopeForResource(database, application, resource);
+    if (!scope) throw Object.assign(new Error('No verified profile and region reaches this resource'), { statusCode: 409 });
+    const groups = logGroupsForResource(resource).filter(group => ['gcp', 'vercel'].includes(parseProviderLogGroup(group)?.provider));
+    if (!groups.length) throw Object.assign(new Error('This resource has no supported GCP or Vercel log source'), { statusCode: 400 });
+    return { resource, scope, groups };
+  }
+
+  router.get('/applications/:applicationId/log-cache/estimate', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const { resource, scope, groups } = logCacheTarget(application, req.query.resourceId);
+      const estimates = groups.map(logGroup => {
+        const provider = parseProviderLogGroup(logGroup).provider;
+        return { logGroup, provider, requests: estimateLogSyncRequests(provider) };
+      });
+      res.json({ resourceId: resource.id, region: scope.region, groups: estimates, estimatedRequestsPerSync: estimates.reduce((sum, item) => sum + item.requests, 0), cloudReads: false });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.get('/applications/:applicationId/log-cache', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const { resource, scope, groups } = logCacheTarget(application, req.query.resourceId);
+      const cache = logCache();
+      res.json({ resourceId: resource.id, groups: groups.map(logGroup => ({ logGroup, cache: cache.describeGroup(scope.profileId, scope.region, logGroup) })) });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/applications/:applicationId/log-cache', async (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const { resource, scope, groups } = logCacheTarget(application, req.body?.resourceId);
+      const hours = req.body?.historyHours === undefined ? 24 : Number(req.body.historyHours);
+      if (!Number.isFinite(hours) || hours < 0 || hours > 168) throw Object.assign(new Error('historyHours must be between 0 and 168'), { statusCode: 400 });
+      const refreshMinutes = 'refreshMinutes' in (req.body || {}) ? checkRefreshMinutes(req.body.refreshMinutes) : undefined;
+      const cache = logCache();
+      const sync = syncProviderLogs
+        ? target => syncProviderLogs({ cache, ...target })
+        : createLogProviderSync({ cache });
+      const results = [];
+      for (const logGroup of groups) {
+        const provider = parseProviderLogGroup(logGroup).provider;
+        cache.enable({ ...scope, logGroup, historyMs: provider === 'vercel' ? 0 : hours * 60 * 60 * 1000 });
+        if (refreshMinutes !== undefined) cache.setRefresh({ ...scope, logGroup, minutes: refreshMinutes });
+        const result = await sync({ ...scope, logGroup, latestOnly: false });
+        results.push({ logGroup, result, cache: cache.describeGroup(scope.profileId, scope.region, logGroup) });
+      }
+      res.json({ resourceId: resource.id, results });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.patch('/applications/:applicationId/log-cache', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    if (!('refreshMinutes' in (req.body || {}))) return res.status(400).json({ error: 'refreshMinutes is required' });
+    try {
+      const { resource, scope, groups } = logCacheTarget(application, req.body?.resourceId);
+      const minutes = checkRefreshMinutes(req.body.refreshMinutes);
+      const cache = logCache();
+      const results = groups.map(logGroup => {
+        if (!cache.describeGroup(scope.profileId, scope.region, logGroup)) throw Object.assign(new Error('Log group is not cached'), { statusCode: 404 });
+        return { logGroup, cache: cache.setRefresh({ ...scope, logGroup, minutes }) };
+      });
+      res.json({ resourceId: resource.id, results });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.delete('/applications/:applicationId/log-cache', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const { resource, scope, groups } = logCacheTarget(application, req.query.resourceId);
+      const cache = logCache();
+      const removed = groups.filter(logGroup => {
+        const existed = !!cache.describeGroup(scope.profileId, scope.region, logGroup);
+        cache.disable({ ...scope, logGroup });
+        return existed;
+      }).length;
+      res.json({ resourceId: resource.id, removed });
+    } catch (error) { handleError(res, error); }
   });
 
   router.get('/applications/:applicationId/series', (req, res) => {

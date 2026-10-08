@@ -137,6 +137,9 @@ KuaDashboard provides comprehensive Google Cloud Platform management accessed fr
 - Interactive **log query panel** — enter an advanced filter, choose a time range (1–72 hours) and execute
 - Results show timestamp, severity (color-coded), resource type, log name and text payload
 
+### Log intelligence in KUA Applications
+In **Signals → Logs**, select a Cloud Run service or Cloud Function and choose **Cache for log intelligence**. KUA shows a local estimate of up to five `entries.list` requests per sync before asking for confirmation; Cloud Logging reads are not billed, but they use the project's request quota. After confirmation, entries pass through the shared sanitizer and analyzer into the encrypted local cache, with the same disk budget and maximum retention window as other providers. Cached signals are linked to the resource's verified GCP project and location. Automatic refresh remains opt-in and follows the plan interval.
+
 ## Creating, starting and deleting resources safely
 
 Cloud Run, Compute Engine VMs and Cloud SQL list their resources in a table with the actions inline (**Start**, **Stop**, **🗑 Delete**), and a **＋ New** button creates new ones. Clicking a row opens its detail below the table. Every action that costs money or cannot be undone asks for confirmation first:

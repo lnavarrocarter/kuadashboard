@@ -926,7 +926,11 @@ async function gcpFetch(url, authCtx, method = 'GET', body = undefined, requestH
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res  = await fetch(url, opts);
   const text = await res.text();
-  if (!res.ok) throw Object.assign(new Error(text), { code: res.status });
+  if (!res.ok) throw Object.assign(new Error(text), {
+    code: res.status,
+    statusCode: res.status,
+    retryAfter: Number(res.headers?.get?.('retry-after')) || null,
+  });
   return text ? JSON.parse(text) : {};
 }
 

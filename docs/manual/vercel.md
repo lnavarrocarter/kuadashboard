@@ -27,6 +27,8 @@ Historial de despliegues por proyecto con estado (Ready/Error/Building), rama, c
 - **Cancel** de builds en progreso.
 - **Logs de build en streaming** (SSE) en tiempo real.
 
+En **KUA Applications → Señales → Logs**, el proyecto puede activar por separado los runtime logs del último deployment de producción para la inteligencia de logs. KUA estima hasta dos solicitudes por sync antes de confirmar; respeta los límites de Vercel y la caché local cifra y limita la retención. Los logs de build de esta sección no se usan como runtime logs.
+
 ### Functions
 
 Funciones serverless/edge incluidas en un deployment, con su runtime y región.

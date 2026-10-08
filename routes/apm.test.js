@@ -17,7 +17,7 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { PostureStore } = require('../lib/advisor/posture');
 const { buildReport, check } = require('../lib/advisor/core');
 
-async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs } = {}) {
   // In-memory log cache: tests never touch the user's data directory.
   const logCache = createLogCache({ dataDir: ':memory:' });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
@@ -59,6 +59,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     scheduler,
     provider: 'generic',
     logCache: () => logCache,
+    syncProviderLogs,
   }));
   app.use('/api/architecture', createArchitectureRouter({
     database: architectureDatabase,
@@ -1266,4 +1267,68 @@ test('an application without provider is read through the generic routes by loca
     const collected = await subject.genericRequest(`/applications/${application.id}/collect-now`, { method: 'POST' });
     assert.equal(collected.status, 200);
   } finally { await subject.close(); }
+});
+
+test('GCP and Vercel log cache is estimated locally and opted into per verified application resource', async () => {
+  const syncs = [];
+  const subject = await fixture({ syncProviderLogs: async ({ cache, ...target }) => {
+    syncs.push(target);
+    return cache.syncGroup({
+      ...target,
+      client: { async send() { return { events: [] }; } },
+      FilterLogEventsCommand: class { constructor(input) { this.input = input; } },
+      maxPages: 1,
+      latestOnly: true,
+    });
+  } });
+  try {
+    const application = subject.database.createApplication({ name: 'Multicloud app' });
+    const gcpScope = normalizeScope({ provider: 'gcp', scopeId: 'project-1', location: 'us-central1' });
+    const vercelScope = normalizeScope({ provider: 'vercel', scopeId: 'team-1', location: 'global' });
+    subject.database.addApplicationScope(application.id, gcpScope);
+    subject.database.addApplicationScope(application.id, vercelScope);
+    subject.database.setScopeBinding(application.id, gcpScope.key, { profileId: 'gcp-profile', status: 'verified' });
+    subject.database.setScopeBinding(application.id, vercelScope.key, { profileId: 'vercel-profile', status: 'verified' });
+    const cloudRun = subject.database.addResource(application.id, {
+      provider: 'gcp', type: 'gcp-cloud-run', key: 'us-central1/checkout', scopeId: 'project-1',
+      location: 'us-central1', name: 'checkout',
+    });
+    const vercelProject = subject.database.addResource(application.id, {
+      provider: 'vercel', type: 'vercel-project', key: 'prj_123', scopeId: 'team-1',
+      location: 'global', name: 'web',
+    });
+
+    const estimate = await subject.genericRequest(`/applications/${application.id}/log-cache/estimate?resourceId=${cloudRun.id}`, { profile: 'gcp-profile' });
+    assert.equal(estimate.status, 200);
+    assert.equal(estimate.body.estimatedRequestsPerSync, 5);
+    assert.equal(estimate.body.cloudReads, false);
+
+    const enabledGcp = await subject.genericRequest(`/applications/${application.id}/log-cache`, {
+      profile: 'gcp-profile', method: 'POST', body: { resourceId: cloudRun.id, historyHours: 3 },
+    });
+    assert.equal(enabledGcp.status, 200);
+    assert.equal(enabledGcp.body.results[0].cache.historyMs, 3 * 60 * 60 * 1000);
+    assert.equal(syncs[0].profileId, 'gcp-profile');
+    assert.equal(syncs[0].logGroup, 'gcp:cloudrun:project-1:us-central1:checkout');
+
+    const estimateVercel = await subject.genericRequest(`/applications/${application.id}/log-cache/estimate?resourceId=${vercelProject.id}`, { profile: 'vercel-profile' });
+    assert.equal(estimateVercel.body.estimatedRequestsPerSync, 2);
+    const enabledVercel = await subject.genericRequest(`/applications/${application.id}/log-cache`, {
+      profile: 'vercel-profile', method: 'POST', body: { resourceId: vercelProject.id },
+    });
+    assert.equal(enabledVercel.status, 200);
+    assert.equal(enabledVercel.body.results[0].cache.historyMs, 0);
+
+    const status = await subject.genericRequest(`/applications/${application.id}/log-cache?resourceId=${cloudRun.id}`, { profile: 'gcp-profile' });
+    assert.equal(status.body.groups[0].cache.lastSyncStatus, 'ok');
+    const forbidden = await subject.genericRequest(`/applications/${application.id}/log-cache/estimate?resourceId=${cloudRun.id}`, { profile: 'unbound-profile' });
+    assert.equal(forbidden.status, 404);
+
+    const removed = await subject.genericRequest(`/applications/${application.id}/log-cache?resourceId=${cloudRun.id}`, {
+      profile: 'gcp-profile', method: 'DELETE',
+    });
+    assert.equal(removed.body.removed, 1);
+  } finally {
+    await subject.close();
+  }
 });

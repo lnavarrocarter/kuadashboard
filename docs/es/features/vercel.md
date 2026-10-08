@@ -89,6 +89,9 @@ Haz clic en **Logs** en cualquier deployment para abrir el panel de logs. Los lo
 - **Limpiar** — borra el buffer de logs actual
 - Coloración por tipo de evento: `stdout` (blanco), `stderr` (rojo), `command` (amarillo), estado de deployment (azul)
 
+### Inteligencia de runtime logs en KUA Applications
+El stream de logs de build anterior es distinto de los runtime logs. En **Señales → Logs**, selecciona un proyecto de Vercel y elige **Cachear para inteligencia de logs** para ver, antes de confirmar, una estimación de hasta dos solicitudes a la API por sync (búsqueda del último deployment de producción y su solicitud de runtime logs). KUA solo lee runtime logs de ese deployment, respeta los límites de Vercel y `Retry-After`, y marca la respuesta como parcial si llega al límite de lectura de 2 MiB/5.000 eventos. Las entradas pasan por la misma caché local cifrada, el sanitizador y el analizador que los otros proveedores; la evidencia observada queda ligada al proyecto de KUA Application.
+
 ---
 
 ## Dominios
