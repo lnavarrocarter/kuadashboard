@@ -70,7 +70,7 @@ describe('ArchitectureResources', () => {
     const scopeFilter = wrapper.get('[data-test="resource-scope-filter"]')
     const options = scopeFilter.findAll('option').map(option => option.text())
     expect(options).toContain('CloudFormation · legacy-stack')
-    expect(options).toContain('Kubernetes · orders')
+    expect(options).toContain('Kubernetes namespace · orders')
 
     await scopeFilter.setValue('namespace:orders')
     expect(wrapper.findAll('.resources-table tbody tr').map(row => row.text())).toHaveLength(1)
