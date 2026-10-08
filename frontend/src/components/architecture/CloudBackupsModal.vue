@@ -63,7 +63,7 @@
           <li v-for="item in data.items" :key="item.id">
             <div class="cbk-item">
               <strong>{{ item.name }}</strong>
-              <small class="text-dim">{{ item.applicationName }} · {{ item.provider }} · {{ item.region }} · {{ size(item.sizeBytes) }} · {{ when(item.createdAt) }}</small>
+              <small class="text-dim">{{ [item.applicationName, item.provider, item.region, size(item.sizeBytes), when(item.createdAt)].filter(Boolean).join(' · ') }}</small>
             </div>
             <span class="cbk-actions">
               <button class="btn sm" :disabled="busy || !profileId" :data-test="`cloud-backup-restore-${item.id}`" @click="restore(item)">{{ t('cloudBackups.restore') }}</button>

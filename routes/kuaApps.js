@@ -41,8 +41,8 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return application;
   }
 
-  // Export reads a KUA Application without provider from any profile: it has no profile of its
-  // own (#149). A legacy application stays scoped to its profile.
+  // Export and cloud backup read a KUA Application without provider from any profile: it has no
+  // profile of its own (#149). A legacy application stays scoped to its profile.
   function exportableApplication(req, res) {
     const profile = profileId(req, res);
     if (!profile) return null;
@@ -232,7 +232,7 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
 
   // Cloud backups (KUA account, Pro and Team): the same sanitized bundle as the export.
   router.post('/:applicationId/cloud-backup', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
     try {
       const backup = await account().backups.create(io.exportBundle(application));

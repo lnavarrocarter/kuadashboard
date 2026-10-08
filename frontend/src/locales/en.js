@@ -4529,6 +4529,7 @@ export default {
   'teamSpace.load': 'Load here',
   'teamSpace.permissions': 'Who may import shared applications',
   'teamSpace.canImport': 'May import',
+  'teamSpace.noProvider': 'no single provider',
   'teamSpace.itemLine': '{owner} · version {version} · {when} · {provider} {region}',
   'teamSpace.role_owner': 'Owner',
   'teamSpace.role_admin': 'Admin',
