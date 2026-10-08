@@ -64,6 +64,15 @@
           </select>
         </div>
       </details>
+      <details v-if="hiddenNodes.length" class="canvas-control-disclosure" data-test="hidden-nodes">
+        <summary><i data-lucide="eye-off"></i><span>{{ t('archCanvas.hiddenNodes') }}</span><strong>{{ hiddenNodes.length }}</strong></summary>
+        <ul class="canvas-hidden-list">
+          <li v-for="node in hiddenNodes" :key="node.id">
+            <span>{{ node.name || node.id }}</span>
+            <button class="btn sm" :disabled="saving" :data-test="`show-node-${node.id}`" @click="showNode(node)"><i data-lucide="eye"></i> {{ t('archCanvas.showNode') }}</button>
+          </li>
+        </ul>
+      </details>
       <details class="canvas-control-disclosure">
         <summary><i data-lucide="layers-3"></i><span>{{ t('archCanvas.mapLayers') }}</span><strong>{{ activeLayerCount }}</strong></summary>
         <div class="canvas-toolbar-row canvas-action-controls">
@@ -237,7 +246,7 @@
         </section>
         <!-- Removing a node only edits this diagram: it never deletes infrastructure (#151). -->
         <div v-if="confirmingRemoval" class="inspector-confirm" data-test="remove-node-confirm" role="alert">
-          <p>{{ t('archCanvas.removeNodeExplain') }}</p>
+          <p>{{ t(isResourceNode(selectedNode) ? 'archCanvas.hideNodeExplain' : 'archCanvas.removeDrawingExplain') }}</p>
           <div class="inspector-actions">
             <button class="btn sm" :disabled="saving" @click="confirmingRemoval = false">{{ t('common.cancel') }}</button>
             <button class="btn sm danger" :disabled="saving" data-test="remove-node-confirmed" @click="removeNode">{{ t('archCanvas.removeNode') }}</button>
@@ -245,7 +254,7 @@
         </div>
         <div v-else class="inspector-actions">
           <button class="btn sm primary" :disabled="saving || !editDraft.name" @click="saveNode"><i data-lucide="check"></i> {{ t('archCanvas.save') }}</button>
-          <button class="btn sm danger" :disabled="saving" data-test="remove-node" @click="confirmingRemoval = true"><i data-lucide="x-circle"></i> {{ t('archCanvas.removeNode') }}</button>
+          <button class="btn sm danger" :disabled="saving" data-test="remove-node" @click="confirmingRemoval = true"><i :data-lucide="isResourceNode(selectedNode) ? 'eye-off' : 'x-circle'"></i> {{ t('archCanvas.removeNode') }}</button>
         </div>
       </aside>
 
@@ -464,7 +473,7 @@ const activeLayerCount = computed(() => [
 const filteredGraphDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
   const query = nodeSearch.value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
-  const nodes = (document.nodes || []).filter(node =>
+  const nodes = (document.nodes || []).filter(node => !node.hidden &&
     (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
     (systemDomainFilter.value === 'all' || systemDomainForNode(node) === systemDomainFilter.value) &&
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
@@ -861,11 +870,28 @@ function saveNode() {
 const confirmingRemoval = ref(false)
 watch(selectedNode, () => { confirmingRemoval.value = false })
 
+// A node that is a real resource (it has a native identity) is only hidden in this view: it stays
+// in the application with its membership, signals and history (#146). A drawing is removed.
+function isResourceNode(node) {
+  return !!(node?.registryResourceId || node?.arn || node?.nativeId || node?.discoveryKey)
+}
+const hiddenNodes = computed(() => (props.graph?.document?.nodes || []).filter(node => node.hidden))
+
 function removeNode() {
   if (!selectedNode.value || props.saving) return
-  emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, t('archCanvas.op.removeNode', { name: nodeName(selectedNode.value.id) }))
+  const name = nodeName(selectedNode.value.id)
+  if (isResourceNode(selectedNode.value)) {
+    emit('operation', { type: 'node.hide', subjectId: selectedNode.value.id }, t('archCanvas.op.hideNode', { name }))
+  } else {
+    emit('operation', { type: 'node.remove', subjectId: selectedNode.value.id }, t('archCanvas.op.removeNode', { name }))
+  }
   confirmingRemoval.value = false
   clearSelection()
+}
+
+function showNode(node) {
+  if (props.saving) return
+  emit('operation', { type: 'node.show', subjectId: node.id }, t('archCanvas.op.showNode', { name: node.name || node.id }))
 }
 
 function removeEdge() {
@@ -1158,6 +1184,9 @@ onMounted(refreshIcons)
 .component-reference strong, .component-reference small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .component-reference small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
 .inspector-actions { display: flex; justify-content: space-between; gap: 7px; }
+.canvas-hidden-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.canvas-hidden-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.canvas-hidden-list li span { overflow-wrap: anywhere; min-width: 0; }
 .inspector-confirm { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--warning, #d97706); border-radius: 6px; padding: 8px; }
 .inspector-confirm p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .relationship-direction { padding: 3px 0; }

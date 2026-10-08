@@ -62,13 +62,30 @@ describe('ArchitectureCanvas', () => {
     await wrapper.get('.select-node').trigger('click')
     await wrapper.get('[data-test="remove-node"]').trigger('click')
     expect(wrapper.emitted('operation')).toBeUndefined()
-    expect(wrapper.get('[data-test="remove-node-confirm"]').text()).toContain('Nothing is deleted in the cloud')
+    expect(wrapper.get('[data-test="remove-node-confirm"]').text()).toContain('nothing is deleted in the cloud')
 
     await wrapper.get('[data-test="remove-node-confirmed"]').trigger('click')
     expect(wrapper.emitted('operation')[0]).toEqual([
       { type: 'node.remove', subjectId: 'manual:node:api' },
       'Remove Orders API from the diagram',
     ])
+  })
+
+  it('hides a real resource in this view instead of removing it, and shows it again from Hidden in this view (#146)', async () => {
+    const queue = 'arn:aws:sqs:us-east-1:123456789012:orders'
+    const resourceGraph = { revision: 3, document: { nodes: [{ id: 'queue', name: 'orders', resourceType: 'sqs', arn: queue, nativeId: queue }], edges: [], layout: {} } }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: resourceGraph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('[data-test="remove-node"]').trigger('click')
+    expect(wrapper.get('[data-test="remove-node-confirm"]').text()).toContain('stays in the application')
+    await wrapper.get('[data-test="remove-node-confirmed"]').trigger('click')
+    expect(wrapper.emitted('operation')[0]).toEqual([{ type: 'node.hide', subjectId: 'queue' }, 'Hide orders in the diagram'])
+
+    await wrapper.setProps({ graph: { revision: 4, document: { ...resourceGraph.document, nodes: [{ ...resourceGraph.document.nodes[0], hidden: true }] } } })
+    expect(wrapper.getComponent(stubs.VueFlow).props('nodes')).toHaveLength(0)
+    expect(wrapper.get('[data-test="hidden-nodes"]').text()).toContain('orders')
+    await wrapper.get('[data-test="show-node-queue"]').trigger('click')
+    expect(wrapper.emitted('operation')[1]).toEqual([{ type: 'node.show', subjectId: 'queue' }, 'Show orders in the diagram'])
   })
 
   it('uses a wider fallback layout for large imported diagrams', () => {
