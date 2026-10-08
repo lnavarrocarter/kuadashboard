@@ -317,18 +317,23 @@ function createApmRouter({
     if (!/^[A-Za-z][A-Za-z0-9-]{0,127}$/.test(stackName)) return res.status(400).json({ error: 'Invalid stack name' });
     try {
       const stackResources = await stackResourceKeys(application.profileId, req.body?.region || application.region, stackName);
-      const existing = new Set(database.listResources(application.id).map(resource => resource.key));
-      const added = [];
-      for (const resource of stackResources) {
-        if (existing.has(resource.key)) continue;
-        added.push(database.addResource(application.id, {
-          type: resource.type, key: resource.key, arn: resource.arn, name: resource.name, service: resource.service,
-          kind: resource.kind, logGroup: resource.type === 'lambda' ? `/aws/lambda/${resource.name}` : null,
-          associationSource: 'deployment',
-        }));
-        existing.add(resource.key);
+      const inputs = stackResources.map(resource => ({
+        type: resource.type, key: resource.key, arn: resource.arn, name: resource.name, service: resource.service,
+        kind: resource.kind, logGroup: resource.type === 'lambda' ? `/aws/lambda/${resource.name}` : null,
+        associationSource: 'deployment',
+      }));
+      let added;
+      if (registry) {
+        // The common membership service (#150): idempotent, revision-checked, and linking the stack
+        // again brings back resources the user had detached.
+        const { results } = registry.attachResources(application, inputs, { ...resourceRevisionOf(req), clearDetachments: true });
+        const failed = results.find(result => result.error);
+        if (failed) throw Object.assign(new Error(failed.error), { statusCode: 400 });
+        added = results.filter(result => result.created).map(result => result.resource);
+        scopes?.syncLegacyScopes(database.getApplication(application.id));
+      } else {
+        added = inputs.map((input, index) => database.attachResource(application.id, input, index === 0 ? resourceRevisionOf(req) : {})).filter(result => result.created).map(result => result.resource);
       }
-      if (added.length) reconcileRegistry(database.getApplication(application.id));
       log('CloudFormation stack linked', stackName, application.profileId, { application: application.name, added: added.length });
       res.json({ added: added.length, alreadyLinked: stackResources.length - added.length, resources: added });
     } catch (error) { handleError(res, error); }

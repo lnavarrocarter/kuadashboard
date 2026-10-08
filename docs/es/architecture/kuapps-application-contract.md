@@ -116,7 +116,6 @@ Una identidad distinta es `mismatch`. Una lectura fallida (sesión expirada, per
 
 KUApps muestra estas aplicaciones con un panel **Cuentas y scopes** (`frontend/src/components/kuapps/KUAppScopes.vue`) que agrega y quita scopes, asocia un perfil de este computador a cada uno y muestra el resultado de la verificación. La arquitectura y la observabilidad todavía necesitan un perfil, así que en una aplicación sin provider se abren cuando se puedan agregar recursos a sus scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). Se exportan, importan, respaldan y publican al equipo con sus scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). Un enlace con `?app=<id>` abre una aplicación en KUApps.
 
-## Membresía de recursos
 ## Fuentes de extensiones y evidencia (#156)
 
 `lib/kua/extensionContract.js` define JSON Schemas estrictos y normalizadores en runtime para manifest versión 1 y evidencia versión 1. Cada manifest identifica la fuente, publisher, versión semántica, versión del contrato, transporte/runtime, scopes admitidos y permisos declarados. Todas las capacidades aparecen como booleanos explícitos: `discovery`, `enrichment`, `relationshipEvidence`, `telemetry`, `historicalSearch` y `findings`. La declaración describe la fuente; no autoriza llamadas remotas ni reemplaza la selección explícita de conexiones/herramientas de la persona usuaria.
@@ -164,7 +163,7 @@ La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de lo
 
 ## Membresía de recursos
 
-`ApplicationRegistryService` es el único lugar que asocia, actualiza y desvincula un recurso de una aplicación (#150). Las rutas de APM delegan en él, así que Observabilidad, Arquitectura y KUApps se comportan igual.
+`ApplicationRegistryService` es el único lugar que asocia, actualiza y desvincula un recurso de una aplicación (#150). Las rutas de APM delegan en él, incluida la que vincula un stack de CloudFormation (`link-stack`, que además recupera los recursos desvinculados del stack), así que Observabilidad, Arquitectura y KUApps se comportan igual.
 
 - **Asociar es idempotente.** Asociar otra vez el mismo recurso (mismo tipo y clave) responde `200` con el recurso existente en vez de `201`, y no duplica membresía, nodo ni relación.
 - **Control de revisión.** Asociar, actualizar y desvincular aceptan `expectedRevision`. Un valor obsoleto responde `409 REVISION_CONFLICT` y no escribe nada. Asociar o desvincular con éxito mueve la `revision` de la aplicación.

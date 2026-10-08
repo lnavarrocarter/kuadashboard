@@ -116,7 +116,6 @@ A different identity is `mismatch`. A failed read (expired session, missing prof
 
 KUApps shows these applications with an **Accounts and scopes** panel (`frontend/src/components/kuapps/KUAppScopes.vue`) that adds and removes scopes, binds a profile of this computer to each one and shows the verification result. Architecture and Observability still need one profile, so for an application without a provider they open once resources can be added to its scopes ([#151](https://github.com/lnavarrocarter/kuadashboard/issues/151)). They export, import, back up and publish to the team with their scopes ([#153](https://github.com/lnavarrocarter/kuadashboard/issues/153)). A link with `?app=<id>` opens an application in KUApps.
 
-## Resource membership
 ## Extension sources and evidence (#156)
 
 `lib/kua/extensionContract.js` defines strict JSON Schemas and runtime normalizers for manifest version 1 and evidence schema version 1. Manifests identify the source, publisher, semantic version, contract version, transport/runtime, supported scopes and declared permissions. Every capability is present as an explicit boolean: `discovery`, `enrichment`, `relationshipEvidence`, `telemetry`, `historicalSearch` and `findings`. A declaration describes a source; it does not authorize remote calls or replace a user's per-connection/tool selection.
@@ -164,7 +163,7 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 
 ## Resource membership
 
-`ApplicationRegistryService` is the one place that attaches, updates and detaches a resource of an application (#150). The APM routes delegate to it, so Observability, Architecture and KUApps get the same behaviour.
+`ApplicationRegistryService` is the one place that attaches, updates and detaches a resource of an application (#150). The APM routes delegate to it, including linking a CloudFormation stack (`link-stack`, which also brings back the stack resources the user had detached), so Observability, Architecture and KUApps get the same behaviour.
 
 - **Attach is idempotent.** Attaching the same resource again (same type and key) answers `200` with the existing resource instead of `201`, and creates no duplicate membership, node or relationship.
 - **Revision checks.** Attach, update and detach accept `expectedRevision`. A stale value answers `409 REVISION_CONFLICT` and writes nothing. A successful attach or detach moves the application `revision`.
