@@ -67,6 +67,10 @@ describe('KUApps resources and review (#239)', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Possible duplicates')
     expect(wrapper.text()).toContain('without account')
+    // Folded: a count and a sentence first; per group the name and how the copies differ (#239).
+    expect(wrapper.get('[data-test="possible-duplicates"]').element.open).toBe(false)
+    expect(wrapper.get('.kpd-group summary').text()).toContain('sg-1')
+    expect(wrapper.get('.kpd-group summary').text()).toContain('2 copies · 1 account(s) known, 1 without account')
     await wrapper.findAll('.kpd-resource')[1].trigger('click')
     expect(wrapper.emitted('select-resource')[0]).toEqual(['a3'])
   })
@@ -160,5 +164,35 @@ describe('tablists follow the arrow keys (#239)', () => {
     document.getElementById('a').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
     expect(clicked.at(-1)).toBe('c')
     document.body.innerHTML = ''
+  })
+})
+
+describe('KUApps recheck (#239)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    settings.lang = 'en'
+  })
+
+  it('the inspector knows where it is (Resources), and the Advisor explains a 404 instead of showing it raw', async () => {
+    const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
+    global.fetch = vi.fn(url => {
+      const text = String(url)
+      const ok = body => Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body), text: () => Promise.resolve('') })
+      if (text.includes('/advisor')) return Promise.resolve({ ok: false, status: 404, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ error: 'KUA Application not found' }), text: () => Promise.resolve('') })
+      if (text.includes('/catalog')) return ok([application])
+      if (text.includes('/registry')) return ok({ resources: RESOURCES, relationships: [] })
+      if (text.includes('/api/kua-apps/applications/app-1') && !text.includes('/views')) return ok({ id: 'app-1', scopes: [], local: { bindings: [], legacy: null } })
+      return ok([])
+    })
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture', applicationId: 'app-1' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('The Advisor could not read this application with the profile local:prod of this computer')
+    expect(wrapper.text()).not.toContain('KUA Application not found')
+
+    await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
+    await wrapper.findAll('.kuapps-resource-list .kuapps-resource-row')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'KUAppResourceInspector' }).props('context')).toBe('resources')
+    wrapper.unmount()
   })
 })

@@ -35,7 +35,7 @@
           <span class="obs-row-name"><i data-lucide="layout-dashboard"></i>{{ t('obs.wholeApplication') }}</span>
           <span v-if="issueList.length" class="obs-issue-count">{{ issueList.length }}</span>
         </button>
-        <p class="obs-count">{{ t('obs.count', { shown: visibleCount, total: data.resources.length }) }}</p>
+        <p class="obs-count" :title="t('obs.countScopeHint')" data-test="observability-count">{{ t('obs.countScoped', { shown: visibleCount, total: data.resources.length }) }}</p>
         <div v-for="group in groups" :key="group.type" class="obs-group" :data-test="`observability-group-${group.type}`">
           <h4><i :data-lucide="group.icon"></i>{{ group.label }} <small>{{ group.items.length }}</small></h4>
           <button

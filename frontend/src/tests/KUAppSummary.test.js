@@ -40,13 +40,13 @@ describe('KUApp summary (#171)', () => {
     expect(card(wrapper, 'structure').text()).toContain('1 finding(s) · 50% connected')
     expect(card(wrapper, 'review').text()).toContain('3')
     // Without signal states (an older backend), compatibility is never shown as data (#239).
-    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^0\s*of 2$/)
+    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^0\s*of 2 inventoried$/)
     expect(card(wrapper, 'coverage').text()).toContain('1 compatible; collect to see which have data')
     await wrapper.setProps({ registry: { relationships: [], resources: [
       { id: 1, signals: { state: 'current' } }, { id: 2, signals: { state: 'no_data' } }, { id: 3, signals: { state: 'gone' } },
       { id: 4, signals: { state: 'unsupported' } }, { id: 5, signals: { state: 'disabled' } },
     ] } })
-    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^1\s*of 5$/)
+    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^1\s*of 5 inventoried$/)
     expect(card(wrapper, 'coverage').text()).toContain('4 compatible · 2 enabled · 1 with recent data')
     expect(card(wrapper, 'coverage').classes()).toContain('attention')
     expect(wrapper.emitted('suggestions').at(-1)).toEqual([1])
@@ -110,6 +110,52 @@ describe('KUApp summary (#171)', () => {
     expect(wrapper.emitted('collect')).toHaveLength(1)
     await card(wrapper, 'structure').trigger('click')
     expect(wrapper.emitted('open-tab').at(-1)).toEqual(['review'])
+    wrapper.unmount()
+  })
+})
+
+describe('KUApp summary: one health for thresholds and open issues (#239)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function respondWithIssues(issues, { hold = false } = {}) {
+    let release
+    const gate = new Promise(resolve => { release = resolve })
+    global.fetch = vi.fn(url => {
+      const body = String(url).includes('/overview') ? { health: { status: 'healthy', signals: [] }, latestRun: { status: 'completed', finishedAt: Date.now() } }
+        : String(url).includes('/observability/issues') ? issues
+          : { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: null }
+      const answer = { ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) }
+      return hold && String(url).includes('/observability/issues') ? gate.then(() => answer) : Promise.resolve(answer)
+    })
+    return () => release()
+  }
+
+  it('a critical issue open in the range is never "healthy", and the card waits for it before answering', async () => {
+    const release = respondWithIssues({ counts: { critical: 1, warning: 0, info: 0 }, issues: [{ id: 'x', severity: 'critical', resourceName: 'payments-lambda', kind: 'threshold' }] }, { hold: true })
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws', registry: { resources: [{ id: 1, signals: { state: 'current' } }], relationships: [] } } })
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Evaluating')
+    expect(card(wrapper, 'health').attributes('disabled')).toBeDefined()
+    await card(wrapper, 'health').trigger('click')
+    expect(wrapper.emitted('open-signals')).toBeUndefined()
+
+    release()
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Critical issues')
+    expect(card(wrapper, 'health').text()).toContain('such as payments-lambda')
+    expect(card(wrapper, 'health').classes()).toContain('bad')
+    expect(wrapper.get('[data-test="summary-health-scope"]').text()).toMatch(/^Evaluated at .+ over 1 resource\(s\) with recent data$/)
+    await card(wrapper, 'health').trigger('click')
+    expect(wrapper.emitted('open-signals')[0][0]).toEqual({ hours: 24, filter: 'issues' })
+    wrapper.unmount()
+  })
+
+  it('healthy thresholds with warnings say so', async () => {
+    respondWithIssues({ counts: { critical: 0, warning: 2, info: 0 }, issues: [] })
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Healthy · 2 warning(s)')
+    expect(card(wrapper, 'health').classes()).toContain('attention')
     wrapper.unmount()
   })
 })

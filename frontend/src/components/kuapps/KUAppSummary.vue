@@ -15,10 +15,13 @@
     <p v-if="collectError" class="kuapp-summary-error" role="alert">{{ collectError }}</p>
 
     <div class="kuapp-summary-cards">
-      <button :class="['kuapp-card', healthTone]" data-test="summary-health" @click="$emit('open-signals', { hours: RANGE_HOURS[range], filter: healthTone === 'bad' ? 'issues' : 'observable' })">
+      <!-- One health (#239): the thresholds of the range and the issues open now. While either is
+           still loading it says so and does not decide where it leads. -->
+      <button :class="['kuapp-card', healthTone]" data-test="summary-health" :disabled="healthLoading" :aria-busy="healthLoading" @click="openHealth">
         <span class="kuapp-card-label">{{ t('kuapps.summary.health', { range }) }}</span>
         <strong class="kuapp-card-value">{{ healthTitle }}</strong>
         <small>{{ healthDetail }}</small>
+        <small v-if="healthScope" class="kuapp-card-scope" data-test="summary-health-scope">{{ healthScope }}</small>
       </button>
       <button :class="['kuapp-card', structureTone]" data-test="summary-structure" @click="$emit('open-tab', 'review')">
         <span class="kuapp-card-label">{{ t('kuapps.summary.structure') }}</span>
@@ -53,6 +56,7 @@
       :hours="RANGE_HOURS[range]"
       :limit="5"
       @action="issue => $emit('issue-action', issue)"
+      @loaded="data => { issuesData = data; issuesLoaded = true }"
       @show-all="$emit('open-signals', { hours: RANGE_HOURS[range], filter: 'issues' })"
     />
 
@@ -166,15 +170,43 @@ const analysis = computed(() => topology.value?.analysis || null)
 const registryTotal = computed(() => props.registry?.resources?.length || resources.value.length)
 
 const health = computed(() => overview.value?.health || null)
-const healthTone = computed(() => !hasSignals.value || !health.value || health.value.status === 'unknown'
-  ? 'unknown' : health.value.status === 'degraded' ? 'bad' : 'ok')
+// The issues open in the range, from the same list shown under the cards (KUAppIssues).
+const issuesData = ref(null)
+const issuesLoaded = ref(false)
+const issueCounts = computed(() => issuesData.value?.counts || { critical: 0, warning: 0, info: 0 })
+const firstCritical = computed(() => (issuesData.value?.issues || []).find(issue => issue.severity === 'critical') || null)
+const healthLoading = computed(() => hasSignals.value && (loading.value || !issuesLoaded.value))
+const healthTone = computed(() => {
+  if (!hasSignals.value || healthLoading.value) return 'unknown'
+  if (issueCounts.value.critical || health.value?.status === 'degraded') return 'bad'
+  if (!health.value || health.value.status === 'unknown') return issueCounts.value.warning ? 'attention' : 'unknown'
+  return issueCounts.value.warning ? 'attention' : 'ok'
+})
 const healthTitle = computed(() => {
   if (!hasSignals.value) return t('kuapps.summary.noSignals')
+  if (healthLoading.value) return t('kuapps.summary.evaluating')
+  // An open critical issue is never "healthy", whatever the aggregated thresholds say.
+  if (issueCounts.value.critical) return t('kuapps.summary.critical')
   if (!health.value || health.value.status === 'unknown') return t('kuapps.summary.noData')
-  return health.value.status === 'degraded' ? t('kuapps.summary.degraded') : t('kuapps.summary.healthy')
+  if (health.value.status === 'degraded') return t('kuapps.summary.degraded')
+  return issueCounts.value.warning ? t('kuapps.summary.healthyWithWarnings', { n: issueCounts.value.warning }) : t('kuapps.summary.healthy')
 })
+// What the health covers and when it was evaluated.
+const evaluatedAt = ref(null)
+const healthScope = computed(() => (hasSignals.value && !healthLoading.value && evaluatedAt.value
+  ? t('kuapps.summary.healthScope', { time: new Date(evaluatedAt.value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), n: coverage.value.withData })
+  : ''))
+function openHealth() {
+  if (healthLoading.value) return
+  const issues = issueCounts.value.critical || issueCounts.value.warning || health.value?.status === 'degraded'
+  emit('open-signals', { hours: RANGE_HOURS[range.value], filter: issues ? 'issues' : 'observable' })
+}
 const healthDetail = computed(() => {
   if (!hasSignals.value) return t('kuapps.summary.noSignalsHint')
+  if (healthLoading.value) return t('kuapps.summary.evaluatingHint')
+  if (issueCounts.value.critical) {
+    return t('kuapps.summary.criticalDetail', { n: issueCounts.value.critical, resource: firstCritical.value?.resourceName || '-' })
+  }
   const signal = health.value?.signals?.[0]
   if (signal) {
     const label = THRESHOLD_LABELS[signal.metric] ? t(THRESHOLD_LABELS[signal.metric]) : signal.metric
@@ -282,6 +314,7 @@ async function load() {
     if (id !== request) return
     overview.value = nextOverview
     topology.value = nextTopology
+    evaluatedAt.value = Date.now()
     emit('suggestions', nextTopology?.analysis?.suggestions?.length || 0)
   } catch (err) {
     if (id === request) error.value = err.message
@@ -291,6 +324,8 @@ async function load() {
   }
 }
 
+// A new application or range waits for its own issues before the health card answers.
+watch(() => [props.application?.id, range.value], () => { issuesData.value = null; issuesLoaded.value = false })
 watch(() => [props.application?.id, props.profileId, props.provider, range.value], load, { immediate: true })
 defineExpose({ reload: load })
 </script>
@@ -307,6 +342,8 @@ defineExpose({ reload: load })
 .kuapp-collect-confirm ul { margin: 0; padding-left: 18px; }
 .kuapp-collect-confirm small { color: var(--text-dim); }
 .kuapp-issues { margin-top: 12px; }
+.kuapp-card-scope { color: var(--text-dim); font-size: 12px; }
+.kuapp-card:disabled { cursor: progress; }
 .range-control { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .range-control button { height: 27px; min-width: 35px; border: 0; border-right: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 12px; cursor: pointer; }
 .range-control button:last-child { border-right: 0; }

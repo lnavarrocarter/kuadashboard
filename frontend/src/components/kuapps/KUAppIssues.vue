@@ -59,6 +59,8 @@ async function load() {
     emit('loaded', data.value)
   } catch (err) {
     error.value = err.message
+    // The Summary's health falls back to the thresholds instead of waiting forever.
+    emit('loaded', null)
   } finally {
     loading.value = false
   }

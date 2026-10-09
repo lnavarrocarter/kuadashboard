@@ -390,6 +390,20 @@ describe('APM collection controls', () => {
 })
 
 describe('Application provider logs', () => {
+  it('says when KUA hid secrets in the logs and what to do about them (#239)', async () => {
+    global.fetch = vi.fn(url => (url.includes('/logs/lambda/')
+      ? response({ events: [{ timestamp: '2026-10-09T12:00:00Z', message: 'DB_PASSWORD: [redacted]' }], redaction: { secrets: 2, types: { password: 2 } } })
+      : response({ groups: [] })))
+    const wrapper = mount(ApmApplicationLogs, {
+      props: { provider: 'aws', profileId: 'aws:dev', application: { id: 'app-orders', region: 'us-east-1' }, resources: [{ id: 'lambda-1', type: 'lambda', provider: 'aws', name: 'orders-worker' }] },
+    })
+    await flushPromises()
+    const notice = wrapper.get('[data-test="logs-redaction"]').text()
+    expect(notice).toContain('KUA hid 2 secret(s) in these logs.')
+    expect(notice).toContain('rotate them and remove that logging at the source')
+    wrapper.unmount()
+  })
+
   it('loads AWS resource logs from CloudWatch in the selected Application context', async () => {
     global.fetch = vi.fn((url) => {
       expect(url).toContain('/api/cloud/aws/logs/lambda/orders-worker')

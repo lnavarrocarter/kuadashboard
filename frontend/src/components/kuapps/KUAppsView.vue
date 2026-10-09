@@ -271,7 +271,7 @@
                   :signals-available="canInspectSignals"
                   :collection="signalsCollection"
                   :hours="signalsEntry.hours"
-                  :context="resources"
+                  context="resources"
                   :initial-tab="inspectorTab"
                   @close="selectedResourceId = ''"
                   @select-resource="selectRegistryResource"
@@ -284,16 +284,21 @@
                 />
               </aside>
             </div>
-            <ArchitectureView
-              v-if="architectureProfileId"
-              ref="architectureRef"
-              :profile-id="architectureProfileId"
-              :application-id="selectedApplicationId"
-              hide-application-list
-              workspace-mode
-              workspace-section="resources"
-              @request-resource-picker="openUnifiedResourcePicker"
-            />
+            <!-- One operational list (#239): the registry's technical table is a separate, folded
+                 section with its own scope, and it is only built when opened. -->
+            <details v-if="architectureProfileId" class="kuapps-registry-details" data-test="registry-details" @toggle="registryDetailsOpen = $event.target.open">
+              <summary><strong>{{ t('kuapps.resources.registryDetails') }}</strong><small>{{ t('kuapps.resources.registryDetailsHint') }}</small></summary>
+              <ArchitectureView
+                v-if="registryDetailsOpen"
+                ref="architectureRef"
+                :profile-id="architectureProfileId"
+                :application-id="selectedApplicationId"
+                hide-application-list
+                workspace-mode
+                workspace-section="resources"
+                @request-resource-picker="openUnifiedResourcePicker"
+              />
+            </details>
           </section>
 
           <section v-else-if="workspaceView === 'review'" class="kuapps-review-workspace">
@@ -309,7 +314,6 @@
               </div>
             </div>
             <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
-            <KUAppPossibleDuplicates :key="`duplicates:${selectedApplicationId}:${applicationRegistry.resources.length}`" :application-id="selectedApplicationId" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -335,6 +339,8 @@
                 </article>
               </div>
             </template>
+            <!-- Decisions first; what KUA could not join, folded at the end (#239). -->
+            <KUAppPossibleDuplicates :key="`duplicates:${selectedApplicationId}:${applicationRegistry.resources.length}`" :application-id="selectedApplicationId" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
           </section>
 
           <div v-else-if="workspaceView === 'signals' || workspaceView === 'map'" class="kuapps-map-signals-workspace">
@@ -416,7 +422,7 @@
                 :signals-available="canInspectSignals"
                 :collection="signalsCollection"
                 :hours="signalsEntry.hours"
-                :context="map"
+                context="map"
                 :initial-tab="inspectorTab"
                 @close="clearResourceSelection"
                 @select-resource="selectRegistryResource"
@@ -739,7 +745,12 @@ let detailRequest = 0
 
 // The product Advisor route reads an application through its profile, or a verified scope
 // profile for an application without provider.
-const advisorProfileId = computed(() => selectedApplication.value?.profileId || architectureProfileId.value || '')
+// An application without provider waits for its own detail: until then the profile could come from
+// the application shown before, which answers "KUA Application not found" (#239).
+const advisorProfileId = computed(() => {
+  if (selectedApplication.value?.profileId) return selectedApplication.value.profileId
+  return selectedApplicationDetail.value?.id === selectedApplication.value?.id ? architectureProfileId.value || '' : ''
+})
 
 async function loadProductAdvisor() {
   const application = selectedApplication.value
@@ -752,7 +763,13 @@ async function loadProductAdvisor() {
     })
     if (id === productAdvisorRequest) { productAdvisor.value = report; productAdvisorError.value = '' }
   } catch (error) {
-    if (id === productAdvisorRequest) { productAdvisor.value = null; productAdvisorError.value = error.message }
+    if (id === productAdvisorRequest) {
+      productAdvisor.value = null
+      // Say which capability failed, that the rest still works, and what to do; never the raw error.
+      productAdvisorError.value = error.status === 404
+        ? t('kuapps.advisor.notReachable', { profile: advisorProfileId.value })
+        : t('kuapps.advisor.failed', { error: error.message })
+    }
   } finally {
     if (id === productAdvisorRequest) productAdvisorLoading.value = false
   }
@@ -978,6 +995,8 @@ function onWorkspaceTabKeydown(event) {
 function selectApplication(application) {
   if (isNarrow()) sidebarCollapsed.value = true
   localApplicationId.value = application.id
+  // The views (and their owners) of the previous application must not pick this one's profile (#239).
+  selectedApplicationViews.value = []
   selectedApplicationDetail.value = application.local ? application : null
   applicationRegistry.value = { resources: [], relationships: [] }
   selectedResourceId.value = ''
@@ -1085,6 +1104,7 @@ function resourceConnection(resource) {
   return [resource.scopeId, resource.location].filter(Boolean).join(' · ') || t('kuapps.scopeUnknown')
 }
 const resourceConnectionTitle = resource => (resource.provider === 'kubernetes' ? resource.kubeContext || resource.scopeId || '' : resourceConnection(resource))
+const registryDetailsOpen = ref(false)
 const resourceFilter = reactive({ search: '', provider: '', type: '', scope: '', namespace: '', state: '' })
 const resourceFacets = computed(() => {
   const resources = applicationRegistry.value.resources
@@ -1445,6 +1465,9 @@ defineExpose({ reloadActiveTab })
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
 .kuapps-inspector-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-inspector-identity code { font-size: 12px; overflow-wrap: anywhere; }
+.kuapps-registry-details { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; }
+.kuapps-registry-details > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; }
+.kuapps-registry-details > summary small { color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-resource-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .kuapps-resource-filters input { flex: 1 1 200px; min-width: 0; }

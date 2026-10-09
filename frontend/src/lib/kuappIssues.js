@@ -28,7 +28,7 @@ export function signalText(t, signal) {
 
 /** What the issue says, in one line. */
 export function issueEvidence(t, issue) {
-  if (issue.kind === 'threshold') return signalText(t, issue.evidence)
+  if (issue.kind === 'threshold') return issue.evidence?.metric ? signalText(t, issue.evidence) : t('kuapps.issue.unknownCause')
   if (issue.kind === 'collection_failed') {
     return t('kuapps.issue.collectionFailed', { cause: [issue.evidence?.errorCode, issue.evidence?.message].filter(Boolean).join(': ') || t('kuapps.issue.unknownCause') })
   }
