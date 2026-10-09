@@ -6,6 +6,8 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
 import KUAppsView from '../components/kuapps/KUAppsView.vue'
 import KUAppPossibleDuplicates from '../components/kuapps/KUAppPossibleDuplicates.vue'
+import KUAppScopes from '../components/kuapps/KUAppScopes.vue'
+import KUAppSync from '../components/kuapps/KUAppSync.vue'
 import { settings } from '../composables/useSettings'
 
 const CONTEXT = 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev'
@@ -67,5 +69,35 @@ describe('KUApps resources and review (#239)', () => {
     expect(wrapper.text()).toContain('without account')
     await wrapper.findAll('.kpd-resource')[1].trigger('click')
     expect(wrapper.emitted('select-resource')[0]).toEqual(['a3'])
+  })
+})
+
+describe('KUApps connections and the join (#239)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    settings.lang = 'en'
+  })
+
+  it('"Verified" says which profile of this computer reaches the connection', async () => {
+    const scope = { key: 'kua-scope:aws', provider: 'aws', scopeId: '111111111111', location: 'us-east-1', label: 'Orders account' }
+    respond(url => (url.startsWith('/api/kua-apps/') ? { id: 'app-1', revision: 1, scopes: [scope], warnings: [], local: { bindings: [{ scopeKey: scope.key, profileId: 'local:prod', status: 'verified' }], legacy: null } }
+      : url === '/api/cloud/aws/local-profiles' ? [{ name: 'prod' }] : []))
+    const wrapper = mount(KUAppScopes, { props: { applicationId: 'app-1' } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="scope-bound-profile"]').text()).toBe('Verified with prod (~/.aws) on this computer')
+    wrapper.unmount()
+  })
+
+  it('names the resources on one side only, with the next step, and selects one', async () => {
+    const one = (id, sources) => ({ id, displayName: id, provider: 'aws', resourceType: 'lambda', sources, divergent: true })
+    respond(() => ({ projectId: ['p'], resources: [one('orders-api', ['apm_resource']), one('sg-1', ['architecture_node']), { ...one('both', ['apm_resource', 'architecture_node']), divergent: false }], syncStatus: { divergentResourceCount: 2, divergentRelationshipCount: 0 } }))
+    const wrapper = mount(KUAppSync, { props: { application: { id: 'app-1', name: 'Dev', profileId: 'local:prod' }, provider: 'aws' } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="sync-one-sided-observedOnly"]').text()).toContain('Observed but not on the map (1)')
+    expect(wrapper.get('[data-test="sync-one-sided-observedOnly"]').text()).toContain('Add resources')
+    expect(wrapper.get('[data-test="sync-one-sided-mapOnly"]').text()).toContain('sg-1')
+    expect(wrapper.text()).not.toContain('both')
+    await wrapper.get('[data-test="sync-one-sided-mapOnly"] button').trigger('click')
+    expect(wrapper.emitted('select-resource')[0]).toEqual(['sg-1'])
   })
 })

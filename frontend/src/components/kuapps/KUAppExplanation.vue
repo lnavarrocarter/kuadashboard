@@ -39,6 +39,7 @@
             </li>
           </ul>
           <p v-for="limit in result.limits" :key="limit" class="kuapp-explain-muted">{{ t(`kuapps.explain.limit.${limit}`, { source: result.source.name, target: result.target.name }) }}</p>
+          <button v-if="result.signalsResourceId" class="btn sm" data-test="explain-open-signals" @click="$emit('open-signals', result.signalsResourceId)"><i data-lucide="activity"></i> {{ t('kuapps.explain.openSignals', { name: result.signalsResourceId === result.source.id ? result.source.name : result.target.name }) }}</button>
           <p v-if="result.signals.syncedAt" class="kuapp-explain-muted">{{ t('kuapps.explain.synced', { date: new Date(result.signals.syncedAt).toLocaleString() }) }}</p>
         </section>
 
@@ -77,7 +78,7 @@ const props = defineProps({
   // { sourceResourceId, targetResourceId, sourceName, targetName, relationType, status, confidence, evidence }
   request: { type: Object, default: null },
 })
-defineEmits(['close'])
+defineEmits(['close', 'open-signals'])
 const { t } = useI18n()
 const result = ref(null)
 const loading = ref(false)

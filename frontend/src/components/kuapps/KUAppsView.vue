@@ -148,7 +148,7 @@
 
               <template v-else-if="settingsSection === 'sources'">
                 <header class="kuapps-section-heading"><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.sync.title') }}</h3><small>{{ t('kuapps.sync.hint') }}</small></div></header>
-                <KUAppSync :application="selectedApplication" :provider="apmProvider" :profile-id="apmProfileId" :architecture-profile-id="architectureProfileId" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" />
+                <KUAppSync :application="selectedApplication" :provider="apmProvider" :profile-id="apmProfileId" :architecture-profile-id="architectureProfileId" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
                 <section class="kuapp-cfn-sync">
                   <h4>{{ t('kuapps.sync.cfnTitle') }}</h4>
                   <p class="kuapps-add-explain"><i data-lucide="info"></i><span><strong>{{ t('kuapps.sync.what') }}</strong> {{ t('kuapps.sync.cfnExplain') }}</span></p>
@@ -428,7 +428,7 @@
           </div>
           </div>
         </template>
-        <KUAppExplanation :application-id="selectedApplicationId" :request="explainRequest" @close="explainRequest = null" />
+        <KUAppExplanation :application-id="selectedApplicationId" :request="explainRequest" @close="explainRequest = null" @open-signals="resourceId => { explainRequest = null; openSignals({ resourceId }) }" />
         <aside v-if="addResourcesOpen && selectedApplication" class="kuapps-add-panel" role="dialog" :aria-label="t('archView.addResources')">
           <header>
             <div><span class="kuapps-kicker">{{ selectedApplication.name }}</span><h3>{{ t('archView.addResources') }}</h3></div>

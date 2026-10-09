@@ -54,6 +54,21 @@ describe('KUApp relationship explanation (#172)', () => {
     wrapper.unmount()
   })
 
+  it('without signals, names the side whose logs would confirm it and opens its signals (#239)', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve({
+      ...explanation, source: { id: 'sg', name: 'sg-1', type: 'ec2' }, target: { id: 'api', name: 'checkout-api', type: 'lambda' },
+      signals: { ...explanation.signals, target: null, source: null, mentions: [] }, limits: ['no_signals_target'], signalsResourceId: 'api',
+    }) }))
+    const wrapper = mount(KUAppExplanation, { props: { applicationId: 'app-a', request: { sourceResourceId: 'sg', targetResourceId: 'api' } }, global: { stubs: { teleport: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('sg-1 writes no logs KUA can read. Cache the logs of checkout-api')
+    const open = wrapper.get('[data-test="explain-open-signals"]')
+    expect(open.text()).toBe('Open signals of checkout-api')
+    await open.trigger('click')
+    expect(wrapper.emitted('open-signals')[0]).toEqual(['api'])
+    wrapper.unmount()
+  })
+
   it('shows nothing and asks nothing without a request', async () => {
     const wrapper = mount(KUAppExplanation, { props: { applicationId: 'app-a', request: null }, global: { stubs: { teleport: true } } })
     await flushPromises()
