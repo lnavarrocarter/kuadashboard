@@ -27,6 +27,11 @@
           </button>
         </div>
         <p v-if="outcome" :class="['acm-outcome', outcome.ok ? 'ok' : 'warn']" data-test="agent-connect-outcome">{{ outcome.text }}</p>
+        <!-- KUApps changes from agents (#155): off until the user allows them on this computer. -->
+        <label class="acm-writes" data-test="agent-writes">
+          <input type="checkbox" :checked="agentWrites" :disabled="writesBusy" @change="setAgentWrites($event.target.checked)" />
+          <span><strong>{{ t('agentConnect.writes') }}</strong><small>{{ t(agentWrites ? 'agentConnect.writesOn' : 'agentConnect.writesOff') }}</small></span>
+        </label>
         <ul class="acm-notes">
           <li>{{ t('agentConnect.noteOpen') }}</li>
           <li v-if="launch.packaged">{{ t('agentConnect.notePackaged') }}</li>
@@ -73,6 +78,18 @@ const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id 
 const installable = computed(() => active.value === 'claude' || active.value === 'codex')
 // 'install' | 'verify' while one runs; outcome: { ok, text } of the last one.
 const busy = ref('')
+const agentWrites = ref(false)
+const writesBusy = ref(false)
+
+async function setAgentWrites(writes) {
+  writesBusy.value = true
+  try {
+    const result = await apiFetch('/api/kua-apps/agent-access', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) })
+    agentWrites.value = result.writes === true
+  } catch (err) {
+    toast(err.message, 'error')
+  } finally { writesBusy.value = false }
+}
 const outcome = ref(null)
 watch(active, () => { outcome.value = null })
 
@@ -109,7 +126,12 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    launch.value = await apiFetch('/api/system/mcp')
+    const [nextLaunch, access] = await Promise.all([
+      apiFetch('/api/system/mcp'),
+      apiFetch('/api/kua-apps/agent-access').catch(() => ({ writes: false })),
+    ])
+    launch.value = nextLaunch
+    agentWrites.value = access?.writes === true
   } catch (err) {
     error.value = err.message
   } finally {
@@ -132,6 +154,9 @@ watch(() => props.show, show => { if (show) load() }, { immediate: true })
 <style scoped>
 .acm { display: flex; flex-direction: column; gap: 10px; font-size: 12px; min-width: 0; }
 .acm-intro { margin: 0; line-height: 1.5; }
+.acm-writes { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.acm-writes span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acm-writes small { color: var(--text-dim); line-height: 1.4; }
 .acm-dim { margin: 0; color: var(--text-dim); }
 .acm-notice { margin: 0; color: var(--yellow); display: flex; gap: 6px; align-items: center; }
 .acm-notice svg { width: 14px; height: 14px; }
