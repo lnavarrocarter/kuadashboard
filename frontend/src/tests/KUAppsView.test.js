@@ -222,6 +222,48 @@ describe('KUApps navigation', () => {
     wrapper.unmount()
   })
 
+  it('after a reload, opens the Map of a multi-account application with the profile that owns its view (#239)', async () => {
+    const application = { id: 'app-multi', name: 'Multi', provider: null, profileId: null, architectureProjectIds: ['project-a'] }
+    const detail = {
+      ...application, revision: 4,
+      scopes: [
+        { key: 'scope-aws', provider: 'aws', scopeId: '111111111111', location: 'us-east-1' },
+        { key: 'scope-kube', provider: 'kubernetes', scopeId: 'prod-cluster', location: '' },
+      ],
+      local: { bindings: [
+        { scopeKey: 'scope-aws', profileId: 'local:aws-prod', status: 'verified' },
+        { scopeKey: 'scope-kube', profileId: 'local:kube-prod', status: 'verified' },
+      ], legacy: null },
+    }
+    const calls = []
+    global.fetch = vi.fn(url => {
+      const text = String(url)
+      calls.push(text)
+      // The observability settings answer 404 (as the AWS route did): the application must not disappear.
+      if (text.startsWith('/api/observability/')) return Promise.resolve({ ok: false, status: 404, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ error: 'Application not found' }) })
+      const body = text.includes('/catalog') ? [application]
+        : text.endsWith('/views') ? [{ projectId: 'project-a', name: 'Multi map', profileId: 'local:kube-prod', revision: 3 }]
+          : text.includes('/registry') ? { resources: [], relationships: [] }
+            : text.includes('/api/kua-apps/applications/app-multi') ? detail : []
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) })
+    })
+    const wrapper = mount(KUAppsView, {
+      props: { activeView: 'architecture', applicationId: application.id, observabilityProvider: 'aws' },
+      global: { stubs: { ArchitectureView: true, ApmObservabilityView: true, KUAppScopes: true } },
+    })
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
+    await flushPromises()
+
+    // No "add the accounts" prompt: the view's owner is one of the verified scopes.
+    const map = wrapper.findAllComponents({ name: 'ArchitectureView' }).find(view => view.props('workspaceSection') === 'canvas')
+    expect(map.props('profileId')).toBe('local:kube-prod')
+    // The settings were asked where the application lives (generic), never on the global AWS provider.
+    expect(calls.some(url => url.startsWith('/api/observability/aws/'))).toBe(false)
+    expect(calls).toContain('/api/observability/generic/applications/app-multi')
+    wrapper.unmount()
+  })
+
   it('keeps a legacy application on its own profile after migration gave it unverified scopes', async () => {
     const application = { id: 'app-legacy', name: 'cobranza-ia', provider: 'aws', profileId: 'local:prod', region: 'us-east-1' }
     const detail = {
@@ -511,6 +553,9 @@ describe('KUApps navigation', () => {
     await wrapper.get('.kuapps-resource-row').trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
     expect(wrapper.get('.kuapps-signals-inspector dl').text()).toContain('lambda')
+    // Browsers do not render the content of a native <template> (jsdom does): the inspector looked empty (#239).
+    expect(wrapper.find('.kuapps-signals-inspector template').exists()).toBe(false)
+    expect(wrapper.get('[data-test="map-inspector-body"]').text()).toContain('arn:aws:lambda:us-east-1:123456789012:function:orders-api')
     await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
 
     const signals = wrapper.findComponent({ name: 'ApmObservabilityView' })

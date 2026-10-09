@@ -39,8 +39,16 @@ describe('KUApp summary (#171)', () => {
     expect(card(wrapper, 'structure').text()).toContain('72')
     expect(card(wrapper, 'structure').text()).toContain('1 finding(s) · 50% connected')
     expect(card(wrapper, 'review').text()).toContain('3')
-    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^1\s*of 2$/)
-    expect(card(wrapper, 'coverage').text()).toContain('No collector:')
+    // Without signal states (an older backend), compatibility is never shown as data (#239).
+    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^0\s*of 2$/)
+    expect(card(wrapper, 'coverage').text()).toContain('1 compatible; collect to see which have data')
+    await wrapper.setProps({ registry: { relationships: [], resources: [
+      { id: 1, signals: { state: 'current' } }, { id: 2, signals: { state: 'no_data' } }, { id: 3, signals: { state: 'gone' } },
+      { id: 4, signals: { state: 'unsupported' } }, { id: 5, signals: { state: 'disabled' } },
+    ] } })
+    expect(card(wrapper, 'coverage').find('.kuapp-card-value').text()).toMatch(/^1\s*of 5$/)
+    expect(card(wrapper, 'coverage').text()).toContain('4 compatible · 2 enabled · 1 with recent data')
+    expect(card(wrapper, 'coverage').classes()).toContain('attention')
     expect(wrapper.emitted('suggestions').at(-1)).toEqual([1])
     wrapper.unmount()
   })

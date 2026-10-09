@@ -216,8 +216,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return viewIdsOf(application).map(projectId => {
       const project = database.getProject(projectId);
       const graph = project ? database.getGraph(projectId) : null;
+      // profileId is the local profile that owns the view (KUApps opens the Map with it); the MCP
+      // tools do not pass it on.
       return project
-        ? { projectId, name: project.name, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
+        ? { projectId, name: project.name, profileId: project.profileId, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
         : { projectId, missing: true };
     });
   }));

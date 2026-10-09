@@ -5,13 +5,14 @@
       <strong>{{ formattedLatest }}</strong>
     </div>
     <small v-if="freshness" class="cmc-freshness">{{ freshness }}</small>
-    <div v-if="!points.length" class="cmc-empty">No data in this range</div>
+    <div v-if="!points.length" class="cmc-empty">{{ t('chart.noData') }}</div>
     <div v-else class="cmc-canvas"><canvas ref="canvasEl"></canvas></div>
   </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '../../composables/useI18n'
 import {
   CategoryScale,
   Chart,
@@ -25,6 +26,7 @@ import {
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip)
 
+const { t } = useI18n()
 const props = defineProps({
   label: { type: String, default: '' },
   unit: { type: String, default: '' },
