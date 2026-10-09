@@ -1169,7 +1169,10 @@ function awsProfileFor(resource) {
   const region = awsRegion({ ...resource, location: resource?.location || registered?.location })
   const scopes = verifiedResourceScopes.value.filter(scope => scope.provider === 'aws')
   const scope = scopes.find(item => accountId && item.scopeId === accountId) || (scopes.length === 1 ? scopes[0] : null)
-  return { awsProfileId: scope?.profileId || selectedApplication.value?.profileId || '', awsRegion: region }
+  const profileId = scope?.profileId || selectedApplication.value?.profileId || ''
+  // Several accounts and none known for this resource: say so instead of choosing credentials silently.
+  const ambiguous = !profileId && scopes.length > 1
+  return { awsProfileId: profileId, awsRegion: region, awsAccountId: accountId || scope?.scopeId || '', awsAmbiguous: ambiguous }
 }
 function openAwsResource(resource) {
   emit('open-aws-resource', { ...resource, ...awsProfileFor(resource) })
