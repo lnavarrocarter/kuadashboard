@@ -284,16 +284,21 @@
                 />
               </aside>
             </div>
-            <ArchitectureView
-              v-if="architectureProfileId"
-              ref="architectureRef"
-              :profile-id="architectureProfileId"
-              :application-id="selectedApplicationId"
-              hide-application-list
-              workspace-mode
-              workspace-section="resources"
-              @request-resource-picker="openUnifiedResourcePicker"
-            />
+            <!-- One operational list (#239): the registry's technical table is a separate, folded
+                 section with its own scope, and it is only built when opened. -->
+            <details v-if="architectureProfileId" class="kuapps-registry-details" data-test="registry-details" @toggle="registryDetailsOpen = $event.target.open">
+              <summary><strong>{{ t('kuapps.resources.registryDetails') }}</strong><small>{{ t('kuapps.resources.registryDetailsHint') }}</small></summary>
+              <ArchitectureView
+                v-if="registryDetailsOpen"
+                ref="architectureRef"
+                :profile-id="architectureProfileId"
+                :application-id="selectedApplicationId"
+                hide-application-list
+                workspace-mode
+                workspace-section="resources"
+                @request-resource-picker="openUnifiedResourcePicker"
+              />
+            </details>
           </section>
 
           <section v-else-if="workspaceView === 'review'" class="kuapps-review-workspace">
@@ -1098,6 +1103,7 @@ function resourceConnection(resource) {
   return [resource.scopeId, resource.location].filter(Boolean).join(' · ') || t('kuapps.scopeUnknown')
 }
 const resourceConnectionTitle = resource => (resource.provider === 'kubernetes' ? resource.kubeContext || resource.scopeId || '' : resourceConnection(resource))
+const registryDetailsOpen = ref(false)
 const resourceFilter = reactive({ search: '', provider: '', type: '', scope: '', namespace: '', state: '' })
 const resourceFacets = computed(() => {
   const resources = applicationRegistry.value.resources
@@ -1458,6 +1464,9 @@ defineExpose({ reloadActiveTab })
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
 .kuapps-inspector-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-inspector-identity code { font-size: 12px; overflow-wrap: anywhere; }
+.kuapps-registry-details { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; }
+.kuapps-registry-details > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; }
+.kuapps-registry-details > summary small { color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-resource-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .kuapps-resource-filters input { flex: 1 1 200px; min-width: 0; }

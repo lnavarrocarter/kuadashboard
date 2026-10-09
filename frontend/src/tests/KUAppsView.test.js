@@ -456,6 +456,12 @@ describe('KUApps navigation', () => {
     expect(settings).not.toContain('Add resources')
 
     await tabs()[1].trigger('click')
+    // The registry's technical table is folded and built only when opened (#239).
+    expect(map().exists()).toBe(false)
+    const details = wrapper.get('[data-test="registry-details"]')
+    expect(details.text()).toContain('The search and filters above do not apply here')
+    details.element.open = true
+    await details.trigger('toggle')
     expect(map().props('workspaceSection')).toBe('resources')
     await wrapper.get('[data-test="kuapps-resources-add"]').trigger('click')
     await flushPromises()
