@@ -72,7 +72,7 @@
       <div v-if="store.writeConflict" class="alert-error architecture-error" role="alert" data-test="picker-conflict">{{ t('archView.writeConflict') }}</div>
       <div v-else-if="store.error" class="alert-error architecture-error" role="alert" data-test="picker-error">{{ t('archView.writeFailed', { error: store.error }) }}</div>
       <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="closePicker" @imported="pickerImported" />
-      <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" :preferred-context="pickerKubeContext" repairable @close="closePicker" @imported="pickerImported" @repair-connection="emit('repair-connection')" />
       <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="closePicker" @imported="pickerImported" />
@@ -425,7 +425,7 @@ const props = defineProps({
 const emit = defineEmits([
   'open-observability', 'application-context', 'resource-selected', 'request-resource-picker',
   'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods',
-  'open-aws-resource', 'open-aws-logs', 'resources-imported', 'picker-closed',
+  'open-aws-resource', 'open-aws-logs', 'resources-imported', 'picker-closed', 'repair-connection',
 ])
 const store = useArchitectureStore()
 const { apiFetch } = useApi()
@@ -572,7 +572,18 @@ function syncCountItems(counts = {}, labels) {
   return Object.entries(labels).map(([key, label]) => ({ key, label, count: counts?.[key] || 0 }))
 }
 
-async function loadProfile(profileId) {
+// Mounting and opening the picker both load the profile: they share one load, or the later one
+// would close the picker and empty its Kubernetes contexts (#239).
+let profileLoad = null
+function loadProfile(profileId) {
+  const key = `${profileId || ''}|${props.applicationId || ''}|${props.projectId || ''}`
+  if (profileLoad?.key === key) return profileLoad.promise
+  const promise = loadProfileNow(profileId).finally(() => { if (profileLoad?.promise === promise) profileLoad = null })
+  profileLoad = { key, promise }
+  return promise
+}
+
+async function loadProfileNow(profileId) {
   resourceProvider.value = ''
   selectedWorkflow.value = null
   traceOverlay.value = null
@@ -1047,7 +1058,9 @@ function handleArchitectureTabKeydown(event) {
   tabs[nextIndex]?.click()
 }
 
-async function openResourcePicker(provider = 'aws') {
+const pickerKubeContext = ref('')
+async function openResourcePicker(provider = 'aws', { kubeContext = '' } = {}) {
+  pickerKubeContext.value = kubeContext
   if (props.workspaceMode && (store.activeProfileId !== props.profileId || store.selectedApplicationId !== props.applicationId)) {
     await loadProfile(props.profileId)
   }

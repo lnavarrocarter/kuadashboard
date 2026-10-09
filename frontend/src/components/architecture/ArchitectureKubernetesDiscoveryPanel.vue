@@ -24,7 +24,11 @@
         <button class="btn sm" :disabled="store.discovering" @click="loadContexts"><i data-lucide="refresh-cw"></i> {{ t('archK8s.refreshContexts') }}</button>
         <button class="btn sm primary" :disabled="store.discovering || !contextId" @click="previewResources"><i data-lucide="scan-search"></i> {{ t('archK8s.previewResources') }}</button>
       </div>
-      <div v-if="!store.discovering && !store.kubernetesContexts.length" class="kubernetes-empty">{{ t('archK8s.noContexts') }}</div>
+      <!-- Contexts come from this computer's kubeconfig. A failure says why and how to recover (#239). -->
+      <div v-if="!store.discovering && contextProblem" class="kubernetes-empty" role="alert" data-test="k8s-context-problem">
+        <span>{{ contextProblem }}</span>
+        <button v-if="repairable" class="btn sm" data-test="k8s-repair-connection" @click="$emit('repair-connection')"><i data-lucide="wrench"></i> {{ t('archK8s.repairConnection') }}</button>
+      </div>
     </template>
 
     <template v-else>
@@ -69,7 +73,13 @@ import { useArchitectureStore } from '../../stores/useArchitectureStore'
 import { useI18n } from '../../composables/useI18n'
 import { alreadyAddedLabel, nativeIdentity } from '../../lib/discoveryMembership'
 
-const emit = defineEmits(['close', 'imported'])
+const props = defineProps({
+  // The kube context of the connection chosen in Add resources: preselected when this computer has it.
+  preferredContext: { type: String, default: '' },
+  // Offer "Repair connection" (the host knows where the connection is configured).
+  repairable: { type: Boolean, default: false },
+})
+const emit = defineEmits(['close', 'imported', 'repair-connection'])
 const store = useArchitectureStore()
 const { t } = useI18n()
 const contextId = ref('')
@@ -89,10 +99,24 @@ const resourceGroups = computed(() => {
 })
 const degradedContexts = computed(() => (store.kubernetesPreview?.health || []).filter(item => item.status === 'degraded').length)
 
+const loadError = ref('')
+const contextProblem = computed(() => {
+  if (loadError.value) return t('archK8s.contextsFailed', { error: loadError.value })
+  if (!store.kubernetesContexts.length) return t('archK8s.noContexts')
+  if (props.preferredContext && !store.kubernetesContexts.some(context => context.id === props.preferredContext)) {
+    return t('archK8s.contextMissing', { context: props.preferredContext })
+  }
+  return ''
+})
+
 async function loadContexts() {
   contextId.value = ''
   selectedNodeIds.value = []
+  loadError.value = ''
   await store.loadKubernetesContexts()
+  // Shown here with its cause, not as a failed write of the map.
+  if (store.error) { loadError.value = store.error; store.error = null }
+  if (store.kubernetesContexts.some(context => context.id === props.preferredContext)) contextId.value = props.preferredContext
   refreshIcons()
 }
 
@@ -162,6 +186,7 @@ onMounted(async () => { await loadContexts(); refreshIcons() })
 .kubernetes-controls { align-items: flex-end; }
 .kubernetes-controls label { display: flex; flex: 1; flex-direction: column; gap: 4px; font-size: 11px; }
 .kubernetes-empty, .kubernetes-warning { padding: 14px 12px; color: var(--text-dim); }
+.kubernetes-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .kubernetes-warning { color: #d29922; }
 .kubernetes-summary span { color: var(--text-dim); font-size: 11px; }
 .kubernetes-summary strong { color: var(--text); }

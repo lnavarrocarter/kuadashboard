@@ -469,6 +469,7 @@
               resource-picker-only
               @resources-imported="handleResourcesImported"
               @picker-closed="addResourcesProvider = ''"
+              @repair-connection="repairAddResourcesConnection"
             />
           </div>
         </aside>
@@ -1093,15 +1094,31 @@ async function openUnifiedResourcePicker() {
   if (!canAddResources.value) return
   addResourcesOpen.value = true
   addResourcesProvider.value = ''
-  if (pickerProfileId.value && addResourcesProviders.value.length === 2) await chooseAddResourcesProvider(addResourcesProviders.value[0])
+  await openConnectionProvider()
   nextTick(() => createIcons({ icons }))
 }
+
+// The chosen connection already says where to discover: its provider opens directly, and a
+// Kubernetes connection preselects its context (#239).
+async function openConnectionProvider() {
+  if (!pickerProfileId.value) return
+  const scopeProvider = activeResourceScope.value?.provider
+  if (scopeProvider && addResourcesProviders.value.includes(scopeProvider)) await chooseAddResourcesProvider(scopeProvider)
+  else if (addResourcesProviders.value.length === 2) await chooseAddResourcesProvider(addResourcesProviders.value[0])
+}
+watch(activeResourceScopeKey, () => { if (addResourcesOpen.value) openConnectionProvider() })
 
 async function chooseAddResourcesProvider(provider) {
   addResourcesProvider.value = provider
   await nextTick()
-  await pickerRef.value?.openResourcePicker?.(provider)
+  const scope = activeResourceScope.value
+  await pickerRef.value?.openResourcePicker?.(provider, { kubeContext: provider === 'kubernetes' && scope?.provider === 'kubernetes' ? scope.scopeId : '' })
   nextTick(() => createIcons({ icons }))
+}
+
+function repairAddResourcesConnection() {
+  closeAddResources()
+  onIssueAction({ action: 'bind_scope' })
 }
 
 function closeAddResources() {

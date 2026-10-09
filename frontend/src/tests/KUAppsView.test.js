@@ -211,14 +211,20 @@ describe('KUApps navigation', () => {
     expect(wrapper.find('.kuapps-overview-content').exists()).toBe(true)
     expect(wrapper.find('.kuapps-add-providers').exists()).toBe(false)
 
+    // The connection decides the provider and the context: no second click on Kubernetes (#239).
     await wrapper.get('.kuapps-scope-selector').setValue('scope-kube')
+    await flushPromises()
     const providers = wrapper.findAll('.kuapps-add-providers button')
     expect(providers.map(button => button.text())).toEqual(['Kubernetes', 'Manual resource'])
-    await providers[0].trigger('click')
-    await flushPromises()
-
-    expect(openResourcePicker).toHaveBeenCalledWith('kubernetes')
+    expect(providers[0].classes()).toContain('primary')
+    expect(openResourcePicker).toHaveBeenCalledWith('kubernetes', { kubeContext: 'prod-cluster' })
     expect(wrapper.findComponent(ArchitectureStub).props('profileId')).toBe('local:kube-prod')
+
+    // A connection that does not work here is repaired where it is configured.
+    wrapper.findComponent(ArchitectureStub).vm.$emit('repair-connection')
+    await flushPromises()
+    expect(wrapper.find('.kuapps-add-panel').exists()).toBe(false)
+    expect(wrapper.find('.kuapps-overview-content').exists()).toBe(false)
     wrapper.unmount()
   })
 

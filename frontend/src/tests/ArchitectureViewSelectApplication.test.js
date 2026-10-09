@@ -26,6 +26,24 @@ describe('ArchitectureView: choosing an application', () => {
     vi.spyOn(store, 'selectApplication').mockResolvedValue()
   })
 
+  it('opening the picker while the profile still loads keeps it open with the connection context (#239)', async () => {
+    // The mount and the picker load the same profile once; a second load used to close the picker.
+    store.selectApplication.mockImplementation(async id => {
+      await new Promise(resolve => setTimeout(resolve, 5))
+      store.selectedApplicationId = id
+      store.selectedProjectId = 'project-a'
+    })
+    const wrapper = mount(ArchitectureView, { props: { profileId: 'aws-dev', applicationId: 'app-a', workspaceMode: true, resourcePickerOnly: true }, shallow: true })
+    await wrapper.vm.openResourcePicker('kubernetes', { kubeContext: 'arn:aws:eks:us-east-1:1:cluster/dev' })
+    await flushPromises()
+
+    expect(store.loadApplications).toHaveBeenCalledTimes(1)
+    const panel = wrapper.findComponent({ name: 'ArchitectureKubernetesDiscoveryPanel' })
+    expect(panel.exists()).toBe(true)
+    expect(panel.props('preferredContext')).toBe('arn:aws:eks:us-east-1:1:cluster/dev')
+    wrapper.unmount()
+  })
+
   it('without a profile, opens the chosen application', async () => {
     const wrapper = mount(ArchitectureView, { props: { profileId: '' }, shallow: true })
     await flushPromises()
