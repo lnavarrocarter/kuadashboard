@@ -9,12 +9,16 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { createKuaExtensionRegistry } = require('../lib/kua/extensionRegistry');
 const { explainRelationship } = require('../lib/kua/relationshipExplainer');
 const { resourceSignalStates } = require('../lib/kua/resourceSignalState');
+const { signalCapabilities } = require('../lib/apm/signalCapabilities');
+const { applicationForResource } = require('../lib/kua/scopeCredentials');
+const { canonicalFromApm } = require('../lib/kua/applicationRegistryService');
+const { createResourceObserver } = require('../lib/kua/resourceObserver');
 const { createChangePlanService } = require('../lib/kua/changePlans');
 const { createAgentAccess } = require('../lib/kua/agentAccess');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -134,6 +138,76 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     } catch (error) { handleError(res, error); }
   });
 
+  // What can be observed in an application, per resource: its signal state, whether KUA collects
+  // metrics or reads logs for it, and the local profile and region that reach it (the verified
+  // binding of its scope, or the profile of a legacy application). The Observability view reads
+  // logs and metrics with these, never with a profile selected elsewhere in KUA.
+  router.get('/applications/:applicationId/observability/resources', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    const registryResources = apmDatabase.listRegistryResources(application.id);
+    const signals = resourceSignalStates({ database: apmDatabase, application, resources: registryResources });
+    const resources = apmDatabase.listResources(application.id).map(resource => {
+      let registryId = null;
+      try { registryId = canonicalFromApm(application, resource).id; } catch { /* not in the registry */ }
+      let access;
+      try {
+        const scoped = applicationForResource(apmDatabase, application, resource);
+        access = { profileId: scoped.profileId, region: scoped.region || null };
+      } catch (error) {
+        access = { error: error.code || 'scope_unbound', message: error.message };
+      }
+      return {
+        id: resource.id, registryId, name: resource.name, provider: resource.provider, type: resource.type, kind: resource.kind || null,
+        key: resource.key, arn: resource.arn || null, kubeContext: resource.kubeContext || null, namespace: resource.namespace || null,
+        logGroup: resource.logGroup || null, service: resource.service || '', scopeId: resource.scopeId || null, location: resource.location || null,
+        enabled: resource.enabled, capabilities: signalCapabilities(resource),
+        signals: (registryId && signals.get(registryId)) || { state: 'unsupported', lastDataAt: null, reason: 'type' },
+        access,
+      };
+    });
+    // Observable first, then by type and name, so the list reads the same every time.
+    const rank = item => (item.capabilities.metrics || item.capabilities.logs ? 0 : 1);
+    resources.sort((a, b) => rank(a) - rank(b) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+    return {
+      application: {
+        id: application.id, name: application.name, revision: application.revision, pollingEnabled: application.pollingEnabled,
+        // Where its collection runs: a legacy application's own provider and profile, else "generic".
+        collection: application.profileId ? { provider: application.provider, profileId: application.profileId } : { provider: 'generic', profileId: 'local' },
+        latestRun: apmDatabase.getLatestCollectionRun(application.id),
+      },
+      resources,
+    };
+  }));
+
+  // Resources that no longer exist (#236): since when, and successors found with free reads of
+  // the Kubernetes API. Replacing attaches the successor and detaches the missing resource;
+  // nothing is replaced automatically and nothing changes in the cluster.
+  const observer = createResourceObserver({ database: apmDatabase, registry: applicationRegistry, ...(kubeLister ? { kubeLister } : {}) });
+  router.get('/applications/:applicationId/observer', (req, res) => sendAsync(res, 200, () => observer.gone(applicationOr404(req.params.applicationId))));
+  router.post('/applications/:applicationId/observer/replace', (req, res) => sendAsync(res, 200, async () => {
+    const application = applicationOr404(req.params.applicationId);
+    const result = await observer.replace(application, req.body?.resourceId, req.body?.successor, revisionOf(req));
+    auditLog?.log({ category: 'kua', action: 'Missing resource replaced by its successor', resource: `${result.replaced} → ${result.by}`, context: 'kuapps', details: { applicationId: application.id } });
+    return result;
+  }));
+  router.post('/applications/:applicationId/observer/ignore', (req, res) => send(res, 200, () =>
+    observer.ignore(applicationOr404(req.params.applicationId), req.body?.resourceId)));
+
+  // The metrics KUA collected for one resource of the application, grouped by metric (local data).
+  router.get('/applications/:applicationId/observability/resources/:resourceId/metrics', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    const resource = apmDatabase.getResource(req.params.resourceId);
+    if (!resource || resource.applicationId !== application.id) throw Object.assign(new Error('Resource not found'), { statusCode: 404, code: 'RESOURCE_NOT_FOUND' });
+    const to = Number(req.query.to) || Date.now();
+    const from = Number(req.query.from) || to - 24 * 60 * 60 * 1000;
+    const metrics = new Map();
+    for (const row of apmDatabase.listResourceMetrics(resource.id, { from, to })) {
+      if (!metrics.has(row.metricName)) metrics.set(row.metricName, { name: row.metricName, unit: row.unit, source: row.source, points: [] });
+      metrics.get(row.metricName).points.push({ t: row.bucketStart, count: row.count, sum: row.sum, min: row.min, max: row.max, last: row.last, average: row.count ? row.sum / row.count : null, partial: row.quality === 'partial' });
+    }
+    return { resourceId: resource.id, from, to, capabilities: signalCapabilities(resource), metrics: [...metrics.values()] };
+  }));
+
   // ── Changes requested by AI agents (#155): preview, then apply with confirmation ──
   // The actor names the client for the audit log (e.g. "mcp"); it is never trusted for permissions:
   // applying needs the user's switch below and a plan previewed against the current revision.
@@ -164,8 +238,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return viewIdsOf(application).map(projectId => {
       const project = database.getProject(projectId);
       const graph = project ? database.getGraph(projectId) : null;
+      // profileId is the local profile that owns the view (KUApps opens the Map with it); the MCP
+      // tools do not pass it on.
       return project
-        ? { projectId, name: project.name, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
+        ? { projectId, name: project.name, profileId: project.profileId, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
         : { projectId, missing: true };
     });
   }));

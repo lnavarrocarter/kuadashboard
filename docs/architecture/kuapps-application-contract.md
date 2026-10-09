@@ -180,6 +180,7 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 | State | Meaning |
 | --- | --- |
 | `unsupported` | KUA cannot collect signals for this provider or resource type |
+| `gone` | the resource no longer exists where it lived (see Resources that no longer exist) |
 | `no_connection` | no verified profile of this computer reaches the resource's scope |
 | `disabled` | collection is off for the application or the resource |
 | `error` | the last collection of the application failed |
@@ -187,6 +188,16 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 | `stale` | latest data older than three collection intervals (at least 2 hours) |
 | `partial` | the last collection read only part of the data |
 | `current` | recent data |
+
+What KUA collects is decided in one place (`lib/apm/signalCapabilities.js`): metrics for Lambda (from its logs), Kubernetes workloads with a context, and the CloudWatch metrics of load balancers, EC2 and S3; logs for Lambda, ECS, EventBridge, Cloud Run, Cloud Functions, Vercel projects and Kubernetes workloads. Other types (API Gateway, SQS, DynamoDB…) are inventory only and read `unsupported`, not "no data".
+
+**KUApps → Signals** lists **Whole application** (aggregated metrics, log history and traces) and then every resource grouped by type, with a search and a signal-state filter. A resource shows its metrics (`GET /applications/:id/observability/resources/:resourceId/metrics`) and logs, read with the profile and region its scope resolves to (`GET /applications/:id/observability/resources` returns them per resource); the AWS log routes accept `?region=` for that. A resource whose scope has no verified profile says so instead of failing.
+
+### Resources that no longer exist (#236)
+
+When the collector reads a Kubernetes resource and the cluster answers 404 for the resource itself (not for the metrics API), it records since when it is missing (`lib/apm/resourcePresence.js`, kept with the collection cursors) instead of failing the collection: a run where resources are only missing is not partial. While a resource is seen, KUA keeps its identity labels (`app.kubernetes.io/name`, `app.kubernetes.io/instance`, `app`, `k8s-app`).
+
+`GET /applications/:id/observer` lists the missing resources. For Deployments, StatefulSets and DaemonSets it looks for successors with a free list of the same kind in the same context and namespace: the same identity label (likely), or the same name without its version or hash, such as `attencion-3.9.1` → `attencion-3.9.2` (possible). KUApps → Review shows them with that evidence. `POST /observer/replace { resourceId, successor, expectedRevision }` attaches the successor and detaches the missing resource; `POST /observer/ignore` stops listing it; detaching works as in Resources. Nothing is replaced automatically, and nothing changes in the cluster. Pods are not members of their own: they are replaced on every rollout and are observed through their Deployment or StatefulSet.
 
 **Add resources** (header, Resources and Map open the same panel) marks discovered resources already in the application ("Already in" followed by the application name), which cannot be selected again, and shows each one's native identity. A write against a view that changed meanwhile answers `409`: the panel reloads the view, keeps the selection and says to add the resources again; nothing was written. In the Map, **Remove from diagram** asks for confirmation. For a real resource (one with a native identity) it only hides the node in that view (`node.hide`): the resource stays in the application with its membership, relationships, signals and history, reconciliation does not draw it again, and **Hidden in this view** shows it back (`node.show`). A drawing without a native identity is removed. Three operations stay distinct: hide in a diagram, detach from the application (Resources), and delete infrastructure, which KUApps never does.
 

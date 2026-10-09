@@ -382,3 +382,47 @@ test('explains a relationship with the pair log signals and local-ML matches, wi
     assert.equal((await subject.request('/applications/missing/relationships/explain', { method: 'POST', body: {} })).status, 404);
   } finally { await subject.close(); }
 });
+
+test('observability resources: per-resource access from scope bindings, capabilities and a stable order', async () => {
+  const { normalizeScope } = require('../lib/kua/applicationContract');
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Checkout' });
+    const bound = normalizeScope({ provider: 'aws', scopeId: '111111111111', location: 'us-east-1' });
+    subject.apmDatabase.addApplicationScope(application.id, bound);
+    subject.apmDatabase.setScopeBinding(application.id, bound.key, { profileId: 'local:prod', status: 'verified' });
+    const arn = name => `arn:aws:lambda:us-east-1:111111111111:function:${name}`;
+    for (const name of ['zeta', 'Alpha']) subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: arn(name), arn: arn(name), name });
+    subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'sqs', key: 'arn:aws:sqs:us-east-1:111111111111:jobs', arn: 'arn:aws:sqs:us-east-1:111111111111:jobs', name: 'jobs' });
+    subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: 'arn:aws:lambda:eu-west-1:222222222222:function:other', arn: 'arn:aws:lambda:eu-west-1:222222222222:function:other', name: 'other' });
+
+    const { status, body } = await subject.request(`/applications/${application.id}/observability/resources`);
+    assert.equal(status, 200);
+    assert.deepEqual(body.resources.map(item => item.name), ['Alpha', 'other', 'zeta', 'jobs']);
+    const alpha = body.resources[0];
+    assert.deepEqual(alpha.access, { profileId: 'local:prod', region: 'us-east-1' });
+    assert.deepEqual(alpha.capabilities, { metrics: true, logs: true });
+    assert.equal(body.resources.find(item => item.name === 'other').access.error, 'scope_unbound');
+    const jobs = body.resources.find(item => item.name === 'jobs');
+    assert.deepEqual([jobs.capabilities, jobs.signals.state], [{ metrics: false, logs: false }, 'unsupported']);
+    assert.equal((await subject.request('/applications/missing/observability/resources')).status, 404);
+  } finally { await subject.close(); }
+});
+
+test('observability metrics: the series of one resource of the application, grouped by metric', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Checkout' });
+    const other = subject.apmDatabase.createApplication({ name: 'Billing' });
+    const { resource } = subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: 'arn:aws:lambda:us-east-1:1:function:api', arn: 'arn:aws:lambda:us-east-1:1:function:api', name: 'api' });
+    const now = Date.now();
+    for (const [metricName, offset, value] of [['duration_ms', 60000, 120], ['duration_ms', 0, 80], ['invocations_observed', 0, 3]]) {
+      subject.apmDatabase.upsertMetricBucket({ resourceId: resource.id, bucketStart: now - offset, metricName, count: 1, sum: value, min: value, max: value, last: value, source: 'cloudwatch_logs' });
+    }
+    const { status, body } = await subject.request(`/applications/${application.id}/observability/resources/${resource.id}/metrics?from=${now - 3600000}&to=${now}`);
+    assert.equal(status, 200);
+    assert.deepEqual(body.metrics.map(metric => [metric.name, metric.points.length]), [['duration_ms', 2], ['invocations_observed', 1]]);
+    assert.equal(body.metrics[0].points[1].average, 80);
+    assert.equal((await subject.request(`/applications/${other.id}/observability/resources/${resource.id}/metrics`)).status, 404);
+  } finally { await subject.close(); }
+});

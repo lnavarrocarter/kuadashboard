@@ -1395,13 +1395,20 @@ router.get('/apigateway', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// A KUA Application reads each resource in the region of its scope, which may not be the
+// profile's default region: ?region= overrides it for the log routes (validated, never free text).
+function withRequestRegion(cfg, req) {
+  const region = String(req.query.region || '');
+  return /^[a-z]{2}(-[a-z]+)+-\d$/.test(region) ? { ...cfg, region } : cfg;
+}
+
 // ─── GET /logs/lambda/:name ───────────────────────────────────────────────────
 
 router.get('/logs/lambda/:name', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
-    const cfg = await resolveAwsConfig(profileId);
+    const cfg = withRequestRegion(await resolveAwsConfig(profileId), req);
     const { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
     const { LambdaClient, GetFunctionConfigurationCommand } = require('@aws-sdk/client-lambda');
     const client       = new CloudWatchLogsClient(cfg);
@@ -1495,7 +1502,7 @@ router.get('/logs/ecs/:cluster/:service', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
-    const cfg = await resolveAwsConfig(profileId);
+    const cfg = withRequestRegion(await resolveAwsConfig(profileId), req);
     const {
       CloudWatchLogsClient,
       DescribeLogGroupsCommand,
@@ -1914,7 +1921,7 @@ router.get('/logs/eventbridge', async (req, res) => {
   const { bus, rule } = req.query;
   if (!bus || !rule) return res.status(400).json({ error: 'bus and rule query params required' });
   try {
-    const cfg     = await resolveAwsConfig(profileId);
+    const cfg     = withRequestRegion(await resolveAwsConfig(profileId), req);
     const minutes = Math.min(parseInt(req.query.minutes) || 60, 1440 * 7);
     const now     = new Date();
     const startTime = new Date(Date.now() - minutes * 60 * 1000);

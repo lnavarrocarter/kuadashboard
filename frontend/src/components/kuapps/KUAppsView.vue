@@ -281,6 +281,7 @@
                 <button class="btn sm" @click="selectWorkspaceTab('settings')">{{ t('kuapps.review.bindProfile') }}</button>
               </div>
             </div>
+            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -310,20 +311,34 @@
 
           <div v-else-if="workspaceView === 'signals' || workspaceView === 'map'" class="kuapps-map-signals-workspace">
           <section v-show="workspaceView === 'signals'" class="kuapps-observability-workspace">
-            <ApmObservabilityView
+            <!-- The application as a whole on top of the list, then each resource grouped by type, read
+                 with the profile of its own scope (#152). The application overview keeps the aggregated
+                 metrics, log history and traces. -->
+            <KUAppSignals
               v-if="canOpenApplicationObservability"
-              ref="signalsRef"
-              :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
-              section="signals"
-              :provider="apmProvider"
-              :profile-id="apmProfileId"
+              ref="resourceSignalsRef"
+              :key="`resource-signals:${selectedApplicationId}`"
               :application-id="selectedApplicationId"
-              :hide-application-list="true"
-              :focus-resource="selectedResource ? selectedResourceFocus : props.focusResource"
-              @open-architecture="openArchitecture"
-              @application-context="forwardApplicationContext"
               @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
-            />
+            >
+              <template #application>
+                <ApmObservabilityView
+                  ref="signalsRef"
+                  :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
+                  section="signals"
+                  hide-logs
+                  hide-collect
+                  :provider="apmProvider"
+                  :profile-id="apmProfileId"
+                  :application-id="selectedApplicationId"
+                  :hide-application-list="true"
+                  :focus-resource="selectedResource ? selectedResourceFocus : props.focusResource"
+                  @open-architecture="openArchitecture"
+                  @application-context="forwardApplicationContext"
+                  @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+                />
+              </template>
+            </KUAppSignals>
             <div v-else class="kuapps-observability-unavailable">
               <i data-lucide="square-activity"></i>
               <strong>{{ t('kuapps.signalsUnavailable') }}</strong>
@@ -362,12 +377,13 @@
             </section>
             <aside v-if="selectedResource" class="kuapps-signals-inspector">
               <header><div><span class="kuapps-kicker">{{ t('kuapps.resourceInspector') }}</span><h3>{{ selectedResource.displayName }}</h3></div><button class="btn btn-icon" :title="t('action.close')" @click="clearResourceSelection"><i data-lucide="x"></i></button></header>
-              <template>
+              <!-- A plain <template> without a directive is not rendered by Vue: the inspector looked empty. -->
+              <div class="kuapps-inspector-body" data-test="map-inspector-body">
                 <div class="kuapps-inspector-tabs" role="tablist">
                   <button v-for="tab in inspectorTabs" :key="tab" :class="{ active: inspectorTab === tab }" role="tab" :aria-selected="inspectorTab === tab" @click="inspectorTab = tab">{{ t(`kuapps.inspector.${tab}`) }}</button>
                 </div>
-                <dl v-if="inspectorTab === 'detail'"><div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div><div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div><div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div></dl>
-                <div v-if="inspectorTab === 'relationships'" class="kuapps-inspector-relationships">
+                <dl v-if="inspectorTab === 'detail'"><div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div><div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div><div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.signalState.title') }}</dt><dd><span :class="['kuapps-signal-badge', signalStateOf(selectedResource)]" :title="t(`kuapps.signalState.${signalStateOf(selectedResource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}`) }}</span></dd></div><div v-if="selectedResource.nativeIdentifier"><dt>{{ t('kuapps.identity') }}</dt><dd class="kuapps-inspector-identity"><code>{{ selectedResource.nativeIdentifier }}</code></dd></div></dl>
+                <div v-else-if="inspectorTab === 'relationships'" class="kuapps-inspector-relationships">
                   <p v-if="!selectedResourceRelationships.length" class="kuapps-review-note">{{ t('kuapps.inspector.noRelationships') }}</p>
                   <button v-for="relationship in selectedResourceRelationships" :key="relationship.id" class="kuapps-inspector-relationship" @click="selectRegistryResource(relationship.otherId)">
                     <span>{{ relationship.outgoing ? '→' : '←' }} <strong>{{ relationship.otherName }}</strong></span>
@@ -390,7 +406,7 @@
                   />
                 </div>
                 <div v-else-if="inspectorTab === 'signals'" class="kuapps-signals-unavailable"><i data-lucide="circle-help"></i><strong>{{ t('kuapps.signalsUnavailable') }}</strong><span>{{ t('kuapps.signalsStatus.pending') }}</span></div>
-              </template>
+              </div>
             </aside>
           </div>
           </div>
@@ -415,8 +431,8 @@
                 </option>
               </select>
             </label>
-            <p v-else-if="selectedProfileId" class="kuapps-add-using">{{ t('kuapps.add.using', { account: addResourcesAccountLabel }) }}</p>
-            <div v-if="selectedProfileId" class="kuapps-add-providers" role="group" :aria-label="t('kuapps.add.source')">
+            <p v-else-if="pickerProfileId" class="kuapps-add-using">{{ t('kuapps.add.using', { account: addResourcesAccountLabel }) }}</p>
+            <div v-if="pickerProfileId" class="kuapps-add-providers" role="group" :aria-label="t('kuapps.add.source')">
               <button v-for="provider in addResourcesProviders" :key="provider" :class="['btn', 'sm', { primary: addResourcesProvider === provider }]" @click="chooseAddResourcesProvider(provider)">
                 {{ provider === 'manual' ? t('archView.manualResource') : providerName(provider) }}
               </button>
@@ -426,10 +442,10 @@
           <p class="kuapps-add-explain"><i data-lucide="info"></i>{{ t('kuapps.add.explain') }}</p>
           <div class="kuapps-add-body">
             <ArchitectureView
-              v-if="addResourcesProvider && selectedProfileId"
+              v-if="addResourcesProvider && pickerProfileId"
               ref="pickerRef"
-              :key="`picker:${selectedApplicationId}:${selectedProfileId}`"
-              :profile-id="selectedProfileId"
+              :key="`picker:${selectedApplicationId}:${pickerProfileId}`"
+              :profile-id="pickerProfileId"
               :application-id="selectedApplicationId"
               hide-application-list
               workspace-mode
@@ -459,6 +475,8 @@ import KUAppSummary from './KUAppSummary.vue'
 import KUAppSync from './KUAppSync.vue'
 import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
+import KUAppSignals from './KUAppSignals.vue'
+import KUAppMissingResources from './KUAppMissingResources.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -553,7 +571,9 @@ const scopeWarnings = computed(() => (selectedApplicationDetail.value?.warnings 
 const suggestedRelationships = computed(() => applicationRegistry.value.relationships.filter(relationship => relationship.status === 'suggested'))
 // What the Review tab holds: relationships to decide and scopes without a usable profile.
 const analysisSuggestionCount = ref(0)
-const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length + analysisSuggestionCount.value)
+// Resources that no longer exist count too (#236): the registry reports them as "gone".
+const missingCount = computed(() => applicationRegistry.value.resources.filter(resource => resource.signals?.state === 'gone').length)
+const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length + analysisSuggestionCount.value + missingCount.value)
 
 function scopeLabel(scopeKey) {
   const scope = (selectedApplicationDetail.value?.scopes || []).find(item => item.key === scopeKey)
@@ -611,12 +631,20 @@ const verifiedResourceScopes = computed(() => {
 const activeResourceScope = computed(() => verifiedResourceScopes.value.length === 1
   ? verifiedResourceScopes.value[0]
   : verifiedResourceScopes.value.find(scope => scope.key === activeResourceScopeKey.value) || null)
+// The architecture views of the application, with the local profile that owns each one.
+const selectedApplicationViews = ref([])
 const architectureProfileId = computed(() => {
   if (!selectedApplication.value) return props.profileId || ''
   // A legacy application reaches its views through its own profile, even after the
   // migration gave it scopes whose bindings are not verified yet (#149).
   if (selectedApplication.value.profileId) return selectedApplication.value.profileId
-  if (selectedApplicationDetail.value?.scopes?.length) return activeResourceScope.value?.profileId || ''
+  // The Map opens with the profile that owns its views, preferring one of this computer's
+  // verified scopes: it never depends on a scope chosen in Add resources (#239).
+  const verified = new Set(verifiedResourceScopes.value.map(scope => scope.profileId))
+  const owners = selectedApplicationViews.value.map(view => view.profileId).filter(Boolean)
+  const owner = owners.find(profile => verified.has(profile)) || owners[0]
+  if (owner) return owner
+  if (selectedApplicationDetail.value?.scopes?.length) return activeResourceScope.value?.profileId || verifiedResourceScopes.value[0]?.profileId || ''
   const verifiedProfiles = [...new Set((selectedApplicationDetail.value?.local?.bindings || [])
     .filter(binding => binding.status === 'verified')
     .map(binding => binding.profileId)
@@ -624,6 +652,13 @@ const architectureProfileId = computed(() => {
   return verifiedProfiles.length === 1 ? verifiedProfiles[0] : ''
 })
 const selectedProfileId = computed(() => selectedApplication.value ? architectureProfileId.value : (props.profileId || ''))
+// Add resources discovers from the account the user picks there (or the application's own profile);
+// the Map uses the profile that owns its views. They are different questions (#239).
+const pickerProfileId = computed(() => {
+  if (!selectedApplication.value) return props.profileId || ''
+  if (selectedApplication.value.profileId) return selectedApplication.value.profileId
+  return activeResourceScope.value?.profileId || ''
+})
 function syncSettingsDraft(source = selectedApplication.value) {
   Object.assign(settingsDraft, {
     name: source?.name || '',
@@ -756,19 +791,27 @@ async function loadSelectedApplicationDetail(applicationId = selectedApplication
   const requestId = ++detailRequest
   if (!applicationId) {
     selectedApplicationDetail.value = null
+    selectedApplicationViews.value = []
     applicationRegistry.value = { resources: [], relationships: [] }
     selectedResourceId.value = ''
     return
   }
   try {
-    const [detail, localSettings] = await Promise.all([
-      api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}`),
-      apiFetch(`/api/observability/${encodeURIComponent(apmProvider.value)}/applications/${encodeURIComponent(applicationId)}`, {
-        headers: { 'X-Profile-Id': apmProfileId.value },
-      }),
+    // The application decides where its collection settings live: its own provider and profile
+    // (legacy) or the generic routes. Not the catalog, which may not be loaded yet after a reload,
+    // and not the provider selected elsewhere in KUA (that answered 404 for multi-provider apps).
+    const detail = await api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}`)
+    const legacy = detail?.local?.legacy
+    const [localSettings, views] = await Promise.all([
+      apiFetch(`/api/observability/${encodeURIComponent(legacy?.provider || 'generic')}/applications/${encodeURIComponent(applicationId)}`, {
+        headers: { 'X-Profile-Id': legacy?.profileId || 'local' },
+      }).catch(() => null),
+      api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}/views`).catch(() => []),
     ])
     if (requestId !== detailRequest || applicationId !== selectedApplicationId.value) return
-    detail.localPollingEnabled = !!localSettings.pollingEnabled
+    // Settings that could not be read must not hide the application (its scopes, its map).
+    detail.localPollingEnabled = !!localSettings?.pollingEnabled
+    selectedApplicationViews.value = Array.isArray(views) ? views : []
     selectedApplicationDetail.value = detail
     syncSettingsDraft(detail)
   } catch (_) {
@@ -958,7 +1001,7 @@ const addResourcesAccountLabel = computed(() => {
 })
 
 // The state the registry API computed (#152); an older backend without it is "unknown", never healthy.
-const SIGNAL_STATES = new Set(['unsupported', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])
+const SIGNAL_STATES = new Set(['unsupported', 'gone', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])
 function signalStateOf(resource) {
   const state = resource?.signals?.state
   return SIGNAL_STATES.has(state) ? state : 'unknown'
@@ -972,7 +1015,7 @@ async function openUnifiedResourcePicker() {
   if (!canAddResources.value) return
   addResourcesOpen.value = true
   addResourcesProvider.value = ''
-  if (selectedProfileId.value && addResourcesProviders.value.length === 2) await chooseAddResourcesProvider(addResourcesProviders.value[0])
+  if (pickerProfileId.value && addResourcesProviders.value.length === 2) await chooseAddResourcesProvider(addResourcesProviders.value[0])
   nextTick(() => createIcons({ icons }))
 }
 
@@ -1275,10 +1318,12 @@ defineExpose({ reloadActiveTab })
 .kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 11px; }
 .kuapps-registry-split { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
+.kuapps-inspector-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.kuapps-inspector-identity code { font-size: 11px; overflow-wrap: anywhere; }
 .kuapps-signal-badge { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .kuapps-signal-badge.current { color: var(--success, #16a34a); border-color: currentColor; }
 .kuapps-signal-badge.stale, .kuapps-signal-badge.partial, .kuapps-signal-badge.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
-.kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
+.kuapps-signal-badge.gone, .kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
 .kuapps-resource-row { width: 100%; min-height: 52px; padding: 7px 10px; display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(90px, .7fr) auto; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-resource-row:hover, .kuapps-resource-row.active { background: var(--bg-hover); }
 .kuapps-resource-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 5px; background: var(--bg-hover); color: var(--accent); }

@@ -150,11 +150,11 @@
           <div v-if="props.section === 'signals'" class="apm-signals-bar">
             <div class="apm-view-tabs">
               <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> {{ t('apmv.metrics') }}</button>
-              <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
+              <button v-if="!props.hideLogs" :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
               <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
             </div>
-            <span :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
-            <button class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
+            <span v-if="!props.hideCollect" :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
+            <button v-if="!props.hideCollect" class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
               <i :data-lucide="store.collecting ? 'loader-2' : 'cloud-download'"></i>
               {{ store.collecting ? t('apm.collecting') : t('apm.collectNow') }}
             </button>
@@ -203,7 +203,7 @@
 
               <div v-if="section.kpis.length" class="kpi-grid compact">
                 <div v-for="item in section.kpis" :key="item.id" class="kpi-item">
-                  <span>{{ t(item.labelKey) }}</span>
+                  <span>{{ t(item.labelKey, item.params) }}</span>
                   <strong>{{ item.value }}</strong>
                   <small>{{ kpiDetail(item) }}</small>
                 </div>
@@ -593,6 +593,9 @@ import { buildResourceMetricSections, estimateCloudWatchMonthlyCost, seriesKey }
 const props = defineProps({
   provider: { type: String, default: 'aws' },
   profileId: { type: String, default: '' },
+  // KUApps → Signals shows logs per resource and has its own Collect now (KUAppSignals.vue).
+  hideLogs: { type: Boolean, default: false },
+  hideCollect: { type: Boolean, default: false },
   applicationId: { type: String, default: '' },
   hideApplicationList: { type: Boolean, default: false },
   overviewOnly: { type: Boolean, default: false },
