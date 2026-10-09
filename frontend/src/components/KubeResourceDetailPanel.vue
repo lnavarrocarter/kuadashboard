@@ -8,16 +8,16 @@
       <button class="btn btn-icon" :title="t('action.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
-    <div class="kdp-tabs">
-      <button :class="['kdp-tab', { active: tab === 'overview' }]" @click="tab = 'overview'"><i data-lucide="layout-list"></i> {{ t('detail.tabOverview') }}</button>
-      <button v-if="isDeployment" :class="['kdp-tab', { active: tab === 'env' }]" @click="tab = 'env'"><i data-lucide="list-plus"></i> Env</button>
-      <button v-if="isDataEditable" :class="['kdp-tab', { active: tab === 'data' }]" @click="tab = 'data'"><i data-lucide="table-properties"></i> Data</button>
-      <button :class="['kdp-tab', { active: tab === 'yaml' }]" @click="tab = 'yaml'"><i data-lucide="braces"></i> YAML</button>
-      <button :class="['kdp-tab', { active: tab === 'metrics' }]" @click="tab = 'metrics'"><i data-lucide="activity"></i> {{ t('detail.tabMetrics') }}</button>
-      <button :class="['kdp-tab', { active: tab === 'events' }]" @click="tab = 'events'"><i data-lucide="bell-ring"></i> {{ t('detail.tabEvents') }}</button>
+    <div class="kdp-tabs" role="tablist" :aria-label="t('detail.tabsLabel', { kind: kindLabel })">
+      <button role="tab" :aria-selected="tab === 'overview'" :tabindex="tab === 'overview' ? 0 : -1" @keydown="moveTab" :class="['kdp-tab', { active: tab === 'overview' }]" @click="tab = 'overview'"><i data-lucide="layout-list"></i> {{ t('detail.tabOverview') }}</button>
+      <button role="tab" :aria-selected="tab === 'env'" :tabindex="tab === 'env' ? 0 : -1" @keydown="moveTab" v-if="isDeployment" :class="['kdp-tab', { active: tab === 'env' }]" @click="tab = 'env'"><i data-lucide="list-plus"></i> Env</button>
+      <button role="tab" :aria-selected="tab === 'data'" :tabindex="tab === 'data' ? 0 : -1" @keydown="moveTab" v-if="isDataEditable" :class="['kdp-tab', { active: tab === 'data' }]" @click="tab = 'data'"><i data-lucide="table-properties"></i> Data</button>
+      <button role="tab" :aria-selected="tab === 'yaml'" :tabindex="tab === 'yaml' ? 0 : -1" @keydown="moveTab" :class="['kdp-tab', { active: tab === 'yaml' }]" @click="tab = 'yaml'"><i data-lucide="braces"></i> YAML</button>
+      <button role="tab" :aria-selected="tab === 'metrics'" :tabindex="tab === 'metrics' ? 0 : -1" @keydown="moveTab" :class="['kdp-tab', { active: tab === 'metrics' }]" @click="tab = 'metrics'"><i data-lucide="activity"></i> {{ t('detail.tabMetrics') }}</button>
+      <button role="tab" :aria-selected="tab === 'events'" :tabindex="tab === 'events' ? 0 : -1" @keydown="moveTab" :class="['kdp-tab', { active: tab === 'events' }]" @click="tab = 'events'"><i data-lucide="bell-ring"></i> {{ t('detail.tabEvents') }}</button>
     </div>
 
-    <section v-if="tab === 'overview'" class="kdp-body">
+    <section v-if="tab === 'overview'" class="kdp-body" role="tabpanel">
       <div v-if="loading" class="kdp-empty">{{ t('detail.loading') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
@@ -150,7 +150,7 @@
       </template>
     </section>
 
-    <section v-else-if="tab === 'yaml'" class="kdp-body">
+    <section v-else-if="tab === 'yaml'" class="kdp-body" role="tabpanel">
       <div v-if="loading" class="kdp-empty">{{ t('detail.loadingYaml') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
@@ -191,7 +191,7 @@
       </template>
     </section>
 
-    <section v-else-if="tab === 'env'" class="kdp-body">
+    <section v-else-if="tab === 'env'" class="kdp-body" role="tabpanel">
       <div v-if="loading" class="kdp-empty">{{ t('detail.loadingEnv') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
@@ -216,7 +216,7 @@
       </template>
     </section>
 
-    <section v-else-if="tab === 'data'" class="kdp-body">
+    <section v-else-if="tab === 'data'" class="kdp-body" role="tabpanel">
       <div v-if="loading" class="kdp-empty">{{ t('detail.loadingData') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
@@ -258,7 +258,7 @@
       </template>
     </section>
 
-    <section v-else-if="tab === 'metrics'" class="kdp-body">
+    <section v-else-if="tab === 'metrics'" class="kdp-body" role="tabpanel">
       <template v-if="isMetricsSupported">
         <div v-if="metricsLoading" class="kdp-empty">{{ t('detail.loadingMetrics') }}</div>
         <div v-else-if="metrics" class="kdp-section">
@@ -309,7 +309,7 @@
       </div>
     </section>
 
-    <section v-else class="kdp-body">
+    <section v-else class="kdp-body" role="tabpanel">
       <div v-if="eventsLoading" class="kdp-empty">{{ t('detail.loadingEvents') }}</div>
       <div v-else-if="eventsError" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ eventsError }}</div>
       <template v-else>
@@ -347,6 +347,7 @@ import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 import { useI18n } from '../composables/useI18n'
 import { podHealth } from '../lib/podHealth'
+import { moveTab } from '../lib/tablistKeys'
 
 const props = defineProps({
   resourceType: { type: String, required: true },

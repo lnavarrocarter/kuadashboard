@@ -20,22 +20,22 @@ describe('age()', () => {
 
   it('returns seconds for < 60s ago', () => {
     const ts = new Date(now - 45 * 1000).toISOString()
-    expect(age(ts)).toEqual({ text: '45sec', sort: 45 })
+    expect(age(ts)).toEqual({ text: '45s', sort: 45 })
   })
 
   it('returns minutes and sort value for < 1h ago', () => {
     const ts = new Date(now - 30 * 60 * 1000).toISOString() // 30 minutes
-    expect(age(ts)).toEqual({ text: '30min', sort: 1800 })
+    expect(age(ts)).toEqual({ text: '30m', sort: 1800 })
   })
 
   it('returns hours and minutes with total minutes sort value', () => {
     const ts = new Date(now - (2 * 3600 + 5 * 60) * 1000).toISOString()
-    expect(age(ts)).toEqual({ text: '2hrs 5min', sort: 7500 })
+    expect(age(ts)).toEqual({ text: '2h 5m', sort: 7500 })
   })
 
-  it('returns days, hours and minutes for long durations', () => {
+  it('returns days and hours (no minutes) for long durations', () => {
     const ts = new Date(now - (1 * 86400 + 3 * 3600 + 10 * 60) * 1000).toISOString()
-    expect(age(ts)).toEqual({ text: '1day 3hrs 10min', sort: 97800 })
+    expect(age(ts)).toEqual({ text: '1d 3h', sort: 97800 })
   })
 })
 

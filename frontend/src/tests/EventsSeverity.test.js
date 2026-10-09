@@ -106,7 +106,7 @@ describe('ResourceTable — Events severity colours and filter', () => {
     store.rows = EVENTS.filter(e => e.type === 'Normal')
     await wrapper.vm.$nextTick()
     await chip('critical').trigger('click')
-    expect(wrapper.find('.empty-state').text()).toBe('No resources match the current filters')
+    expect(wrapper.find('.empty-state').text()).toContain('The active filters hide all 2 resources.')
   })
 
   it('does not render chips for resources without a facet', async () => {

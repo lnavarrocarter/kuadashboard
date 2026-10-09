@@ -72,8 +72,8 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
   it('restores filter and sort when coming back to a resource', async () => {
     const wrapper = mount(ResourceTable)
     await wrapper.find('.search-input').setValue('api')
-    await wrapper.findAll('th.sortable-th')[0].trigger('click')
-    await wrapper.findAll('th.sortable-th')[0].trigger('click')
+    await wrapper.findAll('th.sortable-th .th-sort-btn')[0].trigger('click')
+    await wrapper.findAll('th.sortable-th .th-sort-btn')[0].trigger('click')
     expect(names(wrapper)).toEqual(['api-2', 'api-1'])
 
     await switchTo('deployments', DEPLOYMENTS)
@@ -88,7 +88,7 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
   it('persists the view so a remounted table looks the same', async () => {
     const first = mount(ResourceTable)
     await first.find('.search-input').setValue('web')
-    await first.findAll('th.sortable-th')[4].trigger('click')
+    await first.findAll('th.sortable-th .th-sort-btn')[4].trigger('click')
     first.unmount()
 
     expect(loadTableView('pods')).toMatchObject({ filter: 'web', sortCol: 'Restarts', sortDir: 'asc' })
@@ -220,5 +220,33 @@ describe('ResourceTable — language', () => {
         expect(es[qf.label], `${name}.${qf.id}`).toBeTruthy()
       }
     }
+  })
+})
+
+describe('ResourceTable — filter status and accessibility', () => {
+  it('says how many rows are shown, which filters apply and clears them all', async () => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    const store = useKubeStore()
+    store.resource = 'pods'
+    store.rows = [
+      { name: 'web-a', namespace: 'shop', status: 'Running', reason: null, ready: '1/1', restarts: 0, age: new Date().toISOString(), containers: ['app'] },
+      { name: 'web-b', namespace: 'shop', status: 'Running', reason: 'CrashLoopBackOff', ready: '0/1', restarts: 4, age: new Date().toISOString(), containers: ['app'] },
+    ]
+    const wrapper = mount(ResourceTable)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-test="table-status"]').text()).toContain('2 of 2')
+    await wrapper.findAll('.quick-chip')[0].trigger('click')
+    await wrapper.get('.search-input').setValue('web')
+    const status = wrapper.get('[data-test="table-status"]').text()
+    expect(status).toContain('1 of 2')
+    expect(wrapper.get('[data-test="active-filters"]').text()).toBe('Quick filter: With problems · Text: "web"')
+    expect(wrapper.get('.search-input').attributes('aria-label')).toBe('Filter Pods')
+    expect(wrapper.find('th[aria-sort]').attributes('aria-sort')).toBe('none')
+    expect(wrapper.get('tbody tr').attributes('tabindex')).toBe('0')
+    await wrapper.get('tbody tr').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('select')[0][1].name).toBe('web-b')
+    await wrapper.get('[data-test="clear-filters"]').trigger('click')
+    expect(wrapper.get('[data-test="table-status"]').text()).toContain('2 of 2')
   })
 })

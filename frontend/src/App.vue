@@ -11,29 +11,30 @@
           <span>KUA</span><span class="app-logo-sub">Know Unified Administration</span>
         </span>
         <div class="provider-tabs">
-          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" @click="setProvider('kubernetes')">
+          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" title="Kubernetes" aria-label="Kubernetes" @click="setProvider('kubernetes')">
             <i data-lucide="box"></i> Kubernetes
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" @click="setProvider('aws')">
+          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" title="AWS" aria-label="AWS" @click="setProvider('aws')">
             <i data-lucide="cloud"></i> AWS
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" @click="setProvider('gcp')">
+          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" title="GCP" aria-label="GCP" @click="setProvider('gcp')">
             <i data-lucide="cloud-cog"></i> GCP
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" @click="setProvider('vercel')">
+          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" title="Vercel" aria-label="Vercel" @click="setProvider('vercel')">
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" @click="setProvider('kuapps')">
+          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" title="KUApps" aria-label="KUApps" @click="setProvider('kuapps')">
             <i data-lucide="boxes"></i> KUApps
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
+          <button class="btn btn-icon kube-nav-toggle" :aria-expanded="kubeNavOpen" aria-controls="kube-nav" :title="t('nav.kubeResources')" :aria-label="t('nav.kubeResources')" @click="kubeNavOpen = !kubeNavOpen"><i data-lucide="menu"></i></button>
           <span :class="['kube-env-badge', `env-${kubeEnvironment || 'unknown'}`]" :title="store.currentContext" data-test="kube-env-badge">{{ t(`kubeAction.env.${kubeEnvironment || 'unknown'}`) }}</span>
-          <select class="ctrl-select" v-model="selectedContext" :title="selectedContext" :aria-label="t('nav.kubeContext')" @change="switchContext">
+          <select class="ctrl-select kube-context-select" v-model="selectedContext" :title="selectedContext" :aria-label="t('nav.kubeContext')" @change="switchContext">
             <option v-for="c in store.contexts" :key="c.name" :value="c.name" :title="c.name">{{ shortContextName(c.name) }}</option>
           </select>
-          <select class="ctrl-select" v-model="store.namespace" :aria-label="t('nav.kubeNamespace')" @change="store.loadResources()">
+          <select class="ctrl-select kube-context-select" v-model="store.namespace" :aria-label="t('nav.kubeNamespace')" @change="store.loadResources()">
             <option value="all">{{ t('nav.allNamespaces') }}</option>
             <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
           </select>
@@ -130,7 +131,8 @@
     <div class="page-body">
       <div class="layout">
         <!-- Kubernetes sidebar -->
-        <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
+        <div v-if="activeProvider === 'kubernetes' && kubeNavOpen" class="kube-nav-backdrop" @click="kubeNavOpen = false"></div>
+        <nav id="kube-nav" :class="['sidebar', 'kube-nav', { open: kubeNavOpen }]" v-if="activeProvider === 'kubernetes'" :aria-label="t('nav.kubeResources')">
           <div class="sidebar-section">
             <a :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
                @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
@@ -537,6 +539,7 @@ import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import KubeOverview     from './components/KubeOverview.vue'
 import { loadTableView, saveTableView } from './composables/useTableViews'
+import { RESOURCES } from './config/resources'
 import VercelProjectSelector from './components/cloud/VercelProjectSelector.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
@@ -545,6 +548,7 @@ import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
 import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
 import { contextEnvironment, shortContextName } from './lib/kubeContext'
+import { kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
@@ -703,6 +707,8 @@ const activeProvider  = ref(['architecture', 'observability'].includes(storedPro
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
+// Narrow windows show the Kubernetes resource menu as a drawer.
+const kubeNavOpen = ref(false)
 const kubeEnvironment = computed(() => contextEnvironment(store.currentContext))
 const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
@@ -889,9 +895,12 @@ const {
   urlApplicationId,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
+// A link with ?view=kubernetes names a cluster view; it wins over a stale ?app=.
+const urlKubeView = readKubeUrl(globalThis.location?.search || '')
+
 // A link with ?app=<id> opens that KUA Application in KUApps (#149).
 async function openApplicationFromUrl() {
-  if (!urlApplicationId) return
+  if (!urlApplicationId || urlKubeView) return
   try {
     const context = applicationContextFromView(await api('GET', `/api/kua-apps/applications/${encodeURIComponent(urlApplicationId)}`))
     if (!context) return
@@ -1189,8 +1198,8 @@ function toggleConsole() {
   cloudView.value = cloudView.value === 'console' ? null : 'console'
   nextTick(() => createIcons({ icons }))
 }
-function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.selectResource(r) }
-function setCloudView(view)   { cloudView.value = view }
+function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; kubeNavOpen.value = false; store.selectResource(r) }
+function setCloudView(view)   { cloudView.value = view; kubeNavOpen.value = false }
 
 // Overview drill-down: open the resource table with the matching filter/chips
 // preset, keeping the user's sort for that table.
@@ -1431,8 +1440,51 @@ function onKey(e) {
 
 syncServerCacheSettings()
 
+// Keep the URL on the Kubernetes view shown: context, namespace, resource list
+// (or overview) and the selected resource. Other views drop these params.
+function syncKubeUrl() {
+  const location = globalThis.location
+  if (!location?.href || !globalThis.history?.replaceState) return
+  const kubeView = activeProvider.value === 'kubernetes' && (!cloudView.value || cloudView.value === 'kube-overview')
+  let href
+  try {
+    href = kubeUrlHref(location.href, kubeView ? {
+      context: store.currentContext,
+      namespace: store.namespace,
+      resource: cloudView.value === 'kube-overview' ? 'overview' : store.resource,
+      name: cloudView.value ? '' : selectedKubeResource.value?.row?.name || '',
+    } : null)
+    if (!kubeView && activeProvider.value === 'kuapps' && activeApplicationContext.value?.id) {
+      const url = new URL(href)
+      url.searchParams.set('app', activeApplicationContext.value.id)
+      href = url.href
+    }
+  } catch { return }
+  if (href !== location.href) globalThis.history.replaceState(globalThis.history.state, '', href)
+}
+watch(() => [activeProvider.value, cloudView.value, store.currentContext, store.namespace, store.resource, selectedKubeResource.value?.row?.name], syncKubeUrl)
+
+// Applies ?view=kubernetes once the contexts are known. A context missing from
+// this machine's kubeconfig is said, not silently replaced by another cluster.
+async function applyKubeUrlView() {
+  const view = urlKubeView
+  if (view.context && view.context !== store.currentContext) {
+    if (store.contexts.some(c => c.name === view.context)) {
+      selectedContext.value = view.context
+      await store.switchContext(view.context)
+    } else {
+      toast(t('kubeUrl.contextMissing', { context: view.context }), 'warn')
+      return false
+    }
+  }
+  if (view.resource === 'overview') cloudView.value = 'kube-overview'
+  else if (view.resource && RESOURCES[view.resource]) store.resource = view.resource
+  return true
+}
+
 onMounted(async () => {
   applySettings()
+  if (urlKubeView) setProvider('kubernetes')
   openApplicationFromUrl()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
@@ -1448,13 +1500,19 @@ onMounted(async () => {
   const kube = (async () => {
     await store.loadContexts()
     selectedContext.value = store.currentContext
+    const urlViewApplied = urlKubeView ? await applyKubeUrlView() : false
     await Promise.all([
       (async () => {
         await store.loadNamespaces()
-        // Restaurar namespace guardado
-        const savedNs = LS.get('kubeNs', '')
-        if (savedNs && store.namespaces.includes(savedNs)) store.namespace = savedNs
+        // The URL namespace wins over the one saved locally.
+        const savedNs = urlViewApplied && urlKubeView.namespace ? urlKubeView.namespace : LS.get('kubeNs', '')
+        if (savedNs && (savedNs === 'all' || store.namespaces.includes(savedNs))) store.namespace = savedNs
         await store.loadResources()
+        if (urlViewApplied && urlKubeView.name) {
+          const row = store.rows.find(r => r.name === urlKubeView.name)
+          if (row) selectKubeResource(store.resource, row)
+          else toast(t('kubeUrl.resourceMissing', { name: urlKubeView.name }), 'warn')
+        }
       })(),
       pfStore.autoRestore(),
     ])

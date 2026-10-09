@@ -22,9 +22,9 @@ const INTEL = {
   recommendations: [], anomalies: { status: 'insufficient_history', evaluatedAt: 1, anomalies: [] }, ml: null,
 }
 
-function stubApi() {
+function stubApi({ initialCache = [] } = {}) {
   const calls = []
-  let cached = []
+  let cached = initialCache
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
     calls.push({ url, method: options.method || 'GET', headers: options.headers || {}, body: options.body })
@@ -103,4 +103,24 @@ describe('LogsQueryEditor outside Kubernetes', () => {
     expect(wrapper.findAll('option').map(o => o.attributes('value'))).toContain('insights')
     wrapper.unmount()
   })
+
+  it('says the cache is local and marks workloads that left the cluster as historical', async () => {
+    stubApi({ initialCache: [
+      { logGroup: 'shop/deployments/api', events: 5, bytes: 900, lastSyncAt: 1, newest: 1 },
+      { logGroup: 'shop/deployments/api-3-9-1', events: 0, bytes: 0, lastSyncAt: 1, newest: null },
+      { logGroup: 'other/deployments/web', events: 1, bytes: 10, lastSyncAt: 1, newest: 1 },
+    ] })
+    const wrapper = mount(KubeLogsView)
+    await flushPromises()
+    expect(wrapper.get('[data-test="kube-logs-source"]').text()).toContain('Query reads Kubernetes live')
+    await wrapper.get('[data-test="kube-logs-view-cache"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="kube-logs-source"]').text()).toContain('Local cache on this computer')
+    const historical = wrapper.findAll('[data-test="kube-logs-historical"]')
+    // Only the workload of the namespace in view that the cluster no longer lists.
+    expect(historical).toHaveLength(1)
+    expect(historical[0].element.closest('td').textContent).toContain('api-3-9-1')
+    expect(wrapper.findAll('[data-test="kube-logs-zero"]')).toHaveLength(1)
+  })
 })
+

@@ -14,7 +14,15 @@
       </div>
       <button class="btn btn-icon" :title="t('kubeLogs.refresh')" :disabled="loading" @click="refresh"><i data-lucide="refresh-cw"></i></button>
     </header>
-    <p class="text-dim klv-hint">{{ t('kubeLogs.hint') }}</p>
+    <p class="klv-source" data-test="kube-logs-source">
+      <i :data-lucide="view === 'cache' ? 'hard-drive' : 'radio'"></i>
+      <span>{{ t(view === 'cache' ? 'kubeLogs.sourceCache' : 'kubeLogs.sourceWorkloads') }}</span>
+    </p>
+    <p class="text-dim klv-hint">{{ t('kubeLogs.previousHint') }}</p>
+    <details class="klv-details">
+      <summary>{{ t('kubeLogs.howItWorks') }}</summary>
+      <p class="text-dim">{{ t('kubeLogs.hint') }}</p>
+    </details>
     <p v-if="error" class="activity-notice">{{ error }}</p>
 
     <LogScansPanel
@@ -81,8 +89,14 @@
         <tbody>
           <template v-for="c in cache.groups" :key="c.logGroup">
             <tr>
-              <td class="klv-name">{{ c.logGroup }}</td>
-              <td>{{ formatNumber(c.events || 0) }}</td>
+              <td class="klv-name">
+                {{ c.logGroup }}
+                <span v-if="isHistorical(c.logGroup)" class="msg-chip warn" :title="t('kubeLogs.historicalHint')" data-test="kube-logs-historical">{{ t('kubeLogs.historical') }}</span>
+              </td>
+              <td>
+                {{ formatNumber(c.events || 0) }}
+                <span v-if="!c.events && c.lastSyncAt" class="msg-chip" :title="t('kubeLogs.zeroEventsHint')" data-test="kube-logs-zero">?</span>
+              </td>
               <td>{{ formatBytes(c.bytes) }}</td>
               <td class="text-dim">{{ c.lastSyncAt ? formatTime(c.lastSyncAt, settings.lang) : '—' }}<span v-if="c.lastSyncStatus === 'error'" class="msg-chip warn" :title="c.lastError">{{ t('kubeLogs.syncError') }}</span></td>
               <td>
@@ -153,6 +167,15 @@ const visibleWorkloads = computed(() => {
   return workloads.value.filter(w => !needle || w.group.toLowerCase().includes(needle))
 })
 const groupNames = computed(() => [...new Set([...(cache.value?.groups || []).map(g => g.logGroup), ...workloads.value.map(w => w.group)])])
+// A cached workload whose namespace is in view but that the cluster no longer
+// lists (renamed release, deleted): its cache is history, not current logs.
+const workloadsLoaded = ref(false)
+function isHistorical(group) {
+  if (!workloadsLoaded.value) return false
+  const namespace = String(group).split('/')[0]
+  const inScope = !store.namespace || store.namespace === 'all' || store.namespace === namespace
+  return inScope && !workloads.value.some(w => w.group === group)
+}
 // One log read per container and refresh: pods of the workload approximate it.
 const podsOf = group => Math.max(1, workloads.value.find(w => w.group === group)?.pods || 1)
 // Changes when a sync or scan caches new events: the panel then offers to refresh.
@@ -164,7 +187,8 @@ async function loadWorkloads() {
   try {
     const data = await apiFetch(`/api/kube-logs/workloads?namespace=${encodeURIComponent(store.namespace || 'all')}`, { headers: headers() })
     workloads.value = data.workloads || []
-  } catch (err) { error.value = err.message } finally { loading.value = false }
+    workloadsLoaded.value = true
+  } catch (err) { error.value = err.message; workloadsLoaded.value = false } finally { loading.value = false }
 }
 
 async function loadCache() {
@@ -247,6 +271,9 @@ onUpdated(refreshIcons)
 .klv-views { display: flex; gap: 4px; margin-left: auto; }
 .klv-count { margin-left: 6px; font-size: 10px; opacity: .8; }
 .klv-scanning { color: var(--accent); opacity: 1; }
+.klv-source { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-weight: 600; }
+.klv-details { margin: 0 0 10px; font-size: 12px; }
+.klv-details summary { cursor: pointer; color: var(--text-dim); }
 .klv-hint { margin: 0; font-size: 11px; }
 .klv-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .klv-search { min-width: 220px; flex: 1 1 220px; max-width: 420px; }

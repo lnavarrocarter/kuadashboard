@@ -34,7 +34,7 @@
         </div>
         <div class="filter-box">
           <input
-            v-model="filter" class="search-input" :placeholder="t('table.filterPlaceholder')"
+            v-model="filter" class="search-input" :placeholder="t('table.filterPlaceholder')" :aria-label="t('table.filterLabel', { resource: cfg.title })"
             @focus="historyOpen = true" @blur="onFilterBlur" @keydown.enter="rememberCurrent"
             @keydown.esc="historyOpen = false"
           />
@@ -68,6 +68,13 @@
       </div>
     </div>
 
+    <div v-if="!store.loading && !store.error && store.rows.length" class="table-status" data-test="table-status">
+      <span aria-live="polite">{{ t('table.showingOf', { shown: filtered.length, total: store.rows.length }) }}</span>
+      <template v-if="hasActiveFilters">
+        <span class="table-status-filters" data-test="active-filters">{{ activeFiltersText }}</span>
+        <button class="btn sm" data-test="clear-filters" @click="clearAllFilters">{{ t('table.clearFilters') }}</button>
+      </template>
+    </div>
     <div class="table-wrap">
       <div v-if="store.loading" class="loading-state">{{ t('common.loading') }}</div>
       <div v-else-if="store.error" class="error-state">
@@ -75,7 +82,13 @@
         <span>{{ store.error }}</span>
         <button class="btn sm" @click="store.loadResources()">{{ t('common.retry') }}</button>
       </div>
-      <div v-else-if="!filtered.length" class="empty-state">{{ t(store.rows.length ? 'table.noMatches' : 'table.empty') }}</div>
+      <div v-else-if="!filtered.length" class="empty-state" data-test="table-empty">
+        <template v-if="store.rows.length">
+          {{ t('table.hiddenByFilters', { n: store.rows.length }) }}
+          <button class="btn sm" @click="clearAllFilters">{{ t('table.clearFilters') }}</button>
+        </template>
+        <template v-else>{{ t('table.empty') }}</template>
+      </div>
       <table v-else class="rtable">
         <thead>
           <tr>
@@ -92,10 +105,13 @@
             <th
               v-for="(col, i) in cfg.cols" :key="col"
               :class="sortColIdx === i ? 'sortable-th th-sorted' : 'sortable-th'"
-              @click="sortByCol(i)"
+              :aria-sort="sortColIdx === i ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+              :title="colHelp(i)"
             >
-              {{ col }}
-              <span class="sort-icon">{{ colSortIcon(i) }}</span>
+              <button class="th-sort-btn" @click="sortByCol(i)">
+                {{ colLabel(i) }}
+                <span class="sort-icon" aria-hidden="true">{{ colSortIcon(i) }}</span>
+              </button>
             </th>
             <th>{{ t('table.actions') }}</th>
           </tr>
@@ -105,7 +121,11 @@
             v-for="row in filtered"
             :key="rowKey(row)"
             :class="[cfg.rowClass?.(row), { selected: selectedKey === rowKey(row), checked: selectedKeys.has(rowKey(row)) }]"
+            tabindex="0"
+            :aria-selected="selectedKey === rowKey(row)"
             @click="emit('select', store.resource, row)"
+            @keydown.enter.self.prevent="emit('select', store.resource, row)"
+            @keydown.space.self.prevent="emit('select', store.resource, row)"
           >
             <td v-if="hasBulkDeleteRows" class="col-select" @click.stop>
               <input type="checkbox" :checked="selectedKeys.has(rowKey(row))" :disabled="!rowSupportsBulkDelete(row)" :title="t('table.selectRow', { name: row.name })" @change="toggleRow(row)" />
@@ -116,7 +136,8 @@
                 v-for="action in cfg.actions(row)"
                 :key="action.fn + action.label"
                 :class="`action-btn icon-${action.icon} ${action.cls}`"
-                :title="action.label"
+                :title="actionLabel(action)"
+                :aria-label="`${actionLabel(action)} ${row.name}`"
                 @click.stop="emit('action', action.fn, action.args)"
               ></button>
             </td>
@@ -159,6 +180,23 @@ function sortByCol(i) {
     sortColIdx.value = i
     sortDir.value = 'asc'
   }
+}
+
+// Column names in resources.js are the English keys; `colLabels` (i18n keys)
+// overrides them where the meaning needs words, e.g. KUA severity vs Kubernetes type.
+function colLabel(i) {
+  const key = cfg.value.colLabels?.[i] || `col.${cfg.value.cols[i].toLowerCase().replace(/[^a-z0-9]+/g, '')}`
+  const text = t(key)
+  return text === key ? cfg.value.cols[i] : text
+}
+function colHelp(i) {
+  const key = cfg.value.colHelp?.[i]
+  return key ? t(key) : undefined
+}
+function actionLabel(action) {
+  const key = `action.${action.label.toLowerCase().replace(/[^a-z]+/g, '')}`
+  const text = t(key)
+  return text === key ? action.label : text
 }
 
 function colSortIcon(i) {
@@ -285,6 +323,23 @@ if (props.initialFilter) filter.value = props.initialFilter
 // Allows external navigation (e.g. Architecture "view pods") to seed the search box.
 watch(() => props.initialFilter, v => { if (v) filter.value = v })
 watch([filter, sortColIdx, sortDir, activeFacets, activeQuick], persistView)
+
+const hasActiveFilters = computed(() => !!filter.value.trim() || activeQuick.value.size > 0 || activeFacets.value.size > 0)
+// Quick filters must all match (AND); severity chips add up (OR): say which.
+const activeFiltersText = computed(() => {
+  const parts = []
+  const quick = (cfg.value.quickFilters || []).filter(qf => activeQuick.value.has(qf.id)).map(qf => t(qf.label))
+  if (quick.length) parts.push(t(quick.length > 1 ? 'table.activeQuickAll' : 'table.activeQuick', { list: quick.join(' + ') }))
+  const facets = (cfg.value.facet?.options || []).filter(opt => activeFacets.value.has(opt.value)).map(opt => opt.label)
+  if (facets.length) parts.push(t(facets.length > 1 ? 'table.activeFacetsAny' : 'table.activeFacets', { list: facets.join(', ') }))
+  if (filter.value.trim()) parts.push(t('table.activeText', { text: filter.value.trim() }))
+  return parts.join(' · ')
+})
+function clearAllFilters() {
+  filter.value = ''
+  activeQuick.value = new Set()
+  activeFacets.value = new Set()
+}
 
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
