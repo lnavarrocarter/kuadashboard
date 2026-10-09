@@ -72,7 +72,7 @@
       <div v-if="store.writeConflict" class="alert-error architecture-error" role="alert" data-test="picker-conflict">{{ t('archView.writeConflict') }}</div>
       <div v-else-if="store.error" class="alert-error architecture-error" role="alert" data-test="picker-error">{{ t('archView.writeFailed', { error: store.error }) }}</div>
       <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="closePicker" @imported="pickerImported" />
-      <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" :preferred-context="pickerKubeContext" repairable @close="closePicker" @imported="pickerImported" @repair-connection="emit('repair-connection')" />
+      <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" :preferred-context="pickerKubeContext" :ensure-ready="ensurePickerReady" repairable @close="closePicker" @imported="pickerImported" @repair-connection="emit('repair-connection')" />
       <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="closePicker" @imported="pickerImported" />
@@ -1079,22 +1079,29 @@ const pickerKubeContext = ref('')
 // What changed in the cluster for each drawn Kubernetes resource (#239), marked on the canvas.
 const driftByNode = computed(() => Object.fromEntries((store.kubernetesDrift?.changes || []).map(change => [change.nodeId, change])))
 
-async function openResourcePicker(provider = 'aws', { kubeContext = '' } = {}) {
-  pickerKubeContext.value = kubeContext
+// The shared Architecture store holds this view's profile and project (#239): another view of the
+// same application (the Map with its owner's profile) may have loaded its own in between.
+async function ensurePickerReady() {
   if (props.workspaceMode && (store.activeProfileId !== props.profileId || store.selectedApplicationId !== props.applicationId)) {
     await loadProfile(props.profileId)
   }
   if (!store.selectedProjectId) {
     const applicationId = props.applicationId || store.selectedApplicationId
     const application = store.applications.find(item => item.id === applicationId)
-    if (!application) return
+    if (!application) return false
     const project = await store.createProject({
       name: `${application.name} application map`,
       description: 'Application resources and routes',
       applicationId: application.id,
     })
-    if (!project) return
+    if (!project) return false
   }
+  return Boolean(store.selectedProjectId)
+}
+
+async function openResourcePicker(provider = 'aws', { kubeContext = '' } = {}) {
+  pickerKubeContext.value = kubeContext
+  if (!(await ensurePickerReady())) return
   resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel', 'manual'].includes(provider) ? provider : 'aws'
   nextTick(() => createIcons({ icons }))
 }

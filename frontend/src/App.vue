@@ -508,7 +508,7 @@
 </template>
 
 <script setup>
-import { awsViewTarget } from './lib/awsResourceLinks'
+import { awsDestinationNotice, awsViewTarget } from './lib/awsResourceLinks'
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent, h } from 'vue'
 import { createIcons, icons } from 'lucide'
 
@@ -1040,6 +1040,19 @@ async function openArchitectureKubernetesPods(resource) {
   nextTick(() => createIcons({ icons }))
 }
 
+// Where the AWS view opens (#239 N06): account, region and profile, and a warning when the resource
+// lives in another region than the profile's (the view lists the profile's region) or its account
+// is ambiguous (the profile selected in KUA is used, not one chosen silently).
+function awsProfileRegion(profileId) {
+  if (String(profileId || '').startsWith('local:')) return awsLocalProfiles.value.find(item => `local:${item.name}` === profileId)?.region || ''
+  return (envStore.profiles || []).find(item => item.id === profileId)?.region || ''
+}
+function announceAwsDestination(resource, target) {
+  const profileId = resource.awsProfileId || awsProfileId.value
+  const notice = awsDestinationNotice({ resource, target, profileId, profileRegion: awsProfileRegion(profileId) })
+  if (notice) toast(t(notice.key, notice.params), notice.tone)
+}
+
 // Architecture Canvas node action: focus a Lambda/EC2/EventBridge/Step Functions resource inside AwsView.
 // A resource of a map or a KUA Application opens in its tab of the AWS view, searched by the name
 // AWS lists it with, and with the profile bound to its account when the caller knows it (#239).
@@ -1047,6 +1060,7 @@ function openArchitectureAwsResource(resource) {
   const target = awsViewTarget(resource)
   if (!target) return
   if (resource.awsProfileId && resource.awsProfileId !== awsProfileId.value) selectProfile('aws', resource.awsProfileId)
+  announceAwsDestination(resource, target)
   activeProvider.value = 'aws'
   awsTab.value = target.tab
   whenMounted(awsViewRef).then(view => view?.focusResourceByName?.(target.tab, target.search))

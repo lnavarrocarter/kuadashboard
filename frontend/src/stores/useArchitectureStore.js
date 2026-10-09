@@ -623,7 +623,19 @@ export const useArchitectureStore = defineStore('architecture', () => {
   }
 
   async function loadKubernetesContexts() {
-    if (!selectedProjectId.value) return []
+    // Without a project yet (or while another view of the application holds the store), the
+    // contexts still come from this computer's kubeconfig (#239).
+    if (!selectedProjectId.value) {
+      error.value = null
+      try {
+        const result = await apiFetch('/api/contexts')
+        kubernetesContexts.value = (result?.contexts || []).map(context => ({ id: context.name, name: context.name, cluster: context.cluster }))
+      } catch (requestError) {
+        error.value = requestError.message
+        return []
+      }
+      return kubernetesContexts.value
+    }
     discovering.value = true
     discoveryPhase.value = 'kubernetes-contexts'
     error.value = null

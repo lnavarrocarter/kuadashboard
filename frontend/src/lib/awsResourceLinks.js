@@ -107,3 +107,18 @@ export function awsConsoleUrl(resource = {}) {
     default: return ''
   }
 }
+
+/**
+ * What to tell before opening the AWS view (#239 N06): { key, params, tone } or null. The view lists
+ * the region of the profile, and an ambiguous account opens with the profile selected in KUA.
+ */
+export function awsDestinationNotice({ resource = {}, target = {}, profileId = '', profileRegion = '' } = {}) {
+  const name = target.search || resource.name || resource.displayName || ''
+  if (resource.awsAmbiguous) return { key: 'app.awsDestination.ambiguous', params: { name, profile: profileId || '-' }, tone: 'warning' }
+  if (resource.awsRegion && profileRegion && resource.awsRegion !== profileRegion) {
+    return { key: 'app.awsDestination.otherRegion', params: { name, region: resource.awsRegion, profile: profileId, profileRegion }, tone: 'warning' }
+  }
+  if (!profileId) return null
+  const where = [resource.awsAccountId, resource.awsRegion || profileRegion].filter(Boolean).join(' · ')
+  return { key: 'app.awsDestination.opening', params: { name, where: where || '-', profile: profileId }, tone: 'info' }
+}

@@ -196,3 +196,31 @@ describe('KUApps recheck (#239)', () => {
     wrapper.unmount()
   })
 })
+
+describe('KUApps follows the window width (#239 N04)', () => {
+  it('folds the application list when the window becomes narrow, and unfolds it when it widens', async () => {
+    setActivePinia(createPinia())
+    settings.lang = 'en'
+    const listeners = []
+    const matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({ matches: false, addEventListener: (_type, listener) => listeners.push(listener), removeEventListener() {} }))
+    const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
+    respond(url => (url.includes('/catalog') ? [application] : url.includes('/registry') ? { resources: [], relationships: [] } : []))
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture', applicationId: 'app-1' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    try {
+      expect(wrapper.get('.kuapps-application-shell').classes()).not.toContain('collapsed')
+      listeners.forEach(listener => listener({ matches: true }))
+      await flushPromises()
+      expect(wrapper.get('.kuapps-application-shell').classes()).toContain('collapsed')
+      listeners.forEach(listener => listener({ matches: false }))
+      await flushPromises()
+      expect(wrapper.get('.kuapps-application-shell').classes()).not.toContain('collapsed')
+      // Tabs keep their name as tooltip for when only the icon fits.
+      expect(wrapper.findAll('.kuapps-workspace-tab')[1].attributes('title')).toBe('Resources')
+    } finally {
+      window.matchMedia = matchMedia
+      wrapper.unmount()
+    }
+  })
+})

@@ -64,7 +64,7 @@
           </div>
 
           <nav v-if="selectedApplication" class="kuapps-workspace-nav" role="tablist" :aria-label="t('kuapps.workspaceViews')">
-            <button v-for="item in workspaceViews" :key="item.id" :class="['kuapps-workspace-tab', { active: workspaceView === item.id }]" role="tab" :aria-selected="workspaceView === item.id" :tabindex="workspaceView === item.id ? 0 : -1" :data-tab="item.id" @click="selectWorkspaceTab(item.id)" @keydown="onWorkspaceTabKeydown">
+            <button v-for="item in workspaceViews" :key="item.id" :class="['kuapps-workspace-tab', { active: workspaceView === item.id }]" role="tab" :aria-selected="workspaceView === item.id" :title="t(item.label)" :tabindex="workspaceView === item.id ? 0 : -1" :data-tab="item.id" @click="selectWorkspaceTab(item.id)" @keydown="onWorkspaceTabKeydown">
               <i :data-lucide="item.icon"></i><span>{{ t(item.label) }}</span>
               <b v-if="item.id === 'resources'">{{ applicationRegistry.resources.length }}</b>
               <b v-else-if="item.id === 'review' && reviewCount" class="attention">{{ reviewCount }}</b>
@@ -274,7 +274,7 @@
                   <p v-if="!filteredRegistryResources.length" class="kuapps-review-note" data-test="resource-no-matches">{{ t('obs.noMatches') }}</p>
                 </div>
               </div>
-              <aside v-if="selectedResource" class="kuapps-resource-inspector">
+              <aside v-if="selectedResource" ref="resourceInspectorRef" class="kuapps-resource-inspector">
                 <KUAppResourceInspector
                   :application-id="selectedApplicationId"
                   :resource="selectedResource"
@@ -511,7 +511,7 @@
 <script setup>
 import { awsRegion } from '../../lib/awsResourceLinks'
 import { resourceDestinations } from '../../lib/resourceDestinations'
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import ArchitectureView from '../architecture/ArchitectureView.vue'
 import ApmObservabilityView from '../cloud/apm/ApmObservabilityView.vue'
@@ -1000,6 +1000,16 @@ async function saveApplicationSettings() {
 // Narrow windows fold the application list into a rail and fold it again after choosing one.
 const isNarrow = () => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 760px)')?.matches
 const sidebarCollapsed = ref(isNarrow())
+// The list follows the window while it is open, not only its width when KUApps mounted (#239 N04).
+const narrowQuery = typeof window !== 'undefined' ? window.matchMedia?.('(max-width: 760px)') : null
+const onNarrowChange = event => { sidebarCollapsed.value = !!event.matches }
+onMounted(() => narrowQuery?.addEventListener?.('change', onNarrowChange))
+onBeforeUnmount(() => narrowQuery?.removeEventListener?.('change', onNarrowChange))
+// In a narrow window the inspector sits under the list: bring it into view when a resource is chosen.
+const resourceInspectorRef = ref(null)
+watch(() => selectedResourceId.value, id => {
+  if (id && isNarrow()) nextTick(() => resourceInspectorRef.value?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+})
 
 // Tabs move with the arrow keys, Home and End (roving tabindex), as the inspector does.
 function onWorkspaceTabKeydown(event) {
@@ -1159,7 +1169,10 @@ function awsProfileFor(resource) {
   const region = awsRegion({ ...resource, location: resource?.location || registered?.location })
   const scopes = verifiedResourceScopes.value.filter(scope => scope.provider === 'aws')
   const scope = scopes.find(item => accountId && item.scopeId === accountId) || (scopes.length === 1 ? scopes[0] : null)
-  return { awsProfileId: scope?.profileId || selectedApplication.value?.profileId || '', awsRegion: region }
+  const profileId = scope?.profileId || selectedApplication.value?.profileId || ''
+  // Several accounts and none known for this resource: say so instead of choosing credentials silently.
+  const ambiguous = !profileId && scopes.length > 1
+  return { awsProfileId: profileId, awsRegion: region, awsAccountId: accountId || scope?.scopeId || '', awsAmbiguous: ambiguous }
 }
 function openAwsResource(resource) {
   emit('open-aws-resource', { ...resource, ...awsProfileFor(resource) })
@@ -1617,6 +1630,22 @@ defineExpose({ reloadActiveTab })
 .kuapps-signals-unavailable strong { color: var(--text); font-size: 12px; }
 .kuapps-inspector-empty { margin: auto; align-items: center; text-align: center; }
 @media (max-width: 900px) { .kuapps-complementary-grid.has-resource-inspector { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); } }
+/* Narrow windows (#239 N04): rows in two lines (name and its action first, connection and state
+   under it), tabs as icons with their name as tooltip. */
+@media (max-width: 700px) {
+  .kuapps-resource-header { display: none; }
+  .kuapps-resource-row { grid-template-columns: 30px minmax(0, 1fr) auto; row-gap: 2px; }
+  .kuapps-resource-row .kuapps-resource-copy { grid-column: 2 / 4; grid-row: 1; }
+  .kuapps-resource-row .kuapps-resource-scope { grid-column: 2; grid-row: 2; }
+  .kuapps-resource-row .kuapps-signal-badge { grid-column: 3; grid-row: 2; }
+  .kuapps-resource-row .kuapps-resource-mark { grid-row: 1 / 3; }
+  .kuapps-resource-filters select { max-width: none; flex: 1 1 140px; }
+}
+@media (max-width: 520px) {
+  .kuapps-workspace-tab > span { display: none; }
+  .kuapps-workspace-tab { padding: 0 10px 7px; }
+  .kuapps-workspace-nav { padding-inline: 8px; }
+}
 @media (max-width: 700px) { .kuapps-workspace-nav { overflow-x: auto; }.kuapps-workspace-tab { flex: 0 0 auto; }.kuapps-registry-split { grid-template-columns: minmax(0, 1fr); }.kuapps-resource-inspector { border-top: 1px solid var(--border); border-left: 0; }.kuapps-relationship-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }.kuapps-relationship-status { grid-column: 1 / -1; justify-self: end; }.kuapps-complementary-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 1fr); overflow: auto; }.kuapps-complementary-grid.has-resource-inspector { grid-template-rows: minmax(360px, 1fr) minmax(320px, 44vh); }.kuapps-signals-inspector { border-top: 1px solid var(--border); border-left: 0; } }
 @media (max-width: 760px) { .kuapps-settings-layout { grid-template-columns: minmax(0, 1fr); }.kuapps-settings-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .kuapps-application-shell { grid-template-columns: 175px minmax(0, 1fr); }.kuapps-application-header { align-items: flex-start; flex-direction: column; }.kuapps-overview-strip { margin-inline: 10px; flex-wrap: wrap; }.kuapps-overview-strip > div { min-width: 90px; flex: 1; }.kuapps-observability-summary { margin-inline: 10px; }.kuapps-registry-workspace { padding: 12px 10px; }.kuapps-settings-workspace { padding: 14px 12px; }.kuapps-settings-fields { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 700px) { .kuapps-sync-resource-row { grid-template-columns: 28px minmax(0, 1fr); }.kuapps-sync-resource-row > button { grid-column: 2; justify-self: start; } }

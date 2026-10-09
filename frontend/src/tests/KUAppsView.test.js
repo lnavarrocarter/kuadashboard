@@ -618,7 +618,7 @@ describe('KUApps navigation', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-test="resource-signal-state"]').map(badge => badge.text()))
-      .toEqual(['Current', 'No data yet', 'Stale', 'No connection', 'Not supported', 'Unknown'])
+      .toEqual(['Current', 'No data yet', 'Stale', 'No connection', 'No KUA metrics', 'Unknown'])
     await wrapper.findAll('.kuapps-resource-row')[3].trigger('click')
     expect(wrapper.get('[data-test="inspector-signal-state"]').text()).toContain('No verified profile of this computer reaches its connection')
     wrapper.unmount()

@@ -226,3 +226,21 @@ describe('sanitizer: compound secret keys and private keys (#239)', () => {
     }
   })
 })
+
+describe('structure findings name their resources and the next step (#239 N05)', () => {
+  it('a logs finding lists which resources and how to cache their logs', async () => {
+    const { settings } = await import('../composables/useSettings')
+    settings.lang = 'en'
+    const topology = {
+      application: { id: 'a', name: 'A' },
+      resources: [{ id: 'r1', type: 'lambda', name: 'orders-api' }, { id: 'r2', type: 'lambda', name: 'billing' }],
+      relationships: [],
+      analysis: { score: 80, coveragePercent: 50, counts: { suggestions: 0 }, findings: [{ code: 'logs_not_cached', severity: 'info', resourceIds: ['r1', 'r2'] }], suggestions: [] },
+    }
+    const wrapper = mount(ApmTopologyGraph, { props: { topology } })
+    const finding = wrapper.get('[data-test="finding-logs_not_cached"]')
+    expect(finding.get('summary').text()).toBe('2 resource(s) that write logs have none cached yet.')
+    expect(finding.text()).toContain('Signals → choose the resource → Logs → Cache for log intelligence')
+    expect(finding.findAll('.finding-resources li').map(item => item.text())).toEqual(['orders-api', 'billing'])
+  })
+})

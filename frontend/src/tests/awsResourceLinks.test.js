@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
-import { awsConsoleUrl, awsIdentity, awsRegion, awsViewTarget } from '../lib/awsResourceLinks'
+import { awsConsoleUrl, awsDestinationNotice, awsIdentity, awsRegion, awsViewTarget } from '../lib/awsResourceLinks'
 import { kubernetesObject, resourceDestinations } from '../lib/resourceDestinations'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
 import KUAppResourceInspector from '../components/kuapps/KUAppResourceInspector.vue'
@@ -94,7 +94,7 @@ describe('navigating to an AWS resource (#239)', () => {
     await wrapper.get('.kuapps-resource-list .kuapps-resource-row').trigger('click')
     await flushPromises()
     await wrapper.get('[data-test="inspector-aws-view"]').trigger('click')
-    expect(wrapper.emitted('open-aws-resource')[0][0]).toMatchObject({ id: 'r1', awsProfileId: 'local:two', awsRegion: 'us-east-1' })
+    expect(wrapper.emitted('open-aws-resource')[0][0]).toMatchObject({ id: 'r1', awsProfileId: 'local:two', awsRegion: 'us-east-1', awsAccountId: '222222222222', awsAmbiguous: false })
     wrapper.unmount()
   })
 })
@@ -147,5 +147,17 @@ describe('Kubernetes resources and the Resources list (#239)', () => {
     expect(wrapper.emitted('open-kubernetes-pods')[0][0]).toMatchObject({ kind: 'Deployment', name: 'authv1' })
     expect(wrapper.find('[data-test="inspector-kubernetes-logs"]').exists()).toBe(true)
     wrapper.unmount()
+  })
+})
+
+describe('where the AWS view opens (#239 N06)', () => {
+  const target = { tab: 'sqs', search: 'jobs' }
+  it('says account, region and profile; warns about another region or an ambiguous account', () => {
+    expect(awsDestinationNotice({ resource: { awsAccountId: '2222', awsRegion: 'us-east-1' }, target, profileId: 'local:two', profileRegion: 'us-east-1' }))
+      .toEqual({ key: 'app.awsDestination.opening', params: { name: 'jobs', where: '2222 · us-east-1', profile: 'local:two' }, tone: 'info' })
+    expect(awsDestinationNotice({ resource: { awsRegion: 'sa-east-1' }, target, profileId: 'local:two', profileRegion: 'us-east-1' }))
+      .toMatchObject({ key: 'app.awsDestination.otherRegion', tone: 'warning', params: { region: 'sa-east-1', profileRegion: 'us-east-1' } })
+    expect(awsDestinationNotice({ resource: { awsAmbiguous: true }, target, profileId: 'local:dev' }))
+      .toMatchObject({ key: 'app.awsDestination.ambiguous', tone: 'warning' })
   })
 })

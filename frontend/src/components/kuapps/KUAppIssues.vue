@@ -9,7 +9,10 @@
       </span>
     </header>
     <p v-if="loading && !data" class="kis-dim">{{ t('common.loading') }}</p>
-    <p v-else-if="error" class="kis-warn" role="alert">{{ error }}</p>
+    <p v-else-if="error" class="kis-warn" role="alert">
+      {{ t('kuapps.issue.unavailable', { error }) }}
+      <button class="btn sm" data-test="kuapp-issues-retry" @click="load">{{ t('kuapps.issue.retry') }}</button>
+    </p>
     <p v-else-if="data && !data.issues.length" class="kis-dim" data-test="kuapp-issues-none">{{ t('kuapps.issue.none') }}</p>
     <ol v-else-if="data" class="kis-list">
       <li v-for="issue in shown" :key="issue.id" :class="['kis-item', issue.severity]" :data-test="`issue-${issue.id}`">
@@ -46,23 +49,29 @@ const error = ref('')
 const evidence = issue => issueEvidence(t, issue)
 const shown = computed(() => (props.limit ? data.value.issues.slice(0, props.limit) : data.value.issues))
 
+let request = 0
 async function load() {
+  // Only the answer for the current application and range counts (#239 N02).
+  const id = ++request
   loading.value = true
   error.value = ''
   try {
     const response = await api('GET', `/api/kua-apps/applications/${encodeURIComponent(props.applicationId)}/observability/issues?hours=${props.hours}`)
-    // An older backend (or anything unexpected) reads as "nothing listed", never as a crash.
-    data.value = {
-      counts: { critical: 0, warning: 0, info: 0, ...(response?.counts || {}) },
-      issues: Array.isArray(response?.issues) ? response.issues : [],
+    if (id !== request) return
+    // Something that is not an issues list is a failed read, never "nothing needs attention".
+    if (!response || typeof response !== 'object' || !Array.isArray(response.issues)) {
+      throw new Error(t('kuapps.issue.unexpected'))
     }
+    data.value = { counts: { critical: 0, warning: 0, info: 0, ...(response.counts || {}) }, issues: response.issues }
     emit('loaded', data.value)
   } catch (err) {
+    if (id !== request) return
+    data.value = null
     error.value = err.message
-    // The Summary's health falls back to the thresholds instead of waiting forever.
+    // The Summary says its evaluation is partial instead of waiting forever or reading zero issues.
     emit('loaded', null)
   } finally {
-    loading.value = false
+    if (id === request) loading.value = false
   }
 }
 
