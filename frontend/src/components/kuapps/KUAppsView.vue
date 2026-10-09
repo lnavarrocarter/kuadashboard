@@ -1,8 +1,10 @@
 <template>
   <div class="kuapps-view">
-    <div class="kuapps-application-shell">
+    <div :class="['kuapps-application-shell', { collapsed: sidebarCollapsed }]">
+      <!-- Collapsible (#239): a rail of application marks, folded by default in narrow windows. -->
       <aside class="kuapps-applications">
         <div class="kuapps-list-heading">
+          <button class="btn btn-icon kuapps-sidebar-toggle" data-test="kuapps-sidebar-toggle" :aria-expanded="String(!sidebarCollapsed)" :title="t(sidebarCollapsed ? 'kuapps.sidebar.expand' : 'kuapps.sidebar.collapse')" :aria-label="t(sidebarCollapsed ? 'kuapps.sidebar.expand' : 'kuapps.sidebar.collapse')" @click="sidebarCollapsed = !sidebarCollapsed"><i data-lucide="sidebar"></i></button>
           <span>{{ t('kuapps.applications') }}</span><strong>{{ applications.length }}</strong>
           <button class="btn btn-icon" :title="t('kuapps.createApplication')" @click="startCreate"><i data-lucide="plus"></i></button>
           <button class="btn btn-icon" :title="t('kuapps.refreshApplications')" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
@@ -10,6 +12,7 @@
         <div v-for="application in applications" :key="application.id" class="kuapps-application-item">
           <button
             :class="['kuapps-application-row', { active: selectedApplicationId === application.id }]"
+            :title="sidebarCollapsed ? application.name : undefined"
             @click="selectApplication(application)"
           >
             <span class="application-mark">{{ application.name.slice(0, 2).toUpperCase() }}</span>
@@ -61,7 +64,7 @@
           </div>
 
           <nav v-if="selectedApplication" class="kuapps-workspace-nav" role="tablist" :aria-label="t('kuapps.workspaceViews')">
-            <button v-for="item in workspaceViews" :key="item.id" :class="['kuapps-workspace-tab', { active: workspaceView === item.id }]" role="tab" :aria-selected="workspaceView === item.id" @click="selectWorkspaceTab(item.id)">
+            <button v-for="item in workspaceViews" :key="item.id" :class="['kuapps-workspace-tab', { active: workspaceView === item.id }]" role="tab" :aria-selected="workspaceView === item.id" :tabindex="workspaceView === item.id ? 0 : -1" :data-tab="item.id" @click="selectWorkspaceTab(item.id)" @keydown="onWorkspaceTabKeydown">
               <i :data-lucide="item.icon"></i><span>{{ t(item.label) }}</span>
               <b v-if="item.id === 'resources'">{{ applicationRegistry.resources.length }}</b>
               <b v-else-if="item.id === 'review' && reviewCount" class="attention">{{ reviewCount }}</b>
@@ -954,7 +957,26 @@ async function saveApplicationSettings() {
   }
 }
 
+// Narrow windows fold the application list into a rail and fold it again after choosing one.
+const isNarrow = () => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 760px)')?.matches
+const sidebarCollapsed = ref(isNarrow())
+
+// Tabs move with the arrow keys, Home and End (roving tabindex), as the inspector does.
+function onWorkspaceTabKeydown(event) {
+  const keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End']
+  if (!keys.includes(event.key)) return
+  event.preventDefault()
+  const nav = event.currentTarget?.parentElement
+  const ids = workspaceViews.map(item => item.id)
+  const current = ids.indexOf(workspaceView.value)
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? ids.length - 1
+    : (current + (event.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length
+  selectWorkspaceTab(ids[next])
+  nextTick(() => nav?.querySelector(`[data-tab="${ids[next]}"]`)?.focus())
+}
+
 function selectApplication(application) {
+  if (isNarrow()) sidebarCollapsed.value = true
   localApplicationId.value = application.id
   selectedApplicationDetail.value = application.local ? application : null
   applicationRegistry.value = { resources: [], relationships: [] }
@@ -1298,28 +1320,36 @@ defineExpose({ reloadActiveTab })
 .kuapps-view { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
 .kuapps-application-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 225px minmax(0, 1fr); }
 .kuapps-applications { min-height: 0; overflow: auto; padding: 9px; border-right: 1px solid var(--border); background: var(--surface); }
-.kuapps-list-heading { display: flex; align-items: center; gap: 7px; padding: 5px 7px 10px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+.kuapps-list-heading { display: flex; align-items: center; gap: 7px; padding: 5px 7px 10px; color: var(--text-dim); font-size: 12px; text-transform: uppercase; }
 .kuapps-list-heading strong { color: var(--text); }
 .kuapps-list-heading button { margin-left: auto; }
+.kuapps-list-heading .kuapps-sidebar-toggle { margin-left: 0; }
+.kuapps-application-shell.collapsed { grid-template-columns: 52px minmax(0, 1fr); }
+.kuapps-application-shell.collapsed .kuapps-list-heading > :not(.kuapps-sidebar-toggle),
+.kuapps-application-shell.collapsed .kuapps-application-row > :not(.application-mark),
+.kuapps-application-shell.collapsed .kuapps-empty-list,
+.kuapps-application-shell.collapsed .kuapps-create-btn { display: none; }
+.kuapps-application-shell.collapsed .kuapps-list-heading { justify-content: center; padding-inline: 0; }
+.kuapps-application-shell.collapsed .kuapps-application-row { grid-template-columns: 29px; justify-content: center; padding-inline: 0; }
 .kuapps-list-heading svg { width: 13px; }
 .kuapps-application-row { width: 100%; display: grid; grid-template-columns: 29px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-application-row:hover, .kuapps-application-row.active { background: var(--bg-hover); }
 .kuapps-application-row.active { box-shadow: inset 2px 0 var(--accent); }
 .kuapps-application-row > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .kuapps-application-row strong, .kuapps-application-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kuapps-application-row small { color: var(--text-dim); font-size: 9px; }
+.kuapps-application-row small { color: var(--text-dim); font-size: 12px; }
 .kuapps-app-sync-state { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); }
-.kuapps-app-sync-state small { color: inherit; font-size: 9px; }
+.kuapps-app-sync-state small { color: inherit; font-size: 12px; }
 .kuapps-sync-spinner { width: 11px; height: 11px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: kuapps-sync-spin 800ms linear infinite; }
 @keyframes kuapps-sync-spin { to { transform: rotate(360deg); } }
 .kuapps-application-item { display: flex; flex-direction: column; gap: 3px; }
-.kuapps-empty-list { padding: 24px 8px 8px; color: var(--text-dim); font-size: 10px; text-align: center; }
+.kuapps-empty-list { padding: 24px 8px 8px; color: var(--text-dim); font-size: 12px; text-align: center; }
 .kuapps-create-btn { display: flex; margin: 0 auto 16px; }
 .kuapps-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .kuapps-application-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .kuapps-application-header h2 { margin: 2px 0; font-size: 18px; }
 .kuapps-application-header small { color: var(--text-dim); }
-.kuapps-kicker { color: var(--accent); font-size: 9px; text-transform: uppercase; }
+.kuapps-kicker { color: var(--accent); font-size: 12px; text-transform: uppercase; }
 .kuapps-application-toolbar { min-height: 44px; padding: 6px 16px; display: flex; align-items: center; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--bg); }
 .kuapps-application-toolbar > button { flex: 0 0 auto; }
 .kuapps-bundle-input { display: none; }
@@ -1328,7 +1358,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-workspace-tab:hover, .kuapps-workspace-tab.active { color: var(--text); }
 .kuapps-workspace-tab.active { border-bottom-color: var(--accent); }
 .kuapps-workspace-tab svg { width: 15px; }
-.kuapps-workspace-tab b { min-width: 19px; padding: 1px 5px; border-radius: 9px; background: var(--bg-hover); color: var(--text-dim); font-size: 10px; text-align: center; }
+.kuapps-workspace-tab b { min-width: 19px; padding: 1px 5px; border-radius: 9px; background: var(--bg-hover); color: var(--text-dim); font-size: 12px; text-align: center; }
 .kuapps-overview-content { min-height: 0; flex: 1; overflow: auto; padding-bottom: 18px; }
 .kuapps-settings-layout { min-height: 0; flex: 1; display: grid; grid-template-columns: 210px minmax(0, 1fr); overflow: hidden; }
 .kuapps-settings-nav { padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--border); background: var(--bg-panel); }
@@ -1341,35 +1371,35 @@ defineExpose({ reloadActiveTab })
 .kuapp-cfn-sync { display: grid; gap: 8px; }
 .kuapp-cfn-sync h4 { margin: 4px 0 0; font-size: 13px; }
 .kuapp-cfn-sync .kuapps-add-explain { margin: 0; }
-.kuapps-delete-confirm { display: grid; gap: 5px; max-width: 420px; color: var(--text-dim); font-size: 11px; }
+.kuapps-delete-confirm { display: grid; gap: 5px; max-width: 420px; color: var(--text-dim); font-size: 12px; }
 .kuapps-delete-confirm input { height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-panel); color: var(--text); }
 .kuapps-danger-zone { border: 1px solid var(--red); border-radius: 7px; padding: 14px; }
 .kuapps-inspector-tabs { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); }
-.kuapps-inspector-tabs button { padding: 6px 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); font-size: 11px; cursor: pointer; }
+.kuapps-inspector-tabs button { padding: 6px 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer; }
 .kuapps-inspector-tabs button.active { border-bottom-color: var(--accent); color: var(--text); }
 .kuapps-inspector-relationships { padding: 8px 10px; display: grid; gap: 4px; overflow: auto; }
 .kuapps-inspector-relationship { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
-.kuapps-inspector-relationship small { color: var(--text-dim); font-size: 10px; }
-.kuapps-inspector-why { justify-self: start; color: var(--accent); font-size: 10px; cursor: pointer; }
+.kuapps-inspector-relationship small { color: var(--text-dim); font-size: 12px; }
+.kuapps-inspector-why { justify-self: start; color: var(--accent); font-size: 12px; cursor: pointer; }
 .kuapps-relationship-row .btn svg { width: 12px; }
 .kuapps-settings-section { min-width: 0; margin: 0; padding: 0 0 18px; display: grid; gap: 12px; border: 0; border-bottom: 1px solid var(--border); }
 .kuapps-settings-section > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .kuapps-settings-section > header h3 { margin: 3px 0 0; font-size: 15px; }
-.kuapps-settings-section > header small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 11px; }
+.kuapps-settings-section > header small { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; }
 .kuapps-settings-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.kuapps-settings-fields label { min-width: 0; display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 11px; }
+.kuapps-settings-fields label { min-width: 0; display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 12px; }
 .kuapps-settings-fields input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); }
 .kuapps-settings-fields input:focus { border-color: var(--accent); outline: 1px solid var(--accent); }
 .kuapps-settings-fields .kuapps-collection-schedule { align-self: end; flex-direction: row; align-items: center; gap: 8px; }
 .kuapps-settings-fields .kuapps-collection-schedule input { width: 14px; height: 14px; margin: 0; }
-.kuapps-collection-schedule-hint, .kuapps-collection-estimate small { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+.kuapps-collection-schedule-hint, .kuapps-collection-estimate small { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
 .kuapps-collection-estimate { display: grid; gap: 6px; }
-.kuapps-collection-estimate p { margin: 0; font-size: 11px; line-height: 1.5; }
-.kuapps-cost-acknowledgement { display: flex; align-items: flex-start; gap: 8px; color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+.kuapps-collection-estimate p { margin: 0; font-size: 12px; line-height: 1.5; }
+.kuapps-cost-acknowledgement { display: flex; align-items: flex-start; gap: 8px; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
 .kuapps-cost-acknowledgement input { flex: none; margin-top: 2px; }
 .kuapps-settings-footer { min-height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-.kuapps-settings-footer [role="status"] { margin-right: auto; color: var(--green); font-size: 11px; }
-.kuapps-settings-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapps-settings-footer [role="status"] { margin-right: auto; color: var(--green); font-size: 12px; }
+.kuapps-settings-error { margin: 0; color: var(--red); font-size: 12px; }
 .kuapps-settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .kuapps-observability-workspace { min-height: 0; flex: 1; display: flex; overflow: hidden; }
 .kuapps-observability-workspace > :deep(.apm-view) { width: 100%; min-height: 0; flex: 1; }
@@ -1381,14 +1411,14 @@ defineExpose({ reloadActiveTab })
 .kuapps-review-workspace > :deep(.apm-view) { height: auto; min-height: 0; }
 .kuapps-review-workspace :deep(.apm-layout) { min-height: 0; flex: initial; display: block; }
 .kuapps-review-workspace :deep(.apm-main) { height: auto; min-height: 0; overflow: visible; padding: 0; }
-.kuapps-section-heading small { display: block; margin-top: 3px; color: var(--text-dim); font-size: 11px; }
+.kuapps-section-heading small { display: block; margin-top: 3px; color: var(--text-dim); font-size: 12px; }
 .kuapps-review-group { border: 1px solid var(--yellow); border-radius: 6px; }
 .kuapps-review-group-heading { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .kuapps-review-group-heading span { color: var(--text-dim); }
 .kuapps-review-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .kuapps-review-row:last-child { border-bottom: 0; }
 .kuapps-review-row > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.kuapps-review-row small, .kuapps-review-note { color: var(--text-dim); font-size: 11px; }
+.kuapps-review-row small, .kuapps-review-note { color: var(--text-dim); font-size: 12px; }
 .kuapps-review-note { margin: 0; }
 .kuapps-workspace-tab b.attention { background: var(--yellow); color: #fff; }
 .kuapps-observability-unavailable { min-height: 220px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; padding: 20px; color: var(--text-dim); text-align: center; }
@@ -1396,7 +1426,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-observability-unavailable strong { color: var(--text); }
 .kuapps-overview-strip { display: flex; align-items: center; gap: 0; margin: 12px 18px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 .kuapps-overview-strip > div { min-width: 118px; padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid var(--border); }
-.kuapps-overview-strip span { color: var(--text-dim); font-size: 10px; }
+.kuapps-overview-strip span { color: var(--text-dim); font-size: 12px; }
 .kuapps-overview-strip strong { font-size: 17px; }
 .kuapps-overview-strip button { margin-left: auto; margin-right: 10px; }
 .kuapps-observability-summary { margin: 12px 18px 0; border-top: 1px solid var(--border); }
@@ -1410,18 +1440,18 @@ defineExpose({ reloadActiveTab })
 .kuapps-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .kuapps-section-heading h3 { margin: 3px 0 0; font-size: 16px; }
 .kuapps-section-actions { display: flex; align-items: center; gap: 6px; }
-.kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 11px; }
+.kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 12px; }
 .kuapps-registry-split { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
 .kuapps-inspector-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.kuapps-inspector-identity code { font-size: 11px; overflow-wrap: anywhere; }
+.kuapps-inspector-identity code { font-size: 12px; overflow-wrap: anywhere; }
 .kuapps-resource-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-resource-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .kuapps-resource-filters input { flex: 1 1 200px; min-width: 0; }
 .kuapps-resource-filters select { flex: 0 1 auto; max-width: 180px; }
 .kuapps-resource-count { font-size: 12px; color: var(--text-dim); margin-left: auto; }
 .kuapps-resource-header { display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(90px, .7fr) auto; gap: 10px; padding: 4px 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .03em; }
-.kuapps-signal-badge { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+.kuapps-signal-badge { flex: 0 0 auto; font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .kuapps-signal-badge.current { color: var(--success, #16a34a); border-color: currentColor; }
 .kuapps-signal-badge.stale, .kuapps-signal-badge.partial, .kuapps-signal-badge.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
 .kuapps-signal-badge.gone, .kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
@@ -1431,41 +1461,41 @@ defineExpose({ reloadActiveTab })
 .kuapps-resource-mark svg { width: 15px; }
 .kuapps-resource-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .kuapps-resource-copy strong, .kuapps-resource-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kuapps-resource-copy small, .kuapps-resource-scope { color: var(--text-dim); font-size: 10px; }
+.kuapps-resource-copy small, .kuapps-resource-scope { color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-scope { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kuapps-sync-resource-definitions { margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
 .kuapps-sync-resource-definitions .kuapps-section-heading { margin-bottom: 8px; }
 .kuapps-sync-resource-definitions .kuapps-section-heading h4 { margin: 0; font-size: 13px; }
 .kuapps-sync-resource-list { max-height: 440px; overflow: auto; border-top: 1px solid var(--border); }
 .kuapps-sync-resource-row { min-height: 58px; padding: 8px 4px; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
-.kuapps-sync-resource-row .kuapps-resource-copy code { overflow: hidden; color: var(--text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.kuapps-sync-resource-row .kuapps-resource-copy code { overflow: hidden; color: var(--text-dim); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .kuapps-sync-resource-row > button { white-space: nowrap; }
 .kuapps-sync-source-group + .kuapps-sync-source-group { border-top: 1px solid var(--border); }
 .kuapps-sync-source-heading { min-height: 42px; display: flex; align-items: center; gap: 8px; color: var(--accent); }
 .kuapps-sync-source-heading > span { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
-.kuapps-sync-source-heading strong { color: var(--text); font-size: 11px; }
-.kuapps-sync-source-heading small { color: var(--text-dim); font-size: 10px; }
-.kuapps-sync-source-heading b { color: var(--text-dim); font-size: 10px; }
+.kuapps-sync-source-heading strong { color: var(--text); font-size: 12px; }
+.kuapps-sync-source-heading small { color: var(--text-dim); font-size: 12px; }
+.kuapps-sync-source-heading b { color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-inspector { min-width: 0; padding: 12px; border-left: 1px solid var(--border); background: var(--surface); }
 .kuapps-resource-inspector header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .kuapps-resource-inspector h3 { margin: 3px 0 8px; overflow-wrap: anywhere; font-size: 14px; }
 .kuapps-resource-inspector dl { margin: 0; display: grid; gap: 8px; }
-.kuapps-resource-inspector dl > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 7px; font-size: 10px; }
+.kuapps-resource-inspector dl > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 7px; font-size: 12px; }
 .kuapps-resource-inspector dt { color: var(--text-dim); }
 .kuapps-resource-inspector dd { margin: 0; overflow-wrap: anywhere; }
-.kuapps-resource-inspector code { font-size: 9px; }
+.kuapps-resource-inspector code { font-size: 12px; }
 .kuapps-resource-source-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.kuapps-resource-source-list span { padding: 2px 5px; border-radius: 3px; background: var(--bg-hover); color: var(--text-dim); font-size: 9px; }
+.kuapps-resource-source-list span { padding: 2px 5px; border-radius: 3px; background: var(--bg-hover); color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-identity { margin-top: 10px; padding-top: 8px; display: grid; gap: 4px; border-top: 1px solid var(--border); }
-.kuapps-resource-identity small { color: var(--text-dim); font-size: 10px; }
+.kuapps-resource-identity small { color: var(--text-dim); font-size: 12px; }
 .kuapps-resource-identity code { overflow-wrap: anywhere; }
 .kuapps-inspector-actions { margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; border-top: 1px solid var(--border); }
-.kuapps-inspector-actions > span { color: var(--text-dim); font-size: 10px; }
+.kuapps-inspector-actions > span { color: var(--text-dim); font-size: 12px; }
 .kuapps-relationship-list { border-top: 1px solid var(--border); }
 .kuapps-relationship-row { min-height: 58px; padding: 8px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
 .kuapps-relationship-endpoint { min-width: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-relationship-endpoint strong, .kuapps-relationship-endpoint small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kuapps-relationship-endpoint small, .kuapps-relationship-type, .kuapps-relationship-status { color: var(--text-dim); font-size: 10px; }
+.kuapps-relationship-endpoint small, .kuapps-relationship-type, .kuapps-relationship-status { color: var(--text-dim); font-size: 12px; }
 .kuapps-relationship-type { display: flex; align-items: center; gap: 5px; }
 .kuapps-relationship-type svg { width: 13px; }
 .kuapps-relationship-status { padding: 3px 6px; border-radius: 4px; background: var(--bg-hover); }
@@ -1476,8 +1506,8 @@ defineExpose({ reloadActiveTab })
 .kuapps-empty-state strong { color: var(--text); }
 .kuapps-create-form { max-width: 460px; margin: 28px auto; padding: 0 18px; display: flex; flex-direction: column; gap: 9px; }
 .kuapps-create-form h2 { margin: 0; font-size: 18px; }
-.kuapps-create-form p { margin: 0; color: var(--text-dim); font-size: 11px; }
-.kuapps-create-form label { display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); font-size: 11px; }
+.kuapps-create-form p { margin: 0; color: var(--text-dim); font-size: 12px; }
+.kuapps-create-form label { display: flex; flex-direction: column; gap: 4px; color: var(--text-dim); font-size: 12px; }
 .kuapps-create-form input { height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .kuapps-create-form .kuapps-create-error { color: var(--red); }
 .kuapps-create-actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1486,14 +1516,14 @@ defineExpose({ reloadActiveTab })
 .kuapps-add-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .kuapps-add-panel h3 { margin: 3px 0 0; font-size: 15px; }
 .kuapps-add-steps { margin: 0; padding: 8px 14px; display: flex; gap: 6px; list-style: none; border-bottom: 1px solid var(--border); }
-.kuapps-add-steps li { padding: 2px 9px; border-radius: 10px; background: var(--bg-hover); color: var(--text-dim); font-size: 10px; }
+.kuapps-add-steps li { padding: 2px 9px; border-radius: 10px; background: var(--bg-hover); color: var(--text-dim); font-size: 12px; }
 .kuapps-add-steps li.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .kuapps-add-steps li.done { color: var(--green); }
 .kuapps-add-account { padding: 10px 14px; display: grid; gap: 8px; }
-.kuapps-add-account label { display: grid; gap: 4px; color: var(--text-dim); font-size: 11px; }
-.kuapps-add-using { margin: 0; color: var(--text-dim); font-size: 11px; }
+.kuapps-add-account label { display: grid; gap: 4px; color: var(--text-dim); font-size: 12px; }
+.kuapps-add-using { margin: 0; color: var(--text-dim); font-size: 12px; }
 .kuapps-add-providers { display: flex; flex-wrap: wrap; gap: 6px; }
-.kuapps-add-explain { margin: 0 14px; padding: 7px 10px; display: flex; gap: 7px; align-items: flex-start; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 11px; }
+.kuapps-add-explain { margin: 0 14px; padding: 7px 10px; display: flex; gap: 7px; align-items: flex-start; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 12px; }
 .kuapps-add-explain svg { width: 13px; flex: none; color: var(--accent); }
 .kuapps-add-body { min-height: 0; flex: 1; overflow: auto; padding: 10px 14px; }
 .kuapps-add-body > :deep(.architecture-view) { height: auto; }
@@ -1506,7 +1536,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-signals-inspector > header { min-height: 58px; padding: 10px 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border); }
 .kuapps-signals-inspector h3 { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 13px; }
 .kuapps-signals-inspector dl { margin: 0; padding: 9px 12px; display: grid; gap: 5px; border-bottom: 1px solid var(--border); }
-.kuapps-signals-inspector dl > div { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 7px; font-size: 10px; }
+.kuapps-signals-inspector dl > div { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 7px; font-size: 12px; }
 .kuapps-signals-inspector dt { color: var(--text-dim); }
 .kuapps-signals-inspector dd { margin: 0; overflow-wrap: anywhere; }
 .kuapps-signal-panel { min-height: 0; flex: 1; overflow: hidden; }
@@ -1514,9 +1544,9 @@ defineExpose({ reloadActiveTab })
 .kuapps-signal-panel :deep(.apm-layout) { height: 100%; min-height: 0; display: flex; }
 .kuapps-signal-panel :deep(.apm-main) { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: 8px; }
 .kuapps-signal-panel :deep(.apm-resource-focus) { margin: 0 0 8px; }
-.kuapps-signals-unavailable, .kuapps-inspector-empty { padding: 16px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; color: var(--text-dim); font-size: 10px; }
+.kuapps-signals-unavailable, .kuapps-inspector-empty { padding: 16px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; color: var(--text-dim); font-size: 12px; }
 .kuapps-signals-unavailable svg, .kuapps-inspector-empty svg { width: 17px; color: var(--accent); }
-.kuapps-signals-unavailable strong { color: var(--text); font-size: 11px; }
+.kuapps-signals-unavailable strong { color: var(--text); font-size: 12px; }
 .kuapps-inspector-empty { margin: auto; align-items: center; text-align: center; }
 @media (max-width: 900px) { .kuapps-complementary-grid.has-resource-inspector { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); } }
 @media (max-width: 700px) { .kuapps-workspace-nav { overflow-x: auto; }.kuapps-workspace-tab { flex: 0 0 auto; }.kuapps-registry-split { grid-template-columns: minmax(0, 1fr); }.kuapps-resource-inspector { border-top: 1px solid var(--border); border-left: 0; }.kuapps-relationship-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }.kuapps-relationship-status { grid-column: 1 / -1; justify-self: end; }.kuapps-complementary-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 1fr); overflow: auto; }.kuapps-complementary-grid.has-resource-inspector { grid-template-rows: minmax(360px, 1fr) minmax(320px, 44vh); }.kuapps-signals-inspector { border-top: 1px solid var(--border); border-left: 0; } }

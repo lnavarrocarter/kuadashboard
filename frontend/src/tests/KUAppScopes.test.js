@@ -42,7 +42,7 @@ describe('KUApp scopes', () => {
     const wrapper = mount(KUAppScopes, { props: { applicationId: 'app-1' } })
     await flushPromises()
 
-    expect(wrapper.find('.kuapp-scopes-warning').text()).toContain('1 scope(s)')
+    expect(wrapper.find('.kuapp-scopes-warning').text()).toContain('1 connection(s)')
     expect(wrapper.find('.kuapp-scope-status').text()).toBe('No profile')
     const options = wrapper.findAll('.kuapp-scope-binding option').map(option => option.text())
     expect(options).toContain('prod (~/.aws)')

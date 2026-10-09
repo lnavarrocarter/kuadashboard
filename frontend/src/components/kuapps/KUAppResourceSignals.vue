@@ -155,7 +155,7 @@ defineExpose({ reload: () => { lookUp(); loadMetrics() } })
 .krs-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .krs-head h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .krs-head small { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
-.krs-state { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+.krs-state { flex: 0 0 auto; font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .krs-state.current { color: var(--success, #16a34a); border-color: currentColor; }
 .krs-state.stale, .krs-state.partial, .krs-state.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
 .krs-state.gone, .krs-state.error { color: var(--danger, #dc2626); border-color: currentColor; }

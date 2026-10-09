@@ -310,11 +310,11 @@ onUpdated(refreshIcons)
 .obs-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .obs-row-app { font-weight: 600; }
 .obs-row-app svg { width: 13px; height: 13px; margin-right: 6px; vertical-align: -2px; }
-.obs-issue-count { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--warning, #d97706); color: #fff; }
+.obs-issue-count { font-size: 12px; padding: 0 6px; border-radius: 999px; background: var(--warning, #d97706); color: #fff; }
 .obs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--text-dim); }
 .obs-dot.critical { background: var(--danger, #dc2626); }
 .obs-dot.warning { background: var(--warning, #d97706); }
-.obs-state { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+.obs-state { flex: 0 0 auto; font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .obs-state.current { color: var(--success, #16a34a); border-color: currentColor; }
 .obs-state.stale, .obs-state.partial, .obs-state.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
 .obs-state.gone, .obs-state.error { color: var(--danger, #dc2626); border-color: currentColor; }

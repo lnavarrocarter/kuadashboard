@@ -96,12 +96,12 @@ defineExpose({ reload: load })
 .kmr-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px; }
 .kmr-item header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .kmr-item header > span:first-child { display: flex; flex-direction: column; min-width: 0; }
-.kmr-item small { color: var(--text-dim); font-size: 11px; overflow-wrap: anywhere; }
+.kmr-item small { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
 .kmr-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .kmr-successors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .kmr-successors li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
 .kmr-successors li > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-width: 0; }
-.kmr-chip { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
+.kmr-chip { font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
 .kmr-chip.high { color: var(--success, #16a34a); }
 .kmr-chip.medium { color: var(--warning, #d97706); }
 </style>

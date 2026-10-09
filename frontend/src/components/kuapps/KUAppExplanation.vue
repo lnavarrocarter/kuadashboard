@@ -143,16 +143,16 @@ watch(() => props.request, load, { immediate: true })
 <style scoped>
 .kuapp-explain { display: grid; gap: 14px; max-height: 64vh; overflow: auto; }
 .kuapp-explain section { display: grid; gap: 6px; }
-.kuapp-explain h4 { margin: 0; color: var(--text-dim); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+.kuapp-explain h4 { margin: 0; color: var(--text-dim); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
 .kuapp-explain-summary { margin: 0; font-size: 13px; line-height: 1.5; }
-.kuapp-explain-muted { margin: 0; color: var(--text-dim); font-size: 11px; }
+.kuapp-explain-muted { margin: 0; color: var(--text-dim); font-size: 12px; }
 .kuapp-explain-error { margin: 0; color: var(--red); }
 .kuapp-explain-confidence { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .kuapp-explain-confidence strong { font-size: 18px; }
 .kuapp-explain-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
 .kuapp-explain-list li { display: flex; gap: 8px; align-items: baseline; font-size: 12px; line-height: 1.45; }
-.kuapp-explain-list code { font-size: 11px; overflow-wrap: anywhere; }
-.kuapp-explain-class { flex: none; padding: 1px 7px; border: 1px solid currentColor; border-radius: 10px; font-size: 10px; white-space: nowrap; }
+.kuapp-explain-list code { font-size: 12px; overflow-wrap: anywhere; }
+.kuapp-explain-class { flex: none; padding: 1px 7px; border: 1px solid currentColor; border-radius: 10px; font-size: 12px; white-space: nowrap; }
 .kuapp-explain-class.declared { color: var(--green); }
 .kuapp-explain-class.observed { color: var(--accent); }
 .kuapp-explain-class.inferred { color: var(--yellow); }

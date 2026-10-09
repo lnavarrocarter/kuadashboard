@@ -58,23 +58,36 @@
 
     <BaseModal :show="confirmCollect" @close="confirmCollect = false">
       <template #title><i data-lucide="cloud-download"></i> {{ t('apm.collectTitle') }}</template>
-      <div class="kuapp-collect-confirm">
+      <!-- The same three questions as Signals (#239): what is read now, what comes from the local
+           cache, and what costs. -->
+      <div class="kuapp-collect-confirm" data-test="summary-collect-confirm">
         <p>{{ collectionDescription }}</p>
-        <dl>
-          <div v-if="lambdaCount"><dt>{{ t('apm.lambdaFunctions') }}</dt><dd>{{ formatNumber(lambdaCount) }}</dd></div>
-          <div v-if="lambdaCount"><dt>{{ t('apm.maximumRequestsNow') }}</dt><dd>{{ formatNumber(lambdaCount * 2) }}</dd></div>
-          <div v-if="kubernetesCount"><dt>Kubernetes</dt><dd>{{ formatNumber(kubernetesCount) }}</dd></div>
-        </dl>
-        <p v-if="lambdaCount">{{ t('apm.costForecast', { count: formatNumber(lambdaCount), maximum: formatNumber(lambdaMonthlyMaximum) }) }}</p>
-        <p v-if="cloudWatchEstimate.metricsPerCollection" data-test="summary-cloudwatch-cost">
-          {{ t('apm.cloudWatchMonthlyEstimate', {
-            metrics: formatNumber(cloudWatchEstimate.metricsPerCollection),
-            requests: formatNumber(cloudWatchEstimate.requestsPerMonth),
-            usd: formatNumber(cloudWatchEstimate.monthlyUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          }) }}
-        </p>
-        <p>{{ t('apm.cachedSignalsIncluded') }}</p>
-        <small>{{ t('apm.collectionCostScope') }}</small>
+        <section>
+          <h4>{{ t('obs.confirm.now') }}</h4>
+          <ul>
+            <li v-if="lambdaCount">{{ t('obs.confirm.lambdas', { n: formatNumber(lambdaCount), max: formatNumber(lambdaCount * 2) }) }}</li>
+            <li v-if="cloudWatchResourceCount">{{ t('obs.confirm.cloudWatch', { n: formatNumber(cloudWatchResourceCount), metrics: formatNumber(cloudWatchEstimate.metricsPerCollection) }) }}</li>
+            <li v-if="kubernetesCount">{{ t('obs.confirm.kubernetes', { n: formatNumber(kubernetesCount) }) }}</li>
+            <li v-if="!lambdaCount && !cloudWatchResourceCount && !kubernetesCount">{{ t('obs.confirm.nothing') }}</li>
+          </ul>
+        </section>
+        <section>
+          <h4>{{ t('obs.confirm.cache') }}</h4>
+          <p>{{ t('obs.confirm.cacheText') }}</p>
+        </section>
+        <section>
+          <h4>{{ t('obs.confirm.cost') }}</h4>
+          <p v-if="lambdaCount">{{ t('apm.costForecast', { count: formatNumber(lambdaCount), maximum: formatNumber(lambdaMonthlyMaximum) }) }}</p>
+          <p v-if="cloudWatchEstimate.metricsPerCollection" data-test="summary-cloudwatch-cost">
+            {{ t('apm.cloudWatchMonthlyEstimate', {
+              metrics: formatNumber(cloudWatchEstimate.metricsPerCollection),
+              requests: formatNumber(cloudWatchEstimate.requestsPerMonth),
+              usd: formatNumber(cloudWatchEstimate.monthlyUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            }) }}
+          </p>
+          <p v-if="!lambdaCount && !cloudWatchEstimate.metricsPerCollection">{{ t('obs.confirm.noCost') }}</p>
+          <small>{{ t('apm.collectionCostScope') }}</small>
+        </section>
       </div>
       <template #footer>
         <button class="btn" :disabled="collecting" @click="confirmCollect = false">{{ t('action.cancel') }}</button>
@@ -137,6 +150,7 @@ const lambdaCount = computed(() => resources.value.filter(resource => resource.t
 const kubernetesCount = computed(() => resources.value.filter(resource => resource.type === 'kubernetes' && resource.enabled !== false).length)
 const lambdaMonthlyMaximum = computed(() => lambdaCount.value * 48 * 30 * 2)
 const cloudWatchEstimate = computed(() => estimateCloudWatchMonthlyCost(resources.value))
+const cloudWatchResourceCount = computed(() => resources.value.filter(resource => resource.enabled !== false && ['elb', 'ec2', 's3'].includes(resource.type)).length)
 watch([lambdaCount, cloudWatchEstimate], () => emit('collection-estimate', {
   lambdaCount: lambdaCount.value,
   lambdaMonthlyMaximum: lambdaMonthlyMaximum.value,
@@ -284,28 +298,27 @@ defineExpose({ reload: load })
 <style scoped>
 .kuapp-summary { display: grid; gap: 10px; padding: 12px 18px 0; }
 .kuapp-summary-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.kuapp-summary-freshness { margin-right: auto; color: var(--text-dim); font-size: 11px; }
+.kuapp-summary-freshness { margin-right: auto; color: var(--text-dim); font-size: 12px; }
 .kuapp-summary-bar svg { width: 13px; }
-.kuapp-summary-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapp-summary-error { margin: 0; color: var(--red); font-size: 12px; }
 .kuapp-collect-confirm { display: grid; gap: 10px; max-width: 560px; }
 .kuapp-collect-confirm p, .kuapp-collect-confirm small { margin: 0; line-height: 1.5; }
-.kuapp-collect-confirm dl { margin: 0; display: grid; gap: 5px; }
-.kuapp-collect-confirm dl > div { display: flex; justify-content: space-between; gap: 12px; }
-.kuapp-collect-confirm dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kuapp-collect-confirm h4 { margin: 0 0 4px; font-size: 13px; }
+.kuapp-collect-confirm ul { margin: 0; padding-left: 18px; }
 .kuapp-collect-confirm small { color: var(--text-dim); }
 .kuapp-issues { margin-top: 12px; }
 .range-control { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.range-control button { height: 27px; min-width: 35px; border: 0; border-right: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 10px; cursor: pointer; }
+.range-control button { height: 27px; min-width: 35px; border: 0; border-right: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 12px; cursor: pointer; }
 .range-control button:last-child { border-right: 0; }
 .range-control button.active { background: var(--accent); color: #fff; }
 .kuapp-summary-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .kuapp-card { min-width: 0; padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); color: var(--text); text-align: left; cursor: pointer; }
 .kuapp-card:hover { border-color: var(--accent); }
 .kuapp-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.kuapp-card-label { color: var(--text-dim); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.kuapp-card-label { color: var(--text-dim); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
 .kuapp-card-value { font-size: 20px; font-variant-numeric: tabular-nums; }
-.kuapp-card-value small { color: var(--text-dim); font-size: 11px; font-weight: 400; }
-.kuapp-card > small { color: var(--text-dim); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.kuapp-card-value small { color: var(--text-dim); font-size: 12px; font-weight: 400; }
+.kuapp-card > small { color: var(--text-dim); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .kuapp-card-bar { height: 5px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
 .kuapp-card-bar i { display: block; height: 100%; background: var(--accent); }
 .kuapp-card.ok { border-left: 3px solid var(--green); }

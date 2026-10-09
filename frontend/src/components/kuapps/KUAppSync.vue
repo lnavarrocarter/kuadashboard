@@ -138,7 +138,7 @@ watch(() => [props.application?.id, profile.value, props.provider], load, { imme
 .kuapp-sync { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); }
 .kuapp-sync > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .kuapp-sync h4 { margin: 0; font-size: 13px; }
-.kuapp-sync-chip { padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-dim); font-size: 10px; white-space: nowrap; }
+.kuapp-sync-chip { padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
 .kuapp-sync-chip.ok { border-color: var(--green); color: var(--green); }
 .kuapp-sync-explain { margin: 0; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 12px; line-height: 1.5; }
 .kuapp-sync-side summary { cursor: pointer; font-size: 13px; }
@@ -148,7 +148,7 @@ watch(() => [props.application?.id, profile.value, props.provider], load, { imme
 .kuapp-sync-resource:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .kuapp-sync-resource small { color: var(--text-dim); font-size: 12px; }
 .kuapp-sync-explain strong { color: var(--text); }
-.kuapp-sync-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapp-sync-error { margin: 0; color: var(--red); font-size: 12px; }
 .kuapp-sync > footer { display: flex; align-items: center; gap: 8px; }
 .kuapp-sync-pending { margin: 0 auto 0 0; color: var(--text-dim); font-size: 12px; }
 .kuapp-sync svg { width: 13px; }

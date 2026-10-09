@@ -101,3 +101,44 @@ describe('KUApps connections and the join (#239)', () => {
     expect(wrapper.emitted('select-resource')[0]).toEqual(['sg-1'])
   })
 })
+
+describe('KUApps keyboard and narrow windows (#239)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    settings.lang = 'en'
+  })
+
+  it('moves between workspace tabs with the arrow keys and folds the list in a narrow window', async () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
+    const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
+    respond(url => (url.includes('/catalog') ? [application]
+      : url.includes('/registry') ? { resources: [], relationships: [] }
+        : url.includes('/api/kua-apps/applications/app-1') && !url.includes('/views') ? { id: 'app-1', scopes: [], local: { bindings: [], legacy: null } } : []))
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture', applicationId: 'app-1' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } }, attachTo: document.body })
+    await flushPromises()
+    try {
+      expect(wrapper.get('.kuapps-application-shell').classes()).toContain('collapsed')
+      expect(wrapper.get('.kuapps-application-row').attributes('title')).toBe('Dev')
+      await wrapper.get('[data-test="kuapps-sidebar-toggle"]').trigger('click')
+      expect(wrapper.get('.kuapps-application-shell').classes()).not.toContain('collapsed')
+      await wrapper.get('.kuapps-application-row').trigger('click')
+      expect(wrapper.get('.kuapps-application-shell').classes()).toContain('collapsed')
+
+      const tabs = () => wrapper.findAll('.kuapps-workspace-tab')
+      expect(tabs()[0].attributes('tabindex')).toBe('0')
+      expect(tabs()[1].attributes('tabindex')).toBe('-1')
+      await tabs()[0].trigger('keydown', { key: 'ArrowRight' })
+      await flushPromises()
+      expect(tabs()[1].attributes('aria-selected')).toBe('true')
+      expect(document.activeElement).toBe(tabs()[1].element)
+      await tabs()[1].trigger('keydown', { key: 'End' })
+      expect(tabs().at(-1).attributes('aria-selected')).toBe('true')
+      await tabs().at(-1).trigger('keydown', { key: 'ArrowRight' })
+      expect(tabs()[0].attributes('aria-selected')).toBe('true')
+    } finally {
+      window.matchMedia = matchMedia
+      wrapper.unmount()
+    }
+  })
+})

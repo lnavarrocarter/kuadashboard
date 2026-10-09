@@ -72,7 +72,7 @@ defineExpose({ reload: load })
 .kis { display: flex; flex-direction: column; gap: 6px; }
 .kis-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .kis-counts { display: flex; gap: 4px; flex-wrap: wrap; }
-.kis-chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.kis-chip { font-size: 12px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
 .kis-chip.critical, .kis-dot.critical { color: var(--danger, #dc2626); }
 .kis-chip.warning, .kis-dot.warning { color: var(--warning, #d97706); }
 .kis-chip.info, .kis-dot.info { color: var(--text-dim); }

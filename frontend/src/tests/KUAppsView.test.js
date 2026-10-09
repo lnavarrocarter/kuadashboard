@@ -140,7 +140,7 @@ describe('KUApps navigation', () => {
     await wrapper.findAll('.kuapps-workspace-tab')[5].trigger('click')
     await wrapper.findAll('.kuapps-settings-nav button')[1].trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('Accounts and scopes')
+    expect(wrapper.text()).toContain('Connections')
     expect(wrapper.find('.kuapp-scopes-warning').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -441,7 +441,7 @@ describe('KUApps navigation', () => {
 
     await tabs()[5].trigger('click')
     const sections = () => wrapper.findAll('.kuapps-settings-nav button')
-    expect(sections().map(button => button.text())).toEqual(['Application details', 'Accounts and scopes', 'Sources and sync', 'Backups and collaboration', 'Delete application'])
+    expect(sections().map(button => button.text())).toEqual(['Application details', 'Connections', 'Sources and sync', 'Backups and collaboration', 'Delete application'])
     await sections()[1].trigger('click')
     expect(wrapper.find('.kuapp-scopes').exists()).toBe(true)
     await sections()[2].trigger('click')
@@ -614,7 +614,7 @@ describe('KUApps navigation', () => {
     expect(wrapper.findAll('[data-test="resource-signal-state"]').map(badge => badge.text()))
       .toEqual(['Current', 'No data yet', 'Stale', 'No connection', 'Not supported', 'Unknown'])
     await wrapper.findAll('.kuapps-resource-row')[3].trigger('click')
-    expect(wrapper.get('[data-test="inspector-signal-state"]').text()).toContain('No verified profile of this computer reaches its scope')
+    expect(wrapper.get('[data-test="inspector-signal-state"]').text()).toContain('No verified profile of this computer reaches its connection')
     wrapper.unmount()
   })
 

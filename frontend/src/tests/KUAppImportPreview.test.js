@@ -34,7 +34,7 @@ describe('KUApp import preview', () => {
     const text = wrapper.text()
 
     expect(wrapper.find('[data-test="import-already-here"]').exists()).toBe(true)
-    expect(text).toContain('Accounts and scopes (2)')
+    expect(text).toContain('Connections (2)')
     expect(text).toContain('does not support this provider')
     expect(text).toContain('Checkout (imported)')
     expect(text).toContain('2 return as members, 1 come back with their views, 1 cannot be restored.')
