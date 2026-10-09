@@ -62,7 +62,7 @@ describe('ArchitectureRoutes', () => {
     expect(groups[3].paths.map(path => path.nodes.at(-1).name)).toEqual(['AlphaWorker', 'ZetaWorker'])
   })
 
-  it('keeps routes distinct when the same nodes have different relationships', () => {
+  it('walks the same resources once and lists every kind of relationship of a step (#239)', () => {
     const groups = architectureRouteGroups({
       nodes: [
         { id: 'rule', name: 'Schedule', resourceType: 'eventbridge' },
@@ -76,8 +76,8 @@ describe('ArchitectureRoutes', () => {
       ],
     })
 
-    expect(groups[0].paths).toHaveLength(2)
-    expect(new Set(groups[0].paths.map(path => path.id))).toHaveProperty('size', 2)
+    expect(groups[0].paths).toHaveLength(1)
+    expect(groups[0].paths[0].relationTypes).toEqual([['triggers'], ['invokes', 'starts_execution']])
   })
 
   it('groups Kubernetes Ingress and Service paths as microservice routes', () => {

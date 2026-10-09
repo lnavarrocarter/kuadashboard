@@ -253,6 +253,7 @@
               @imported="resourceProvider = ''"
             />
 
+            <ArchitectureKubernetesDrift v-if="store.graph" />
             <ArchitectureGraphAdvisor
               v-if="store.graph"
               :graph="store.graph"
@@ -283,6 +284,7 @@
             <section v-if="store.graph && activeView === 'canvas'" class="architecture-view-panel" role="tabpanel" :aria-label="t('archView.canvas')">
               <ArchitectureCanvas
                 :graph="store.graph"
+                :drift="driftByNode"
                 :saving="store.saving"
                 :observability-enabled="Boolean(store.linkedApplication)"
                 :metrics="metricsByNode"
@@ -403,6 +405,7 @@ import ApmApplicationLogs from '../cloud/apm/ApmApplicationLogs.vue'
 import ArchitectureCanvas from './ArchitectureCanvas.vue'
 import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
+import ArchitectureKubernetesDrift from './ArchitectureKubernetesDrift.vue'
 import ArchitectureCloudDiscoveryPanel from './ArchitectureCloudDiscoveryPanel.vue'
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
@@ -1059,6 +1062,9 @@ function handleArchitectureTabKeydown(event) {
 }
 
 const pickerKubeContext = ref('')
+// What changed in the cluster for each drawn Kubernetes resource (#239), marked on the canvas.
+const driftByNode = computed(() => Object.fromEntries((store.kubernetesDrift?.changes || []).map(change => [change.nodeId, change])))
+
 async function openResourcePicker(provider = 'aws', { kubeContext = '' } = {}) {
   pickerKubeContext.value = kubeContext
   if (props.workspaceMode && (store.activeProfileId !== props.profileId || store.selectedApplicationId !== props.applicationId)) {

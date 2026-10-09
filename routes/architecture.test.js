@@ -600,3 +600,84 @@ test('API exposes scoped GCP and Vercel discovery preview/import endpoints', asy
     await subject.close();
   }
 });
+
+test('API validates a Kubernetes map against the cluster and applies the confirmed refresh (#239)', async () => {
+  const k8s = (id, resourceType, name, extra = {}) => ({
+    id, provider: 'kubernetes', resourceType, kind: { deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType],
+    name, nativeId: `uid-${id}`, kubeContext: 'eks-dev', namespace: 'orders', sourceId: 'kubernetes:context:eks-dev',
+    discoveryKey: `eks-dev/orders/${{ deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType]}/${name}`, ...extra,
+  });
+  const auth = k8s('k:auth', 'deployment', 'auth');
+  const oldPod = k8s('k:pod-old', 'pod', 'auth-7d9f8c6b5d-x2k4p');
+  const newPod = k8s('k:pod-new', 'pod', 'auth-5c4b3a2f1e-q9w8e');
+  const billingOld = k8s('k:billing-old', 'deployment', 'billing');
+  const billingNew = { ...k8s('k:billing-new', 'deployment', 'billing'), nativeId: 'uid-billing-2' };
+  const config = k8s('k:config', 'configmap', 'auth-config');
+  const gateway = k8s('k:gateway', 'service', 'gateway');
+  const elsewhere = { ...k8s('k:other', 'deployment', 'reports'), kubeContext: 'eks-prod', discoveryKey: 'eks-prod/orders/Deployment/reports', sourceId: 'kubernetes:context:eks-prod' };
+  const calls = [];
+  const subject = await fixture({
+    kubernetesAdapter: {
+      listContexts: () => [],
+      async preview(input) {
+        calls.push(input);
+        if (input.contexts[0] === 'eks-prod') throw new Error('Unauthorized');
+        return {
+          sources: [{ id: 'kubernetes:context:eks-dev', type: 'kubernetes', provider: 'kubernetes', context: 'eks-dev', namespaces: input.namespaces }],
+          nodes: [auth, newPod, billingNew, gateway],
+          relationships: [{ id: 'owns-new', sourceNodeId: 'k:auth', targetNodeId: 'k:pod-new', relationType: 'owns', status: 'automatic' }],
+          health: [], capabilities: [], failures: [],
+        };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'kubernetes' } });
+    const projectId = created.body.id;
+    await subject.request(`/projects/${projectId}/graph`, {
+      method: 'PUT',
+      body: { expectedRevision: 0, document: {
+        projectId,
+        nodes: [auth, oldPod, billingOld, config, gateway, elsewhere],
+        edges: [
+          { id: 'owns-old', sourceNodeId: 'k:auth', targetNodeId: 'k:pod-old', relationType: 'owns', status: 'automatic' },
+          { id: 'drawn', sourceNodeId: 'k:gateway', targetNodeId: 'k:pod-old', relationType: 'routes_to', status: 'manual' },
+        ],
+        layout: { 'k:pod-old': { x: 300, y: 120 }, 'k:billing-old': { x: 40, y: 40 } },
+      } },
+    });
+
+    const checked = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(calls.map(call => [call.contexts[0], call.namespaces]), [['eks-dev', ['orders']], ['eks-prod', ['orders']]]);
+    assert.equal(checked.body.present, 2);
+    const byNode = Object.fromEntries(checked.body.changes.map(item => [item.nodeId, item]));
+    assert.equal(byNode['k:pod-old'].change, 'replaced');
+    assert.deepEqual(byNode['k:pod-old'].successors, [{ id: 'k:pod-new', name: 'auth-5c4b3a2f1e-q9w8e' }]);
+    assert.equal(byNode['k:billing-old'].change, 'recreated');
+    assert.equal(byNode['k:config'].change, 'gone');
+    // An unreachable context marks nothing as gone.
+    assert.equal(byNode['k:other'], undefined);
+    assert.deepEqual(checked.body.contexts.find(item => item.context === 'eks-prod'), { context: 'eks-prod', namespaces: ['orders'], status: 'unreachable', error: 'Unauthorized' });
+
+    const applied = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: 1 } });
+    assert.equal(applied.status, 200);
+    const { nodes, edges, layout } = applied.body.document;
+    const ids = nodes.map(node => node.id).sort();
+    assert.deepEqual(ids, ['k:auth', 'k:billing-old', 'k:gateway', 'k:other', 'k:pod-new']);
+    // The recreated workload keeps its place and takes the new uid.
+    assert.equal(nodes.find(node => node.id === 'k:billing-old').nativeId, 'uid-billing-2');
+    // The new pod takes the old one's place and the relationship drawn by hand.
+    assert.deepEqual(layout['k:pod-new'], { x: 300, y: 120 });
+    assert.ok(edges.some(edge => edge.sourceNodeId === 'k:gateway' && edge.targetNodeId === 'k:pod-new' && edge.status === 'manual'));
+    assert.ok(edges.some(edge => edge.sourceNodeId === 'k:auth' && edge.targetNodeId === 'k:pod-new'));
+    assert.ok(!edges.some(edge => edge.targetNodeId === 'k:pod-old'));
+    const changes = await subject.request(`/projects/${projectId}/changes`);
+    assert.match(changes.body[0].reason, /Refresh 3 Kubernetes resources/);
+
+    const again = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: applied.body.revision } });
+    assert.equal(again.status, 409);
+  } finally {
+    await subject.close();
+  }
+});

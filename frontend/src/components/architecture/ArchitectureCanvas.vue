@@ -133,7 +133,7 @@
         <Background pattern-color="var(--border)" :gap="24" />
         <Controls position="bottom-left" />
         <template #node-default="{ data }">
-          <div class="architecture-node">
+          <div :class="['architecture-node', { 'architecture-node--drift': data.drift, 'architecture-node--gone': data.drift === 'gone' }]">
             <span :class="['node-icon', `node-icon--${presentationForType(data.resourceType).tone}`]">
               <i :data-lucide="presentationForType(data.resourceType).icon"></i>
             </span>
@@ -144,6 +144,7 @@
               </strong>
               <small>{{ typeLabel(data.resourceType) }}</small>
             </span>
+            <span v-if="data.drift" :class="['node-drift-badge', data.drift]" :data-test="`node-drift-${data.drift}`">{{ t(`archDrift.badge.${data.drift}`) }}</span>
             <span
               v-if="data.health"
               :class="['node-health-badge', `node-health-badge--${data.health.status}`]"
@@ -316,6 +317,8 @@ const props = defineProps({
   rolloutsLoading: { type: Boolean, default: false },
   security: { type: Object, default: () => ({}) },
   securityLoading: { type: Boolean, default: false },
+  // nodeId → { change: 'recreated' | 'replaced' | 'gone', successors } from the cluster check (#239)
+  drift: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'request-rollouts', 'request-security', 'resource-selected'])
 
@@ -680,6 +683,7 @@ function syncGraph(hydrateView = true) {
         events: nodeEventsOverlay(node),
         rollout: nodeRolloutOverlay(node),
         security: nodeSecurityOverlay(node),
+        drift: props.drift?.[node.id]?.change || '',
       },
     }
   })
@@ -1112,7 +1116,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading], () => syncGraph(false), { deep: true })
+watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1150,6 +1154,10 @@ onMounted(refreshIcons)
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
 .node-title { display: flex; align-items: center; gap: 6px; }
 .architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.architecture-node--drift { outline: 2px dashed var(--yellow); outline-offset: 2px; }
+.architecture-node--gone { opacity: .6; outline-color: var(--red); }
+.node-drift-badge { position: absolute; top: -10px; left: 8px; padding: 0 6px; border-radius: 8px; background: var(--yellow); color: #111; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.node-drift-badge.gone { background: var(--red); color: #fff; }
 .node-health-badge { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel); }
 .node-health-badge--healthy { background: #3fb950; }
 .node-health-badge--degraded { background: #d29922; }

@@ -94,7 +94,7 @@
               <span><strong>{{ node.name }}</strong><small>{{ stageLabel(node.resourceType) }}</small></span>
             </button>
             <span v-if="path.relations[index]" class="route-relation">
-              <small>{{ relationLabel(path.relations[index].relationType) }}</small>
+              <small>{{ (path.relationTypes?.[index] || [path.relations[index].relationType]).map(relationLabel).join(' · ') }}</small>
               <i data-lucide="arrow-right"></i>
             </span>
           </span>

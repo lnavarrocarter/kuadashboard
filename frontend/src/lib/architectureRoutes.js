@@ -106,21 +106,28 @@ export function architectureRouteGroups(document = {}, { order = 'sequence' } = 
     })
   return roots.map(root => {
     const rootEdges = outgoing.get(root.id) || []
-    // The same resources joined by the same kinds of relationship (one found twice) walk one route;
-    // different kinds (invokes, starts an execution) stay apart (#239).
-    const seen = new Set()
-    const paths = enumeratePaths(root.id, outgoing, nodesById)
-      .filter(path => {
-        const key = `${path.nodeIds.join('>')}|${path.edgeIds.map(id => edgesById.get(id)?.relationType || 'depends_on').join('>')}`
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
+    // The same resources walk one route (#239): several relationships between two of them (invokes
+    // and starts an execution, or one found twice) are the kinds of that step, not more routes.
+    const byNodes = new Map()
+    for (const path of enumeratePaths(root.id, outgoing, nodesById)) {
+      const key = path.nodeIds.join('>')
+      const route = byNodes.get(key)
+      if (!route) {
+        byNodes.set(key, { nodeIds: path.nodeIds, edgeIds: path.edgeIds.map(id => [id]) })
+        continue
+      }
+      path.edgeIds.forEach((id, index) => { if (!route.edgeIds[index].includes(id)) route.edgeIds[index].push(id) })
+    }
+    const paths = [...byNodes.values()]
+      .map(path => {
+        const steps = path.edgeIds.map(ids => ids.map(id => edgesById.get(id)).filter(Boolean))
+        return {
+          id: path.nodeIds.join('>'),
+          nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
+          relations: steps.map(edges => edges[0]).filter(Boolean),
+          relationTypes: steps.map(edges => [...new Set(edges.map(edge => edge.relationType || 'depends_on'))]),
+        }
       })
-      .map(path => ({
-        id: `${path.nodeIds.join('>')}|${path.edgeIds.join('>')}`,
-        nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
-        relations: path.edgeIds.map(id => edgesById.get(id)).filter(Boolean),
-      }))
       .sort((left, right) => comparePaths(left, right, order))
       .map((path, index, sorted) => ({ ...path, shared: index ? sharedPrefix(sorted[index - 1], path) : 0 }))
     return {

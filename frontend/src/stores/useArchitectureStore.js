@@ -27,6 +27,11 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const discoveryCatalog = ref(null)
   const discoveryPreview = ref(null)
   const kubernetesContexts = ref([])
+  // Whether the Kubernetes resources of the map still exist (#239): checked when the map opens.
+  const kubernetesDrift = ref(null)
+  const kubernetesDriftChecking = ref(false)
+  const driftChecks = new Map()
+  const DRIFT_TTL_MS = 5 * 60 * 1000
   const kubernetesPreview = ref(null)
   const gcpPreview = ref(null)
   const vercelPreview = ref(null)
@@ -101,6 +106,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryCatalog.value = null
     discoveryPreview.value = null
     kubernetesContexts.value = []
+    kubernetesDrift.value = null
     kubernetesPreview.value = null
     gcpPreview.value = null
     vercelPreview.value = null
@@ -198,6 +204,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     discoveryCatalog.value = null
     discoveryPreview.value = null
     kubernetesContexts.value = []
+    kubernetesDrift.value = null
     kubernetesPreview.value = null
     gcpPreview.value = null
     vercelPreview.value = null
@@ -633,6 +640,59 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
+  function mapHasKubernetes() {
+    return (graph.value?.document?.nodes || []).some(node => node.provider === 'kubernetes' && node.kubeContext && !node.manual)
+  }
+
+  async function checkKubernetesDrift({ force = false } = {}) {
+    const projectId = selectedProjectId.value
+    if (!projectId || !graph.value || !mapHasKubernetes()) {
+      kubernetesDrift.value = null
+      return null
+    }
+    const cached = driftChecks.get(projectId)
+    if (!force && cached && Date.now() - cached.at < DRIFT_TTL_MS && cached.revision === graph.value.revision) {
+      kubernetesDrift.value = cached.result
+      return cached.result
+    }
+    kubernetesDriftChecking.value = true
+    try {
+      const result = await apiFetch(`/api/architecture/projects/${projectId}/discovery/kubernetes/drift`, { method: 'POST', headers: headers(true), body: '{}' })
+      driftChecks.set(projectId, { at: Date.now(), revision: graph.value?.revision, result })
+      if (selectedProjectId.value === projectId) kubernetesDrift.value = result
+      return result
+    } catch (requestError) {
+      if (selectedProjectId.value === projectId) kubernetesDrift.value = { error: requestError.message, changes: [], contexts: [] }
+      return null
+    } finally {
+      kubernetesDriftChecking.value = false
+    }
+  }
+
+  async function applyKubernetesDrift(nodeIds = []) {
+    const projectId = selectedProjectId.value
+    if (!projectId || !graph.value) return null
+    saving.value = true
+    error.value = null
+    try {
+      const next = await apiFetch(`/api/architecture/projects/${projectId}/discovery/kubernetes/drift-apply`, {
+        method: 'POST', headers: headers(true), body: JSON.stringify({ expectedRevision: graph.value.revision, nodeIds }),
+      })
+      driftChecks.delete(projectId)
+      if (selectedProjectId.value === projectId) {
+        graph.value = next
+        await loadChanges(projectId)
+        await checkKubernetesDrift({ force: true })
+      }
+      return next
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function previewKubernetesResources({ contexts, namespaces = [] }) {
     if (!selectedProjectId.value) return null
     discovering.value = true
@@ -918,6 +978,10 @@ export const useArchitectureStore = defineStore('architecture', () => {
     graph,
     importAwsResources,
     importKubernetesResources,
+    kubernetesDrift,
+    kubernetesDriftChecking,
+    checkKubernetesDrift,
+    applyKubernetesDrift,
     importKuaApp,
     writeConflict,
     previewKuaApp,

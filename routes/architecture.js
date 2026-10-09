@@ -12,6 +12,7 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct, summarizeTechnicalFindings, crossRecommendations } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
+const { checkKubernetesMap, publicDrift, refreshOperation } = require('../lib/architecture/kubernetesDrift');
 
 function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
   if (!database) throw new Error('database is required');
@@ -439,6 +440,42 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
         profileId: project.profileId,
         sources: preview.sources.map(source => ({ ...source, profileId: project.profileId })),
       });
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Whether the Kubernetes resources drawn in the map still exist (#239): free reads of the Kubernetes
+  // API for the contexts and namespaces in the map. Nothing is written.
+  router.post('/projects/:projectId/discovery/kubernetes/drift', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const graph = database.getGraph(project.id);
+      const { drift } = await checkKubernetesMap(graph?.document, kubernetesAdapter);
+      res.json({ ...publicDrift(drift), projectId: project.id, revision: graph?.revision ?? null });
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Applies the changes the user confirmed, computed again here from the cluster (never from the
+  // client): successors take the place and relationships of what they replaced, gone resources
+  // leave the map. One revision, with its reason in the history.
+  router.post('/projects/:projectId/discovery/kubernetes/drift-apply', async (req, res) => {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const current = database.getGraph(project.id);
+      const { drift, preview } = await checkKubernetesMap(current?.document, kubernetesAdapter);
+      const nodeIds = Array.isArray(req.body?.nodeIds) ? req.body.nodeIds.map(String) : [];
+      const chosen = nodeIds.length ? drift.changes.filter(item => nodeIds.includes(item.nodeId)) : drift.changes;
+      if (!chosen.length) return res.status(409).json({ error: 'The map already matches the cluster', drift: publicDrift(drift) });
+      const operation = refreshOperation({ drift, preview, profileId: project.profileId, nodeIds: chosen.map(item => item.nodeId) });
+      let graph = service.applyOperation(project.id, operation, {
+        expectedRevision: req.body?.expectedRevision,
+        author: project.profileId,
+        reason: `Refresh ${chosen.length} Kubernetes resource${chosen.length === 1 ? '' : 's'} that changed in the cluster`,
+      });
+      graph = reconcileLinkedApplication(project) || graph;
+      log('Kubernetes map refreshed', project.name, project.profileId, { projectId: project.id, changes: chosen.length, revision: graph.revision });
+      res.json(graph);
     } catch (error) { handleError(res, error); }
   });
 
