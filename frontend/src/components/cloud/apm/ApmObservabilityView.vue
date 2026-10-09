@@ -203,7 +203,7 @@
 
               <div v-if="section.kpis.length" class="kpi-grid compact">
                 <div v-for="item in section.kpis" :key="item.id" class="kpi-item">
-                  <span>{{ t(item.labelKey) }}</span>
+                  <span>{{ t(item.labelKey, item.params) }}</span>
                   <strong>{{ item.value }}</strong>
                   <small>{{ kpiDetail(item) }}</small>
                 </div>

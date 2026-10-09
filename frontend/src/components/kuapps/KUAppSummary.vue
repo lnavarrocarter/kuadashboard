@@ -35,9 +35,9 @@
         <small>{{ pendingDetail }}</small>
       </button>
       <button :class="['kuapp-card', coverageTone]" data-test="summary-coverage" @click="$emit('open-tab', 'resources')">
-        <span class="kuapp-card-label">{{ t('kuapps.summary.coverage') }}</span>
+        <span class="kuapp-card-label" :title="t('kuapps.summary.coverageHint')">{{ t('kuapps.summary.coverage') }}</span>
         <strong class="kuapp-card-value">
-          <template v-if="registryTotal">{{ coverage.collected }}<small> {{ t('kuapps.summary.ofTotal', { total: registryTotal }) }}</small></template>
+          <template v-if="registryTotal">{{ coverage.withData }}<small> {{ t('kuapps.summary.ofTotal', { total: registryTotal }) }}</small></template>
           <template v-else>0</template>
         </strong>
         <span v-if="registryTotal" class="kuapp-card-bar"><i :style="{ width: `${coveragePercent}%` }"></i></span>
@@ -104,6 +104,8 @@ const RANGE_MS = { '6h': 6 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3 }
 const THRESHOLD_LABELS = {
   errorRatePercent: 'apm.threshold.errorRate', durationMs: 'apm.threshold.duration',
   readyPodsPercent: 'apm.threshold.readyPods', restartDelta: 'apm.threshold.restarts',
+  elb5xxRatePercent: 'apm.threshold.elb5xx', elbLatencyP95Ms: 'apm.threshold.elbLatency',
+  elbGenerated5xxCount: 'apm.signal.elbGenerated5xx',
 }
 
 const { t } = useI18n()
@@ -149,6 +151,8 @@ const healthDetail = computed(() => {
   const signal = health.value?.signals?.[0]
   if (signal) {
     const label = THRESHOLD_LABELS[signal.metric] ? t(THRESHOLD_LABELS[signal.metric]) : signal.metric
+    // A count has no threshold to compare with (the load balancer's own 5xx errors).
+    if (signal.comparison === 'count') return t('kuapps.summary.signalCount', { label, value: round(signal.value), count: health.value.signals.length })
     return t('kuapps.summary.signal', { label, value: round(signal.value), threshold: round(signal.threshold), count: health.value.signals.length })
   }
   if (!health.value || health.value.status === 'unknown') return t('kuapps.summary.noDataHint')
@@ -177,20 +181,40 @@ const pendingDetail = computed(() => {
   return parts.join(' · ') || t('kuapps.review.nothing')
 })
 
-// Resources whose type has a collector, out of every resource of the application.
+// Coverage that means data (#239): inventoried resources, the ones whose type KUA collects
+// (compatible), the ones it can collect now (enabled: collection on and a profile reaches them),
+// and the ones with recent data. Only the last one counts as covered.
+const ENABLED_STATES = new Set(['current', 'partial', 'stale', 'no_data', 'error'])
 const coverage = computed(() => {
+  const registryResources = props.registry?.resources || []
+  const states = registryResources.map(resource => resource.signals?.state).filter(Boolean)
+  if (states.length) {
+    return {
+      compatible: states.filter(state => state !== 'unsupported').length,
+      enabled: states.filter(state => ENABLED_STATES.has(state)).length,
+      withData: states.filter(state => state === 'current' || state === 'partial').length,
+      uncollected: [],
+    }
+  }
+  // An older backend without signal states: what each type could collect, never shown as data.
   const sections = buildResourceMetricSections({ resources: resources.value })
-  const collected = sections.filter(section => section.collectsMetrics).reduce((sum, section) => sum + section.resourceCount, 0)
-  const uncollected = sections.filter(section => !section.collectsMetrics)
-  return { collected, uncollected }
+  const compatible = sections.filter(section => section.collectsMetrics).reduce((sum, section) => sum + section.resourceCount, 0)
+  return { compatible, enabled: null, withData: 0, uncollected: sections.filter(section => !section.collectsMetrics) }
 })
-const coveragePercent = computed(() => registryTotal.value ? Math.round(100 * coverage.value.collected / registryTotal.value) : 0)
-const coverageTone = computed(() => !registryTotal.value ? 'unknown' : coveragePercent.value >= 60 ? 'ok' : 'attention')
+const coveragePercent = computed(() => registryTotal.value ? Math.round(100 * coverage.value.withData / registryTotal.value) : 0)
+// Green only when most of what can be collected has recent data, never for compatibility alone.
+const coverageTone = computed(() => {
+  if (!registryTotal.value) return 'unknown'
+  const { withData, compatible } = coverage.value
+  return compatible && withData / compatible >= 0.8 ? 'ok' : 'attention'
+})
 const coverageDetail = computed(() => {
   if (!registryTotal.value) return t('kuapps.noResourcesHint')
   if (!hasSignals.value) return t('kuapps.summary.noSignalsHint')
-  const names = coverage.value.uncollected.slice(0, 3).map(section => section.label).join(', ')
-  return names ? t('kuapps.summary.uncollected', { names }) : t('kuapps.summary.allCollected')
+  const { compatible, enabled, withData } = coverage.value
+  return enabled == null
+    ? t('kuapps.summary.coverageCompatible', { compatible })
+    : t('kuapps.summary.coverageBreakdown', { compatible, enabled, withData })
 })
 
 const freshnessLabel = computed(() => {
