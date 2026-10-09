@@ -16,12 +16,13 @@
     <p v-for="context in unreachable" :key="context.context" class="k8s-drift-problem" data-test="k8s-drift-unreachable">
       {{ t('archDrift.unreachable', { context: context.context, error: context.error || '' }) }}
     </p>
+    <p v-if="awsNotVerifiedText" class="k8s-drift-note" data-test="k8s-drift-aws-not-verified">{{ awsNotVerifiedText }}</p>
     <template v-if="changes.length">
       <ul class="k8s-drift-list">
         <li v-for="change in changes" :key="change.nodeId">
           <label>
             <input v-model="selected" type="checkbox" :value="change.nodeId" :disabled="store.saving" />
-            <span><strong>{{ change.name }}</strong><small>{{ change.kind || change.resourceType }} · {{ change.namespace || t('archK8s.clusterScope') }}</small></span>
+            <span><strong>{{ change.name }}</strong><small>{{ change.kind || change.resourceType }}<template v-if="change.provider !== 'aws'"> · {{ change.namespace || t('archK8s.clusterScope') }}</template></small></span>
           </label>
           <span :class="['k8s-drift-change', change.change]">{{ changeText(change) }}</span>
         </li>
@@ -60,7 +61,18 @@ const title = computed(() => {
 const subtitle = computed(() => {
   if (!drift.value?.checkedAt) return t('archDrift.reads')
   const contexts = (drift.value.contexts || []).filter(context => context.status === 'checked').map(context => context.context.split(/[/:]/).pop())
-  return t('archDrift.checked', { contexts: contexts.join(', ') || '-', time: new Date(drift.value.checkedAt).toLocaleTimeString() })
+  const where = [
+    contexts.length ? t('archDrift.whereKubernetes', { contexts: contexts.join(', ') }) : '',
+    drift.value.aws?.checked ? t('archDrift.whereAws', { n: drift.value.aws.checked - notVerifiedCount.value }) : '',
+  ].filter(Boolean).join(' · ')
+  return t('archDrift.checked', { where: where || '-', time: new Date(drift.value.checkedAt).toLocaleTimeString() })
+})
+// AWS resources KUA could not read are never shown as gone: it says how many and why (#239).
+const notVerifiedCount = computed(() => Object.values(drift.value?.aws?.notVerified || {}).reduce((sum, value) => sum + (Number(value) || 0), 0))
+const awsNotVerifiedText = computed(() => {
+  const counts = drift.value?.aws?.notVerified || {}
+  const reasons = ['noConnection', 'denied', 'unsupported', 'failed'].filter(key => counts[key]).map(key => t(`archDrift.notVerified.${key}`, { n: counts[key] }))
+  return reasons.length ? t('archDrift.notVerified', { reasons: reasons.join(', ') }) : ''
 })
 
 function changeText(change) {
@@ -91,6 +103,7 @@ onMounted(() => store.checkKubernetesDrift())
 .k8s-drift-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin-right: auto; }
 .k8s-drift-copy small, .k8s-drift footer small { color: var(--text-dim); font-size: 12px; }
 .k8s-drift-problem { margin: 0; color: var(--yellow); font-size: 12px; }
+.k8s-drift-note { margin: 0; color: var(--text-dim); font-size: 12px; }
 .k8s-drift-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow: auto; }
 .k8s-drift-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 4px 6px; border-radius: 4px; background: var(--bg); }
 .k8s-drift-list label { display: flex; align-items: center; gap: 8px; min-width: 0; }

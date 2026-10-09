@@ -640,13 +640,15 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  function mapHasKubernetes() {
-    return (graph.value?.document?.nodes || []).some(node => node.provider === 'kubernetes' && node.kubeContext && !node.manual)
+  // Resources the check can read where they live: Kubernetes with a context, AWS with a CloudFormation type.
+  function mapHasCheckableResources() {
+    return (graph.value?.document?.nodes || []).some(node => (node.provider === 'kubernetes' && node.kubeContext) ||
+      (node.provider === 'aws' && /^AWS::/.test(String(node.kind || ''))))
   }
 
   async function checkKubernetesDrift({ force = false } = {}) {
     const projectId = selectedProjectId.value
-    if (!projectId || !graph.value || !mapHasKubernetes()) {
+    if (!projectId || !graph.value || !mapHasCheckableResources()) {
       kubernetesDrift.value = null
       return null
     }
@@ -657,7 +659,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
     kubernetesDriftChecking.value = true
     try {
-      const result = await apiFetch(`/api/architecture/projects/${projectId}/discovery/kubernetes/drift`, { method: 'POST', headers: headers(true), body: '{}' })
+      const result = await apiFetch(`/api/architecture/projects/${projectId}/discovery/drift`, { method: 'POST', headers: headers(true), body: '{}' })
       driftChecks.set(projectId, { at: Date.now(), revision: graph.value?.revision, result })
       if (selectedProjectId.value === projectId) kubernetesDrift.value = result
       return result
@@ -675,7 +677,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     saving.value = true
     error.value = null
     try {
-      const next = await apiFetch(`/api/architecture/projects/${projectId}/discovery/kubernetes/drift-apply`, {
+      const next = await apiFetch(`/api/architecture/projects/${projectId}/discovery/drift-apply`, {
         method: 'POST', headers: headers(true), body: JSON.stringify({ expectedRevision: graph.value.revision, nodeIds }),
       })
       driftChecks.delete(projectId)

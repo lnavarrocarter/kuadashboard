@@ -19,7 +19,9 @@ const DRIFT = {
   changes: [
     { nodeId: 'pod-old', name: 'auth-7d9f8c6b5d-x2k4p', resourceType: 'pod', kind: 'Pod', namespace: 'auth', context: 'dev', change: 'replaced', successors: [{ id: 'pod-new', name: 'auth-5c4b3a2f1e-q9w8e' }] },
     { nodeId: 'config', name: 'auth-config', resourceType: 'configmap', kind: 'ConfigMap', namespace: 'auth', context: 'dev', change: 'gone', successors: [] },
+    { nodeId: 'sg', provider: 'aws', name: 'sg-0720983be49e437e2', resourceType: 'ec2', kind: 'AWS::EC2::SecurityGroup', namespace: '', context: '', change: 'gone', successors: [] },
   ],
+  aws: { checked: 10, present: 6, notVerified: { unsupported: 2, noConnection: 1, denied: 0, failed: 0 } },
 }
 
 function respond(handler) {
@@ -44,23 +46,26 @@ describe('Kubernetes map check (#239)', () => {
     const calls = []
     respond((url, options) => {
       calls.push([url, options.method, options.body])
-      if (url.endsWith('/drift')) return { body: DRIFT }
+      if (url.endsWith('/discovery/drift')) return { body: DRIFT }
       if (url.endsWith('/drift-apply')) return { body: { revision: 4, document: { nodes: [{ id: 'pod-new', provider: 'kubernetes', kubeContext: 'dev', name: 'auth-5c4b3a2f1e-q9w8e' }], edges: [] } } }
       return { body: [] }
     })
     const wrapper = mount(ArchitectureKubernetesDrift)
     await flushPromises()
 
-    expect(calls[0][0]).toBe('/api/architecture/projects/project-a/discovery/kubernetes/drift')
+    expect(calls[0][0]).toBe('/api/architecture/projects/project-a/discovery/drift')
     const text = wrapper.text()
-    expect(text).toContain('2 resource(s) of the map changed in the cluster')
-    expect(text).toContain('Checked in dev at')
+    expect(text).toContain('3 resource(s) of the map changed where they live')
+    expect(text).toContain('Checked in dev · 7 AWS resource(s) at')
+    expect(text).toContain('AWS::EC2::SecurityGroup')
+    expect(wrapper.get('[data-test="k8s-drift-aws-not-verified"]').text()).toBe('Not verified, never marked as gone: 1 without a connection verified on this computer, 2 of a type or with an identifier KUA does not verify.')
     expect(text).toContain('Replaced by auth-5c4b3a2f1e-q9w8e')
     expect(text).toContain('No longer exists: leaves the map')
     expect(wrapper.get('[data-test="k8s-drift-unreachable"]').text()).toContain('Could not read prod: Unauthorized')
 
-    // Leave the configmap out.
+    // Leave the configmap and the security group out.
     await wrapper.findAll('.k8s-drift-list input')[1].setValue(false)
+    await wrapper.findAll('.k8s-drift-list input')[2].setValue(false)
     expect(wrapper.get('[data-test="k8s-drift-apply"]').text()).toBe('Apply 1 change(s)')
     await wrapper.get('[data-test="k8s-drift-apply"]').trigger('click')
     await flushPromises()
@@ -68,11 +73,11 @@ describe('Kubernetes map check (#239)', () => {
     expect(JSON.parse(apply[2])).toEqual({ expectedRevision: 3, nodeIds: ['pod-old'] })
     expect(store.graph.revision).toBe(4)
     // Checked again after applying.
-    expect(calls.filter(([url]) => url.endsWith('/drift')).length).toBe(2)
+    expect(calls.filter(([url]) => url.endsWith('/discovery/drift')).length).toBe(2)
   })
 
-  it('does not read the cluster for a map without Kubernetes resources', async () => {
-    store.graph = { revision: 1, document: { nodes: [{ id: 'fn', provider: 'aws', name: 'orders' }], edges: [] } }
+  it('reads nothing for a map with only components drawn by hand', async () => {
+    store.graph = { revision: 1, document: { nodes: [{ id: 'fn', provider: 'aws', name: 'orders' }, { id: 'svc', provider: 'kubernetes', name: 'idea', manual: true }], edges: [] } }
     respond(() => ({ body: DRIFT }))
     const wrapper = mount(ArchitectureKubernetesDrift)
     await flushPromises()

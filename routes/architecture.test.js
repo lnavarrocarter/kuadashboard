@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -15,6 +15,7 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader, 
   app.use('/api/architecture', createArchitectureRouter({
     database,
     ...(apmDatabase ? { apmDatabase } : {}),
+    ...(awsDriftReader ? { awsDriftReader } : {}),
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
     inventoryReader: inventoryReader || {
@@ -680,7 +681,7 @@ test('API validates a Kubernetes map against the cluster and applies the confirm
     assert.ok(edges.some(edge => edge.sourceNodeId === 'k:auth' && edge.targetNodeId === 'k:pod-new'));
     assert.ok(!edges.some(edge => edge.targetNodeId === 'k:pod-old'));
     const changes = await subject.request(`/projects/${projectId}/changes`);
-    assert.match(changes.body[0].reason, /Refresh 3 Kubernetes resources/);
+    assert.match(changes.body[0].reason, /Refresh 3 resources that changed where they live/);
 
     const again = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: applied.body.revision } });
     assert.equal(again.status, 409);
@@ -741,6 +742,51 @@ test('API refresh also moves the membership of a replaced workload and detaches 
     // Checking again finds nothing to change.
     const again = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
     assert.deepEqual(again.body.changes, []);
+  } finally {
+    await subject.close();
+    apmDatabase.close();
+  }
+});
+
+test('API checks the AWS resources of the map with the connection bound to their account and removes the gone ones (#239)', async () => {
+  const { ApmDatabase } = require('../lib/apm/database');
+  const { normalizeScope } = require('../lib/kua/applicationContract');
+  const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+  const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
+  const calls = [];
+  const subject = await fixture({
+    apmDatabase,
+    kubernetesAdapter: { listContexts: () => [], async preview() { return { sources: [], nodes: [], relationships: [], failures: [] }; } },
+    // A Cloud Control reader that knows only the first security group.
+    awsDriftReader: {
+      async exists(item, location, identifier) {
+        calls.push([identifier, location.profileId, location.region]);
+        if (identifier === 'sg-0000000000000000b') throw Object.assign(new Error('not found'), { name: 'ResourceNotFoundException' });
+        return true;
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'dev' } });
+    const application = apmDatabase.createApplication({ profileId: 'local:dev', region: 'us-east-1', name: 'Dev' });
+    apmDatabase.updateArchitectureProjectLink(application.id, created.body.id);
+    const scope = normalizeScope({ provider: 'aws', scopeId: '073746111526', location: 'us-east-1' });
+    apmDatabase.addApplicationScope(application.id, scope);
+    apmDatabase.setScopeBinding(application.id, scope.key, { profileId: 'local:dev-sso', status: 'verified' });
+    const node = (id, sg) => ({ id, provider: 'aws', resourceType: 'ec2', kind: 'AWS::EC2::SecurityGroup', name: sg, nativeId: `AWS::EC2::SecurityGroup:${sg}`, accountId: '073746111526', region: 'us-east-1' });
+    await subject.request(`/projects/${created.body.id}/graph`, { method: 'PUT', body: { expectedRevision: 0, document: { projectId: created.body.id, nodes: [node('kept', 'sg-0000000000000000a'), node('old', 'sg-0000000000000000b')] } } });
+    new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: subject.database }).reconcile(apmDatabase.getApplication(application.id));
+    const before = (await subject.request(`/projects/${created.body.id}/graph`)).body;
+
+    const checked = await subject.request(`/projects/${created.body.id}/discovery/drift`, { method: 'POST', body: {} });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(calls.sort(), [['sg-0000000000000000a', 'local:dev-sso', 'us-east-1'], ['sg-0000000000000000b', 'local:dev-sso', 'us-east-1']]);
+    assert.deepEqual(checked.body.changes.map(change => [change.nodeId, change.provider, change.change]), [['old', 'aws', 'gone']]);
+    assert.equal(checked.body.aws.present, 1);
+
+    const applied = await subject.request(`/projects/${created.body.id}/discovery/drift-apply`, { method: 'POST', body: { expectedRevision: before.revision } });
+    assert.equal(applied.status, 200);
+    assert.deepEqual(applied.body.document.nodes.map(item => item.id), ['kept']);
   } finally {
     await subject.close();
     apmDatabase.close();
