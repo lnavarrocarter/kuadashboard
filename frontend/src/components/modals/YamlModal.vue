@@ -2,6 +2,7 @@
   <BaseModal :show="show" :wide="true" @close="$emit('close')">
     <template #title><i data-lucide="file-code-2"></i> YAML — {{ title }}</template>
     <div class="yaml-modal-body">
+      <KubeActionTarget v-if="context" compact :context="context" :namespace="namespace" :resource="`${kubeKindLabel(resourceType)} / ${name}`" />
       <div class="yaml-toolbar">
         <div class="yaml-search">
           <i data-lucide="search"></i>
@@ -90,11 +91,15 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import yaml from 'js-yaml'
 import BaseModal from '../BaseModal.vue'
+import KubeActionTarget from './KubeActionTarget.vue'
+import { kubeKindLabel } from '../../lib/kubeContext'
 import { api } from '../../composables/useApi'
 import { useToast } from '../../composables/useToast'
 import { useI18n } from '../../composables/useI18n'
 
-const props = defineProps({ show: Boolean, title: String, resourceType: String, namespace: String, name: String })
+// `context` is the kube context captured when the editor opened; applying is
+// refused by the server if the active context changed since.
+const props = defineProps({ show: Boolean, title: String, resourceType: String, namespace: String, name: String, context: String })
 const emit  = defineEmits(['close'])
 
 const { toast } = useToast()
@@ -360,7 +365,7 @@ async function saveYaml() {
   error.value = ''
   saving.value = true
   try {
-    await api('PUT', '/api/apply', { yamlContent: content.value })
+    await api('PUT', '/api/apply', { yamlContent: content.value, expectedContext: props.context || undefined })
     toast(t('yamlm.saved'), 'success')
     emit('close')
   } catch (e) {

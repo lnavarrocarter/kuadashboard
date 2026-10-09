@@ -16,6 +16,7 @@ const k8s        = require('@kubernetes/client-node');
 const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
 const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
+const { requireExpectedContext } = require('./lib/kubeContextGuard');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
 const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
@@ -986,6 +987,8 @@ function revalidateKubeList(originalUrl, key) {
 
 app.use('/api', (req, res, next) => {
   if (req.method !== 'GET') {
+    // Writes confirmed for a kube context are refused if the active one changed.
+    if (!requireExpectedContext(req, res, currentContext)) return;
     res.on('finish', () => {
       if (res.statusCode >= 400) return;
       const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
@@ -1450,22 +1453,29 @@ app.get('/api/:namespace/deployments', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
-app.post('/api/:namespace/deployments/:name/restart', async (req, res) => {
-  try {
-    const { apps } = clients();
-    const { namespace, name } = req.params;
-    const patch = { spec: { template: { metadata: {
-      annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() }
-    }}}};
-    await apps.patchNamespacedDeployment(name, namespace, patch,
-      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
-    auditLog.log({
-      category: 'kubernetes', action: 'Deployment restarted',
-      resource: `${namespace}/${name}`, context: currentContext,
-    });
-    res.json({ success: true });
-  } catch (err) { handleError(res, err); }
-});
+const RESTARTABLE_WORKLOADS = {
+  deployments:  { patch: 'patchNamespacedDeployment',  label: 'Deployment' },
+  statefulsets: { patch: 'patchNamespacedStatefulSet', label: 'StatefulSet' },
+  daemonsets:   { patch: 'patchNamespacedDaemonSet',   label: 'DaemonSet' },
+};
+for (const [kind, workload] of Object.entries(RESTARTABLE_WORKLOADS)) {
+  app.post(`/api/:namespace/${kind}/:name/restart`, async (req, res) => {
+    try {
+      const { apps } = clients();
+      const { namespace, name } = req.params;
+      const patch = { spec: { template: { metadata: {
+        annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() }
+      }}}};
+      await apps[workload.patch](name, namespace, patch,
+        undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
+      auditLog.log({
+        category: 'kubernetes', action: `${workload.label} restarted`,
+        resource: `${namespace}/${name}`, context: currentContext,
+      });
+      res.json({ success: true });
+    } catch (err) { handleError(res, err); }
+  });
+}
 
 // POST /api/:namespace/deployments/:name/set-image  body: { container, image }
 app.post('/api/:namespace/deployments/:name/set-image', async (req, res) => {
@@ -1603,23 +1613,6 @@ app.get('/api/:namespace/statefulsets', async (req, res) => {
       ports:     portsDisplay(rawPorts),
     };
     }));
-  } catch (err) { handleError(res, err); }
-});
-
-app.post('/api/:namespace/statefulsets/:name/restart', async (req, res) => {
-  try {
-    const { apps } = clients();
-    const { namespace, name } = req.params;
-    const patch = { spec: { template: { metadata: {
-      annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() }
-    }}}};
-    await apps.patchNamespacedStatefulSet(name, namespace, patch,
-      undefined, undefined, undefined, undefined, undefined, PATCH_HEADERS);
-    auditLog.log({
-      category: 'kubernetes', action: 'StatefulSet restarted',
-      resource: `${namespace}/${name}`, context: currentContext,
-    });
-    res.json({ success: true });
   } catch (err) { handleError(res, err); }
 });
 

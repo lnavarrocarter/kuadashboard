@@ -29,10 +29,11 @@
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
-          <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
-            <option v-for="c in store.contexts" :key="c.name" :value="c.name">{{ c.name }}</option>
+          <span :class="['kube-env-badge', `env-${kubeEnvironment || 'unknown'}`]" :title="store.currentContext" data-test="kube-env-badge">{{ t(`kubeAction.env.${kubeEnvironment || 'unknown'}`) }}</span>
+          <select class="ctrl-select" v-model="selectedContext" :title="selectedContext" :aria-label="t('nav.kubeContext')" @change="switchContext">
+            <option v-for="c in store.contexts" :key="c.name" :value="c.name" :title="c.name">{{ shortContextName(c.name) }}</option>
           </select>
-          <select class="ctrl-select" v-model="store.namespace" @change="store.loadResources()">
+          <select class="ctrl-select" v-model="store.namespace" :aria-label="t('nav.kubeNamespace')" @change="store.loadResources()">
             <option value="all">{{ t('nav.allNamespaces') }}</option>
             <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
           </select>
@@ -485,9 +486,9 @@
     <!-- Modals -->
     <DeleteModal      :show="modals.delete"        :message="modalData.deleteMsg"          @confirm="confirmDelete"        @close="modals.delete = false" />
     <DeleteModal      :show="modals.deleteContext"  :message="modalData.deleteContextMsg"   @confirm="confirmDeleteContext"  @close="modals.deleteContext = false" />
-    <DeleteModal      :show="modals.drain"          :message="modalData.drainMsg"            @confirm="confirmDrain"          @close="modals.drain = false" />
-    <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" @confirm="confirmScale" @close="modals.scale = false" />
-    <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
+    <KubeActionConfirmModal :show="modals.kubeAction" :action="modalData.kubeAction"         @confirm="confirmKubeAction"     @close="modals.kubeAction = false" />
+    <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" :context="modalData.scalePending?.context" :namespace="modalData.scalePending?.ns" :type="modalData.scalePending?.type" @confirm="confirmScale" @close="modals.scale = false" />
+    <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" :context="modalData.yamlContext" @close="modals.yaml = false" />
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help" :initial-tab="helpTab"                             @close="modals.help = false; helpTab = ''" />
@@ -540,6 +541,8 @@ import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
 import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
+import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
+import { contextEnvironment, shortContextName } from './lib/kubeContext'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
@@ -698,6 +701,7 @@ const activeProvider  = ref(['architecture', 'observability'].includes(storedPro
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
+const kubeEnvironment = computed(() => contextEnvironment(store.currentContext))
 const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
@@ -864,16 +868,15 @@ window.addEventListener('kua:open-help', event => {
   helpTab.value = event.detail?.tab || ''
   modals.help = true
 })
-const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
+const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, kubeAction: false, addConnection: false })
 const modalData = reactive({
-  deleteMsg: '', deletePending: null,
-  deleteManyPending: [],
+  deleteMsg: '',
   deleteContextMsg: '', deleteContextName: '',
   scaleName: '', scaleCurrent: 0, scalePending: null,
-  yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '',
+  yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '', yamlContext: '',
   pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false, pfResourceType: 'services',
-  drainMsg: '', drainPending: null,
-  connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
+  kubeAction: null,
+  connectionProvider: 'aws', deleteConnectionId: null,
 })
 const {
   architectureProjectId,
@@ -1166,9 +1169,6 @@ function deleteConnectionConfirm(provider) {
   const profile = envStore.profiles.find(p => p.id === id)
   if (!profile) return
   modalData.deleteConnectionId   = id
-  modalData.deleteConnectionMode = true
-  modalData.deletePending        = null
-  modalData.deleteManyPending    = []
   modalData.deleteMsg            = `Delete profile "${profile.name}"? All stored keys will be permanently removed.`
   modals.delete                  = true
 }
@@ -1280,9 +1280,9 @@ function handleAction(fn, args) {
     openScale:       ([type, ns, name, cur])=> openScale(type, ns, name, cur),
     openPortForward: ([ns, name, ports, resourceType]) => openPf(ns, name, ports, resourceType || 'services'),
     openExternal:    ([url])                 => openExternalUrl(url),
-    restart:         ([type, ns, name])     => doRestart(type, ns, name),
-    cordonNode:      ([name, cordon])       => doCordon(name, cordon),
-    confirmDrain:    ([name])               => openDrain(name),
+    restart:         ([type, ns, name])     => openKubeAction({ kind: 'restart', type, namespace: ns, name }),
+    cordonNode:      ([name, cordon])       => openKubeAction({ kind: cordon ? 'cordon' : 'uncordon', type: 'nodes', name }),
+    confirmDrain:    ([name])               => openKubeAction({ kind: 'drain', type: 'nodes', name }),
   }
   h[fn]?.(args)
 }
@@ -1309,76 +1309,85 @@ function openExternalUrl(url) {
   else window.open(url, '_blank')
 }
 
-function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name }); modals.yaml = true }
-function openDelete(type, ns, name)  { modalData.deleteManyPending = []; modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name, yamlContext: store.currentContext }); modals.yaml = true }
+function openDelete(type, ns, name)  { openKubeAction({ kind: 'delete', type, namespace: ns, name }) }
 function openBulkDelete(rows) {
   const selected = Array.isArray(rows) ? rows : []
   if (!selected.length) return
-  modalData.deleteConnectionMode = false
-  modalData.deletePending = null
-  modalData.deleteManyPending = selected.map(row => ({ type: store.resource, ns: row.namespace, name: row.name }))
-  const sample = selected.slice(0, 3).map(row => `${row.namespace}/${row.name}`).join(', ')
-  const more = selected.length > 3 ? ` y ${selected.length - 3} mas` : ''
-  modalData.deleteMsg = `Delete ${selected.length} ${LABELS[store.resource] || store.resource}: ${sample}${more}? Cannot be undone.`
-  modals.delete = true
+  const items = selected.map(row => ({ namespace: row.namespace, name: row.name }))
+  openKubeAction({ kind: 'delete', type: store.resource, namespace: items[0].namespace, name: items[0].name, items })
 }
-function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
+function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name, context: store.currentContext }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
 function openPf(ns, name, ports, resourceType = 'services') { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${resourceType}/${ns}/${name}`, pfManual: false, pfResourceType: resourceType }); modals.portForward = true }
 function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true, pfResourceType: 'services' }); modals.portForward = true }
-function openDrain(name)             { modalData.drainPending = name; modalData.drainMsg = `Drain node "${name}"? It will be cordoned and pods evicted.`; modals.drain = true }
 
+// Kubernetes deletes go through confirmKubeAction; this modal only removes
+// stored connection profiles.
 async function confirmDelete() {
-  if (modalData.deleteConnectionMode) {
-    modalData.deleteConnectionMode = false
-    const id = modalData.deleteConnectionId
-    modals.delete = false
-    const ok = await envStore.deleteProfile(id)
-    if (ok) {
-      if (awsProfileId.value === id) { awsProfileId.value = ''; awsStore.setActiveProfile(null) }
-      if (gcpProfileId.value === id) { gcpProfileId.value = ''; gcpStore.setActiveProfile(null) }
-      toast('Profile deleted', 'success')
-    }
-    return
+  const id = modalData.deleteConnectionId
+  modals.delete = false
+  const ok = await envStore.deleteProfile(id)
+  if (ok) {
+    if (awsProfileId.value === id) { awsProfileId.value = ''; awsStore.setActiveProfile(null) }
+    if (gcpProfileId.value === id) { gcpProfileId.value = ''; gcpStore.setActiveProfile(null) }
+    toast('Profile deleted', 'success')
   }
-  const many = modalData.deleteManyPending || []
-  if (many.length) {
-    modals.delete = false
-    modalData.deleteManyPending = []
-    const results = await Promise.allSettled(many.map(item => deleteKubeResource(item.type, item.ns, item.name)))
-    const failed = results.filter(result => result.status === 'rejected')
-    const removed = results.length - failed.length
-    if (removed) toast(`Deleted ${removed} resource(s)`, failed.length ? 'warn' : 'success')
-    if (failed.length) toast(`${failed.length} resource(s) failed to delete`, 'error')
-    setTimeout(() => store.loadResources({ silent: true }), 600)
-    return
-  }
-  const { type, ns, name } = modalData.deletePending; modals.delete = false
-  try {
-    await deleteKubeResource(type, ns, name)
-    toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 600)
-  } catch (e) { toast(e.message, 'error') }
 }
-function deleteKubeResource(type, ns, name) {
-  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`)
-  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`)
+function deleteKubeResource(type, ns, name, expectedContext) {
+  const body = { expectedContext }
+  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`, body)
+  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`, body)
 }
 async function confirmScale(replicas) {
-  const { type, ns, name } = modalData.scalePending; modals.scale = false
-  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas }); toast(`Scaled ${name} to ${replicas}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+  const { type, ns, name, context } = modalData.scalePending; modals.scale = false
+  if (!kubeContextStillActive(context)) return
+  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas, expectedContext: context }); toast(t('kubeAction.scaled', { name, n: replicas }), 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
+  catch (e) { toastKubeActionError(e) }
 }
-async function doRestart(type, ns, name) {
-  try { await api('POST', `/api/${ns}/${type}/${name}/restart`); toast(`Restarted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 1000) }
-  catch (e) { toast(e.message, 'error') }
+// Restart, cordon, drain and delete change the cluster, so they are confirmed with the
+// context captured when the action was opened. The server rejects the write if
+// the active context changed in the meantime.
+function openKubeAction(action) {
+  modalData.kubeAction = { ...action, context: store.currentContext }
+  modals.kubeAction = true
 }
-async function doCordon(name, cordon) {
-  try { await api('POST', `/api/nodes/${name}/cordon`, { cordon }); toast(`Node ${name} ${cordon ? 'cordoned' : 'uncordoned'}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+function kubeActionRequest({ kind, type, namespace, name }) {
+  if (kind === 'restart') return { path: `/api/${namespace}/${type}/${name}/restart`, body: {} }
+  if (kind === 'drain') return { path: `/api/nodes/${name}/drain`, body: {} }
+  return { path: `/api/nodes/${name}/cordon`, body: { cordon: kind === 'cordon' } }
 }
-async function confirmDrain() {
-  const name = modalData.drainPending; modals.drain = false
-  try { const r = await api('POST', `/api/nodes/${name}/drain`); toast(`Node ${name} drained. Evicted: ${r.evicted}`, r.failed ? 'warn' : 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+function kubeContextStillActive(context) {
+  if (context === store.currentContext) return true
+  toast(t('kubeAction.contextChanged', { current: store.currentContext, expected: context }), 'error')
+  return false
+}
+function toastKubeActionError(e) {
+  if (e.details?.code === 'KUBE_CONTEXT_CHANGED') toast(t('kubeAction.contextChanged', { current: e.details.currentContext, expected: e.details.expectedContext }), 'error')
+  else toast(e.message, 'error')
+}
+async function confirmKubeDelete(action) {
+  const items = action.items || [{ namespace: action.namespace, name: action.name }]
+  const results = await Promise.allSettled(items.map(item => deleteKubeResource(action.type, item.namespace, item.name, action.context)))
+  const failed = results.filter(result => result.status === 'rejected')
+  const removed = results.length - failed.length
+  if (removed) toast(items.length === 1 ? t('kubeAction.deleted', { name: action.name }) : t('kubeAction.deletedMany', { n: removed }), failed.length ? 'warn' : 'success')
+  if (failed.length === 1) toastKubeActionError(failed[0].reason)
+  else if (failed.length) toast(t('kubeAction.deleteFailed', { n: failed.length }), 'error')
+  setTimeout(() => store.loadResources({ silent: true }), 600)
+}
+async function confirmKubeAction() {
+  const action = modalData.kubeAction
+  modals.kubeAction = false
+  if (!action || !kubeContextStillActive(action.context)) return
+  if (action.kind === 'delete') return confirmKubeDelete(action)
+  const { path, body } = kubeActionRequest(action)
+  try {
+    const r = await api('POST', path, { ...body, expectedContext: action.context })
+    if (action.kind === 'restart') toast(t('kubeAction.restarted', { name: action.name }), 'success')
+    else if (action.kind === 'drain') toast(t('kubeAction.drained', { name: action.name, evicted: r.evicted }), r.failed ? 'warn' : 'success')
+    else toast(t(`kubeAction.${action.kind}ed`, { name: action.name }), 'success')
+    setTimeout(() => store.loadResources({ silent: true }), action.kind === 'restart' ? 1000 : 800)
+  } catch (e) { toastKubeActionError(e) }
 }
 
 function openSponsor() {
