@@ -18,6 +18,7 @@
         <span class="canvas-hint">{{ t('archCanvas.dragHint') }}</span>
       </div>
       <div class="canvas-toolbar-row canvas-layout-controls">
+        <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" data-test="canvas-search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" :title="t('archCanvas.searchEnterHint')" @keydown.enter.prevent="goToSearchMatch" /></label>
         <select v-model="layoutMode" class="ctrl-select" :title="t('archCanvas.arrangement')" @change="persistView">
           <option value="request-flow">{{ t('archCanvas.layout.requestFlow') }}</option>
           <option value="system-domains">{{ t('archCanvas.layout.systemDomains') }}</option>
@@ -37,7 +38,6 @@
       <details class="canvas-control-disclosure" :open="activeFilterCount > 0">
         <summary><i data-lucide="filter"></i><span>{{ t('archCanvas.filters') }}</span><strong>{{ activeFilterCount || t('archCanvas.allResources') }}</strong></summary>
         <div class="canvas-toolbar-row canvas-filter-controls">
-          <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" /></label>
           <select v-model="systemDomainFilter" class="ctrl-select" :title="t('archCanvas.filterSystemDomain')" @change="persistView">
             <option value="all">{{ t('archCanvas.allSystemDomains') }}</option>
             <option v-for="domain in availableSystemDomains" :key="domain" :value="domain">{{ systemDomainLabel(domain) }}</option>
@@ -123,7 +123,7 @@
         :min-zoom="0.25"
         :max-zoom="2"
         :delete-key-code="null"
-        fit-view-on-init
+        @init="fitReadable()"
         @connect="connectNodes"
         @node-click="selectNode"
         @edge-click="selectEdge"
@@ -190,6 +190,7 @@
       <aside v-if="selectedNode" class="canvas-inspector">
         <header>
           <span><i data-lucide="box"></i> {{ t('archCanvas.component') }}</span>
+          <button class="btn sm btn-icon" data-test="canvas-zoom-neighbors" :title="t('archCanvas.zoomNeighbors')" :aria-label="t('archCanvas.zoomNeighbors')" @click="zoomToNeighbors()"><i data-lucide="scan-search"></i></button>
           <button class="btn sm btn-icon" :title="t('archCanvas.closeInspector')" @click="clearSelection"><i data-lucide="x"></i></button>
         </header>
         <label>{{ t('archCanvas.name') }}<input v-model.trim="editDraft.name" class="ctrl-input" maxlength="120" /></label>
@@ -336,6 +337,9 @@ const editNodeTypes = computed(() => nodeTypes.value.some(option => option.value
 const flowNodes = ref([])
 const flowEdges = ref([])
 const layoutMode = ref('request-flow')
+// Above this many resources a map without a chosen arrangement opens grouped by domain (#239).
+const LARGE_MAP_NODES = 40
+let largeMapDefaultApplied = false
 const layoutDirection = ref('horizontal')
 const resourceSections = ref([])
 const fitAfterSync = ref(false)
@@ -356,7 +360,7 @@ const systemDomainFilter = ref('all')
 const nodeSearch = ref('')
 const exporting = ref(false)
 const canvasBodyRef = ref(null)
-const { fitView, setCenter, setViewport, getNodes } = useVueFlow()
+const { fitView, setCenter, getNodes } = useVueFlow()
 const { toast } = useToast()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
@@ -620,6 +624,11 @@ function computedLayout(document, visibleDocument) {
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
+  // Once per canvas: a later refresh keeps what the user arranged locally.
+  if (hydrateView && !largeMapDefaultApplied && !['resource-type', 'request-flow', 'provider-lanes', 'provider-resource', 'system-domains'].includes(document.view?.layoutMode)) {
+    largeMapDefaultApplied = true
+    if ((document.nodes || []).length > LARGE_MAP_NODES) layoutMode.value = 'system-domains'
+  }
   if (hydrateView && document.view && typeof document.view === 'object') {
     if (['resource-type', 'request-flow', 'provider-lanes', 'provider-resource', 'system-domains'].includes(document.view.layoutMode)) {
       layoutMode.value = document.view.layoutMode
@@ -693,9 +702,7 @@ function syncGraph(hydrateView = true) {
   if (selectedEdge.value) selectedEdge.value = document.edges.find(edge => edge.id === selectedEdge.value.id) || null
   if (fitAfterSync.value) {
     fitAfterSync.value = false
-    nextTick(() => document.nodes.length > 40
-      ? setViewport({ x: 40, y: 40, zoom: 0.65 }, { duration: 250 })
-      : fitView({ padding: 0.16, duration: 250 }))
+    nextTick(() => fitReadable({ duration: 250 }))
   }
   refreshIcons()
 }
@@ -906,6 +913,27 @@ function reviewEdge(decision) {
     type: 'edge.review', subjectId: selectedEdge.value.id, value: { decision },
   }, decision === 'accept' ? t('archCanvas.op.acceptInferred') : t('archCanvas.op.rejectInferred'))
   clearSelection()
+}
+
+// A large map opens at a readable size around its centre instead of shrinking to fit (#239).
+const READABLE_ZOOM = 0.6
+function fitReadable(options = {}) {
+  return fitView({ padding: 0.16, minZoom: READABLE_ZOOM, maxZoom: 1.1, ...options })
+}
+
+// The selected resource and its neighbours, already highlighted, fill the view.
+function zoomToNeighbors() {
+  if (!focusedNodeIds.value) return
+  const ids = [...focusedNodeIds.value].filter(id => flowNodes.value.some(node => node.id === id))
+  if (ids.length) fitView({ nodes: ids, padding: 0.3, minZoom: READABLE_ZOOM, maxZoom: 1.2, duration: 250 })
+}
+
+// Enter in the search selects the first visible match and brings its neighbours into view.
+function goToSearchMatch() {
+  const match = filteredGraphDocument.value.nodes[0]
+  if (!match) return
+  selectNode({ node: { id: match.id } })
+  nextTick(zoomToNeighbors)
 }
 
 function clearSelection() {

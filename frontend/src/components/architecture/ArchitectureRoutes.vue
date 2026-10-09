@@ -79,9 +79,11 @@
       </div>
 
       <div class="route-paths">
-        <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path" :data-route-id="path.id">
+        <!-- Progressive (#239): the first routes of each entry, and each one from where it branches. -->
+        <div v-for="(path, pathIndex) in visiblePaths(group)" :key="path.id" class="route-path" :data-route-id="path.id">
           <span class="path-order"><small>{{ t('archRoutes.routeLabel') }}</small><strong>{{ sequence(pathIndex) }}</strong></span>
-          <span v-for="(node, index) in path.nodes" :key="node.id" class="route-segment">
+          <span v-if="path.shared > 1" class="route-continues" :title="path.nodes.slice(0, path.shared).map(node => node.name).join(' → ')"><i data-lucide="corner-down-right"></i>{{ t('archRoutes.continuesFrom', { name: path.nodes[path.shared - 1].name }) }}</span>
+          <span v-for="(node, index) in path.nodes" v-show="path.shared <= 1 || index >= path.shared - 1" :key="node.id" class="route-segment">
             <button
               :class="['route-node', node.resourceType, { actionable: node.resourceType === 'stepfunctions' }]"
               :disabled="node.resourceType !== 'stepfunctions'"
@@ -97,6 +99,9 @@
             </span>
           </span>
         </div>
+        <button v-if="group.paths.length > ROUTES_SHOWN && !expandedGroups.has(group.id)" class="btn sm route-more" data-test="routes-show-more" @click="expandGroup(group.id)">
+          {{ t('archRoutes.showMore', { n: group.paths.length - ROUTES_SHOWN }) }}
+        </button>
       </div>
     </article>
   </section>
@@ -173,6 +178,13 @@ const filteredDocument = computed(() => {
     (relationStatusFilter.value === 'all' || (edge.status || 'automatic') === relationStatusFilter.value)) }
 })
 const groups = computed(() => architectureRouteGroups(filteredDocument.value, { order: sortMode.value }))
+const ROUTES_SHOWN = 5
+const expandedGroups = ref(new Set())
+const visiblePaths = group => (expandedGroups.value.has(group.id) ? group.paths : group.paths.slice(0, ROUTES_SHOWN))
+function expandGroup(id) {
+  expandedGroups.value = new Set([...expandedGroups.value, id])
+  nextTick(() => createIcons({ icons }))
+}
 const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
 
 function sequence(index) {
@@ -274,6 +286,9 @@ onMounted(refreshIcons)
 .event-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
 .event-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
 .route-paths { display: flex; flex-direction: column; overflow-x: auto; }
+.route-continues { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+.route-continues :deep(svg) { width: 13px; height: 13px; }
+.route-more { align-self: flex-start; margin: 6px 0 2px; }
 .route-path { min-width: max-content; padding: 14px 12px; display: flex; align-items: center; border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent); }
 .route-path:first-child { border-top: 0; }
 .path-order { width: 54px; margin-right: 12px; display: flex; flex-direction: column; align-items: center; color: var(--text-dim); }

@@ -77,6 +77,13 @@ function comparePaths(left, right, order) {
   return 0
 }
 
+// How many leading resources a route shares with the previous one: the UI shows only where it branches.
+function sharedPrefix(previous, path) {
+  let count = 0
+  while (count < previous.nodes.length - 1 && count < path.nodes.length - 1 && previous.nodes[count].id === path.nodes[count].id) count += 1
+  return count
+}
+
 export function architectureRouteGroups(document = {}, { order = 'sequence' } = {}) {
   const nodes = document.nodes || []
   const edges = (document.edges || []).filter(edge => edge.status !== 'rejected')
@@ -99,11 +106,23 @@ export function architectureRouteGroups(document = {}, { order = 'sequence' } = 
     })
   return roots.map(root => {
     const rootEdges = outgoing.get(root.id) || []
-    const paths = enumeratePaths(root.id, outgoing, nodesById).map(path => ({
-      id: `${path.nodeIds.join('>')}|${path.edgeIds.join('>')}`,
-      nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
-      relations: path.edgeIds.map(id => edgesById.get(id)).filter(Boolean),
-    })).sort((left, right) => comparePaths(left, right, order))
+    // The same resources joined by the same kinds of relationship (one found twice) walk one route;
+    // different kinds (invokes, starts an execution) stay apart (#239).
+    const seen = new Set()
+    const paths = enumeratePaths(root.id, outgoing, nodesById)
+      .filter(path => {
+        const key = `${path.nodeIds.join('>')}|${path.edgeIds.map(id => edgesById.get(id)?.relationType || 'depends_on').join('>')}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .map(path => ({
+        id: `${path.nodeIds.join('>')}|${path.edgeIds.join('>')}`,
+        nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
+        relations: path.edgeIds.map(id => edgesById.get(id)).filter(Boolean),
+      }))
+      .sort((left, right) => comparePaths(left, right, order))
+      .map((path, index, sorted) => ({ ...path, shared: index ? sharedPrefix(sorted[index - 1], path) : 0 }))
     return {
       id: root.id,
       name: root.name,

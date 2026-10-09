@@ -92,8 +92,9 @@ describe('ArchitectureCanvas', () => {
     const nodes = Array.from({ length: 45 }, (_, index) => ({
       id: `node:${index}`, name: `Resource ${index}`, resourceType: 'lambda',
     }))
+    // The request flow chosen explicitly: a large map without a choice opens grouped by domain (#239).
     const wrapper = mount(ArchitectureCanvas, {
-      props: { graph: { revision: 1, document: { nodes, edges: [], layout: {} } } },
+      props: { graph: { revision: 1, document: { nodes, edges: [], layout: {}, view: { layoutMode: 'request-flow' } } } },
       global: { stubs },
     })
 

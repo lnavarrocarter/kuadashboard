@@ -235,3 +235,36 @@ describe('ArchitectureRoutes', () => {
     expect(wrapper.emitted('inspect-workflow')[0][0]).toEqual(graph.document.nodes[3])
   })
 })
+
+describe('ArchitectureRoutes without repeated paths (#239)', () => {
+  const k8s = (id, resourceType) => ({ id, name: id, resourceType, provider: 'kubernetes', namespace: 'shop' })
+  const pods = Array.from({ length: 7 }, (_, index) => k8s(`pod-${index}`, 'pod'))
+  const document = {
+    nodes: [k8s('ingress', 'ingress'), k8s('svc', 'service'), k8s('deploy', 'deployment'), ...pods],
+    edges: [
+      { id: 'i-s', sourceNodeId: 'ingress', targetNodeId: 'svc', relationType: 'routes_to', status: 'confirmed' },
+      // The same relationship found twice walks one route.
+      { id: 's-d', sourceNodeId: 'svc', targetNodeId: 'deploy', relationType: 'routes_to', status: 'confirmed' },
+      { id: 's-d2', sourceNodeId: 'svc', targetNodeId: 'deploy', relationType: 'routes_to', status: 'suggested' },
+      ...pods.map(pod => ({ id: `d-${pod.id}`, sourceNodeId: 'deploy', targetNodeId: pod.id, relationType: 'owns', status: 'automatic' })),
+    ],
+  }
+
+  it('walks each route once and says where it branches from the previous one', () => {
+    const [group] = architectureRouteGroups(document)
+    expect(group.paths).toHaveLength(7)
+    expect(group.paths[0].shared).toBe(0)
+    expect(group.paths[1].shared).toBe(3)
+  })
+
+  it('shows the first routes from where they branch and the rest on demand', async () => {
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: { revision: 1, document } } })
+    const paths = () => wrapper.findAll('.route-path')
+    expect(paths()).toHaveLength(5)
+    expect(paths()[1].text()).toContain('continues from deploy')
+    expect(paths()[1].findAll('.route-segment').filter(segment => segment.isVisible()).map(segment => segment.find('strong').text())).toEqual(['deploy', 'pod-1'])
+    await wrapper.get('[data-test="routes-show-more"]').trigger('click')
+    expect(paths()).toHaveLength(7)
+    expect(wrapper.find('[data-test="routes-show-more"]').exists()).toBe(false)
+  })
+})
