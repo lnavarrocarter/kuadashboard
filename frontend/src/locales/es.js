@@ -5568,6 +5568,8 @@ export default {
   'kuapps.sync.side.mapOnly.next': "Una vista del mapa los dibuja, pero Observabilidad aún no los sigue. Abre cada uno para ver si tiene señales, o desvincúlalo si ya no pertenece a la aplicación.",
   'kuapps.sidebar.collapse': "Plegar la lista de aplicaciones",
   'kuapps.sidebar.expand': "Mostrar la lista de aplicaciones",
+  'kuapps.advisor.notReachable': "El Asesor no pudo leer esta aplicación con el perfil {profile} de este equipo. Recursos, el Mapa y Señales siguen funcionando. Revisa ese perfil en Configuración → Conexiones.",
+  'kuapps.advisor.failed': "El Asesor no pudo ejecutarse ahora ({error}). Recursos, el Mapa y Señales siguen funcionando; vuelve a intentar con Actualizar.",
   'kuapps.delete.title': 'Eliminar aplicación',
   'kuapps.delete.hint': "Quita de este computador la aplicación, sus conexiones, los perfiles asociados y las métricas recolectadas. No se eliminan los proyectos de Arquitectura ni la infraestructura en la nube.",
   'kuapps.delete.typeName': 'Escribe {name} para confirmar',

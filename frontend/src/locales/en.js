@@ -5569,6 +5569,8 @@ export default {
   'kuapps.sync.side.mapOnly.next': "A map view draws them, but Observability does not follow them yet. Open each one to see whether it has signals, or detach it if it no longer belongs to the application.",
   'kuapps.sidebar.collapse': "Fold the application list",
   'kuapps.sidebar.expand': "Show the application list",
+  'kuapps.advisor.notReachable': "The Advisor could not read this application with the profile {profile} of this computer. Resources, the Map and Signals still work. Check that profile in Settings → Connections.",
+  'kuapps.advisor.failed': "The Advisor could not run now ({error}). Resources, the Map and Signals still work; try again with Refresh.",
   'kuapps.delete.title': 'Delete application',
   'kuapps.delete.hint': "Removes the application, its connections, local profile bindings and collected metrics from this computer. Architecture projects and the infrastructure in the cloud are not deleted.",
   'kuapps.delete.typeName': 'Type {name} to confirm',

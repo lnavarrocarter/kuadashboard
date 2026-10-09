@@ -91,6 +91,15 @@ setImmediate(() => {
       if (application) registry.reconcile(application);
       console.log('[kuapps] Removed AWS resources observed as Kubernetes workloads from', application?.name || applicationId);
     }
+    // Every application is joined again with this version's rules (identity, one node per resource),
+    // so an update applies without waiting for the next change (#239). Local only, no cloud call.
+    let reconciled = 0;
+    for (const application of apmDatabase.listApplications()) {
+      try { registry.reconcile(application); reconciled += 1; } catch (error) {
+        console.error('[kuapps] Reconcile at startup failed for', application.name, error.message);
+      }
+    }
+    if (reconciled) console.log(`[kuapps] Reconciled ${reconciled} application(s) at startup`);
   } catch (err) {
     console.error('[kuapps] Contract migration failed:', err.message);
   }

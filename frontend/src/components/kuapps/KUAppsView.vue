@@ -271,7 +271,7 @@
                   :signals-available="canInspectSignals"
                   :collection="signalsCollection"
                   :hours="signalsEntry.hours"
-                  :context="resources"
+                  context="resources"
                   :initial-tab="inspectorTab"
                   @close="selectedResourceId = ''"
                   @select-resource="selectRegistryResource"
@@ -416,7 +416,7 @@
                 :signals-available="canInspectSignals"
                 :collection="signalsCollection"
                 :hours="signalsEntry.hours"
-                :context="map"
+                context="map"
                 :initial-tab="inspectorTab"
                 @close="clearResourceSelection"
                 @select-resource="selectRegistryResource"
@@ -739,7 +739,12 @@ let detailRequest = 0
 
 // The product Advisor route reads an application through its profile, or a verified scope
 // profile for an application without provider.
-const advisorProfileId = computed(() => selectedApplication.value?.profileId || architectureProfileId.value || '')
+// An application without provider waits for its own detail: until then the profile could come from
+// the application shown before, which answers "KUA Application not found" (#239).
+const advisorProfileId = computed(() => {
+  if (selectedApplication.value?.profileId) return selectedApplication.value.profileId
+  return selectedApplicationDetail.value?.id === selectedApplication.value?.id ? architectureProfileId.value || '' : ''
+})
 
 async function loadProductAdvisor() {
   const application = selectedApplication.value
@@ -752,7 +757,13 @@ async function loadProductAdvisor() {
     })
     if (id === productAdvisorRequest) { productAdvisor.value = report; productAdvisorError.value = '' }
   } catch (error) {
-    if (id === productAdvisorRequest) { productAdvisor.value = null; productAdvisorError.value = error.message }
+    if (id === productAdvisorRequest) {
+      productAdvisor.value = null
+      // Say which capability failed, that the rest still works, and what to do; never the raw error.
+      productAdvisorError.value = error.status === 404
+        ? t('kuapps.advisor.notReachable', { profile: advisorProfileId.value })
+        : t('kuapps.advisor.failed', { error: error.message })
+    }
   } finally {
     if (id === productAdvisorRequest) productAdvisorLoading.value = false
   }
@@ -978,6 +989,8 @@ function onWorkspaceTabKeydown(event) {
 function selectApplication(application) {
   if (isNarrow()) sidebarCollapsed.value = true
   localApplicationId.value = application.id
+  // The views (and their owners) of the previous application must not pick this one's profile (#239).
+  selectedApplicationViews.value = []
   selectedApplicationDetail.value = application.local ? application : null
   applicationRegistry.value = { resources: [], relationships: [] }
   selectedResourceId.value = ''
