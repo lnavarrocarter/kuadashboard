@@ -49,6 +49,7 @@ export const RESOURCES = {
       { id: 'problems', label: 'quick.problems', test: r => !!r.reason },
       { id: 'not-running', label: 'quick.notRunning', test: r => !['Running', 'Succeeded'].includes(r.status) },
       { id: 'not-ready', label: 'quick.notReady', test: r => r.status === 'Running' && notReady(r.ready) },
+      { id: 'recent-restarts', label: 'quick.restartedLastHour', test: r => !!r.lastRestartAt && Date.now() - r.lastRestartAt < 3600000 },
       { id: 'restarts', label: 'quick.withRestarts', test: r => Number(r.restarts) > 0 },
     ],
     actions: r => [

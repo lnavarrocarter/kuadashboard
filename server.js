@@ -16,9 +16,10 @@ const k8s        = require('@kubernetes/client-node');
 const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
 const yaml       = require('js-yaml');
 const { listServicesWithBackends } = require('./lib/kubeServices');
+const { readPodRelations, readServiceBackends } = require('./lib/kubeRelations');
 const { requireExpectedContext } = require('./lib/kubeContextGuard');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
-const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
+const { buildOverview, lastRestartAt, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
 const {
@@ -1240,6 +1241,7 @@ app.get('/api/:namespace/pods', async (req, res) => {
       reason:     podProblem(pod),
       ready:      `${pod.status.containerStatuses?.filter(c => c.ready).length ?? 0}/${pod.status.containerStatuses?.length ?? 0}`,
       restarts:   pod.status.containerStatuses?.reduce((s, c) => s + c.restartCount, 0) ?? 0,
+      lastRestartAt: lastRestartAt(pod) || null,
       age:        pod.metadata.creationTimestamp,
       nodeName:   pod.spec.nodeName || '-',
       containers: pod.spec.containers.map(c => c.name),
@@ -1268,6 +1270,20 @@ function containerPorts(containers = []) {
 function portsDisplay(ports = []) {
   return ports.length ? ports.map(port => `${port.name ? `${port.name}:` : ''}${port.port}/${port.protocol || 'TCP'}`).join(', ') : '-';
 }
+
+// Owners, node and Services of a pod, for the inspector's Relations section.
+app.get('/api/:namespace/pods/:name/relations', async (req, res) => {
+  try {
+    res.json(await readPodRelations(clients(), req.params.namespace, req.params.name));
+  } catch (err) { handleError(res, err); }
+});
+
+// Why a Service has or lacks backends: matching pods, ready pods and endpoints.
+app.get('/api/:namespace/services/:name/backends', async (req, res) => {
+  try {
+    res.json(await readServiceBackends(clients(), req.params.namespace, req.params.name));
+  } catch (err) { handleError(res, err); }
+});
 
 app.get('/api/:namespace/pods/:name/yaml', async (req, res) => {
   try {

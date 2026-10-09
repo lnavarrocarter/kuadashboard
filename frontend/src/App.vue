@@ -399,6 +399,8 @@
                 :style="{ width: `${kubeDetailWidth}px` }"
                 @close="selectedKubeResource = null"
                 @open-helm="openPrometheusHelm"
+                @open-logs="openInspectorLogs"
+                @open-resource="openInspectorResource"
               />
             </div>
           </template>
@@ -421,7 +423,7 @@
             @open-architecture="openApplicationArchitecture"
             @application-context="handleKuAppsApplicationContext"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
-            @open-kubernetes-detail="openArchitectureKubernetesDetail"
+            @open-kubernetes-detail="openKubernetesDetail"
             @open-kubernetes-pods="openArchitectureKubernetesPods"
             @open-aws-resource="openArchitectureAwsResource"
             @open-aws-logs="openArchitectureAwsLogs"
@@ -451,7 +453,7 @@
             :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
-          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
         </main>
       </div>
 
@@ -999,8 +1001,9 @@ async function openObservabilityKubernetesLogs(resource) {
 const KUBE_KIND_TO_RESOURCE = {
   Pod: 'pods', Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets',
   Service: 'services', Ingress: 'ingresses', ConfigMap: 'configmaps', Secret: 'secrets',
-  PersistentVolumeClaim: 'pvcs',
+  PersistentVolumeClaim: 'pvcs', ReplicaSet: 'replicasets', Job: 'jobs', CronJob: 'cronjobs', Node: 'nodes',
 }
+const CLUSTER_SCOPED_KINDS = new Set(['Node'])
 
 async function switchToKubernetesResourceScope(resource) {
   activeProvider.value = 'kubernetes'
@@ -1012,12 +1015,14 @@ async function switchToKubernetesResourceScope(resource) {
   if (resource.namespace && store.namespace !== resource.namespace) store.namespace = resource.namespace
 }
 
-// Architecture Canvas node action: open the same YAML/metrics detail panel used by the Kubernetes view.
-async function openArchitectureKubernetesDetail(resource) {
+// Open the YAML/metrics detail panel of the Kubernetes view for a resource, in
+// its context and namespace (Architecture Canvas and inspector links).
+async function openKubernetesDetail(resource) {
   const resourceType = KUBE_KIND_TO_RESOURCE[resource?.kind]
-  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  const clusterScoped = CLUSTER_SCOPED_KINDS.has(resource?.kind)
+  if (!resourceType || !resource?.kubeContext || (!clusterScoped && !resource?.namespace) || !resource?.name) return
   try {
-    await switchToKubernetesResourceScope(resource)
+    await switchToKubernetesResourceScope(clusterScoped ? { ...resource, namespace: '' } : resource)
     selectedKubeResource.value = null
     store.resource = resourceType
     await store.loadResources()
@@ -1290,7 +1295,19 @@ function handleAction(fn, args) {
 function applicationAuditContext() {
   return { environment: activeApplicationContext.value?.environment, applicationId: activeApplicationContext.value?.id }
 }
-function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext, ...applicationAuditContext() }); startLogStream(tab, false) }
+function openLogs(ns, pod, containers, resourceType = 'pods', { previous = false, container = null } = {}) {
+  const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext, ...applicationAuditContext() })
+  if (container && tab.containers.includes(container)) tab.container = container
+  tab.previous = previous
+  startLogStream(tab, previous)
+}
+// Inspector shortcuts: logs of the instance that just ended, for one container.
+function openInspectorLogs({ namespace, name, containers, container, previous }) {
+  openLogs(namespace, name, containers, 'pods', { previous, container })
+}
+function openInspectorResource({ kind, name, namespace }) {
+  openKubernetesDetail({ kind, name, namespace, kubeContext: store.currentContext })
+}
 function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers, { kubeContext: store.currentContext, ...applicationAuditContext() }); startExecStream(tab) }
 function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })

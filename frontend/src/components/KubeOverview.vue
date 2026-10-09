@@ -30,7 +30,7 @@
         <button class="kov-tile" :class="{ bad: pods.problemCount }" :title="t('overview.viewProblemPods')" @click="go('pods', { quick: ['problems'] })">
           <span class="kov-tile-label"><StatusDot :level="pods.problemCount ? 'critical' : 'good'" />{{ t('overview.problemPods') }}</span>
           <span class="kov-tile-value">{{ pods.problemCount ?? '—' }}</span>
-          <span class="kov-tile-sub">{{ t('overview.restartsTotal', { n: pods.restarts ?? 0 }) }}</span>
+          <span class="kov-tile-sub" data-test="restart-counts">{{ t('overview.restartsSplit', { recent: pods.recentlyRestarted ?? 0, minutes: pods.recentRestartMinutes ?? 60, total: pods.restarts ?? 0 }) }}</span>
         </button>
         <button class="kov-tile" :class="{ bad: nodes.notReady }" :title="t('overview.viewNodes')" @click="go('nodes', nodes.notReady ? { quick: ['not-ready'] } : {})">
           <span class="kov-tile-label"><StatusDot :level="nodes.error ? 'unknown' : nodes.notReady ? 'critical' : 'good'" />{{ t('overview.nodes') }}</span>
@@ -49,7 +49,24 @@
         </button>
       </div>
 
-      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
+      <!-- Active incidents: what is failing now, before posture recommendations -->
+      <section class="kov-card kov-wide kov-incidents" data-test="active-incidents">
+        <h3>{{ t('overview.activeIncidents') }} <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">{{ t('overview.topOf', { shown: pods.problems.length, total: pods.problemCount }) }}</span></h3>
+        <p v-if="!pods.problems?.length" class="kov-empty">{{ t('overview.noProblemPods') }}</p>
+        <table v-else class="kov-table">
+          <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestartsTotal') }}</th></tr></thead>
+          <tbody>
+            <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
+              <td class="kov-link">{{ p.name }}</td>
+              <td>{{ p.namespace }}</td>
+              <td><span class="badge failed">{{ p.reason }}</span></td>
+              <td class="num">{{ p.restarts }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :default-collapsed="true" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
 
       <div class="kov-grid">
         <!-- Cluster usage -->
@@ -142,23 +159,6 @@
               <template v-if="seriesErrors.length"> {{ t('overview.noDataFor', { list: seriesErrors.join(', ') }) }}</template>
             </p>
           </template>
-        </section>
-
-        <!-- Problem pods -->
-        <section class="kov-card kov-wide">
-          <h3>{{ t('overview.problemPods') }} <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">{{ t('overview.topOf', { shown: pods.problems.length, total: pods.problemCount }) }}</span></h3>
-          <p v-if="!pods.problems?.length" class="kov-empty">{{ t('overview.noProblemPods') }}</p>
-          <table v-else class="kov-table">
-            <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestarts') }}</th></tr></thead>
-            <tbody>
-              <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
-                <td class="kov-link">{{ p.name }}</td>
-                <td>{{ p.namespace }}</td>
-                <td><span class="badge failed">{{ p.reason }}</span></td>
-                <td class="num">{{ p.restarts }}</td>
-              </tr>
-            </tbody>
-          </table>
         </section>
 
         <!-- Nodes -->
@@ -412,6 +412,7 @@ defineExpose({ load })
 .kov-updated { opacity: .8; }
 .kov-dim { color: var(--text-dim); }
 
+.kov-incidents { margin-top: 12px; }
 .kov-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .kov-tile {
   display: flex; flex-direction: column; gap: 4px; text-align: left;

@@ -100,7 +100,7 @@ describe('ResourceTable — per-resource view, quick filters and history', () =>
   it('narrows rows with quick filters and shows their counts', async () => {
     const wrapper = mount(ResourceTable)
     const chips = wrapper.findAll('.quick-chip')
-    expect(chips.map(c => c.text())).toEqual(['With problems 0', 'Not Running 1', 'Not ready 1', 'With restarts 1'])
+    expect(chips.map(c => c.text())).toEqual(['With problems 0', 'Not Running 1', 'Not ready 1', 'Restarted in the last hour 0', 'Restarted ever 1'])
 
     await chips[1].trigger('click')
     expect(names(wrapper)).toEqual(['api-2'])
@@ -200,7 +200,7 @@ describe('ResourceTable — language', () => {
     settings.lang = 'es'
     try {
       const wrapper = mount(ResourceTable)
-      expect(wrapper.findAll('.quick-chip').map(c => c.text())).toEqual(['Con problemas 0', 'No Running 1', 'No listos 1', 'Con reinicios 1'])
+      expect(wrapper.findAll('.quick-chip').map(c => c.text())).toEqual(['Con problemas 0', 'No Running 1', 'No listos 1', 'Reinicio en la última hora 0', 'Con reinicios (histórico) 1'])
       expect(wrapper.find('.search-input').attributes('placeholder')).toBe('Filtrar...')
       settings.lang = 'en'
       await nextTick()

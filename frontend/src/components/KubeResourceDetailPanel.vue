@@ -42,6 +42,65 @@
             </div>
             <div class="kdp-prop-row"><dt>{{ t('detail.podPhase') }}</dt><dd data-test="pod-health-phase">{{ health.phase }}</dd></div>
           </dl>
+          <div class="kdp-health-actions">
+            <button class="btn sm" data-test="pod-logs" @click="openPodLogs(false)"><i data-lucide="scroll"></i> {{ t('detail.viewLogs') }}</button>
+            <button v-if="previousLogsContainer" class="btn sm" data-test="pod-previous-logs" @click="openPodLogs(true)">
+              <i data-lucide="history"></i> {{ t('detail.viewPreviousLogs', { container: previousLogsContainer }) }}
+            </button>
+          </div>
+        </div>
+        <div v-if="resourceType === 'pods' && (relations || relationsError)" class="kdp-section" data-test="pod-relations">
+          <h3>{{ t('detail.relations') }}</h3>
+          <p v-if="relationsError" class="kdp-muted">{{ relationsError }}</p>
+          <ul v-else class="kdp-relations">
+            <li v-for="owner in relations.owners" :key="owner.kind + owner.name">
+              <span class="kdp-relation-kind">{{ owner.kind }}</span>
+              <button v-if="NAVIGABLE_KINDS.has(owner.kind)" class="kdp-link" @click="openResource(owner.kind, owner.name)">{{ owner.name }}</button>
+              <span v-else>{{ owner.name }}</span>
+            </li>
+            <li v-if="relations.node">
+              <span class="kdp-relation-kind">Node</span>
+              <button class="kdp-link" @click="openResource('Node', relations.node)">{{ relations.node }}</button>
+            </li>
+            <li v-for="svc in relations.services" :key="svc.name" data-test="pod-relation-service">
+              <span class="kdp-relation-kind">Service</span>
+              <button class="kdp-link" @click="openResource('Service', svc.name)">{{ svc.name }}</button>
+              <span :class="['kdp-traffic', svc.readyEndpoint === true ? 'ok' : svc.readyEndpoint === false ? 'warn' : 'unknown']">
+                {{ t(svc.readyEndpoint === true ? 'detail.receivesTraffic' : svc.readyEndpoint === false ? 'detail.noTraffic' : 'detail.trafficUnknown') }}
+              </span>
+            </li>
+            <li v-if="!relations.services.length" class="kdp-muted">{{ t('detail.noServiceSelects') }}</li>
+          </ul>
+        </div>
+        <div v-if="resourceType === 'services' && (backends || backendsError)" class="kdp-section" data-test="service-backends">
+          <h3>{{ t('detail.backendsTitle') }}</h3>
+          <p v-if="backendsError" class="kdp-muted">{{ backendsError }}</p>
+          <template v-else>
+            <p :class="['kdp-backend-state', `state-${backends.state}`]" data-test="service-backends-state">{{ t(`detail.backends.${backends.state}`, { name: backends.externalName }) }}</p>
+            <dl class="kdp-props compact">
+              <div v-if="selectorText" class="kdp-prop-row"><dt>Selector</dt><dd>{{ selectorText }}</dd></div>
+              <div v-if="backends.state !== 'external-name' && backends.state !== 'no-selector'" class="kdp-prop-row">
+                <dt>{{ t('detail.matchingPods') }}</dt><dd data-test="service-backends-matching">{{ backends.matchingCount }}</dd>
+              </div>
+              <div v-if="backends.matchingCount" class="kdp-prop-row"><dt>{{ t('detail.readyPods') }}</dt><dd>{{ backends.readyPods }}/{{ backends.matchingCount }}</dd></div>
+              <div v-if="backends.state !== 'external-name'" class="kdp-prop-row">
+                <dt>{{ t('detail.readyEndpoints') }}</dt>
+                <dd>{{ backends.endpoints ? t('detail.endpointsCount', { ready: backends.endpoints.ready, notReady: backends.endpoints.notReady }) : t('detail.endpointsUnreadable') }}</dd>
+              </div>
+            </dl>
+            <ul v-if="backends.nearMisses.length" class="kdp-near-misses" data-test="service-near-misses">
+              <li v-for="miss in backends.nearMisses" :key="miss.pod">
+                {{ t('detail.nearMiss', { pod: miss.pod, key: miss.key, actual: miss.actual, expected: miss.expected }) }}
+              </li>
+            </ul>
+            <ul v-if="backends.matchingPods.length" class="kdp-relations">
+              <li v-for="item in backends.matchingPods" :key="item.name">
+                <span class="kdp-relation-kind">Pod</span>
+                <button class="kdp-link" @click="openResource('Pod', item.name)">{{ item.name }}</button>
+                <span :class="['kdp-traffic', item.ready ? 'ok' : 'warn']">{{ t(item.ready ? 'detail.healthLevel.ok' : 'detail.healthLevel.not-ready') }}</span>
+              </li>
+            </ul>
+          </template>
         </div>
         <div class="kdp-section">
           <h3>{{ t('detail.properties') }}</h3>
@@ -293,7 +352,7 @@ const props = defineProps({
   resourceType: { type: String, required: true },
   resource: { type: Object, required: true },
 })
-defineEmits(['close', 'open-helm'])
+const emit = defineEmits(['close', 'open-helm', 'open-logs', 'open-resource'])
 const { toast } = useToast()
 const { t } = useI18n()
 
@@ -318,6 +377,48 @@ const savingData = ref(false)
 const secretImmutable = ref(false)
 const revealedDataKeys = ref(new Set())
 const HEALTH_ICONS = { ok: 'check-circle-2', 'not-ready': 'circle-alert', failing: 'triangle-alert', pending: 'clock', completed: 'check', unknown: 'circle-help' }
+// Kinds the Kubernetes view can open; others (e.g. custom controllers) stay as text.
+const NAVIGABLE_KINDS = new Set(['ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob'])
+const relations = ref(null)
+const relationsError = ref('')
+const backends = ref(null)
+const backendsError = ref('')
+const selectorText = computed(() => Object.entries(backends.value?.selector || {}).map(([key, value]) => `${key}=${value}`).join(', '))
+// The container whose previous instance explains a restart.
+const previousLogsContainer = computed(() => {
+  if (!health.value) return ''
+  if (health.value.lastTermination) return health.value.lastTermination.container
+  return health.value.containers.find(c => c.restarts > 0)?.name || ''
+})
+function openPodLogs(previous) {
+  const names = (spec.value.containers || []).map(c => c.name)
+  emit('open-logs', {
+    namespace: props.resource.namespace,
+    name: props.resource.name,
+    containers: names,
+    container: previous ? previousLogsContainer.value : names[0] || null,
+    previous,
+  })
+}
+function openResource(kind, name) {
+  emit('open-resource', { kind, name, namespace: props.resource.namespace })
+}
+async function loadRelations() {
+  try {
+    relations.value = await api('GET', `/api/${encodeURIComponent(props.resource.namespace)}/pods/${encodeURIComponent(props.resource.name)}/relations`)
+  } catch (e) {
+    relationsError.value = e.message
+  } finally {
+    nextTick(() => createIcons({ icons }))
+  }
+}
+async function loadBackends() {
+  try {
+    backends.value = await api('GET', `/api/${encodeURIComponent(props.resource.namespace)}/services/${encodeURIComponent(props.resource.name)}/backends`)
+  } catch (e) {
+    backendsError.value = e.message
+  }
+}
 const health = computed(() => (props.resourceType === 'pods' && yamlObject.value?.status ? podHealth(yamlObject.value) : null))
 const lastTerminationText = computed(() => {
   const last = health.value?.lastTermination
@@ -393,6 +494,10 @@ async function loadDetail(resetTab = true) {
   prometheus.value = null
   relatedEvents.value = { total: 0, warnings: 0, events: [] }
   eventsError.value = ''
+  relations.value = null
+  relationsError.value = ''
+  backends.value = null
+  backendsError.value = ''
   try {
     const url = CLUSTER_RESOURCES.has(props.resourceType)
       ? `/api/${props.resourceType}/${encodeURIComponent(props.resource.name)}/yaml`
@@ -411,6 +516,8 @@ async function loadDetail(resetTab = true) {
   if (isMetricsSupported.value) loadMetrics()
   loadRelatedEvents()
   loadPrometheusStatus()
+  if (props.resourceType === 'pods') loadRelations()
+  if (props.resourceType === 'services') loadBackends()
 }
 
 async function loadPrometheusStatus() {
@@ -951,6 +1058,19 @@ function formatValue(value) {
 .kdp-health-headline { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 14px; }
 .kdp-health-problems { margin: 0 0 8px; padding-left: 18px; }
 .kdp-health-problems li { margin-bottom: 4px; }
+.kdp-health-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.kdp-relations { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.kdp-relations li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.kdp-relation-kind { min-width: 84px; color: var(--text-dim); font-size: 11px; }
+.kdp-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.kdp-link:hover { text-decoration: underline; }
+.kdp-traffic { font-size: 11px; color: var(--text-dim); }
+.kdp-traffic.ok { color: var(--green); }
+.kdp-traffic.warn { color: var(--yellow); }
+.kdp-backend-state { margin: 0 0 8px; font-weight: 600; }
+.kdp-backend-state.state-no-matching-pods, .kdp-backend-state.state-pods-not-ready { color: var(--yellow); }
+.kdp-backend-state.state-ok { color: var(--green); }
+.kdp-near-misses { margin: 8px 0; padding-left: 18px; font-size: 12px; overflow-wrap: anywhere; }
 .kdp-health-problems small { display: block; color: var(--text-dim); overflow-wrap: anywhere; }
 .kdp-meter-ref { display: block; margin-top: 6px; color: var(--text-dim); font-size: 11px; }
 .kdp-meter strong.kdp-no-sample { color: var(--text-dim); font-size: 13px; font-weight: 600; }

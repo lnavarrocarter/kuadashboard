@@ -62,7 +62,7 @@ describe('podHealth', () => {
 })
 
 describe('KubeResourceDetailPanel pod health and metrics', () => {
-  let metricsResponse
+  let metricsResponse, backendsResponse
 
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -77,17 +77,62 @@ describe('KubeResourceDetailPanel pod health and metrics', () => {
     vi.spyOn(ApiModule, 'api').mockImplementation(async (_method, path) => {
       if (path.endsWith('/yaml')) return yaml.dump(crashingPod())
       if (path.endsWith('/metrics')) return metricsResponse
+      if (path.endsWith('/relations')) {
+        return {
+          owners: [{ kind: 'ReplicaSet', name: 'sot360-6f9' }, { kind: 'Deployment', name: 'sot360' }],
+          node: 'ip-10-0-1-5.ec2.internal',
+          services: [{ name: 'sot', readyEndpoint: false }],
+        }
+      }
+      if (path.endsWith('/backends')) return backendsResponse
       if (path.startsWith('/api/monitoring/prometheus/status')) return { available: true, services: [{ namespace: 'monitoring', name: 'prometheus' }] }
       if (path.startsWith('/api/events/related')) return { total: 0, warnings: 0, events: [] }
       return {}
     })
   })
 
-  function mountPanel() {
+  function mountPanel(resourceType = 'pods', name = 'sot360-abc') {
     return mount(KubeResourceDetailPanel, {
-      props: { resourceType: 'pods', resource: { name: 'sot360-abc', namespace: 'backend360' } },
+      props: { resourceType, resource: { name, namespace: 'backend360' } },
     })
   }
+
+  it('opens the logs of the previous instance of the container that ended', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.get('[data-test="pod-previous-logs"]').trigger('click')
+    expect(wrapper.emitted('open-logs')[0][0]).toEqual({
+      namespace: 'backend360', name: 'sot360-abc', containers: ['app'], container: 'app', previous: true,
+    })
+  })
+
+  it('links the owner chain, node and Services, saying whether the pod gets traffic', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    const relations = wrapper.get('[data-test="pod-relations"]')
+    expect(relations.text()).toContain('ReplicaSet')
+    expect(relations.get('[data-test="pod-relation-service"]').text()).toContain('not a ready endpoint')
+    const links = relations.findAll('.kdp-link')
+    await links[1].trigger('click')
+    await links[2].trigger('click')
+    expect(wrapper.emitted('open-resource')).toEqual([
+      [{ kind: 'Deployment', name: 'sot360', namespace: 'backend360' }],
+      [{ kind: 'Node', name: 'ip-10-0-1-5.ec2.internal', namespace: 'backend360' }],
+    ])
+  })
+
+  it('explains a Service without backends with the label that no longer matches', async () => {
+    backendsResponse = {
+      state: 'no-matching-pods', type: 'ClusterIP', selector: { app: 'sot360-3.9.1' }, externalName: null,
+      matchingPods: [], matchingCount: 0, readyPods: 0, endpoints: { ready: 0, notReady: 0 },
+      nearMisses: [{ pod: 'sot360-abc', key: 'app', expected: 'sot360-3.9.1', actual: 'sot360-3.9.2' }],
+    }
+    const wrapper = mountPanel('services', 'sot')
+    await flushPromises()
+    expect(wrapper.get('[data-test="service-backends-state"]').text()).toBe('No pod matches the selector')
+    expect(wrapper.get('[data-test="service-near-misses"]').text()).toBe('Pod sot360-abc has app=sot360-3.9.2; the selector asks for app=sot360-3.9.1')
+    expect(wrapper.get('[data-test="service-backends-matching"]').text()).toBe('0')
+  })
 
   it('leads with health and labels the phase as phase', async () => {
     const wrapper = mountPanel()
@@ -97,7 +142,7 @@ describe('KubeResourceDetailPanel pod health and metrics', () => {
     expect(wrapper.get('[data-test="pod-health-ready"]').text()).toBe('0/1')
     expect(wrapper.get('[data-test="pod-health-phase"]').text()).toBe('Running')
     expect(wrapper.get('[data-test="pod-health-last-termination"]').text()).toContain('app · Error · exit code 1')
-    const properties = wrapper.findAll('.kdp-section')[1].text()
+    const properties = wrapper.findAll('.kdp-section').find(section => section.find('h3').text() === 'Properties').text()
     expect(properties).toContain('Pod phase')
     expect(properties).not.toContain('Status')
   })
