@@ -29,7 +29,7 @@ import {
   Sidebar, Signature, SlidersHorizontal, Space, Sparkles, Split, Square, SquareActivity,
   SquareFunction, SquarePlus, SquareTerminal, Star, Sun, SunMoon, Table, Table2, TableProperties,
   Tag, Tags, Target, Terminal, TerminalSquare, Text, Timer, Trash2, Triangle, TriangleAlert, Type,
-  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow,
+  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow, Wrench,
   WrapText, X, XCircle, Zap, ZoomIn, ZoomOut,
 } from 'lucide/dist/esm/lucide.js'
 
@@ -57,6 +57,6 @@ export const icons = {
   Sidebar, Signature, SlidersHorizontal, Space, Sparkles, Split, Square, SquareActivity,
   SquareFunction, SquarePlus, SquareTerminal, Star, Sun, SunMoon, Table, Table2, TableProperties,
   Tag, Tags, Target, Terminal, TerminalSquare, Text, Timer, Trash2, Triangle, TriangleAlert, Type,
-  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow,
+  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow, Wrench,
   WrapText, X, XCircle, Zap, ZoomIn, ZoomOut,
 }
