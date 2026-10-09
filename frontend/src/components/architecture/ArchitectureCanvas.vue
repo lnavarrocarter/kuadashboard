@@ -291,6 +291,7 @@
 </template>
 
 <script setup>
+import { awsConsoleUrl, awsViewTarget } from '../../lib/awsResourceLinks'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { Background } from '@vue-flow/background'
@@ -444,12 +445,14 @@ const nodeActions = computed(() => {
       actions.push({ key: 'observability-metrics', label: t('archCanvas.action.viewMetrics'), icon: 'chart-no-axes-combined' })
       actions.push({ key: 'inline-metrics', label: t('archCanvas.action.viewMetricsHere'), icon: 'panel-right' })
     }
-  } else if (AWS_DETAIL_TYPES.includes(node.resourceType)) {
+  } else if (node.provider === 'aws' || AWS_DETAIL_TYPES.includes(node.resourceType)) {
     if (node.resourceType === 'lambda') {
       actions.push({ key: 'aws-logs', label: t('archCanvas.action.viewLogs'), icon: 'scroll-text' })
       actions.push({ key: 'inline-logs', label: t('archCanvas.action.viewLogsHere'), icon: 'panel-right' })
     }
-    actions.push({ key: 'aws-detail', label: t('archCanvas.action.openAws'), icon: 'external-link' })
+    // The resource's own page (#239): its tab in KUA's AWS view, else the AWS console.
+    if (awsViewTarget(node)) actions.push({ key: 'aws-detail', label: t('archCanvas.action.openAws'), icon: 'external-link' })
+    else if (awsConsoleUrl(node)) actions.push({ key: 'aws-console', label: t('archCanvas.action.openAwsConsole'), icon: 'square-arrow-out-up-right' })
     if (props.observabilityEnabled && ['lambda', 'ec2'].includes(node.resourceType)) {
       actions.push({ key: 'observability-metrics', label: t('archCanvas.action.viewMetrics'), icon: 'chart-no-axes-combined' })
       actions.push({ key: 'inline-metrics', label: t('archCanvas.action.viewMetricsHere'), icon: 'panel-right' })

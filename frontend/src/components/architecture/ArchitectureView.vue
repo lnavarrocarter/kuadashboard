@@ -319,6 +319,7 @@
                 :loading="store.registryLoading"
                 @refresh="store.loadRegistry"
                 @operation="applyCanvasOperation"
+                @open-destination="openDestination"
               />
             </section>
 
@@ -386,6 +387,7 @@
 </template>
 
 <script setup>
+import { awsConsoleUrl } from '../../lib/awsResourceLinks'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
@@ -983,6 +985,12 @@ const KUBE_LOG_TAB_RESOURCE_TYPE = {
   Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods',
 }
 
+// A resource of the registry table opens where it lives, through the same events as the canvas (#239).
+function openDestination(destination) {
+  if (destination?.event === 'open-aws') emit('open-aws-resource', destination.payload)
+  else if (destination?.event) emit(destination.event, destination.payload)
+}
+
 function handleNodeAction({ action, node } = {}) {
   if (action === 'kubernetes-log-suggestions') return suggestRelationshipsFromLogs(node)
   if (['observability-metrics', 'observability-traces'].includes(action)) {
@@ -997,6 +1005,12 @@ function handleNodeAction({ action, node } = {}) {
     if (!store.linkedApplication || !node) return
     inlineNode.value = node
     inlineMode.value = action === 'inline-logs' ? 'logs' : 'metrics'
+    return
+  }
+  if (action === 'aws-console') {
+    const url = awsConsoleUrl(node)
+    // Opens the system browser (Electron routes window.open outside); nothing changes in AWS.
+    if (url) window.open(url, '_blank', 'noopener')
     return
   }
   const eventName = NODE_ACTION_EVENTS[action]
