@@ -9,10 +9,12 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { createKuaExtensionRegistry } = require('../lib/kua/extensionRegistry');
 const { explainRelationship } = require('../lib/kua/relationshipExplainer');
 const { resourceSignalStates } = require('../lib/kua/resourceSignalState');
+const { createChangePlanService } = require('../lib/kua/changePlans');
+const { createAgentAccess } = require('../lib/kua/agentAccess');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -24,6 +26,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
   const applicationRegistry = new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database });
   const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database });
+  const changePlans = createChangePlanService({
+    apmDatabase, architectureDatabase: database, applications, registry: applicationRegistry, access: agentAccess,
+    audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'mcp', details }),
+  });
 
   function profileId(req, res) {
     const value = req.get('X-Profile-Id');
@@ -127,6 +133,22 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       });
     } catch (error) { handleError(res, error); }
   });
+
+  // ── Changes requested by AI agents (#155): preview, then apply with confirmation ──
+  // The actor names the client for the audit log (e.g. "mcp"); it is never trusted for permissions:
+  // applying needs the user's switch below and a plan previewed against the current revision.
+  const actorOf = req => (/^[a-z0-9:._-]{1,60}$/i.test(req.get('X-KUA-Actor') || '') ? req.get('X-KUA-Actor') : 'agent');
+  router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
+  router.put('/agent-access', (req, res) => send(res, 200, () => {
+    const result = agentAccess.set(req.body?.writes === true);
+    auditLog?.log({ category: 'kua', action: result.writes ? 'Agents allowed to change KUApps' : 'Agents no longer allowed to change KUApps', resource: 'KUApps', context: 'kuapps' });
+    return result;
+  }));
+  router.post('/changes/preview', (req, res) => send(res, 201, () => changePlans.preview({
+    applicationId: req.body?.applicationId, operation: req.body?.operation, input: req.body?.input, actor: actorOf(req),
+  })));
+  router.post('/changes/:planId/apply', (req, res) => send(res, 200, () => changePlans.apply(req.params.planId, { confirm: req.body?.confirm === true, actor: actorOf(req) })));
+  router.get('/changes/:planId', (req, res) => send(res, 200, () => changePlans.get(req.params.planId)));
 
   // The architecture views of an application (#154). Not scoped by X-Profile-Id: a view is read
   // through the application it belongs to, and a project of another application is never served.

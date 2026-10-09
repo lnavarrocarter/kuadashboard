@@ -104,7 +104,7 @@ describe('AgentConnectModal', () => {
       { ok: true, tools: 11, profiles: 0, kua: { url: 'http://localhost:7190', version: '1.16.0', reachable: true }, thisKua: 'http://localhost:7192' },
       { ok: false, error: 'KUA is not reachable at http://localhost:7190 (ECONNREFUSED).', thisKua: 'http://localhost:7192' },
     ]
-    apiFetch.mockImplementation(async path => (path === '/api/system/mcp' ? REPO : answers.shift()))
+    apiFetch.mockImplementation(async path => (path === '/api/system/mcp' ? REPO : path === '/api/kua-apps/agent-access' ? { writes: false } : answers.shift()))
     const wrapper = await open()
     await click('[data-test="agent-connect-verify"]')
     expect(outcome()).toBe('It works: 11 tools, reading KUA 1.17.0 · http://localhost:7192 (3 cloud profiles).')
@@ -112,6 +112,27 @@ describe('AgentConnectModal', () => {
     expect(outcome()).toBe('Another KUA is running at http://localhost:7190, and the agent will read that one. Close it, or set KUA_URL to http://localhost:7192.')
     await click('[data-test="agent-connect-verify"]')
     expect(outcome()).toBe('It does not work yet: KUA is not reachable at http://localhost:7190 (ECONNREFUSED).')
+    wrapper.unmount()
+  })
+
+  it('shows agent writes off by default and turns them on in KUA (#155)', async () => {
+    let writes = false
+    apiFetch.mockImplementation(async (path, options = {}) => {
+      if (path === '/api/system/mcp') return PACKAGED
+      if (path === '/api/kua-apps/agent-access' && options.method === 'PUT') { writes = JSON.parse(options.body).writes; return { writes } }
+      if (path === '/api/kua-apps/agent-access') return { writes }
+      throw new Error(`unexpected ${path}`)
+    })
+    const wrapper = mount(AgentConnectModal, { props: { show: true }, attachTo: document.body })
+    await flushPromises()
+    const toggle = () => document.querySelector('[data-test="agent-writes"]')
+    expect(toggle().querySelector('input').checked).toBe(false)
+    expect(toggle().textContent).toContain('but not apply them')
+
+    toggle().querySelector('input').click()
+    await flushPromises()
+    expect(apiFetch).toHaveBeenCalledWith('/api/kua-apps/agent-access', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ writes: true }) }))
+    expect(toggle().textContent).toContain('after you approve it')
     wrapper.unmount()
   })
 })
