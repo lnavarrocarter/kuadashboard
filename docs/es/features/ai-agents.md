@@ -44,6 +44,9 @@ Todas son de solo lectura.
 | `kube_log_intelligence` | Brief de un workload de Kubernetes en caché: tasas de error, anomalías, errores parecidos, recomendaciones, consultas |
 | `list_applications` | Aplicaciones de KUApps |
 | `product_advisor` (Pro) | Hallazgos de producto de una aplicación de KUApps |
+| `get_application` | Una KUA Application como la muestra KUApps: identidad, revisión, scopes con si este computador tiene un perfil verificado para cada uno (nunca el perfil), vistas de arquitectura, recursos contados por estado de señales, relaciones por estado y advertencias |
+| `list_application_resources` | Sus recursos: identidad portable, scope del provider, fuentes, estado de señales (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) con la hora de los últimos datos, y relaciones. Filtros `state` y `provider`; como máximo 500 (100 por defecto), con `truncated` |
+| `get_architecture_graph` | Una vista de arquitectura de la aplicación (por defecto la primera): nodos, nodos ocultos, relaciones con estado, confianza, decisión humana y tipos de evidencia. Es la vista guardada en su revisión, no una lectura en vivo |
 
 Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto, o `json` para los datos crudos) y `lang` (`en` o `es`). `profile` acepta el id o el nombre de un perfil de KUA, o el nombre de un perfil de la CLI de AWS o de una configuración de gcloud de este equipo (por ejemplo `prod`), así el agente puede trabajar antes de agregar el perfil a KUA. Se puede omitir cuando hay un solo perfil de ese proveedor.
 
@@ -127,10 +130,12 @@ Empieza por **Verificar conexión** en Conectar agentes IA: nombra el problema. 
 - "Usa KUA para leer el Advisor de AWS del perfil prod y corrige los hallazgos altos en nuestro Terraform."
 - "Lee la inteligencia de logs de /aws/lambda/orders en KUA, encuentra el código que lanza esos errores y propón una corrección."
 - "Revisa el Advisor de Kubernetes del namespace shop y actualiza el chart de Helm para agregar requests, limits y probes."
+- "Lee la aplicación Checkout en KUA y dime qué recursos tienen señales desactualizadas o sin datos."
 
 ## Privacidad
 
 - Los briefs y las respuestas del MCP solo contienen lo que KUA ya muestra en pantalla.
 - KUA sanitiza las muestras de logs antes de guardarlas; los valores sensibles se cuentan por tipo, nunca se copian.
 - Las credenciales de los perfiles nunca salen de KUA: `list_profiles` devuelve solo id, nombre y proveedor.
+- Las herramientas de KUA Application leen la aplicación con el mismo servicio de KUApps que la UI. Un nombre compartido por varias aplicaciones necesita el id, y una vista solo se entrega a través de la aplicación a la que pertenece. Indican qué scopes puede leer este computador, no qué perfil llega a ellos.
 - Una vez que el brief llega a un agente, lo procesa el proveedor de ese agente según sus propios términos.

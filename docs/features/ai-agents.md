@@ -44,6 +44,9 @@ All tools are read-only.
 | `kube_log_intelligence` | Brief of a cached Kubernetes workload: error rates, anomalies, similar errors, recommendations, queries |
 | `list_applications` | KUApps applications |
 | `product_advisor` (Pro) | Product findings of a KUApps application |
+| `get_application` | One KUA Application as KUApps shows it: identity, revision, scopes with whether this computer has a verified profile for each (never the profile itself), architecture views, resources counted by signal state and relationships by status, and warnings |
+| `list_application_resources` | Its resources: portable identity, provider scope, sources, signal state (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) with the time of the latest data, and relationships. Filters `state` and `provider`; at most 500 (default 100), with `truncated` |
+| `get_architecture_graph` | One architecture view of the application (default the first): nodes, hidden nodes, relationships with status, confidence, human decision and evidence kinds. It is the stored view at its revision, not a live read |
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a KUA profile id or name, or the name of an AWS CLI profile or gcloud configuration of this computer (for example `prod`), so the agent can work before the profile is added to KUA. It can be omitted when there is only one profile of that provider.
 
@@ -127,10 +130,12 @@ Start with **Verify connection** in Connect AI agents: it names the problem. Ins
 - "Use KUA to read the AWS Advisor for the prod profile and fix the high findings in our Terraform."
 - "Read the log intelligence of /aws/lambda/orders in KUA, find the code that throws those errors and propose a fix."
 - "Check the Kubernetes Advisor for the shop namespace and update the Helm chart to add requests, limits and probes."
+- "Read the Checkout application in KUA and tell me which of its resources have stale or missing signals."
 
 ## Privacy
 
 - Briefs and MCP answers only contain what KUA already shows on screen.
 - Log samples are sanitized by KUA before they are stored; sensitive values are counted by type, never copied.
 - Profile credentials never leave KUA: `list_profiles` returns id, name and provider only.
+- The KUA Application tools read the application through the same KUApps service as the UI. A name shared by several applications needs the id, and a view is only served through the application it belongs to. They report which scopes this computer can read, not which profile reaches them.
 - Once a brief reaches an agent, it is handled by that agent's provider under its own terms.

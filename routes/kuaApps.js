@@ -122,9 +122,41 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
           sourceName: resourcesById.get(relationship.sourceResourceId)?.displayName || '',
           targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
         })),
+        // When the registry was last reconciled: it is derived from APM resources and views.
+        syncStatus: apmDatabase.getRegistrySyncStatus(application.id),
       });
     } catch (error) { handleError(res, error); }
   });
+
+  // The architecture views of an application (#154). Not scoped by X-Profile-Id: a view is read
+  // through the application it belongs to, and a project of another application is never served.
+  const applicationOr404 = id => {
+    const application = apmDatabase.getApplication(id);
+    if (!application) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404, code: 'NOT_FOUND' });
+    return application;
+  };
+  const viewIdsOf = application => application.architectureProjectIds?.length
+    ? application.architectureProjectIds : [application.architectureProjectId].filter(Boolean);
+  router.get('/applications/:applicationId/views', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    return viewIdsOf(application).map(projectId => {
+      const project = database.getProject(projectId);
+      const graph = project ? database.getGraph(projectId) : null;
+      return project
+        ? { projectId, name: project.name, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
+        : { projectId, missing: true };
+    });
+  }));
+  router.get('/applications/:applicationId/views/:projectId/graph', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    if (!viewIdsOf(application).includes(req.params.projectId)) {
+      throw Object.assign(new Error('This view does not belong to the application'), { statusCode: 404, code: 'VIEW_NOT_FOUND' });
+    }
+    const project = database.getProject(req.params.projectId);
+    const graph = project ? database.getGraph(project.id) : null;
+    if (!graph) throw Object.assign(new Error('The view no longer exists'), { statusCode: 404, code: 'VIEW_NOT_FOUND' });
+    return { projectId: project.id, name: project.name, revision: graph.revision, updatedAt: graph.updatedAt || null, document: graph.document };
+  }));
   router.delete('/applications/:applicationId/registry/resources/:resourceId', (req, res) => {
     const application = apmDatabase.getApplication(req.params.applicationId);
     if (!application) return res.status(404).json({ error: 'KUA Application not found' });
