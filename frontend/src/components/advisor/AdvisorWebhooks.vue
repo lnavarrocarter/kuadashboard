@@ -1,12 +1,6 @@
 <template>
   <div class="awh" data-test="advisor-webhooks">
-    <div class="opts-label">
-      <i data-lucide="webhook"></i>
-      <span>{{ t('advisorWebhooks.title') }}</span>
-      <span class="opts-desc">{{ t('advisorWebhooks.desc') }}</span>
-    </div>
-
-    <p v-if="!isTeam" class="awh-locked" data-test="advisor-webhooks-locked"><i data-lucide="lock"></i>{{ t('advisorWebhooks.locked') }}</p>
+    <p v-if="!allowed" class="awh-locked" data-test="advisor-webhooks-locked"><i data-lucide="lock"></i>{{ t('advisorWebhooks.locked') }}</p>
 
     <ul v-if="webhooks.length" class="awh-list">
       <li v-for="hook in webhooks" :key="hook.id" class="awh-item" :data-test="`advisor-webhook-${hook.id}`">
@@ -16,11 +10,11 @@
           <code class="awh-url">{{ hook.url }}</code>
         </div>
         <div class="awh-row">
-          <select :value="hook.minSeverity" :disabled="!isTeam || busy" @change="update(hook, { minSeverity: $event.target.value })">
+          <select :value="hook.minSeverity" :disabled="!allowed || busy" @change="update(hook, { minSeverity: $event.target.value })">
             <option v-for="level in SEVERITIES" :key="level" :value="level">{{ t(`advisorWebhooks.severity.${level}`) }}</option>
           </select>
-          <label class="awh-toggle"><input type="checkbox" :checked="hook.enabled" :disabled="!isTeam || busy" @change="update(hook, { enabled: $event.target.checked })" /> {{ t('advisorWebhooks.enabled') }}</label>
-          <button class="btn sm" :disabled="!isTeam || busy" :data-test="`advisor-webhook-test-${hook.id}`" @click="sendTest(hook)">{{ t('advisorWebhooks.test') }}</button>
+          <label class="awh-toggle"><input type="checkbox" :checked="hook.enabled" :disabled="!allowed || busy" @change="update(hook, { enabled: $event.target.checked })" /> {{ t('advisorWebhooks.enabled') }}</label>
+          <button class="btn sm" :disabled="!allowed || busy" :data-test="`advisor-webhook-test-${hook.id}`" @click="sendTest(hook)">{{ t('advisorWebhooks.test') }}</button>
           <button class="btn sm danger" :disabled="busy" @click="remove(hook)">{{ t('advisorWebhooks.remove') }}</button>
         </div>
         <p v-if="hook.lastError" class="awh-warn">{{ t('advisorWebhooks.lastError', { error: hook.lastError }) }}</p>
@@ -28,7 +22,7 @@
       </li>
     </ul>
 
-    <form v-if="isTeam" class="awh-form" data-test="advisor-webhook-form" @submit.prevent="add">
+    <form v-if="allowed" class="awh-form" data-test="advisor-webhook-form" @submit.prevent="add">
       <input v-model="draft.name" class="ctrl-input" maxlength="80" :placeholder="t('advisorWebhooks.name')" required />
       <select v-model="draft.kind" class="ctrl-select">
         <option value="slack">Slack</option>
@@ -60,7 +54,8 @@ import { settings } from '../../composables/useSettings'
 const SEVERITIES = ['high', 'medium', 'all']
 const { t } = useI18n()
 const { plan } = usePlan()
-const isTeam = computed(() => !!plan.value?.features?.teamSharing)
+// Posture alerts come from the Advisor, so webhooks follow its plans: Pro and Team.
+const allowed = computed(() => !!plan.value?.features?.advisor)
 const webhooks = ref([])
 const busy = ref(false)
 const message = ref(null)
@@ -112,7 +107,11 @@ onUpdated(refreshIcons)
 .awh-chip { font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-dim); }
 .awh-url { font-size: 11px; color: var(--text-dim); overflow-wrap: anywhere; }
 .awh-toggle { display: flex; gap: 4px; align-items: center; font-size: 11px; }
-.awh-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.awh-form { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(130px, auto) minmax(200px, 2fr); gap: 6px; align-items: center; }
+.awh-form .awh-url-input { min-width: 0; }
+.awh-form .btn { justify-self: start; }
+.awh-form .awh-hint { grid-column: 1 / -1; }
+@media (max-width: 640px) { .awh-form { grid-template-columns: 1fr; } }
 .awh-form .ctrl-input, .awh-form .ctrl-select { font-size: 12px; }
 .awh-url-input { flex: 1 1 260px; min-width: 0; }
 .awh-hint { flex-basis: 100%; }

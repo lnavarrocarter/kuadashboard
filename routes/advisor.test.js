@@ -120,9 +120,9 @@ test('scheduled analyses are set within the plan, listed and removed, with audit
   } finally { server.close(); database.close(); }
 });
 
-test('webhooks: Team adds them, the URL never comes back whole, removals are audited', async () => {
+test('webhooks: Pro and Team add them, the URL never comes back whole, removals are audited', async () => {
   const { createWebhookDispatcher } = require('../lib/advisor/webhooks');
-  for (const [plan, expected] of [[PLANS.pro, 403], [PLANS.team, 201]]) {
+  for (const [plan, expected] of [[PLANS.free, 403], [PLANS.pro, 201], [PLANS.team, 201]]) {
     let secret = null;
     const webhooks = createWebhookDispatcher({ secrets: { get: () => secret, set: value => { secret = value; } }, plan: () => plan, fetchImpl: async () => ({ ok: true }) });
     const database = new ApmDatabase({ filePath: ':memory:' });

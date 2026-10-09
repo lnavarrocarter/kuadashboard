@@ -81,6 +81,10 @@
               </td>
             </tr>
             <tr>
+              <td>{{ t('account.featureWebhooks') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.advisor) }}</td>
+            </tr>
+            <tr>
               <td>{{ t('account.featureTeam') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ plan.plans[name].features.teamSharing ? t('account.soon') : '—' }}</td>
             </tr>
@@ -144,6 +148,18 @@
       </div>
     </section>
 
+    <!-- Alert webhooks: Slack and Teams channels for Advisor posture alerts (Pro and Team) -->
+    <section class="acp-card" data-test="account-webhooks">
+      <div class="acp-head">
+        <i data-lucide="webhook"></i>
+        <div>
+          <h4>{{ t('advisorWebhooks.title') }} <span v-if="!plan?.features?.advisor" class="msg-chip">{{ t('advisorWebhooks.planChip') }}</span></h4>
+          <p class="text-dim">{{ t('advisorWebhooks.desc') }}</p>
+        </div>
+      </div>
+      <AdvisorWebhooks />
+    </section>
+
     <!-- What KUA spent on cloud APIs -->
     <section class="acp-card" data-test="account-usage">
       <div class="acp-head">
@@ -173,6 +189,7 @@ import { useI18n } from '../../composables/useI18n'
 import { usePlan } from '../../composables/usePlan'
 import { formatBytes } from '../../lib/awsLogs'
 import LogCacheBudget from '../cloud/logs/LogCacheBudget.vue'
+import AdvisorWebhooks from '../advisor/AdvisorWebhooks.vue'
 import { openExternal } from '../../lib/openExternal'
 import { settings } from '../../composables/useSettings'
 import { useToast } from '../../composables/useToast'

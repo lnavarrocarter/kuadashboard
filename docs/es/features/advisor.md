@@ -78,7 +78,7 @@ El panel muestra el último análisis, el próximo, y por qué uno falló o est�
 
 ## Webhooks de alertas (Slack y Teams)
 
-Con el plan **Team**, las alertas de postura también pueden ir a un canal de Slack o Microsoft Teams: **Ayuda y opciones → Opciones → Webhooks de alertas**.
+Con los planes **Pro** y **Team**, las alertas de postura también pueden ir a un canal de Slack o Microsoft Teams: **Cuenta → Webhooks de alertas**.
 
 - **Slack**: crea un *Incoming Webhook* (Apps → Incoming Webhooks) y pega su dirección `https://hooks.slack.com/…`.
 - **Microsoft Teams**: en el canal, crea un Workflow con la plantilla *Publicar en un canal cuando se reciba una solicitud de webhook* y pega su dirección.
