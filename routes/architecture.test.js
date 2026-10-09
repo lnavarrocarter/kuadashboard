@@ -7,13 +7,14 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
   app.use(express.json());
   app.use('/api/architecture', createArchitectureRouter({
     database,
+    ...(apmDatabase ? { apmDatabase } : {}),
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
     inventoryReader: inventoryReader || {
@@ -45,6 +46,7 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader, 
 
   return {
     auditEvents,
+    database,
     request,
     async close() {
       await new Promise(resolve => server.close(resolve));
@@ -602,16 +604,21 @@ test('API exposes scoped GCP and Vercel discovery preview/import endpoints', asy
 });
 
 test('API validates a Kubernetes map against the cluster and applies the confirmed refresh (#239)', async () => {
+  const uids = new Map();
+  const uuidFor = id => {
+    if (!uids.has(id)) uids.set(id, `00000000-0000-4000-8000-${String(uids.size + 1).padStart(12, '0')}`);
+    return uids.get(id);
+  };
   const k8s = (id, resourceType, name, extra = {}) => ({
     id, provider: 'kubernetes', resourceType, kind: { deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType],
-    name, nativeId: `uid-${id}`, kubeContext: 'eks-dev', namespace: 'orders', sourceId: 'kubernetes:context:eks-dev',
+    name, nativeId: uuidFor(id), kubeContext: 'eks-dev', namespace: 'orders', sourceId: 'kubernetes:context:eks-dev',
     discoveryKey: `eks-dev/orders/${{ deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType]}/${name}`, ...extra,
   });
   const auth = k8s('k:auth', 'deployment', 'auth');
   const oldPod = k8s('k:pod-old', 'pod', 'auth-7d9f8c6b5d-x2k4p');
   const newPod = k8s('k:pod-new', 'pod', 'auth-5c4b3a2f1e-q9w8e');
   const billingOld = k8s('k:billing-old', 'deployment', 'billing');
-  const billingNew = { ...k8s('k:billing-new', 'deployment', 'billing'), nativeId: 'uid-billing-2' };
+  const billingNew = { ...k8s('k:billing-new', 'deployment', 'billing'), nativeId: '11111111-2222-4333-8444-555555555555' };
   const config = k8s('k:config', 'configmap', 'auth-config');
   const gateway = k8s('k:gateway', 'service', 'gateway');
   const elsewhere = { ...k8s('k:other', 'deployment', 'reports'), kubeContext: 'eks-prod', discoveryKey: 'eks-prod/orders/Deployment/reports', sourceId: 'kubernetes:context:eks-prod' };
@@ -666,7 +673,7 @@ test('API validates a Kubernetes map against the cluster and applies the confirm
     const ids = nodes.map(node => node.id).sort();
     assert.deepEqual(ids, ['k:auth', 'k:billing-old', 'k:gateway', 'k:other', 'k:pod-new']);
     // The recreated workload keeps its place and takes the new uid.
-    assert.equal(nodes.find(node => node.id === 'k:billing-old').nativeId, 'uid-billing-2');
+    assert.equal(nodes.find(node => node.id === 'k:billing-old').nativeId, '11111111-2222-4333-8444-555555555555');
     // The new pod takes the old one's place and the relationship drawn by hand.
     assert.deepEqual(layout['k:pod-new'], { x: 300, y: 120 });
     assert.ok(edges.some(edge => edge.sourceNodeId === 'k:gateway' && edge.targetNodeId === 'k:pod-new' && edge.status === 'manual'));
@@ -679,5 +686,63 @@ test('API validates a Kubernetes map against the cluster and applies the confirm
     assert.equal(again.status, 409);
   } finally {
     await subject.close();
+  }
+});
+
+test('API refresh also moves the membership of a replaced workload and detaches a gone pod, so reconcile does not draw them again (#239)', async () => {
+  const { ApmDatabase } = require('../lib/apm/database');
+  const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
+  const context = 'arn:aws:eks:us-east-1:1:cluster/dev';
+  const live = (id, resourceType, kind, name) => ({
+    id, provider: 'kubernetes', resourceType, kind, name, nativeId: id === 'k:new-deploy' ? '00000000-0000-4000-8000-000000000001' : '00000000-0000-4000-8000-000000000002',
+    kubeContext: context, namespace: 'backend360', sourceId: `kubernetes:context:${context}`, discoveryKey: `${context}/backend360/${kind}/${name}`,
+  });
+  const subject = await fixture({
+    apmDatabase,
+    kubernetesAdapter: {
+      listContexts: () => [],
+      async preview() {
+        return {
+          sources: [{ id: `kubernetes:context:${context}`, type: 'kubernetes', provider: 'kubernetes', context }],
+          nodes: [live('k:new-deploy', 'deployment', 'Deployment', 'authv1-20261008-155437-6b16cc3'), live('k:new-pod', 'pod', 'Pod', 'authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr')],
+          relationships: [], health: [], capabilities: [], failures: [],
+        };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'dev' } });
+    const application = apmDatabase.createApplication({ profileId: 'local:dev', region: 'us-east-1', name: 'Dev' });
+    apmDatabase.updateArchitectureProjectLink(application.id, created.body.id);
+    for (const [kind, name] of [['Deployment', 'authv1-3.9.1'], ['Pod', 'authv1-3.9.1-64c66865cd-zjqhc']]) {
+      apmDatabase.addResource(application.id, { type: 'kubernetes', kind, name, key: `${context}/backend360/${kind}/${name}`, kubeContext: context, namespace: 'backend360', associationSource: 'manual' });
+    }
+    // Reconcile projects both members into the map (apm-resource nodes).
+    const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+    new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: subject.database }).reconcile(apmDatabase.getApplication(application.id));
+    const before = (await subject.request(`/projects/${created.body.id}/graph`)).body;
+    assert.deepEqual(before.document.nodes.map(node => node.name).sort(), ['authv1-3.9.1', 'authv1-3.9.1-64c66865cd-zjqhc']);
+
+    const checked = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.deepEqual(checked.body.changes.map(item => [item.name, item.change, item.successors[0]?.name]).sort(), [
+      ['authv1-3.9.1', 'replaced', 'authv1-20261008-155437-6b16cc3'],
+      ['authv1-3.9.1-64c66865cd-zjqhc', 'replaced', 'authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr'],
+    ]);
+
+    const applied = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: before.revision } });
+    assert.equal(applied.status, 200);
+    // The members follow: the successor workload joins, the old workload and the old pod leave.
+    assert.deepEqual(apmDatabase.listResources(application.id).map(resource => resource.name), ['authv1-20261008-155437-6b16cc3']);
+    const names = applied.body.document.nodes.map(node => node.name);
+    assert.ok(!names.includes('authv1-3.9.1'));
+    assert.ok(!names.includes('authv1-3.9.1-64c66865cd-zjqhc'));
+    assert.ok(names.includes('authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr'));
+    assert.equal(names.filter(name => name === 'authv1-20261008-155437-6b16cc3').length, 1);
+    // Checking again finds nothing to change.
+    const again = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.deepEqual(again.body.changes, []);
+  } finally {
+    await subject.close();
+    apmDatabase.close();
   }
 });

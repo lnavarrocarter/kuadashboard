@@ -83,6 +83,72 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     return applications.length ? database.getGraph(project.id) : null;
   }
 
+  // The member of a KUA Application behind a drawn node: the Observability resource it was
+  // projected from (apm-resource:<id>), or the one its registry resource joins (#239).
+  function applicationMemberOf(project, node) {
+    if (!apmDatabase || !node) return null;
+    const direct = String(node.id || '').startsWith('apm-resource:') ? apmDatabase.getResource(node.id.slice('apm-resource:'.length)) : null;
+    if (direct) return direct;
+    if (!node.registryResourceId) return null;
+    const applications = apmDatabase.listApplicationsByArchitectureProjectId
+      ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+      : [apmDatabase.getApplicationByArchitectureProjectId?.(project.id)].filter(Boolean);
+    for (const application of applications) {
+      const registered = apmDatabase.listRegistryResources(application.id).find(item => item.id === node.registryResourceId);
+      const apmId = (registered?.lineage || []).find(item => item.kind === 'apm_resource')?.id;
+      const resource = apmId ? apmDatabase.getResource(apmId) : null;
+      if (resource) return resource;
+    }
+    return null;
+  }
+
+  // On its own the map would draw a member again on the next reconcile, so its membership follows
+  // the same decision: a replaced workload's successor becomes a member (observed like any other)
+  // and what no longer exists is detached. Pods are observed through their workload, never added.
+  // Before the map changes: every detach reconciles, and a member still attached would be drawn
+  // again. The successors are attached after the map changed (attachSuccessors).
+  function detachMembers(project, document, changes) {
+    if (!registry) return { results: [], attaches: [] };
+    const results = [];
+    const attaches = [];
+    for (const change of changes) {
+      if (change.change === 'recreated') continue;
+      const resource = applicationMemberOf(project, (document?.nodes || []).find(node => node.id === change.nodeId));
+      const application = resource ? apmDatabase.getApplication(resource.applicationId) : null;
+      if (!application) continue;
+      try {
+        registry.detachResource(application, resource.id);
+        results.push({ applicationId: application.id, detached: resource.name, attached: null });
+      } catch (error) {
+        results.push({ applicationId: application.id, detached: null, error: error.message, resource: resource.name });
+        continue;
+      }
+      const kind = String(resource.kind || '').toLowerCase();
+      const successor = change.successors[0];
+      if (change.change !== 'replaced' || !successor || !['deployment', 'statefulset', 'daemonset'].includes(kind)) continue;
+      const suffix = `/${resource.name}`;
+      const key = String(resource.key || '').endsWith(suffix)
+        ? `${resource.key.slice(0, -suffix.length)}/${successor.name}`
+        : `${resource.kubeContext}/${resource.namespace || 'default'}/${resource.kind}/${successor.name}`;
+      attaches.push({ application, result: results.at(-1), input: {
+        provider: 'kubernetes', type: 'kubernetes', kind: resource.kind, key, name: successor.name,
+        kubeContext: resource.kubeContext, namespace: resource.namespace, associationSource: 'manual',
+      } });
+    }
+    return { results, attaches };
+  }
+
+  function attachSuccessors({ results, attaches }) {
+    for (const { application, result, input } of attaches) {
+      try {
+        const { results: attached } = registry.attachResources(apmDatabase.getApplication(application.id), [input], { clearDetachments: true });
+        if (attached[0]?.error) result.error = attached[0].error;
+        else result.attached = input.name;
+      } catch (error) { result.error = error.message; }
+    }
+    return results;
+  }
+
   // Lets discovery panels show which preview resources are already part of the project's graph,
   // instead of silently letting the user re-select and re-import something that's already there.
   function markExistingNodes(nodes, projectId) {
@@ -468,14 +534,19 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       const chosen = nodeIds.length ? drift.changes.filter(item => nodeIds.includes(item.nodeId)) : drift.changes;
       if (!chosen.length) return res.status(409).json({ error: 'The map already matches the cluster', drift: publicDrift(drift) });
       const operation = refreshOperation({ drift, preview, profileId: project.profileId, nodeIds: chosen.map(item => item.nodeId) });
+      if (Number(req.body?.expectedRevision) !== current?.revision) {
+        throw Object.assign(new Error('Architecture graph revision conflict'), { statusCode: 409 });
+      }
+      const pending = detachMembers(project, current.document, chosen);
       let graph = service.applyOperation(project.id, operation, {
-        expectedRevision: req.body?.expectedRevision,
+        expectedRevision: database.getGraph(project.id).revision,
         author: project.profileId,
         reason: `Refresh ${chosen.length} Kubernetes resource${chosen.length === 1 ? '' : 's'} that changed in the cluster`,
       });
-      graph = reconcileLinkedApplication(project) || graph;
-      log('Kubernetes map refreshed', project.name, project.profileId, { projectId: project.id, changes: chosen.length, revision: graph.revision });
-      res.json(graph);
+      const membership = attachSuccessors(pending);
+      graph = reconcileLinkedApplication(project) || database.getGraph(project.id) || graph;
+      log('Kubernetes map refreshed', project.name, project.profileId, { projectId: project.id, changes: chosen.length, membership, revision: graph.revision });
+      res.json({ ...graph, membership });
     } catch (error) { handleError(res, error); }
   });
 
