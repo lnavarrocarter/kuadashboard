@@ -386,6 +386,7 @@
 </template>
 
 <script setup>
+import { awsConsoleUrl } from '../../lib/awsResourceLinks'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useArchitectureStore } from '../../stores/useArchitectureStore'
@@ -997,6 +998,12 @@ function handleNodeAction({ action, node } = {}) {
     if (!store.linkedApplication || !node) return
     inlineNode.value = node
     inlineMode.value = action === 'inline-logs' ? 'logs' : 'metrics'
+    return
+  }
+  if (action === 'aws-console') {
+    const url = awsConsoleUrl(node)
+    // Opens the system browser (Electron routes window.open outside); nothing changes in AWS.
+    if (url) window.open(url, '_blank', 'noopener')
     return
   }
   const eventName = NODE_ACTION_EVENTS[action]

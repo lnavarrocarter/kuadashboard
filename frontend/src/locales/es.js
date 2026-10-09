@@ -4454,6 +4454,7 @@ export default {
   'archCanvas.action.viewPods': 'Ver pods',
   'archCanvas.action.viewMetrics': 'Ver métricas',
   'archCanvas.action.viewMetricsHere': 'Ver métricas aquí',
+  'archCanvas.action.openAwsConsole': "Abrir en la consola de AWS",
   'archCanvas.action.openAws': 'Abrir en la vista de AWS',
   'archCanvas.action.viewTraces': 'Ver trazas',
   'archCanvas.health.stale': 'Desactualizado: no apareció en la última sincronización',

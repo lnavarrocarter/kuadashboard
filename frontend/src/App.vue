@@ -508,6 +508,7 @@
 </template>
 
 <script setup>
+import { awsViewTarget } from './lib/awsResourceLinks'
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent, h } from 'vue'
 import { createIcons, icons } from 'lucide'
 
@@ -1040,14 +1041,15 @@ async function openArchitectureKubernetesPods(resource) {
 }
 
 // Architecture Canvas node action: focus a Lambda/EC2/EventBridge/Step Functions resource inside AwsView.
-const AWS_RESOURCE_TABS = { lambda: 'lambda', ec2: 'ec2', eventbridge: 'eventbridge', stepfunctions: 'stepfn' }
-
+// A resource of a map or a KUA Application opens in its tab of the AWS view, searched by the name
+// AWS lists it with, and with the profile bound to its account when the caller knows it (#239).
 function openArchitectureAwsResource(resource) {
-  const tab = AWS_RESOURCE_TABS[resource?.resourceType]
-  if (!tab || !resource?.name) return
+  const target = awsViewTarget(resource)
+  if (!target) return
+  if (resource.awsProfileId && resource.awsProfileId !== awsProfileId.value) selectProfile('aws', resource.awsProfileId)
   activeProvider.value = 'aws'
-  awsTab.value = tab
-  whenMounted(awsViewRef).then(view => view?.focusResourceByName?.(tab, resource.name))
+  awsTab.value = target.tab
+  whenMounted(awsViewRef).then(view => view?.focusResourceByName?.(target.tab, target.search))
 }
 
 function openArchitectureAwsLogs(resource) {

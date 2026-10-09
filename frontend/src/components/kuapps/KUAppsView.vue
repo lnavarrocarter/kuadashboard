@@ -277,6 +277,7 @@
                   @select-resource="selectRegistryResource"
                   @explain="explainRegistryRelationship"
                   @open-map="workspaceView = 'map'"
+                @open-aws="openAwsResource"
                   @retry="registryId => openSignals({ filter: 'failed' })"
                   @bind-scope="onIssueAction({ action: 'bind_scope' })"
                   @review-missing="workspaceView = 'review'"
@@ -410,7 +411,7 @@
                 @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
                 @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
                 @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
-                @open-aws-resource="$emit('open-aws-resource', $event)"
+                @open-aws-resource="openAwsResource"
                 @open-aws-logs="$emit('open-aws-logs', $event)"
               />
             </section>
@@ -428,6 +429,7 @@
                 @select-resource="selectRegistryResource"
                 @explain="explainRegistryRelationship"
                 @open-map="workspaceView = 'map'"
+                @open-aws="openAwsResource"
                 @retry="registryId => openSignals({ filter: 'failed' })"
                 @bind-scope="onIssueAction({ action: 'bind_scope' })"
                 @review-missing="workspaceView = 'review'"
@@ -488,6 +490,7 @@
 </template>
 
 <script setup>
+import { awsRegion } from '../../lib/awsResourceLinks'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import ArchitectureView from '../architecture/ArchitectureView.vue'
@@ -1127,6 +1130,20 @@ const filteredRegistryResources = computed(() => {
     (!resourceFilter.namespace || resource.namespace === resourceFilter.namespace) &&
     (!resourceFilter.state || signalStateOf(resource) === resourceFilter.state))
 })
+
+// The AWS view opens with the profile bound to the resource's account in this application, not
+// with whatever profile is selected elsewhere in KUA (#239).
+function awsProfileFor(resource) {
+  const registered = applicationRegistry.value.resources.find(item => item.id === resource?.registryResourceId || item.id === resource?.id)
+  const accountId = resource?.accountId || registered?.scopeId || String(resource?.arn || '').split(':')[4] || ''
+  const region = awsRegion({ ...resource, location: resource?.location || registered?.location })
+  const scopes = verifiedResourceScopes.value.filter(scope => scope.provider === 'aws')
+  const scope = scopes.find(item => accountId && item.scopeId === accountId) || (scopes.length === 1 ? scopes[0] : null)
+  return { awsProfileId: scope?.profileId || selectedApplication.value?.profileId || '', awsRegion: region }
+}
+function openAwsResource(resource) {
+  emit('open-aws-resource', { ...resource, ...awsProfileFor(resource) })
+}
 
 function providerName(provider) {
   return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
