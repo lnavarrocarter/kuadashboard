@@ -95,6 +95,9 @@ At every start, and whenever an application's resources change, legacy applicati
 | `PUT /applications/:id/scopes/:scopeKey/binding` | bind a local profile `{ profileId }` and verify it |
 | `POST /applications/:id/scopes/:scopeKey/binding/verify` | verify the binding again |
 | `DELETE /applications/:id/scopes/:scopeKey/binding` | remove the binding |
+| `POST /changes/preview` | an agent's change `{ applicationId, operation, input }` as a plan, without writing (#155) |
+| `POST /changes/:planId/apply` | apply a plan with `{ confirm: true }` while `GET/PUT /agent-access` allows agent writes |
+| `GET /changes/:planId` | the state and outcome of a plan |
 
 Writes that change the application accept `expectedRevision`, in the body or the query. A stale value answers `409 REVISION_CONFLICT` with the current `revision`, and nothing is written. Bindings are local, so they do not move the revision.
 

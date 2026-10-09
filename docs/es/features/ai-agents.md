@@ -28,7 +28,7 @@ El servidor MCP de KUA permite que los agentes compatibles con el [Model Context
 
 ### Herramientas
 
-Todas son de solo lectura.
+Todas leen, excepto `apply_application_change`, que aplica un cambio de KUApps que aprobaste (ver Cambiar KUApps desde un agente).
 
 | Herramienta | Qué devuelve |
 | --- | --- |
@@ -46,9 +46,33 @@ Todas son de solo lectura.
 | `product_advisor` (Pro) | Hallazgos de producto de una aplicación de KUApps |
 | `get_application` | Una KUA Application como la muestra KUApps: identidad, revisión, scopes con si este computador tiene un perfil verificado para cada uno (nunca el perfil), vistas de arquitectura, recursos contados por estado de señales, relaciones por estado y advertencias |
 | `list_application_resources` | Sus recursos: identidad portable, scope del provider, fuentes, estado de señales (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) con la hora de los últimos datos, y relaciones. Filtros `state` y `provider`; como máximo 500 (100 por defecto), con `truncated` |
+| `preview_application_change` | Qué haría un cambio en una KUA Application, como un plan por aprobar |
+| `apply_application_change` | Aplica un plan aprobado (requiere Permitir que agentes cambien KUApps) |
+| `get_application_change` | El resultado de un plan, si se perdió la respuesta |
 | `get_architecture_graph` | Una vista de arquitectura de la aplicación (por defecto la primera): nodos, nodos ocultos, relaciones con estado, confianza, decisión humana y tipos de evidencia. Es la vista guardada en su revisión, no una lectura en vivo |
 
 Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto, o `json` para los datos crudos) y `lang` (`en` o `es`). `profile` acepta el id o el nombre de un perfil de KUA, o el nombre de un perfil de la CLI de AWS o de una configuración de gcloud de este equipo (por ejemplo `prod`), así el agente puede trabajar antes de agregar el perfil a KUA. Se puede omitir cuando hay un solo perfil de ese proveedor.
+
+### Cambiar KUApps desde un agente
+
+Un agente puede cambiar una KUA Application en dos pasos, y solo mientras lo permitas: **Conectar un agente IA → Permitir que agentes cambien KUApps** (apagado por defecto, guardado en este computador). Apagado, los agentes igual pueden leer y previsualizar.
+
+1. `preview_application_change` dice qué cambiaría y devuelve un `planId` válido por 15 minutos. No cambia nada.
+2. Apruebas la vista previa en el agente. Después `apply_application_change` ejecuta ese plan con `confirm: true`.
+
+| Operación | Datos | Lo que nunca hace |
+| --- | --- | --- |
+| `application.create` | `name`, `environment`, `team`, `scopes` | crear recursos en la nube |
+| `application.update` | `name`, `environment`, `team` | |
+| `resources.attach` | `resources[]` con `provider`, `type`, `key`, `name` y su scope: un ARN, o `scopeId` y `location`; `kubeContext` en Kubernetes. Solo un nombre se rechaza | activar la recolección |
+| `resources.detach` | `resourceIds[]` (de `list_application_resources`) | borrar el recurso en la nube |
+| `view.link` / `view.unlink` | `projectId` | borrar la vista |
+
+- **Las vistas previas desactualizadas se rechazan.** Si la aplicación cambió después de la vista previa, aplicar responde `409 REVISION_CONFLICT` con la revisión actual y no escribe nada: vuelve a previsualizar.
+- **Un plan, una escritura.** Se aplica el plan tal cual; el agente no puede cambiarlo entre medio. Aplicar el mismo `planId` otra vez devuelve el resultado registrado. Si se pierde una respuesta, `get_application_change` dice si se aplicó.
+- **Los resultados parciales son explícitos.** Cada recurso asociado o desvinculado tiene su propio resultado; un plan donde algunos fallaron queda `partial`.
+- **Auditado.** Cada aplicación de un plan queda en el registro de auditoría con el cliente (`mcp`), la aplicación, la operación, el plan y las revisiones antes y después, sin datos de los recursos ni perfiles.
+- No hay herramientas para borrar aplicaciones ni infraestructura.
 
 ### Configuración desde la app
 

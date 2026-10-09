@@ -61,6 +61,22 @@ describe('AccountProfile', () => {
 describe('AccountProfile spend tracking', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  it('has an Alert webhooks section for Pro and Team, locked on Free', async () => {
+    for (const [plan, unlocked] of [['free', false], ['pro', true], ['team', true]]) {
+      stub(plan)
+      const AccountProfile = await load('../components/account/AccountProfile.vue')
+      const wrapper = mount(AccountProfile)
+      await flushPromises()
+      const card = wrapper.get('[data-test="account-webhooks"]')
+      expect(card.text()).toContain('Alert webhooks')
+      expect(card.find('[data-test="advisor-webhook-form"]').exists(), plan).toBe(unlocked)
+      expect(card.find('[data-test="advisor-webhooks-locked"]').exists(), plan).toBe(!unlocked)
+      const row = wrapper.get('[data-test="account-plans"]').findAll('tr').find(tr => tr.text().startsWith('Alert webhooks'))
+      expect(row.findAll('td').slice(1).map(td => td.text())).toEqual(['—', '✓', '✓'])
+      wrapper.unmount()
+    }
+  })
+
   it('is optional: it can be turned off (deleting the history) and on again', async () => {
     let enabled = true
     const calls = []

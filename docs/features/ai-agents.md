@@ -28,7 +28,7 @@ The KUA MCP server lets agents that support the [Model Context Protocol](https:/
 
 ### Tools
 
-All tools are read-only.
+All tools read, except `apply_application_change`, which applies a KUApps change you approved (see Changing KUApps from an agent).
 
 | Tool | What it returns |
 | --- | --- |
@@ -46,9 +46,33 @@ All tools are read-only.
 | `product_advisor` (Pro) | Product findings of a KUApps application |
 | `get_application` | One KUA Application as KUApps shows it: identity, revision, scopes with whether this computer has a verified profile for each (never the profile itself), architecture views, resources counted by signal state and relationships by status, and warnings |
 | `list_application_resources` | Its resources: portable identity, provider scope, sources, signal state (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) with the time of the latest data, and relationships. Filters `state` and `provider`; at most 500 (default 100), with `truncated` |
+| `preview_application_change` | What a change to a KUA Application would do, as a plan to approve |
+| `apply_application_change` | Applies an approved plan (needs Allow agents to change KUApps) |
+| `get_application_change` | The outcome of a plan, for a lost response |
 | `get_architecture_graph` | One architecture view of the application (default the first): nodes, hidden nodes, relationships with status, confidence, human decision and evidence kinds. It is the stored view at its revision, not a live read |
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a KUA profile id or name, or the name of an AWS CLI profile or gcloud configuration of this computer (for example `prod`), so the agent can work before the profile is added to KUA. It can be omitted when there is only one profile of that provider.
+
+### Changing KUApps from an agent
+
+An agent can change a KUA Application in two steps, and only while you allow it: **Connect an AI agent → Allow agents to change KUApps** (off by default, stored on this computer). With it off, agents can still read and preview.
+
+1. `preview_application_change` says what would change and returns a `planId` valid for 15 minutes. Nothing changes.
+2. You approve the preview in the agent. Then `apply_application_change` runs that plan with `confirm: true`.
+
+| Operation | Input | What it never does |
+| --- | --- | --- |
+| `application.create` | `name`, `environment`, `team`, `scopes` | create cloud resources |
+| `application.update` | `name`, `environment`, `team` | |
+| `resources.attach` | `resources[]` with `provider`, `type`, `key`, `name` and their scope: an ARN, or `scopeId` and `location`; `kubeContext` for Kubernetes. A name alone is refused | turn on collection |
+| `resources.detach` | `resourceIds[]` (from `list_application_resources`) | delete the resource in the cloud |
+| `view.link` / `view.unlink` | `projectId` | delete the view |
+
+- **Stale previews are refused.** If the application changed after the preview, apply answers `409 REVISION_CONFLICT` with the current revision and writes nothing: preview again.
+- **One plan, one write.** The plan is what is applied; the agent cannot change it in between. Applying the same `planId` again returns the recorded outcome. If a response is lost, `get_application_change` tells whether it was applied.
+- **Partial outcomes are explicit.** Each attached or detached resource has its own outcome; a plan where some failed is `partial`.
+- **Audited.** Each apply is in the audit log with the client (`mcp`), application, operation, plan and revisions before and after, without resource payloads or profiles.
+- There is no tool to delete applications or infrastructure.
 
 ### Setup from the app
 

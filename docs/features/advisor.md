@@ -78,7 +78,7 @@ The panel shows the last run, the next one, and why a run failed or is waiting. 
 
 ## Alert webhooks (Slack and Teams)
 
-On the **Team** plan, posture alerts can also go to a Slack or Microsoft Teams channel: **Help & Options → Options → Alert webhooks**.
+On the **Pro** and **Team** plans, posture alerts can also go to a Slack or Microsoft Teams channel: **Account → Alert webhooks**.
 
 - **Slack**: create an *Incoming Webhook* (Apps → Incoming Webhooks) and paste its `https://hooks.slack.com/…` address.
 - **Microsoft Teams**: in the channel, create a Workflow from the template *Post to a channel when a webhook request is received* and paste its address.
