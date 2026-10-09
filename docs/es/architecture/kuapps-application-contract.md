@@ -177,6 +177,7 @@ La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de lo
 | Estado | Significado |
 | --- | --- |
 | `unsupported` | KUA no puede recolectar señales de este provider o tipo de recurso |
+| `gone` | el recurso ya no existe donde estaba (ver Recursos que ya no existen) |
 | `no_connection` | ningún perfil verificado de este computador llega al scope del recurso |
 | `disabled` | la recolección está apagada para la aplicación o el recurso |
 | `error` | la última recolección de la aplicación falló |
@@ -188,6 +189,12 @@ La evolución es fail-closed: cambios aditivos o semánticos de cualquiera de lo
 Qué recolecta KUA se decide en un solo lugar (`lib/apm/signalCapabilities.js`): métricas de Lambda (desde sus logs), workloads de Kubernetes con contexto y las métricas de CloudWatch de load balancers, EC2 y S3; logs de Lambda, ECS, EventBridge, Cloud Run, Cloud Functions, proyectos Vercel y workloads de Kubernetes. Los demás tipos (API Gateway, SQS, DynamoDB…) son solo inventario y aparecen como `unsupported`, no como "sin datos".
 
 **KUApps → Señales** lista **Toda la aplicación** (métricas agregadas, historial de logs y trazas) y luego cada recurso agrupado por tipo, con buscador y filtro por estado de señales. Un recurso muestra sus métricas (`GET /applications/:id/observability/resources/:resourceId/metrics`) y sus logs, leídos con el perfil y la región que resuelve su scope (`GET /applications/:id/observability/resources` los entrega por recurso); las rutas de logs de AWS aceptan `?region=` para eso. Un recurso cuyo scope no tiene un perfil verificado lo indica en vez de fallar.
+
+### Recursos que ya no existen (#236)
+
+Cuando el recolector lee un recurso de Kubernetes y el clúster responde 404 por el recurso mismo (no por la API de métricas), registra desde cuándo falta (`lib/apm/resourcePresence.js`, junto a los cursores de recolección) en vez de fallar la recolección: una recolección donde solo faltan recursos no queda parcial. Mientras el recurso se ve, KUA guarda sus labels de identidad (`app.kubernetes.io/name`, `app.kubernetes.io/instance`, `app`, `k8s-app`).
+
+`GET /applications/:id/observer` lista los recursos que faltan. Para Deployments, StatefulSets y DaemonSets busca sucesores con un listado sin costo del mismo tipo en el mismo contexto y namespace: el mismo label de identidad (probable), o el mismo nombre sin su versión ni hash, como `attencion-3.9.1` → `attencion-3.9.2` (posible). KUApps → Revisión los muestra con esa evidencia. `POST /observer/replace { resourceId, successor, expectedRevision }` asocia el sucesor y desvincula el recurso que falta; `POST /observer/ignore` deja de listarlo; desvincular funciona como en Recursos. No se reemplaza nada automáticamente y no cambia nada en el clúster. Los Pods no son miembros por sí mismos: se reemplazan en cada rollout y se observan a través de su Deployment o StatefulSet.
 
 **Agregar recursos** (el encabezado, Recursos y el Mapa abren el mismo panel) marca los recursos descubiertos que ya están en la aplicación ("Ya está en" seguido del nombre de la aplicación), que no se pueden volver a seleccionar, y muestra la identidad nativa de cada uno. Una escritura sobre una vista que cambió mientras tanto responde `409`: el panel recarga la vista, conserva la selección y pide volver a agregar los recursos; no se escribió nada. En el Mapa, **Quitar del diagrama** pide confirmación. Para un recurso real (con identidad nativa) solo oculta el nodo en esa vista (`node.hide`): el recurso sigue en la aplicación con su membresía, relaciones, señales e historial, la reconciliación no lo vuelve a dibujar y **Ocultos en esta vista** lo vuelve a mostrar (`node.show`). Un dibujo sin identidad nativa se elimina. Las tres operaciones siguen separadas: ocultar en un diagrama, desvincular de la aplicación (Recursos) y borrar infraestructura, que KUApps nunca hace.
 
