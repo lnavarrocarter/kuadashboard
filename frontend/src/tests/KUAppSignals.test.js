@@ -81,9 +81,16 @@ describe('KUApp signals', () => {
       if (options.method === 'POST') return { body: { skipped: false } }
       return { body: { metrics: [] } }
     })
-    const wrapper = mount(KUAppSignals, { props: { applicationId: 'app-1' }, global: { stubs: { CloudMetricChart: true, ApmApplicationLogs: true } } })
+    const wrapper = mount(KUAppSignals, { props: { applicationId: 'app-1' }, global: { stubs: { CloudMetricChart: true, ApmApplicationLogs: true, BaseModal: { props: ['show'], template: '<div v-if="show"><slot name="title"/><slot/><slot name="footer"/></div>' } } } })
     await flushPromises()
     await wrapper.get('[data-test="observability-collect"]').trigger('click')
+    // Nothing is read before the confirmation that says what is read now, what is cached and what costs.
+    expect(global.fetch.mock.calls.some(([, request]) => request?.method === 'POST')).toBe(false)
+    const confirm = wrapper.get('[data-test="observability-collect-confirm"]').text()
+    // The Lambda no verified profile reaches is not read.
+    expect(confirm).toContain('1 Lambda function(s)')
+    expect(confirm).toContain('Log events already read are not downloaded again')
+    await wrapper.get('[data-test="observability-collect-confirmed"]').trigger('click')
     await flushPromises()
     const [url, options] = global.fetch.mock.calls.find(([, request]) => request?.method === 'POST')
     expect(url).toBe('/api/observability/generic/applications/app-1/collect-now')

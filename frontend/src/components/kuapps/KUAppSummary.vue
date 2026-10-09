@@ -15,7 +15,7 @@
     <p v-if="collectError" class="kuapp-summary-error" role="alert">{{ collectError }}</p>
 
     <div class="kuapp-summary-cards">
-      <button :class="['kuapp-card', healthTone]" data-test="summary-health" @click="$emit('open-tab', 'signals')">
+      <button :class="['kuapp-card', healthTone]" data-test="summary-health" @click="$emit('open-signals', { hours: RANGE_HOURS[range], filter: healthTone === 'bad' ? 'issues' : 'observable' })">
         <span class="kuapp-card-label">{{ t('kuapps.summary.health', { range }) }}</span>
         <strong class="kuapp-card-value">{{ healthTitle }}</strong>
         <small>{{ healthDetail }}</small>
@@ -44,6 +44,17 @@
         <small>{{ coverageDetail }}</small>
       </button>
     </div>
+
+    <!-- What to look at first, under the indicators: resource, evidence, since when and action (#239). -->
+    <KUAppIssues
+      v-if="application?.id && hasSignals"
+      class="kuapp-issues"
+      :application-id="application.id"
+      :hours="RANGE_HOURS[range]"
+      :limit="5"
+      @action="issue => $emit('issue-action', issue)"
+      @show-all="$emit('open-signals', { hours: RANGE_HOURS[range], filter: 'issues' })"
+    />
 
     <BaseModal :show="confirmCollect" @close="confirmCollect = false">
       <template #title><i data-lucide="cloud-download"></i> {{ t('apm.collectTitle') }}</template>
@@ -79,6 +90,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../BaseModal.vue'
+import KUAppIssues from './KUAppIssues.vue'
 import { useApi } from '../../composables/useApi'
 import { formatNumber, useI18n } from '../../composables/useI18n'
 import { buildResourceMetricSections, estimateCloudWatchMonthlyCost } from '../cloud/apm/metricCatalog'
@@ -97,10 +109,11 @@ const props = defineProps({
   collecting: { type: Boolean, default: false },
   collectError: { type: String, default: '' },
 })
-const emit = defineEmits(['open-tab', 'collect', 'suggestions', 'collection-estimate'])
+const emit = defineEmits(['open-tab', 'open-signals', 'issue-action', 'collect', 'suggestions', 'collection-estimate'])
 
 const RANGES = ['6h', '24h', '7d']
 const RANGE_MS = { '6h': 6 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3 }
+const RANGE_HOURS = { '6h': 6, '24h': 24, '7d': 168 }
 const THRESHOLD_LABELS = {
   errorRatePercent: 'apm.threshold.errorRate', durationMs: 'apm.threshold.duration',
   readyPodsPercent: 'apm.threshold.readyPods', restartDelta: 'apm.threshold.restarts',
@@ -280,6 +293,7 @@ defineExpose({ reload: load })
 .kuapp-collect-confirm dl > div { display: flex; justify-content: space-between; gap: 12px; }
 .kuapp-collect-confirm dd { margin: 0; font-variant-numeric: tabular-nums; }
 .kuapp-collect-confirm small { color: var(--text-dim); }
+.kuapp-issues { margin-top: 12px; }
 .range-control { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .range-control button { height: 27px; min-width: 35px; border: 0; border-right: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 10px; cursor: pointer; }
 .range-control button:last-child { border-right: 0; }

@@ -14,7 +14,7 @@
           <option value="">{{ t('apm.allTeams') }}</option>
           <option v-for="value in store.teams" :key="value">{{ value }}</option>
         </select>
-        <div class="range-control" :aria-label="t('apm.metricRange')">
+        <div v-if="!props.range" class="range-control" :aria-label="t('apm.metricRange')">
           <button v-for="value in ranges" :key="value" :class="{ active: store.range === value }" @click="setRange(value)">{{ value }}</button>
         </div>
         <button class="btn sm btn-icon" :title="t('apm.refreshLocal')" :disabled="store.loading" @click="refreshLocal">
@@ -24,7 +24,7 @@
       </div>
     </header>
 
-    <header v-else-if="props.section !== 'review'" class="apm-overview-toolbar">
+    <header v-else-if="props.section !== 'review' && !props.range" class="apm-overview-toolbar">
       <span>{{ t('apm.localStorage', { range: store.range }) }}</span>
       <div class="range-control" :aria-label="t('apm.metricRange')">
         <button v-for="value in ranges" :key="value" :class="{ active: store.range === value }" @click="setRange(value)">{{ value }}</button>
@@ -209,9 +209,9 @@
                 </div>
               </div>
 
-              <div v-if="section.charts.length" class="chart-grid">
+              <div v-if="chartsWithData(section).length" class="chart-grid">
                 <CloudMetricChart
-                  v-for="chart in section.charts"
+                  v-for="chart in chartsWithData(section)"
                   :key="seriesKey(chart)"
                   :label="t(chart.labelKey, chart.params)"
                   :unit="chart.unit"
@@ -220,6 +220,11 @@
                   :x-tick-limit="4"
                 />
               </div>
+              <!-- Charts without data in the range are folded, so the problem comes before empty grids (#239). -->
+              <details v-if="emptyCharts(section).length" class="apm-empty-charts" data-test="apm-empty-charts">
+                <summary>{{ t('apm.emptyCharts', { n: emptyCharts(section).length }) }}</summary>
+                <span>{{ emptyCharts(section).map(chart => t(chart.labelKey, chart.params)).join(' · ') }}</span>
+              </details>
             </section>
 
             <section v-if="store.logHistory" class="resource-metric-section apm-log-history" data-test="apm-log-history">
@@ -596,6 +601,8 @@ const props = defineProps({
   // KUApps → Signals shows logs per resource and has its own Collect now (KUAppSignals.vue).
   hideLogs: { type: Boolean, default: false },
   hideCollect: { type: Boolean, default: false },
+  // A range set by the page (KUApps → Signals): its own range controls are hidden.
+  range: { type: String, default: '' },
   applicationId: { type: String, default: '' },
   hideApplicationList: { type: Boolean, default: false },
   overviewOnly: { type: Boolean, default: false },
@@ -828,6 +835,16 @@ async function chooseApplication(applicationId) {
   mainEl.value?.scrollTo({ top: 0 })
   renderIcons()
 }
+
+const chartsWithData = section => section.charts.filter(chart => (store.series[seriesKey(chart)] || []).length)
+const emptyCharts = section => section.charts.filter(chart => !(store.series[seriesKey(chart)] || []).length)
+
+// KUApps → Signals drives the range with its own bar: one time range on the page (#239).
+watch(() => props.range, (value, previous) => {
+  if (!value) return
+  if (previous === undefined) store.range = value
+  else setRange(value)
+}, { immediate: true })
 
 async function setRange(value) {
   if (store.range === value) return
@@ -1104,6 +1121,8 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true }, reques
 .apm-title small { color: var(--text-dim); font-size: 9px; }
 .apm-toolbar-controls { display: flex; align-items: center; gap: 7px; }
 .apm-toolbar-controls select { width: 130px; }
+.apm-empty-charts { margin-top: 6px; font-size: 12px; color: var(--text-dim); }
+.apm-empty-charts summary { cursor: pointer; }
 .range-control, .apm-view-tabs { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .range-control button, .apm-view-tabs button { border: 0; border-right: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer; }
 .range-control button { height: 27px; min-width: 35px; font-size: 9px; }

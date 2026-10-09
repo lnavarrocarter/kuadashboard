@@ -85,6 +85,8 @@
               :collecting="collectionBusy"
               :collect-error="collectionError"
               @open-tab="selectWorkspaceTab"
+              @open-signals="openSignals"
+              @issue-action="onIssueAction"
               @collect="collectFromSummary"
               @collection-estimate="collectionEstimate = $event"
               @suggestions="analysisSuggestionCount = $event"
@@ -242,19 +244,24 @@
                 </button>
               </div>
               <aside v-if="selectedResource" class="kuapps-resource-inspector">
-                <header><div><span class="kuapps-kicker">{{ t('kuapps.resourceInspector') }}</span><h3>{{ selectedResource.displayName }}</h3></div><button class="btn btn-icon" :title="t('action.close')" @click="selectedResourceId = ''"><i data-lucide="x"></i></button></header>
-                <dl>
-                  <div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div>
-                  <div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div>
-                  <div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div>
-                  <div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div>
-                  <template v-if="selectedResource.provider === 'kubernetes'"><div><dt>{{ t('kuapps.sync.namespace') }}</dt><dd>{{ selectedResource.namespace || t('kuapps.sync.clusterScope') }}</dd></div><div><dt>{{ t('kuapps.sync.context') }}</dt><dd>{{ selectedResource.kubeContext || t('kuapps.sync.contextUnknown') }}</dd></div></template>
-                  <div><dt>{{ t('kuapps.sources') }}</dt><dd class="kuapps-resource-source-list"><span v-for="source in selectedResource.sources || []" :key="source">{{ t(`kuapps.source.${source}`, source) }}</span></dd></div>
-                  <div v-if="selectedResource.updatedAt"><dt>{{ t('kuapps.sync.updated') }}</dt><dd>{{ new Date(selectedResource.updatedAt).toLocaleString() }}</dd></div>
-                  <div data-test="inspector-signal-state"><dt>{{ t('kuapps.signalState.title') }}</dt><dd><span :class="['kuapps-signal-badge', signalStateOf(selectedResource)]">{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}`) }}</span> <small>{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}.hint`) }}</small><small v-if="selectedResource.signals?.lastDataAt"> · {{ t('kuapps.signalState.lastData', { when: new Date(selectedResource.signals.lastDataAt).toLocaleString() }) }}</small></dd></div>
-                </dl>
-                <div class="kuapps-resource-identity"><small>{{ t('kuapps.identity') }}</small><code>{{ selectedResource.nativeIdentifier || t('kuapps.scopeUnknown') }}</code></div>
-                <div class="kuapps-inspector-actions"><button class="btn sm primary" @click="workspaceView = 'map'"><i data-lucide="network"></i>{{ t('kuapps.openComplementary') }}</button><span>{{ canInspectSignals ? t('kuapps.signalsStatus.openInspector') : t('kuapps.signalsStatus.pending') }}</span></div>
+                <KUAppResourceInspector
+                  :application-id="selectedApplicationId"
+                  :resource="selectedResource"
+                  :relationships="selectedResourceRelationships"
+                  :signals-available="canInspectSignals"
+                  :collection="signalsCollection"
+                  :hours="signalsEntry.hours"
+                  :context="resources"
+                  :initial-tab="inspectorTab"
+                  @close="selectedResourceId = ''"
+                  @select-resource="selectRegistryResource"
+                  @explain="explainRegistryRelationship"
+                  @open-map="workspaceView = 'map'"
+                  @retry="registryId => openSignals({ filter: 'failed' })"
+                  @bind-scope="onIssueAction({ action: 'bind_scope' })"
+                  @review-missing="workspaceView = 'review'"
+                  @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+                />
               </aside>
             </div>
             <ArchitectureView
@@ -319,15 +326,20 @@
               ref="resourceSignalsRef"
               :key="`resource-signals:${selectedApplicationId}`"
               :application-id="selectedApplicationId"
+              :initial-hours="signalsEntry.hours"
+              :initial-filter="signalsEntry.filter"
+              @issue-action="onIssueAction"
+              @select-resource="registryId => { if (registryId) selectedResourceId = registryId }"
               @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
             >
-              <template #application>
+              <template #application="{ range }">
                 <ApmObservabilityView
                   ref="signalsRef"
                   :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
                   section="signals"
                   hide-logs
                   hide-collect
+                  :range="range"
                   :provider="apmProvider"
                   :profile-id="apmProfileId"
                   :application-id="selectedApplicationId"
@@ -376,37 +388,24 @@
               />
             </section>
             <aside v-if="selectedResource" class="kuapps-signals-inspector">
-              <header><div><span class="kuapps-kicker">{{ t('kuapps.resourceInspector') }}</span><h3>{{ selectedResource.displayName }}</h3></div><button class="btn btn-icon" :title="t('action.close')" @click="clearResourceSelection"><i data-lucide="x"></i></button></header>
-              <!-- A plain <template> without a directive is not rendered by Vue: the inspector looked empty. -->
-              <div class="kuapps-inspector-body" data-test="map-inspector-body">
-                <div class="kuapps-inspector-tabs" role="tablist">
-                  <button v-for="tab in inspectorTabs" :key="tab" :class="{ active: inspectorTab === tab }" role="tab" :aria-selected="inspectorTab === tab" @click="inspectorTab = tab">{{ t(`kuapps.inspector.${tab}`) }}</button>
-                </div>
-                <dl v-if="inspectorTab === 'detail'"><div><dt>{{ t('kuapps.provider') }}</dt><dd>{{ selectedResource.provider }}</dd></div><div><dt>{{ t('kuapps.type') }}</dt><dd>{{ selectedResource.resourceType }}</dd></div><div><dt>{{ t('kuapps.scope') }}</dt><dd>{{ selectedResource.scopeId || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.location') }}</dt><dd>{{ selectedResource.location || t('kuapps.scopeUnknown') }}</dd></div><div><dt>{{ t('kuapps.signalState.title') }}</dt><dd><span :class="['kuapps-signal-badge', signalStateOf(selectedResource)]" :title="t(`kuapps.signalState.${signalStateOf(selectedResource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(selectedResource)}`) }}</span></dd></div><div v-if="selectedResource.nativeIdentifier"><dt>{{ t('kuapps.identity') }}</dt><dd class="kuapps-inspector-identity"><code>{{ selectedResource.nativeIdentifier }}</code></dd></div></dl>
-                <div v-else-if="inspectorTab === 'relationships'" class="kuapps-inspector-relationships">
-                  <p v-if="!selectedResourceRelationships.length" class="kuapps-review-note">{{ t('kuapps.inspector.noRelationships') }}</p>
-                  <button v-for="relationship in selectedResourceRelationships" :key="relationship.id" class="kuapps-inspector-relationship" @click="selectRegistryResource(relationship.otherId)">
-                    <span>{{ relationship.outgoing ? '→' : '←' }} <strong>{{ relationship.otherName }}</strong></span>
-                    <small>{{ relationship.relationType }} · {{ t(`apm.relationshipStatus.${relationship.status}`) }}</small>
-                    <span class="kuapps-inspector-why" role="button" tabindex="0" @click.stop="explainRegistryRelationship(relationship)" @keydown.enter.stop="explainRegistryRelationship(relationship)">{{ t('kuapps.explain.button') }}</span>
-                  </button>
-                </div>
-                <div v-else-if="inspectorTab === 'signals' && canInspectSignals" class="kuapps-signal-panel">
-                  <ApmObservabilityView
-                    ref="observabilityRef"
-                    section="signals"
-                    :provider="apmProvider"
-                    :profile-id="selectedApplication.profileId || apmProfileId"
-                    :application-id="selectedApplicationId"
-                    :hide-application-list="true"
-                    :focus-resource="selectedResourceFocus"
-                    @open-architecture="openArchitecture"
-                    @application-context="forwardApplicationContext"
-                    @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
-                  />
-                </div>
-                <div v-else-if="inspectorTab === 'signals'" class="kuapps-signals-unavailable"><i data-lucide="circle-help"></i><strong>{{ t('kuapps.signalsUnavailable') }}</strong><span>{{ t('kuapps.signalsStatus.pending') }}</span></div>
-              </div>
+              <KUAppResourceInspector
+                :application-id="selectedApplicationId"
+                :resource="selectedResource"
+                :relationships="selectedResourceRelationships"
+                :signals-available="canInspectSignals"
+                :collection="signalsCollection"
+                :hours="signalsEntry.hours"
+                :context="map"
+                :initial-tab="inspectorTab"
+                @close="clearResourceSelection"
+                @select-resource="selectRegistryResource"
+                @explain="explainRegistryRelationship"
+                @open-map="workspaceView = 'map'"
+                @retry="registryId => openSignals({ filter: 'failed' })"
+                @bind-scope="onIssueAction({ action: 'bind_scope' })"
+                @review-missing="workspaceView = 'review'"
+                @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+              />
             </aside>
           </div>
           </div>
@@ -477,6 +476,7 @@ import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
 import KUAppMissingResources from './KUAppMissingResources.vue'
+import KUAppResourceInspector from './KUAppResourceInspector.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -502,6 +502,7 @@ const { toast } = useToast()
 const architectureRef = ref(null)
 const observabilityRef = ref(null)
 const summaryRef = ref(null)
+const resourceSignalsRef = ref(null)
 const collectionBusy = ref(false)
 const collectionError = ref('')
 const bundleInput = ref(null)
@@ -742,6 +743,32 @@ function selectView(view) {
 
 function selectWorkspaceTab(view) {
   workspaceView.value = view
+}
+
+// Signals opens with the range and filter of whoever sent the user there (#239): the Summary's
+// health card opens the resources with issues in its own range.
+const signalsEntry = reactive({ hours: 24, filter: 'observable' })
+// Where the application's collection lives (legacy provider and profile, or generic).
+const signalsCollection = computed(() => selectedApplication.value?.profileId
+  ? { provider: selectedApplication.value.provider || 'aws', profileId: selectedApplication.value.profileId }
+  : { provider: 'generic', profileId: 'local' })
+function openSignals({ hours = signalsEntry.hours, filter = 'observable', resourceId = '' } = {}) {
+  signalsEntry.hours = hours
+  signalsEntry.filter = filter
+  workspaceView.value = 'signals'
+  if (resourceId) nextTick(() => resourceSignalsRef.value?.selectResourceById?.(resourceId))
+}
+
+// The action of an issue, wherever it was shown: the resource's signals, a new collection (from
+// Signals, with its cost confirmation), the missing resources in Review, or the accounts.
+function onIssueAction(issue) {
+  if (issue.action === 'open_signals') openSignals({ filter: 'issues', resourceId: issue.resourceId })
+  else if (issue.action === 'retry') openSignals({ filter: 'failed', resourceId: issue.resourceId })
+  else if (issue.action === 'review_missing') workspaceView.value = 'review'
+  else if (issue.action === 'bind_scope') {
+    settingsSection.value = 'accounts'
+    workspaceView.value = 'settings'
+  }
 }
 
 function selectRegistryResource(resourceId) {
