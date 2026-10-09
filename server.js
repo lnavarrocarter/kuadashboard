@@ -361,6 +361,8 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   auditLog,
   syncEngine,
   teamEngine,
+  // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
+  agentAccess: require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() }),
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
 syncEngine.start({ task: applicationSyncTask });
