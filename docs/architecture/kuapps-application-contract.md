@@ -185,6 +185,10 @@ Evolution is fail-closed: additive or semantic changes to either strict schema i
 | `partial` | the last collection read only part of the data |
 | `current` | recent data |
 
+What KUA collects is decided in one place (`lib/apm/signalCapabilities.js`): metrics for Lambda (from its logs), Kubernetes workloads with a context, and the CloudWatch metrics of load balancers, EC2 and S3; logs for Lambda, ECS, EventBridge, Cloud Run, Cloud Functions, Vercel projects and Kubernetes workloads. Other types (API Gateway, SQS, DynamoDB…) are inventory only and read `unsupported`, not "no data".
+
+**KUApps → Signals** lists **Whole application** (aggregated metrics, log history and traces) and then every resource grouped by type, with a search and a signal-state filter. A resource shows its metrics (`GET /applications/:id/observability/resources/:resourceId/metrics`) and logs, read with the profile and region its scope resolves to (`GET /applications/:id/observability/resources` returns them per resource); the AWS log routes accept `?region=` for that. A resource whose scope has no verified profile says so instead of failing.
+
 **Add resources** (header, Resources and Map open the same panel) marks discovered resources already in the application ("Already in" followed by the application name), which cannot be selected again, and shows each one's native identity. A write against a view that changed meanwhile answers `409`: the panel reloads the view, keeps the selection and says to add the resources again; nothing was written. In the Map, **Remove from diagram** asks for confirmation. For a real resource (one with a native identity) it only hides the node in that view (`node.hide`): the resource stays in the application with its membership, relationships, signals and history, reconciliation does not draw it again, and **Hidden in this view** shows it back (`node.show`). A drawing without a native identity is removed. Three operations stay distinct: hide in a diagram, detach from the application (Resources), and delete infrastructure, which KUApps never does.
 
 ## Migration report

@@ -81,6 +81,15 @@ setImmediate(() => {
     const result = new ApplicationScopeService({ database: apmDatabase, architectureDatabase, registry,
       log: (...args) => console.error('[kuapps]', ...args) }).migrate();
     if (result.scopesAdded || result.registry.migrated) console.log('[kuapps] Contract migration:', result);
+    // Only runs from before this process started: a collection of this start keeps running.
+    const interrupted = apmDatabase.closeInterruptedCollectionRuns({ startedBefore: new Date(Date.now() - process.uptime() * 1000).toISOString() });
+    if (interrupted) console.log(`[apm] Closed ${interrupted} collection run(s) interrupted by a restart`);
+    // AWS resources an older KUA observed as Kubernetes workloads (CloudFormation secrets).
+    for (const applicationId of apmDatabase.removeMisclassifiedKubernetesResources()) {
+      const application = apmDatabase.getApplication(applicationId);
+      if (application) registry.reconcile(application);
+      console.log('[kuapps] Removed AWS resources observed as Kubernetes workloads from', application?.name || applicationId);
+    }
   } catch (err) {
     console.error('[kuapps] Contract migration failed:', err.message);
   }

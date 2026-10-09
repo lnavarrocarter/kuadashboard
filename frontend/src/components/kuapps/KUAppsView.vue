@@ -310,20 +310,34 @@
 
           <div v-else-if="workspaceView === 'signals' || workspaceView === 'map'" class="kuapps-map-signals-workspace">
           <section v-show="workspaceView === 'signals'" class="kuapps-observability-workspace">
-            <ApmObservabilityView
+            <!-- The application as a whole on top of the list, then each resource grouped by type, read
+                 with the profile of its own scope (#152). The application overview keeps the aggregated
+                 metrics, log history and traces. -->
+            <KUAppSignals
               v-if="canOpenApplicationObservability"
-              ref="signalsRef"
-              :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
-              section="signals"
-              :provider="apmProvider"
-              :profile-id="apmProfileId"
+              ref="resourceSignalsRef"
+              :key="`resource-signals:${selectedApplicationId}`"
               :application-id="selectedApplicationId"
-              :hide-application-list="true"
-              :focus-resource="selectedResource ? selectedResourceFocus : props.focusResource"
-              @open-architecture="openArchitecture"
-              @application-context="forwardApplicationContext"
               @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
-            />
+            >
+              <template #application>
+                <ApmObservabilityView
+                  ref="signalsRef"
+                  :key="`signals:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
+                  section="signals"
+                  hide-logs
+                  hide-collect
+                  :provider="apmProvider"
+                  :profile-id="apmProfileId"
+                  :application-id="selectedApplicationId"
+                  :hide-application-list="true"
+                  :focus-resource="selectedResource ? selectedResourceFocus : props.focusResource"
+                  @open-architecture="openArchitecture"
+                  @application-context="forwardApplicationContext"
+                  @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
+                />
+              </template>
+            </KUAppSignals>
             <div v-else class="kuapps-observability-unavailable">
               <i data-lucide="square-activity"></i>
               <strong>{{ t('kuapps.signalsUnavailable') }}</strong>
@@ -459,6 +473,7 @@ import KUAppSummary from './KUAppSummary.vue'
 import KUAppSync from './KUAppSync.vue'
 import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
+import KUAppSignals from './KUAppSignals.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'

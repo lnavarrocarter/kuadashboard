@@ -18,7 +18,7 @@
       </div>
     </header>
 
-    <div v-if="loggableResources.length" class="logs-resource-tabs" role="tablist" :aria-label="t('apmLogs.resources')">
+    <div v-if="loggableResources.length && !hideResourceTabs" class="logs-resource-tabs" role="tablist" :aria-label="t('apmLogs.resources')">
       <button
         v-for="resource in loggableResources"
         :key="resource.id"
@@ -129,6 +129,8 @@ const props = defineProps({
   profileId: { type: String, default: '' },
   application: { type: Object, default: null },
   resources: { type: Array, default: () => [] },
+  // The Observability view picks the resource itself: no resource tabs here.
+  hideResourceTabs: { type: Boolean, default: false },
 })
 const emit = defineEmits(['open-kubernetes-logs', 'cache-updated'])
 
@@ -158,8 +160,17 @@ const sourceLabel = computed(() => {
   return t('apmLogs.source.provider')
 })
 
-const loggableResources = computed(() => props.resources.filter(resource => isKubernetes(resource) || isVercel(resource) ||
-  ['lambda', 'ecs', 'eventbridge', 'gcp-cloud-run', 'gcp-function'].includes(resource.type)))
+// Resources with logs, grouped by type and in name order, so the list reads the same every time.
+const loggableResources = computed(() => props.resources
+  .filter(resource => (resource.capabilities ? resource.capabilities.logs : isKubernetes(resource) || isVercel(resource) ||
+    ['lambda', 'ecs', 'eventbridge', 'gcp-cloud-run', 'gcp-function'].includes(resource.type)))
+  .slice()
+  .sort((a, b) => String(a.type).localeCompare(String(b.type)) || String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true })))
+
+// The profile and region that reach a resource: the ones its scope resolves to (resource.access,
+// from /api/kua-apps/.../observability/resources), else the profile the view was given.
+const requestFor = resource => ({ headers: { 'X-Profile-Id': resource.access?.profileId || props.profileId } })
+const regionParam = resource => (resource.access?.region ? `&region=${encodeURIComponent(resource.access.region)}` : '')
 const cacheProvider = computed(() => resourceProvider(selectedResource.value))
 const cacheableSelected = computed(() => ['gcp-cloud-run', 'gcp-function', 'vercel-project'].includes(selectedResource.value?.type))
 const cacheEndpoint = computed(() => `/api/observability/${encodeURIComponent(props.provider)}/applications/${encodeURIComponent(props.application?.id || '')}/log-cache`)
@@ -207,35 +218,40 @@ async function loadLogs() {
   latestDeployment.value = null
   try {
     const resource = selectedResource.value
+    // No verified profile of this computer reaches the resource's scope: say so instead of failing.
+    if (resource.access?.error) {
+      message.value = t('apmLogs.noAccess')
+      return
+    }
     const limit = 300
     let data
     const provider = resourceProvider(resource)
     if (provider === 'aws') {
       const minutes = hours.value * 60
       if (resource.type === 'lambda') {
-        data = await apiFetch(`/api/cloud/aws/logs/lambda/${encodeURIComponent(resource.name)}?minutes=${minutes}&limit=${limit}`, { headers: { 'X-Profile-Id': props.profileId } })
+        data = await apiFetch(`/api/cloud/aws/logs/lambda/${encodeURIComponent(resource.name)}?minutes=${minutes}&limit=${limit}${regionParam(resource)}`, requestFor(resource))
       } else if (resource.type === 'ecs') {
         const cluster = resourceValue(resource, 'cluster', resource.service || 'default')
-        data = await apiFetch(`/api/cloud/aws/logs/ecs/${encodeURIComponent(cluster)}/${encodeURIComponent(resource.name)}?minutes=${minutes}&limit=${limit}`, { headers: { 'X-Profile-Id': props.profileId } })
+        data = await apiFetch(`/api/cloud/aws/logs/ecs/${encodeURIComponent(cluster)}/${encodeURIComponent(resource.name)}?minutes=${minutes}&limit=${limit}${regionParam(resource)}`, requestFor(resource))
       } else {
         const bus = resourceValue(resource, 'bus', 'default')
-        data = await apiFetch(`/api/cloud/aws/logs/eventbridge?bus=${encodeURIComponent(bus)}&rule=${encodeURIComponent(resource.name)}&minutes=${minutes}`, { headers: { 'X-Profile-Id': props.profileId } })
+        data = await apiFetch(`/api/cloud/aws/logs/eventbridge?bus=${encodeURIComponent(bus)}&rule=${encodeURIComponent(resource.name)}&minutes=${minutes}${regionParam(resource)}`, requestFor(resource))
       }
       entries.value = data?.events || []
       message.value = data?.message || (data?.logGroupName ? data.logGroupName : '')
     } else if (provider === 'gcp') {
       const location = resourceRegion(resource)
       if (resource.type === 'gcp-cloud-run') {
-        data = await apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(location)}/${encodeURIComponent(resource.name)}/logs?hours=${hours.value}&limit=${limit}`, { headers: { 'X-Profile-Id': props.profileId } })
+        data = await apiFetch(`/api/cloud/gcp/cloudrun/${encodeURIComponent(location)}/${encodeURIComponent(resource.name)}/logs?hours=${hours.value}&limit=${limit}`, requestFor(resource))
       } else {
-        data = await apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(resource.name)}/logs?hours=${hours.value}&limit=${limit}`, { headers: { 'X-Profile-Id': props.profileId } })
+        data = await apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(resource.name)}/logs?hours=${hours.value}&limit=${limit}`, requestFor(resource))
       }
       entries.value = data?.entries || []
     } else if (provider === 'vercel') {
-      const projects = await apiFetch('/api/cloud/vercel/projects', { headers: { 'X-Profile-Id': props.profileId } })
+      const projects = await apiFetch('/api/cloud/vercel/projects', requestFor(resource))
       const project = projects.find(item => item.id === resource.key || item.id === resource.name || item.name === resource.name)
       if (!project) { message.value = t('apmLogs.vercelProjectMissing'); return }
-      const deployments = await apiFetch(`/api/cloud/vercel/projects/${encodeURIComponent(project.id)}/deployments?limit=1`, { headers: { 'X-Profile-Id': props.profileId } })
+      const deployments = await apiFetch(`/api/cloud/vercel/projects/${encodeURIComponent(project.id)}/deployments?limit=1`, requestFor(resource))
       latestDeployment.value = deployments?.[0] || null
       message.value = latestDeployment.value ? t('apmLogs.openLatest') : t('apmLogs.noDeployments')
     }
