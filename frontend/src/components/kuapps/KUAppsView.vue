@@ -1437,7 +1437,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-observability-summary :deep(.apm-main) { height: auto; min-height: 0; overflow: visible; padding: 12px; }
 .kuapps-registry-workspace { min-height: 0; flex: 1; overflow: auto; padding: 16px 18px; }
 .kuapps-registry-workspace > :deep(.architecture-view) { min-height: 420px; border-top: 1px solid var(--border); }
-.kuapps-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.kuapps-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .kuapps-section-heading h3 { margin: 3px 0 0; font-size: 16px; }
 .kuapps-section-actions { display: flex; align-items: center; gap: 6px; }
 .kuapps-registry-error { padding: 8px 18px; color: var(--red); font-size: 12px; }

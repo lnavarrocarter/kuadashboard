@@ -4354,6 +4354,7 @@ export default {
   'archCanvas.allResources': 'All resources',
   'archCanvas.zoomNeighbors': "Zoom to this resource and its neighbours",
   'archCanvas.searchEnterHint': "Enter goes to the first match and its neighbours",
+  'archCanvas.mapTools': "Map tools",
   'archCanvas.searchResources': 'Find a resource by name or type',
   'archCanvas.filterSystemDomain': 'Filter system domain',
   'archCanvas.allSystemDomains': 'All system domains',

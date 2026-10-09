@@ -4353,6 +4353,7 @@ export default {
   'archCanvas.allResources': 'Todos los recursos',
   'archCanvas.zoomNeighbors': "Acercar a este recurso y sus vecinos",
   'archCanvas.searchEnterHint': "Enter va a la primera coincidencia y sus vecinos",
+  'archCanvas.mapTools': "Herramientas del mapa",
   'archCanvas.searchResources': 'Buscar recurso por nombre o tipo',
   'archCanvas.filterSystemDomain': 'Filtrar dominio del sistema',
   'archCanvas.allSystemDomains': 'Todos los dominios del sistema',

@@ -142,3 +142,23 @@ describe('KUApps keyboard and narrow windows (#239)', () => {
     }
   })
 })
+
+describe('tablists follow the arrow keys (#239)', () => {
+  it('moves and selects with the arrows, skipping disabled tabs', async () => {
+    const { moveTab } = await import('../lib/tablistKeys')
+    document.body.innerHTML = '<div role="tablist"><button role="tab" id="a">A</button><button role="tab" id="b" disabled>B</button><button role="tab" id="c">C</button></div>'
+    const clicked = []
+    for (const tab of document.querySelectorAll('[role="tab"]')) {
+      tab.addEventListener('click', () => clicked.push(tab.id))
+      tab.addEventListener('keydown', moveTab)
+    }
+    document.getElementById('a').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(clicked).toEqual(['c'])
+    expect(document.activeElement.id).toBe('c')
+    document.getElementById('c').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(clicked).toEqual(['c', 'a'])
+    document.getElementById('a').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    expect(clicked.at(-1)).toBe('c')
+    document.body.innerHTML = ''
+  })
+})

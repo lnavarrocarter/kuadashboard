@@ -1,7 +1,7 @@
 <template>
   <!-- The map against its clusters (#239): checked when the map opens (free reads of the Kubernetes
        API), with the change it proposes. Nothing changes until the user applies it. -->
-  <section v-if="visible" :class="['k8s-drift', tone]" data-test="k8s-drift" :role="changes.length ? 'alert' : 'status'">
+  <section v-if="visible" :class="['k8s-drift', tone, { compact: tone === 'ok' }]" data-test="k8s-drift" :role="changes.length ? 'alert' : 'status'">
     <header>
       <i :data-lucide="store.kubernetesDriftChecking ? 'loader-2' : changes.length ? 'triangle-alert' : 'check-circle-2'"></i>
       <span class="k8s-drift-copy">
@@ -98,6 +98,9 @@ onMounted(() => store.checkKubernetesDrift())
 <style scoped>
 .k8s-drift { margin: 8px 0; padding: 10px 12px; display: grid; gap: 8px; border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 6px; background: var(--bg-panel); font-size: 13px; }
 .k8s-drift.attention { border-left-color: var(--yellow); }
+/* Up to date: one line, the diagram comes first. */
+.k8s-drift.compact { padding: 4px 10px; margin: 0 0 6px; }
+.k8s-drift.compact .k8s-drift-copy { flex-direction: row; align-items: baseline; gap: 8px; }
 .k8s-drift > header { display: flex; align-items: center; gap: 10px; }
 .k8s-drift > header :deep(svg) { width: 16px; height: 16px; flex: none; }
 .k8s-drift-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin-right: auto; }

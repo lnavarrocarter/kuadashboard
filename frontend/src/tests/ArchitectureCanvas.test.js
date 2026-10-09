@@ -40,8 +40,8 @@ describe('ArchitectureCanvas', () => {
   it('emits a canonical manual node operation', async () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('input[placeholder="Component name"]').setValue('Orders worker')
-    await wrapper.get('.canvas-toolbar select').setValue('function')
-    await wrapper.get('.canvas-toolbar button').trigger('click')
+    await wrapper.get('.canvas-create-controls select').setValue('function')
+    await wrapper.get('.canvas-create-controls button').trigger('click')
 
     expect(wrapper.emitted('operation')[0]).toEqual([
       {

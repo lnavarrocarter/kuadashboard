@@ -19,8 +19,8 @@
       </div>
 
       <nav class="krs-tabs" role="tablist">
-        <button role="tab" :class="['krs-tab', { active: tab === 'metrics' }]" :aria-selected="tab === 'metrics'" data-test="observability-tab-metrics" @click="tab = 'metrics'">{{ t('obs.metrics') }}</button>
-        <button role="tab" :class="['krs-tab', { active: tab === 'logs' }]" :aria-selected="tab === 'logs'" :disabled="!current.capabilities.logs" data-test="observability-tab-logs" @click="tab = 'logs'">{{ t('obs.logs') }}</button>
+        <button role="tab" :class="['krs-tab', { active: tab === 'metrics' }]" :aria-selected="tab === 'metrics'" :tabindex="tab === 'metrics' ? 0 : -1" data-test="observability-tab-metrics" @click="tab = 'metrics'" @keydown="moveTab">{{ t('obs.metrics') }}</button>
+        <button role="tab" :class="['krs-tab', { active: tab === 'logs' }]" :aria-selected="tab === 'logs'" :tabindex="tab === 'logs' ? 0 : -1" :disabled="!current.capabilities.logs" data-test="observability-tab-logs" @click="tab = 'logs'" @keydown="moveTab">{{ t('obs.logs') }}</button>
       </nav>
 
       <section v-if="tab === 'metrics'" class="krs-metrics" data-test="observability-metrics">
@@ -57,6 +57,7 @@
 </template>
 
 <script setup>
+import { moveTab } from '../../lib/tablistKeys'
 import { computed, ref, watch } from 'vue'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
