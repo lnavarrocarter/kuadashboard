@@ -112,6 +112,17 @@ describe('KubeOverview', () => {
     expect(wrapper.find('.kov-table').text()).toContain('CrashLoopBackOff')
   })
 
+  it('says how many Running pods are not ready, since the phase is not health', async () => {
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    expect(wrapper.find('h3').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Pods by phase')
+    const note = wrapper.get('[data-test="running-not-ready"]')
+    expect(note.text()).toBe('1 Running pods are not ready')
+    await note.trigger('click')
+    expect(wrapper.emitted('navigate').at(-1)).toEqual([{ resource: 'pods', quick: ['not-ready'] }])
+  })
+
   it('shows cluster usage from metrics-server', async () => {
     const wrapper = mount(KubeOverview)
     await flushPromises()

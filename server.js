@@ -19,6 +19,7 @@ const { listServicesWithBackends } = require('./lib/kubeServices');
 const { requireExpectedContext } = require('./lib/kubeContextGuard');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
 const { buildOverview, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
+const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
 const {
   isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries,
@@ -694,33 +695,6 @@ function normalizeEvent(evt = {}) {
   };
 }
 
-function metricTotalsFromContainers(containers = []) {
-  const cpuNano = containers.reduce((sum, c) => sum + parseCpu(c.usage?.cpu), 0);
-  const memoryBytes = containers.reduce((sum, c) => sum + parseMemory(c.usage?.memory), 0);
-  return { cpuNano, memoryBytes };
-}
-
-function metricPayload({ cpuNano = 0, memoryBytes = 0, cpuCapacityNano = 1e9, memoryCapacityBytes = 512 * 1024 * 1024, items = [], containers = [], timestamp, window, source = 'metrics.k8s.io' } = {}) {
-  return {
-    timestamp,
-    window,
-    source,
-    items,
-    containers,
-    cpu: {
-      nano: cpuNano,
-      cores: cpuNano / 1e9,
-      display: formatCpu(cpuNano),
-      percent: Math.min(100, Math.max(2, (cpuNano / Math.max(cpuCapacityNano, 1)) * 100)),
-    },
-    memory: {
-      bytes: memoryBytes,
-      display: formatBytes(memoryBytes),
-      percent: Math.min(100, Math.max(2, (memoryBytes / Math.max(memoryCapacityBytes, 1)) * 100)),
-    },
-  };
-}
-
 function isMetricsApiUnavailable(err) {
   const message = err.body?.message || err.message || '';
   return err.statusCode === 404 || /metrics\.k8s\.io|not found|the server could not find|not have a resource type/i.test(message);
@@ -852,46 +826,40 @@ function prometheusQueryRange(query, { start, end, step }) {
   return prometheusApi(`query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`);
 }
 
-function prometheusScalar(body) {
-  const value = body?.data?.result?.[0]?.value?.[1];
-  const number = Number(value || 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
 function regexEscape(value = '') { return String(value).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'); }
 
 async function prometheusMetricsForPods(namespace, pods = []) {
-  const names = pods.map(pod => pod.metadata?.name || pod.name).filter(Boolean);
+  const names = pods.map(pod => pod.metadata?.name).filter(Boolean);
   if (!names.length) throw new Error('No pods found for Prometheus metrics');
   const podMatcher = names.length === 1 ? `pod="${names[0]}"` : `pod=~"${names.map(regexEscape).join('|')}"`;
   const scope = `namespace="${namespace}",${podMatcher},container!="",container!="POD"`;
   const [cpuResult, memoryResult] = await Promise.all([
-    prometheusQuery(`sum(rate(container_cpu_usage_seconds_total{${scope}}[5m]))`),
-    prometheusQuery(`sum(container_memory_working_set_bytes{${scope}})`),
+    prometheusQuery(`sum by (pod) (rate(container_cpu_usage_seconds_total{${scope}}[5m]))`),
+    prometheusQuery(`sum by (pod) (container_memory_working_set_bytes{${scope}})`),
   ]);
-  const cpuNano = prometheusScalar(cpuResult.body) * 1e9;
-  const memoryBytes = prometheusScalar(memoryResult.body);
-  return metricPayload({
+  return podsMetricPayload(pods, prometheusUsage(pods, cpuResult.body, memoryResult.body), {
     source: `Prometheus (${cpuResult.service.namespace}/${cpuResult.service.name})`,
-    items: names.map(name => ({ name, cpu: '-', memory: '-' })),
-    cpuNano,
-    memoryBytes,
-    cpuCapacityNano: Math.max(1e9, names.length * 1e9),
-    memoryCapacityBytes: Math.max(512 * 1024 * 1024, names.length * 512 * 1024 * 1024),
   });
 }
 
 async function prometheusMetricsForNode(name) {
   const instanceMatcher = `instance=~"${regexEscape(name)}(:[0-9]+)?"`;
-  const [cpuResult, memoryResult] = await Promise.all([
+  const { core } = clients();
+  const [cpuResult, memoryResult, nodeResult] = await Promise.all([
     prometheusQuery(`sum(rate(node_cpu_seconds_total{${instanceMatcher},mode!="idle"}[5m]))`),
     prometheusQuery(`sum(node_memory_MemTotal_bytes{${instanceMatcher}} - node_memory_MemAvailable_bytes{${instanceMatcher}})`),
+    core.readNode(name),
   ]);
+  const node = nodeResult.body || nodeResult || {};
+  const cores = prometheusValue(cpuResult.body);
+  const memoryBytes = prometheusValue(memoryResult.body);
   return metricPayload({
     source: `Prometheus (${cpuResult.service.namespace}/${cpuResult.service.name})`,
-    items: [{ name, cpu: '-', memory: '-' }],
-    cpuNano: prometheusScalar(cpuResult.body) * 1e9,
-    memoryBytes: prometheusScalar(memoryResult.body),
+    items: [{ name, cpu: null, memory: null }],
+    cpuNano: cores == null ? null : cores * 1e9,
+    memoryBytes,
+    cpuReference: nodeReference(node, 'cpu'),
+    memoryReference: nodeReference(node, 'memory'),
   });
 }
 
@@ -1313,17 +1281,18 @@ app.get('/api/:namespace/pods/:name/yaml', async (req, res) => {
 app.get('/api/:namespace/pods/:name/metrics', async (req, res) => {
   const { namespace, name } = req.params;
   try {
-    const { custom } = clients();
-    const result = await custom.getNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods', name);
+    const { core, custom } = clients();
+    const [podResult, result] = await Promise.all([
+      core.readNamespacedPod(name, namespace),
+      custom.getNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods', name),
+    ]);
+    const pod = podResult.body;
     const body = result.body || result || {};
     const containers = body.containers || [];
-    const { cpuNano, memoryBytes } = metricTotalsFromContainers(containers);
-    res.json(metricPayload({
+    res.json(podsMetricPayload([pod], metricsApiUsage([pod], [{ ...body, metadata: { ...body.metadata, name } }]), {
       timestamp: body.timestamp,
       window: body.window,
       containers: containers.map(c => ({ name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })),
-      cpuNano,
-      memoryBytes,
     }));
   } catch (err) {
     if (isMetricsApiUnavailable(err)) {
@@ -1350,19 +1319,10 @@ app.get('/api/:namespace/:resourceType/:name/metrics', async (req, res) => {
     const metricsResult = await custom.listNamespacedCustomObject('metrics.k8s.io', 'v1beta1', namespace, 'pods');
     const metricItems = (metricsResult.body?.items || metricsResult.items || []).filter(item => podNames.has(item.metadata?.name));
     const containers = metricItems.flatMap(item => (item.containers || []).map(c => ({ pod: item.metadata?.name, name: c.name, cpu: c.usage?.cpu, memory: c.usage?.memory })));
-    const { cpuNano, memoryBytes } = metricTotalsFromContainers(containers.map(c => ({ usage: { cpu: c.cpu, memory: c.memory } })));
-    const payload = metricPayload({
+    const payload = podsMetricPayload(pods, metricsApiUsage(pods, metricItems), {
       timestamp: metricItems[0]?.timestamp,
       window: metricItems[0]?.window,
       containers,
-      items: metricItems.map(item => {
-        const totals = metricTotalsFromContainers(item.containers || []);
-        return { name: item.metadata?.name, cpu: formatCpu(totals.cpuNano), memory: formatBytes(totals.memoryBytes) };
-      }),
-      cpuNano,
-      memoryBytes,
-      cpuCapacityNano: Math.max(1e9, pods.length * 1e9),
-      memoryCapacityBytes: Math.max(512 * 1024 * 1024, pods.length * 512 * 1024 * 1024),
     });
     try {
       captureKubernetesMetrics({
@@ -1397,18 +1357,6 @@ app.get('/api/monitoring/prometheus/status', async (_req, res) => {
     res.json({ available: matches.length > 0, services: matches });
   } catch (err) { handleError(res, err); }
 });
-
-function formatCpu(nano) {
-  if (nano < 1e6) return `${Math.round(nano / 1000)}u`;
-  if (nano < 1e9) return `${Math.round(nano / 1e6)}m`;
-  return `${(nano / 1e9).toFixed(2)} cores`;
-}
-
-function formatBytes(bytes) {
-  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KiB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
-}
 
 app.delete('/api/:namespace/pods/:name', async (req, res) => {
   try {
@@ -2447,16 +2395,16 @@ app.get('/api/nodes/:name/metrics', async (req, res) => {
     ]);
     const node = nodeResult.body || nodeResult || {};
     const body = metricsResult.body || metricsResult || {};
-    const cpuNano = parseCpu(body.usage?.cpu);
-    const memoryBytes = parseMemory(body.usage?.memory);
+    const cpuNano = body.usage?.cpu ? parseCpu(body.usage.cpu) : null;
+    const memoryBytes = body.usage?.memory ? parseMemory(body.usage.memory) : null;
     res.json(metricPayload({
       timestamp: body.timestamp,
       window: body.window,
-      items: [{ name, cpu: body.usage?.cpu, memory: body.usage?.memory }],
+      items: [{ name, cpu: formatCpu(cpuNano), memory: formatBytes(memoryBytes) }],
       cpuNano,
       memoryBytes,
-      cpuCapacityNano: parseCpu(node.status?.allocatable?.cpu || node.status?.capacity?.cpu || '1'),
-      memoryCapacityBytes: parseMemory(node.status?.allocatable?.memory || node.status?.capacity?.memory || '512Mi'),
+      cpuReference: nodeReference(node, 'cpu'),
+      memoryReference: nodeReference(node, 'memory'),
     }));
   } catch (err) {
     if (isMetricsApiUnavailable(err)) {

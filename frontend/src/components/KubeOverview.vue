@@ -81,7 +81,7 @@
 
         <!-- Pods by phase -->
         <section class="kov-card">
-          <h3>{{ t('overview.podsByStatus') }}</h3>
+          <h3>{{ t('overview.podsByPhase') }}</h3>
           <p v-if="pods.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ pods.error }}</p>
           <template v-else>
             <div v-if="pods.total" class="kov-stack" role="img" :aria-label="phaseSummary">
@@ -98,6 +98,9 @@
                 <span class="kov-legend-count">{{ seg.count }}</span>
               </li>
             </ul>
+            <button v-if="runningNotReady" class="kov-phase-note" data-test="running-not-ready" @click="go('pods', { quick: ['not-ready'] })">
+              <i data-lucide="circle-alert"></i>{{ t('overview.runningNotReady', { n: runningNotReady }) }}
+            </button>
             <div v-if="reasonList.length" class="kov-reasons">
               <span class="kov-dim">{{ t('overview.reasons') }}</span>
               <button
@@ -286,6 +289,9 @@ const phaseRows = computed(() => Object.entries(pods.value.phases || {}).map(([p
   phase, count, level: PHASE_LEVELS[phase] || 'unknown',
   percent: pods.value.total ? Math.round((count / pods.value.total) * 100) : 0,
 })))
+// The phase chart counts a pod with a crashing container as Running; say how
+// many of those are not ready so the chart is not read as health.
+const runningNotReady = computed(() => Math.max(0, (pods.value.phases?.Running ?? 0) - (pods.value.ready ?? 0)))
 const phaseSegments = computed(() => phaseRows.value.filter(seg => seg.count > 0))
 const phaseSummary = computed(() => phaseSegments.value.map(seg => `${seg.phase} ${seg.count}`).join(', '))
 const reasonList = computed(() => Object.entries(pods.value.reasons || {})
@@ -462,6 +468,8 @@ defineExpose({ load })
 .kov-stack-seg.critical, .kov-swatch.critical { background: var(--red); }
 .kov-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
 .kov-legend li { display: flex; align-items: center; gap: 6px; }
+.kov-phase-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 0; border: 0; background: none; color: var(--yellow); font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.kov-phase-note:hover { text-decoration: underline; }
 .kov-legend-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .kov-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--text-dim); }
 .kov-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; }

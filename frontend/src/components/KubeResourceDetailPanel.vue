@@ -21,6 +21,28 @@
       <div v-if="loading" class="kdp-empty">{{ t('detail.loading') }}</div>
       <div v-else-if="error" class="kdp-alert error"><i data-lucide="alert-triangle"></i>{{ error }}</div>
       <template v-else>
+        <div v-if="health" :class="['kdp-section', 'kdp-health', `level-${health.level}`]" data-test="pod-health">
+          <h3>{{ t('detail.health') }}</h3>
+          <p class="kdp-health-headline">
+            <i :data-lucide="HEALTH_ICONS[health.level]"></i>
+            <strong data-test="pod-health-level">{{ t(`detail.healthLevel.${health.level}`) }}</strong>
+          </p>
+          <ul v-if="health.problems.length" class="kdp-health-problems" data-test="pod-health-problems">
+            <li v-for="c in health.problems" :key="c.name">
+              <span>{{ t(c.init ? 'detail.initContainerState' : 'detail.containerState', { name: c.name, state: c.reason || t('detail.exitCode', { code: c.exitCode }) }) }}</span>
+              <small v-if="c.message">{{ c.message }}</small>
+            </li>
+          </ul>
+          <dl class="kdp-props compact">
+            <div class="kdp-prop-row"><dt>{{ t('detail.readyContainers') }}</dt><dd data-test="pod-health-ready">{{ health.ready }}/{{ health.total }}</dd></div>
+            <div class="kdp-prop-row"><dt>{{ t('detail.restarts') }}</dt><dd>{{ health.restarts }}</dd></div>
+            <div v-if="health.lastTermination" class="kdp-prop-row">
+              <dt>{{ t('detail.lastTermination') }}</dt>
+              <dd data-test="pod-health-last-termination">{{ lastTerminationText }}</dd>
+            </div>
+            <div class="kdp-prop-row"><dt>{{ t('detail.podPhase') }}</dt><dd data-test="pod-health-phase">{{ health.phase }}</dd></div>
+          </dl>
+        </div>
         <div class="kdp-section">
           <h3>{{ t('detail.properties') }}</h3>
           <dl class="kdp-props">
@@ -186,22 +208,24 @@
             <i :data-lucide="prometheus?.available ? 'check-circle-2' : 'circle-dashed'"></i>
             <span>{{ prometheusLabel }}</span>
           </div>
+          <p v-if="metricCoverageText" class="kdp-muted" data-test="metric-coverage">{{ metricCoverageText }}</p>
           <div class="kdp-metric-grid">
-            <div class="kdp-meter">
-              <span>CPU</span>
-              <strong>{{ metrics.cpu.display }}</strong>
-              <div class="kdp-bar"><span :style="{ width: `${metrics.cpu.percent}%` }"></span></div>
-            </div>
-            <div class="kdp-meter">
-              <span>{{ t('detail.memory') }}</span>
-              <strong>{{ metrics.memory.display }}</strong>
-              <div class="kdp-bar memory"><span :style="{ width: `${metrics.memory.percent}%` }"></span></div>
+            <div v-for="meter in metricMeters" :key="meter.key" class="kdp-meter" :data-test="`metric-${meter.key}`">
+              <span>{{ meter.label }}</span>
+              <strong :class="{ 'kdp-no-sample': !meter.usage.available }">{{ meter.usage.available ? meter.usage.display : t('detail.noRecentSample') }}</strong>
+              <template v-if="meter.usage.percent != null">
+                <div :class="['kdp-bar', meter.key, { over: meter.usage.percent > 100 }]" role="meter" :aria-valuenow="meter.usage.percent" aria-valuemin="0" :aria-valuemax="100" :aria-label="meter.label">
+                  <span :style="{ width: `${Math.min(meter.usage.percent, 100)}%` }"></span>
+                </div>
+                <small class="kdp-meter-ref" data-test="metric-reference">{{ t('detail.percentOf', { percent: meter.usage.percent, reference: meter.usage.reference.display, kind: t(`detail.reference.${meter.usage.reference.kind}`) }) }}</small>
+              </template>
+              <small v-else-if="meter.usage.available" class="kdp-meter-ref" data-test="metric-reference">{{ t('detail.noReference') }}</small>
             </div>
           </div>
-          <div v-if="metrics.items?.length" class="kdp-list kdp-metric-items">
+          <div v-if="metrics.items?.length > 1" class="kdp-list kdp-metric-items">
             <div v-for="item in metrics.items" :key="item.name" class="kdp-list-item">
               <span>{{ item.name }}</span>
-              <small>CPU {{ item.cpu }} | {{ t('detail.memory') }} {{ item.memory }}</small>
+              <small>CPU {{ item.cpu ?? t('detail.noSample') }} | {{ t('detail.memory') }} {{ item.memory ?? t('detail.noSample') }}</small>
             </div>
           </div>
           <p class="kdp-muted">{{ t('detail.source') }} <code>{{ metrics.source || 'metrics.k8s.io' }}</code>.</p>
@@ -263,6 +287,7 @@ import yaml from 'js-yaml'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 import { useI18n } from '../composables/useI18n'
+import { podHealth } from '../lib/podHealth'
 
 const props = defineProps({
   resourceType: { type: String, required: true },
@@ -292,7 +317,28 @@ const dataBinaryKeys = ref([])
 const savingData = ref(false)
 const secretImmutable = ref(false)
 const revealedDataKeys = ref(new Set())
+const HEALTH_ICONS = { ok: 'check-circle-2', 'not-ready': 'circle-alert', failing: 'triangle-alert', pending: 'clock', completed: 'check', unknown: 'circle-help' }
+const health = computed(() => (props.resourceType === 'pods' && yamlObject.value?.status ? podHealth(yamlObject.value) : null))
+const lastTerminationText = computed(() => {
+  const last = health.value?.lastTermination
+  if (!last) return ''
+  const parts = [last.container, last.reason || '-']
+  if (last.exitCode != null) parts.push(t('detail.exitCode', { code: last.exitCode }))
+  if (last.finishedAt) parts.push(new Date(last.finishedAt).toLocaleString())
+  return parts.join(' · ')
+})
 const metrics = ref(null)
+const metricMeters = computed(() => metrics.value ? [
+  { key: 'cpu', label: 'CPU', usage: metrics.value.cpu },
+  { key: 'memory', label: t('detail.memory'), usage: metrics.value.memory },
+] : [])
+// "Prometheus detected" says nothing about this resource: say how many of its
+// pods actually have a sample.
+const metricCoverageText = computed(() => {
+  const coverage = metrics.value?.coverage
+  if (!coverage?.pods) return ''
+  return t(coverage.sampled === coverage.pods ? 'detail.coverageFull' : 'detail.coveragePartial', { sampled: coverage.sampled, pods: coverage.pods })
+})
 const metricsError = ref('')
 const metricsLoading = ref(false)
 const prometheus = ref(null)
@@ -423,7 +469,10 @@ function baseProperties() {
   return compactRows([
     row(t('detail.name'), metadata.value.name || props.resource.name),
     row('Namespace', metadata.value.namespace || props.resource.namespace),
-    row(t('detail.status'), status.value.phase || props.resource.status || props.resource.ready),
+    // A pod's phase is not its health; the Health block above says that.
+    props.resourceType === 'pods'
+      ? row(t('detail.podPhase'), status.value.phase)
+      : row(t('detail.status'), status.value.phase || props.resource.status || props.resource.ready),
     row(t('detail.created'), metadata.value.creationTimestamp ? new Date(metadata.value.creationTimestamp).toLocaleString() : props.resource.age),
     row('UID', metadata.value.uid),
     row(t('detail.version'), metadata.value.resourceVersion),
@@ -894,6 +943,17 @@ function formatValue(value) {
 .kdp-bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,.09); overflow: hidden; }
 .kdp-bar span { display: block; height: 100%; background: var(--accent); }
 .kdp-bar.memory span { background: var(--teal); }
+.kdp-bar.over span { background: var(--red); }
+.kdp-health { border-left: 3px solid var(--text-dim); padding-left: 10px; }
+.kdp-health.level-ok, .kdp-health.level-completed { border-left-color: var(--green); }
+.kdp-health.level-not-ready, .kdp-health.level-pending { border-left-color: var(--yellow); }
+.kdp-health.level-failing { border-left-color: var(--red); }
+.kdp-health-headline { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 14px; }
+.kdp-health-problems { margin: 0 0 8px; padding-left: 18px; }
+.kdp-health-problems li { margin-bottom: 4px; }
+.kdp-health-problems small { display: block; color: var(--text-dim); overflow-wrap: anywhere; }
+.kdp-meter-ref { display: block; margin-top: 6px; color: var(--text-dim); font-size: 11px; }
+.kdp-meter strong.kdp-no-sample { color: var(--text-dim); font-size: 13px; font-weight: 600; }
 .kdp-metric-items { margin-top: 10px; }
 .kdp-event-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kdp-event-card { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-row); padding: 10px; }
