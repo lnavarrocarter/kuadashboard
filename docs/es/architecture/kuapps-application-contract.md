@@ -94,6 +94,9 @@ En cada arranque, y cada vez que cambian los recursos de una aplicación, las ap
 | `DELETE /applications/:id/scopes/:scopeKey` | quitar un scope; `409 SCOPE_IN_USE` mientras tenga recursos legacy |
 | `PUT /applications/:id/scopes/:scopeKey/binding` | asociar un perfil local `{ profileId }` y verificarlo |
 | `POST /applications/:id/scopes/:scopeKey/binding/verify` | volver a verificar el binding |
+| `POST /changes/preview` | un cambio de un agente `{ applicationId, operation, input }` como plan, sin escribir (#155) |
+| `POST /changes/:planId/apply` | aplica un plan con `{ confirm: true }` mientras `GET/PUT /agent-access` permite escrituras de agentes |
+| `GET /changes/:planId` | el estado y el resultado de un plan |
 | `DELETE /applications/:id/scopes/:scopeKey/binding` | quitar el binding |
 
 Las escrituras que cambian la aplicación aceptan `expectedRevision`, en el body o en la query. Un valor obsoleto responde `409 REVISION_CONFLICT` con la `revision` actual, y no se escribe nada. Los bindings son locales, así que no mueven la revisión.
