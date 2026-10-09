@@ -198,6 +198,25 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   router.post('/applications/:applicationId/observer/ignore', (req, res) => send(res, 200, () =>
     observer.ignore(applicationOr404(req.params.applicationId), req.body?.resourceId)));
 
+  // Possible duplicates (#239): resources with the same provider, type and native identifier where one
+  // has no account. Reconciliation joins them when only one account is known; these are the ones it
+  // could not decide. Names alone never make a duplicate (homonyms are legitimate).
+  router.get('/applications/:applicationId/registry/possible-duplicates', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    const groups = new Map();
+    for (const resource of apmDatabase.listRegistryResources(application.id)) {
+      const key = `${resource.provider}|${resource.resourceType}|${String(resource.nativeIdentifier).toLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(resource);
+    }
+    return [...groups.values()]
+      .filter(items => items.length > 1 && items.some(item => !item.scopeId))
+      .map(items => ({
+        nativeIdentifier: items[0].nativeIdentifier, resourceType: items[0].resourceType, provider: items[0].provider,
+        resources: items.map(({ id, displayName, scopeId, location, sources }) => ({ id, displayName, scopeId, location, sources })),
+      }));
+  }));
+
   // What needs attention, resource by resource, most important first (#239). ?hours= is the range.
   router.get('/applications/:applicationId/observability/issues', (req, res) => send(res, 200, () => {
     const application = applicationOr404(req.params.applicationId);

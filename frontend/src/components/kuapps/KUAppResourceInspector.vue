@@ -111,7 +111,7 @@ watch(() => props.initialTab, value => { if (TABS.includes(value)) tab.value = v
 .kri { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .kri-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .kri-head h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
-.kri-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+.kri-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
 .kri-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 .kri-tabs button { padding: 6px 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 13px; }
 .kri-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -122,7 +122,7 @@ watch(() => props.initialTab, value => { if (TABS.includes(value)) tab.value = v
 .kri-detail small { color: var(--text-dim); font-size: 12px; }
 .kri-sources { display: flex; flex-wrap: wrap; gap: 4px; }
 .kri-sources span { font-size: 12px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; }
-.kri-state { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
+.kri-state { font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
 .kri-state.current { color: var(--success, #16a34a); border-color: currentColor; }
 .kri-state.stale, .kri-state.partial, .kri-state.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
 .kri-state.gone, .kri-state.error { color: var(--danger, #dc2626); border-color: currentColor; }

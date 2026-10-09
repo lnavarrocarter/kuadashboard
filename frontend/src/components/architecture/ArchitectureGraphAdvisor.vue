@@ -1,5 +1,6 @@
 <template>
-  <details class="graph-advisor" data-test="architecture-graph-advisor" :open="recommendations.length > 0">
+  <!-- Folded by default, its count always visible: the diagram comes first (#239). -->
+  <details class="graph-advisor" data-test="architecture-graph-advisor">
     <summary>
       <i data-lucide="brain-circuit"></i>
       <span><strong>{{ t('archGraphAdvisor.title') }}</strong><small>{{ t('archGraphAdvisor.subtitle') }}</small></span>
@@ -74,8 +75,8 @@ onMounted(refreshIcons)
 </script>
 
 <style scoped>
-.graph-advisor { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
-.graph-advisor > summary { min-height: 52px; padding: 8px 12px; display: flex; align-items: center; gap: 9px; cursor: pointer; list-style: none; }
+.graph-advisor { margin: 0 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
+.graph-advisor > summary { min-height: 40px; padding: 6px 12px; display: flex; align-items: center; gap: 9px; cursor: pointer; list-style: none; }
 .graph-advisor > summary::-webkit-details-marker { display: none; }
 .graph-advisor > summary > i { color: var(--accent, #d29922); }
 .graph-advisor > summary > span, .graph-advisor-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -86,7 +87,7 @@ onMounted(refreshIcons)
 .graph-advisor-item:last-child { border-bottom: 0; }
 .graph-advisor-item > i { flex: none; color: var(--text-dim); }
 .graph-advisor-copy { flex: 1; overflow-wrap: anywhere; }
-.graph-advisor-evidence { font-size: 10px; }
+.graph-advisor-evidence { font-size: 12px; }
 .graph-advisor-empty { margin: 0; padding: 12px; }
 @media (max-width: 620px) { .graph-advisor-item { align-items: flex-start; flex-wrap: wrap; }.graph-advisor-copy { flex-basis: calc(100% - 28px); }.graph-advisor-item > .btn { margin-left: 28px; } }
 </style>

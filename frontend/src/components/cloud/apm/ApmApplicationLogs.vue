@@ -25,7 +25,9 @@
         :class="['logs-resource-tab', { active: selectedResource?.id === resource.id }]"
         role="tab"
         :aria-selected="selectedResource?.id === resource.id"
+        :tabindex="selectedResource?.id === resource.id ? 0 : -1"
         @click="selectResource(resource)"
+        @keydown="moveTab"
       >
         <span>{{ resource.name }}</span>
         <small>{{ resourceLabel(resource) }}</small>
@@ -116,6 +118,7 @@
 </template>
 
 <script setup>
+import { moveTab } from '../../../lib/tablistKeys'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import BaseModal from '../../BaseModal.vue'

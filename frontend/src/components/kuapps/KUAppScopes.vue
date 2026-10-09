@@ -35,6 +35,8 @@
           <small>
             <template v-if="scope.label && scope.scopeId">{{ scope.scopeId }} · </template>{{ scope.location || t('kuapps.scopes.noLocation') }}
           </small>
+          <!-- Which profile of this computer reaches the connection (#239); it never leaves this computer. -->
+          <small v-if="bindingOf(scope)?.profileId" class="kuapp-scope-bound" data-test="scope-bound-profile">{{ t(statusOf(scope) === 'verified' ? 'kuapps.scopes.verifiedWith' : 'kuapps.scopes.boundTo', { profile: profileLabel(scope) }) }}</small>
         </span>
         <span :class="['kuapp-scope-status', statusOf(scope)]" :title="bindingOf(scope)?.lastError || ''">{{ t(`kuapps.scopes.status.${statusOf(scope)}`) }}</span>
         <span class="kuapp-scope-binding">
@@ -97,6 +99,11 @@ function bindingOf(scope) {
 function statusOf(scope) {
   if (!PROVIDERS.includes(scope.provider)) return 'unsupported'
   return bindingOf(scope)?.status === 'migrated' ? 'unverified' : (bindingOf(scope)?.status || 'unbound')
+}
+
+function profileLabel(scope) {
+  const id = bindingOf(scope)?.profileId || ''
+  return profileOptions(scope.provider).find(option => option.id === id)?.name || id
 }
 
 // Profiles this computer has for a provider: stored connections plus local CLI profiles.
@@ -191,22 +198,23 @@ defineExpose({ reload: load })
 .kuapp-scopes { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
 .kuapp-scopes-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .kuapp-scopes-heading > span { display: flex; flex-direction: column; gap: 2px; }
-.kuapp-scopes-heading small, .kuapp-scopes-empty { color: var(--text-dim); font-size: 10px; }
+.kuapp-scopes-heading small, .kuapp-scopes-empty { color: var(--text-dim); font-size: 12px; }
 .kuapp-scopes-heading svg, .kuapp-scope svg, .kuapp-scopes-warning svg { width: 13px; }
-.kuapp-scopes-warning { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--yellow); border-radius: 6px; color: var(--text); font-size: 11px; }
+.kuapp-scopes-warning { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--yellow); border-radius: 6px; color: var(--text); font-size: 12px; }
 .kuapp-scopes-warning svg { color: var(--yellow); flex: none; }
-.kuapp-scopes-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapp-scopes-error { margin: 0; color: var(--red); font-size: 12px; }
 .kuapp-scopes-empty { margin: 0; }
 .kuapp-scope-form { display: flex; flex-wrap: wrap; gap: 6px; }
-.kuapp-scope-form input, .kuapp-scope-form select, .kuapp-scope-binding select { min-width: 0; height: 26px; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); font-size: 11px; }
+.kuapp-scope-form input, .kuapp-scope-form select, .kuapp-scope-binding select { min-width: 0; height: 26px; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); font-size: 12px; }
 .kuapp-scope-form input { flex: 1 1 120px; }
 .kuapp-scope-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .kuapp-scope { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; background: var(--surface); }
-.kuapp-scope-provider { color: var(--accent); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.kuapp-scope-provider { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .kuapp-scope-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .kuapp-scope-name strong, .kuapp-scope-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kuapp-scope-name small { color: var(--text-dim); font-size: 9px; }
-.kuapp-scope-status { padding: 2px 7px; border: 1px solid currentColor; border-radius: 10px; font-size: 9px; white-space: nowrap; }
+.kuapp-scope-name small { color: var(--text-dim); font-size: 12px; }
+.kuapp-scope-name .kuapp-scope-bound { color: var(--text); }
+.kuapp-scope-status { padding: 2px 7px; border: 1px solid currentColor; border-radius: 10px; font-size: 12px; white-space: nowrap; }
 .kuapp-scope-status.verified { color: var(--green); }
 .kuapp-scope-status.unverified, .kuapp-scope-status.unbound { color: var(--yellow); }
 .kuapp-scope-status.mismatch { color: var(--red); }

@@ -19,6 +19,16 @@
       </button>
     </footer>
     <p v-else class="kuapp-sync-pending">{{ t('kuapps.sync.unavailable') }}</p>
+    <!-- "N resources on one side only" names them and the next step for each side (#239). -->
+    <details v-for="group in oneSided" :key="group.side" class="kuapp-sync-side" :data-test="`sync-one-sided-${group.side}`">
+      <summary>{{ t(`kuapps.sync.side.${group.side}`, { n: group.resources.length }) }}</summary>
+      <p class="kuapp-sync-next">{{ t(`kuapps.sync.side.${group.side}.next`) }}</p>
+      <ul>
+        <li v-for="resource in group.resources" :key="resource.id">
+          <button class="kuapp-sync-resource" @click="$emit('select-resource', resource.id)"><strong>{{ resource.displayName }}</strong><small>{{ resource.provider }} · {{ resource.resourceType }}</small></button>
+        </li>
+      </ul>
+    </details>
   </section>
 </template>
 
@@ -38,7 +48,7 @@ const props = defineProps({
   profileId: { type: String, default: '' },
   architectureProfileId: { type: String, default: '' },
 })
-const emit = defineEmits(['open-tab', 'reconciled'])
+const emit = defineEmits(['open-tab', 'reconciled', 'select-resource'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const architectureStore = useArchitectureStore()
@@ -55,6 +65,14 @@ const pending = computed(() => (status.value?.divergentResourceCount || 0) + (st
 const linkedProjectIds = computed(() => {
   const value = registryInfo.value?.projectId
   return Array.isArray(value) ? value : value ? [value] : []
+})
+const oneSided = computed(() => {
+  const divergent = (registryInfo.value?.resources || []).filter(resource => resource.divergent)
+  const only = source => divergent.filter(resource => (resource.sources || []).includes(source))
+  return [
+    { side: 'observedOnly', resources: only('apm_resource') },
+    { side: 'mapOnly', resources: only('architecture_node') },
+  ].filter(group => group.resources.length)
 })
 const canCreateArchitectureView = computed(() => available.value && pending.value > 0 && !linkedProjectIds.value.length)
 const pendingLabel = computed(() => pending.value
@@ -82,6 +100,7 @@ async function reconcile() {
   try {
     const result = await apiFetch(`${base.value}/reconcile`, { method: 'POST', headers: headers.value })
     status.value = result?.syncStatus || status.value
+    if (registryInfo.value && Array.isArray(result?.resources)) registryInfo.value = { ...registryInfo.value, resources: result.resources }
     emit('reconciled', result)
   } catch (err) { error.value = err.message } finally {
     running.value = false
@@ -119,12 +138,18 @@ watch(() => [props.application?.id, profile.value, props.provider], load, { imme
 .kuapp-sync { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); }
 .kuapp-sync > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .kuapp-sync h4 { margin: 0; font-size: 13px; }
-.kuapp-sync-chip { padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-dim); font-size: 10px; white-space: nowrap; }
+.kuapp-sync-chip { padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
 .kuapp-sync-chip.ok { border-color: var(--green); color: var(--green); }
-.kuapp-sync-explain { margin: 0; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+.kuapp-sync-explain { margin: 0; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+.kuapp-sync-side summary { cursor: pointer; font-size: 13px; }
+.kuapp-sync-next { margin: 6px 0; color: var(--text-dim); font-size: 12px; }
+.kuapp-sync-side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 240px; overflow: auto; }
+.kuapp-sync-resource { width: 100%; display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 13px; }
+.kuapp-sync-resource:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.kuapp-sync-resource small { color: var(--text-dim); font-size: 12px; }
 .kuapp-sync-explain strong { color: var(--text); }
-.kuapp-sync-error { margin: 0; color: var(--red); font-size: 11px; }
+.kuapp-sync-error { margin: 0; color: var(--red); font-size: 12px; }
 .kuapp-sync > footer { display: flex; align-items: center; gap: 8px; }
-.kuapp-sync-pending { margin: 0 auto 0 0; color: var(--text-dim); font-size: 11px; }
+.kuapp-sync-pending { margin: 0 auto 0 0; color: var(--text-dim); font-size: 12px; }
 .kuapp-sync svg { width: 13px; }
 </style>

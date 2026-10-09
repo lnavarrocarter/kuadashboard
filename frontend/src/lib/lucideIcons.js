@@ -14,7 +14,7 @@ import {
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,
   Clock, ClockAlert, Cloud, CloudCog, CloudDownload, CloudSync, CloudUpload, Code, Code2, Columns3, Command,
-  Container, Copy, Cpu, Currency, Database, DatabaseZap, Delete, Download, Edit, Eraser,
+  Container, Copy, CornerDownRight, Cpu, Currency, Database, DatabaseZap, Delete, Download, Edit, Eraser,
   ExternalLink, Eye, EyeOff, File, FileCode, FileCode2, FileCog, FileDown, FileKey, FileSearch,
   FileText, FileUp, Filter, FilterX, Focus, Folder, FolderOpen, Form, FormInput, FunctionSquare,
   Gauge, GitBranch, GitCompareArrows, GitMerge, GitPullRequestArrow, Globe, Grab, Group, HardDrive,
@@ -29,7 +29,7 @@ import {
   Sidebar, Signature, SlidersHorizontal, Space, Sparkles, Split, Square, SquareActivity,
   SquareFunction, SquarePlus, SquareTerminal, Star, Sun, SunMoon, Table, Table2, TableProperties,
   Tag, Tags, Target, Terminal, TerminalSquare, Text, Timer, Trash2, Triangle, TriangleAlert, Type,
-  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow,
+  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow, Wrench,
   WrapText, X, XCircle, Zap, ZoomIn, ZoomOut,
 } from 'lucide/dist/esm/lucide.js'
 
@@ -42,7 +42,7 @@ export const icons = {
   ChartNoAxesCombined, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   ChevronsDown, ChevronsUp, CircleAlert, CircleDashed, CircleHelp, Clipboard, ClipboardPaste,
   Clock, ClockAlert, Cloud, CloudCog, CloudDownload, CloudSync, CloudUpload, Code, Code2, Columns3, Command,
-  Container, Copy, Cpu, Currency, Database, DatabaseZap, Delete, Download, Edit, Eraser,
+  Container, Copy, CornerDownRight, Cpu, Currency, Database, DatabaseZap, Delete, Download, Edit, Eraser,
   ExternalLink, Eye, EyeOff, File, FileCode, FileCode2, FileCog, FileDown, FileKey, FileSearch,
   FileText, FileUp, Filter, FilterX, Focus, Folder, FolderOpen, Form, FormInput, FunctionSquare,
   Gauge, GitBranch, GitCompareArrows, GitMerge, GitPullRequestArrow, Globe, Grab, Group, HardDrive,
@@ -57,6 +57,6 @@ export const icons = {
   Sidebar, Signature, SlidersHorizontal, Space, Sparkles, Split, Square, SquareActivity,
   SquareFunction, SquarePlus, SquareTerminal, Star, Sun, SunMoon, Table, Table2, TableProperties,
   Tag, Tags, Target, Terminal, TerminalSquare, Text, Timer, Trash2, Triangle, TriangleAlert, Type,
-  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow,
+  Undo2, Unlink, Unlock, Upload, User, UserRound, Users, Verified, View, Volume, Waypoints, Webhook, Workflow, Wrench,
   WrapText, X, XCircle, Zap, ZoomIn, ZoomOut,
 }

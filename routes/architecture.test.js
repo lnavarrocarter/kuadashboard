@@ -7,13 +7,15 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService } = {}) {
+async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
   app.use(express.json());
   app.use('/api/architecture', createArchitectureRouter({
     database,
+    ...(apmDatabase ? { apmDatabase } : {}),
+    ...(awsDriftReader ? { awsDriftReader } : {}),
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
     inventoryReader: inventoryReader || {
@@ -45,6 +47,7 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader, 
 
   return {
     auditEvents,
+    database,
     request,
     async close() {
       await new Promise(resolve => server.close(resolve));
@@ -598,5 +601,194 @@ test('API exposes scoped GCP and Vercel discovery preview/import endpoints', asy
     assert.equal(calls[1][3].expectedRevision, 0);
   } finally {
     await subject.close();
+  }
+});
+
+test('API validates a Kubernetes map against the cluster and applies the confirmed refresh (#239)', async () => {
+  const uids = new Map();
+  const uuidFor = id => {
+    if (!uids.has(id)) uids.set(id, `00000000-0000-4000-8000-${String(uids.size + 1).padStart(12, '0')}`);
+    return uids.get(id);
+  };
+  const k8s = (id, resourceType, name, extra = {}) => ({
+    id, provider: 'kubernetes', resourceType, kind: { deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType],
+    name, nativeId: uuidFor(id), kubeContext: 'eks-dev', namespace: 'orders', sourceId: 'kubernetes:context:eks-dev',
+    discoveryKey: `eks-dev/orders/${{ deployment: 'Deployment', pod: 'Pod', configmap: 'ConfigMap', service: 'Service' }[resourceType]}/${name}`, ...extra,
+  });
+  const auth = k8s('k:auth', 'deployment', 'auth');
+  const oldPod = k8s('k:pod-old', 'pod', 'auth-7d9f8c6b5d-x2k4p');
+  const newPod = k8s('k:pod-new', 'pod', 'auth-5c4b3a2f1e-q9w8e');
+  const billingOld = k8s('k:billing-old', 'deployment', 'billing');
+  const billingNew = { ...k8s('k:billing-new', 'deployment', 'billing'), nativeId: '11111111-2222-4333-8444-555555555555' };
+  const config = k8s('k:config', 'configmap', 'auth-config');
+  const gateway = k8s('k:gateway', 'service', 'gateway');
+  const elsewhere = { ...k8s('k:other', 'deployment', 'reports'), kubeContext: 'eks-prod', discoveryKey: 'eks-prod/orders/Deployment/reports', sourceId: 'kubernetes:context:eks-prod' };
+  const calls = [];
+  const subject = await fixture({
+    kubernetesAdapter: {
+      listContexts: () => [],
+      async preview(input) {
+        calls.push(input);
+        if (input.contexts[0] === 'eks-prod') throw new Error('Unauthorized');
+        return {
+          sources: [{ id: 'kubernetes:context:eks-dev', type: 'kubernetes', provider: 'kubernetes', context: 'eks-dev', namespaces: input.namespaces }],
+          nodes: [auth, newPod, billingNew, gateway],
+          relationships: [{ id: 'owns-new', sourceNodeId: 'k:auth', targetNodeId: 'k:pod-new', relationType: 'owns', status: 'automatic' }],
+          health: [], capabilities: [], failures: [],
+        };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'kubernetes' } });
+    const projectId = created.body.id;
+    await subject.request(`/projects/${projectId}/graph`, {
+      method: 'PUT',
+      body: { expectedRevision: 0, document: {
+        projectId,
+        nodes: [auth, oldPod, billingOld, config, gateway, elsewhere],
+        edges: [
+          { id: 'owns-old', sourceNodeId: 'k:auth', targetNodeId: 'k:pod-old', relationType: 'owns', status: 'automatic' },
+          { id: 'drawn', sourceNodeId: 'k:gateway', targetNodeId: 'k:pod-old', relationType: 'routes_to', status: 'manual' },
+        ],
+        layout: { 'k:pod-old': { x: 300, y: 120 }, 'k:billing-old': { x: 40, y: 40 } },
+      } },
+    });
+
+    const checked = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(calls.map(call => [call.contexts[0], call.namespaces]), [['eks-dev', ['orders']], ['eks-prod', ['orders']]]);
+    assert.equal(checked.body.present, 2);
+    const byNode = Object.fromEntries(checked.body.changes.map(item => [item.nodeId, item]));
+    assert.equal(byNode['k:pod-old'].change, 'replaced');
+    assert.deepEqual(byNode['k:pod-old'].successors, [{ id: 'k:pod-new', name: 'auth-5c4b3a2f1e-q9w8e' }]);
+    assert.equal(byNode['k:billing-old'].change, 'recreated');
+    assert.equal(byNode['k:config'].change, 'gone');
+    // An unreachable context marks nothing as gone.
+    assert.equal(byNode['k:other'], undefined);
+    assert.deepEqual(checked.body.contexts.find(item => item.context === 'eks-prod'), { context: 'eks-prod', namespaces: ['orders'], status: 'unreachable', error: 'Unauthorized' });
+
+    const applied = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: 1 } });
+    assert.equal(applied.status, 200);
+    const { nodes, edges, layout } = applied.body.document;
+    const ids = nodes.map(node => node.id).sort();
+    assert.deepEqual(ids, ['k:auth', 'k:billing-old', 'k:gateway', 'k:other', 'k:pod-new']);
+    // The recreated workload keeps its place and takes the new uid.
+    assert.equal(nodes.find(node => node.id === 'k:billing-old').nativeId, '11111111-2222-4333-8444-555555555555');
+    // The new pod takes the old one's place and the relationship drawn by hand.
+    assert.deepEqual(layout['k:pod-new'], { x: 300, y: 120 });
+    assert.ok(edges.some(edge => edge.sourceNodeId === 'k:gateway' && edge.targetNodeId === 'k:pod-new' && edge.status === 'manual'));
+    assert.ok(edges.some(edge => edge.sourceNodeId === 'k:auth' && edge.targetNodeId === 'k:pod-new'));
+    assert.ok(!edges.some(edge => edge.targetNodeId === 'k:pod-old'));
+    const changes = await subject.request(`/projects/${projectId}/changes`);
+    assert.match(changes.body[0].reason, /Refresh 3 resources that changed where they live/);
+
+    const again = await subject.request(`/projects/${projectId}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: applied.body.revision } });
+    assert.equal(again.status, 409);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('API refresh also moves the membership of a replaced workload and detaches a gone pod, so reconcile does not draw them again (#239)', async () => {
+  const { ApmDatabase } = require('../lib/apm/database');
+  const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
+  const context = 'arn:aws:eks:us-east-1:1:cluster/dev';
+  const live = (id, resourceType, kind, name) => ({
+    id, provider: 'kubernetes', resourceType, kind, name, nativeId: id === 'k:new-deploy' ? '00000000-0000-4000-8000-000000000001' : '00000000-0000-4000-8000-000000000002',
+    kubeContext: context, namespace: 'backend360', sourceId: `kubernetes:context:${context}`, discoveryKey: `${context}/backend360/${kind}/${name}`,
+  });
+  const subject = await fixture({
+    apmDatabase,
+    kubernetesAdapter: {
+      listContexts: () => [],
+      async preview() {
+        return {
+          sources: [{ id: `kubernetes:context:${context}`, type: 'kubernetes', provider: 'kubernetes', context }],
+          nodes: [live('k:new-deploy', 'deployment', 'Deployment', 'authv1-20261008-155437-6b16cc3'), live('k:new-pod', 'pod', 'Pod', 'authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr')],
+          relationships: [], health: [], capabilities: [], failures: [],
+        };
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'dev' } });
+    const application = apmDatabase.createApplication({ profileId: 'local:dev', region: 'us-east-1', name: 'Dev' });
+    apmDatabase.updateArchitectureProjectLink(application.id, created.body.id);
+    for (const [kind, name] of [['Deployment', 'authv1-3.9.1'], ['Pod', 'authv1-3.9.1-64c66865cd-zjqhc']]) {
+      apmDatabase.addResource(application.id, { type: 'kubernetes', kind, name, key: `${context}/backend360/${kind}/${name}`, kubeContext: context, namespace: 'backend360', associationSource: 'manual' });
+    }
+    // Reconcile projects both members into the map (apm-resource nodes).
+    const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+    new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: subject.database }).reconcile(apmDatabase.getApplication(application.id));
+    const before = (await subject.request(`/projects/${created.body.id}/graph`)).body;
+    assert.deepEqual(before.document.nodes.map(node => node.name).sort(), ['authv1-3.9.1', 'authv1-3.9.1-64c66865cd-zjqhc']);
+
+    const checked = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.deepEqual(checked.body.changes.map(item => [item.name, item.change, item.successors[0]?.name]).sort(), [
+      ['authv1-3.9.1', 'replaced', 'authv1-20261008-155437-6b16cc3'],
+      ['authv1-3.9.1-64c66865cd-zjqhc', 'replaced', 'authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr'],
+    ]);
+
+    const applied = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift-apply`, { method: 'POST', body: { expectedRevision: before.revision } });
+    assert.equal(applied.status, 200);
+    // The members follow: the successor workload joins, the old workload and the old pod leave.
+    assert.deepEqual(apmDatabase.listResources(application.id).map(resource => resource.name), ['authv1-20261008-155437-6b16cc3']);
+    const names = applied.body.document.nodes.map(node => node.name);
+    assert.ok(!names.includes('authv1-3.9.1'));
+    assert.ok(!names.includes('authv1-3.9.1-64c66865cd-zjqhc'));
+    assert.ok(names.includes('authv1-20261008-155437-6b16cc3-65b67db6dc-7zdgr'));
+    assert.equal(names.filter(name => name === 'authv1-20261008-155437-6b16cc3').length, 1);
+    // Checking again finds nothing to change.
+    const again = await subject.request(`/projects/${created.body.id}/discovery/kubernetes/drift`, { method: 'POST', body: {} });
+    assert.deepEqual(again.body.changes, []);
+  } finally {
+    await subject.close();
+    apmDatabase.close();
+  }
+});
+
+test('API checks the AWS resources of the map with the connection bound to their account and removes the gone ones (#239)', async () => {
+  const { ApmDatabase } = require('../lib/apm/database');
+  const { normalizeScope } = require('../lib/kua/applicationContract');
+  const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+  const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
+  const calls = [];
+  const subject = await fixture({
+    apmDatabase,
+    kubernetesAdapter: { listContexts: () => [], async preview() { return { sources: [], nodes: [], relationships: [], failures: [] }; } },
+    // A Cloud Control reader that knows only the first security group.
+    awsDriftReader: {
+      async exists(item, location, identifier) {
+        calls.push([identifier, location.profileId, location.region]);
+        if (identifier === 'sg-0000000000000000b') throw Object.assign(new Error('not found'), { name: 'ResourceNotFoundException' });
+        return true;
+      },
+    },
+  });
+  try {
+    const created = await subject.request('/projects', { method: 'POST', body: { name: 'dev' } });
+    const application = apmDatabase.createApplication({ profileId: 'local:dev', region: 'us-east-1', name: 'Dev' });
+    apmDatabase.updateArchitectureProjectLink(application.id, created.body.id);
+    const scope = normalizeScope({ provider: 'aws', scopeId: '073746111526', location: 'us-east-1' });
+    apmDatabase.addApplicationScope(application.id, scope);
+    apmDatabase.setScopeBinding(application.id, scope.key, { profileId: 'local:dev-sso', status: 'verified' });
+    const node = (id, sg) => ({ id, provider: 'aws', resourceType: 'ec2', kind: 'AWS::EC2::SecurityGroup', name: sg, nativeId: `AWS::EC2::SecurityGroup:${sg}`, accountId: '073746111526', region: 'us-east-1' });
+    await subject.request(`/projects/${created.body.id}/graph`, { method: 'PUT', body: { expectedRevision: 0, document: { projectId: created.body.id, nodes: [node('kept', 'sg-0000000000000000a'), node('old', 'sg-0000000000000000b')] } } });
+    new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: subject.database }).reconcile(apmDatabase.getApplication(application.id));
+    const before = (await subject.request(`/projects/${created.body.id}/graph`)).body;
+
+    const checked = await subject.request(`/projects/${created.body.id}/discovery/drift`, { method: 'POST', body: {} });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(calls.sort(), [['sg-0000000000000000a', 'local:dev-sso', 'us-east-1'], ['sg-0000000000000000b', 'local:dev-sso', 'us-east-1']]);
+    assert.deepEqual(checked.body.changes.map(change => [change.nodeId, change.provider, change.change]), [['old', 'aws', 'gone']]);
+    assert.equal(checked.body.aws.present, 1);
+
+    const applied = await subject.request(`/projects/${created.body.id}/discovery/drift-apply`, { method: 'POST', body: { expectedRevision: before.revision } });
+    assert.equal(applied.status, 200);
+    assert.deepEqual(applied.body.document.nodes.map(item => item.id), ['kept']);
+  } finally {
+    await subject.close();
+    apmDatabase.close();
   }
 });

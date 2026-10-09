@@ -51,6 +51,30 @@ describe('ArchitectureKubernetesDiscoveryPanel', () => {
     expect(wrapper.emitted('imported')).toHaveLength(1)
   })
 
+  it('preselects the context of the connection, and explains a context this computer lacks (#239)', async () => {
+    const store = useArchitectureStore()
+    store.loadKubernetesContexts = vi.fn(async () => { store.kubernetesContexts = [{ id: 'arn:aws:eks:us-east-1:1:cluster/dev', name: 'arn:aws:eks:us-east-1:1:cluster/dev' }] })
+    const wrapper = mount(ArchitectureKubernetesDiscoveryPanel, { props: { preferredContext: 'arn:aws:eks:us-east-1:1:cluster/dev', repairable: true } })
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe('arn:aws:eks:us-east-1:1:cluster/dev')
+    expect(wrapper.find('[data-test="k8s-context-problem"]').exists()).toBe(false)
+
+    const missing = mount(ArchitectureKubernetesDiscoveryPanel, { props: { preferredContext: 'prod-cluster', repairable: true } })
+    await flushPromises()
+    expect(missing.get('[data-test="k8s-context-problem"]').text()).toContain('The context prod-cluster of this connection is not in this computer')
+    await missing.get('[data-test="k8s-repair-connection"]').trigger('click')
+    expect(missing.emitted('repair-connection')).toHaveLength(1)
+
+    // A failed read names its cause here, not as a failed write of the map.
+    store.loadKubernetesContexts = vi.fn(async () => { store.kubernetesContexts = []; store.error = 'ENOENT: kubeconfig' })
+    const failed = mount(ArchitectureKubernetesDiscoveryPanel)
+    await flushPromises()
+    expect(failed.get('[data-test="k8s-context-problem"]').text()).toContain('Could not read this computer')
+    expect(failed.text()).toContain('ENOENT: kubeconfig')
+    expect(store.error).toBe(null)
+    expect(failed.find('[data-test="k8s-repair-connection"]').exists()).toBe(false)
+  })
+
   it('shows the native identity and marks resources already in the application, which cannot be selected twice (#151)', async () => {
     const store = useArchitectureStore()
     store.linkedApplication = { id: 'app-a', name: 'Orders' }

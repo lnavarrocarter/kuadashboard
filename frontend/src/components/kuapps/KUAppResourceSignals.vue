@@ -19,8 +19,8 @@
       </div>
 
       <nav class="krs-tabs" role="tablist">
-        <button role="tab" :class="['krs-tab', { active: tab === 'metrics' }]" :aria-selected="tab === 'metrics'" data-test="observability-tab-metrics" @click="tab = 'metrics'">{{ t('obs.metrics') }}</button>
-        <button role="tab" :class="['krs-tab', { active: tab === 'logs' }]" :aria-selected="tab === 'logs'" :disabled="!current.capabilities.logs" data-test="observability-tab-logs" @click="tab = 'logs'">{{ t('obs.logs') }}</button>
+        <button role="tab" :class="['krs-tab', { active: tab === 'metrics' }]" :aria-selected="tab === 'metrics'" :tabindex="tab === 'metrics' ? 0 : -1" data-test="observability-tab-metrics" @click="tab = 'metrics'" @keydown="moveTab">{{ t('obs.metrics') }}</button>
+        <button role="tab" :class="['krs-tab', { active: tab === 'logs' }]" :aria-selected="tab === 'logs'" :tabindex="tab === 'logs' ? 0 : -1" :disabled="!current.capabilities.logs" data-test="observability-tab-logs" @click="tab = 'logs'" @keydown="moveTab">{{ t('obs.logs') }}</button>
       </nav>
 
       <section v-if="tab === 'metrics'" class="krs-metrics" data-test="observability-metrics">
@@ -57,6 +57,7 @@
 </template>
 
 <script setup>
+import { moveTab } from '../../lib/tablistKeys'
 import { computed, ref, watch } from 'vue'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
@@ -155,7 +156,7 @@ defineExpose({ reload: () => { lookUp(); loadMetrics() } })
 .krs-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .krs-head h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .krs-head small { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
-.krs-state { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+.krs-state { flex: 0 0 auto; font-size: 12px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .krs-state.current { color: var(--success, #16a34a); border-color: currentColor; }
 .krs-state.stale, .krs-state.partial, .krs-state.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
 .krs-state.gone, .krs-state.error { color: var(--danger, #dc2626); border-color: currentColor; }

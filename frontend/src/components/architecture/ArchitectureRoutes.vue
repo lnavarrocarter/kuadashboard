@@ -79,9 +79,11 @@
       </div>
 
       <div class="route-paths">
-        <div v-for="(path, pathIndex) in group.paths" :key="path.id" class="route-path" :data-route-id="path.id">
+        <!-- Progressive (#239): the first routes of each entry, and each one from where it branches. -->
+        <div v-for="(path, pathIndex) in visiblePaths(group)" :key="path.id" class="route-path" :data-route-id="path.id">
           <span class="path-order"><small>{{ t('archRoutes.routeLabel') }}</small><strong>{{ sequence(pathIndex) }}</strong></span>
-          <span v-for="(node, index) in path.nodes" :key="node.id" class="route-segment">
+          <span v-if="path.shared > 1" class="route-continues" :title="path.nodes.slice(0, path.shared).map(node => node.name).join(' → ')"><i data-lucide="corner-down-right"></i>{{ t('archRoutes.continuesFrom', { name: path.nodes[path.shared - 1].name }) }}</span>
+          <span v-for="(node, index) in path.nodes" v-show="path.shared <= 1 || index >= path.shared - 1" :key="node.id" class="route-segment">
             <button
               :class="['route-node', node.resourceType, { actionable: node.resourceType === 'stepfunctions' }]"
               :disabled="node.resourceType !== 'stepfunctions'"
@@ -92,11 +94,14 @@
               <span><strong>{{ node.name }}</strong><small>{{ stageLabel(node.resourceType) }}</small></span>
             </button>
             <span v-if="path.relations[index]" class="route-relation">
-              <small>{{ relationLabel(path.relations[index].relationType) }}</small>
+              <small>{{ (path.relationTypes?.[index] || [path.relations[index].relationType]).map(relationLabel).join(' · ') }}</small>
               <i data-lucide="arrow-right"></i>
             </span>
           </span>
         </div>
+        <button v-if="group.paths.length > ROUTES_SHOWN && !expandedGroups.has(group.id)" class="btn sm route-more" data-test="routes-show-more" @click="expandGroup(group.id)">
+          {{ t('archRoutes.showMore', { n: group.paths.length - ROUTES_SHOWN }) }}
+        </button>
       </div>
     </article>
   </section>
@@ -173,6 +178,13 @@ const filteredDocument = computed(() => {
     (relationStatusFilter.value === 'all' || (edge.status || 'automatic') === relationStatusFilter.value)) }
 })
 const groups = computed(() => architectureRouteGroups(filteredDocument.value, { order: sortMode.value }))
+const ROUTES_SHOWN = 5
+const expandedGroups = ref(new Set())
+const visiblePaths = group => (expandedGroups.value.has(group.id) ? group.paths : group.paths.slice(0, ROUTES_SHOWN))
+function expandGroup(id) {
+  expandedGroups.value = new Set([...expandedGroups.value, id])
+  nextTick(() => createIcons({ icons }))
+}
 const totalPaths = computed(() => groups.value.reduce((total, group) => total + group.paths.length, 0))
 
 function sequence(index) {
@@ -252,7 +264,7 @@ onMounted(refreshIcons)
 .routes-actions { margin-left: 0; flex-wrap: wrap; justify-content: flex-start; }
 .routes-actions > .ctrl-select { min-width: 150px; max-width: 230px; }
 .routes-actions > .cloudformation-filter { width: 270px; min-width: 240px; max-width: 320px; }
-.route-order-control { color: var(--text-dim); font-size: 11px; }
+.route-order-control { color: var(--text-dim); font-size: 12px; }
 .route-order-control :deep(svg) { width: 14px; height: 14px; }
 .route-order-control .ctrl-select { width: 140px; }
 .route-count { margin-left: auto; white-space: nowrap; }
@@ -261,7 +273,7 @@ onMounted(refreshIcons)
 .route-group:last-child { border-bottom: 0; }
 .route-group > header { background: var(--bg-hover); }
 .route-group > header .btn { margin-left: auto; }
-.event-order { width: 76px; color: #e3b341; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.event-order { width: 76px; color: #e3b341; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .event-order.microservice { color: #326ce5; }
 .route-entry-icon { width: 32px; height: 32px; display: grid; place-items: center; color: #0d1117; background: #e3b341; border-radius: 5px; }
 .route-entry-icon :deep(svg) { width: 16px; height: 16px; }
@@ -269,15 +281,18 @@ onMounted(refreshIcons)
 .event-structure > span { min-width: 130px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #d29922; background: color-mix(in srgb, #d29922 7%, transparent); }
 .microservice-structure { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 7px; border-bottom: 1px solid var(--border); }
 .microservice-structure > span { min-width: 130px; padding: 5px 7px; display: flex; flex-direction: column; gap: 2px; border-left: 2px solid #326ce5; background: color-mix(in srgb, #326ce5 7%, transparent); }
-.microservice-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
+.microservice-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 12px; }
 .microservice-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
-.event-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 9px; }
+.event-structure small { color: var(--text-dim); text-transform: uppercase; font-size: 12px; }
 .event-structure code { color: var(--text); white-space: normal; overflow-wrap: anywhere; }
 .route-paths { display: flex; flex-direction: column; overflow-x: auto; }
+.route-continues { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+.route-continues :deep(svg) { width: 13px; height: 13px; }
+.route-more { align-self: flex-start; margin: 6px 0 2px; }
 .route-path { min-width: max-content; padding: 14px 12px; display: flex; align-items: center; border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent); }
 .route-path:first-child { border-top: 0; }
 .path-order { width: 54px; margin-right: 12px; display: flex; flex-direction: column; align-items: center; color: var(--text-dim); }
-.path-order small { font-size: 9px; text-transform: uppercase; }
+.path-order small { font-size: 12px; text-transform: uppercase; }
 .path-order strong { color: var(--text); font-size: 15px; }
 .route-segment { display: contents; }
 .route-node { --node-accent: #8b949e; width: 210px; min-height: 62px; padding: 7px 9px; display: grid; grid-template-columns: 22px 18px minmax(0, 1fr); align-items: center; gap: 7px; color: var(--text); text-align: left; border: 1px solid var(--border); border-left: 3px solid var(--node-accent); border-radius: 5px; background: var(--bg); }
@@ -292,7 +307,7 @@ onMounted(refreshIcons)
 .route-node.configmap { --node-accent: #64748b; }
 .route-node.secret { --node-accent: #b74856; }
 .route-node.pvc { --node-accent: #3fb950; }
-.stage-order { width: 22px; height: 22px; display: grid; place-items: center; color: var(--node-accent); border: 1px solid color-mix(in srgb, var(--node-accent) 65%, transparent); border-radius: 50%; font-size: 9px; font-weight: 700; }
+.stage-order { width: 22px; height: 22px; display: grid; place-items: center; color: var(--node-accent); border: 1px solid color-mix(in srgb, var(--node-accent) 65%, transparent); border-radius: 50%; font-size: 12px; font-weight: 700; }
 .route-node > span { display: flex; flex-direction: column; min-width: 0; }
 .route-node > .stage-order { display: grid; }
 .route-node strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

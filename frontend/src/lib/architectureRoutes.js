@@ -77,6 +77,13 @@ function comparePaths(left, right, order) {
   return 0
 }
 
+// How many leading resources a route shares with the previous one: the UI shows only where it branches.
+function sharedPrefix(previous, path) {
+  let count = 0
+  while (count < previous.nodes.length - 1 && count < path.nodes.length - 1 && previous.nodes[count].id === path.nodes[count].id) count += 1
+  return count
+}
+
 export function architectureRouteGroups(document = {}, { order = 'sequence' } = {}) {
   const nodes = document.nodes || []
   const edges = (document.edges || []).filter(edge => edge.status !== 'rejected')
@@ -99,11 +106,30 @@ export function architectureRouteGroups(document = {}, { order = 'sequence' } = 
     })
   return roots.map(root => {
     const rootEdges = outgoing.get(root.id) || []
-    const paths = enumeratePaths(root.id, outgoing, nodesById).map(path => ({
-      id: `${path.nodeIds.join('>')}|${path.edgeIds.join('>')}`,
-      nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
-      relations: path.edgeIds.map(id => edgesById.get(id)).filter(Boolean),
-    })).sort((left, right) => comparePaths(left, right, order))
+    // The same resources walk one route (#239): several relationships between two of them (invokes
+    // and starts an execution, or one found twice) are the kinds of that step, not more routes.
+    const byNodes = new Map()
+    for (const path of enumeratePaths(root.id, outgoing, nodesById)) {
+      const key = path.nodeIds.join('>')
+      const route = byNodes.get(key)
+      if (!route) {
+        byNodes.set(key, { nodeIds: path.nodeIds, edgeIds: path.edgeIds.map(id => [id]) })
+        continue
+      }
+      path.edgeIds.forEach((id, index) => { if (!route.edgeIds[index].includes(id)) route.edgeIds[index].push(id) })
+    }
+    const paths = [...byNodes.values()]
+      .map(path => {
+        const steps = path.edgeIds.map(ids => ids.map(id => edgesById.get(id)).filter(Boolean))
+        return {
+          id: path.nodeIds.join('>'),
+          nodes: path.nodeIds.map(id => nodesById.get(id)).filter(Boolean),
+          relations: steps.map(edges => edges[0]).filter(Boolean),
+          relationTypes: steps.map(edges => [...new Set(edges.map(edge => edge.relationType || 'depends_on'))]),
+        }
+      })
+      .sort((left, right) => comparePaths(left, right, order))
+      .map((path, index, sorted) => ({ ...path, shared: index ? sharedPrefix(sorted[index - 1], path) : 0 }))
     return {
       id: root.id,
       name: root.name,

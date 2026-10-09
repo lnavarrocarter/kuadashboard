@@ -62,7 +62,7 @@ describe('ArchitectureRoutes', () => {
     expect(groups[3].paths.map(path => path.nodes.at(-1).name)).toEqual(['AlphaWorker', 'ZetaWorker'])
   })
 
-  it('keeps routes distinct when the same nodes have different relationships', () => {
+  it('walks the same resources once and lists every kind of relationship of a step (#239)', () => {
     const groups = architectureRouteGroups({
       nodes: [
         { id: 'rule', name: 'Schedule', resourceType: 'eventbridge' },
@@ -76,8 +76,8 @@ describe('ArchitectureRoutes', () => {
       ],
     })
 
-    expect(groups[0].paths).toHaveLength(2)
-    expect(new Set(groups[0].paths.map(path => path.id))).toHaveProperty('size', 2)
+    expect(groups[0].paths).toHaveLength(1)
+    expect(groups[0].paths[0].relationTypes).toEqual([['triggers'], ['invokes', 'starts_execution']])
   })
 
   it('groups Kubernetes Ingress and Service paths as microservice routes', () => {
@@ -233,5 +233,38 @@ describe('ArchitectureRoutes', () => {
     await wrapper.get('.route-group:last-child button').trigger('click')
 
     expect(wrapper.emitted('inspect-workflow')[0][0]).toEqual(graph.document.nodes[3])
+  })
+})
+
+describe('ArchitectureRoutes without repeated paths (#239)', () => {
+  const k8s = (id, resourceType) => ({ id, name: id, resourceType, provider: 'kubernetes', namespace: 'shop' })
+  const pods = Array.from({ length: 7 }, (_, index) => k8s(`pod-${index}`, 'pod'))
+  const document = {
+    nodes: [k8s('ingress', 'ingress'), k8s('svc', 'service'), k8s('deploy', 'deployment'), ...pods],
+    edges: [
+      { id: 'i-s', sourceNodeId: 'ingress', targetNodeId: 'svc', relationType: 'routes_to', status: 'confirmed' },
+      // The same relationship found twice walks one route.
+      { id: 's-d', sourceNodeId: 'svc', targetNodeId: 'deploy', relationType: 'routes_to', status: 'confirmed' },
+      { id: 's-d2', sourceNodeId: 'svc', targetNodeId: 'deploy', relationType: 'routes_to', status: 'suggested' },
+      ...pods.map(pod => ({ id: `d-${pod.id}`, sourceNodeId: 'deploy', targetNodeId: pod.id, relationType: 'owns', status: 'automatic' })),
+    ],
+  }
+
+  it('walks each route once and says where it branches from the previous one', () => {
+    const [group] = architectureRouteGroups(document)
+    expect(group.paths).toHaveLength(7)
+    expect(group.paths[0].shared).toBe(0)
+    expect(group.paths[1].shared).toBe(3)
+  })
+
+  it('shows the first routes from where they branch and the rest on demand', async () => {
+    const wrapper = mount(ArchitectureRoutes, { props: { graph: { revision: 1, document } } })
+    const paths = () => wrapper.findAll('.route-path')
+    expect(paths()).toHaveLength(5)
+    expect(paths()[1].text()).toContain('continues from deploy')
+    expect(paths()[1].findAll('.route-segment').filter(segment => segment.isVisible()).map(segment => segment.find('strong').text())).toEqual(['deploy', 'pod-1'])
+    await wrapper.get('[data-test="routes-show-more"]').trigger('click')
+    expect(paths()).toHaveLength(7)
+    expect(wrapper.find('[data-test="routes-show-more"]').exists()).toBe(false)
   })
 })

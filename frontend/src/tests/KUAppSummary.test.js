@@ -104,7 +104,7 @@ describe('KUApp summary (#171)', () => {
     expect(wrapper.find('[data-test="summary-confirm-collect"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="summary-confirm-collect"]').element.disabled).toBe(false)
     expect(wrapper.get('[data-test="summary-cloudwatch-cost"]').text()).toContain('$0.07/month')
-    expect(wrapper.text()).toContain('does not download logs again')
+    expect(wrapper.text()).toContain('Log events already read are not downloaded again')
     expect(wrapper.emitted('collect')).toBeUndefined()
     await wrapper.get('[data-test="summary-confirm-collect"]').trigger('click')
     expect(wrapper.emitted('collect')).toHaveLength(1)

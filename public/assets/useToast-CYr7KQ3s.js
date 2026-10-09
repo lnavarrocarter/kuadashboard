@@ -1,1 +1,0 @@
-import{ct as e}from"./_plugin-vue_export-helper-CSstm0AJ.js";var t=e([]);function n(){function e(e,n=`info`){let r=Date.now()+Math.random();t.value.push({id:r,message:e,type:n}),setTimeout(()=>{let e=t.value.findIndex(e=>e.id===r);e!==-1&&t.value.splice(e,1)},4e3)}return{toasts:t,toast:e}}export{n as t};

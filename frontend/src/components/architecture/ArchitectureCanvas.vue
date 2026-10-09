@@ -1,23 +1,8 @@
 <template>
   <section class="architecture-canvas-shell">
     <header class="canvas-toolbar">
-      <div class="canvas-toolbar-row canvas-create-controls">
-        <input
-          v-model.trim="nodeDraft.name"
-          class="ctrl-input"
-          maxlength="120"
-          :placeholder="t('archCanvas.componentName')"
-          @keyup.enter="addNode"
-        />
-        <select v-model="nodeDraft.resourceType" class="ctrl-select" :title="t('archCanvas.componentType')">
-          <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-        <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
-          <i data-lucide="plus"></i> {{ t('archCanvas.addComponent') }}
-        </button>
-        <span class="canvas-hint">{{ t('archCanvas.dragHint') }}</span>
-      </div>
       <div class="canvas-toolbar-row canvas-layout-controls">
+        <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" data-test="canvas-search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" :title="t('archCanvas.searchEnterHint')" @keydown.enter.prevent="goToSearchMatch" /></label>
         <select v-model="layoutMode" class="ctrl-select" :title="t('archCanvas.arrangement')" @change="persistView">
           <option value="request-flow">{{ t('archCanvas.layout.requestFlow') }}</option>
           <option value="system-domains">{{ t('archCanvas.layout.systemDomains') }}</option>
@@ -33,11 +18,34 @@
           <i :data-lucide="['resource-type', 'provider-resource', 'system-domains'].includes(layoutMode) ? 'rows-3' : layoutMode === 'provider-lanes' ? 'columns-3' : 'layout-dashboard'"></i>
           {{ layoutMode === 'system-domains' ? t('archCanvas.arrangeDomains') : layoutMode === 'resource-type' ? t('archCanvas.arrangeByType') : layoutMode === 'provider-resource' ? t('archCanvas.arrangeSections') : layoutMode === 'provider-lanes' ? t('archCanvas.arrangeLanes') : t('archCanvas.arrangeFlow') }}
         </button>
+        <!-- One row before the diagram (#239): each tool opens its panel below, one at a time. -->
+        <span class="canvas-panel-toggles" role="group" :aria-label="t('archCanvas.mapTools')">
+          <button type="button" :class="['btn', 'sm', { primary: openPanel === 'filters' }]" :aria-expanded="String(openPanel === 'filters')" data-test="canvas-panel-filters" @click="togglePanel('filters')"><i data-lucide="filter"></i>{{ t('archCanvas.filters') }}<b v-if="activeFilterCount" class="canvas-panel-count">{{ activeFilterCount }}</b></button>
+          <button type="button" :class="['btn', 'sm', { primary: openPanel === 'layers' }]" :aria-expanded="String(openPanel === 'layers')" data-test="canvas-panel-layers" @click="togglePanel('layers')"><i data-lucide="layers-3"></i>{{ t('archCanvas.mapLayers') }}<b v-if="activeLayerCount" class="canvas-panel-count">{{ activeLayerCount }}</b></button>
+          <button v-if="hiddenNodes.length" type="button" :class="['btn', 'sm', { primary: openPanel === 'hidden' }]" :aria-expanded="String(openPanel === 'hidden')" data-test="canvas-panel-hidden" @click="togglePanel('hidden')"><i data-lucide="eye-off"></i>{{ t('archCanvas.hiddenNodes') }}<b class="canvas-panel-count">{{ hiddenNodes.length }}</b></button>
+          <button type="button" :class="['btn', 'sm', { primary: openPanel === 'create' }]" :aria-expanded="String(openPanel === 'create')" data-test="canvas-panel-create" @click="togglePanel('create')"><i data-lucide="plus"></i>{{ t('archCanvas.component') }}</button>
+        </span>
       </div>
-      <details class="canvas-control-disclosure" :open="activeFilterCount > 0">
-        <summary><i data-lucide="filter"></i><span>{{ t('archCanvas.filters') }}</span><strong>{{ activeFilterCount || t('archCanvas.allResources') }}</strong></summary>
+      <div v-show="openPanel === 'create'" class="canvas-panel">
+        <div class="canvas-toolbar-row canvas-create-controls">
+          <input
+            v-model.trim="nodeDraft.name"
+            class="ctrl-input"
+            maxlength="120"
+            :placeholder="t('archCanvas.componentName')"
+            @keyup.enter="addNode"
+          />
+          <select v-model="nodeDraft.resourceType" class="ctrl-select" :title="t('archCanvas.componentType')">
+            <option v-for="option in nodeTypes" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+          <button class="btn sm primary" :disabled="saving || !nodeDraft.name" @click="addNode">
+            <i data-lucide="plus"></i> {{ t('archCanvas.addComponent') }}
+          </button>
+          <span class="canvas-hint">{{ t('archCanvas.dragHint') }}</span>
+        </div>
+      </div>
+      <div v-show="openPanel === 'filters'" class="canvas-panel">
         <div class="canvas-toolbar-row canvas-filter-controls">
-          <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" /></label>
           <select v-model="systemDomainFilter" class="ctrl-select" :title="t('archCanvas.filterSystemDomain')" @change="persistView">
             <option value="all">{{ t('archCanvas.allSystemDomains') }}</option>
             <option v-for="domain in availableSystemDomains" :key="domain" :value="domain">{{ systemDomainLabel(domain) }}</option>
@@ -63,18 +71,16 @@
             <option v-for="status in availableRelationStatuses" :key="status" :value="status">{{ relationshipStatus(status) }}</option>
           </select>
         </div>
-      </details>
-      <details v-if="hiddenNodes.length" class="canvas-control-disclosure" data-test="hidden-nodes">
-        <summary><i data-lucide="eye-off"></i><span>{{ t('archCanvas.hiddenNodes') }}</span><strong>{{ hiddenNodes.length }}</strong></summary>
+      </div>
+      <div v-if="hiddenNodes.length" v-show="openPanel === 'hidden'" class="canvas-panel" data-test="hidden-nodes">
         <ul class="canvas-hidden-list">
           <li v-for="node in hiddenNodes" :key="node.id">
             <span>{{ node.name || node.id }}</span>
             <button class="btn sm" :disabled="saving" :data-test="`show-node-${node.id}`" @click="showNode(node)"><i data-lucide="eye"></i> {{ t('archCanvas.showNode') }}</button>
           </li>
         </ul>
-      </details>
-      <details class="canvas-control-disclosure">
-        <summary><i data-lucide="layers-3"></i><span>{{ t('archCanvas.mapLayers') }}</span><strong>{{ activeLayerCount }}</strong></summary>
+      </div>
+      <div v-show="openPanel === 'layers'" class="canvas-panel">
         <div class="canvas-toolbar-row canvas-action-controls">
         <button :class="['btn', 'sm', { primary: showEdgeLabels }]" :disabled="!flowEdges.length" :title="t('archCanvas.toggleLabels')" @click="toggleEdgeLabels">
           <i data-lucide="tags"></i> {{ t('archCanvas.labels') }}
@@ -111,7 +117,7 @@
           <button class="btn sm" type="button" @click="clearTraceOverlay">{{ t('archCanvas.clear') }}</button>
         </span>
         </div>
-      </details>
+      </div>
     </header>
 
     <div ref="canvasBodyRef" class="canvas-body">
@@ -123,7 +129,7 @@
         :min-zoom="0.25"
         :max-zoom="2"
         :delete-key-code="null"
-        fit-view-on-init
+        @init="fitReadable()"
         @connect="connectNodes"
         @node-click="selectNode"
         @edge-click="selectEdge"
@@ -133,17 +139,18 @@
         <Background pattern-color="var(--border)" :gap="24" />
         <Controls position="bottom-left" />
         <template #node-default="{ data }">
-          <div class="architecture-node">
+          <div :class="['architecture-node', { 'architecture-node--drift': data.drift, 'architecture-node--gone': data.drift === 'gone' }]">
             <span :class="['node-icon', `node-icon--${presentationForType(data.resourceType).tone}`]">
               <i :data-lucide="presentationForType(data.resourceType).icon"></i>
             </span>
             <span>
-              <strong class="node-title">
+              <strong class="node-title" :title="data.label">
                 <span v-if="data.method" :class="['api-method', `api-method--${data.method.toLowerCase()}`]">{{ data.method }}</span>
                 {{ data.label }}
               </strong>
               <small>{{ typeLabel(data.resourceType) }}</small>
             </span>
+            <span v-if="data.drift" :class="['node-drift-badge', data.drift]" :data-test="`node-drift-${data.drift}`">{{ t(`archDrift.badge.${data.drift}`) }}</span>
             <span
               v-if="data.health"
               :class="['node-health-badge', `node-health-badge--${data.health.status}`]"
@@ -190,6 +197,7 @@
       <aside v-if="selectedNode" class="canvas-inspector">
         <header>
           <span><i data-lucide="box"></i> {{ t('archCanvas.component') }}</span>
+          <button class="btn sm btn-icon" data-test="canvas-zoom-neighbors" :title="t('archCanvas.zoomNeighbors')" :aria-label="t('archCanvas.zoomNeighbors')" @click="zoomToNeighbors()"><i data-lucide="scan-search"></i></button>
           <button class="btn sm btn-icon" :title="t('archCanvas.closeInspector')" @click="clearSelection"><i data-lucide="x"></i></button>
         </header>
         <label>{{ t('archCanvas.name') }}<input v-model.trim="editDraft.name" class="ctrl-input" maxlength="120" /></label>
@@ -315,6 +323,8 @@ const props = defineProps({
   rolloutsLoading: { type: Boolean, default: false },
   security: { type: Object, default: () => ({}) },
   securityLoading: { type: Boolean, default: false },
+  // nodeId → { change: 'recreated' | 'replaced' | 'gone', successors } from the cluster check (#239)
+  drift: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'request-rollouts', 'request-security', 'resource-selected'])
 
@@ -336,6 +346,15 @@ const editNodeTypes = computed(() => nodeTypes.value.some(option => option.value
 const flowNodes = ref([])
 const flowEdges = ref([])
 const layoutMode = ref('request-flow')
+// Above this many resources a map without a chosen arrangement opens grouped by domain (#239).
+const LARGE_MAP_NODES = 40
+// The tool panel open under the toolbar: filters, layers, hidden nodes or a new component (#239).
+const openPanel = ref('')
+function togglePanel(name) {
+  openPanel.value = openPanel.value === name ? '' : name
+  nextTick(refreshIcons)
+}
+let largeMapDefaultApplied = false
 const layoutDirection = ref('horizontal')
 const resourceSections = ref([])
 const fitAfterSync = ref(false)
@@ -356,7 +375,7 @@ const systemDomainFilter = ref('all')
 const nodeSearch = ref('')
 const exporting = ref(false)
 const canvasBodyRef = ref(null)
-const { fitView, setCenter, setViewport, getNodes } = useVueFlow()
+const { fitView, setCenter, getNodes } = useVueFlow()
 const { toast } = useToast()
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
@@ -620,6 +639,11 @@ function computedLayout(document, visibleDocument) {
 function syncGraph(hydrateView = true) {
   const document = props.graph?.document
   if (!document) return
+  // Once per canvas: a later refresh keeps what the user arranged locally.
+  if (hydrateView && !largeMapDefaultApplied && !['resource-type', 'request-flow', 'provider-lanes', 'provider-resource', 'system-domains'].includes(document.view?.layoutMode)) {
+    largeMapDefaultApplied = true
+    if ((document.nodes || []).length > LARGE_MAP_NODES) layoutMode.value = 'system-domains'
+  }
   if (hydrateView && document.view && typeof document.view === 'object') {
     if (['resource-type', 'request-flow', 'provider-lanes', 'provider-resource', 'system-domains'].includes(document.view.layoutMode)) {
       layoutMode.value = document.view.layoutMode
@@ -671,6 +695,7 @@ function syncGraph(hydrateView = true) {
         events: nodeEventsOverlay(node),
         rollout: nodeRolloutOverlay(node),
         security: nodeSecurityOverlay(node),
+        drift: props.drift?.[node.id]?.change || '',
       },
     }
   })
@@ -693,9 +718,7 @@ function syncGraph(hydrateView = true) {
   if (selectedEdge.value) selectedEdge.value = document.edges.find(edge => edge.id === selectedEdge.value.id) || null
   if (fitAfterSync.value) {
     fitAfterSync.value = false
-    nextTick(() => document.nodes.length > 40
-      ? setViewport({ x: 40, y: 40, zoom: 0.65 }, { duration: 250 })
-      : fitView({ padding: 0.16, duration: 250 }))
+    nextTick(() => fitReadable({ duration: 250 }))
   }
   refreshIcons()
 }
@@ -908,6 +931,27 @@ function reviewEdge(decision) {
   clearSelection()
 }
 
+// A large map opens at a readable size around its centre instead of shrinking to fit (#239).
+const READABLE_ZOOM = 0.6
+function fitReadable(options = {}) {
+  return fitView({ padding: 0.16, minZoom: READABLE_ZOOM, maxZoom: 1.1, ...options })
+}
+
+// The selected resource and its neighbours, already highlighted, fill the view.
+function zoomToNeighbors() {
+  if (!focusedNodeIds.value) return
+  const ids = [...focusedNodeIds.value].filter(id => flowNodes.value.some(node => node.id === id))
+  if (ids.length) fitView({ nodes: ids, padding: 0.3, minZoom: READABLE_ZOOM, maxZoom: 1.2, duration: 250 })
+}
+
+// Enter in the search selects the first visible match and brings its neighbours into view.
+function goToSearchMatch() {
+  const match = filteredGraphDocument.value.nodes[0]
+  if (!match) return
+  selectNode({ node: { id: match.id } })
+  nextTick(zoomToNeighbors)
+}
+
 function clearSelection() {
   selectedNode.value = null
   selectedEdge.value = null
@@ -1084,7 +1128,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading], () => syncGraph(false), { deep: true })
+watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1098,12 +1142,12 @@ onMounted(refreshIcons)
 .canvas-layout-controls { flex-wrap: wrap; }
 .canvas-action-controls { flex-wrap: wrap; }
 .canvas-control-disclosure { border-top: 1px solid var(--border); }
-.canvas-control-disclosure summary { min-height: 34px; padding: 5px 9px; display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: 11px; cursor: pointer; list-style: none; }
+.canvas-control-disclosure summary { min-height: 34px; padding: 5px 9px; display: flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: 12px; cursor: pointer; list-style: none; }
 .canvas-control-disclosure summary::-webkit-details-marker { display: none; }
 .canvas-control-disclosure summary::before { content: '›'; width: 12px; color: var(--text-dim); font-size: 17px; line-height: 1; transition: transform .16s ease; }
 .canvas-control-disclosure[open] summary::before { transform: rotate(90deg); }
 .canvas-control-disclosure summary :deep(svg) { width: 14px; height: 14px; }
-.canvas-control-disclosure summary strong { margin-left: auto; color: var(--text); font-size: 10px; font-weight: 600; }
+.canvas-control-disclosure summary strong { margin-left: auto; color: var(--text); font-size: 12px; font-weight: 600; }
 .canvas-filter-controls, .canvas-action-controls { padding: 8px 9px; }
 .canvas-filter-controls { flex-wrap: wrap; }
 .canvas-filter-controls .ctrl-select { flex: 1 1 160px; }
@@ -1115,35 +1159,45 @@ onMounted(refreshIcons)
 .canvas-layout-controls .ctrl-select { flex-basis: 168px; }
 .canvas-layout-controls .direction-select { width: 166px; }
 .canvas-toolbar-row .btn { flex: 0 0 auto; white-space: nowrap; }
-.canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 11px; }
+.canvas-hint { margin-left: auto; color: var(--text-dim); font-size: 12px; }
+.canvas-layout-controls { flex-wrap: wrap; }
+.canvas-panel-toggles { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; }
+.canvas-panel-count { margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--bg-hover); color: var(--text); font-size: 12px; font-weight: 600; }
+.canvas-panel { padding-top: 7px; border-top: 1px solid var(--border); }
+.canvas-panel > .canvas-toolbar-row { flex-wrap: wrap; }
 .canvas-body { position: relative; height: clamp(420px, 58vh, 680px); }
 .architecture-flow { width: 100%; height: 100%; background: var(--bg-panel); }
 .architecture-node { min-width: 155px; display: flex; align-items: center; gap: 9px; color: var(--text); text-align: left; position: relative; }
 .architecture-node > span:last-child { display: flex; flex-direction: column; }
-.node-title { display: flex; align-items: center; gap: 6px; }
-.architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+/* Long names wrap inside the node instead of overflowing it; the full name is its tooltip (#239). */
+.node-title { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; word-break: break-word; }
+.architecture-node small { margin-top: 2px; color: var(--text-dim); font-size: 12px; }
+.architecture-node--drift { outline: 2px dashed var(--yellow); outline-offset: 2px; }
+.architecture-node--gone { opacity: .6; outline-color: var(--red); }
+.node-drift-badge { position: absolute; top: -10px; left: 8px; padding: 0 6px; border-radius: 8px; background: var(--yellow); color: #111; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.node-drift-badge.gone { background: var(--red); color: #fff; }
 .node-health-badge { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel); }
 .node-health-badge--healthy { background: #3fb950; }
 .node-health-badge--degraded { background: #d29922; }
 .node-health-badge--stale { background: #6e7781; }
-.node-metrics { display: flex; flex-wrap: wrap; gap: 4px 7px; margin-left: 4px; padding-left: 6px; border-left: 1px solid var(--border); color: var(--text-dim); font-size: 9px; }
+.node-metrics { display: flex; flex-wrap: wrap; gap: 4px 7px; margin-left: 4px; padding-left: 6px; border-left: 1px solid var(--border); color: var(--text-dim); font-size: 12px; }
 .node-metric { display: inline-flex; align-items: baseline; gap: 3px; }
-.node-metric small { margin: 0; font-size: 8px; }
-.node-metric strong { color: var(--text); font-size: 9px; }
-.node-collection { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; padding: 2px 5px; border-radius: 8px; background: var(--bg-panel); color: var(--text-dim); font-size: 8px; }
+.node-metric small { margin: 0; font-size: 12px; }
+.node-metric strong { color: var(--text); font-size: 12px; }
+.node-collection { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; padding: 2px 5px; border-radius: 8px; background: var(--bg-panel); color: var(--text-dim); font-size: 12px; }
 .node-collection--completed { color: #3fb950; }
 .node-collection--partial { color: #d29922; }
 .node-collection--failed, .node-collection--budget_exhausted { color: #f85149; }
 .node-collection :deep(svg) { width: 10px; height: 10px; }
 .component-metadata { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .component-metadata > span { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 7px; align-items: baseline; }
-.component-metadata small { color: var(--text-dim); font-size: 10px; }
-.component-metadata strong { overflow-wrap: anywhere; font-family: monospace; font-size: 10px; font-weight: 500; }
+.component-metadata small { color: var(--text-dim); font-size: 12px; }
+.component-metadata strong { overflow-wrap: anywhere; font-family: monospace; font-size: 12px; font-weight: 500; }
 .api-gateway-routes { display: flex; flex-direction: column; gap: 5px; }
 .resource-section { width: 100%; height: 100%; padding: 12px 16px; display: flex; align-items: flex-start; justify-content: space-between; border: 1px solid color-mix(in srgb, var(--border) 82%, #58a6ff); border-radius: 6px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--text-dim); pointer-events: none; }
-.resource-section span { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.resource-section span { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .resource-section span :deep(svg) { width: 14px; height: 14px; color: #58a6ff; }
-.resource-section strong { min-width: 24px; padding: 2px 6px; border-radius: 10px; background: var(--bg-panel); color: var(--text); font-size: 10px; text-align: center; }
+.resource-section strong { min-width: 24px; padding: 2px 6px; border-radius: 10px; background: var(--bg-panel); color: var(--text); font-size: 12px; text-align: center; }
 .node-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 30px; border: 1px solid transparent; border-radius: 5px; color: white; }
 .node-icon :deep(svg) { width: 16px; height: 16px; }
 .node-icon--compute { background: #d86613; }
@@ -1157,7 +1211,7 @@ onMounted(refreshIcons)
 .node-icon--management { background: #39788f; }
 .node-icon--neutral { background: #59636e; }
 .node-icon--security-simple { border-color: #b74856; background: transparent; color: #d75a68; }
-.api-method { min-width: 31px; padding: 2px 4px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 9px; line-height: 1; text-align: center; color: #fff; background: #6e7781; }
+.api-method { min-width: 31px; padding: 2px 4px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1; text-align: center; color: #fff; background: #6e7781; }
 .api-method--get { background: #287f3b; }
 .api-method--post { background: #2869a8; }
 .api-method--put, .api-method--patch { background: #9a6700; }
@@ -1170,19 +1224,19 @@ onMounted(refreshIcons)
 .canvas-inspector::-webkit-scrollbar-thumb { border-radius: 10px; background: color-mix(in srgb, var(--text-dim) 38%, transparent); }
 .canvas-inspector header { display: flex; align-items: center; justify-content: space-between; }
 .canvas-inspector header span, .relationship-direction { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
-.canvas-inspector label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 11px; }
+.canvas-inspector label { display: flex; flex-direction: column; gap: 5px; color: var(--text-dim); font-size: 12px; }
 .canvas-inspector .ctrl-input, .canvas-inspector .ctrl-select { width: 100%; }
 .inspector-id { color: var(--text-dim); word-break: break-all; }
 .component-references { display: flex; flex-direction: column; gap: 5px; }
 .component-node-actions { display: flex; flex-direction: column; gap: 5px; }
 .component-node-actions .btn { justify-content: flex-start; }
-.inspector-section-title { color: var(--text-dim); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.inspector-section-title { color: var(--text-dim); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .component-reference { width: 100%; padding: 7px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
 .component-reference:hover { border-color: #2f81f7; }
 .component-reference > svg { width: 14px; height: 14px; flex: 0 0 14px; color: #58a6ff; }
 .component-reference > span { min-width: 0; display: flex; flex-direction: column; }
 .component-reference strong, .component-reference small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.component-reference small { margin-top: 2px; color: var(--text-dim); font-size: 10px; }
+.component-reference small { margin-top: 2px; color: var(--text-dim); font-size: 12px; }
 .inspector-actions { display: flex; justify-content: space-between; gap: 7px; }
 .canvas-hidden-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .canvas-hidden-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
@@ -1190,28 +1244,28 @@ onMounted(refreshIcons)
 .inspector-confirm { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--warning, #d97706); border-radius: 6px; padding: 8px; }
 .inspector-confirm p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .relationship-direction { padding: 3px 0; }
-.relationship-status { width: fit-content; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.relationship-status { width: fit-content; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 700; }
 .relationship-status.automatic { color: #58a6ff; background: color-mix(in srgb, #2f81f7 14%, transparent); }
 .relationship-status.suggested { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .relationship-status.manual { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
 .relationship-evidence { color: var(--text-dim); overflow-wrap: anywhere; }
-.trace-overlay-status { display: inline-flex; align-items: center; gap: 5px; color: #f778ba; font-size: 10px; }
+.trace-overlay-status { display: inline-flex; align-items: center; gap: 5px; color: #f778ba; font-size: 12px; }
 .trace-overlay-status > svg { width: 13px; height: 13px; }
 .trace-overlay-status .btn { min-height: 22px; padding: 2px 6px; color: var(--text-dim); }
-.node-trace-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #f778ba; background: color-mix(in srgb, #f778ba 14%, transparent); font-size: 9px; font-weight: 700; }
+.node-trace-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #f778ba; background: color-mix(in srgb, #f778ba 14%, transparent); font-size: 12px; font-weight: 700; }
 .node-trace-badge > svg { width: 11px; height: 11px; }
-.node-events-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); font-size: 9px; font-weight: 700; }
+.node-events-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); font-size: 12px; font-weight: 700; }
 .node-events-badge > svg { width: 11px; height: 11px; }
-.node-rollout-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 9px; font-weight: 700; }
+.node-rollout-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 12px; font-weight: 700; }
 .node-rollout-badge--ready { color: #3fb950; background: color-mix(in srgb, #3fb950 14%, transparent); }
 .node-rollout-badge--degraded { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .node-rollout-badge > svg { width: 11px; height: 11px; }
-.node-security-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 9px; font-weight: 700; }
+.node-security-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; font-size: 12px; font-weight: 700; }
 .node-security-badge > svg { width: 11px; height: 11px; }
 .node-security-badge--high { color: #f85149; background: color-mix(in srgb, #f85149 14%, transparent); }
 .node-security-badge--medium { color: #d29922; background: color-mix(in srgb, #d29922 14%, transparent); }
 .node-security-badge--low { color: #58a6ff; background: color-mix(in srgb, #58a6ff 14%, transparent); }
-:deep(.vue-flow__node-default) { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
+:deep(.vue-flow__node-default) { width: auto; min-width: 150px; max-width: 240px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
 :deep(.vue-flow__node-resource-section) { border: 0; background: transparent; box-shadow: none; pointer-events: none; }
 :deep(.vue-flow__node.selected) { box-shadow: 0 0 0 2px #2f81f7; }
 :deep(.vue-flow__handle) { width: 9px; height: 9px; background: #2f81f7; border: 2px solid var(--bg-panel); }

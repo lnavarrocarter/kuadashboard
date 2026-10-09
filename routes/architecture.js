@@ -4,7 +4,7 @@ const express = require('express');
 const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
 const { ArchitectureGraphService, discoveryIdentityKeys } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
-const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+const { ApplicationRegistryService, canonicalFromApm, canonicalFromNode } = require('../lib/kua/applicationRegistryService');
 const { ArchitectureCloudDiscoveryService } = require('../lib/architecture/cloudDiscoveryService');
 const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryReader');
 const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
@@ -12,8 +12,10 @@ const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct, summarizeTechnicalFindings, crossRecommendations } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
+const { checkKubernetesMap, publicDrift, refreshOperation } = require('../lib/architecture/kubernetesDrift');
+const { checkAwsMap } = require('../lib/architecture/awsDrift');
 
-function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   // Advisor acceptances and history live in the APM database (migration 18). The server passes
@@ -80,6 +82,69 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     applications.filter(application => applicationAvailableToProfile(application, project.profileId))
       .forEach(application => registry.reconcile(application));
     return applications.length ? database.getGraph(project.id) : null;
+  }
+
+  // The member of a KUA Application behind a drawn node (#239): the Observability resource it was
+  // projected from (apm-resource:<id>), or the member with the same canonical identity (the
+  // reconcile makes observable nodes members without recording them in the node).
+  function applicationMemberOf(project, node) {
+    if (!apmDatabase || !node) return null;
+    const direct = String(node.id || '').startsWith('apm-resource:') ? apmDatabase.getResource(node.id.slice('apm-resource:'.length)) : null;
+    if (direct) return direct;
+    const identity = canonicalFromNode(project, node)?.identityKey;
+    if (!identity) return null;
+    for (const application of linkedApplications(project)) {
+      const member = apmDatabase.listResources(application.id).find(resource => canonicalFromApm(application, resource)?.identityKey === identity);
+      if (member) return member;
+    }
+    return null;
+  }
+
+  // On its own the map would draw a member again on the next reconcile, so its membership follows
+  // the same decision: a replaced workload's successor becomes a member (observed like any other)
+  // and what no longer exists is detached. Pods are observed through their workload, never added.
+  // Before the map changes: every detach reconciles, and a member still attached would be drawn
+  // again. The successors are attached after the map changed (attachSuccessors).
+  function detachMembers(project, document, changes) {
+    if (!registry) return { results: [], attaches: [] };
+    const results = [];
+    const attaches = [];
+    for (const change of changes) {
+      if (change.change === 'recreated') continue;
+      const resource = applicationMemberOf(project, (document?.nodes || []).find(node => node.id === change.nodeId));
+      const application = resource ? apmDatabase.getApplication(resource.applicationId) : null;
+      if (!application) continue;
+      try {
+        registry.detachResource(application, resource.id);
+        results.push({ applicationId: application.id, detached: resource.name, attached: null });
+      } catch (error) {
+        results.push({ applicationId: application.id, detached: null, error: error.message, resource: resource.name });
+        continue;
+      }
+      const kind = String(resource.kind || '').toLowerCase();
+      const successor = change.successors[0];
+      if (change.change !== 'replaced' || !successor || !['deployment', 'statefulset', 'daemonset'].includes(kind)) continue;
+      const suffix = `/${resource.name}`;
+      const key = String(resource.key || '').endsWith(suffix)
+        ? `${resource.key.slice(0, -suffix.length)}/${successor.name}`
+        : `${resource.kubeContext}/${resource.namespace || 'default'}/${resource.kind}/${successor.name}`;
+      attaches.push({ application, result: results.at(-1), input: {
+        provider: 'kubernetes', type: 'kubernetes', kind: resource.kind, key, name: successor.name,
+        kubeContext: resource.kubeContext, namespace: resource.namespace, associationSource: 'manual',
+      } });
+    }
+    return { results, attaches };
+  }
+
+  function attachSuccessors({ results, attaches }) {
+    for (const { application, result, input } of attaches) {
+      try {
+        const { results: attached } = registry.attachResources(apmDatabase.getApplication(application.id), [input], { clearDetachments: true });
+        if (attached[0]?.error) result.error = attached[0].error;
+        else result.attached = input.name;
+      } catch (error) { result.error = error.message; }
+    }
+    return results;
   }
 
   // Lets discovery panels show which preview resources are already part of the project's graph,
@@ -441,6 +506,124 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       });
     } catch (error) { handleError(res, error); }
   });
+
+  function linkedApplications(project) {
+    if (!apmDatabase) return [];
+    return apmDatabase.listApplicationsByArchitectureProjectId
+      ? apmDatabase.listApplicationsByArchitectureProjectId(project.id)
+      : [apmDatabase.getApplicationByArchitectureProjectId?.(project.id)].filter(Boolean);
+  }
+
+  // The connection of this computer that reaches a drawn AWS resource (#239): the account and region
+  // of the node or of its registry resource, and the profile bound and verified for that account in
+  // the linked application; an application from before connections uses its own profile and region.
+  function awsLocator(project) {
+    const applications = linkedApplications(project);
+    const registered = new Map();
+    const connections = new Map();
+    for (const application of applications) {
+      for (const resource of apmDatabase.listRegistryResources(application.id)) registered.set(resource.id, { resource, application });
+      const bindings = apmDatabase.listScopeBindings(application.id).filter(binding => binding.status === 'verified' && binding.profileId);
+      connections.set(application.id, apmDatabase.listApplicationScopes(application.id)
+        .filter(scope => scope.provider === 'aws')
+        .map(scope => ({ scope, binding: bindings.find(binding => binding.scopeKey === scope.key) }))
+        .filter(item => item.binding));
+    }
+    return node => {
+      const arn = String(node.arn || '').split(':');
+      let accountId = node.accountId || (/^\d{12}$/.test(arn[4] || '') ? arn[4] : '');
+      let region = node.region || arn[3] || '';
+      let candidates = applications;
+      const known = node.registryResourceId ? registered.get(node.registryResourceId) : null;
+      if (known) {
+        accountId = accountId || known.resource.scopeId || '';
+        region = region || known.resource.location || '';
+        candidates = [known.application];
+      }
+      for (const application of candidates) {
+        const bound = (connections.get(application.id) || []).filter(({ scope }) =>
+          (!accountId || scope.scopeId === accountId) && (!region || !scope.location || scope.location === region));
+        if (bound.length === 1 || (bound.length && accountId)) {
+          const [{ scope, binding }] = bound;
+          return { profileId: binding.profileId, accountId: accountId || scope.scopeId, region: region || scope.location || application.region || 'us-east-1' };
+        }
+        if (!(connections.get(application.id) || []).length && application.provider === 'aws' && application.profileId) {
+          return { profileId: application.profileId, accountId, region: region || application.region || 'us-east-1' };
+        }
+      }
+      return null;
+    };
+  }
+
+  // Every drawn resource against where it lives (#239): Kubernetes resources with free reads of the
+  // Kubernetes API, AWS resources with Cloud Control reads (no charge of their own). Nothing is written.
+  async function checkMap(project, document) {
+    const [kubernetes, aws] = await Promise.all([
+      checkKubernetesMap(document, kubernetesAdapter),
+      apmDatabase ? checkAwsMap(document, { locate: awsLocator(project), ...(awsDriftReader ? { reader: awsDriftReader } : {}) })
+        : Promise.resolve({ checked: 0, present: 0, changes: [], notVerified: {} }),
+    ]);
+    return { kubernetes, aws };
+  }
+
+  function driftResponse({ kubernetes, aws }) {
+    const drift = publicDrift(kubernetes.drift);
+    return {
+      ...drift,
+      present: drift.present + aws.present,
+      changes: [...drift.changes.map(change => ({ provider: 'kubernetes', ...change })), ...aws.changes],
+      aws: { checked: aws.checked, present: aws.present, notVerified: aws.notVerified },
+    };
+  }
+
+  async function sendDrift(req, res) {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const graph = database.getGraph(project.id);
+      res.json({ ...driftResponse(await checkMap(project, graph?.document)), projectId: project.id, revision: graph?.revision ?? null });
+    } catch (error) { handleError(res, error); }
+  }
+
+  // Applies the changes the user confirmed, computed again here (never taken from the client):
+  // successors take the place and relationships of what they replaced, what no longer exists leaves
+  // the map, and the members of the linked application follow. One revision, with its reason.
+  async function applyDrift(req, res) {
+    const project = scopedProject(req, res);
+    if (!project) return;
+    try {
+      const current = database.getGraph(project.id);
+      const checked = await checkMap(project, current?.document);
+      const { drift, preview } = checked.kubernetes;
+      const all = driftResponse(checked).changes;
+      const nodeIds = Array.isArray(req.body?.nodeIds) ? req.body.nodeIds.map(String) : [];
+      const chosen = nodeIds.length ? all.filter(item => nodeIds.includes(item.nodeId)) : all;
+      if (!chosen.length) return res.status(409).json({ error: 'The map already matches where its resources live', drift: driftResponse(checked) });
+      const kubernetesIds = chosen.filter(item => item.provider === 'kubernetes').map(item => item.nodeId);
+      const operation = kubernetesIds.length
+        ? refreshOperation({ drift, preview, profileId: project.profileId, nodeIds: kubernetesIds })
+        : { type: 'discovery.refresh', value: { scopes: [], sources: [], nodes: [], edges: [], replacements: [], removeIds: [] } };
+      operation.value.removeIds = [...operation.value.removeIds, ...chosen.filter(item => item.provider === 'aws').map(item => item.nodeId)];
+      if (Number(req.body?.expectedRevision) !== current?.revision) {
+        throw Object.assign(new Error('Architecture graph revision conflict'), { statusCode: 409 });
+      }
+      const pending = detachMembers(project, current.document, chosen);
+      let graph = service.applyOperation(project.id, operation, {
+        expectedRevision: database.getGraph(project.id).revision,
+        author: project.profileId,
+        reason: `Refresh ${chosen.length} resource${chosen.length === 1 ? '' : 's'} that changed where they live`,
+      });
+      const membership = attachSuccessors(pending);
+      graph = reconcileLinkedApplication(project) || database.getGraph(project.id) || graph;
+      log('Map refreshed from where its resources live', project.name, project.profileId, { projectId: project.id, changes: chosen.length, membership, revision: graph.revision });
+      res.json({ ...graph, membership });
+    } catch (error) { handleError(res, error); }
+  }
+
+  router.post('/projects/:projectId/discovery/drift', sendDrift);
+  router.post('/projects/:projectId/discovery/drift-apply', applyDrift);
+  router.post('/projects/:projectId/discovery/kubernetes/drift', sendDrift);
+  router.post('/projects/:projectId/discovery/kubernetes/drift-apply', applyDrift);
 
   router.post('/projects/:projectId/discovery/kubernetes/rollouts', async (req, res) => {
     const project = scopedProject(req, res);
