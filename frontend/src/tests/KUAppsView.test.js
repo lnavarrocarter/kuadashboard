@@ -555,14 +555,14 @@ describe('KUApps navigation', () => {
     expect(wrapper.get('.kuapps-signals-inspector dl').text()).toContain('lambda')
     // Browsers do not render the content of a native <template> (jsdom does): the inspector looked empty (#239).
     expect(wrapper.find('.kuapps-signals-inspector template').exists()).toBe(false)
-    expect(wrapper.get('[data-test="map-inspector-body"]').text()).toContain('arn:aws:lambda:us-east-1:123456789012:function:orders-api')
-    await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
+    expect(wrapper.get('.kuapps-signals-inspector [data-test="resource-inspector"]').text()).toContain('arn:aws:lambda:us-east-1:123456789012:function:orders-api')
+    await wrapper.get('.kuapps-signals-inspector [data-test="inspector-tab-signals"]').trigger('click')
 
-    const signals = wrapper.findComponent({ name: 'ApmObservabilityView' })
+    // The signals of that resource (#239), read where the application's collection lives.
+    const signals = wrapper.findComponent({ name: 'KUAppResourceSignals' })
     expect(signals.exists()).toBe(true)
-    expect(signals.props('section')).toBe('signals')
-    expect(signals.props('focusResource').node).toMatchObject({ registryResourceId: resource.id, name: resource.displayName })
-    expect(signals.props('profileId')).toBe('local:prod')
+    expect(signals.props('registryId')).toBe(resource.id)
+    expect(signals.props('collection')).toEqual({ provider: 'aws', profileId: 'local:prod' })
 
     wrapper.findComponent({ name: 'ArchitectureView' }).vm.$emit('resource-selected', {
       id: 'graph:checkout-handler', provider: 'aws', resourceType: 'lambda', name: 'checkout-handler',
@@ -570,18 +570,13 @@ describe('KUApps navigation', () => {
     })
     await flushPromises()
     expect(wrapper.get('.kuapps-signals-inspector h3').text()).toBe('checkout-handler')
-    expect(wrapper.findComponent({ name: 'ApmObservabilityView' }).props('focusResource').node).toMatchObject({
-      name: 'checkout-handler', nativeId: 'arn:aws:lambda:us-east-1:123456789012:function:checkout-handler',
-    })
 
     await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
     await wrapper.findAll('.kuapps-resource-row')[1].trigger('click')
     await wrapper.findAll('.kuapps-workspace-tab')[2].trigger('click')
-    await wrapper.findAll('.kuapps-inspector-tabs button')[1].trigger('click')
+    await wrapper.get('.kuapps-signals-inspector [data-test="inspector-tab-signals"]').trigger('click')
     // A Kubernetes workload of an AWS application has signals too (collected through its kube context).
-    const workload = wrapper.findComponent({ name: 'ApmObservabilityView' })
-    expect(workload.exists()).toBe(true)
-    expect(workload.props('focusResource').node).toMatchObject({ provider: 'kubernetes', name: 'orders-pods' })
+    expect(wrapper.findComponent({ name: 'KUAppResourceSignals' }).props('registryId')).toBe('registry:orders-pods')
     wrapper.unmount()
   })
 
@@ -740,8 +735,8 @@ describe('KUApps navigation', () => {
     const inspector = wrapper.get('.kuapps-resource-inspector')
     expect(inspector.text()).toContain('dev-eks')
     expect(inspector.text()).toContain('orders')
-    expect(inspector.get('.kuapps-resource-source-list').text()).toContain('Observability')
-    expect(inspector.get('.kuapps-resource-identity').text()).toContain(resources[0].nativeIdentifier)
+    expect(inspector.get('.kri-sources').text()).toContain('Observability')
+    expect(inspector.get('.kri-identity').text()).toContain(resources[0].nativeIdentifier)
     wrapper.unmount()
   })
 

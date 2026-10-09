@@ -92,8 +92,11 @@ describe('KUApp summary (#171)', () => {
     const calls = global.fetch.mock.calls.length
     await wrapper.findAll('.range-control button')[2].trigger('click')
     await flushPromises()
-    expect(global.fetch.mock.calls.length).toBe(calls + 2)
-    const overviewUrl = global.fetch.mock.calls.at(-2)[0]
+    // Overview, topology and the issues of the new range (#239).
+    const rangeCalls = global.fetch.mock.calls.slice(calls).map(([url]) => String(url))
+    expect(rangeCalls).toHaveLength(3)
+    expect(rangeCalls.some(url => url.includes('/observability/issues?hours=168'))).toBe(true)
+    const overviewUrl = rangeCalls.find(url => url.includes('/overview'))
     const [, from, to] = overviewUrl.match(/from=(\d+)&to=(\d+)/)
     expect(Number(to) - Number(from)).toBe(7 * 24 * 3600e3)
 

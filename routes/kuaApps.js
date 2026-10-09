@@ -13,6 +13,8 @@ const { signalCapabilities } = require('../lib/apm/signalCapabilities');
 const { applicationForResource } = require('../lib/kua/scopeCredentials');
 const { canonicalFromApm } = require('../lib/kua/applicationRegistryService');
 const { createResourceObserver } = require('../lib/kua/resourceObserver');
+const { applicationIssues } = require('../lib/kua/applicationIssues');
+const { readCollection } = require('../lib/apm/resourcePresence');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
@@ -154,7 +156,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
         id: resource.id, registryId, name: resource.name, provider: resource.provider, type: resource.type, kind: resource.kind || null,
         key: resource.key, arn: resource.arn || null, kubeContext: resource.kubeContext || null, namespace: resource.namespace || null,
         logGroup: resource.logGroup || null, service: resource.service || '', scopeId: resource.scopeId || null, location: resource.location || null,
+        metadata: resource.metadata || {},
         enabled: resource.enabled, capabilities: signalCapabilities(resource),
+        // The outcome of its last collection: which one failed, why and when (#239).
+        lastCollection: readCollection(apmDatabase, resource.id),
         signals: (registryId && signals.get(registryId)) || { state: 'unsupported', lastDataAt: null, reason: 'type' },
         access,
       };
@@ -186,6 +191,14 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   }));
   router.post('/applications/:applicationId/observer/ignore', (req, res) => send(res, 200, () =>
     observer.ignore(applicationOr404(req.params.applicationId), req.body?.resourceId)));
+
+  // What needs attention, resource by resource, most important first (#239). ?hours= is the range.
+  router.get('/applications/:applicationId/observability/issues', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 90);
+    const to = Date.now();
+    return applicationIssues({ database: apmDatabase, application, from: to - hours * 3600000, to, now: to });
+  }));
 
   // The metrics KUA collected for one resource of the application, grouped by metric (local data).
   router.get('/applications/:applicationId/observability/resources/:resourceId/metrics', (req, res) => send(res, 200, () => {
