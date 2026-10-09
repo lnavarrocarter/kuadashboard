@@ -5,7 +5,7 @@
       <div class="range-control" role="group" :aria-label="t('apm.metricRange')">
         <button v-for="value in RANGES" :key="value" :class="{ active: range === value }" @click="range = value">{{ value }}</button>
       </div>
-      <button class="btn sm btn-icon" :title="t('apm.refreshLocal')" :disabled="loading" @click="load"><i data-lucide="refresh-cw"></i></button>
+      <button class="btn sm btn-icon" :title="t('apm.refreshLocal')" :disabled="loading" data-test="summary-refresh" @click="refresh"><i data-lucide="refresh-cw"></i></button>
       <button class="btn sm" data-test="summary-collect" :disabled="!hasSignals || !resources.length || collecting" @click="confirmCollect = true">
         <i :data-lucide="collecting ? 'loader-2' : 'cloud-download'"></i>{{ collecting ? t('apm.collecting') : t('apm.collectNow') }}
       </button>
@@ -51,12 +51,13 @@
     <!-- What to look at first, under the indicators: resource, evidence, since when and action (#239). -->
     <KUAppIssues
       v-if="application?.id && hasSignals"
+      ref="issuesRef"
       class="kuapp-issues"
       :application-id="application.id"
       :hours="RANGE_HOURS[range]"
       :limit="5"
       @action="issue => $emit('issue-action', issue)"
-      @loaded="data => { issuesData = data; issuesLoaded = true }"
+      @loaded="onIssuesLoaded"
       @show-all="$emit('open-signals', { hours: RANGE_HOURS[range], filter: 'issues' })"
     />
 
@@ -173,12 +174,23 @@ const health = computed(() => overview.value?.health || null)
 // The issues open in the range, from the same list shown under the cards (KUAppIssues).
 const issuesData = ref(null)
 const issuesLoaded = ref(false)
+// The issues could not be read: the health is partial, never "no issues" (#239 N02).
+const issuesFailed = ref(false)
+const issuesAt = ref(null)
+const issuesRef = ref(null)
+function onIssuesLoaded(data) {
+  issuesData.value = data
+  issuesFailed.value = data === null
+  issuesLoaded.value = true
+  issuesAt.value = Date.now()
+}
 const issueCounts = computed(() => issuesData.value?.counts || { critical: 0, warning: 0, info: 0 })
 const firstCritical = computed(() => (issuesData.value?.issues || []).find(issue => issue.severity === 'critical') || null)
 const healthLoading = computed(() => hasSignals.value && (loading.value || !issuesLoaded.value))
 const healthTone = computed(() => {
   if (!hasSignals.value || healthLoading.value) return 'unknown'
   if (issueCounts.value.critical || health.value?.status === 'degraded') return 'bad'
+  if (issuesFailed.value) return 'attention'
   if (!health.value || health.value.status === 'unknown') return issueCounts.value.warning ? 'attention' : 'unknown'
   return issueCounts.value.warning ? 'attention' : 'ok'
 })
@@ -187,15 +199,20 @@ const healthTitle = computed(() => {
   if (healthLoading.value) return t('kuapps.summary.evaluating')
   // An open critical issue is never "healthy", whatever the aggregated thresholds say.
   if (issueCounts.value.critical) return t('kuapps.summary.critical')
+  if (health.value?.status === 'degraded') return t('kuapps.summary.degraded')
+  if (issuesFailed.value) return t('kuapps.summary.partial')
   if (!health.value || health.value.status === 'unknown') return t('kuapps.summary.noData')
-  if (health.value.status === 'degraded') return t('kuapps.summary.degraded')
   return issueCounts.value.warning ? t('kuapps.summary.healthyWithWarnings', { n: issueCounts.value.warning }) : t('kuapps.summary.healthy')
 })
-// What the health covers and when it was evaluated.
+// What the health covers and when it was evaluated: the older of its two sources (#239 N01).
 const evaluatedAt = ref(null)
-const healthScope = computed(() => (hasSignals.value && !healthLoading.value && evaluatedAt.value
-  ? t('kuapps.summary.healthScope', { time: new Date(evaluatedAt.value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), n: coverage.value.withData })
-  : ''))
+const healthScope = computed(() => {
+  if (!hasSignals.value || healthLoading.value || !evaluatedAt.value) return ''
+  const time = Math.min(evaluatedAt.value, issuesAt.value || evaluatedAt.value)
+  return t(issuesFailed.value ? 'kuapps.summary.healthScopePartial' : 'kuapps.summary.healthScope', {
+    time: new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), n: coverage.value.withData,
+  })
+})
 function openHealth() {
   if (healthLoading.value) return
   const issues = issueCounts.value.critical || issueCounts.value.warning || health.value?.status === 'degraded'
@@ -206,6 +223,10 @@ const healthDetail = computed(() => {
   if (healthLoading.value) return t('kuapps.summary.evaluatingHint')
   if (issueCounts.value.critical) {
     return t('kuapps.summary.criticalDetail', { n: issueCounts.value.critical, resource: firstCritical.value?.resourceName || '-' })
+  }
+  if (issuesFailed.value && health.value?.status !== 'degraded') {
+    const thresholds = health.value?.status === 'healthy' ? t('kuapps.summary.healthy') : health.value?.status === 'degraded' ? t('kuapps.summary.degraded') : t('kuapps.summary.noData')
+    return t('kuapps.summary.partialDetail', { thresholds })
   }
   const signal = health.value?.signals?.[0]
   if (signal) {
@@ -325,9 +346,15 @@ async function load() {
 }
 
 // A new application or range waits for its own issues before the health card answers.
-watch(() => [props.application?.id, range.value], () => { issuesData.value = null; issuesLoaded.value = false })
+watch(() => [props.application?.id, range.value], () => { issuesData.value = null; issuesLoaded.value = false; issuesFailed.value = false })
+// Refresh renews every source of the health together: thresholds, topology and issues (#239 N01).
+function refresh() {
+  issuesLoaded.value = false
+  issuesRef.value?.reload?.()
+  return load()
+}
 watch(() => [props.application?.id, props.profileId, props.provider, range.value], load, { immediate: true })
-defineExpose({ reload: load })
+defineExpose({ reload: refresh })
 </script>
 
 <style scoped>

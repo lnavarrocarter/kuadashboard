@@ -13,7 +13,8 @@ function respond({ overview, topology }) {
     ok: true,
     status: 200,
     headers: { get: () => 'application/json' },
-    json: () => Promise.resolve(String(url).includes('/overview') ? overview : topology),
+    json: () => Promise.resolve(String(url).includes('/overview') ? overview
+      : String(url).includes('/observability/issues') ? { counts: { critical: 0, warning: 0, info: 0 }, issues: [] } : topology),
   }))
 }
 
@@ -156,6 +157,68 @@ describe('KUApp summary: one health for thresholds and open issues (#239)', () =
     await flushPromises()
     expect(card(wrapper, 'health').text()).toContain('Healthy · 2 warning(s)')
     expect(card(wrapper, 'health').classes()).toContain('attention')
+    wrapper.unmount()
+  })
+})
+
+describe('KUApp summary: refresh and partial evaluation (#239 N01, N02)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function serve(handler) {
+    global.fetch = vi.fn(url => {
+      const text = String(url)
+      const result = text.includes('/overview') ? { health: { status: 'healthy', signals: [] }, latestRun: { status: 'completed', finishedAt: Date.now() } }
+        : text.includes('/observability/issues') ? handler(text)
+          : { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: null }
+      return Promise.resolve(result).then(body => (body instanceof Error
+        ? { ok: false, status: 500, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ error: body.message }) }
+        : { ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body) }))
+    })
+  }
+
+  it('says the evaluation is partial when the issues cannot be read, never healthy', async () => {
+    serve(() => new Error('issues unavailable'))
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Partial evaluation')
+    expect(card(wrapper, 'health').text()).toContain('Thresholds: Healthy. The open issues could not be read')
+    expect(card(wrapper, 'health').text()).not.toMatch(/^Health · 24hHealthy/)
+    expect(card(wrapper, 'health').classes()).toContain('attention')
+    expect(wrapper.get('[data-test="summary-health-scope"]').text()).toContain('issues unavailable')
+    wrapper.unmount()
+  })
+
+  it('refresh renews the thresholds and the issues together', async () => {
+    let critical = 1
+    serve(() => ({ counts: { critical, warning: 0, info: 0 }, issues: critical ? [{ id: 'x', severity: 'critical', resourceName: 'payments', kind: 'gone' }] : [] }))
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Critical issues')
+    // The issue is solved in the backend; a local refresh, not a collection, shows it.
+    critical = 0
+    await wrapper.get('[data-test="summary-refresh"]').trigger('click')
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Healthy')
+    expect(card(wrapper, 'health').text()).not.toContain('Critical issues')
+    await card(wrapper, 'health').trigger('click')
+    expect(wrapper.emitted('open-signals').at(-1)[0].filter).toBe('observable')
+    wrapper.unmount()
+  })
+
+  it('an answer for a previous range never overwrites the current one', async () => {
+    let release24
+    serve(url => (url.includes('hours=24')
+      ? new Promise(resolve => { release24 = () => resolve({ counts: { critical: 3, warning: 0, info: 0 }, issues: [] }) })
+      : { counts: { critical: 0, warning: 1, info: 0 }, issues: [] }))
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
+    await flushPromises()
+    await wrapper.findAll('.range-control button').find(button => button.text() === '6h').trigger('click')
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Healthy · 1 warning(s)')
+    release24()
+    await flushPromises()
+    expect(card(wrapper, 'health').text()).toContain('Healthy · 1 warning(s)')
+    expect(card(wrapper, 'health').text()).not.toContain('Critical issues')
     wrapper.unmount()
   })
 })
