@@ -446,3 +446,23 @@ test('possible duplicates: same identifier with and without account, never by na
     assert.deepEqual(body[0].resources.map(resource => resource.id).sort(), ['a1', 'a2', 'a3']);
   } finally { await subject.close(); }
 });
+
+test('API registry: a cluster-scoped object of an EKS context has no namespace (#239 N05)', async () => {
+  const subject = await fixture();
+  try {
+    const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
+    const context = 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev';
+    const application = subject.apmDatabase.createApplication({ profileId: 'local:test', region: 'us-east-1', name: 'Dev' });
+    subject.apmDatabase.addResource(application.id, { type: 'kubernetes', kind: 'Node', name: 'ip-1', key: `${context}//Node/ip-1`, associationSource: 'manual' });
+    subject.apmDatabase.addResource(application.id, { type: 'kubernetes', kind: 'Deployment', name: 'authv1', key: `${context}/backend360/Deployment/authv1`, associationSource: 'manual' });
+    new ApplicationRegistryService({ database: subject.apmDatabase, architectureDatabase: subject.database }).reconcile(subject.apmDatabase.getApplication(application.id));
+    const { body } = await subject.request(`/applications/${application.id}/registry`);
+    const byName = Object.fromEntries(body.resources.map(resource => [resource.displayName, resource]));
+    assert.equal(byName['ip-1'].namespace, '');
+    assert.equal(byName['ip-1'].kubeContext, context);
+    assert.equal(byName.authv1.namespace, 'backend360');
+    assert.equal(byName.authv1.kubeContext, context);
+  } finally {
+    await subject.close();
+  }
+});

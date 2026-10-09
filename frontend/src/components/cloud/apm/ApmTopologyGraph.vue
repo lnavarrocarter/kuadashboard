@@ -27,9 +27,20 @@
           </button>
         </div>
         <div v-if="topology.analysis.findings?.length" class="finding-list">
-          <span v-for="finding in topology.analysis.findings" :key="finding.code" :class="['finding', finding.severity]">
-            {{ t(`apm.analysis.${finding.code}`, { count: finding.resourceIds?.length || topology.analysis.counts.suggestions }) }}
-          </span>
+          <template v-for="finding in topology.analysis.findings" :key="finding.code">
+            <!-- A finding names its resources and the next step, not only a count (#239 N05). -->
+            <details v-if="finding.resourceIds?.length" :class="['finding', 'finding-detail', finding.severity]" :data-test="`finding-${finding.code}`">
+              <summary>{{ t(`apm.analysis.${finding.code}`, { count: finding.resourceIds.length }) }}</summary>
+              <p v-if="nextStep(finding.code)" class="finding-next">{{ nextStep(finding.code) }}</p>
+              <ul class="finding-resources">
+                <li v-for="name in findingNames(finding).shown" :key="name">{{ name }}</li>
+                <li v-if="findingNames(finding).more" class="finding-more">{{ t('apm.analysis.more', { n: findingNames(finding).more }) }}</li>
+              </ul>
+            </details>
+            <span v-else :class="['finding', finding.severity]">
+              {{ t(`apm.analysis.${finding.code}`, { count: finding.resourceIds?.length || topology.analysis.counts.suggestions }) }}
+            </span>
+          </template>
         </div>
         <p v-else>{{ t('apm.analysisHealthy') }}</p>
         <p v-if="topology.analysis.cloudScan" class="cloud-scan-summary">
@@ -188,6 +199,17 @@ const props = defineProps({
 
 defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'open-kubernetes-logs', 'explain'])
 const { t } = useI18n()
+// The names of a finding's resources (up to 12) and its next step, when one is written.
+function findingNames(finding) {
+  const byId = new Map((props.topology?.resources || []).map(resource => [resource.id, resource.name || resource.id]))
+  const names = (finding.resourceIds || []).map(id => byId.get(id) || id)
+  return { shown: names.slice(0, 12), more: Math.max(0, names.length - 12) }
+}
+function nextStep(code) {
+  const key = `apm.analysis.${code}.next`
+  const text = t(key)
+  return text === key ? '' : text
+}
 
 const resolvedEdges = computed(() => {
   const names = Object.fromEntries((props.topology.resources || []).map(resource => [resource.id, resource.name]))
@@ -333,4 +355,9 @@ onMounted(renderIcons)
 .unresolved-row small { color: var(--text-dim); font-size: 9px; }
 .dependency-empty, .apm-topology-empty { color: var(--text-dim); font-size: 10px; text-align: center; padding: 20px; }
 @media (max-width: 680px) { .apm-resource-grid { grid-template-columns: 1fr; } .topology-intelligence { grid-template-columns: 1fr; } .analysis-score { border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 9px; } .suggestion-row, .unresolved-row { align-items: stretch; flex-direction: column; } }
+.finding-detail { display: block; }
+.finding-detail > summary { cursor: pointer; }
+.finding-next { margin: 6px 0 4px; font-size: 12px; color: var(--text); }
+.finding-resources { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-dim); }
+.finding-more { list-style: none; margin-left: -18px; }
 </style>

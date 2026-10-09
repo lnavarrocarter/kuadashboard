@@ -121,12 +121,15 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       res.json({
         resources: resources.map(({ id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, lineage, updatedAt }) => {
           const kubernetesOrigin = lineage.find(item => item.kubeContext || item.namespace) || {};
+          // A Kubernetes key is <context>/<namespace>/<Kind>/<name>, and an EKS context is an ARN that
+          // contains "/": read it from the end (#239 N05). Cluster-scoped objects have no namespace.
           const identityParts = String(nativeIdentifier || '').split('/');
+          const keyed = provider === 'kubernetes' && identityParts.length >= 4;
           return {
             id, provider, scopeId, location, nativeIdentifier, resourceType, displayName, sources, updatedAt,
             signals: signals.get(id),
-            kubeContext: kubernetesOrigin.kubeContext || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[0] : ''),
-            namespace: kubernetesOrigin.namespace || (provider === 'kubernetes' && identityParts.length >= 4 ? identityParts[1] : ''),
+            kubeContext: kubernetesOrigin.kubeContext || (keyed ? identityParts.slice(0, -3).join('/') : ''),
+            namespace: kubernetesOrigin.namespace || (keyed ? identityParts[identityParts.length - 3] : ''),
           };
         }),
         relationships: apmDatabase.listRegistryRelationships(application.id).map(relationship => ({
