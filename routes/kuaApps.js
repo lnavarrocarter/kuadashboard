@@ -42,8 +42,8 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return application;
   }
 
-  // Export and cloud backup read a KUA Application without provider from any profile: it has no
-  // profile of its own (#149). A legacy application stays scoped to its profile.
+  // Export, cloud backup and sync reach a KUA Application without provider from any profile: it
+  // has no profile of its own (#149). A legacy application stays scoped to its profile.
   function exportableApplication(req, res) {
     const profile = profileId(req, res);
     if (!profile) return null;
@@ -122,9 +122,41 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
           sourceName: resourcesById.get(relationship.sourceResourceId)?.displayName || '',
           targetName: resourcesById.get(relationship.targetResourceId)?.displayName || '',
         })),
+        // When the registry was last reconciled: it is derived from APM resources and views.
+        syncStatus: apmDatabase.getRegistrySyncStatus(application.id),
       });
     } catch (error) { handleError(res, error); }
   });
+
+  // The architecture views of an application (#154). Not scoped by X-Profile-Id: a view is read
+  // through the application it belongs to, and a project of another application is never served.
+  const applicationOr404 = id => {
+    const application = apmDatabase.getApplication(id);
+    if (!application) throw Object.assign(new Error('KUA Application not found'), { statusCode: 404, code: 'NOT_FOUND' });
+    return application;
+  };
+  const viewIdsOf = application => application.architectureProjectIds?.length
+    ? application.architectureProjectIds : [application.architectureProjectId].filter(Boolean);
+  router.get('/applications/:applicationId/views', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    return viewIdsOf(application).map(projectId => {
+      const project = database.getProject(projectId);
+      const graph = project ? database.getGraph(projectId) : null;
+      return project
+        ? { projectId, name: project.name, revision: graph?.revision ?? 0, updatedAt: graph?.updatedAt || null, nodes: graph?.document?.nodes?.length || 0, edges: graph?.document?.edges?.length || 0 }
+        : { projectId, missing: true };
+    });
+  }));
+  router.get('/applications/:applicationId/views/:projectId/graph', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    if (!viewIdsOf(application).includes(req.params.projectId)) {
+      throw Object.assign(new Error('This view does not belong to the application'), { statusCode: 404, code: 'VIEW_NOT_FOUND' });
+    }
+    const project = database.getProject(req.params.projectId);
+    const graph = project ? database.getGraph(project.id) : null;
+    if (!graph) throw Object.assign(new Error('The view no longer exists'), { statusCode: 404, code: 'VIEW_NOT_FOUND' });
+    return { projectId: project.id, name: project.name, revision: graph.revision, updatedAt: graph.updatedAt || null, document: graph.document };
+  }));
   router.delete('/applications/:applicationId/registry/resources/:resourceId', (req, res) => {
     const application = apmDatabase.getApplication(req.params.applicationId);
     if (!application) return res.status(404).json({ error: 'KUA Application not found' });
@@ -273,25 +305,25 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
 
   router.post('/:applicationId/sync', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
-    try { res.status(201).json(await engine().enable(application)); } catch (error) { handleError(res, error); }
+    try { res.status(201).json(await engine().enable(application, { profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // ?everywhere=1 also stops it on the other computers (the local copies stay).
   router.delete('/:applicationId/sync', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
-    try { res.json(await engine().disable(application, { everywhere: req.query.everywhere === '1' })); } catch (error) { handleError(res, error); }
+    try { res.json(await engine().disable(application, { everywhere: req.query.everywhere === '1', profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // { choice: "mine" | "theirs" }: the version not chosen is kept as a snapshot.
   router.post('/:applicationId/sync/resolve', async (req, res) => {
-    const application = scopedApplication(req, res);
+    const application = exportableApplication(req, res);
     if (!application) return;
     const choice = String(req.body?.choice || '');
     if (!['mine', 'theirs'].includes(choice)) return res.status(400).json({ error: 'choice must be mine or theirs' });
-    try { res.json(await engine().resolve(application, choice)); } catch (error) { handleError(res, error); }
+    try { res.json(await engine().resolve(application, choice, { profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
   });
 
   // An application synced from another computer, added to this profile.
