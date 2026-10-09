@@ -251,15 +251,26 @@
                   <span class="kuapps-resource-count" data-test="resource-count">{{ t('obs.count', { shown: filteredRegistryResources.length, total: applicationRegistry.resources.length }) }}</span>
                 </div>
                 <div class="kuapps-resource-list" role="list">
-                  <div class="kuapps-resource-header" aria-hidden="true">
-                    <span></span><span>{{ t('kuapps.resources.columnName') }}</span><span>{{ t('kuapps.resources.connection') }}</span><span>{{ t('kuapps.signalState.title') }}</span>
+                  <div class="kuapps-resource-item" aria-hidden="true">
+                    <div class="kuapps-resource-header">
+                      <span></span><span>{{ t('kuapps.resources.columnName') }}</span><span>{{ t('kuapps.resources.connection') }}</span><span>{{ t('kuapps.signalState.title') }}</span>
+                    </div>
+                    <span class="kuapps-resource-open"></span>
                   </div>
-                  <button v-for="resource in filteredRegistryResources" :key="resource.id" role="listitem" :class="['kuapps-resource-row', { active: selectedResourceId === resource.id }]" @click="selectedResourceId = resource.id">
+                  <div v-for="resource in filteredRegistryResources" :key="resource.id" class="kuapps-resource-item" role="listitem">
+                  <button :class="['kuapps-resource-row', { active: selectedResourceId === resource.id }]" @click="selectedResourceId = resource.id">
                     <span class="kuapps-resource-mark"><i :data-lucide="resource.provider === 'kubernetes' ? 'box' : 'cloud' "></i></span>
                     <span class="kuapps-resource-copy"><strong :title="resource.displayName">{{ resource.displayName }}</strong><small>{{ resource.provider }} · {{ resource.resourceType }}<template v-if="resource.provider === 'kubernetes'"> · {{ resource.namespace || t('kuapps.sync.clusterScope') }}</template></small></span>
                     <span class="kuapps-resource-scope" :title="resourceConnectionTitle(resource)">{{ resourceConnection(resource) }}</span>
                     <span :class="['kuapps-signal-badge', signalStateOf(resource)]" data-test="resource-signal-state" :title="t(`kuapps.signalState.${signalStateOf(resource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(resource)}`) }}</span>
                   </button>
+                  <!-- Straight to the resource where it lives (#239): AWS view or console, Kubernetes. -->
+                  <template v-for="destination in [primaryDestination(resource)]" :key="destination?.key || 'none'">
+                    <a v-if="destination?.url" class="btn btn-icon kuapps-resource-open" data-test="resource-open" :href="destination.url" target="_blank" rel="noopener noreferrer" :title="t(destination.label)" :aria-label="`${t(destination.label)}: ${resource.displayName}`"><i :data-lucide="destination.icon"></i></a>
+                    <button v-else-if="destination" class="btn btn-icon kuapps-resource-open" data-test="resource-open" :title="t(destination.label)" :aria-label="`${t(destination.label)}: ${resource.displayName}`" @click="openDestination(destination)"><i :data-lucide="destination.icon"></i></button>
+                    <span v-else class="kuapps-resource-open"></span>
+                  </template>
+                  </div>
                   <p v-if="!filteredRegistryResources.length" class="kuapps-review-note" data-test="resource-no-matches">{{ t('obs.noMatches') }}</p>
                 </div>
               </div>
@@ -278,6 +289,8 @@
                   @explain="explainRegistryRelationship"
                   @open-map="workspaceView = 'map'"
                 @open-aws="openAwsResource"
+                @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
+                @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
                   @retry="registryId => openSignals({ filter: 'failed' })"
                   @bind-scope="onIssueAction({ action: 'bind_scope' })"
                   @review-missing="workspaceView = 'review'"
@@ -298,6 +311,10 @@
                 workspace-mode
                 workspace-section="resources"
                 @request-resource-picker="openUnifiedResourcePicker"
+                @open-aws-resource="openAwsResource"
+                @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
+                @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
+                @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"
               />
             </details>
           </section>
@@ -430,6 +447,8 @@
                 @explain="explainRegistryRelationship"
                 @open-map="workspaceView = 'map'"
                 @open-aws="openAwsResource"
+                @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
+                @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
                 @retry="registryId => openSignals({ filter: 'failed' })"
                 @bind-scope="onIssueAction({ action: 'bind_scope' })"
                 @review-missing="workspaceView = 'review'"
@@ -491,6 +510,7 @@
 
 <script setup>
 import { awsRegion } from '../../lib/awsResourceLinks'
+import { resourceDestinations } from '../../lib/resourceDestinations'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import ArchitectureView from '../architecture/ArchitectureView.vue'
@@ -1144,6 +1164,11 @@ function awsProfileFor(resource) {
 function openAwsResource(resource) {
   emit('open-aws-resource', { ...resource, ...awsProfileFor(resource) })
 }
+const primaryDestination = resource => resourceDestinations(resource)[0] || null
+function openDestination(destination) {
+  if (destination.event === 'open-aws') openAwsResource(destination.payload)
+  else emit(destination.event, destination.payload)
+}
 
 function providerName(provider) {
   return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
@@ -1485,6 +1510,9 @@ defineExpose({ reloadActiveTab })
 .kuapps-registry-details { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; }
 .kuapps-registry-details > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; }
 .kuapps-registry-details > summary small { color: var(--text-dim); font-size: 12px; }
+.kuapps-resource-item { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; border-bottom: 1px solid var(--border); }
+.kuapps-resource-item > .kuapps-resource-row { border-bottom: 0; }
+.kuapps-resource-open { justify-self: center; }
 .kuapps-resource-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-resource-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .kuapps-resource-filters input { flex: 1 1 200px; min-width: 0; }

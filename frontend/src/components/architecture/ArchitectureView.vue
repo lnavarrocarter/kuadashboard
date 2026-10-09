@@ -319,6 +319,7 @@
                 :loading="store.registryLoading"
                 @refresh="store.loadRegistry"
                 @operation="applyCanvasOperation"
+                @open-destination="openDestination"
               />
             </section>
 
@@ -982,6 +983,12 @@ const NODE_ACTION_EVENTS = {
 // Kind -> the resourceType used by open Kubernetes log terminal tabs (see useTerminalStore.openLogsTab).
 const KUBE_LOG_TAB_RESOURCE_TYPE = {
   Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Pod: 'pods',
+}
+
+// A resource of the registry table opens where it lives, through the same events as the canvas (#239).
+function openDestination(destination) {
+  if (destination?.event === 'open-aws') emit('open-aws-resource', destination.payload)
+  else if (destination?.event) emit(destination.event, destination.payload)
 }
 
 function handleNodeAction({ action, node } = {}) {

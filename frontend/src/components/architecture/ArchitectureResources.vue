@@ -53,6 +53,7 @@
           <th>{{ t('archRes.col.status') }}</th>
           <th>{{ t('archRes.col.relations') }}</th>
           <th v-if="$slots.actions">{{ t('archRes.col.actions') }}</th>
+          <th>{{ t('archRes.col.open') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -86,6 +87,13 @@
             </span>
           </td>
           <td v-if="$slots.actions" class="resource-actions-cell"><slot name="actions" :resource="resource.sourceResource || resource"></slot></td>
+          <!-- Straight to the resource where it lives (#239): AWS view or console, Kubernetes. -->
+          <td class="resource-open-cell">
+            <template v-for="destination in [resourceDestinations(resource)[0]]" :key="destination?.key || 'none'">
+              <a v-if="destination?.url" class="btn sm btn-icon" data-test="registry-resource-open" :href="destination.url" target="_blank" rel="noopener noreferrer" :title="t(destination.label)" :aria-label="`${t(destination.label)}: ${resource.displayName}`"><i :data-lucide="destination.icon"></i></a>
+              <button v-else-if="destination" class="btn sm btn-icon" data-test="registry-resource-open" :title="t(destination.label)" :aria-label="`${t(destination.label)}: ${resource.displayName}`" @click="emit('open-destination', destination)"><i :data-lucide="destination.icon"></i></button>
+            </template>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -95,6 +103,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
+import { resourceDestinations } from '../../lib/resourceDestinations'
 
 const props = defineProps({
   graph: { type: Object, default: null },
@@ -102,7 +111,7 @@ const props = defineProps({
   fallbackResources: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
 })
-const emit = defineEmits(['refresh', 'operation'])
+const emit = defineEmits(['refresh', 'operation', 'open-destination'])
 const { t } = useI18n()
 const providerFilter = ref('all')
 const scopeFilter = ref('')

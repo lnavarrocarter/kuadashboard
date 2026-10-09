@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
 import { awsConsoleUrl, awsIdentity, awsRegion, awsViewTarget } from '../lib/awsResourceLinks'
+import { kubernetesObject, resourceDestinations } from '../lib/resourceDestinations'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
 import KUAppResourceInspector from '../components/kuapps/KUAppResourceInspector.vue'
 import KUAppsView from '../components/kuapps/KUAppsView.vue'
@@ -66,10 +67,10 @@ describe('navigating to an AWS resource (#239)', () => {
   it('the KUApps inspector offers the same destinations', () => {
     settings.lang = 'en'
     const queue = mount(KUAppResourceInspector, { props: { applicationId: 'a', resource: { id: 'r', provider: 'aws', resourceType: 'sqs', displayName: 'jobs', nativeIdentifier: 'arn:aws:sqs:us-east-1:111111111111:jobs', signals: { state: 'unsupported' } } }, global: { stubs: { KUAppResourceSignals: true } } })
-    expect(queue.find('[data-test="inspector-open-aws"]').exists()).toBe(true)
+    expect(queue.find('[data-test="inspector-aws-view"]').exists()).toBe(true)
     const group = mount(KUAppResourceInspector, { props: { applicationId: 'a', resource: { id: 's', provider: 'aws', resourceType: 'ec2', displayName: 'sg-1', nativeIdentifier: 'AWS::EC2::SecurityGroup:sg-1', location: 'us-east-1', signals: { state: 'unsupported' } } }, global: { stubs: { KUAppResourceSignals: true } } })
-    expect(group.get('[data-test="inspector-open-aws-console"]').attributes('href')).toContain('#SecurityGroup:groupId=sg-1')
-    expect(group.get('[data-test="inspector-open-aws-console"]').attributes('rel')).toContain('noopener')
+    expect(group.get('[data-test="inspector-aws-console"]').attributes('href')).toContain('#SecurityGroup:groupId=sg-1')
+    expect(group.get('[data-test="inspector-aws-console"]').attributes('rel')).toContain('noopener')
   })
 
   it('KUApps sends the profile bound to the resource account with it', async () => {
@@ -92,8 +93,59 @@ describe('navigating to an AWS resource (#239)', () => {
     await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
     await wrapper.get('.kuapps-resource-list .kuapps-resource-row').trigger('click')
     await flushPromises()
-    await wrapper.get('[data-test="inspector-open-aws"]').trigger('click')
+    await wrapper.get('[data-test="inspector-aws-view"]').trigger('click')
     expect(wrapper.emitted('open-aws-resource')[0][0]).toMatchObject({ id: 'r1', awsProfileId: 'local:two', awsRegion: 'us-east-1' })
+    wrapper.unmount()
+  })
+})
+
+describe('Kubernetes resources and the Resources list (#239)', () => {
+  const CONTEXT = 'arn:aws:eks:us-east-1:073746111526:cluster/EKS130-360-Dev'
+
+  it('reads the Kubernetes object of a registry resource, even from its key, and offers detail, pods and logs', () => {
+    const deployment = { provider: 'kubernetes', resourceType: 'deployment', displayName: 'authv1', nativeIdentifier: `${CONTEXT}/backend360/Deployment/authv1` }
+    expect(kubernetesObject(deployment)).toEqual({ provider: 'kubernetes', kind: 'Deployment', name: 'authv1', namespace: 'backend360', kubeContext: CONTEXT })
+    expect(resourceDestinations(deployment).map(item => item.key)).toEqual(['kubernetes-detail', 'kubernetes-pods', 'kubernetes-logs'])
+    expect(resourceDestinations({ ...deployment, resourceType: 'service', nativeIdentifier: `${CONTEXT}/backend360/Service/authv1` }).map(item => item.key)).toEqual(['kubernetes-detail'])
+    // A cluster Node has no Kubernetes view to open; an AWS resource has no Kubernetes one.
+    expect(resourceDestinations({ provider: 'kubernetes', resourceType: 'node', displayName: 'ip-1', nativeIdentifier: `${CONTEXT}//Node/ip-1` })).toEqual([])
+    expect(resourceDestinations({ provider: 'aws', resourceType: 'sqs', name: 'jobs' }).map(item => item.key)).toEqual(['aws-view'])
+  })
+
+  it('each row of Resources opens its resource where it lives; the inspector offers every destination', async () => {
+    setActivePinia(createPinia())
+    settings.lang = 'en'
+    const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
+    const resources = [
+      { id: 'k1', provider: 'kubernetes', resourceType: 'deployment', displayName: 'authv1', kubeContext: CONTEXT, namespace: 'backend360', nativeIdentifier: `${CONTEXT}/backend360/Deployment/authv1`, sources: ['apm_resource'], signals: { state: 'current' } },
+      { id: 'q1', provider: 'aws', resourceType: 'sqs', displayName: 'jobs', scopeId: '111111111111', location: 'us-east-1', nativeIdentifier: 'arn:aws:sqs:us-east-1:111111111111:jobs', sources: ['apm_resource'], signals: { state: 'unsupported' } },
+      { id: 's1', provider: 'aws', resourceType: 'ec2', displayName: 'sg-1', scopeId: '111111111111', location: 'us-east-1', nativeIdentifier: 'AWS::EC2::SecurityGroup:sg-1', sources: ['architecture_node'], signals: { state: 'unsupported' } },
+    ]
+    global.fetch = vi.fn(url => {
+      const text = String(url)
+      const body = text.includes('/catalog') ? [application]
+        : text.includes('/registry') ? { resources, relationships: [] }
+          : text.includes('/api/kua-apps/applications/app-1') && !text.includes('/views') ? { id: 'app-1', scopes: [], local: { bindings: [], legacy: null } } : []
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve(body), text: () => Promise.resolve('') })
+    })
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture', applicationId: 'app-1' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
+    const opens = wrapper.findAll('[data-test="resource-open"]')
+    expect(opens.map(open => open.attributes('title'))).toEqual(['Open in Kubernetes', 'Open in AWS view', 'Open in the AWS console'])
+    await opens[0].trigger('click')
+    expect(wrapper.emitted('open-kubernetes-detail')[0][0]).toEqual({ provider: 'kubernetes', kind: 'Deployment', name: 'authv1', namespace: 'backend360', kubeContext: CONTEXT })
+    await opens[1].trigger('click')
+    expect(wrapper.emitted('open-aws-resource')[0][0]).toMatchObject({ id: 'q1', awsProfileId: 'local:prod' })
+    expect(opens[2].attributes('href')).toContain('#SecurityGroup:groupId=sg-1')
+    // Opening a row's destination does not select the row.
+    expect(wrapper.find('.kuapps-resource-row.active').exists()).toBe(false)
+
+    await wrapper.findAll('.kuapps-resource-list .kuapps-resource-row')[0].trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="inspector-kubernetes-pods"]').trigger('click')
+    expect(wrapper.emitted('open-kubernetes-pods')[0][0]).toMatchObject({ kind: 'Deployment', name: 'authv1' })
+    expect(wrapper.find('[data-test="inspector-kubernetes-logs"]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

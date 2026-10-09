@@ -29,9 +29,11 @@
       <!-- Concrete next steps: never promise signals for a type KUA does not collect. -->
       <div class="kri-actions">
         <button v-if="context !== 'map'" class="btn sm" data-test="inspector-open-map" @click="$emit('open-map', resource.id)"><i data-lucide="network"></i>{{ t('kuapps.inspector.openMap') }}</button>
-        <!-- The resource's own page (#239): its tab in KUA's AWS view, else the AWS console. -->
-        <button v-if="awsTarget" class="btn sm" data-test="inspector-open-aws" @click="$emit('open-aws', resource)"><i data-lucide="external-link"></i>{{ t('archCanvas.action.openAws') }}</button>
-        <a v-else-if="awsConsole" class="btn sm" data-test="inspector-open-aws-console" :href="awsConsole" target="_blank" rel="noopener noreferrer"><i data-lucide="square-arrow-out-up-right"></i>{{ t('archCanvas.action.openAwsConsole') }}</a>
+        <!-- Where the resource lives in KUA (#239): AWS view or console, Kubernetes detail, pods, logs. -->
+        <template v-for="destination in destinations" :key="destination.key">
+          <a v-if="destination.url" class="btn sm" :data-test="`inspector-${destination.key}`" :href="destination.url" target="_blank" rel="noopener noreferrer"><i :data-lucide="destination.icon"></i>{{ t(destination.label) }}</a>
+          <button v-else class="btn sm" :data-test="`inspector-${destination.key}`" @click="$emit(destination.event, destination.payload)"><i :data-lucide="destination.icon"></i>{{ t(destination.label) }}</button>
+        </template>
         <button v-if="state === 'no_connection'" class="btn sm primary" data-test="inspector-bind" @click="$emit('bind-scope')"><i data-lucide="key-round"></i>{{ t('kuapps.issue.action.bind_scope') }}</button>
         <button v-else-if="state === 'gone'" class="btn sm primary" @click="$emit('review-missing')">{{ t('kuapps.issue.action.review_missing') }}</button>
         <button v-else-if="signalsAvailable && state !== 'unsupported'" class="btn sm primary" data-test="inspector-open-signals" @click="tab = 'signals'"><i data-lucide="activity"></i>{{ t('kuapps.issue.action.open_signals') }}</button>
@@ -64,7 +66,7 @@
 </template>
 
 <script setup>
-import { awsConsoleUrl, awsViewTarget } from '../../lib/awsResourceLinks'
+import { resourceDestinations } from '../../lib/resourceDestinations'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
 import KUAppResourceSignals from './KUAppResourceSignals.vue'
@@ -81,9 +83,8 @@ const props = defineProps({
   context: { type: String, default: 'resources' },
   initialTab: { type: String, default: 'detail' },
 })
-const awsTarget = computed(() => awsViewTarget(props.resource || {}))
-const awsConsole = computed(() => (awsTarget.value ? '' : awsConsoleUrl(props.resource || {})))
-defineEmits(['close', 'select-resource', 'explain', 'open-map', 'retry', 'bind-scope', 'review-missing', 'open-kubernetes-logs', 'open-aws'])
+const destinations = computed(() => resourceDestinations(props.resource || {}))
+defineEmits(['close', 'select-resource', 'explain', 'open-map', 'retry', 'bind-scope', 'review-missing', 'open-kubernetes-logs', 'open-kubernetes-detail', 'open-kubernetes-pods', 'open-aws'])
 
 const TABS = ['detail', 'signals', 'relationships']
 const STATES = new Set(['unsupported', 'gone', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])

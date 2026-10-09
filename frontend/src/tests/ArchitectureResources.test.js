@@ -110,3 +110,22 @@ describe('ArchitectureResources', () => {
     expect(apiRow.text()).toContain('1 pending review')
   })
 })
+
+describe('ArchitectureResources: open each resource where it lives (#239)', () => {
+  it('offers the Kubernetes view, the AWS view or the AWS console per row', async () => {
+    const CONTEXT = 'arn:aws:eks:us-east-1:1:cluster/dev'
+    const registry = { relationships: [], resources: [
+      { id: 'k', provider: 'kubernetes', resourceType: 'deployment', displayName: 'authv1', kubeContext: CONTEXT, namespace: 'backend360', nativeIdentifier: `${CONTEXT}/backend360/Deployment/authv1`, sources: ['architecture_node'] },
+      { id: 'q', provider: 'aws', resourceType: 'sqs', displayName: 'jobs', nativeIdentifier: 'arn:aws:sqs:us-east-1:1:jobs', sources: ['apm_resource'] },
+      { id: 's', provider: 'aws', resourceType: 'ec2', displayName: 'sg-1', location: 'us-east-1', nativeIdentifier: 'AWS::EC2::SecurityGroup:sg-1', sources: ['architecture_node'] },
+    ] }
+    const wrapper = mount(ArchitectureResources, { props: { graph: null, registry, loading: false } })
+    const opens = wrapper.findAll('[data-test="registry-resource-open"]')
+    expect(opens.map(open => open.attributes('title'))).toEqual(['Open in Kubernetes', 'Open in AWS view', 'Open in the AWS console'])
+    await opens[0].trigger('click')
+    expect(wrapper.emitted('open-destination')[0][0]).toMatchObject({ event: 'open-kubernetes-detail', payload: { kind: 'Deployment', name: 'authv1', namespace: 'backend360' } })
+    await opens[1].trigger('click')
+    expect(wrapper.emitted('open-destination')[1][0]).toMatchObject({ event: 'open-aws' })
+    expect(opens[2].attributes('href')).toContain('#SecurityGroup:groupId=sg-1')
+  })
+})
