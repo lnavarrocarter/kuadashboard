@@ -5,9 +5,9 @@
       <button class="btn sm btn-icon" :title="t('archK8s.close')" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
 
-    <div v-if="store.discovering" class="kubernetes-progress" role="status" aria-live="polite">
+    <div v-if="loadingContexts || store.discovering" class="kubernetes-progress" role="status" aria-live="polite">
       <i data-lucide="loader-2"></i>
-      <span>{{ store.discoveryPhase === 'kubernetes-contexts' ? t('archK8s.loadingContexts') : t('archK8s.loadingResources') }}</span>
+      <span>{{ loadingContexts ? t('archK8s.loadingContexts') : t('archK8s.loadingResources') }}</span>
     </div>
 
     <template v-if="!store.kubernetesPreview">
@@ -15,7 +15,7 @@
         <label>{{ t('archK8s.context') }}
           <select v-model="contextId" class="ctrl-input" :disabled="store.discovering">
             <option value="">{{ t('archK8s.selectContext') }}</option>
-            <option v-for="context in store.kubernetesContexts" :key="context.id" :value="context.id">{{ context.name }}</option>
+            <option v-for="context in contexts" :key="context.id" :value="context.id">{{ context.name }}</option>
           </select>
         </label>
         <label>{{ t('archK8s.namespaces') }}
@@ -25,9 +25,11 @@
         <button class="btn sm primary" :disabled="store.discovering || !contextId" @click="previewResources"><i data-lucide="scan-search"></i> {{ t('archK8s.previewResources') }}</button>
       </div>
       <!-- Contexts come from this computer's kubeconfig. A failure says why and how to recover (#239). -->
-      <div v-if="!store.discovering && contextProblem" class="kubernetes-empty" role="alert" data-test="k8s-context-problem">
-        <span>{{ contextProblem }}</span>
-        <button v-if="repairable" class="btn sm" data-test="k8s-repair-connection" @click="$emit('repair-connection')"><i data-lucide="wrench"></i> {{ t('archK8s.repairConnection') }}</button>
+      <div v-if="!loadingContexts && !store.discovering && contextProblem" class="kubernetes-empty" role="alert" data-test="k8s-context-problem">
+        <span>{{ contextProblem.text }}</span>
+        <!-- Repairing the connection is only proposed when the connection is the cause. -->
+        <button v-if="repairable && contextProblem.repair" class="btn sm" data-test="k8s-repair-connection" @click="$emit('repair-connection')"><i data-lucide="wrench"></i> {{ t('archK8s.repairConnection') }}</button>
+        <button v-if="contextProblem.retry" class="btn sm" data-test="k8s-retry" @click="contextProblem.retry()"><i data-lucide="refresh-cw"></i> {{ t('archK8s.retry') }}</button>
       </div>
     </template>
 
@@ -78,6 +80,9 @@ const props = defineProps({
   preferredContext: { type: String, default: '' },
   // Offer "Repair connection" (the host knows where the connection is configured).
   repairable: { type: Boolean, default: false },
+  // Makes sure the shared Architecture store holds this picker's profile and project before a
+  // preview: other views of the same application share that store (#239). Resolves to a boolean.
+  ensureReady: { type: Function, default: null },
 })
 const emit = defineEmits(['close', 'imported', 'repair-connection'])
 const store = useArchitectureStore()
@@ -99,29 +104,48 @@ const resourceGroups = computed(() => {
 })
 const degradedContexts = computed(() => (store.kubernetesPreview?.health || []).filter(item => item.status === 'degraded').length)
 
+// The contexts of this panel are its own (#239): other views of the application share the store and
+// may reset its list while this panel is open, which read as "the kubeconfig has no contexts".
+const contexts = ref([])
+const loadingContexts = ref(false)
 const loadError = ref('')
+const notReady = ref(false)
 const contextProblem = computed(() => {
-  if (loadError.value) return t('archK8s.contextsFailed', { error: loadError.value })
-  if (!store.kubernetesContexts.length) return t('archK8s.noContexts')
-  if (props.preferredContext && !store.kubernetesContexts.some(context => context.id === props.preferredContext)) {
-    return t('archK8s.contextMissing', { context: props.preferredContext })
+  if (notReady.value) return { text: t('archK8s.notReady'), retry: previewResources }
+  if (loadError.value) return { text: t('archK8s.contextsFailed', { error: loadError.value }), repair: true, retry: loadContexts }
+  if (!contexts.value.length) return { text: t('archK8s.noContexts'), repair: true }
+  if (props.preferredContext && !contexts.value.some(context => context.id === props.preferredContext)) {
+    return { text: t('archK8s.contextMissing', { context: props.preferredContext }), repair: true }
   }
-  return ''
+  return null
 })
 
 async function loadContexts() {
   contextId.value = ''
   selectedNodeIds.value = []
   loadError.value = ''
-  await store.loadKubernetesContexts()
-  // Shown here with its cause, not as a failed write of the map.
-  if (store.error) { loadError.value = store.error; store.error = null }
-  if (store.kubernetesContexts.some(context => context.id === props.preferredContext)) contextId.value = props.preferredContext
+  notReady.value = false
+  loadingContexts.value = true
+  try {
+    const listed = await store.loadKubernetesContexts()
+    // Shown here with its cause, not as a failed write of the map.
+    if (store.error) { loadError.value = store.error; store.error = null }
+    contexts.value = Array.isArray(listed) ? listed : [...(store.kubernetesContexts || [])]
+  } finally {
+    loadingContexts.value = false
+  }
+  if (contexts.value.some(context => context.id === props.preferredContext)) contextId.value = props.preferredContext
   refreshIcons()
 }
 
 async function previewResources() {
   selectedNodeIds.value = []
+  notReady.value = false
+  if (props.ensureReady && !(await props.ensureReady())) {
+    notReady.value = true
+    refreshIcons()
+    return
+  }
   const namespaces = namespaceFilter.value.split(',').map(value => value.trim()).filter(Boolean)
   const preview = await store.previewKubernetesResources({ contexts: [contextId.value], namespaces })
   if (preview) selectedNodeIds.value = preview.nodes.filter(node => !node.alreadyInGraph).map(node => node.id)

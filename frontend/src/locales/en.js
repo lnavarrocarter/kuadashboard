@@ -4962,6 +4962,8 @@ export default {
   'archK8s.noContexts': "This computer's kubeconfig has no Kubernetes contexts. Add the cluster to the kubeconfig or repair the connection.",
   'archK8s.contextsFailed': "Could not read this computer's kubeconfig: {error}",
   'archK8s.contextMissing': "The context {context} of this connection is not in this computer's kubeconfig. Choose another context or repair the connection.",
+  'archK8s.notReady': "The map view of this connection is still getting ready, so resources cannot be previewed yet. This is not a problem of the cluster or the kubeconfig.",
+  'archK8s.retry': "Try again",
   'archK8s.repairConnection': "Repair connection",
   'archK8s.resources': 'resources',
   'archK8s.relationships': 'relationships',
