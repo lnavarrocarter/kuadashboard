@@ -171,20 +171,27 @@
             </button>
           </div>
 
+          <!-- Review in three parts (#239): what waits for a decision, what the structure analysis found,
+               and the relationships already decided (folded). -->
           <template v-if="props.section === 'review'">
-            <ApmTopologyGraph
-              review-only
-              :topology="store.topology"
-              :selected-resource-id="selectedResourceId"
-              :can-analyze-cloud="canAnalyzeCloudTopology"
-              :analyzing-cloud="store.analyzingTopology"
-              :confirming-suggestions="confirmingSuggestions"
-              @confirm-dependency="confirmDependency"
-              @confirm-all-dependencies="confirmAllDependencies"
-              @analyze-cloud="analyzeCloudTopology"
-              @add-cloud-resource="addCloudResource"
-              @explain="edge => emit('explain-relationship', { sourceResourceId: edge.sourceResourceId, targetResourceId: edge.targetResourceId, sourceName: edge.source, targetName: edge.target, relationType: edge.relationType, status: 'suggested', confidence: edge.confidence, evidence: edge.evidence || [] })"
-            />
+            <section class="review-part" data-test="review-decisions">
+              <h3>{{ t('apm.review.decisions') }} <span class="review-count">{{ pendingDecisionCount }}</span></h3>
+              <ApmTopologyGraph
+                review-only
+                review-part="decisions"
+                :topology="store.topology"
+                :selected-resource-id="selectedResourceId"
+                :can-analyze-cloud="canAnalyzeCloudTopology"
+                :analyzing-cloud="store.analyzingTopology"
+                :confirming-suggestions="confirmingSuggestions"
+                @confirm-dependency="confirmDependency"
+                @confirm-all-dependencies="confirmAllDependencies"
+                @analyze-cloud="analyzeCloudTopology"
+                @add-cloud-resource="addCloudResource"
+                @explain="edge => emit('explain-relationship', { sourceResourceId: edge.sourceResourceId, targetResourceId: edge.targetResourceId, sourceName: edge.source, targetName: edge.target, relationType: edge.relationType, status: 'suggested', confidence: edge.confidence, evidence: edge.evidence || [] })"
+              />
+              <p v-if="!pendingDecisionCount" class="review-none">{{ t('apm.review.noDecisions') }}</p>
+            </section>
           </template>
 
           <template v-else-if="activeView === 'overview'">
@@ -310,54 +317,69 @@
           />
 
           <section v-if="activeView === 'relationships' || props.section === 'review'" class="relationship-review">
-            <p class="relationship-intro">{{ t('apm.relationshipsIntro') }}</p>
+            <p v-if="props.section !== 'review'" class="relationship-intro">{{ t('apm.relationshipsIntro') }}</p>
             <div v-if="!store.registry" class="apm-empty compact">
               <i data-lucide="git-merge"></i>
               <span>{{ t('apm.relationshipsUnavailable') }}</span>
             </div>
             <template v-else>
-              <div v-if="!pendingRelationships.length" class="apm-empty compact">
-                <i data-lucide="check-circle-2"></i>
-                <span>{{ t('apm.relationshipsAllReviewed') }}</span>
-              </div>
-              <div class="resource-table-wrap">
+              <div v-if="pendingRelationships.length" class="resource-table-wrap" data-test="review-pending-relationships">
                 <table class="cloud-table">
                   <thead>
-                    <tr>
-                      <th>{{ t('apm.relationship') }}</th>
-                      <th>{{ t('apm.relationType') }}</th>
-                      <th>{{ t('apm.evidence') }}</th>
-                      <th>{{ t('apm.status') }}</th>
-                      <th>{{ t('apm.actions') }}</th>
-                    </tr>
+                    <tr><th>{{ t('apm.relationship') }}</th><th>{{ t('apm.relationType') }}</th><th>{{ t('apm.evidence') }}</th><th>{{ t('apm.actions') }}</th></tr>
                   </thead>
                   <tbody>
-                    <tr v-for="item in reviewableRelationships" :key="item.id" :class="{ pending: item.divergent }">
-                      <td>
-                        {{ item.sourceName || item.sourceResourceId }}
-                        <small>&rarr; {{ item.targetName || item.targetResourceId }}</small>
-                      </td>
-                      <td>{{ item.relationType }}</td>
+                    <tr v-for="item in pendingRelationships" :key="item.id" class="pending">
+                      <td>{{ item.sourceName || item.sourceResourceId }}<small>&rarr; {{ item.targetName || item.targetResourceId }}</small></td>
+                      <td>{{ relationLabel(item.relationType) }}</td>
                       <td><small>{{ relationshipEvidence(item) }}</small></td>
-                      <td><span :class="['relationship-status', item.status]">{{ relationshipStatusLabel(item.status) }}</span></td>
                       <td class="relationship-actions">
-                        <button v-if="props.section === 'review'" class="btn sm" data-test="explain-relationship" @click="emit('explain-relationship', { sourceResourceId: item.sourceResourceId, targetResourceId: item.targetResourceId, sourceName: item.sourceName, targetName: item.targetName, relationType: item.relationType, status: item.status, confidence: item.confidence, evidence: item.evidence || [] })">
-                          <i data-lucide="circle-help"></i> {{ t('kuapps.explain.button') }}
-                        </button>
-                        <template v-if="item.divergent">
-                          <button class="btn sm primary" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'accept')">
-                            <i data-lucide="check"></i> {{ t('apm.accept') }}
-                          </button>
-                          <button class="btn sm" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'reject')">
-                            <i data-lucide="x"></i> {{ t('apm.reject') }}
-                          </button>
-                        </template>
-                        <span v-else-if="props.section !== 'review'" class="relationship-reviewed">&mdash;</span>
+                        <button v-if="props.section === 'review'" class="btn sm" data-test="explain-relationship" @click="explainRelationship(item)"><i data-lucide="circle-help"></i> {{ t('kuapps.explain.button') }}</button>
+                        <button class="btn sm primary" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'accept')"><i data-lucide="check"></i> {{ t('apm.accept') }}</button>
+                        <button class="btn sm" :disabled="store.reviewingRelationshipId === item.id" @click="reviewRelationship(item, 'reject')"><i data-lucide="x"></i> {{ t('apm.reject') }}</button>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              <template v-if="props.section === 'review'">
+                <section class="review-part" data-test="review-findings">
+                  <h3>{{ t('apm.review.findings') }}</h3>
+                  <ApmTopologyGraph
+                    review-only
+                          review-part="findings"
+                    :topology="store.topology"
+                    :selected-resource-id="selectedResourceId"
+                    :can-analyze-cloud="canAnalyzeCloudTopology"
+                    :analyzing-cloud="store.analyzingTopology"
+                    :confirming-suggestions="confirmingSuggestions"
+                    @confirm-dependency="confirmDependency"
+                    @confirm-all-dependencies="confirmAllDependencies"
+                    @analyze-cloud="analyzeCloudTopology"
+                    @add-cloud-resource="addCloudResource"
+                    @explain="edge => emit('explain-relationship', { sourceResourceId: edge.sourceResourceId, targetResourceId: edge.targetResourceId, sourceName: edge.source, targetName: edge.target, relationType: edge.relationType, status: 'suggested', confidence: edge.confidence, evidence: edge.evidence || [] })"
+                  />
+                </section>
+              </template>
+              <details v-if="decidedRelationships.length" class="review-history" :open="props.section !== 'review'" data-test="review-history">
+                <summary>{{ t('apm.review.history', { n: decidedRelationships.length }) }}</summary>
+                <div class="resource-table-wrap">
+                  <table class="cloud-table">
+                    <thead>
+                      <tr><th>{{ t('apm.relationship') }}</th><th>{{ t('apm.relationType') }}</th><th>{{ t('apm.evidence') }}</th><th>{{ t('apm.status') }}</th><th v-if="props.section === 'review'">{{ t('apm.actions') }}</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in decidedRelationships" :key="item.id">
+                        <td>{{ item.sourceName || item.sourceResourceId }}<small>&rarr; {{ item.targetName || item.targetResourceId }}</small></td>
+                        <td>{{ relationLabel(item.relationType) }}</td>
+                        <td><small>{{ relationshipEvidence(item) }}</small></td>
+                        <td><span :class="['relationship-status', item.status]">{{ relationshipStatusLabel(item.status) }}</span></td>
+                        <td v-if="props.section === 'review'" class="relationship-actions"><button class="btn sm" data-test="explain-relationship" @click="explainRelationship(item)"><i data-lucide="circle-help"></i> {{ t('kuapps.explain.button') }}</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </template>
           </section>
 
@@ -747,14 +769,29 @@ const topologyOnlySections = computed(() => metricSections.value.filter(section 
 const registryRelationships = computed(() => store.registry?.relationships || [])
 const pendingRelationships = computed(() => registryRelationships.value.filter(item => item.divergent))
 // Pending ones first: this view exists to clear them, not to browse the confirmed ones.
-const reviewableRelationships = computed(() => [
-  ...pendingRelationships.value,
-  ...registryRelationships.value.filter(item => !item.divergent),
-])
+const decidedRelationships = computed(() => registryRelationships.value.filter(item => !item.divergent))
+const reviewableRelationships = computed(() => [...pendingRelationships.value, ...decidedRelationships.value])
+// What waits for a decision in Review: suggested dependencies, referenced resources to add and
+// relationships to accept or reject.
+const pendingDecisionCount = computed(() => pendingRelationships.value.length
+  + (store.topology?.analysis?.suggestions?.length || 0)
+  + (store.topology?.analysis?.cloudScan?.unresolvedReferences?.length || 0))
+
+function explainRelationship(item) {
+  emit('explain-relationship', { sourceResourceId: item.sourceResourceId, targetResourceId: item.targetResourceId, sourceName: item.sourceName, targetName: item.targetName, relationType: item.relationType, status: item.status, confidence: item.confidence, evidence: item.evidence || [] })
+}
+
+// Internal ids read as words; an unknown one keeps its id without underscores.
+function wordsFor(prefix, value) {
+  const key = `${prefix}.${value}`
+  const label = t(key)
+  return label === key ? String(value || '').replace(/_/g, ' ') : label
+}
+const relationLabel = type => wordsFor('kuapps.relation', type || 'depends_on')
 
 function relationshipEvidence(item) {
   const types = [...new Set((item.evidence || []).map(entry => entry.type || entry.kind).filter(Boolean))]
-  return types.join(', ') || '-'
+  return types.map(type => wordsFor('kuapps.evidenceType', type)).join(', ') || '-'
 }
 
 // A status the UI does not know yet must read as itself, never as a raw translation key.
@@ -1121,6 +1158,11 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true }, reques
 .apm-title small { color: var(--text-dim); font-size: 9px; }
 .apm-toolbar-controls { display: flex; align-items: center; gap: 7px; }
 .apm-toolbar-controls select { width: 130px; }
+.review-part { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.review-part h3 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.review-count { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff; }
+.review-none { margin: 0; font-size: 13px; color: var(--text-dim); }
+.review-history summary { cursor: pointer; font-size: 13px; color: var(--text-dim); margin: 6px 0; }
 .apm-empty-charts { margin-top: 6px; font-size: 12px; color: var(--text-dim); }
 .apm-empty-charts summary { cursor: pointer; }
 .range-control, .apm-view-tabs { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }

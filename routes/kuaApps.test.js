@@ -426,3 +426,23 @@ test('observability metrics: the series of one resource of the application, grou
     assert.equal((await subject.request(`/applications/${other.id}/observability/resources/${resource.id}/metrics`)).status, 404);
   } finally { await subject.close(); }
 });
+
+test('possible duplicates: same identifier with and without account, never by name alone (#239)', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Dev' });
+    const register = (id, displayName, scopeId, nativeIdentifier) => {
+      subject.apmDatabase.upsertRegistryResource({ id, identityKey: id, provider: 'aws', scopeId, location: scopeId ? 'us-east-1' : '', nativeIdentifier, resourceType: 'ec2', displayName, lineage: [] });
+      subject.apmDatabase.addRegistryMembership({ applicationId: application.id, resourceId: id, sourceKind: 'architecture_node', sourceReference: `p:${id}` });
+    };
+    register('a1', 'sg-1', '111111111111', 'AWS::EC2::SecurityGroup:sg-1');
+    register('a2', 'sg-1', '222222222222', 'AWS::EC2::SecurityGroup:sg-1');
+    register('a3', 'sg-1', '', 'AWS::EC2::SecurityGroup:sg-1');
+    register('b1', 'error', '111111111111', 'Custom::LogRetention:/aws-glue/jobs/error');
+    register('b2', 'error', '111111111111', 'Custom::LogRetention:/aws-glue/python-jobs/error');
+    const { status, body } = await subject.request(`/applications/${application.id}/registry/possible-duplicates`);
+    assert.equal(status, 200);
+    assert.equal(body.length, 1);
+    assert.deepEqual(body[0].resources.map(resource => resource.id).sort(), ['a1', 'a2', 'a3']);
+  } finally { await subject.close(); }
+});

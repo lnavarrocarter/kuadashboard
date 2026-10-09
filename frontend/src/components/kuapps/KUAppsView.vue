@@ -235,13 +235,30 @@
             <div v-else-if="registryError" class="kuapps-empty-state compact"><strong>{{ t('kuapps.registryUnavailable') }}</strong><span>{{ registryError }}</span></div>
             <div v-else-if="!applicationRegistry.resources.length" class="kuapps-empty-state compact"><i data-lucide="boxes"></i><strong>{{ t('kuapps.noResources') }}</strong><span>{{ t('kuapps.noResourcesHint') }}</span></div>
             <div v-else class="kuapps-registry-split">
-              <div class="kuapps-resource-list" role="list">
-                <button v-for="resource in applicationRegistry.resources" :key="resource.id" :class="['kuapps-resource-row', { active: selectedResourceId === resource.id }]" @click="selectedResourceId = resource.id">
-                  <span class="kuapps-resource-mark"><i :data-lucide="resource.provider === 'kubernetes' ? 'box' : 'cloud' "></i></span>
-                  <span class="kuapps-resource-copy"><strong>{{ resource.displayName }}</strong><small>{{ resource.provider }} · {{ resource.resourceType }}<template v-if="resource.provider === 'kubernetes'"> · {{ resource.namespace || t('kuapps.sync.clusterScope') }}</template></small></span>
-                  <span class="kuapps-resource-scope">{{ resource.provider === 'kubernetes' ? resource.kubeContext || t('kuapps.sync.contextUnknown') : resource.scopeId || resource.location || t('kuapps.scopeUnknown') }}</span>
-                  <span :class="['kuapps-signal-badge', signalStateOf(resource)]" data-test="resource-signal-state" :title="t(`kuapps.signalState.${signalStateOf(resource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(resource)}`) }}</span>
-                </button>
+              <div class="kuapps-resource-pane">
+                <!-- Find a resource among many (#239): search and filters by provider, type, account or
+                     context, namespace and signal state. -->
+                <div class="kuapps-resource-filters" data-test="resource-filters">
+                  <input v-model.trim="resourceFilter.search" class="ctrl-input" type="search" :placeholder="t('kuapps.resources.search')" :aria-label="t('kuapps.resources.search')" data-test="resource-search" />
+                  <select v-model="resourceFilter.provider" class="ctrl-select" :aria-label="t('kuapps.provider')"><option value="">{{ t('kuapps.resources.allProviders') }}</option><option v-for="value in resourceFacets.providers" :key="value" :value="value">{{ value }}</option></select>
+                  <select v-model="resourceFilter.type" class="ctrl-select" :aria-label="t('kuapps.type')"><option value="">{{ t('kuapps.resources.allTypes') }}</option><option v-for="value in resourceFacets.types" :key="value" :value="value">{{ value }}</option></select>
+                  <select v-model="resourceFilter.scope" class="ctrl-select" :aria-label="t('kuapps.resources.connection')"><option value="">{{ t('kuapps.resources.allConnections') }}</option><option v-for="value in resourceFacets.scopes" :key="value" :value="value">{{ value }}</option></select>
+                  <select v-if="resourceFacets.namespaces.length" v-model="resourceFilter.namespace" class="ctrl-select" :aria-label="t('kuapps.sync.namespace')"><option value="">{{ t('kuapps.resources.allNamespaces') }}</option><option v-for="value in resourceFacets.namespaces" :key="value" :value="value">{{ value }}</option></select>
+                  <select v-model="resourceFilter.state" class="ctrl-select" :aria-label="t('kuapps.signalState.title')"><option value="">{{ t('kuapps.resources.allStates') }}</option><option v-for="value in resourceFacets.states" :key="value" :value="value">{{ t(`kuapps.signalState.${value}`) }}</option></select>
+                  <span class="kuapps-resource-count" data-test="resource-count">{{ t('obs.count', { shown: filteredRegistryResources.length, total: applicationRegistry.resources.length }) }}</span>
+                </div>
+                <div class="kuapps-resource-list" role="list">
+                  <div class="kuapps-resource-header" aria-hidden="true">
+                    <span></span><span>{{ t('kuapps.resources.columnName') }}</span><span>{{ t('kuapps.resources.connection') }}</span><span>{{ t('kuapps.signalState.title') }}</span>
+                  </div>
+                  <button v-for="resource in filteredRegistryResources" :key="resource.id" role="listitem" :class="['kuapps-resource-row', { active: selectedResourceId === resource.id }]" @click="selectedResourceId = resource.id">
+                    <span class="kuapps-resource-mark"><i :data-lucide="resource.provider === 'kubernetes' ? 'box' : 'cloud' "></i></span>
+                    <span class="kuapps-resource-copy"><strong :title="resource.displayName">{{ resource.displayName }}</strong><small>{{ resource.provider }} · {{ resource.resourceType }}<template v-if="resource.provider === 'kubernetes'"> · {{ resource.namespace || t('kuapps.sync.clusterScope') }}</template></small></span>
+                    <span class="kuapps-resource-scope" :title="resourceConnectionTitle(resource)">{{ resourceConnection(resource) }}</span>
+                    <span :class="['kuapps-signal-badge', signalStateOf(resource)]" data-test="resource-signal-state" :title="t(`kuapps.signalState.${signalStateOf(resource)}.hint`)">{{ t(`kuapps.signalState.${signalStateOf(resource)}`) }}</span>
+                  </button>
+                  <p v-if="!filteredRegistryResources.length" class="kuapps-review-note" data-test="resource-no-matches">{{ t('obs.noMatches') }}</p>
+                </div>
               </div>
               <aside v-if="selectedResource" class="kuapps-resource-inspector">
                 <KUAppResourceInspector
@@ -289,6 +306,7 @@
               </div>
             </div>
             <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
+            <KUAppPossibleDuplicates :key="`duplicates:${selectedApplicationId}:${applicationRegistry.resources.length}`" :application-id="selectedApplicationId" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -477,6 +495,7 @@ import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
 import KUAppMissingResources from './KUAppMissingResources.vue'
 import KUAppResourceInspector from './KUAppResourceInspector.vue'
+import KUAppPossibleDuplicates from './KUAppPossibleDuplicates.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -1034,6 +1053,38 @@ function signalStateOf(resource) {
   return SIGNAL_STATES.has(state) ? state : 'unknown'
 }
 
+// Resources: readable connection (account and region, or the cluster of a kube context) and filters.
+function resourceConnection(resource) {
+  if (resource.provider === 'kubernetes') {
+    const context = String(resource.kubeContext || resource.scopeId || '')
+    return context ? context.split(/[/:]/).filter(Boolean).pop() : t('kuapps.sync.contextUnknown')
+  }
+  return [resource.scopeId, resource.location].filter(Boolean).join(' · ') || t('kuapps.scopeUnknown')
+}
+const resourceConnectionTitle = resource => (resource.provider === 'kubernetes' ? resource.kubeContext || resource.scopeId || '' : resourceConnection(resource))
+const resourceFilter = reactive({ search: '', provider: '', type: '', scope: '', namespace: '', state: '' })
+const resourceFacets = computed(() => {
+  const resources = applicationRegistry.value.resources
+  const sorted = values => [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)))
+  return {
+    providers: sorted(resources.map(resource => resource.provider)),
+    types: sorted(resources.map(resource => resource.resourceType)),
+    scopes: sorted(resources.map(resourceConnection)),
+    namespaces: sorted(resources.filter(resource => resource.provider === 'kubernetes').map(resource => resource.namespace)),
+    states: sorted(resources.map(signalStateOf)),
+  }
+})
+const filteredRegistryResources = computed(() => {
+  const query = resourceFilter.search.toLowerCase()
+  return applicationRegistry.value.resources.filter(resource =>
+    (!query || `${resource.displayName} ${resource.nativeIdentifier || ''} ${resource.resourceType}`.toLowerCase().includes(query)) &&
+    (!resourceFilter.provider || resource.provider === resourceFilter.provider) &&
+    (!resourceFilter.type || resource.resourceType === resourceFilter.type) &&
+    (!resourceFilter.scope || resourceConnection(resource) === resourceFilter.scope) &&
+    (!resourceFilter.namespace || resource.namespace === resourceFilter.namespace) &&
+    (!resourceFilter.state || signalStateOf(resource) === resourceFilter.state))
+})
+
 function providerName(provider) {
   return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
 }
@@ -1347,6 +1398,12 @@ defineExpose({ reloadActiveTab })
 .kuapps-resource-list { min-width: 0; max-height: 100%; overflow: auto; }
 .kuapps-inspector-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .kuapps-inspector-identity code { font-size: 11px; overflow-wrap: anywhere; }
+.kuapps-resource-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.kuapps-resource-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.kuapps-resource-filters input { flex: 1 1 200px; min-width: 0; }
+.kuapps-resource-filters select { flex: 0 1 auto; max-width: 180px; }
+.kuapps-resource-count { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+.kuapps-resource-header { display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(90px, .7fr) auto; gap: 10px; padding: 4px 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .03em; }
 .kuapps-signal-badge { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .kuapps-signal-badge.current { color: var(--success, #16a34a); border-color: currentColor; }
 .kuapps-signal-badge.stale, .kuapps-signal-badge.partial, .kuapps-signal-badge.no_connection { color: var(--warning, #d97706); border-color: currentColor; }

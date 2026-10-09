@@ -12,7 +12,7 @@
 
     <div v-if="!reviewOnly" class="membership-line" aria-hidden="true"><span>{{ t('apm.belongsTo') }}</span></div>
 
-    <section v-if="topology.analysis" class="topology-intelligence">
+    <section v-if="topology.analysis && reviewPart !== 'decisions'" class="topology-intelligence">
       <div class="analysis-score">
         <span>{{ t('apm.topologyScore') }}</span>
         <strong>{{ topology.analysis.score }}</strong>
@@ -127,7 +127,7 @@
     </div>
     </template>
 
-    <div v-if="resolvedSuggestions.length" class="suggestion-list">
+    <div v-if="resolvedSuggestions.length && reviewPart !== 'findings'" class="suggestion-list">
       <div class="suggestion-heading">
         <div class="dependency-title"><i data-lucide="sparkles"></i> {{ t('apm.suggestedDependencies') }}</div>
         <button class="btn sm" type="button" :disabled="confirmingSuggestions" @click="$emit('confirm-all-dependencies', resolvedSuggestions)">
@@ -152,7 +152,7 @@
       <p class="analysis-disclaimer">{{ t('apm.analysisDisclaimer') }}</p>
     </div>
 
-    <div v-if="unresolvedReferences.length" class="unresolved-list">
+    <div v-if="unresolvedReferences.length && reviewPart !== 'findings'" class="unresolved-list">
       <div class="dependency-title"><i data-lucide="package-plus"></i> {{ t('apm.referencedResources') }}</div>
       <div v-for="reference in unresolvedReferences" :key="`${reference.type}:${reference.name}`" class="unresolved-row">
         <div>
@@ -182,6 +182,8 @@ const props = defineProps({
   confirmingSuggestions: { type: Boolean, default: false },
   // Only what needs a decision: structure analysis, suggestions and unresolved references.
   reviewOnly: { type: Boolean, default: false },
+  // In Review: 'decisions' (suggestions and references to add) or 'findings' (structure); '' both.
+  reviewPart: { type: String, default: '' },
 })
 
 defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'open-kubernetes-logs', 'explain'])
