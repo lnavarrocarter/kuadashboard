@@ -15,10 +15,10 @@
  *   PUT    /schedules            { scope, intervalHours }  every 6 h at most on Pro, 1 h on Team
  *   DELETE /schedules?scope=     stop analysing a scope on its own
  *   GET    /webhooks             Slack/Teams channels for alerts (URLs masked)
- *   POST   /webhooks             { name, kind: slack|teams, url, minSeverity, lang }      (Team)
- *   PATCH  /webhooks/:id         { name?, minSeverity?, lang?, enabled? }                 (Team)
+ *   POST   /webhooks             { name, kind: slack|teams, url, minSeverity, lang }      (Pro, Team)
+ *   PATCH  /webhooks/:id         { name?, minSeverity?, lang?, enabled? }                 (Pro, Team)
  *   DELETE /webhooks/:id
- *   POST   /webhooks/:id/test    sends a test message now                                 (Team)
+ *   POST   /webhooks/:id/test    sends a test message now                                 (Pro, Team)
  */
 
 const express = require('express');

@@ -7,7 +7,7 @@ let currentPlan = 'team'
 vi.mock('../composables/useApi', () => ({ api: (...args) => api(...args), useApi: () => ({ apiFetch: vi.fn() }) }))
 vi.mock('../composables/usePlan', async () => {
   const { ref } = await import('vue')
-  return { usePlan: () => ({ plan: ref({ plan: currentPlan, features: { teamSharing: currentPlan === 'team' } }), reload: vi.fn() }) }
+  return { usePlan: () => ({ plan: ref({ plan: currentPlan, features: { advisor: currentPlan !== 'free', teamSharing: currentPlan === 'team' } }), reload: vi.fn() }) }
 })
 
 import AdvisorWebhooks from '../components/advisor/AdvisorWebhooks.vue'
@@ -22,12 +22,12 @@ describe('AdvisorWebhooks', () => {
     api.mockReset()
   })
 
-  it('is locked without Team: lists nothing to add', async () => {
-    currentPlan = 'pro'
+  it('is locked on the Free plan: lists nothing to add', async () => {
+    currentPlan = 'free'
     api.mockResolvedValue([])
     const wrapper = mount(AdvisorWebhooks)
     await flushPromises()
-    expect(wrapper.find('[data-test="advisor-webhooks-locked"]').text()).toBe('Webhooks are part of the Team plan.')
+    expect(wrapper.find('[data-test="advisor-webhooks-locked"]').text()).toBe('Alert webhooks are part of the Pro and Team plans.')
     expect(wrapper.find('[data-test="advisor-webhook-form"]').exists()).toBe(false)
   })
 
