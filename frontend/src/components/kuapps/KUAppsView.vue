@@ -281,6 +281,7 @@
                 <button class="btn sm" @click="selectWorkspaceTab('settings')">{{ t('kuapps.review.bindProfile') }}</button>
               </div>
             </div>
+            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -474,6 +475,7 @@ import KUAppSync from './KUAppSync.vue'
 import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
+import KUAppMissingResources from './KUAppMissingResources.vue'
 import { api } from '../../composables/useApi'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
@@ -568,7 +570,9 @@ const scopeWarnings = computed(() => (selectedApplicationDetail.value?.warnings 
 const suggestedRelationships = computed(() => applicationRegistry.value.relationships.filter(relationship => relationship.status === 'suggested'))
 // What the Review tab holds: relationships to decide and scopes without a usable profile.
 const analysisSuggestionCount = ref(0)
-const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length + analysisSuggestionCount.value)
+// Resources that no longer exist count too (#236): the registry reports them as "gone".
+const missingCount = computed(() => applicationRegistry.value.resources.filter(resource => resource.signals?.state === 'gone').length)
+const reviewCount = computed(() => suggestedRelationships.value.length + scopeWarnings.value.length + analysisSuggestionCount.value + missingCount.value)
 
 function scopeLabel(scopeKey) {
   const scope = (selectedApplicationDetail.value?.scopes || []).find(item => item.key === scopeKey)
@@ -973,7 +977,7 @@ const addResourcesAccountLabel = computed(() => {
 })
 
 // The state the registry API computed (#152); an older backend without it is "unknown", never healthy.
-const SIGNAL_STATES = new Set(['unsupported', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])
+const SIGNAL_STATES = new Set(['unsupported', 'gone', 'no_connection', 'disabled', 'error', 'no_data', 'stale', 'partial', 'current'])
 function signalStateOf(resource) {
   const state = resource?.signals?.state
   return SIGNAL_STATES.has(state) ? state : 'unknown'
@@ -1293,7 +1297,7 @@ defineExpose({ reloadActiveTab })
 .kuapps-signal-badge { flex: 0 0 auto; font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .kuapps-signal-badge.current { color: var(--success, #16a34a); border-color: currentColor; }
 .kuapps-signal-badge.stale, .kuapps-signal-badge.partial, .kuapps-signal-badge.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
-.kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
+.kuapps-signal-badge.gone, .kuapps-signal-badge.error { color: var(--danger, #dc2626); border-color: currentColor; }
 .kuapps-resource-row { width: 100%; min-height: 52px; padding: 7px 10px; display: grid; grid-template-columns: 30px minmax(110px, 1fr) minmax(90px, .7fr) auto; align-items: center; gap: 10px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .kuapps-resource-row:hover, .kuapps-resource-row.active { background: var(--bg-hover); }
 .kuapps-resource-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 5px; background: var(--bg-hover); color: var(--accent); }

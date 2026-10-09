@@ -12,10 +12,11 @@ const { resourceSignalStates } = require('../lib/kua/resourceSignalState');
 const { signalCapabilities } = require('../lib/apm/signalCapabilities');
 const { applicationForResource } = require('../lib/kua/scopeCredentials');
 const { canonicalFromApm } = require('../lib/kua/applicationRegistryService');
+const { createResourceObserver } = require('../lib/kua/resourceObserver');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, kubeLister, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -171,6 +172,20 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       resources,
     };
   }));
+
+  // Resources that no longer exist (#236): since when, and successors found with free reads of
+  // the Kubernetes API. Replacing attaches the successor and detaches the missing resource;
+  // nothing is replaced automatically and nothing changes in the cluster.
+  const observer = createResourceObserver({ database: apmDatabase, registry: applicationRegistry, ...(kubeLister ? { kubeLister } : {}) });
+  router.get('/applications/:applicationId/observer', (req, res) => sendAsync(res, 200, () => observer.gone(applicationOr404(req.params.applicationId))));
+  router.post('/applications/:applicationId/observer/replace', (req, res) => sendAsync(res, 200, async () => {
+    const application = applicationOr404(req.params.applicationId);
+    const result = await observer.replace(application, req.body?.resourceId, req.body?.successor, revisionOf(req));
+    auditLog?.log({ category: 'kua', action: 'Missing resource replaced by its successor', resource: `${result.replaced} → ${result.by}`, context: 'kuapps', details: { applicationId: application.id } });
+    return result;
+  }));
+  router.post('/applications/:applicationId/observer/ignore', (req, res) => send(res, 200, () =>
+    observer.ignore(applicationOr404(req.params.applicationId), req.body?.resourceId)));
 
   // The metrics KUA collected for one resource of the application, grouped by metric (local data).
   router.get('/applications/:applicationId/observability/resources/:resourceId/metrics', (req, res) => send(res, 200, () => {

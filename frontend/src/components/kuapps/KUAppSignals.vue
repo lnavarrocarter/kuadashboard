@@ -116,7 +116,7 @@ const props = defineProps({ applicationId: { type: String, required: true } })
 defineEmits(['open-kubernetes-logs'])
 
 const RANGES = [{ hours: 6, label: '6 h' }, { hours: 24, label: '24 h' }, { hours: 168, label: '7 d' }]
-const STATES = ['current', 'partial', 'stale', 'no_data', 'disabled', 'error', 'no_connection', 'unsupported']
+const STATES = ['current', 'partial', 'stale', 'no_data', 'disabled', 'error', 'gone', 'no_connection', 'unsupported']
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
@@ -273,7 +273,7 @@ onUpdated(refreshIcons)
 .obs-state { flex: 0 0 auto; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
 .obs-state.current { color: var(--success, #16a34a); border-color: currentColor; }
 .obs-state.stale, .obs-state.partial, .obs-state.no_connection { color: var(--warning, #d97706); border-color: currentColor; }
-.obs-state.error { color: var(--danger, #dc2626); border-color: currentColor; }
+.obs-state.gone, .obs-state.error { color: var(--danger, #dc2626); border-color: currentColor; }
 .obs-detail { display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .obs-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .obs-detail-head h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
