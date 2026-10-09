@@ -314,7 +314,6 @@
               </div>
             </div>
             <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
-            <KUAppPossibleDuplicates :key="`duplicates:${selectedApplicationId}:${applicationRegistry.resources.length}`" :application-id="selectedApplicationId" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -340,6 +339,8 @@
                 </article>
               </div>
             </template>
+            <!-- Decisions first; what KUA could not join, folded at the end (#239). -->
+            <KUAppPossibleDuplicates :key="`duplicates:${selectedApplicationId}:${applicationRegistry.resources.length}`" :application-id="selectedApplicationId" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
           </section>
 
           <div v-else-if="workspaceView === 'signals' || workspaceView === 'map'" class="kuapps-map-signals-workspace">

@@ -67,6 +67,10 @@ describe('KUApps resources and review (#239)', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Possible duplicates')
     expect(wrapper.text()).toContain('without account')
+    // Folded: a count and a sentence first; per group the name and how the copies differ (#239).
+    expect(wrapper.get('[data-test="possible-duplicates"]').element.open).toBe(false)
+    expect(wrapper.get('.kpd-group summary').text()).toContain('sg-1')
+    expect(wrapper.get('.kpd-group summary').text()).toContain('2 copies · 1 account(s) known, 1 without account')
     await wrapper.findAll('.kpd-resource')[1].trigger('click')
     expect(wrapper.emitted('select-resource')[0]).toEqual(['a3'])
   })
