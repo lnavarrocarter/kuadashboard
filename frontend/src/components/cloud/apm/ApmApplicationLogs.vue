@@ -52,6 +52,11 @@
         </button>
       </div>
 
+      <!-- Secrets found in these logs were hidden (#239): hiding them is not enough. -->
+      <p v-if="redaction?.secrets" class="logs-redaction" role="alert" data-test="logs-redaction">
+        <i data-lucide="shield-alert"></i>
+        <span><strong>{{ t('apmLogs.redacted', { n: redaction.secrets }) }}</strong> {{ t('apmLogs.redactedHint') }}</span>
+      </p>
       <div v-if="cacheableSelected" class="logs-cache-tools">
         <span v-if="cachedGroup?.cache" class="text-dim">{{ t('apmLogs.cacheEnabled', { n: cachedGroup.cache.events || 0 }) }}</span>
         <button v-if="!cachedGroup?.cache" class="btn sm" :disabled="cacheLoading || cacheBusy" @click="prepareCache">
@@ -145,6 +150,7 @@ const entries = ref([])
 const loading = ref(false)
 const error = ref('')
 const message = ref('')
+const redaction = ref(null)
 const vercelLogsOpen = ref(false)
 const latestDeployment = ref(null)
 const cachedGroup = ref(null)
@@ -218,6 +224,7 @@ async function loadLogs() {
   error.value = ''
   message.value = ''
   entries.value = []
+  redaction.value = null
   latestDeployment.value = null
   try {
     const resource = selectedResource.value
@@ -241,6 +248,7 @@ async function loadLogs() {
         data = await apiFetch(`/api/cloud/aws/logs/eventbridge?bus=${encodeURIComponent(bus)}&rule=${encodeURIComponent(resource.name)}&minutes=${minutes}${regionParam(resource)}`, requestFor(resource))
       }
       entries.value = data?.events || []
+      redaction.value = data?.redaction || null
       message.value = data?.message || (data?.logGroupName ? data.logGroupName : '')
     } else if (provider === 'gcp') {
       const location = resourceRegion(resource)
@@ -250,6 +258,7 @@ async function loadLogs() {
         data = await apiFetch(`/api/cloud/gcp/functions/${encodeURIComponent(location)}/${encodeURIComponent(resource.name)}/logs?hours=${hours.value}&limit=${limit}`, requestFor(resource))
       }
       entries.value = data?.entries || []
+      redaction.value = data?.redaction || null
     } else if (provider === 'vercel') {
       const projects = await apiFetch('/api/cloud/vercel/projects', requestFor(resource))
       const project = projects.find(item => item.id === resource.key || item.id === resource.name || item.name === resource.name)
@@ -389,4 +398,6 @@ onMounted(() => {
 .log-severity.error, .log-severity.critical { color: #f85149; }
 .log-severity.warning, .log-severity.warn { color: #d29922; }
 @media (max-width: 650px) { .logs-toolbar, .logs-resource-header { align-items: flex-start; flex-direction: column; }.logs-toolbar-actions { width: 100%; }.logs-toolbar-actions select { flex: 1; } }
+.logs-redaction { margin: 0 0 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: flex-start; border-left: 3px solid var(--red); border-radius: 4px; background: color-mix(in srgb, var(--red) 10%, transparent); font-size: 13px; }
+.logs-redaction :deep(svg) { width: 16px; height: 16px; flex: none; color: var(--red); }
 </style>

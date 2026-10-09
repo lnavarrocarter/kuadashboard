@@ -1,5 +1,6 @@
 'use strict';
 
+const { redactText } = require('./lib/logRedaction');
 const express    = require('express');
 const http       = require('http');
 const net        = require('net');
@@ -205,6 +206,8 @@ const { getUsageLedger } = require('./lib/usage/ledger');
 installAwsMeter({ ledger: getUsageLedger() });
 try { getUsageLedger().prune(); } catch (err) { console.warn('[usage] prune:', err.message); }
 app.use('/api', usageContextMiddleware);
+// Log text leaves the server sanitized, with the count of hidden secrets (#239).
+app.use('/api', require('./lib/logRedaction').logRedactionMiddleware);
 mountConsoleRoutes(app, consoleSessions);
 
 for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssGcpSsh, wssVercelLogs]) {
@@ -2711,7 +2714,7 @@ wss.on('connection', (ws, request) => {
           currentStreams.push(logStream);
           logStream.on('data', chunk => {
             if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'log', pod: targetPod.name, data: chunk.toString('utf-8') }));
+              ws.send(JSON.stringify({ type: 'log', pod: targetPod.name, data: redactText(chunk.toString('utf-8')) }));
           });
 
           const req = await log.log(
@@ -3394,7 +3397,7 @@ wssGcpLogs.on('connection', (ws, req) => {
       const { profileId, project, region } = req.consoleSession.session;
       const { name: service } = req.consoleSession.session.target;
       const { entries, nextSince } = await broker.fetchEntries({ profileId, project, region, service, sinceTimestamp });
-      for (const entry of entries) send({ type: 'log', data: `[${entry.severity}] ${entry.message}` });
+      for (const entry of entries) send({ type: 'log', data: `[${entry.severity}] ${redactText(entry.message)}` });
       if (!stopped) pollTimer = setTimeout(() => poll(nextSince), 3000);
     } catch (err) {
       send({ type: 'error', data: err.message });
@@ -3450,7 +3453,7 @@ wssVercelLogs.on('connection', (ws, req) => {
         const { profileId } = req.consoleSession.session;
         const { name: deploymentId } = req.consoleSession.session.target;
         handle = await broker.streamDeploymentLogs({ profileId, deploymentId }, {
-          onEntry: text => send({ type: 'log', data: text }),
+          onEntry: text => send({ type: 'log', data: redactText(text) }),
           onError: err => send({ type: 'error', data: err.message }),
         });
       } catch (err) {

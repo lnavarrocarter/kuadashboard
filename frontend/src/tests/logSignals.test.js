@@ -207,3 +207,22 @@ describe('LogIntelligencePanel', () => {
     wrapper.unmount()
   })
 })
+
+describe('sanitizer: compound secret keys and private keys (#239)', () => {
+  it('redacts keys that contain a secret word and PEM private keys, and leaves normal text alone', async () => {
+    const { sanitizeWithFindings } = await import('../shared/logSignals.mjs')
+    const cases = [
+      ['aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY region=us', 'aws_secret_access_key: [redacted] region=us', { secret: 1 }],
+      ['{"DB_PASSWORD":"hunter2","user":"app"}', '{"DB_PASSWORD": [redacted],"user":"app"}', { password: 1 }],
+      ['stripe_api_key_live: sk_live_123456', 'stripe_api_key_live: [redacted]', { api_key: 1 }],
+      ['-----BEGIN RSA PRIVATE KEY----- MIIEpAIBAAKCAQ', '[private-key]', { private_key: 1 }],
+      ['tokenizer loaded 42 tokens', 'tokenizer loaded 42 tokens', {}],
+      ['GET /health 200 in 12ms', 'GET /health 200 in 12ms', {}],
+    ]
+    for (const [line, text, findings] of cases) {
+      const result = sanitizeWithFindings(line)
+      expect(result.text).toBe(text)
+      expect(result.findings).toEqual(findings)
+    }
+  })
+})

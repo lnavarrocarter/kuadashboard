@@ -7,17 +7,19 @@
 // confirm them before they change a graph (KUA unified plan, Phase 16).
 
 // Raising it re-analyzes cached sources on their next read.
-export const SIGNALS_VERSION = 4
+export const SIGNALS_VERSION = 5
 
 // ─── Sanitization and sensitive data ────────────────────────────────────────
 
-export const SENSITIVE_TYPES = ['password', 'token', 'api_key', 'secret', 'authorization', 'bearer', 'aws_key', 'jwt', 'url_credentials', 'url_query', 'email', 'card', 'rut', 'ip_address']
+export const SENSITIVE_TYPES = ['password', 'token', 'api_key', 'secret', 'authorization', 'bearer', 'aws_key', 'jwt', 'private_key', 'url_credentials', 'url_query', 'email', 'card', 'rut', 'ip_address']
 
+// Compound keys count too (DB_PASSWORD, aws_secret_access_key, stripe_api_key_live, #239).
 const SECRET_KEY_TYPES = [
-  [/^(password|passwd|pwd)$/i, 'password'],
-  [/^(api[_-]?key|apikey|x-api-key)$/i, 'api_key'],
-  [/^(secret|client[_-]?secret)$/i, 'secret'],
+  [/(password|passwd|pwd)/i, 'password'],
+  [/(api[_-]?key|apikey)/i, 'api_key'],
+  [/private[_-]?key/i, 'secret'],
   [/token/i, 'token'],
+  [/secret/i, 'secret'],
 ]
 
 function secretKeyType(key) {
@@ -46,7 +48,8 @@ function rutValid(body, dv) {
 const SECRET_PATTERNS = [
   ['authorization', /\bauthorization\b\s*:?\s*(?!\[redacted\]).+/gi, () => 'Authorization: [redacted]'],
   ['bearer', /\bbearer\s+(?!\[redacted\])[a-z0-9._~+/=-]{8,}/gi, () => 'Bearer [redacted]'],
-  ['secret_key', /\b(api[_-]?key|apikey|x-api-key|token|access[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|client[_-]?secret)\b(["']?)\s*[:=]\s*(?!\[redacted\])("[^"]*"|'[^']*'|\S+)/gi, (_, key, quote) => `${key}${quote}: [redacted]`],
+  ['private_key', /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----|.*)/g, () => '[private-key]'],
+  ['secret_key', /\b((?:[a-z0-9]+[_-])*(?:api[_-]?key|apikey|x-api-key|access[_-]?token|refresh[_-]?token|token|password|passwd|pwd|client[_-]?secret|secret[_-]?access[_-]?key|secret|private[_-]?key)(?:[_-][a-z0-9]+)*)\b(["']?)\s*[:=]\s*(?!\[redacted\])("[^"]*"|'[^']*'|\S+)/gi, (_, key, quote) => `${key}${quote}: [redacted]`],
   ['aws_key', /\b(AKIA|ASIA)[A-Z0-9]{16}\b/g, () => '[aws-key]'],
   ['jwt', /\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g, () => '[jwt]'],
   ['url_credentials', /(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/:@[]+:[^\s/@]+@/gi, (_, scheme) => `${scheme}[credentials]@`],
@@ -61,13 +64,14 @@ const MARKERS = [
   ['bearer', /Bearer \[redacted\]/g],
   ['aws_key', /\[aws-key\]/g],
   ['jwt', /\[jwt\]/g],
+  ['private_key', /\[private-key\]/g],
   ['url_credentials', /\[credentials\]@/g],
   ['url_query', /\?\[query\]/g],
   ['email', /\[email\]/g],
   ['card', /\[card\]/g],
   ['rut', /\[rut\]/g],
 ]
-const SECRET_MARKER_RE = /\b(api[_-]?key|apikey|x-api-key|token|access[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|client[_-]?secret)\b["']?: \[redacted\]/gi
+const SECRET_MARKER_RE = /\b((?:[a-z0-9]+[_-])*(?:api[_-]?key|apikey|x-api-key|access[_-]?token|refresh[_-]?token|token|password|passwd|pwd|client[_-]?secret|secret[_-]?access[_-]?key|secret|private[_-]?key)(?:[_-][a-z0-9]+)*)\b["']?: \[redacted\]/gi
 const IPV4_RE = /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/g
 
 /**

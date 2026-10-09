@@ -5219,6 +5219,8 @@ export default {
   'apmLogs.lastHours': 'últimas {n} h',
   'apmLogs.range': 'Rango de logs',
   'apmLogs.resources': 'Recursos con logs de la aplicación',
+  'apmLogs.redacted': "KUA ocultó {n} secreto(s) en estos logs.",
+  'apmLogs.redactedHint': "La aplicación escribe credenciales en sus logs: rótalas y quita ese logging en el origen. Ocultarlas aquí no las borra del proveedor.",
   'apmLogs.noSource': 'No hay una fuente de logs configurada',
   'apmLogs.noSourceHint': 'Las métricas están en la pestaña Métricas. Agrega un workload compatible para ver aquí los logs del provider.',
   'apmLogs.openKubernetes': 'Abrir logs de Kubernetes',
