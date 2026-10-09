@@ -243,7 +243,6 @@
             </div>
 
             <!-- Posture alerts to Slack or Teams channels (Team); mounted with the Options tab -->
-            <AdvisorWebhooks v-if="activeTab === 'options'" />
 
             <div class="opts-row">
               <div class="opts-label">
@@ -377,7 +376,6 @@ import PlatformStorage from '../PlatformStorage.vue'
 import AccountProfile from '../account/AccountProfile.vue'
 import { useI18n } from '../../composables/useI18n.js'
 import { useAdvisorAlerts } from '../../composables/useAdvisorAlerts.js'
-import AdvisorWebhooks from '../advisor/AdvisorWebhooks.vue'
 import { useUpdateStore } from '../../stores/useUpdateStore.js'
 import { CHANGELOG, CHANGELOG_VERSION, localized } from '../../composables/useChangelog.js'
 
