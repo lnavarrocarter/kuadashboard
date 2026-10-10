@@ -32,7 +32,7 @@ function insights(overrides = {}) {
     usage: {
       lambda: { present: true, invocations: 3129, errors: 6, throttles: 0, errorRate: 0.19, series: [{ t: 1, v: 10 }, { t: 2, v: 20 }] },
       ec2: { present: true, cpuAvg: 15.2, cpuPeak: 92.3, cpuNow: 11.6, series: [{ t: 1, v: 10 }, { t: 2, v: 20 }] },
-      elb: { present: true, requests: 22, errors5xx: 1208, elbGenerated5xx: 1202, errorRate: 5490.91, latencyMs: 1, nlbBytes: null, series: [{ t: 1, v: 1 }, { t: 2, v: 0 }] },
+      elb: { present: true, requests: 22, errors5xx: 1208, target5xx: 6, elbGenerated5xx: 1202, targetErrorRate: 27.27, latencyMs: 1, nlbBytes: null, series: [{ t: 1, v: 1 }, { t: 2, v: 0 }] },
       s3: { present: true, bytes: 463706964808, objects: 7665221, asOf: Date.parse('2026-09-27T00:00:00Z') },
       eks: { present: false },
       rds: { present: true, cpuAvg: 4.5, cpuPeak: 30, connections: 5, freeStorageMin: 3e9, series: [{ t: 1, v: 4 }, { t: 2, v: 5 }] },
@@ -171,6 +171,15 @@ describe('AwsOverviewInsights', () => {
     expect(byTitle.CloudFront.find('.aoi-kpi-facts').text()).toContain('Downloaded 463 KB')
   })
 
+  it('never shows a combined 5xx rate, even when it would stay under 100% (R01)', () => {
+    const data = insights()
+    data.usage.elb = { present: true, requests: 10, errors5xx: 4, target5xx: 1, elbGenerated5xx: 3, targetErrorRate: 10, series: [] }
+    const facts = mountWith(data).findAll('.aoi-kpi').find(c => c.text().includes('Load balancers')).find('.aoi-kpi-facts').text()
+    expect(facts).toContain('Target 5xx 1 (10%)')
+    expect(facts).toContain('LB 5xx 3')
+    expect(facts).not.toContain('40%')
+  })
+
   it('flags load balancers answering 5xx without claiming they are outside KUA', async () => {
     const wrapper = mountWith(insights())
     const elb = wrapper.findAll('.aoi-kpi').find(c => c.text().includes('Load balancers'))
@@ -178,8 +187,10 @@ describe('AwsOverviewInsights', () => {
     expect(elb.find('.aoi-tag').exists()).toBe(false)
     expect(elb.find('.aoi-kpi-note').text()).toContain('1,202 5xx came from the load balancer itself')
     expect(elb.attributes('disabled')).toBeUndefined() // the Load Balancers tab exists (A03)
-    expect(elb.find('.aoi-kpi-facts').text()).toContain('5xx 1,208')
-    expect(elb.find('.aoi-kpi-facts').text()).not.toContain('%)')
+    // Rate only for target 5xx (same population as RequestCount); load balancer 5xx as a count (R01).
+    expect(elb.find('.aoi-kpi-facts').text()).toContain('Target 5xx 6 (27.27%)')
+    expect(elb.find('.aoi-kpi-facts').text()).toContain('LB 5xx 1,202')
+    expect(elb.find('.aoi-kpi-facts').text()).not.toMatch(/1,208 \(|1,202 \(/)
   })
 
   it('draws a sparkline for hourly series and opens the service tab', async () => {
