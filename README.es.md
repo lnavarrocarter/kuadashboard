@@ -9,6 +9,8 @@ Idioma: [English](README.md) · Español
 [![Stars](https://img.shields.io/github/stars/lnavarrocarter/kuadashboard)](https://github.com/lnavarrocarter/kuadashboard/stargazers)
 [![Forks](https://img.shields.io/github/forks/lnavarrocarter/kuadashboard)](https://github.com/lnavarrocarter/kuadashboard/forks)
 [![Documentación](https://img.shields.io/badge/docs-English%20%7C%20Espa%C3%B1ol-008060)](docs/es/index.md)
+[![Patrocinar en GitHub](https://img.shields.io/badge/Patrocinar-GitHub-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/lnavarrocarter)
+[![Donar por PayPal](https://img.shields.io/badge/Donar-PayPal-0070ba?logo=paypal&logoColor=white)](https://paypal.me/NavarroCarter)
 
 KUA es una plataforma open source para observar y operar infraestructura distribuida en Kubernetes y varios proveedores cloud. Reúne inventario, actividad, logs y arquitectura de aplicaciones en una sola interfaz.
 
