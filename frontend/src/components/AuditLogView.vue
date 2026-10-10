@@ -207,7 +207,7 @@ async function loadLogs() {
     entries.value = data.entries || []
     total.value   = data.total   || 0
   } catch (err) {
-    toast('error', t('audit.loadFailed', { error: err.message }))
+    toast(t('audit.loadFailed', { error: err.message }), 'error')
   }
 }
 
@@ -254,9 +254,9 @@ async function clearLogs() {
     total.value   = 0
     offset.value  = 0
     stats.value   = null
-    toast('success', t('audit.cleared'))
+    toast(t('audit.cleared'), 'success')
   } catch (err) {
-    toast('error', err.message)
+    toast(err.message, 'error')
   }
 }
 
