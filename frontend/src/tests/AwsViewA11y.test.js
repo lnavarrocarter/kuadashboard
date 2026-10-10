@@ -27,6 +27,13 @@ describe('AWS views accessibility guards', () => {
     expect(view).toMatch(/@click="submitInvoke"[^>]*>\s*\{\{[^}]*awsv\.invokeAction/)
   })
 
+  it('action names say whether they read, configure or check (A14)', () => {
+    const view = read('components/cloud/AwsView.vue')
+    expect(view).not.toMatch(/>\s*CW Logs\s*</)
+    expect(view).not.toMatch(/ℹ Info|>Info</)
+    expect(view).not.toMatch(/'Test'/)
+  })
+
   it('the AWS search box has an accessible name and a placeholder', () => {
     const input = read('components/cloud/AwsView.vue').match(/<input[^>]*aws-search[^>]*\/>/)[0]
     expect(input).toContain(":aria-label=\"t('awsv.searchResourcesLabel')\"")

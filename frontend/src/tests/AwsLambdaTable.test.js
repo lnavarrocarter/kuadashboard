@@ -26,6 +26,9 @@ describe('AwsView Lambda table (A05)', () => {
 
     const headers = w.findAll('.tab-panel table thead th').map(th => th.text())
     expect(headers.some(h => h.startsWith('State'))).toBe(false)
+    expect(headers.some(h => h.startsWith('Log group'))).toBe(true)
+    const actions = w.find('tbody tr').findAll('button').map(b => b.text())
+    expect(actions).toEqual(expect.arrayContaining(['View logs', 'Configure logging', 'Details']))
 
     const tags = Object.fromEntries(w.findAll('tbody tr').map(tr => [tr.find('td').text(), tr.find('[data-test="lambda-tags"]')]))
     expect(tags.tagged.text()).toBe('team=shop')

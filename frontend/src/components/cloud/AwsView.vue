@@ -111,7 +111,7 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openEc2Detail(i)">ℹ Info</button>
+                  <button class="btn sm" @click="openEc2Detail(i)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" @click="startEc2(i)" :disabled="i.state === 'running'">{{ t('action.start') }}</button>
                   <button class="btn sm danger" @click="stopEc2(i)" :disabled="i.state === 'stopped'">{{ t('action.stop') }}</button>
                   <button class="btn sm" @click="openTags('ec2', `EC2: ${i.name}`, i.id, i.tags)">{{ t('th.tags') }}</button>
@@ -173,8 +173,8 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="startEcs(svc)" :disabled="svc.desired > 0" :title="svc.desired > 0 ? t('awsv.op.ecsAlreadyRunning') : ''">{{ t('action.start') }}</button>
                   <button class="btn sm danger" @click="stopEcs(svc)" :disabled="svc.desired === 0">{{ t('action.stop') }}</button>
-                  <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('action.logs') }}</button>
-                  <button class="btn sm" @click="openLogging('ecs', svc)">CW Logs</button>
+                  <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('awsv.act.viewLogs') }}</button>
+                  <button class="btn sm" :title="t('awsv.act.configureLoggingHint')" @click="openLogging('ecs', svc)">{{ t('awsv.act.configureLogging') }}</button>
                   <button class="btn sm" @click="openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name })">{{ t('sidebar.config') }}</button>
                 </div>
               </td>
@@ -225,7 +225,7 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" :title="t('awsv.awsInfrastructureNetworkNodeGroupsEc2')" @click="openEksDetail(c)">ℹ Info</button>
+                  <button class="btn sm" :title="t('awsv.awsInfrastructureNetworkNodeGroupsEc2')" @click="openEksDetail(c)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" :title="t('awsv.openContainerInsightsDashboard')" @click="openEksObservability(c)">
                     <i data-lucide="chart-no-axes-combined"></i> {{ t('detail.tabMetrics') }}
                   </button>
@@ -254,7 +254,7 @@
             <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
             <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
             <th :class="thClass('invocations24h')" @click="sortBy('invocations24h')" :title="t('awsActivity.invocationsHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('invocations24h') }}</span></th>
-            <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')">{{ t('awsActivity.logs') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
+            <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')" :title="t('awsActivity.logGroupHint')">{{ t('awsActivity.logGroup') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -291,11 +291,11 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openInvoke(fn)">{{ t('gcp.invoke') }}</button>
-                  <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('action.logs') }}</button>
-                  <button class="btn sm" @click="openLogging('lambda', fn)">CW Logs</button>
+                  <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('awsv.act.viewLogs') }}</button>
+                  <button class="btn sm" :title="t('awsv.act.configureLoggingHint')" @click="openLogging('lambda', fn)">{{ t('awsv.act.configureLogging') }}</button>
                   <button class="btn sm" @click="openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags)">{{ t('th.tags') }}</button>
                   <button class="btn sm" @click="openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name })">{{ t('sidebar.config') }}</button>
-                  <button class="btn sm" @click="openLambdaDetail(fn)">ℹ Info</button>
+                  <button class="btn sm" @click="openLambdaDetail(fn)">{{ t('awsv.act.details') }}</button>
                 </div>
               </td>
             </tr>
@@ -368,7 +368,7 @@
                   <button class="btn sm" :disabled="s3TestState[b.name]?.loading"
                     @click="testS3Bucket(b.name)"
                     :style="s3TestState[b.name]?.ok === true ? 'border-color:#50c878;color:#50c878' : s3TestState[b.name]?.ok === false ? 'border-color:#f85149;color:#f85149' : ''"
-                    :title="s3TestState[b.name]?.msg || 'Test bucket connectivity'">{{ s3TestState[b.name]?.loading ? '...' : 'Test' }}</button>
+                    :title="s3TestState[b.name]?.msg || t('awsv.act.checkAccessHint')">{{ s3TestState[b.name]?.loading ? '…' : t('awsv.act.checkAccess') }}</button>
                 </div>
               </td>
             </tr>
@@ -451,7 +451,7 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openTags('vpc', `VPC: ${v.name}`, v.id, v.tags)">{{ t('th.tags') }}</button>
                   <button class="btn sm" @click="openConfig('vpc', `VPC: ${v.name}`, v, { id: v.id })">{{ t('sidebar.config') }}</button>
-                  <button class="btn sm" @click="openVpcDetail(v)">ℹ Info</button>
+                  <button class="btn sm" @click="openVpcDetail(v)">{{ t('awsv.act.details') }}</button>
                 </div>
               </td>
             </tr>
@@ -489,7 +489,7 @@
                   <button class="btn sm" @click="openTags('eventbridge', `Rule: ${r.name}`, r.arn, r.tags)">{{ t('th.tags') }}</button>
                   <button class="btn sm" @click="openConfig('eventbridge', `Rule: ${r.name}`, r, { bus: r.busName, name: r.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openEbDetails(r)">{{ t('audit.colDetails') }}</button>
-                  <button class="btn sm" @click="openEbLogs(r)">{{ t('action.logs') }}</button>
+                  <button class="btn sm" @click="openEbLogs(r)">{{ t('awsv.act.viewLogs') }}</button>
                 </div>
               </td>
             </tr>
@@ -554,7 +554,7 @@
                   <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">{{ t('th.tags') }}</button>
                   <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">{{ t('awsv.diagram') }}</button>
-                  <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">Info</button>
+                  <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">{{ t('awsv.act.details') }}</button>
                 </div>
               </td>
             </tr>
@@ -602,7 +602,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ tableItem.creationDateTime ? formatDate(tableItem.creationDateTime) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openDynamoInfo(tableItem)">ℹ Info</button>
+                  <button class="btn sm" @click="openDynamoInfo(tableItem)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" @click="openDynamoBrowse(tableItem)">{{ t('awsv.browse') }}</button>
                   <button class="btn sm" @click="openConfig('dynamodb', `DynamoDB: ${tableItem.name}`, tableItem, { table: tableItem.name })">{{ t('sidebar.config') }}</button>
                 </div>
@@ -645,7 +645,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ db.createdAt ? formatDate(db.createdAt) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openRdsInfo(db)">ℹ Info</button>
+                  <button class="btn sm" @click="openRdsInfo(db)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" @click="openConfig('rds', `RDS: ${db.id}`, db, { id: db.id })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" @click="openRdsConnect(db)">{{ t('console.connect') }}</button>
                   <button class="btn sm" @click="openRdsResetPwd(db)">{{ t('awsv.resetPwd') }}</button>
@@ -683,7 +683,7 @@
               <td class="text-dim" style="white-space:nowrap">{{ j.lastModified ? formatDate(j.lastModified) : '-' }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openGlueInfo(j)">ℹ Info</button>
+                  <button class="btn sm" @click="openGlueInfo(j)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" @click="runGlueJob(j)">{{ t('awsLogs.q.run') }}</button>
                   <button class="btn sm" @click="openGlueRuns(j)">{{ t('awsv.runs') }}</button>
                   <button class="btn sm" @click="openGlueJobConfig(j)">{{ t('sidebar.config') }}</button>
@@ -775,7 +775,7 @@
                   <td class="text-dim">{{ (cat.databases || []).length }}</td>
                   <td>
                     <div class="action-group">
-                      <button class="btn sm" @click.stop="openAthenaCatalogInfo(cat)" :title="t('awsv.catalogDetails')">ℹ Info</button>
+                      <button class="btn sm" @click.stop="openAthenaCatalogInfo(cat)" :title="t('awsv.catalogDetails')">{{ t('awsv.act.details') }}</button>
                       <button class="btn sm" @click.stop="athenaSubTab = 'editor'; athenaEditor.selectedCatalog = cat.name" :title="t('awsv.openInQueryEditor')">⚡ Editor</button>
                     </div>
                   </td>
@@ -4776,12 +4776,12 @@ async function testS3Bucket(bucketName) {
       toast(t('awsv.toastS3Accessible', { name: bucketName, ms: r.latencyMs, region: r.region }), 'success')
     } else {
       s3TestState[bucketName].ok  = false
-      s3TestState[bucketName].msg = r?.reason || 'Not accessible'
+      s3TestState[bucketName].msg = r?.reason || t('awsv.act.notAccessible')
       toast(`S3 "${bucketName}" — ${r?.reason || t('awsv.notAccessible')}`, 'error')
     }
   } catch (e) {
     s3TestState[bucketName].ok  = false
-    s3TestState[bucketName].msg = e?.message || 'Error'
+    s3TestState[bucketName].msg = e?.message || t('awsv.act.checkFailed')
   } finally {
     s3TestState[bucketName].loading = false
   }
