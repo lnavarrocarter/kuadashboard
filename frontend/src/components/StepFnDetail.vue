@@ -341,9 +341,16 @@ async function loadEvents(ex, force = false) {
   }
 }
 
+// Unreadable dates (e.g. {} in snapshots cached before the cloudHistory fix) render as '—'.
+function toDate(d) {
+  if (d === null || d === undefined || typeof d === 'object' && !(d instanceof Date)) return null
+  const date = new Date(d)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 function fmtDate(d) {
-  if (!d) return '—'
-  try { return new Date(d).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US') } catch { return String(d) }
+  const date = toDate(d)
+  return date ? date.toLocaleString(settings.lang === 'es' ? 'es' : 'en-US') : '—'
 }
 
 function fmtJson(str) {
@@ -352,8 +359,8 @@ function fmtJson(str) {
 }
 
 function calcDuration(start, end) {
-  if (!start) return '—'
-  const s = new Date(start), e = end ? new Date(end) : new Date()
+  const s = toDate(start), e = end ? toDate(end) : new Date()
+  if (!s || !e) return '—'
   const ms = e - s
   if (ms < 0) return '—'
   if (ms < 1000) return `${ms}ms`

@@ -67,6 +67,25 @@ describe('Step Functions execution history', () => {
     wrapper.unmount()
   })
 
+  it('lists execution dates and durations, and shows a dash for unreadable cached dates', async () => {
+    const pinia = createTestingPinia({ createSpy: vi.fn })
+    const store = useAwsStore()
+    store.fetchStepFnDiagram.mockResolvedValue({ stateMachine: { definition }, recentExecutions: [
+      { name: 'ok', executionArn: 'ok', status: 'SUCCEEDED', startDate: '2026-10-09T10:00:00.000Z', stopDate: '2026-10-09T10:01:05.000Z' },
+      { name: 'stale', executionArn: 'stale', status: 'FAILED', startDate: {}, stopDate: {} },
+    ] })
+    const wrapper = mount(StepFnDetail, { props: { open: false, sm: { arn: 'machine' } }, global: { plugins: [pinia], stubs: { teleport: true } } })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    await wrapper.findAll('.sfnd-tab')[2].trigger('click')
+    const [ok, stale] = wrapper.findAll('.sfnd-exec-row').map(row => row.text())
+    expect(ok).toContain('2026')
+    expect(ok).toContain('1m 5s')
+    expect(stale).not.toMatch(/Invalid Date|NaN/)
+    expect(stale).toContain('—')
+    wrapper.unmount()
+  })
+
   it('highlights catch transitions after a failed task', () => {
     const result = buildExecution([enter(1, 0, 'Work'), event(2, 1, 'TaskFailed'), enter(3, 2, 'Done', 'Succeed')], definition)
     expect(result.transitions).toEqual([{ scopeId: 'root', from: 'Work', to: 'Done' }])
