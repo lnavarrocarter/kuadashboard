@@ -10,6 +10,12 @@
         <span class="audit-total" data-test="audit-total">{{ t(hasFilters ? 'audit.matching' : 'audit.totalEntries', { n: total }) }}</span>
       </div>
       <div class="audit-header-right">
+        <button class="btn sm" data-test="audit-verify" :disabled="verifying" :title="t('audit.verifyHint')" @click="verifyChain">
+          <i data-lucide="shield-check"></i> {{ t('audit.verify') }}
+        </button>
+        <button class="btn sm" data-test="audit-settings-toggle" :aria-expanded="String(showSettings)" :title="t('audit.settings')" :aria-label="t('audit.settings')" @click="toggleSettings">
+          <i data-lucide="settings"></i>
+        </button>
         <a :href="exportUrl" class="btn sm" target="_blank" :title="t(hasFilters ? 'audit.exportFiltered' : 'audit.export')" :aria-label="t(hasFilters ? 'audit.exportFiltered' : 'audit.export')" data-test="audit-export">
           <i data-lucide="download"></i> CSV
         </a>
@@ -18,6 +24,47 @@
         </button>
       </div>
     </div>
+
+    <!-- Integrity of the chain of entries -->
+    <div v-if="verification" :class="['audit-verify', verification.valid ? 'ok' : 'broken']" role="status" data-test="audit-verify-result">
+      <template v-if="verification.valid">{{ t('audit.verifyOk', { n: verification.checked, since: verification.firstAt ? formatTime(verification.firstAt) : '—' }) }}</template>
+      <template v-else>{{ t(`audit.verifyBroken.${verification.brokenAt?.reason || 'modified'}`, { line: verification.brokenAt?.line }) }}</template>
+      <span v-if="verification.legacy" class="text-dim"> · {{ t('audit.verifyLegacy', { n: verification.legacy }) }}</span>
+    </div>
+
+    <!-- Retention and external copy -->
+    <section v-if="showSettings && settings" class="audit-settings" data-test="audit-settings">
+      <label class="audit-settings-row">
+        <span>{{ t('audit.retention') }}</span>
+        <select v-model.number="settingsDraft.retentionDays" class="ctrl-select" data-test="audit-retention">
+          <option v-for="days in RETENTION_CHOICES" :key="days" :value="days">{{ t('audit.retentionDays', { n: days }) }}</option>
+        </select>
+      </label>
+      <h4>{{ t('audit.forwardTitle') }}</h4>
+      <p class="text-dim audit-settings-hint">{{ t('audit.forwardHint') }}</p>
+      <PlanNote feature="auditForwarding" :text="t('audit.forwardPlan')" />
+      <label class="audit-settings-row">
+        <span>{{ t('audit.forwardUrl') }}</span>
+        <input v-model.trim="settingsDraft.url" class="audit-search" type="url" placeholder="https://siem.example.com/kua" data-test="audit-forward-url" />
+      </label>
+      <label class="audit-settings-row">
+        <span>{{ t('audit.forwardToken') }}</span>
+        <input v-model="settingsDraft.token" class="audit-search" type="password" autocomplete="off" :placeholder="settings.forward.hasToken ? t('audit.forwardTokenStored') : t('audit.forwardTokenNone')" data-test="audit-forward-token" />
+      </label>
+      <label class="audit-settings-check">
+        <input v-model="settingsDraft.enabled" type="checkbox" :disabled="!settings.forward.allowed && !settingsDraft.enabled" data-test="audit-forward-enabled" />
+        {{ t('audit.forwardEnabled') }}
+      </label>
+      <p v-if="settings.forward.enabled" class="text-dim audit-settings-hint" data-test="audit-forward-status">
+        {{ t('audit.forwardStatus', { pending: settings.forward.pending, last: settings.forward.lastSuccessAt ? formatTime(settings.forward.lastSuccessAt) : '—' }) }}
+        <span v-if="settings.forward.dropped" class="status-warn"> · {{ t('audit.forwardDropped', { n: settings.forward.dropped }) }}</span>
+        <span v-if="settings.forward.lastError" class="status-err"> · {{ settings.forward.lastError }}</span>
+      </p>
+      <div class="audit-settings-actions">
+        <button class="btn sm" :disabled="savingSettings || !settingsDraft.url" data-test="audit-forward-test" @click="testForwarding">{{ t('audit.forwardTest') }}</button>
+        <button class="btn sm primary" :disabled="savingSettings" data-test="audit-settings-save" @click="saveSettings">{{ t('action.save') }}</button>
+      </div>
+    </section>
 
     <!-- Filters -->
     <div class="audit-filters">
@@ -42,6 +89,12 @@
         <option value="console">{{ t('audit.catConsole') }}</option>
         <option value="localShell">{{ t('audit.catLocalShell') }}</option>
         <option value="system">{{ t('audit.catSystem') }}</option>
+      </select>
+      <select v-model="filterActor" class="ctrl-select audit-filter-sel" :aria-label="t('audit.colActor')" data-test="audit-actor-filter" @change="applyFilters">
+        <option value="">{{ t('audit.allActors') }}</option>
+        <option value="ui">{{ t('audit.actor.ui') }}</option>
+        <option value="mcp">{{ t('audit.actor.mcp') }}</option>
+        <option value="system">{{ t('audit.actor.system') }}</option>
       </select>
       <select v-model="filterLevel" class="ctrl-select audit-filter-sel" :aria-label="t('audit.colLevel')" @change="applyFilters">
         <option value="">{{ t('audit.allLevels') }}</option>
@@ -85,6 +138,7 @@
             <th>{{ t('audit.colAction') }}</th>
             <th>{{ t('audit.colResource') }}</th>
             <th>{{ t('audit.colContext') }}</th>
+            <th>{{ t('audit.colActor') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -101,9 +155,10 @@
               <td class="audit-action">{{ e.action }}</td>
               <td class="audit-resource" :title="e.resource">{{ truncate(e.resource, 40) }}</td>
               <td class="audit-context">{{ truncate(e.context, 30) }}</td>
+              <td class="audit-actor" :title="actorTitle(e.actor)" data-test="audit-actor">{{ t(`audit.actor.${e.actor?.kind || 'system'}`) }}<span v-if="e.actor?.user" class="text-dim"> · {{ e.actor.user }}</span></td>
             </template>
             <template v-else>
-              <td colspan="6" class="audit-expanded">
+              <td colspan="7" class="audit-expanded">
                 <div class="audit-expanded-grid">
                   <div><strong>{{ t('audit.colTime') }}:</strong> {{ e.timestamp }}</div>
                   <div><strong>{{ t('audit.colLevel') }}:</strong> <span :class="['audit-level-badge', `lvl-${e.level}`]">{{ e.level }}</span></div>
@@ -111,6 +166,8 @@
                   <div><strong>{{ t('audit.colAction') }}:</strong> {{ e.action }}</div>
                   <div><strong>{{ t('audit.colResource') }}:</strong> {{ e.resource }}</div>
                   <div><strong>{{ t('audit.colContext') }}:</strong> {{ e.context }}</div>
+                  <div><strong>{{ t('audit.colActor') }}:</strong> {{ actorTitle(e.actor) }}</div>
+                  <div v-if="e.hash" class="audit-hash"><strong>SHA-256:</strong> <code>{{ e.hash.slice(0, 16) }}…</code></div>
                   <div v-if="Object.keys(e.details || {}).length" class="audit-details-full">
                     <strong>{{ t('audit.colDetails') }}:</strong>
                     <pre>{{ JSON.stringify(e.details, null, 2) }}</pre>
@@ -148,7 +205,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import PlanNote from './PlanNote.vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
@@ -163,6 +221,7 @@ const stats           = ref(null)
 const search          = ref('')
 const filterCategory  = ref('')
 const filterLevel     = ref('')
+const filterActor     = ref('')
 const filterFrom      = ref('')   // datetime-local value, local time
 const filterTo        = ref('')
 const offset          = ref(0)
@@ -183,6 +242,7 @@ const filterParams = computed(() => {
   if (search.value)         params.set('search',   search.value)
   if (filterCategory.value) params.set('category', filterCategory.value)
   if (filterLevel.value)    params.set('level',    filterLevel.value)
+  if (filterActor.value)    params.set('actor',    filterActor.value)
   const from = isoAt(filterFrom.value)
   const to   = isoAt(filterTo.value, 59_999)   // the end minute is included
   if (from) params.set('from', from)
@@ -237,9 +297,74 @@ function resetFilters() {
   search.value         = ''
   filterCategory.value = ''
   filterLevel.value    = ''
+  filterActor.value    = ''
   filterFrom.value     = ''
   filterTo.value       = ''
   return applyFilters()
+}
+
+function actorTitle(actor) {
+  if (!actor) return t('audit.actor.system')
+  return [t(`audit.actor.${actor.kind || 'system'}`), actor.user, actor.account].filter(Boolean).join(' · ')
+}
+
+// ─── Integrity, retention, forwarding ───────────────────────────────────────
+const RETENTION_CHOICES = [30, 90, 180, 365, 730]
+const verification = ref(null)
+const verifying = ref(false)
+const showSettings = ref(false)
+const settings = ref(null)
+const savingSettings = ref(false)
+const settingsDraft = reactive({ retentionDays: 90, url: '', token: '', enabled: false })
+
+async function verifyChain() {
+  verifying.value = true
+  try {
+    verification.value = await api('GET', '/api/audit/verify')
+  } catch (err) {
+    toast(err.message, 'error')
+  } finally {
+    verifying.value = false
+  }
+}
+
+function fillDraft(value) {
+  settings.value = value
+  Object.assign(settingsDraft, { retentionDays: value.retentionDays, url: value.forward.url, token: '', enabled: value.forward.enabled })
+}
+
+async function toggleSettings() {
+  showSettings.value = !showSettings.value
+  if (!showSettings.value) return
+  try { fillDraft(await api('GET', '/api/audit/settings')) } catch (err) { toast(err.message, 'error') }
+  nextTick(() => createIcons({ icons }))
+}
+
+async function saveSettings() {
+  savingSettings.value = true
+  try {
+    const forward = { url: settingsDraft.url, enabled: settingsDraft.enabled }
+    // An empty field keeps the stored token: it is never sent back to the UI.
+    if (settingsDraft.token) forward.token = settingsDraft.token
+    fillDraft(await api('PUT', '/api/audit/settings', { retentionDays: settingsDraft.retentionDays, forward }))
+    toast(t('audit.settingsSaved'), 'success')
+  } catch (err) {
+    toast(err.message, 'error')
+  } finally {
+    savingSettings.value = false
+  }
+}
+
+async function testForwarding() {
+  savingSettings.value = true
+  try {
+    await api('POST', '/api/audit/forward/test')
+    toast(t('audit.forwardTestOk'), 'success')
+  } catch (err) {
+    toast(t('audit.forwardTestFailed', { error: err.message }), 'error')
+  } finally {
+    savingSettings.value = false
+  }
 }
 
 function confirmClear() {
@@ -278,6 +403,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.audit-verify { padding: 6px 10px; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+.audit-verify.ok { border: 1px solid var(--green); }
+.audit-verify.broken { border: 1px solid var(--red); color: var(--red); font-weight: 600; }
+.audit-settings { padding: 10px 12px; border: 1px solid var(--border, #444); border-radius: 6px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; font-size: 12px; }
+.audit-settings h4 { margin: 4px 0 0; font-size: 12px; }
+.audit-settings-row { display: flex; align-items: center; gap: 8px; }
+.audit-settings-row > span { min-width: 150px; color: var(--text-muted, #888); }
+.audit-settings-check { display: flex; align-items: center; gap: 6px; }
+.audit-settings-hint { margin: 0; font-size: 11px; }
+.audit-settings-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.audit-actor { white-space: nowrap; font-size: 0.78rem; }
+.audit-hash code { font-size: 11px; }
 .audit-view {
   display: flex;
   flex-direction: column;
