@@ -33,9 +33,13 @@
         <option value="kubernetes">Kubernetes</option>
         <option value="aws">AWS</option>
         <option value="gcp">GCP</option>
+        <option value="vercel">Vercel</option>
         <option value="helm">Helm</option>
+        <option value="architecture">{{ t('audit.catArchitecture') }}</option>
         <option value="advisor">{{ t('audit.catAdvisor') }}</option>
         <option value="envManager">{{ t('audit.catEnvManager') }}</option>
+        <option value="console">{{ t('audit.catConsole') }}</option>
+        <option value="localShell">{{ t('audit.catLocalShell') }}</option>
         <option value="system">{{ t('audit.catSystem') }}</option>
       </select>
       <select v-model="filterLevel" class="ctrl-select audit-filter-sel" @change="loadLogs">
