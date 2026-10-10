@@ -2189,6 +2189,8 @@ import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useI18n } from '../../composables/useI18n'
 import { useToast }    from '../../composables/useToast'
 import { filterFirewallRules, formatFirewallProtocols } from './gcpNetworkFilter'
+import { cloudProfileEnvironment } from '../../lib/profileEnvironment'
+import { contextEnvironment } from '../../lib/kubeContext'
 import { useApi }      from '../../composables/useApi'
 import { settings as appSettings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
@@ -2877,7 +2879,14 @@ function gcpDestinationContext(resource = null) {
   const local = localConfigs.value.find(c => `local:${c.name}` === profileId)
   const profile = envStore.findById?.(profileId)
   const project = gcpStore.overview?.projectId || local?.project || profile?.projectId || ''
+  const environment = cloudProfileEnvironment('gcp', profileId, { gcpProfiles: envStore.gcpProfiles, gcpLocalConfigs: localConfigs.value })
+    || (project ? contextEnvironment(project) : null)
   const rows = [
+    {
+      label: t('kubeAction.environment'),
+      value: t(`kubeAction.env.${environment || 'unknown'}`),
+      warning: environment === 'production' ? t('gcpv.audit.ctx.productionWarning') : '',
+    },
     { label: t('gcpv.audit.ctx.project'), value: project || t('gcpv.audit.ctx.unknown') },
     { label: t('gcpv.audit.ctx.profile'), value: profile?.name || local?.name || profileId },
   ]
