@@ -1009,6 +1009,17 @@ export default {
   'apm.error.collection_failed':         'One or more resources could not be collected.',
 
   // ── Audit Log ─────────────────────────────────────────────────────────
+  'readOnly.badge': 'Read-only',
+  'readOnly.onHint': 'Read-only mode is on: KUA refuses changes to clouds and clusters, and terminals stay closed. Click to turn it off.',
+  'readOnly.offHint': 'Turn on read-only mode: KUA will refuse changes to clouds and clusters, and close terminals',
+  'readOnly.forced': 'Read-only mode is forced by KUA_READ_ONLY on this computer',
+  'readOnly.enabled': 'Read-only mode on',
+  'readOnly.disabled': 'Read-only mode off: changes are allowed again',
+  'readOnly.disableTitle': 'Turn off read-only mode?',
+  'readOnly.disableMessage': 'KUA will accept changes to AWS, GCP, Vercel, Helm and Kubernetes again, and open terminals. Each change still asks for its own confirmation.',
+  'readOnly.disableConfirm': 'Allow changes',
+  'readOnly.refused': 'Read-only mode is on: KUA does not change {area} resources. Turn it off in the header to make this change.',
+  'readOnly.refusedTerminal': 'Read-only mode is on: terminals stay closed because KUA cannot check what is typed in them.',
   'audit.title':             'Audit Log',
   'audit.export':            'Export to CSV',
   'audit.clear':             'Clear all entries',
