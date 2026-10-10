@@ -990,7 +990,6 @@ export default {
   'apm.error.collection_failed':         'No se pudieron recolectar uno o más recursos.',
   // ── Audit Log ────────────────────────────────────────────────────────
   'audit.title':             'Log de Auditoría',
-  'audit.entries':           'entradas',
   'audit.export':            'Exportar a CSV',
   'audit.clear':             'Limpiar todo',
   'audit.search':            'Buscar acción, recurso, contexto…',
@@ -1012,6 +1011,20 @@ export default {
   'audit.empty':             'Aún no hay eventos de auditoría',
   'audit.clearConfirm':      '¿Limpiar todas las entradas del log? Esta acción no se puede deshacer.',
   'audit.cleared':           'Log de auditoría limpiado',
+  'audit.totalEntries':      '{n} entradas',
+  'audit.matching':          '{n} entradas coinciden',
+  'audit.exportFiltered':    'Exportar a CSV las entradas filtradas',
+  'audit.from':              'Desde',
+  'audit.to':                'Hasta',
+  'audit.resetFilters':      'Limpiar filtros',
+  'audit.refresh':           'Actualizar',
+  'audit.statsAll':          'Todas las entradas:',
+  'audit.statsFiltered':     'Entradas filtradas:',
+  'audit.noMatches':         'Ninguna entrada coincide con estos filtros',
+  'audit.prev':              'Anterior',
+  'audit.next':              'Siguiente',
+  'audit.range':             '{from}–{to} de {total}',
+  'audit.loadFailed':        'No se pudo cargar el log de auditoría: {error}',
 
   // ── Console ────────────────────────────────────────────────────────────
   'console.title':           'Consola',

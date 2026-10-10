@@ -7,13 +7,13 @@
           <i data-lucide="shield-check"></i>
           {{ t('audit.title') }}
         </h2>
-        <span class="audit-total">{{ total }} {{ t('audit.entries') }}</span>
+        <span class="audit-total" data-test="audit-total">{{ t(hasFilters ? 'audit.matching' : 'audit.totalEntries', { n: total }) }}</span>
       </div>
       <div class="audit-header-right">
-        <a :href="`/api/audit/logs/export`" class="btn sm" target="_blank" :title="t('audit.export')">
+        <a :href="exportUrl" class="btn sm" target="_blank" :title="t(hasFilters ? 'audit.exportFiltered' : 'audit.export')" :aria-label="t(hasFilters ? 'audit.exportFiltered' : 'audit.export')" data-test="audit-export">
           <i data-lucide="download"></i> CSV
         </a>
-        <button class="btn sm danger" @click="confirmClear" :title="t('audit.clear')">
+        <button class="btn sm danger" @click="confirmClear" :title="t('audit.clear')" :aria-label="t('audit.clear')">
           <i data-lucide="trash-2"></i>
         </button>
       </div>
@@ -26,9 +26,10 @@
         class="audit-search"
         type="text"
         :placeholder="t('audit.search')"
+        :aria-label="t('audit.search')"
         @input="debouncedLoad"
       />
-      <select v-model="filterCategory" class="ctrl-select audit-filter-sel" @change="loadLogs">
+      <select v-model="filterCategory" class="ctrl-select audit-filter-sel" :aria-label="t('audit.colCategory')" @change="applyFilters">
         <option value="">{{ t('audit.allCategories') }}</option>
         <option value="kubernetes">Kubernetes</option>
         <option value="aws">AWS</option>
@@ -42,19 +43,28 @@
         <option value="localShell">{{ t('audit.catLocalShell') }}</option>
         <option value="system">{{ t('audit.catSystem') }}</option>
       </select>
-      <select v-model="filterLevel" class="ctrl-select audit-filter-sel" @change="loadLogs">
+      <select v-model="filterLevel" class="ctrl-select audit-filter-sel" :aria-label="t('audit.colLevel')" @change="applyFilters">
         <option value="">{{ t('audit.allLevels') }}</option>
         <option value="info">Info</option>
         <option value="warning">Warning</option>
         <option value="error">Error</option>
         <option value="critical">Critical</option>
       </select>
-      <button class="btn sm" @click="resetFilters"><i data-lucide="x"></i></button>
-      <button class="btn sm primary" @click="loadLogs"><i data-lucide="refresh-cw"></i></button>
+      <label class="audit-date">
+        <span>{{ t('audit.from') }}</span>
+        <input v-model="filterFrom" type="datetime-local" class="audit-date-input" data-test="audit-from" @change="applyFilters" />
+      </label>
+      <label class="audit-date">
+        <span>{{ t('audit.to') }}</span>
+        <input v-model="filterTo" type="datetime-local" class="audit-date-input" data-test="audit-to" @change="applyFilters" />
+      </label>
+      <button class="btn sm" @click="resetFilters" :title="t('audit.resetFilters')" :aria-label="t('audit.resetFilters')"><i data-lucide="x"></i></button>
+      <button class="btn sm primary" @click="refresh" :title="t('audit.refresh')" :aria-label="t('audit.refresh')"><i data-lucide="refresh-cw"></i></button>
     </div>
 
     <!-- Stats bar -->
     <div class="audit-stats" v-if="stats">
+      <span class="audit-stats-scope">{{ t(hasFilters ? 'audit.statsFiltered' : 'audit.statsAll') }}</span>
       <span v-for="(count, lvl) in stats.byLevel" :key="lvl" :class="['audit-stat-badge', `lvl-${lvl}`]">
         {{ lvl }}: {{ count }}
       </span>
@@ -113,8 +123,15 @@
       </table>
       <div v-else class="audit-empty">
         <i data-lucide="inbox"></i>
-        <p>{{ t('audit.empty') }}</p>
+        <p>{{ t(hasFilters ? 'audit.noMatches' : 'audit.empty') }}</p>
       </div>
+    </div>
+
+    <!-- Paging -->
+    <div v-if="total > PAGE_SIZE" class="audit-paging" data-test="audit-paging">
+      <button class="btn sm" :disabled="offset === 0" @click="goToPage(offset - PAGE_SIZE)">{{ t('audit.prev') }}</button>
+      <span>{{ t('audit.range', { from: offset + 1, to: Math.min(offset + PAGE_SIZE, total), total }) }}</span>
+      <button class="btn sm" :disabled="offset + PAGE_SIZE >= total" @click="goToPage(offset + PAGE_SIZE)">{{ t('audit.next') }}</button>
     </div>
 
     <!-- Confirm clear modal -->
@@ -131,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
@@ -146,40 +163,83 @@ const stats           = ref(null)
 const search          = ref('')
 const filterCategory  = ref('')
 const filterLevel     = ref('')
+const filterFrom      = ref('')   // datetime-local value, local time
+const filterTo        = ref('')
+const offset          = ref(0)
 const expandedId      = ref(null)
 const showClearConfirm = ref(false)
+
+const PAGE_SIZE = 200
+
+// datetime-local gives local time without zone; the log stores ISO timestamps (UTC).
+function isoAt(local, extraMs = 0) {
+  const time = local ? new Date(local).getTime() : NaN
+  return Number.isNaN(time) ? '' : new Date(time + extraMs).toISOString()
+}
+
+// The list, the stats and the CSV share these filters.
+const filterParams = computed(() => {
+  const params = new URLSearchParams()
+  if (search.value)         params.set('search',   search.value)
+  if (filterCategory.value) params.set('category', filterCategory.value)
+  if (filterLevel.value)    params.set('level',    filterLevel.value)
+  const from = isoAt(filterFrom.value)
+  const to   = isoAt(filterTo.value, 59_999)   // the end minute is included
+  if (from) params.set('from', from)
+  if (to)   params.set('to',   to)
+  return params
+})
+const hasFilters = computed(() => filterParams.value.toString() !== '')
+const exportUrl  = computed(() => `/api/audit/logs/export${hasFilters.value ? `?${filterParams.value}` : ''}`)
 
 let debounceTimer = null
 function debouncedLoad() {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => loadLogs(), 300)
+  debounceTimer = setTimeout(() => applyFilters(), 300)
 }
 
 async function loadLogs() {
   try {
-    const params = new URLSearchParams({ limit: 500 })
-    if (search.value)         params.set('search',   search.value)
-    if (filterCategory.value) params.set('category', filterCategory.value)
-    if (filterLevel.value)    params.set('level',    filterLevel.value)
+    const params = new URLSearchParams(filterParams.value)
+    params.set('limit',  PAGE_SIZE)
+    params.set('offset', offset.value)
     const data = await api('GET', `/api/audit/logs?${params}`)
     entries.value = data.entries || []
     total.value   = data.total   || 0
   } catch (err) {
-    toast('error', `Failed to load audit log: ${err.message}`)
+    toast('error', t('audit.loadFailed', { error: err.message }))
   }
 }
 
 async function loadStats() {
   try {
-    stats.value = await api('GET', '/api/audit/stats')
+    const params = filterParams.value.toString()
+    stats.value = await api('GET', `/api/audit/stats${params ? `?${params}` : ''}`)
   } catch { /* stats are optional */ }
+}
+
+function refresh() {
+  return Promise.all([loadLogs(), loadStats()])
+}
+
+function applyFilters() {
+  offset.value = 0
+  return refresh()
+}
+
+function goToPage(start) {
+  offset.value = Math.max(0, start)
+  expandedId.value = null
+  return loadLogs()
 }
 
 function resetFilters() {
   search.value         = ''
   filterCategory.value = ''
   filterLevel.value    = ''
-  loadLogs()
+  filterFrom.value     = ''
+  filterTo.value       = ''
+  return applyFilters()
 }
 
 function confirmClear() {
@@ -192,6 +252,7 @@ async function clearLogs() {
     showClearConfirm.value = false
     entries.value = []
     total.value   = 0
+    offset.value  = 0
     stats.value   = null
     toast('success', t('audit.cleared'))
   } catch (err) {
@@ -211,7 +272,7 @@ function truncate(str, len) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadLogs(), loadStats()])
+  await refresh()
   nextTick(() => createIcons({ icons }))
 })
 </script>
@@ -271,6 +332,22 @@ onMounted(async () => {
   font-size: 0.85rem;
 }
 .audit-filter-sel { min-width: 130px; }
+.audit-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted, #888);
+}
+.audit-date-input {
+  padding: 5px 8px;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  background: var(--bg-input, #2a2a2a);
+  color: var(--text, #ddd);
+  font-size: 0.8rem;
+  color-scheme: dark light;
+}
 
 /* Stats */
 .audit-stats {
@@ -282,6 +359,7 @@ onMounted(async () => {
   font-size: 0.78rem;
 }
 .audit-stats-sep { color: var(--text-muted, #888); }
+.audit-stats-scope { color: var(--text-muted, #888); }
 
 /* Level badges */
 .audit-level-badge,
@@ -379,6 +457,17 @@ onMounted(async () => {
   gap: 8px;
 }
 .audit-empty i { width: 32px; height: 32px; }
+
+/* Paging */
+.audit-paging {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+}
 
 /* Confirm overlay */
 .audit-confirm-overlay {

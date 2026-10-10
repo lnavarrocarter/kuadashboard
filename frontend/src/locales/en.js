@@ -991,7 +991,6 @@ export default {
 
   // ── Audit Log ─────────────────────────────────────────────────────────
   'audit.title':             'Audit Log',
-  'audit.entries':           'entries',
   'audit.export':            'Export to CSV',
   'audit.clear':             'Clear all entries',
   'audit.search':            'Search action, resource, context…',
@@ -1013,6 +1012,20 @@ export default {
   'audit.empty':             'No audit events recorded yet',
   'audit.clearConfirm':      'Clear all audit log entries? This cannot be undone.',
   'audit.cleared':           'Audit log cleared',
+  'audit.totalEntries':      '{n} entries',
+  'audit.matching':          '{n} matching entries',
+  'audit.exportFiltered':    'Export the filtered entries to CSV',
+  'audit.from':              'From',
+  'audit.to':                'To',
+  'audit.resetFilters':      'Clear filters',
+  'audit.refresh':           'Refresh',
+  'audit.statsAll':          'All entries:',
+  'audit.statsFiltered':     'Filtered entries:',
+  'audit.noMatches':         'No entries match these filters',
+  'audit.prev':              'Previous',
+  'audit.next':              'Next',
+  'audit.range':             '{from}–{to} of {total}',
+  'audit.loadFailed':        'Failed to load audit log: {error}',
 
   // ── Console ────────────────────────────────────────────────────────────
   'console.title':           'Console',

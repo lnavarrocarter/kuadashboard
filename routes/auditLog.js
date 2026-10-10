@@ -5,10 +5,11 @@
  *
  * Base path: /api/audit
  *
- * GET  /logs         → list entries (filters: limit, category, level, search, from, to)
+ * GET  /logs         → one page of entries and the number of matches
+ *                      (filters: category, level, search, from, to; paging: limit, offset)
  * DELETE /logs       → clear all entries
- * GET  /logs/export  → download as CSV
- * GET  /stats        → summary counters per category and level
+ * GET  /logs/export  → download the matching entries as CSV
+ * GET  /stats        → counters per category and level of the matching entries
  */
 
 const express  = require('express');
@@ -16,20 +17,27 @@ const auditLog = require('../lib/auditLog');
 
 const router = express.Router();
 
+// The same filters apply to the list, the stats and the CSV export.
+function filtersFrom({ category, level, search, from, to }) {
+  return {
+    category: category || undefined,
+    level:    level    || undefined,
+    search:   search   || undefined,
+    from:     from     || undefined,
+    to:       to       || undefined,
+  };
+}
+
 // ─── GET /logs ────────────────────────────────────────────────────────────────
 
 router.get('/logs', (req, res) => {
   try {
-    const { limit, category, level, search, from, to } = req.query;
-    const entries = auditLog.getLogs({
-      limit:    limit    ? parseInt(limit, 10) : 200,
-      category: category || undefined,
-      level:    level    || undefined,
-      search:   search   || undefined,
-      from:     from     || undefined,
-      to:       to       || undefined,
-    });
-    res.json({ entries, total: entries.length });
+    const { limit, offset } = req.query;
+    res.json(auditLog.queryLogs({
+      ...filtersFrom(req.query),
+      limit:  limit  ? parseInt(limit, 10)  : 200,
+      offset: offset ? parseInt(offset, 10) : 0,
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -39,7 +47,7 @@ router.get('/logs', (req, res) => {
 
 router.get('/logs/export', (req, res) => {
   try {
-    const csv = auditLog.exportCsv();
+    const csv = auditLog.exportCsv(filtersFrom(req.query));
     const filename = `kuadashboard-audit-${new Date().toISOString().slice(0, 10)}.csv`;
     res
       .set('Content-Type', 'text/csv; charset=utf-8')
@@ -54,14 +62,7 @@ router.get('/logs/export', (req, res) => {
 
 router.get('/stats', (req, res) => {
   try {
-    const entries = auditLog.getLogs({ limit: 5000 });
-    const byCategory = {};
-    const byLevel    = {};
-    for (const e of entries) {
-      byCategory[e.category] = (byCategory[e.category] || 0) + 1;
-      byLevel[e.level]       = (byLevel[e.level]       || 0) + 1;
-    }
-    res.json({ total: entries.length, byCategory, byLevel });
+    res.json(auditLog.getStats(filtersFrom(req.query)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
