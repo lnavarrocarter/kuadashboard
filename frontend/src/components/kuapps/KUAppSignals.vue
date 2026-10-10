@@ -35,7 +35,15 @@
           <span class="obs-row-name"><i data-lucide="layout-dashboard"></i>{{ t('obs.wholeApplication') }}</span>
           <span v-if="issueList.length" class="obs-issue-count">{{ issueList.length }}</span>
         </button>
-        <p class="obs-count" :title="t('obs.countScopeHint')" data-test="observability-count">{{ t('obs.countScoped', { shown: visibleCount, total: data.resources.length }) }}</p>
+        <!-- Each number says what it counts: shown by the filter, followed by Observability, inventoried. -->
+        <div class="obs-count" :title="t('obs.countScopeHint')" data-test="observability-count">
+          <span>{{ t('obs.countScoped', { shown: visibleCount, total: data.resources.length }) }}</span>
+          <span v-if="hiddenCount" class="obs-count-hidden" data-test="observability-hidden">
+            {{ search ? t('obs.hiddenBySearch', { n: hiddenCount }) : t('obs.hiddenByFilter', { n: hiddenCount, filter: filterLabel }) }}
+            <button type="button" class="btn-link" data-test="observability-show-all" @click="showAll">{{ t('obs.showAll') }}</button>
+          </span>
+          <span v-if="inventoryTotal > data.resources.length" class="obs-count-inventory" data-test="observability-inventory">{{ t('obs.followedOfInventory', { followed: data.resources.length, inventory: inventoryTotal }) }}</span>
+        </div>
         <div v-for="group in groups" :key="group.type" class="obs-group" :data-test="`observability-group-${group.type}`">
           <h4><i :data-lucide="group.icon"></i>{{ group.label }} <small>{{ group.items.length }}</small></h4>
           <button
@@ -125,6 +133,8 @@ const props = defineProps({
   // The range and filter it opens with (e.g. from the Summary's health card).
   initialHours: { type: Number, default: 24 },
   initialFilter: { type: String, default: 'observable' },
+  // Resources in the application inventory (Resources tab), to relate both totals.
+  inventoryTotal: { type: Number, default: 0 },
 })
 const emit = defineEmits(['open-kubernetes-logs', 'issue-action', 'select-resource'])
 
@@ -175,6 +185,15 @@ const filtered = computed(() => {
   })
 })
 const visibleCount = computed(() => filtered.value.length)
+const hiddenCount = computed(() => (data.value?.resources.length || 0) - visibleCount.value)
+const filterLabel = computed(() => {
+  const labels = { issues: 'obs.withIssues', failed: 'obs.failedFilter', observable: 'obs.observableOnly' }
+  return stateFilter.value ? t(labels[stateFilter.value] || `kuapps.signalState.${stateFilter.value}`) : ''
+})
+function showAll() {
+  search.value = ''
+  stateFilter.value = ''
+}
 // One group per type, in the order the API returns (observable first, then type and name).
 const groups = computed(() => {
   const byType = new Map()
@@ -288,6 +307,9 @@ onUpdated(refreshIcons)
 </script>
 
 <style scoped>
+.obs-count { display: flex; flex-direction: column; gap: 2px; }
+.obs-count-hidden, .obs-count-inventory { color: var(--text-dim); font-size: 11px; }
+.obs-count .btn-link { background: none; border: none; padding: 0; color: var(--accent, #2f81f7); cursor: pointer; font-size: inherit; text-decoration: underline; }
 .obs { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .obs-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .obs-range { display: flex; gap: 4px; }
