@@ -8,7 +8,7 @@ const lists = {
   vercelProfiles: [{ id: 'v-1', name: 'web-dev' }],
 }
 
-describe('environment of the cloud profile in the header (H3)', () => {
+describe('environment of the cloud profile in the header', () => {
   it('reads stored and local profiles like a kube context', () => {
     expect(cloudProfileEnvironment('aws', 'p-1', lists)).toBe('production')
     expect(cloudProfileEnvironment('aws', 'local:dev', lists)).toBe('development')

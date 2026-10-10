@@ -164,7 +164,7 @@ describe('useAwsStore.fetchResourceConfig("vpc") — regression', () => {
   })
 })
 
-describe('VpcDetail.vue — security group search and outbound rules (H4)', () => {
+describe('VpcDetail.vue — security group search and outbound rules', () => {
   let store
   const GROUPS = [
     { GroupId: 'sg-web', GroupName: 'web', Description: 'public web', IpPermissions: [

@@ -733,7 +733,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
   })
 })
 
-describe('GcpView — expired credentials (H7)', () => {
+describe('GcpView — expired credentials', () => {
   let store
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -772,7 +772,7 @@ describe('GcpView — expired credentials (H7)', () => {
   })
 })
 
-describe('GcpView — network firewall and routes (H4)', () => {
+describe('GcpView — network firewall and routes', () => {
   let store
   beforeEach(() => {
     setActivePinia(createPinia())

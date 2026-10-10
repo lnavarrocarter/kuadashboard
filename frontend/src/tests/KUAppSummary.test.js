@@ -54,7 +54,7 @@ describe('KUApp summary (#171)', () => {
     wrapper.unmount()
   })
 
-  it('shows coverage as pending, not zero, while the registry loads (H8)', async () => {
+  it('shows coverage as pending, not zero, while the registry loads', async () => {
     respond({ overview: { health: { status: 'unknown', signals: [] }, latestRun: null }, topology: { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: null } })
     const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws', registryLoading: true, registry: { resources: [], relationships: [] } } })
     await flushPromises()

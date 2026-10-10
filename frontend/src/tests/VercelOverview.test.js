@@ -24,7 +24,7 @@ const OVERVIEW = {
   rows: [row('a', 'shop'), row('b', 'legacy', { inactive: true, production: { state: 'ERROR' }, recent: { finished: 4, failed: 4 } })],
 }
 
-describe('Vercel overview: activity windows and inactive projects (H5)', () => {
+describe('Vercel overview: activity windows and inactive projects', () => {
   beforeEach(() => {
     settings.lang = 'en'
     setActivePinia(createPinia())

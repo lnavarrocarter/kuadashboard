@@ -42,7 +42,7 @@ describe('view URL (A15)', () => {
     expect(href).toBe(`${BASE}?view=kuapps`)
   })
 
-  it('carries the Vercel service, profile and project, but no filters (H10)', () => {
+  it('carries the Vercel service, profile and project, but no filters', () => {
     const { href } = nextViewUrl(BASE, { view: 'vercel', service: 'deployments', profile: 'p-1', project: 'prj_1', filters: { q: 'x' } })
     expect(href).toBe(`${BASE}?view=vercel&service=deployments&profile=p-1&project=prj_1`)
     expect(readViewUrl(new URL(href).search)).toEqual({ view: 'vercel', service: 'deployments', profile: 'p-1', resource: '', project: 'prj_1', filters: {} })

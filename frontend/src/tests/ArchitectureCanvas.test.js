@@ -434,7 +434,7 @@ describe('ArchitectureCanvas', () => {
     expect(nodes.find(node => node.id === 'stale-node').data.health.status).toBe('stale')
   })
 
-  it('goes to the first degraded resource and can take the whole window (H9)', async () => {
+  it('goes to the first degraded resource and can take the whole window', async () => {
     const graph = {
       revision: 1,
       document: {
