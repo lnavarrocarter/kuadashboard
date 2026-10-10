@@ -138,6 +138,8 @@
                     </table>
                   </div>
 
+                  <AwsLbPath :key="lb.id" :lb="lb" />
+
                   <div v-if="detail?.tags?.length" class="msg-section">
                     <h5>{{ t('elb.tags') }}</h5>
                     <div><span v-for="tag in detail.tags" :key="tag.key" class="msg-chip">{{ tag.key }}={{ tag.value }}</span></div>
@@ -153,6 +155,7 @@
 </template>
 
 <script setup>
+import AwsLbPath from './AwsLbPath.vue'
 import { computed, ref } from 'vue'
 import { useAwsStore } from '../../../stores/useAwsStore'
 import { useI18n } from '../../../composables/useI18n'

@@ -4396,6 +4396,18 @@ router.get('/elb/detail', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// GET /elb/path?arn= → network path of an ELBv2 load balancer to its targets
+// (subnets, routes, security groups; lib/awsLbPath.js). Describe calls only, no charge.
+router.get('/elb/path', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const arn = typeof req.query.arn === 'string' ? req.query.arn : '';
+    res.json(await require('../lib/awsLbPath').collectLbPath(cfg, arn));
+  } catch (err) { handleErr(res, err); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── AMAZON CLOUDFRONT ────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1124,6 +1124,11 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  /** Network path of an ELBv2 load balancer to its targets: subnets, routes, security group verdicts. */
+  async function fetchLoadBalancerPath(lb) {
+    return apiFetch(`/api/cloud/aws/elb/path?arn=${encodeURIComponent(lb.arn)}`, { headers: headers() })
+  }
+
   /** Listener rules, attributes and tags of one load balancer (ELBv2 by ARN, Classic by name). */
   async function fetchLoadBalancerDetail(lb) {
     const query = lb.arn ? `arn=${encodeURIComponent(lb.arn)}` : `name=${encodeURIComponent(lb.name)}`
@@ -1389,7 +1394,7 @@ export const useAwsStore = defineStore('aws', () => {
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
-    loadBalancers, loadBalancersTruncated, loadBalancersUnavailable, fetchLoadBalancers, fetchLoadBalancerDetail,
+    loadBalancers, loadBalancersTruncated, loadBalancersUnavailable, fetchLoadBalancers, fetchLoadBalancerDetail, fetchLoadBalancerPath,
     sqsQueues, sqsTruncated, sqsActivity, snsTopics, snsTruncated, snsActivity, sesData, sesMetrics,
     fetchSqsQueues, fetchSnsTopics, fetchSes, fetchSqsActivity, fetchSnsActivity, fetchSesMetrics, fetchSesSeries, fetchSqsQueueMetrics, fetchSnsTopicMetrics,
     fetchSqsQueueDetails, fetchSnsTopicDetails, fetchSnsDeliveryLogs, fetchSesSuppression, fetchSesSetMetrics,
