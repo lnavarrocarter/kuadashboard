@@ -227,7 +227,7 @@
   <div class="gcp-list-table">
             <table class="cloud-table gcp-table" data-test="cloudrun-table">
               <thead><tr>
-                <th>{{ t('gri.service') }}</th><th>{{ t('res.state') }}</th><th>{{ t('lmd.image') }}</th><th>CPU / Mem</th><th>{{ t('gri.instances') }}</th><th>Ingress</th><th>{{ t('gri.revision') }}</th><th>{{ t('res.updated') }}</th><th>{{ t('gcpv.actions') }}</th>
+                <th>{{ t('gri.service') }}</th><th>{{ t('res.state') }}</th><th>{{ t('lmd.image') }}</th><th>CPU / Mem</th><th>{{ t('gcpv.audit.crScaling') }}</th><th>Ingress</th><th>{{ t('gri.revision') }}</th><th>{{ t('res.updated') }}</th><th>{{ t('gcpv.actions') }}</th>
               </tr></thead>
               <tbody>
                 <tr v-for="svc in filteredCloudRun" :key="`${svc.region}/${svc.name}`"
@@ -242,9 +242,9 @@
                     <div v-if="svc.statusMessage && svc.status === 'failed'" class="text-dim mono-xs gcp-ellipsis" :title="svc.statusMessage">{{ svc.statusMessage }}</div>
                   </td>
                   <td class="mono-xs text-dim gcp-ellipsis" :title="svc.image">{{ shortImage(svc.image) }}</td>
-                  <td class="text-dim">{{ svc.cpu || '—' }} / {{ svc.memory || '—' }}</td>
+                  <td class="text-dim" :title="`${svc.cpu || '—'} / ${svc.memory || '—'}`">{{ formatCloudRunCpu(svc.cpu) }} / {{ formatCloudRunMemory(svc.memory) }}</td>
                   <td>
-                    <span :class="svc.minInstances > 0 ? 'gcp-chip warm' : 'gcp-chip'" :title="svc.minInstances > 0 ? 'Instancias siempre encendidas: facturan 24/7' : 'Escala a cero'">{{ svc.minInstances }}–{{ svc.maxInstances ?? '∞' }}</span>
+                    <span :class="svc.minInstances > 0 ? 'gcp-chip warm' : 'gcp-chip'" :title="svc.minInstances > 0 ? t('gcpv.audit.crWarmHint') : t('gcpv.audit.crZeroHint')">{{ svc.minInstances }}–{{ svc.maxInstances ?? '∞' }}</span>
                   </td>
                   <td class="text-dim">{{ svc.ingress || '—' }}</td>
                   <td class="mono-xs text-dim">
@@ -254,9 +254,9 @@
                   <td class="text-dim" style="white-space:nowrap">{{ svc.updatedAt ? new Date(svc.updatedAt).toLocaleString() : '—' }}</td>
                   <td @click.stop>
                     <div class="row-actions">
-                      <button class="btn sm" data-test="start" @click="requestAction('cloudrun', 'start', svc)" :title="'Fijar min instances = 1'">{{ t('action.start') }}</button>
-                      <button class="btn sm" data-test="stop" :disabled="svc.minInstances === 0" @click="requestAction('cloudrun', 'stop', svc)" :title="'Fijar min instances = 0'">{{ t('action.stop') }}</button>
-                      <button class="btn sm danger" data-test="delete" @click="requestAction('cloudrun', 'delete', svc)">🗑</button>
+                      <button class="btn sm" data-test="start" :disabled="!cloudRunScaling(svc).canWarm" @click="requestAction('cloudrun', 'start', svc)" :title="t('gcpv.audit.crWarmTitle')">{{ t('gcpv.audit.crWarm') }}</button>
+                      <button class="btn sm" data-test="stop" :disabled="!cloudRunScaling(svc).canScaleToZero" @click="requestAction('cloudrun', 'stop', svc)" :title="t('gcpv.audit.crScaleToZeroTitle')">{{ t('gcpv.audit.crScaleToZero') }}</button>
+                      <button class="btn sm danger" data-test="delete" :aria-label="t('gcpv.delete')" :title="t('gcpv.delete')" @click="requestAction('cloudrun', 'delete', svc)">🗑</button>
                     </div>
                   </td>
                 </tr>
@@ -274,13 +274,13 @@
                 <span :class="statusClass(crPanel.resource.status)" style="font-size:11px">{{ crPanel.resource.status }}</span>
                 <a v-if="crPanel.resource.uri" :href="crPanel.resource.uri" target="_blank" class="link" style="font-size:11px">{{ t('gcpv.openUrl') }}</a>
                 <div style="margin-left:auto;display:flex;gap:6px">
-                  <button class="btn sm" @click="requestAction('cloudrun', 'start', crPanel.resource)">{{ t('action.start') }}</button>
-                  <button class="btn sm" @click="requestAction('cloudrun', 'stop', crPanel.resource)">{{ t('action.stop') }}</button>
+                  <button class="btn sm" :disabled="!cloudRunScaling(crPanel.resource).canWarm" :title="t('gcpv.audit.crWarmTitle')" @click="requestAction('cloudrun', 'start', crPanel.resource)">{{ t('gcpv.audit.crWarm') }}</button>
+                  <button class="btn sm" :disabled="!cloudRunScaling(crPanel.resource).canScaleToZero" :title="t('gcpv.audit.crScaleToZeroTitle')" @click="requestAction('cloudrun', 'stop', crPanel.resource)">{{ t('gcpv.audit.crScaleToZero') }}</button>
                   <button class="btn sm danger" @click="requestAction('cloudrun', 'delete', crPanel.resource)">{{ t('gcpv.delete') }}</button>
                   <button class="btn sm" :title="t('gcpv.closeDetail')" @click="crPanel.resource = null">✕</button>
                 </div>
               </div>
-              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }}</div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }} · {{ t('gcpv.audit.crScalingLine', { min: cloudRunScaling(crPanel.resource).min, max: cloudRunScaling(crPanel.resource).max ?? '∞' }) }}</div>
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
@@ -2054,7 +2054,7 @@ import GcpLabelsEditor  from './GcpLabelsEditor.vue'
 import GcpStateTimeline from './GcpStateTimeline.vue'
 import GcpPollingSettings from './GcpPollingSettings.vue'
 import './gcpInfo.css'
-import { gcpActionConfig } from './gcpActions'
+import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'

@@ -7,7 +7,7 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import GcpConfirmModal from '../components/cloud/GcpConfirmModal.vue'
 import GcpCreateModal from '../components/cloud/GcpCreateModal.vue'
 import GcpView from '../components/cloud/GcpView.vue'
-import { gcpActionConfig } from '../components/cloud/gcpActions'
+import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from '../components/cloud/gcpActions'
 import { useGcpStore } from '../stores/useGcpStore'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { settings } from '../composables/useSettings'
@@ -59,6 +59,29 @@ function stubFetch(estimate = LOW_ESTIMATE, { presets = PRESETS } = {}) {
 
 // ── gcpActions ───────────────────────────────────────────────────────────────
 
+describe('Cloud Run scaling actions (G01)', () => {
+  it('start/stop only change the minimum and say the endpoint stays', () => {
+    const zero = { ...CLOUD_RUN[0], minInstances: 0 }
+    expect(cloudRunScaling(zero)).toMatchObject({ canWarm: true, canScaleToZero: false })
+    expect(cloudRunScaling(CLOUD_RUN[0])).toMatchObject({ canWarm: false, canScaleToZero: true })
+    const warm = gcpActionConfig('cloudrun', 'start', zero)
+    expect(warm.blocked).toBe('')
+    expect(warm.lines.join(' ')).toMatch(/0 → 1/)
+    const toZero = gcpActionConfig('cloudrun', 'stop', CLOUD_RUN[0])
+    expect(toZero.blocked).toBe('')
+    expect(toZero.lines.join(' ')).toMatch(/1 → 0/)
+    expect(gcpActionConfig('cloudrun', 'stop', zero).blocked).toBeTruthy()
+    expect(gcpActionConfig('cloudrun', 'start', { ...CLOUD_RUN[0], minInstances: 3 }).blocked).toBeTruthy()
+  })
+  it('normalizes CPU and memory', () => {
+    expect(formatCloudRunCpu('1000m')).toBe('1 vCPU')
+    expect(formatCloudRunCpu('2')).toBe('2 vCPU')
+    expect(formatCloudRunMemory('512Mi')).toBe('512 MiB')
+    expect(formatCloudRunMemory('1Gi')).toBe('1 GiB')
+    expect(formatCloudRunMemory('weird')).toBe('weird')
+  })
+})
+
 describe('gcpActionConfig (#74)', () => {
   it('start asks for a cost acknowledgement with an estimate spec', () => {
     const vm = gcpActionConfig('vm', 'start', VMS[0])
@@ -66,7 +89,7 @@ describe('gcpActionConfig (#74)', () => {
     expect(vm.estimateSpec).toEqual({ machineType: 'e2-small', diskSizeGb: 120, externalIp: true, spot: true })
     const run = gcpActionConfig('cloudrun', 'start', CLOUD_RUN[0])
     expect(run.estimateSpec.minInstances).toBe(1)
-    expect(run.lines[0]).toMatch(/24\/7/)
+    expect(run.lines.join(' ')).toMatch(/24\/7/)
     const sql = gcpActionConfig('sql', 'start', SQL[0])
     expect(sql.estimateSpec).toEqual({ tier: 'db-custom-2-7680', storageGb: 50, storageType: 'PD_SSD', availabilityType: 'REGIONAL' })
   })
@@ -308,10 +331,13 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     const w = await mountTab('cloudrun')
     const row = w.find('[data-test="cloudrun-table"] tbody tr')
     expect(row.text()).toContain('api:1')
-    expect(row.text()).toContain('1 / 512Mi')
+    expect(row.text()).toContain('1 vCPU / 512 MiB')
     expect(row.text()).toContain('1–5')
     expect(row.text()).toContain('api-00002')
-    expect(row.find('[data-test="start"]').exists()).toBe(true)
+    // minimum is already 1: "keep warm" is off, "allow scale to zero" is on
+    expect(row.find('[data-test="start"]').attributes('disabled')).toBeDefined()
+    expect(row.find('[data-test="stop"]').attributes('disabled')).toBeUndefined()
+    expect(row.find('[data-test="delete"]').attributes('aria-label')).toBeTruthy()
     expect(row.find('[data-test="delete"]').exists()).toBe(true)
   })
 
