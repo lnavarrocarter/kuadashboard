@@ -419,6 +419,27 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(calls.some(c => c.method === 'DELETE')).toBe(false)
   })
 
+  it('rows, side lists and detail tabs work from the keyboard (G12)', async () => {
+    const w = await mountTab('cloudrun')
+    const link = w.find('[data-test="cloudrun-table"] .gcp-row-link')
+    expect(link.element.tagName).toBe('BUTTON')
+    await link.trigger('click')
+    await flushPromises()
+    expect(link.attributes('aria-expanded')).toBe('true')
+    const tabs = w.findAll('[role="tablist"] [role="tab"]')
+    expect(tabs.length).toBeGreaterThan(1)
+    expect(tabs.filter(tab => tab.attributes('aria-selected') === 'true')).toHaveLength(1)
+
+    const fns = await mountTab('functions')
+    store.tabs.functions.data = [{ name: 'api', location: 'us-central1', fullName: 'projects/p/locations/us-central1/functions/api', state: 'ACTIVE', trigger: 'HTTPS' }]
+    await flushPromises()
+    const item = fns.find('.sidebar-item[role="button"]')
+    expect(item.attributes('tabindex')).toBe('0')
+    await item.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(item.attributes('aria-current')).toBe('true')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

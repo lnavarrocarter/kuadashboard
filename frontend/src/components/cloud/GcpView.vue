@@ -264,7 +264,7 @@
                   :class="{ 'row-selected': crPanel.resource?.name === svc.name && crPanel.resource?.region === svc.region }"
                   @click="selectCloudRun(svc)">
                   <td>
-                    <div class="fw-medium">{{ svc.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="crPanel.resource?.name === svc.name && crPanel.resource?.region === svc.region" @click.stop="selectCloudRun(svc)">{{ svc.name }}</button>
                     <div class="text-dim mono-xs">{{ svc.region }}</div>
                   </td>
                   <td>
@@ -313,9 +313,9 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }} · {{ t('gcpv.audit.crScalingLine', { min: cloudRunScaling(crPanel.resource).min, max: cloudRunScaling(crPanel.resource).max ?? '∞' }) }}</div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
               <button v-for="tabItem in CR_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="crPanel.tab === tabItem.id" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','revisions','variables'].includes(crPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -449,7 +449,7 @@
                   :class="{ 'row-selected': vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone }"
                   @click="selectVm(vm)">
                   <td>
-                    <div class="fw-medium">{{ vm.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone" @click.stop="selectVm(vm)">{{ vm.name }}</button>
                     <div class="text-dim mono-xs">{{ vm.zone }}</div>
                   </td>
                   <td><span :class="vmStatusClass(vm.status)">{{ vm.status }}</span></td>
@@ -493,9 +493,9 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
               <button v-for="tabItem in VM_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="vmPanel.tab === tabItem.id" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','disks','network'].includes(vmPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -579,7 +579,7 @@
                   :class="{ 'row-selected': sqlPanel.resource?.name === inst.name }"
                   @click="selectSql(inst)">
                   <td>
-                    <div class="fw-medium">{{ inst.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="sqlPanel.resource?.name === inst.name" @click.stop="selectSql(inst)">{{ inst.name }}</button>
                     <div class="text-dim mono-xs">{{ inst.zone || inst.region }}</div>
                   </td>
                   <td>
@@ -621,9 +621,9 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
               <button v-for="tabItem in SQL_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="sqlPanel.tab === tabItem.id" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','config','connection'].includes(sqlPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
@@ -718,7 +718,8 @@
           <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
             <div v-for="fn in filteredFunctions" :key="fnKey(fn)"
               :class="['sidebar-item', fnKey(fnPanel.resource) === fnKey(fn) ? 'active' : '']"
-              style="cursor:pointer" @click="selectFn(fn)">
+              style="cursor:pointer" role="button" tabindex="0" :aria-current="fnKey(fnPanel.resource) === fnKey(fn) ? 'true' : undefined"
+              @click="selectFn(fn)" @keydown.enter.prevent="selectFn(fn)" @keydown.space.prevent="selectFn(fn)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ fn.name }}</div>
               <div class="text-dim" style="font-size:10px">{{ fn.location || t('gcpv.audit.fnRegionUnknown') }}</div>
               <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
@@ -742,9 +743,9 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
               <button v-for="tabItem in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" @click="fnSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id" @click="fnSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
@@ -903,7 +904,8 @@
           <div style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
             <div v-for="r in filteredArtifact" :key="r.name"
               :class="['sidebar-item', arPanel.repo?.name === r.name ? 'active' : '']"
-              style="cursor:pointer" @click="selectArtifactRepo(r)">
+              style="cursor:pointer" role="button" tabindex="0" :aria-current="arPanel.repo?.name === r.name ? 'true' : undefined"
+              @click="selectArtifactRepo(r)" @keydown.enter.prevent="selectArtifactRepo(r)" @keydown.space.prevent="selectArtifactRepo(r)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</div>
               <div class="text-dim" style="font-size:10px">{{ r.location }}</div>
               <div style="margin-top:4px">
@@ -926,9 +928,9 @@
               </div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
               <button v-for="tabItem in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" @click="arSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id" @click="arSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
             </div>
             <!-- PACKAGES & TAGS -->
             <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
@@ -938,7 +940,8 @@
                 <div v-else-if="!arPanel.pkgs.length" style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">{{ t('gcpv.noPackages') }}</div>
                 <div v-for="pkg in arPanel.pkgs" :key="pkg.name"
                   :class="['sidebar-item', arPanel.selectedPkg?.name === pkg.name ? 'active' : '']"
-                  style="cursor:pointer;padding:8px 12px" @click="selectArtifactPkg(pkg)">
+                  style="cursor:pointer;padding:8px 12px" role="button" tabindex="0" :aria-current="arPanel.selectedPkg?.name === pkg.name ? 'true' : undefined"
+                  @click="selectArtifactPkg(pkg)" @keydown.enter.prevent="selectArtifactPkg(pkg)" @keydown.space.prevent="selectArtifactPkg(pkg)">
                   <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ pkg.displayName }}</div>
                   <div class="text-dim" style="font-size:10px">{{ pkg.updated ? new Date(pkg.updated).toLocaleDateString() : '' }}</div>
                 </div>
@@ -1454,7 +1457,7 @@
     <!-- ══ Function Invoke Modal ════════════════════════════════════════════════ -->
     <Teleport to="body">
     <div v-if="fnInvokeOpen" class="gcp-modal-backdrop" @mousedown.self="fnInvokeOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (fnInvokeOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.invoke', { p0: fnInvokeTarget?.name }) }}</span>
           <button class="s3b-close" @click="fnInvokeOpen = false">&#x2715;</button>
@@ -1482,7 +1485,7 @@
   <!-- ══ Function Logs Modal ══════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fnLogsOpen" class="gcp-modal-backdrop" @mousedown.self="fnLogsOpen = false">
-      <div class="gcp-modal gcp-modal-wide">
+      <div class="gcp-modal gcp-modal-wide" v-dialog="() => (fnLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>&#x1F4DC; Logs: {{ fnLogsTarget?.name }}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -1521,7 +1524,7 @@
   <!-- ══ Resource Logs Modal (cloudrun, gke, vms, sql, workflows) ═══════════ -->
   <Teleport to="body">
     <div v-if="resLogsOpen" class="gcp-modal-backdrop" @mousedown.self="resLogsOpen = false">
-      <div class="gcp-modal gcp-modal-wide">
+      <div class="gcp-modal gcp-modal-wide" v-dialog="() => (resLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.logs', { p0: resLogsType, p1: resLogsTarget?.name || resLogsTarget?.service }) }}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -1548,7 +1551,7 @@
   <!-- ══ Secret Preview & Import Modal ═══════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="secretPreviewOpen" class="gcp-modal-backdrop" @mousedown.self="secretPreviewOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (secretPreviewOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.secret', { p0: secretPreviewName }) }}</span>
           <button class="s3b-close" @click="secretPreviewOpen = false">&#x2715;</button>
@@ -1589,7 +1592,7 @@
   <!-- ══ Artifact Packages Modal ══════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="artifactPkgOpen" class="gcp-modal-backdrop" @mousedown.self="artifactPkgOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (artifactPkgOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.packages', { p0: artifactPkgRepo?.name }) }}</span>
           <button class="s3b-close" @click="artifactPkgOpen = false">&#x2715;</button>
@@ -1615,7 +1618,7 @@
   <!-- ══ BigQuery Tables Modal ═════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="bqTablesOpen" class="gcp-modal-backdrop" @mousedown.self="bqTablesOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (bqTablesOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.tables2', { p0: bqTablesDataset?.id }) }}</span>
           <button class="s3b-close" @click="bqTablesOpen = false">&#x2715;</button>
@@ -1644,7 +1647,7 @@
   <!-- ══ BigQuery Query Modal ══════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="bqQueryOpen" class="gcp-modal-backdrop" @mousedown.self="bqQueryOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (bqQueryOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.queryBigquery', { p0: bqQueryDataset?.id }) }}</span>
           <button class="s3b-close" @click="bqQueryOpen = false">&#x2715;</button>
@@ -1681,7 +1684,7 @@
   <!-- ══ Workflow Executions Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="wfExecOpen" class="gcp-modal-backdrop" @mousedown.self="wfExecOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (wfExecOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.executions', { p0: wfExecTarget?.name }) }}</span>
           <button class="s3b-close" @click="wfExecOpen = false">&#x2715;</button>
@@ -1710,7 +1713,7 @@
   <!-- ══ Workflow Definition Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="wfDefOpen" class="gcp-modal-backdrop" @mousedown.self="wfDefOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (wfDefOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.definition2', { p0: wfDefTarget?.name }) }}</span>
           <button class="s3b-close" @click="wfDefOpen = false">&#x2715;</button>
@@ -1727,7 +1730,7 @@
   <!-- ══ DNS Records Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="dnsRecordsOpen" class="gcp-modal-backdrop" @mousedown.self="dnsRecordsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (dnsRecordsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.records2', { p0: dnsRecordsZone?.dnsName }) }}</span>
           <button class="s3b-close" @click="dnsRecordsOpen = false">&#x2715;</button>
@@ -1758,7 +1761,7 @@
   <!-- ══ Firestore Collections Modal ═══════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fsColOpen" class="gcp-modal-backdrop" @mousedown.self="fsColOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (fsColOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.collections2', { p0: fsColDb?.name }) }}</span>
           <button class="s3b-close" @click="fsColOpen = false">&#x2715;</button>
@@ -1787,7 +1790,7 @@
   <!-- ══ Firestore Documents Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fsDocsOpen" class="gcp-modal-backdrop" @mousedown.self="fsDocsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (fsDocsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.docs', { p0: fsDocsDb?.name, p1: fsDocsCol?.id }) }}</span>
           <button class="s3b-close" @click="fsDocsOpen = false">&#x2715;</button>
@@ -1825,7 +1828,7 @@
   <!-- ══ Spanner Databases Modal ════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="spannerDbOpen" class="gcp-modal-backdrop" @mousedown.self="spannerDbOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (spannerDbOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.databases', { p0: spannerInst?.displayName || spannerInst?.name }) }}</span>
           <button class="s3b-close" @click="spannerDbOpen = false">&#x2715;</button>
@@ -1856,7 +1859,7 @@
   <!-- ══ Spanner Query Modal ════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="spannerQOpen" class="gcp-modal-backdrop" @mousedown.self="spannerQOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (spannerQOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.query', { p0: spannerQInst?.name, p1: spannerQDb?.name }) }}</span>
           <button class="s3b-close" @click="spannerQOpen = false">&#x2715;</button>
@@ -1890,7 +1893,7 @@
   <!-- ══ Cloud Tasks Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="tasksOpen" class="gcp-modal-backdrop" @mousedown.self="tasksOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (tasksOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.tasks2', { p0: tasksQueue?.name }) }}</span>
           <button class="s3b-close" @click="tasksOpen = false">&#x2715;</button>
@@ -1919,7 +1922,7 @@
   <!-- ══ Cloud Build Logs Modal ════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="buildLogsOpen" class="gcp-modal-backdrop" @mousedown.self="buildLogsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (buildLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.buildLogs', { p0: buildLogsBuild?.id?.slice(0,8) }) }}</span>
           <button class="s3b-close" @click="buildLogsOpen = false">&#x2715;</button>
@@ -1941,7 +1944,7 @@
   <!-- ══ IAM Keys Modal ════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="iamKeysOpen" class="gcp-modal-backdrop" @mousedown.self="iamKeysOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (iamKeysOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.keys', { p0: iamKeysSa?.email }) }}</span>
           <button class="s3b-close" @click="iamKeysOpen = false">&#x2715;</button>
@@ -1971,7 +1974,7 @@
   <!-- ══ Job Executions Modal ═══════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="jobExecOpen" class="gcp-modal-backdrop" @mousedown.self="jobExecOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (jobExecOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.executions', { p0: jobExecTarget?.name }) }}</span>
           <button class="s3b-close" @click="jobExecOpen = false">&#x2715;</button>
@@ -2005,7 +2008,7 @@
   <!-- ══ VPC Subnets Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="vpcSubnetsOpen" class="gcp-modal-backdrop" @mousedown.self="vpcSubnetsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (vpcSubnetsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.subnets', { p0: vpcSubnetsNetwork?.name }) }}</span>
           <button class="s3b-close" @click="vpcSubnetsOpen = false">&#x2715;</button>
@@ -2035,7 +2038,7 @@
   <!-- ══ KMS Keys Modal ════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="kmsKeysOpen" class="gcp-modal-backdrop" @mousedown.self="kmsKeysOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (kmsKeysOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.keys', { p0: kmsKeysRing?.name }) }}</span>
           <button class="s3b-close" @click="kmsKeysOpen = false">&#x2715;</button>
@@ -2089,6 +2092,7 @@ import GcpPollingSettings from './GcpPollingSettings.vue'
 import './gcpInfo.css'
 import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
+import { vDialog }       from '../../composables/vDialog'
 import { CR_METRICS, VM_METRICS, SQL_METRICS, FN_METRICS, createMetricsPanel, loadMetric, loadMetricSet } from './gcpMetrics'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -3905,6 +3909,9 @@ async function openIamKeys(sa) {
 .gcp-overview-attention-copy span { color: var(--text-dim); }
 .gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
 .gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.gcp-row-link:hover { text-decoration: underline; }
+.gcp-row-link:focus-visible, .sidebar-item[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gcp-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .gcp-overview-table-wrap { overflow: auto; max-height: 500px; }
 .gcp-overview-table { margin: 0; }
