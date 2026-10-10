@@ -37,6 +37,18 @@ export default {
 
   // ── Sidebar sections ──────────────────────────────────────────────────────
   'sidebar.overview':        'Overview',
+  'sidebar.projects':        'Projects',
+  'sidebar.deploymentFiles': 'Deployment files',
+  'sidebar.checks':          'Checks',
+  'sidebar.dnsRecords':      'DNS records',
+  'sidebar.envVariables':    'Environment variables',
+  'sidebar.cronJobs':        'Cron jobs',
+  'sidebar.activity':        'Activity',
+  'sidebar.computeVms':      'Compute VMs',
+  'sidebar.runJobs':         'Cloud Run jobs',
+  'sidebar.subscriptions':   'Subscriptions',
+  'sidebar.vpcNetworks':     'VPC networks',
+  'sidebar.serviceAccounts': 'Service accounts',
   'sidebar.workloads':       'Workloads',
   'sidebar.network':         'Network',
   'sidebar.config':          'Config',

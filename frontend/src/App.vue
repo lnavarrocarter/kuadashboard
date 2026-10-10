@@ -191,67 +191,67 @@
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.containers') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.containers" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.integration') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.integration" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">AI</div>
             <button type="button" v-for="r in AWS_SIDEBAR.ai" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.monitoring') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.management') }}</div>
             <button type="button" v-for="r in AWS_SIDEBAR.management" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
         </nav>
 
@@ -261,31 +261,31 @@
             <div class="sidebar-section-title">{{ t('vercel.sidebar.projects') }}</div>
             <button type="button" v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.deployments') }}</div>
             <button type="button" v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.config') }}</div>
             <button type="button" v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.advanced') }}</div>
             <button type="button" v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.account') }}</div>
             <button type="button" v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
         </nav>
 
@@ -295,79 +295,79 @@
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.serverless') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.messaging') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workflows') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cache') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.cache" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.async') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.async" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.devops') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.devops" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.iam') }}</div>
             <button type="button" v-for="r in GCP_SIDEBAR.iam" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
+               @click="closeGlobalView(); gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
           </div>
         </nav>
 
@@ -654,27 +654,27 @@ const AWS_SIDEBAR = {
 }
 
 const VERCEL_SIDEBAR = {
-  projects:    [{ id: 'overview',    label: 'Overview' }, { id: 'projects', label: 'Projects' }],
-  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Deployment Files' }, { id: 'checks', label: 'Checks' }],
-  config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records' }, { id: 'env-vars', label: 'Env Variables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs' }],
+  projects:    [{ id: 'overview',    label: 'Overview', labelKey: 'sidebar.overview' }, { id: 'projects', label: 'Projects', labelKey: 'sidebar.projects' }],
+  deployments: [{ id: 'deployments', label: 'Deployments' }, { id: 'functions', label: 'Deployment Files', labelKey: 'sidebar.deploymentFiles' }, { id: 'checks', label: 'Checks', labelKey: 'sidebar.checks' }],
+  config:      [{ id: 'domains',     label: 'Domains' }, { id: 'dns-records', label: 'DNS Records', labelKey: 'sidebar.dnsRecords' }, { id: 'env-vars', label: 'Env Variables', labelKey: 'sidebar.envVariables' }, { id: 'aliases', label: 'Aliases' }, { id: 'cron', label: 'Cron Jobs', labelKey: 'sidebar.cronJobs' }],
   advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
-  account:     [{ id: 'activity',    label: 'Activity' }],
+  account:     [{ id: 'activity',    label: 'Activity', labelKey: 'sidebar.activity' }],
 }
 
 const GCP_SIDEBAR = {
-  compute:    [{ id: 'overview', label: 'Overview' }, { id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs' }],
+  compute:    [{ id: 'overview', label: 'Overview', labelKey: 'sidebar.overview' }, { id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs', labelKey: 'sidebar.computeVms' }],
   database:   [{ id: 'sql', label: 'Cloud SQL' }, { id: 'firestore', label: 'Firestore' }, { id: 'spanner', label: 'Cloud Spanner' }],
   storage:    [{ id: 'storage', label: 'Storage' }, { id: 'artifact', label: 'Artifact Registry' }],
-  serverless: [{ id: 'functions', label: 'Functions' }, { id: 'cloudrunJobs', label: 'Run Jobs' }],
-  messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }, { id: 'pubsubSubs', label: 'Subscriptions' }],
+  serverless: [{ id: 'functions', label: 'Functions' }, { id: 'cloudrunJobs', label: 'Run Jobs', labelKey: 'sidebar.runJobs' }],
+  messaging:  [{ id: 'pubsub', label: 'Pub/Sub' }, { id: 'pubsubSubs', label: 'Subscriptions', labelKey: 'sidebar.subscriptions' }],
   security:   [{ id: 'secrets', label: 'Secret Manager' }, { id: 'kms', label: 'Cloud KMS' }],
   analytics:  [{ id: 'bigquery', label: 'BigQuery' }],
   workflows:  [{ id: 'workflows', label: 'Cloud Workflows' }],
-  networking: [{ id: 'dns', label: 'Cloud DNS' }, { id: 'vpc', label: 'VPC Networks' }],
+  networking: [{ id: 'dns', label: 'Cloud DNS' }, { id: 'vpc', label: 'VPC Networks', labelKey: 'sidebar.vpcNetworks' }],
   cache:      [{ id: 'memorystore', label: 'Memorystore' }],
   async:      [{ id: 'tasks', label: 'Cloud Tasks' }, { id: 'scheduler', label: 'Cloud Scheduler' }],
   devops:     [{ id: 'build', label: 'Cloud Build' }],
-  iam:        [{ id: 'iam', label: 'Service Accounts' }],
+  iam:        [{ id: 'iam', label: 'Service Accounts', labelKey: 'sidebar.serviceAccounts' }],
 }
 
 const OBSERVABILITY_OPTIONS = {
@@ -929,6 +929,7 @@ function setLinkedAwsFilters(service, filters) {
 // The same for GCP (G15): service, profile, search/filters/sort and the
 // selected resource per tab, kept here so leaving GCP and coming back keeps them.
 const GCP_TABS = new Set(['apm', 'overview', ...Object.values(GCP_SIDEBAR).flat().map(item => item.id)])
+const VERCEL_TABS = new Set(['apm', 'overview', ...Object.values(VERCEL_SIDEBAR).flat().map(item => item.id)])
 const gcpFiltersByTab = reactive({})
 const gcpResourceByTab = reactive({})
 const gcpFiltersSeq = ref(0)
@@ -940,12 +941,13 @@ function setLinkedGcpState(service, filters, resource) {
 function serviceState() {
   if (activeProvider.value === 'aws') return { service: awsTab.value, profile: awsProfileId.value, filters: { ...(awsFiltersByTab[awsTab.value] || {}) } }
   if (activeProvider.value === 'gcp') return { service: gcpTab.value, profile: gcpProfileId.value, filters: { ...(gcpFiltersByTab[gcpTab.value] || {}) }, resource: gcpResourceByTab[gcpTab.value] || '' }
+  if (activeProvider.value === 'vercel') return { service: vercelTab.value, profile: vercelProfileId.value, project: vercelStore.selectedProject?.id || '', filters: {} }
   return { service: '', profile: '', filters: {} }
 }
 const viewUrl = useViewUrl({
   state: () => ({ view: activeProvider.value, ...serviceState() }),
-  navigation: [activeProvider, awsTab, gcpTab],
-  context: [awsProfileId, gcpProfileId, activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {}),
+  navigation: [activeProvider, awsTab, gcpTab, vercelTab],
+  context: [awsProfileId, gcpProfileId, vercelProfileId, () => vercelStore.selectedProject?.id || '', activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {}),
     () => JSON.stringify(gcpFiltersByTab[gcpTab.value] || {}), () => gcpResourceByTab[gcpTab.value] || ''],
   onPop: applyViewFromHistory,
 })
@@ -964,6 +966,21 @@ function applyLinkedView(linked) {
     setLinkedGcpState(linked.service, linked.filters, linked.resource)
   }
   if (linked.view === 'gcp' && linked.profile && linked.profile !== gcpProfileId.value) linkedGcpProfile = linked.profile
+  if (linked.view === 'vercel' && VERCEL_TABS.has(linked.service)) vercelTab.value = linked.service
+  if (linked.view === 'vercel' && linked.profile) linkedVercel = { profile: linked.profile, project: linked.project }
+}
+// Vercel profile and project named by a link, applied once the profiles are known.
+let linkedVercel = null
+function applyLinkedVercelProfile() {
+  if (!linkedVercel) return
+  const { profile, project } = linkedVercel
+  linkedVercel = null
+  if (!envStore.vercelProfiles.some(item => item.id === profile)) {
+    toast(t('viewUrl.profileMissing', { profile }), 'warn')
+    return
+  }
+  vercelProfileId.value = profile
+  vercelStore.linkProject(profile, project)
 }
 let linkedGcpProfile = ''
 function gcpProfileExists(id) {
@@ -993,6 +1010,7 @@ async function applyViewFromHistory(linked) {
   if (!linked.view || linked.view === 'kubernetes') return
   await setProvider(linked.view)
   if (linked.view === 'gcp') return applyGcpFromHistory(linked)
+  if (linked.view === 'vercel') return applyVercelFromHistory(linked)
   if (linked.view !== 'aws') return
   if (AWS_TABS.has(linked.service)) {
     awsTab.value = linked.service
@@ -1007,6 +1025,18 @@ async function applyViewFromHistory(linked) {
     // Never a silent switch: the view now reads another account.
     toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
   }
+}
+function applyVercelFromHistory(linked) {
+  if (VERCEL_TABS.has(linked.service)) vercelTab.value = linked.service
+  if (linked.profile && linked.profile !== vercelProfileId.value) {
+    if (!envStore.vercelProfiles.some(item => item.id === linked.profile)) {
+      toast(t('viewUrl.profileMissing', { profile: linked.profile }), 'warn')
+      return
+    }
+    selectProfile('vercel', linked.profile)
+    toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
+  }
+  if (linked.project) vercelStore.linkProject(vercelProfileId.value, linked.project)
 }
 function applyGcpFromHistory(linked) {
   if (GCP_TABS.has(linked.service)) {
@@ -1707,6 +1737,7 @@ onMounted(async () => {
     }
     applyLinkedAwsProfile()
     applyLinkedGcpProfile()
+    applyLinkedVercelProfile()
     // Restaurar perfiles AWS/GCP/Vercel guardados
     if (awsProfileId.value) awsStore.setActiveProfile(awsProfileId.value)
     if (gcpProfileId.value) gcpStore.setActiveProfile(gcpProfileId.value)
