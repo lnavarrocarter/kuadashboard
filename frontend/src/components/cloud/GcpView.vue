@@ -30,11 +30,22 @@
       <!-- Toolbar -->
       <div v-if="activeTab !== 'apm' && activeTab !== 'overview'" class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" :placeholder="t('table.filterPlaceholder')" />
-        <span class="text-dim" style="font-size:12px">
+        <select v-for="facet in activeFacets" :key="`${activeTab}-${facet.id}`" v-model="facetState[facetKey(activeTab, facet.id)]"
+          class="ctrl-select aws-facet" :aria-label="facet.label" :data-test="`facet-${facet.id}`">
+          <option value="">{{ t('awsFilter.any', { label: facet.label }) }}</option>
+          <option v-for="option in facet.options" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
+        </select>
+        <select v-if="currentTab.data?.length > 1" v-model="sortState[activeTab]" class="ctrl-select aws-facet" :aria-label="t('gcpv.audit.sortBy')" data-test="sort">
+          <option value="">{{ t('gcpv.audit.sortDefault') }}</option>
+          <option v-for="key in SORT_KEYS" :key="key" :value="key">{{ t(`gcpv.audit.sort.${key}`) }}</option>
+        </select>
+        <span class="text-dim" style="font-size:12px" data-test="row-count">
           <template v-if="currentTab.loading">{{ t('state.loading') }}</template>
           <template v-else-if="currentTab.error && !filteredRows.length">{{ t('gcpv.audit.notRead') }}</template>
+          <template v-else-if="hasFilters && filteredRows.length !== (currentTab.data?.length || 0)">{{ t('awsFilter.resultsOf', { n: filteredRows.length, total: currentTab.data?.length || 0 }) }}</template>
           <template v-else>{{ t('gcpv.results', { n: filteredRows.length }) }}</template>
         </span>
+        <button v-if="hasFilters" class="btn sm" data-test="clear-filters" @click="clearFilters()">{{ t('awsFilter.clear') }}</button>
         <button class="btn sm" @click="reloadActiveTab" :disabled="currentTab.loading" :title="t('action.refresh')"><i data-lucide="refresh-cw"></i></button>
       </div>
 
@@ -267,7 +278,7 @@
         </div>
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunServices') }}</div>
+        <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunServices') }}</div>
         <SplitPane v-else :split="!!crPanel.resource" storage-key="gcp-cloudrun">
           <template #top>
   <div class="gcp-list-table">
@@ -395,7 +406,7 @@
       <div v-show="activeTab === 'gke'" class="tab-panel">
         <div v-if="gcpStore.tabs.gke.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.gke.error && !filteredGke.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredGke.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noGke') }}</div>
+        <div v-else-if="!filteredGke.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noGke') }}</div>
         <table v-else class="cloud-table">
           <thead>
             <tr>
@@ -452,7 +463,7 @@
         </div>
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noVms') }}</div>
+        <div v-else-if="!filteredVms.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noVms') }}</div>
         <SplitPane v-else :split="!!vmPanel.resource" storage-key="gcp-vms">
           <template #top>
   <div class="gcp-list-table">
@@ -582,7 +593,7 @@
         </div>
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSql') }}</div>
+        <div v-else-if="!filteredSql.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSql') }}</div>
         <SplitPane v-else :split="!!sqlPanel.resource" storage-key="gcp-sql">
           <template #top>
   <div class="gcp-list-table">
@@ -702,7 +713,7 @@
       <div v-show="activeTab === 'storage'" class="tab-panel">
         <div v-if="gcpStore.tabs.storage.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.storage.error && !filteredStorage.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredStorage.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuckets') }}</div>
+        <div v-else-if="!filteredStorage.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuckets') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('gcpv.storageClass') }}</th><th :title="t('gcpv.audit.papHint')">{{ t('gcpv.audit.pap') }}</th><th>{{ t('gcpv.audit.uniformAccess') }}</th><th :title="t('gcpv.audit.exposureHint')">{{ t('gcpv.audit.exposure') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -728,10 +739,10 @@
       <div v-show="activeTab === 'functions'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.functions.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.functions.error && !filteredFunctions.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredFunctions.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noFunctions') }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
+        <div v-else-if="!filteredFunctions.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noFunctions') }}</div>
+        <div v-else class="gcp-master-detail">
           <!-- LEFT -->
-          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+          <div class="gcp-master-list" style="width:240px">
             <div v-for="fn in filteredFunctions" :key="fnKey(fn)"
               :class="['sidebar-item', fnKey(fnPanel.resource) === fnKey(fn) ? 'active' : '']"
               style="cursor:pointer" role="button" tabindex="0" :aria-current="fnKey(fnPanel.resource) === fnKey(fn) ? 'true' : undefined"
@@ -870,7 +881,7 @@
       <div v-show="activeTab === 'pubsub'" class="tab-panel">
         <div v-if="gcpStore.tabs.pubsub.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.pubsub.error && !filteredPubSub.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredPubSub.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noTopics') }}</div>
+        <div v-else-if="!filteredPubSub.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noTopics') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.topicName') }}</th><th>{{ t('detail.labels') }}</th></tr></thead>
           <tbody>
@@ -886,7 +897,7 @@
       <div v-show="activeTab === 'secrets'" class="tab-panel">
         <div v-if="gcpStore.tabs.secrets.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.secrets.error && !filteredSecrets.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSecrets') }}</div>
+        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSecrets') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('gsi.replication') }}</th><th>{{ t('th.created') }}</th><th>{{ t('detail.labels') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -914,10 +925,10 @@
       <div v-show="activeTab === 'artifact'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.artifact.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.artifact.error && !filteredArtifact.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredArtifact.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noArtifact') }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
+        <div v-else-if="!filteredArtifact.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noArtifact') }}</div>
+        <div v-else class="gcp-master-detail">
           <!-- LEFT: repo list -->
-          <div style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+          <div class="gcp-master-list" style="width:220px">
             <div v-for="r in filteredArtifact" :key="r.name"
               :class="['sidebar-item', arPanel.repo?.name === r.name ? 'active' : '']"
               style="cursor:pointer" role="button" tabindex="0" :aria-current="arPanel.repo?.name === r.name ? 'true' : undefined"
@@ -1058,7 +1069,7 @@
       <div v-show="activeTab === 'bigquery'" class="tab-panel">
         <div v-if="gcpStore.tabs.bigquery.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.bigquery.error && !filteredBigQuery.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredBigQuery.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBigQuery') }}</div>
+        <div v-else-if="!filteredBigQuery.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBigQuery') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Dataset</th><th>{{ t('apm.location') }}</th><th>{{ t('detail.labels') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1084,7 +1095,7 @@
       <div v-show="activeTab === 'workflows'" class="tab-panel">
         <div v-if="gcpStore.tabs.workflows.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.workflows.error && !filteredWorkflows.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredWorkflows.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noWorkflows') }}</div>
+        <div v-else-if="!filteredWorkflows.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noWorkflows') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.state') }}</th><th>{{ t('th.description') }}</th><th>{{ t('th.updated') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1110,7 +1121,7 @@
       <div v-show="activeTab === 'dns'" class="tab-panel">
         <div v-if="gcpStore.tabs.dns.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.dns.error && !filteredDns.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredDns.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noDns') }}</div>
+        <div v-else-if="!filteredDns.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noDns') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.zoneName') }}</th><th>{{ t('gcpv.dnsName') }}</th><th>{{ t('gcpv.visibility') }}</th><th>{{ t('th.description') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1134,7 +1145,7 @@
       <div v-show="activeTab === 'firestore'" class="tab-panel">
         <div v-if="gcpStore.tabs.firestore.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.firestore.error && !filteredFirestore.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredFirestore.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noFirestore') }}</div>
+        <div v-else-if="!filteredFirestore.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noFirestore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('sidebar.database') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.type') }}</th><th>{{ t('th.state') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1158,7 +1169,7 @@
       <div v-show="activeTab === 'spanner'" class="tab-panel">
         <div v-if="gcpStore.tabs.spanner.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.spanner.error && !filteredSpanner.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSpanner.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSpanner') }}</div>
+        <div v-else-if="!filteredSpanner.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSpanner') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('ec2d.instance') }}</th><th>{{ t('sidebar.config') }}</th><th>{{ t('th.state') }}</th><th>Nodes / PUs</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1179,7 +1190,7 @@
       <div v-show="activeTab === 'memorystore'" class="tab-panel">
         <div v-if="gcpStore.tabs.memorystore.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.memorystore.error && !filteredMemory.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredMemory.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noMemorystore') }}</div>
+        <div v-else-if="!filteredMemory.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noMemorystore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.version') }}</th><th>Tier</th><th>{{ t('th.size') }}</th><th>Host:Port</th><th>Auth</th><th>{{ t('th.state') }}</th></tr></thead>
           <tbody>
@@ -1204,7 +1215,7 @@
       <div v-show="activeTab === 'tasks'" class="tab-panel">
         <div v-if="gcpStore.tabs.tasks.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.tasks.error && !filteredTasks.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredTasks.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noTasks') }}</div>
+        <div v-else-if="!filteredTasks.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noTasks') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.queue') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.state') }}</th><th>Max/s</th><th>{{ t('gcpv.maxConcurrent') }}</th><th>{{ t('awsv.maxRetries') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1227,7 +1238,7 @@
       <div v-show="activeTab === 'scheduler'" class="tab-panel">
         <div v-if="gcpStore.tabs.scheduler.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.scheduler.error && !filteredScheduler.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredScheduler.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noScheduler') }}</div>
+        <div v-else-if="!filteredScheduler.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noScheduler') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Job</th><th>{{ t('apm.location') }}</th><th>{{ t('vercel.col.schedule') }}</th><th>{{ t('gcpv.timezone') }}</th><th>{{ t('vercel.col.target') }}</th><th>{{ t('th.state') }}</th><th>{{ t('awsv.lastRun') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1261,7 +1272,7 @@
       <div v-show="activeTab === 'build'" class="tab-panel">
         <div v-if="gcpStore.tabs.build.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.build.error && !filteredBuild.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredBuild.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuilds') }}</div>
+        <div v-else-if="!filteredBuild.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuilds') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>ID</th><th>{{ t('th.status') }}</th><th>Trigger</th><th>{{ t('vercel.col.gitBranch') }}</th><th>Commit</th><th>{{ t('awsv.duration') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1290,7 +1301,7 @@
       <div v-show="activeTab === 'iam'" class="tab-panel">
         <div v-if="gcpStore.tabs.iam.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.iam.error && !filteredIam.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredIam.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noServiceAccounts') }}</div>
+        <div v-else-if="!filteredIam.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noServiceAccounts') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('ses.type_email') }}</th><th>{{ t('sns.displayName') }}</th><th>{{ t('th.description') }}</th><th>{{ t('help.autoRefreshOff') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1319,7 +1330,7 @@
       <div v-show="activeTab === 'cloudrunJobs'" class="tab-panel">
         <div v-if="gcpStore.tabs.cloudrunJobs.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.cloudrunJobs.error && !filteredCloudRunJobs.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredCloudRunJobs.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunJobs') }}</div>
+        <div v-else-if="!filteredCloudRunJobs.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunJobs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('th.region') }}</th><th>{{ t('awsv.lastRun') }}</th><th>{{ t('gcpv.lastStatus') }}</th><th>{{ t('gcpv.tasks') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1347,7 +1358,7 @@
       <div v-show="activeTab === 'pubsubSubs'" class="tab-panel">
         <div v-if="gcpStore.tabs.pubsubSubs.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.pubsubSubs.error && !filteredPubSubSubs.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredPubSubSubs.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSubscriptions') }}</div>
+        <div v-else-if="!filteredPubSubSubs.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSubscriptions') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>Topic</th><th>{{ t('th.type') }}</th><th>Ack Deadline</th><th>{{ t('table.filterPlaceholder') }}</th></tr></thead>
           <tbody>
@@ -1366,7 +1377,7 @@
       <div v-show="activeTab === 'vpc'" class="tab-panel">
         <div v-if="gcpStore.tabs.vpc.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.vpc.error && !filteredVpc.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredVpc.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noVpcs') }}</div>
+        <div v-else-if="!filteredVpc.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noVpcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('vercel.col.mode') }}</th><th>Routing</th><th>{{ t('eksd.sectionSubnets') }}</th><th>MTU</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1388,7 +1399,7 @@
       <div v-show="activeTab === 'monitoring'" class="tab-panel">
         <div v-if="gcpStore.tabs.monitoring.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.monitoring.error && !filteredMonitoring.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredMonitoring.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noAlerts') }}</div>
+        <div v-else-if="!filteredMonitoring.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noAlerts') }}</div>
         <div class="monitoring-row">
           <div class="monitoring-section">
             <div class="monitoring-title">{{ t('gcpv.alertPolicies') }}</div>
@@ -1444,7 +1455,7 @@
       <div v-show="activeTab === 'kms'" class="tab-panel">
         <div v-if="gcpStore.tabs.kms.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.kms.error && !filteredKms.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredKms.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noKms') }}</div>
+        <div v-else-if="!filteredKms.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noKms') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Key Ring</th><th>{{ t('apm.location') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -2473,12 +2484,67 @@ function openOverviewBilling() {
 }
 
 function filterRows(rows) {
+  const tab = tabOfRows(rows)
   const focus = evidenceFocus.value
-  if (focus && rows === gcpStore.tabs[focus.tab]?.data) rows = rows.filter(row => focus.names.includes(rowName(row)))
-  if (!search.value) return rows
-  const q = search.value.toLowerCase()
-  return rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
+  if (focus && focus.tab === tab) rows = rows.filter(row => focus.names.includes(rowName(row)))
+  rows = applyFacets(tab, rows)
+  if (search.value && tab === activeTab.value) {
+    const q = search.value.toLowerCase()
+    rows = rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
+  }
+  return sortRows(tab, rows)
 }
+
+// ── Filters and sort next to the search (G13) ────────────────────────────────
+// Built from the rows themselves, with counts; shown only when they split the
+// list. They combine with the search and the Overview evidence filter.
+function tabOfRows(rows) { return Object.keys(gcpStore.tabs).find(key => gcpStore.tabs[key].data === rows) || null }
+const rowState = r => r?.status || r?.state || r?.lifecycleState || null
+const rowRegion = r => r?.region || r?.location || (r?.zone ? String(r.zone).replace(/-[a-z]$/, '') : null)
+const FACETS = [
+  { id: 'state', label: () => t('th.state'), value: rowState },
+  { id: 'region', label: () => t('gcpv.audit.ctx.region'), value: rowRegion },
+]
+const facetState = reactive({})
+const facetKey = (tab, id) => `${tab}:${id}`
+function applyFacets(tab, rows) {
+  const selected = FACETS.filter(f => facetState[facetKey(tab, f.id)])
+  if (!selected.length) return rows
+  return rows.filter(row => selected.every(f => String(f.value(row)) === facetState[facetKey(tab, f.id)]))
+}
+const activeFacets = computed(() => {
+  const rows = gcpStore.tabs[activeTab.value]?.data || []
+  return FACETS.map(facet => {
+    const counts = new Map()
+    for (const row of rows) {
+      const value = facet.value(row)
+      if (value != null && value !== '') counts.set(String(value), (counts.get(String(value)) || 0) + 1)
+    }
+    const options = [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+    return { id: facet.id, label: facet.label(), options }
+  }).filter(facet => facet.options.length > 1 || facetState[facetKey(activeTab.value, facet.id)])
+})
+const SORT_KEYS = ['name', 'state', 'region', 'updated']
+const sortState = reactive({})
+const SORTERS = {
+  name: (a, b) => rowName(a).localeCompare(rowName(b)),
+  state: (a, b) => String(rowState(a) || '').localeCompare(String(rowState(b) || '')),
+  region: (a, b) => String(rowRegion(a) || '').localeCompare(String(rowRegion(b) || '')),
+  updated: (a, b) => String(b.updatedAt || b.updated || b.created || '').localeCompare(String(a.updatedAt || a.updated || a.created || '')),
+}
+function sortRows(tab, rows) {
+  const key = tab && sortState[tab]
+  return key && SORTERS[key] ? [...rows].sort(SORTERS[key]) : rows
+}
+const hasFilters = computed(() => !!search.value
+  || FACETS.some(f => facetState[facetKey(activeTab.value, f.id)])
+  || evidenceFocus.value?.tab === activeTab.value)
+function clearFilters() {
+  search.value = ''
+  for (const f of FACETS) facetState[facetKey(activeTab.value, f.id)] = ''
+  if (evidenceFocus.value?.tab === activeTab.value) evidenceFocus.value = null
+}
+watch(selectedProfileId, () => { for (const key of Object.keys(facetState)) facetState[key] = '' })
 
 const filteredCloudRun   = computed(() => filterRows(gcpStore.tabs.cloudrun.data))
 const filteredGke        = computed(() => filterRows(gcpStore.tabs.gke.data))
@@ -3978,6 +4044,12 @@ async function openIamKeys(sa) {
 .gcp-overview-cost-scope { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 8px 0 0; font-size: 11px; }
 .gcp-overview-cost-scope dt { color: var(--text-dim); }
 .gcp-overview-cost-scope dd { margin: 0; }
+.gcp-master-detail { display: flex; flex: 1; overflow: hidden; }
+.gcp-master-list { border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+@media (max-width: 760px) {
+  .gcp-master-detail { flex-direction: column; overflow: auto; }
+  .gcp-master-list { width: 100% !important; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); }
+}
 .gcp-focus-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
 .gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .gcp-row-link:hover { text-decoration: underline; }

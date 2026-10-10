@@ -6652,4 +6652,10 @@ export default {
   "gcc.warn.runMin": "Las instancias mínimas se facturan 24/7 aunque no haya tráfico.",
   "gcc.warn.runUsage": "CPU y memoria durante peticiones, las peticiones y el egress se facturan por uso además de esto.",
   "gcc.disclaimer.listPrice": "Precio de lista aproximado bajo demanda en us-central1; excluye descuentos, nivel gratuito, egress e impuestos.",
+  "gcpv.audit.sortBy": "Ordenar por",
+  "gcpv.audit.sortDefault": "Orden: como se listó",
+  "gcpv.audit.sort.name": "Orden: nombre",
+  "gcpv.audit.sort.state": "Orden: estado",
+  "gcpv.audit.sort.region": "Orden: región",
+  "gcpv.audit.sort.updated": "Orden: más reciente",
 }

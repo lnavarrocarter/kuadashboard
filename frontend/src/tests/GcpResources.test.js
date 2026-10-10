@@ -459,6 +459,26 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.text()).not.toContain('Min instances are billed')
   })
 
+  it('state/region filters and sort come from the rows, with "n of total" and clear (G13)', async () => {
+    const w = await mountTab('cloudrun')
+    store.tabs.cloudrun.data = [
+      { ...CLOUD_RUN[0], name: 'b-api', region: 'us-central1', status: 'ready' },
+      { ...CLOUD_RUN[0], name: 'a-web', region: 'europe-west1', status: 'ready' },
+      { ...CLOUD_RUN[0], name: 'c-job', region: 'us-central1', status: 'failed' },
+    ]
+    await flushPromises()
+    const names = () => w.findAll('[data-test="cloudrun-table"] tbody tr .gcp-row-link').map(b => b.text())
+    await w.find('[data-test="facet-region"]').setValue('us-central1')
+    expect(names()).toEqual(['b-api', 'c-job'])
+    expect(w.find('[data-test="row-count"]').text()).toBe('2 de 3')
+    await w.find('[data-test="sort"]').setValue('name')
+    await w.find('[data-test="facet-region"]').setValue('')
+    expect(names()).toEqual(['a-web', 'b-api', 'c-job'])
+    await w.find('[data-test="facet-state"]').setValue('failed')
+    await w.find('[data-test="clear-filters"]').trigger('click')
+    expect(names()).toHaveLength(3)
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

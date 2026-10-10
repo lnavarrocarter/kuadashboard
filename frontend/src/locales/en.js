@@ -6653,4 +6653,10 @@ export default {
   "gcc.warn.runMin": "Minimum instances are billed 24/7 even with no traffic.",
   "gcc.warn.runUsage": "Request-time CPU, memory, requests and egress are billed per use on top of this.",
   "gcc.disclaimer.listPrice": "Approximate on-demand list price in us-central1; excludes discounts, free tier, egress and taxes.",
+  "gcpv.audit.sortBy": "Sort by",
+  "gcpv.audit.sortDefault": "Order: as listed",
+  "gcpv.audit.sort.name": "Order: name",
+  "gcpv.audit.sort.state": "Order: state",
+  "gcpv.audit.sort.region": "Order: region",
+  "gcpv.audit.sort.updated": "Order: most recent",
 }
