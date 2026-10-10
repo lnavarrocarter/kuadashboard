@@ -1420,6 +1420,7 @@
               <td class="text-dim">{{ n.mtu || '--' }}</td>
               <td>
                 <button class="btn sm" @click="openVpcSubnets(n)"><i data-lucide="network"></i> {{ t('eksd.sectionSubnets') }}</button>
+                <button class="btn sm" data-test="open-firewall" @click="openVpcSubnets(n, 'firewall')"><i data-lucide="shield"></i> {{ t('gcpv.net.tab.firewall') }}</button>
               </td>
             </tr>
           </tbody>
@@ -2068,10 +2069,63 @@
     <div v-if="vpcSubnetsOpen" class="gcp-modal-backdrop" @mousedown.self="vpcSubnetsOpen = false">
       <div class="gcp-modal gcp-modal--wide" v-dialog="() => (vpcSubnetsOpen = false)">
         <div class="gcp-modal-header">
-          <span>{{ t('gcpv.subnets', { p0: vpcSubnetsNetwork?.name }) }}</span>
+          <span>{{ t('gcpv.net.title', { name: vpcSubnetsNetwork?.name }) }}</span>
           <button class="s3b-close" @click="vpcSubnetsOpen = false">&#x2715;</button>
         </div>
-        <div class="gcp-modal-body">
+        <div class="gcp-net-tabs" role="tablist">
+          <button v-for="tab in NETWORK_TABS" :key="tab" role="tab" :aria-selected="String(vpcNetworkTab === tab)"
+            :class="['gcp-net-tab', { active: vpcNetworkTab === tab }]" :data-test="`net-tab-${tab}`" @click="openNetworkTab(tab)">{{ t(`gcpv.net.tab.${tab}`) }}</button>
+        </div>
+        <!-- Firewall rules: what may reach the instances of this network, and where they may go -->
+        <div v-if="vpcNetworkTab === 'firewall'" class="gcp-modal-body" data-test="net-firewall">
+          <div v-if="vpcFirewall.loading" class="empty-row">{{ t('state.loading') }}</div>
+          <div v-else-if="vpcFirewall.error" class="s3b-error">{{ vpcFirewall.error }}</div>
+          <template v-else>
+            <div class="gcp-net-toolbar">
+              <input v-model="firewallSearch" type="search" class="gcp-net-search" data-test="firewall-search" :placeholder="t('gcpv.net.firewallSearch')" :aria-label="t('gcpv.net.firewallSearch')" />
+              <span class="text-dim" data-test="firewall-count">{{ t('gcpv.net.ruleCount', { n: shownFirewall.length, total: vpcFirewall.items.length }) }}{{ vpcFirewall.partial ? '+' : '' }}</span>
+            </div>
+            <div class="text-dim gcp-net-note">{{ t('gcpv.net.exposureNote') }}</div>
+            <div v-if="!shownFirewall.length" class="empty-row">{{ vpcFirewall.items.length ? t('awsv.lit.noMatches') : t('gcpv.net.noFirewall') }}</div>
+            <table v-else class="cloud-table">
+              <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('gcpv.net.direction') }}</th><th>{{ t('gcpv.net.priority') }}</th><th>{{ t('gcpv.net.action') }}</th><th>{{ t('gcpv.net.protocols') }}</th><th>{{ t('gcpv.net.peers') }}</th><th>{{ t('gcpv.net.targets') }}</th></tr></thead>
+              <tbody>
+                <tr v-for="rule in shownFirewall" :key="rule.name" :class="{ 'text-dim': rule.disabled }" data-test="firewall-row">
+                  <td>
+                    {{ rule.name }}
+                    <span v-if="rule.disabled" class="badge-gray">{{ t('gcpv.net.disabled') }}</span>
+                    <div v-if="rule.description" class="text-dim mono-xs">{{ rule.description }}</div>
+                  </td>
+                  <td>{{ t(`gcpv.net.dir.${rule.direction}`) }}</td>
+                  <td class="font-mono">{{ rule.priority }}</td>
+                  <td><span :class="rule.action === 'allow' ? 'status-ok' : 'status-warn'">{{ t(`gcpv.net.act.${rule.action}`) }}</span></td>
+                  <td class="font-mono">{{ formatFirewallProtocols(rule.protocols) }}</td>
+                  <td class="font-mono gcp-net-list">{{ firewallPeers(rule) }}</td>
+                  <td class="gcp-net-list">{{ rule.allInstances ? t('gcpv.net.allInstances') : [...rule.targetTags, ...rule.targetServiceAccounts].join(', ') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
+        <!-- Routes: where traffic of this network leaves -->
+        <div v-else-if="vpcNetworkTab === 'routes'" class="gcp-modal-body" data-test="net-routes">
+          <div v-if="vpcRoutes.loading" class="empty-row">{{ t('state.loading') }}</div>
+          <div v-else-if="vpcRoutes.error" class="s3b-error">{{ vpcRoutes.error }}</div>
+          <div v-else-if="!vpcRoutes.items.length" class="empty-row">{{ t('gcpv.net.noRoutes') }}</div>
+          <table v-else class="cloud-table">
+            <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('ec2d.destination') }}</th><th>{{ t('gcpv.net.nextHop') }}</th><th>{{ t('gcpv.net.priority') }}</th><th>{{ t('gcpv.net.tags') }}</th></tr></thead>
+            <tbody>
+              <tr v-for="route in vpcRoutes.items" :key="route.name" data-test="route-row">
+                <td>{{ route.name }} <span v-if="route.system" class="badge-gray">{{ t('gcpv.net.systemRoute') }}</span></td>
+                <td class="font-mono">{{ route.destRange }}</td>
+                <td><span class="text-dim">{{ t(`gcpv.net.hop.${route.nextHop.kind}`) }}</span> <span class="font-mono">{{ route.nextHop.value }}</span></td>
+                <td class="font-mono">{{ route.priority }}</td>
+                <td class="text-dim">{{ route.tags.length ? route.tags.join(', ') : t('gcpv.net.allInstances') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="gcp-modal-body">
           <div v-if="vpcSubnetsLoading" class="empty-row">{{ t('state.loading') }}</div>
           <div v-else-if="vpcSubnetsError" class="s3b-error">{{ vpcSubnetsError }}</div>
           <div v-else-if="!vpcSubnetsList.length" class="empty-row">{{ t('gcpv.noSubnetsFound') }}</div>
@@ -2134,6 +2188,7 @@ import { useGcpStore } from '../../stores/useGcpStore'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useI18n } from '../../composables/useI18n'
 import { useToast }    from '../../composables/useToast'
+import { filterFirewallRules, formatFirewallProtocols } from './gcpNetworkFilter'
 import { useApi }      from '../../composables/useApi'
 import { settings as appSettings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
@@ -2716,9 +2771,43 @@ const vpcSubnetsLoading = ref(false)
 const vpcSubnetsError   = ref(null)
 const vpcSubnetsList    = ref([])
 
-async function openVpcSubnets(n) {
+// The network detail: subnets, firewall rules and routes, each read when its tab opens.
+const NETWORK_TABS = ['subnets', 'firewall', 'routes']
+const vpcNetworkTab  = ref('subnets')
+const emptyNetworkList = () => ({ loading: false, loaded: false, error: null, items: [], partial: false })
+const vpcFirewall    = ref(emptyNetworkList())
+const vpcRoutes      = ref(emptyNetworkList())
+const firewallSearch = ref('')
+const shownFirewall  = computed(() => filterFirewallRules(vpcFirewall.value.items, firewallSearch.value))
+function firewallPeers(rule) {
+  const peers = rule.direction === 'EGRESS'
+    ? rule.destinationRanges
+    : [...rule.sourceRanges, ...rule.sourceTags.map(tag => `tag:${tag}`), ...rule.sourceServiceAccounts]
+  return peers.length ? peers.join(', ') : '—'
+}
+async function loadNetworkList(target, fetcher) {
+  if (target.value.loaded || target.value.loading || !vpcSubnetsNetwork.value) return
+  target.value = { ...emptyNetworkList(), loading: true }
+  try {
+    const data = await fetcher(vpcSubnetsNetwork.value.name)
+    target.value = { loading: false, loaded: true, error: null, items: data?.items || [], partial: !!data?.partial }
+  } catch (e) {
+    target.value = { ...emptyNetworkList(), error: e.message }
+  }
+}
+function openNetworkTab(tab) {
+  vpcNetworkTab.value = tab
+  if (tab === 'firewall') loadNetworkList(vpcFirewall, gcpStore.fetchVpcFirewalls)
+  if (tab === 'routes') loadNetworkList(vpcRoutes, gcpStore.fetchVpcRoutes)
+}
+
+async function openVpcSubnets(n, tab = 'subnets') {
   vpcSubnetsOpen.value    = true
   vpcSubnetsNetwork.value = n
+  vpcFirewall.value = emptyNetworkList()
+  vpcRoutes.value   = emptyNetworkList()
+  firewallSearch.value = ''
+  openNetworkTab(tab)
   vpcSubnetsLoading.value = true
   vpcSubnetsError.value   = null
   vpcSubnetsList.value    = []
@@ -3989,6 +4078,13 @@ watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.lo
 </script>
 
 <style scoped>
+.gcp-net-tabs { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.gcp-net-tab { padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+.gcp-net-tab.active { color: var(--text); border-bottom-color: var(--accent, #2f81f7); }
+.gcp-net-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.gcp-net-search { flex: 1; max-width: 420px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input, transparent); color: inherit; font-size: 12px; }
+.gcp-net-note { font-size: 11px; margin-bottom: 8px; }
+.gcp-net-list { max-width: 260px; word-break: break-word; }
 .gcp-auth-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
 .gcp-auth-recovery code { padding: 2px 6px; border-radius: 4px; background: var(--bg-input, rgba(0,0,0,.2)); word-break: break-all; }
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */

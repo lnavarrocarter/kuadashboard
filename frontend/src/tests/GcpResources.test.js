@@ -771,3 +771,58 @@ describe('GcpView — expired credentials (H7)', () => {
     expect(w.find('[data-test="manage-connection"]').exists()).toBe(false)
   })
 })
+
+describe('GcpView — network firewall and routes (H4)', () => {
+  let store
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    stubFetch()
+    store = useGcpStore()
+    store.activeProfileId = 'gcp-1'
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const FIREWALL = [
+    { name: 'allow-ssh', direction: 'INGRESS', priority: 1000, action: 'allow', protocols: [{ protocol: 'tcp', ports: ['22'] }], sourceRanges: ['0.0.0.0/0'], destinationRanges: [], sourceTags: [], targetTags: ['bastion'], sourceServiceAccounts: [], targetServiceAccounts: [], allInstances: false, disabled: false },
+    { name: 'allow-web', direction: 'INGRESS', priority: 900, action: 'allow', protocols: [{ protocol: 'tcp', ports: ['80-443'] }], sourceRanges: ['10.0.0.0/8'], destinationRanges: [], sourceTags: [], targetTags: [], sourceServiceAccounts: [], targetServiceAccounts: [], allInstances: true, disabled: false },
+    { name: 'deny-out', direction: 'EGRESS', priority: 65534, action: 'deny', protocols: [{ protocol: 'all', ports: [] }], sourceRanges: [], destinationRanges: ['0.0.0.0/0'], sourceTags: [], targetTags: [], sourceServiceAccounts: [], targetServiceAccounts: [], allInstances: true, disabled: true },
+  ]
+
+  async function openFirewall() {
+    vi.spyOn(store, 'fetchVpcSubnets').mockResolvedValue([])
+    const firewalls = vi.spyOn(store, 'fetchVpcFirewalls').mockResolvedValue({ items: FIREWALL, partial: false })
+    vi.spyOn(store, 'fetchVpcRoutes').mockResolvedValue({ items: [
+      { name: 'default-route', destRange: '0.0.0.0/0', priority: 1000, nextHop: { kind: 'gateway', value: 'default-internet-gateway' }, tags: [], system: false },
+    ], partial: false })
+    const w = mount(GcpView, { props: { activeService: 'vpc' }, global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    store.tabs.vpc.data = [{ name: 'main', autoSubnet: false, routingMode: 'REGIONAL', subnetCount: 2, mtu: 1460 }]
+    await flushPromises()
+    await w.find('[data-test="open-firewall"]').trigger('click')
+    await flushPromises()
+    return { w, firewalls }
+  }
+  const names = w => w.findAll('[data-test="firewall-row"]').map(row => row.find('td').text().split(/\s/)[0])
+
+  it('reads the rules only when the firewall is opened and finds them by port, CIDR or tag', async () => {
+    const { w, firewalls } = await openFirewall()
+    expect(firewalls).toHaveBeenCalledWith('main')
+    expect(names(w)).toEqual(['allow-ssh', 'allow-web', 'deny-out'])
+    const search = w.find('[data-test="firewall-search"]')
+    await search.setValue('22')
+    expect(names(w)).toEqual(['allow-ssh', 'deny-out'])   // deny-out covers all ports
+    await search.setValue('443')
+    expect(names(w)).toEqual(['allow-web', 'deny-out'])
+    await search.setValue('bastion')
+    expect(names(w)).toEqual(['allow-ssh'])
+    await search.setValue('10.0.0.0')
+    expect(names(w)).toEqual(['allow-web'])
+  })
+
+  it('shows the routes with their next hop', async () => {
+    const { w } = await openFirewall()
+    await w.find('[data-test="net-tab-routes"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="route-row"]').text()).toContain('default-internet-gateway')
+  })
+})
