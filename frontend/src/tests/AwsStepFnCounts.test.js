@@ -65,6 +65,21 @@ describe('AwsView Step Functions execution counts (A04)', () => {
     expect(cells.fast.text()).toBe('N/A')
   })
 
+  it('shows a dash, not "Invalid Date", for an unreadable cached creation date', async () => {
+    const store = useAwsStore()
+    store.activeProfileId = 'prof-1'
+    const w = mount(AwsView, { props: { activeService: 'stepfn' }, global: { stubs: { Teleport: true } } })
+    await flushPromises()
+    store.stepFunctions = [
+      { name: 'quiet', arn: arn('quiet'), type: 'STANDARD', creationDate: {} },
+      { name: 'busy', arn: arn('busy'), type: 'STANDARD', creationDate: '2026-01-15T10:00:00.000Z' },
+    ]
+    await flushPromises()
+    const text = w.find('[data-test="sfn-counts"]').element.closest('tbody').textContent
+    expect(text).not.toContain('Invalid Date')
+    expect(text).toContain('2026')
+  })
+
   it('does not ask ListExecutions for Express workflows', async () => {
     await countCells([['quiet'], ['fast', 'EXPRESS']])
     expect(countRequests).toEqual(['quiet'])

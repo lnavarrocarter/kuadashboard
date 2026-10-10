@@ -4438,13 +4438,20 @@ async function submitInvoke() {
 
 // Dates follow the app language, not the operating system's locale.
 const dateLocale = () => (settings.lang === 'es' ? 'es' : 'en-US')
-function formatDate(d) {
-  return new Date(d).toLocaleDateString(dateLocale(), { year: 'numeric', month: 'short', day: '2-digit' })
+// Missing or unreadable dates (e.g. {} in snapshots cached before the cloudHistory fix) render as '—'.
+function toDate(value) {
+  if (value === null || value === undefined || value === '' || (typeof value === 'object' && !(value instanceof Date))) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
 }
-function formatTs(ts) {  return new Date(ts).toLocaleString(dateLocale(), {
+function formatDate(d) {
+  return toDate(d)?.toLocaleDateString(dateLocale(), { year: 'numeric', month: 'short', day: '2-digit' }) ?? '—'
+}
+function formatTs(ts) {
+  return toDate(ts)?.toLocaleString(dateLocale(), {
     hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
+  }) ?? '—'
 }
 function ec2StateClass(s) {
   return s === 'running' ? 'status-ok' : (s === 'pending' || s === 'stopping') ? 'status-warn' : 'status-err'
