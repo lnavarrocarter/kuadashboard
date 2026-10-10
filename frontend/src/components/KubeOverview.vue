@@ -30,7 +30,7 @@
         <button class="kov-tile" :class="{ bad: pods.problemCount }" :title="t('overview.viewProblemPods')" @click="go('pods', { quick: ['problems'] })">
           <span class="kov-tile-label"><StatusDot :level="pods.problemCount ? 'critical' : 'good'" />{{ t('overview.problemPods') }}</span>
           <span class="kov-tile-value">{{ pods.problemCount ?? '—' }}</span>
-          <span class="kov-tile-sub">{{ t('overview.restartsTotal', { n: pods.restarts ?? 0 }) }}</span>
+          <span class="kov-tile-sub" data-test="restart-counts">{{ t('overview.restartsSplit', { recent: pods.recentlyRestarted ?? 0, minutes: pods.recentRestartMinutes ?? 60, total: pods.restarts ?? 0 }) }}</span>
         </button>
         <button class="kov-tile" :class="{ bad: nodes.notReady }" :title="t('overview.viewNodes')" @click="go('nodes', nodes.notReady ? { quick: ['not-ready'] } : {})">
           <span class="kov-tile-label"><StatusDot :level="nodes.error ? 'unknown' : nodes.notReady ? 'critical' : 'good'" />{{ t('overview.nodes') }}</span>
@@ -49,7 +49,24 @@
         </button>
       </div>
 
-      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
+      <!-- Active incidents: what is failing now, before posture recommendations -->
+      <section class="kov-card kov-wide kov-incidents" data-test="active-incidents">
+        <h3>{{ t('overview.activeIncidents') }} <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">{{ t('overview.topOf', { shown: pods.problems.length, total: pods.problemCount }) }}</span></h3>
+        <p v-if="!pods.problems?.length" class="kov-empty">{{ t('overview.noProblemPods') }}</p>
+        <table v-else class="kov-table">
+          <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestartsTotal') }}</th></tr></thead>
+          <tbody>
+            <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
+              <td><button type="button" class="kov-link" data-test="incident-link" @click.stop="go('pods', { filter: p.name })">{{ p.name }}</button></td>
+              <td>{{ p.namespace }}</td>
+              <td><span class="badge failed">{{ p.reason }}</span></td>
+              <td class="num">{{ p.restarts }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :default-collapsed="true" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
 
       <div class="kov-grid">
         <!-- Cluster usage -->
@@ -81,7 +98,7 @@
 
         <!-- Pods by phase -->
         <section class="kov-card">
-          <h3>{{ t('overview.podsByStatus') }}</h3>
+          <h3>{{ t('overview.podsByPhase') }}</h3>
           <p v-if="pods.error" class="kov-notice"><i data-lucide="alert-triangle"></i>{{ pods.error }}</p>
           <template v-else>
             <div v-if="pods.total" class="kov-stack" role="img" :aria-label="phaseSummary">
@@ -98,6 +115,9 @@
                 <span class="kov-legend-count">{{ seg.count }}</span>
               </li>
             </ul>
+            <button v-if="runningNotReady" class="kov-phase-note" data-test="running-not-ready" @click="go('pods', { quick: ['not-ready'] })">
+              <i data-lucide="circle-alert"></i>{{ t('overview.runningNotReady', { n: runningNotReady }) }}
+            </button>
             <div v-if="reasonList.length" class="kov-reasons">
               <span class="kov-dim">{{ t('overview.reasons') }}</span>
               <button
@@ -141,23 +161,6 @@
           </template>
         </section>
 
-        <!-- Problem pods -->
-        <section class="kov-card kov-wide">
-          <h3>{{ t('overview.problemPods') }} <span v-if="pods.problemCount > pods.problems?.length" class="kov-dim">{{ t('overview.topOf', { shown: pods.problems.length, total: pods.problemCount }) }}</span></h3>
-          <p v-if="!pods.problems?.length" class="kov-empty">{{ t('overview.noProblemPods') }}</p>
-          <table v-else class="kov-table">
-            <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestarts') }}</th></tr></thead>
-            <tbody>
-              <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
-                <td class="kov-link">{{ p.name }}</td>
-                <td>{{ p.namespace }}</td>
-                <td><span class="badge failed">{{ p.reason }}</span></td>
-                <td class="num">{{ p.restarts }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
         <!-- Nodes -->
         <section class="kov-card kov-wide">
           <h3>{{ t('overview.nodes') }}</h3>
@@ -166,7 +169,7 @@
             <thead><tr><th>{{ t('overview.colNode') }}</th><th>{{ t('overview.colStatus') }}</th><th>{{ t('overview.colRoles') }}</th><th>{{ t('overview.colConditions') }}</th><th>CPU</th><th>{{ t('overview.memory') }}</th></tr></thead>
             <tbody>
               <tr v-for="n in nodes.items" :key="n.name" @click="go('nodes', { filter: n.name })">
-                <td class="kov-link">{{ n.name }}</td>
+                <td><button type="button" class="kov-link" @click.stop="go('nodes', { filter: n.name })">{{ n.name }}</button></td>
                 <td><span :class="['badge', n.ready ? (n.cordoned ? 'cordoned' : 'ready') : 'notready']">{{ n.ready ? (n.cordoned ? 'Cordoned' : 'Ready') : 'NotReady' }}</span></td>
                 <td>{{ n.roles }}</td>
                 <td>{{ n.pressures.length ? n.pressures.join(', ') : '—' }}</td>
@@ -184,7 +187,7 @@
           <p v-else-if="!notReadyWorkloads.length" class="kov-empty">{{ t('overview.allWorkloadsReady') }}</p>
           <ul v-else class="kov-list">
             <li v-for="w in notReadyWorkloads" :key="w.kind + w.namespace + w.name" @click="go(w.kind, { filter: w.name, quick: ['not-ready'] })">
-              <span class="kov-link">{{ w.name }}</span>
+              <button type="button" class="kov-link" @click.stop="go(w.kind, { filter: w.name, quick: ['not-ready'] })">{{ w.name }}</button>
               <span class="kov-dim">{{ KIND_LABELS[w.kind] }}{{ w.namespace ? ` · ${w.namespace}` : '' }}</span>
               <span class="kov-list-value">{{ w.ready }}/{{ w.desired }}</span>
             </li>
@@ -198,7 +201,7 @@
           <p v-else-if="!events.recent?.length" class="kov-empty">{{ t('overview.noRecentWarnings') }}</p>
           <ul v-else class="kov-list">
             <li v-for="(e, i) in events.recent" :key="i" :title="e.message" @click="go('events', { filter: e.object.split('/')[1] || '' })">
-              <span class="kov-link">{{ e.reason }}</span>
+              <button type="button" class="kov-link" @click.stop="go('events', { filter: e.object.split('/')[1] || '' })">{{ e.reason }}</button>
               <span class="kov-dim kov-ellipsis">{{ e.object }} · {{ e.message }}</span>
               <span class="kov-list-value">×{{ e.count }}</span>
             </li>
@@ -286,6 +289,9 @@ const phaseRows = computed(() => Object.entries(pods.value.phases || {}).map(([p
   phase, count, level: PHASE_LEVELS[phase] || 'unknown',
   percent: pods.value.total ? Math.round((count / pods.value.total) * 100) : 0,
 })))
+// The phase chart counts a pod with a crashing container as Running; say how
+// many of those are not ready so the chart is not read as health.
+const runningNotReady = computed(() => Math.max(0, (pods.value.phases?.Running ?? 0) - (pods.value.ready ?? 0)))
 const phaseSegments = computed(() => phaseRows.value.filter(seg => seg.count > 0))
 const phaseSummary = computed(() => phaseSegments.value.map(seg => `${seg.phase} ${seg.count}`).join(', '))
 const reasonList = computed(() => Object.entries(pods.value.reasons || {})
@@ -406,6 +412,7 @@ defineExpose({ load })
 .kov-updated { opacity: .8; }
 .kov-dim { color: var(--text-dim); }
 
+.kov-incidents { margin-top: 12px; }
 .kov-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .kov-tile {
   display: flex; flex-direction: column; gap: 4px; text-align: left;
@@ -462,6 +469,8 @@ defineExpose({ load })
 .kov-stack-seg.critical, .kov-swatch.critical { background: var(--red); }
 .kov-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
 .kov-legend li { display: flex; align-items: center; gap: 6px; }
+.kov-phase-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 0; border: 0; background: none; color: var(--yellow); font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.kov-phase-note:hover { text-decoration: underline; }
 .kov-legend-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .kov-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--text-dim); }
 .kov-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; }
@@ -473,7 +482,8 @@ defineExpose({ load })
 .kov-table tbody tr { cursor: pointer; }
 .kov-table tbody tr:hover td { background: var(--bg-hover); }
 .kov-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-.kov-link { color: var(--accent); }
+.kov-link { color: var(--accent); padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.kov-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
 .kov-mini { display: inline-flex; align-items: center; gap: 6px; }
 .kov-mini-track { width: 64px; height: 6px; }

@@ -10,6 +10,20 @@
 
 import { SEVERITIES, eventSeverity, severityLabel, severityOrder } from './eventSeverity'
 
+// Node capacity comes as raw quantities ("16073388Ki", "4"): show GiB and cores.
+function capacityText(value, kind) {
+  if (value == null || value === '' || value === '-') return '-'
+  const raw = String(value)
+  if (kind === 'cpu') {
+    const cores = raw.endsWith('m') ? parseFloat(raw) / 1000 : parseFloat(raw)
+    return Number.isFinite(cores) ? { text: `${cores} cores`, sort: cores } : raw
+  }
+  const units = { Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4, K: 1e3, M: 1e6, G: 1e9 }
+  const unit = raw.replace(/^[\d.]+/, '')
+  const bytes = parseFloat(raw) * (units[unit] || 1)
+  return Number.isFinite(bytes) ? { text: `${(bytes / 1024 ** 3).toFixed(1)} GiB`, sort: bytes } : raw
+}
+
 export function age(ts) {
   if (!ts) return '-'
   const diffSeconds = Math.max(0, Math.floor((Date.now() - new Date(ts)) / 1000))
@@ -17,11 +31,12 @@ export function age(ts) {
   const hours = Math.floor((diffSeconds % 86400) / 3600)
   const minutes = Math.floor((diffSeconds % 3600) / 60)
   const seconds = diffSeconds % 60
+  // kubectl-style units (7d 9h, 12m, 30s) read the same in every language.
   const parts = []
-  if (days) parts.push(`${days}day${days === 1 ? '' : 's'}`)
-  if (hours) parts.push(`${hours}hrs`)
-  if (minutes) parts.push(`${minutes}min`)
-  if (!parts.length) parts.push(`${seconds}sec`)
+  if (days) parts.push(`${days}d`)
+  if (hours) parts.push(`${hours}h`)
+  if (minutes && !days) parts.push(`${minutes}m`)
+  if (!parts.length) parts.push(`${seconds}s`)
   return { text: parts.join(' '), sort: diffSeconds }
 }
 
@@ -49,6 +64,7 @@ export const RESOURCES = {
       { id: 'problems', label: 'quick.problems', test: r => !!r.reason },
       { id: 'not-running', label: 'quick.notRunning', test: r => !['Running', 'Succeeded'].includes(r.status) },
       { id: 'not-ready', label: 'quick.notReady', test: r => r.status === 'Running' && notReady(r.ready) },
+      { id: 'recent-restarts', label: 'quick.restartedLastHour', test: r => !!r.lastRestartAt && Date.now() - r.lastRestartAt < 3600000 },
       { id: 'restarts', label: 'quick.withRestarts', test: r => Number(r.restarts) > 0 },
     ],
     actions: r => [
@@ -309,7 +325,8 @@ export const RESOURCES = {
   nodes: {
     title: 'Nodes',
     cols:  ['Name', 'Status', 'Roles', 'Version', 'OS', 'CPU', 'Memory', 'Age'],
-    row:   r => [r.name, { badge: r.unschedulable ? 'Cordoned' : r.status }, r.roles, r.version, r.os, r.cpu, r.memory, age(r.age)],
+    colLabels: [null, null, null, null, null, 'col.cpuCapacity', 'col.memoryCapacity', null],
+    row:   r => [r.name, { badge: r.unschedulable ? 'Cordoned' : r.status }, r.roles, r.version, r.os, capacityText(r.cpu, 'cpu'), capacityText(r.memory, 'memory'), age(r.age)],
     quickFilters: [
       { id: 'not-ready', label: 'quick.nodeNotReady', test: r => r.status !== 'Ready' },
       { id: 'cordoned', label: 'quick.cordoned', test: r => !!r.unschedulable },
@@ -324,11 +341,14 @@ export const RESOURCES = {
   },
   events: {
     title: 'Events',
-    cols:  ['Severity', 'Namespace', 'Type', 'Reason', 'Object', 'Count', 'Message', 'Age'],
+    cols:  ['Severity', 'Namespace', 'Type', 'Reason', 'Object', 'Count', 'Message', 'First seen', 'Age'],
+    // Severity is KUA's reading of the reason; Type is what Kubernetes reported.
+    colLabels: ['col.kuaSeverity', null, 'col.k8sType', null, null, 'col.repetitions', null, 'col.firstSeen', 'col.lastSeen'],
+    colHelp: ['events.severityHelp', null, 'events.typeHelp', null, null, 'events.countHelp', null, null, 'events.lastSeenHelp'],
     row:   r => {
       const sev = eventSeverity(r)
       return [{ badge: severityLabel(sev), sort: severityOrder(sev) }, r.namespace, r.type, r.reason, r.object, r.count,
-              { truncate: r.message, max: 80 }, age(r.age)]
+              { truncate: r.message, max: 80 }, age(r.firstTimestamp), age(r.age)]
     },
     rowClass: r => `sev-row sev-${eventSeverity(r)}`,
     facet: { label: 'Severity', value: eventSeverity, options: SEVERITIES },

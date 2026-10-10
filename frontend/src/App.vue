@@ -11,28 +11,30 @@
           <span>KUA</span><span class="app-logo-sub">Know Unified Administration</span>
         </span>
         <div class="provider-tabs">
-          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" @click="setProvider('kubernetes')">
+          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" title="Kubernetes" aria-label="Kubernetes" @click="setProvider('kubernetes')">
             <i data-lucide="box"></i> Kubernetes
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" @click="setProvider('aws')">
+          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" title="AWS" aria-label="AWS" @click="setProvider('aws')">
             <i data-lucide="cloud"></i> AWS
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" @click="setProvider('gcp')">
+          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" title="GCP" aria-label="GCP" @click="setProvider('gcp')">
             <i data-lucide="cloud-cog"></i> GCP
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" @click="setProvider('vercel')">
+          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" title="Vercel" aria-label="Vercel" @click="setProvider('vercel')">
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" @click="setProvider('kuapps')">
+          <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" title="KUApps" aria-label="KUApps" @click="setProvider('kuapps')">
             <i data-lucide="boxes"></i> KUApps
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
-          <select class="ctrl-select" v-model="selectedContext" @change="switchContext">
-            <option v-for="c in store.contexts" :key="c.name" :value="c.name">{{ c.name }}</option>
+          <button ref="kubeNavToggleRef" class="btn btn-icon kube-nav-toggle" :aria-expanded="kubeNavOpen" aria-controls="kube-nav" :title="t('nav.kubeResources')" :aria-label="t('nav.kubeResources')" @click="kubeNavOpen = !kubeNavOpen"><i data-lucide="menu"></i></button>
+          <span :class="['kube-env-badge', `env-${kubeEnvironment || 'unknown'}`]" :title="store.currentContext" data-test="kube-env-badge">{{ t(`kubeAction.env.${kubeEnvironment || 'unknown'}`) }}</span>
+          <select class="ctrl-select kube-context-select" v-model="selectedContext" :title="selectedContext" :aria-label="t('nav.kubeContext')" @change="switchContext">
+            <option v-for="c in store.contexts" :key="c.name" :value="c.name" :title="c.name">{{ shortContextName(c.name) }}</option>
           </select>
-          <select class="ctrl-select" v-model="store.namespace" @change="store.loadResources()">
+          <select class="ctrl-select kube-context-select" v-model="store.namespace" :aria-label="t('nav.kubeNamespace')" @change="store.loadResources()">
             <option value="all">{{ t('nav.allNamespaces') }}</option>
             <option v-for="n in store.namespaces" :key="n" :value="n">{{ n }}</option>
           </select>
@@ -129,51 +131,52 @@
     <div class="page-body">
       <div class="layout">
         <!-- Kubernetes sidebar -->
-        <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
+        <div v-if="activeProvider === 'kubernetes' && kubeNavOpen" class="kube-nav-backdrop" @click="closeKubeNav"></div>
+        <nav id="kube-nav" ref="kubeNavRef" :class="['sidebar', 'kube-nav', { open: kubeNavOpen }]" v-if="activeProvider === 'kubernetes'" :aria-label="t('nav.kubeResources')" :inert="narrowLayout && !kubeNavOpen ? true : undefined" @keydown.esc="closeKubeNav">
           <div class="sidebar-section">
-            <a :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-overview' }]" :aria-current="(cloudView === 'kube-overview') ? 'page' : undefined"
                @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
             <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
             <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
-              :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+              href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
             <a v-for="r in ['nodes','namespaces','events']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.logs') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" :aria-current="(cloudView === 'kube-logs') ? 'page' : undefined" data-test="sidebar-kube-logs"
                @click.prevent="setCloudView('kube-logs')">{{ t('sidebar.logsIntelligence') }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'helm' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm' }]" :aria-current="(cloudView === 'helm') ? 'page' : undefined"
                @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
-            <a :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm-repos' }]" :aria-current="(cloudView === 'helm-repos') ? 'page' : undefined"
                @click.prevent="setCloudView('helm-repos')">{{ t('sidebar.repositories') }}</a>
           </div>
         </nav>
@@ -398,6 +401,8 @@
                 :style="{ width: `${kubeDetailWidth}px` }"
                 @close="selectedKubeResource = null"
                 @open-helm="openPrometheusHelm"
+                @open-logs="openInspectorLogs"
+                @open-resource="openInspectorResource"
               />
             </div>
           </template>
@@ -420,7 +425,7 @@
             @open-architecture="openApplicationArchitecture"
             @application-context="handleKuAppsApplicationContext"
             @open-kubernetes-logs="openObservabilityKubernetesLogs"
-            @open-kubernetes-detail="openArchitectureKubernetesDetail"
+            @open-kubernetes-detail="openKubernetesDetail"
             @open-kubernetes-pods="openArchitectureKubernetesPods"
             @open-aws-resource="openArchitectureAwsResource"
             @open-aws-logs="openArchitectureAwsLogs"
@@ -450,7 +455,7 @@
             :apm-focus-resource="observabilityFocus"
             @open-architecture="openApplicationArchitecture"
           />
-          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openArchitectureKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
+          <ArchitectureView v-else-if="activeProvider === 'architecture'" :profile-id="architectureProfileId" :application-id="activeApplicationContext?.id || ''" :project-id="architectureProjectId" @open-observability="openApplicationObservability" @application-context="setApplicationContext" @open-kubernetes-logs="openObservabilityKubernetesLogs" @open-kubernetes-detail="openKubernetesDetail" @open-kubernetes-pods="openArchitectureKubernetesPods" @open-aws-resource="openArchitectureAwsResource" @open-aws-logs="openArchitectureAwsLogs" />
         </main>
       </div>
 
@@ -485,9 +490,9 @@
     <!-- Modals -->
     <DeleteModal      :show="modals.delete"        :message="modalData.deleteMsg"          @confirm="confirmDelete"        @close="modals.delete = false" />
     <DeleteModal      :show="modals.deleteContext"  :message="modalData.deleteContextMsg"   @confirm="confirmDeleteContext"  @close="modals.deleteContext = false" />
-    <DeleteModal      :show="modals.drain"          :message="modalData.drainMsg"            @confirm="confirmDrain"          @close="modals.drain = false" />
-    <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" @confirm="confirmScale" @close="modals.scale = false" />
-    <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" @close="modals.yaml = false" />
+    <KubeActionConfirmModal :show="modals.kubeAction" :action="modalData.kubeAction"         @confirm="confirmKubeAction"     @close="modals.kubeAction = false" />
+    <ScaleModal       :show="modals.scale"          :name="modalData.scaleName"              :current="modalData.scaleCurrent" :context="modalData.scalePending?.context" :namespace="modalData.scalePending?.ns" :type="modalData.scalePending?.type" @confirm="confirmScale" @close="modals.scale = false" />
+    <YamlModal        :show="modals.yaml"           :title="modalData.yamlTitle"             :resource-type="modalData.yamlType" :namespace="modalData.yamlNs" :name="modalData.yamlName" :context="modalData.yamlContext" @close="modals.yaml = false" />
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help" :initial-tab="helpTab"                             @close="modals.help = false; helpTab = ''" />
@@ -534,12 +539,16 @@ import ResourceTable    from './components/ResourceTable.vue'
 import KubeResourceDetailPanel from './components/KubeResourceDetailPanel.vue'
 import KubeOverview     from './components/KubeOverview.vue'
 import { loadTableView, saveTableView } from './composables/useTableViews'
+import { RESOURCES } from './config/resources'
 import VercelProjectSelector from './components/cloud/VercelProjectSelector.vue'
 import CliToolsNotice  from './components/CliToolsNotice.vue'
 import TerminalPanel    from './components/TerminalPanel.vue'
 import PortForwardPanel from './components/PortForwardPanel.vue'
 import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
+import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
+import { contextEnvironment, shortContextName } from './lib/kubeContext'
+import { kubeUrlChange, kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
@@ -698,6 +707,25 @@ const activeProvider  = ref(['architecture', 'observability'].includes(storedPro
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
+// Narrow windows show the Kubernetes resource menu as a drawer: opening it moves
+// focus to the active item, Escape or the backdrop close it and return focus to
+// the toggle.
+const kubeNavOpen = ref(false)
+const kubeNavRef = ref(null)
+const kubeNavToggleRef = ref(null)
+const narrowQuery = globalThis.matchMedia?.('(max-width: 900px)')
+const narrowLayout = ref(!!narrowQuery?.matches)
+narrowQuery?.addEventListener?.('change', event => { narrowLayout.value = event.matches; if (!event.matches) kubeNavOpen.value = false })
+watch(kubeNavOpen, open => {
+  if (!open || !narrowLayout.value) return
+  nextTick(() => (kubeNavRef.value?.querySelector('.sidebar-item.active') || kubeNavRef.value?.querySelector('.sidebar-item'))?.focus())
+})
+function closeKubeNav() {
+  if (!kubeNavOpen.value) return
+  kubeNavOpen.value = false
+  nextTick(() => kubeNavToggleRef.value?.focus())
+}
+const kubeEnvironment = computed(() => contextEnvironment(store.currentContext))
 const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
@@ -864,16 +892,15 @@ window.addEventListener('kua:open-help', event => {
   helpTab.value = event.detail?.tab || ''
   modals.help = true
 })
-const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, drain: false, addConnection: false })
+const modals    = reactive({ delete: false, deleteContext: false, scale: false, yaml: false, portForward: false, kubeconfig: false, help: false, kubeAction: false, addConnection: false })
 const modalData = reactive({
-  deleteMsg: '', deletePending: null,
-  deleteManyPending: [],
+  deleteMsg: '',
   deleteContextMsg: '', deleteContextName: '',
   scaleName: '', scaleCurrent: 0, scalePending: null,
-  yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '',
+  yamlTitle: '', yamlType: '', yamlNs: null, yamlName: '', yamlContext: '',
   pfNamespace: '', pfService: '', pfPorts: [], pfLabel: '', pfManual: false, pfResourceType: 'services',
-  drainMsg: '', drainPending: null,
-  connectionProvider: 'aws', deleteConnectionId: null, deleteConnectionMode: false,
+  kubeAction: null,
+  connectionProvider: 'aws', deleteConnectionId: null,
 })
 const {
   architectureProjectId,
@@ -884,9 +911,12 @@ const {
   urlApplicationId,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
+// A link with ?view=kubernetes names a cluster view; it wins over a stale ?app=.
+const urlKubeView = readKubeUrl(globalThis.location?.search || '')
+
 // A link with ?app=<id> opens that KUA Application in KUApps (#149).
 async function openApplicationFromUrl() {
-  if (!urlApplicationId) return
+  if (!urlApplicationId || urlKubeView) return
   try {
     const context = applicationContextFromView(await api('GET', `/api/kua-apps/applications/${encodeURIComponent(urlApplicationId)}`))
     if (!context) return
@@ -996,8 +1026,9 @@ async function openObservabilityKubernetesLogs(resource) {
 const KUBE_KIND_TO_RESOURCE = {
   Pod: 'pods', Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets',
   Service: 'services', Ingress: 'ingresses', ConfigMap: 'configmaps', Secret: 'secrets',
-  PersistentVolumeClaim: 'pvcs',
+  PersistentVolumeClaim: 'pvcs', ReplicaSet: 'replicasets', Job: 'jobs', CronJob: 'cronjobs', Node: 'nodes',
 }
+const CLUSTER_SCOPED_KINDS = new Set(['Node'])
 
 async function switchToKubernetesResourceScope(resource) {
   activeProvider.value = 'kubernetes'
@@ -1009,12 +1040,14 @@ async function switchToKubernetesResourceScope(resource) {
   if (resource.namespace && store.namespace !== resource.namespace) store.namespace = resource.namespace
 }
 
-// Architecture Canvas node action: open the same YAML/metrics detail panel used by the Kubernetes view.
-async function openArchitectureKubernetesDetail(resource) {
+// Open the YAML/metrics detail panel of the Kubernetes view for a resource, in
+// its context and namespace (Architecture Canvas and inspector links).
+async function openKubernetesDetail(resource) {
   const resourceType = KUBE_KIND_TO_RESOURCE[resource?.kind]
-  if (!resourceType || !resource?.kubeContext || !resource?.namespace || !resource?.name) return
+  const clusterScoped = CLUSTER_SCOPED_KINDS.has(resource?.kind)
+  if (!resourceType || !resource?.kubeContext || (!clusterScoped && !resource?.namespace) || !resource?.name) return
   try {
-    await switchToKubernetesResourceScope(resource)
+    await switchToKubernetesResourceScope(clusterScoped ? { ...resource, namespace: '' } : resource)
     selectedKubeResource.value = null
     store.resource = resourceType
     await store.loadResources()
@@ -1166,9 +1199,6 @@ function deleteConnectionConfirm(provider) {
   const profile = envStore.profiles.find(p => p.id === id)
   if (!profile) return
   modalData.deleteConnectionId   = id
-  modalData.deleteConnectionMode = true
-  modalData.deletePending        = null
-  modalData.deleteManyPending    = []
   modalData.deleteMsg            = `Delete profile "${profile.name}"? All stored keys will be permanently removed.`
   modals.delete                  = true
 }
@@ -1184,8 +1214,8 @@ function toggleConsole() {
   cloudView.value = cloudView.value === 'console' ? null : 'console'
   nextTick(() => createIcons({ icons }))
 }
-function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; store.selectResource(r) }
-function setCloudView(view)   { cloudView.value = view }
+function setResource(r)       { cloudView.value = null; selectedKubeResource.value = null; kubeNavOpen.value = false; store.selectResource(r) }
+function setCloudView(view)   { cloudView.value = view; kubeNavOpen.value = false }
 
 // Overview drill-down: open the resource table with the matching filter/chips
 // preset, keeping the user's sort for that table.
@@ -1280,9 +1310,9 @@ function handleAction(fn, args) {
     openScale:       ([type, ns, name, cur])=> openScale(type, ns, name, cur),
     openPortForward: ([ns, name, ports, resourceType]) => openPf(ns, name, ports, resourceType || 'services'),
     openExternal:    ([url])                 => openExternalUrl(url),
-    restart:         ([type, ns, name])     => doRestart(type, ns, name),
-    cordonNode:      ([name, cordon])       => doCordon(name, cordon),
-    confirmDrain:    ([name])               => openDrain(name),
+    restart:         ([type, ns, name])     => openKubeAction({ kind: 'restart', type, namespace: ns, name }),
+    cordonNode:      ([name, cordon])       => openKubeAction({ kind: cordon ? 'cordon' : 'uncordon', type: 'nodes', name }),
+    confirmDrain:    ([name])               => openKubeAction({ kind: 'drain', type: 'nodes', name }),
   }
   h[fn]?.(args)
 }
@@ -1290,7 +1320,19 @@ function handleAction(fn, args) {
 function applicationAuditContext() {
   return { environment: activeApplicationContext.value?.environment, applicationId: activeApplicationContext.value?.id }
 }
-function openLogs(ns, pod, containers, resourceType = 'pods') { const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext, ...applicationAuditContext() }); startLogStream(tab, false) }
+function openLogs(ns, pod, containers, resourceType = 'pods', { previous = false, container = null } = {}) {
+  const tab = termStore.openLogsTab(ns, pod, containers, resourceType, { kubeContext: store.currentContext, ...applicationAuditContext() })
+  if (container && tab.containers.includes(container)) tab.container = container
+  tab.previous = previous
+  startLogStream(tab, previous)
+}
+// Inspector shortcuts: logs of the instance that just ended, for one container.
+function openInspectorLogs({ namespace, name, containers, container, previous }) {
+  openLogs(namespace, name, containers, 'pods', { previous, container })
+}
+function openInspectorResource({ kind, name, namespace }) {
+  openKubernetesDetail({ kind, name, namespace, kubeContext: store.currentContext })
+}
 function openExec(ns, pod, containers) { const tab = termStore.openExecTab(ns, pod, containers, { kubeContext: store.currentContext, ...applicationAuditContext() }); startExecStream(tab) }
 function restartStream(tab, previous = false) {
   if (tab.type === 'exec') startExecStream(tab, { reconnect: true })
@@ -1309,76 +1351,85 @@ function openExternalUrl(url) {
   else window.open(url, '_blank')
 }
 
-function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name }); modals.yaml = true }
-function openDelete(type, ns, name)  { modalData.deleteManyPending = []; modalData.deletePending = { type, ns, name }; modalData.deleteMsg = `Delete ${type.slice(0,-1)} "${name}" in ns "${ns}"? Cannot be undone.`; modals.delete = true }
+function openYaml(type, ns, name)    { Object.assign(modalData, { yamlTitle: `${type}/${name}`, yamlType: type, yamlNs: ns, yamlName: name, yamlContext: store.currentContext }); modals.yaml = true }
+function openDelete(type, ns, name)  { openKubeAction({ kind: 'delete', type, namespace: ns, name }) }
 function openBulkDelete(rows) {
   const selected = Array.isArray(rows) ? rows : []
   if (!selected.length) return
-  modalData.deleteConnectionMode = false
-  modalData.deletePending = null
-  modalData.deleteManyPending = selected.map(row => ({ type: store.resource, ns: row.namespace, name: row.name }))
-  const sample = selected.slice(0, 3).map(row => `${row.namespace}/${row.name}`).join(', ')
-  const more = selected.length > 3 ? ` y ${selected.length - 3} mas` : ''
-  modalData.deleteMsg = `Delete ${selected.length} ${LABELS[store.resource] || store.resource}: ${sample}${more}? Cannot be undone.`
-  modals.delete = true
+  const items = selected.map(row => ({ namespace: row.namespace, name: row.name }))
+  openKubeAction({ kind: 'delete', type: store.resource, namespace: items[0].namespace, name: items[0].name, items })
 }
-function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
+function openScale(type, ns, name, cur) { modalData.scalePending = { type, ns, name, context: store.currentContext }; modalData.scaleName = name; modalData.scaleCurrent = cur; modals.scale = true }
 function openPf(ns, name, ports, resourceType = 'services') { Object.assign(modalData, { pfNamespace: ns, pfService: name, pfPorts: ports||[], pfLabel: `${resourceType}/${ns}/${name}`, pfManual: false, pfResourceType: resourceType }); modals.portForward = true }
 function openPfManual()              { Object.assign(modalData, { pfNamespace: store.namespace||'default', pfService: '', pfPorts: [], pfLabel: 'Manual', pfManual: true, pfResourceType: 'services' }); modals.portForward = true }
-function openDrain(name)             { modalData.drainPending = name; modalData.drainMsg = `Drain node "${name}"? It will be cordoned and pods evicted.`; modals.drain = true }
 
+// Kubernetes deletes go through confirmKubeAction; this modal only removes
+// stored connection profiles.
 async function confirmDelete() {
-  if (modalData.deleteConnectionMode) {
-    modalData.deleteConnectionMode = false
-    const id = modalData.deleteConnectionId
-    modals.delete = false
-    const ok = await envStore.deleteProfile(id)
-    if (ok) {
-      if (awsProfileId.value === id) { awsProfileId.value = ''; awsStore.setActiveProfile(null) }
-      if (gcpProfileId.value === id) { gcpProfileId.value = ''; gcpStore.setActiveProfile(null) }
-      toast('Profile deleted', 'success')
-    }
-    return
+  const id = modalData.deleteConnectionId
+  modals.delete = false
+  const ok = await envStore.deleteProfile(id)
+  if (ok) {
+    if (awsProfileId.value === id) { awsProfileId.value = ''; awsStore.setActiveProfile(null) }
+    if (gcpProfileId.value === id) { gcpProfileId.value = ''; gcpStore.setActiveProfile(null) }
+    toast('Profile deleted', 'success')
   }
-  const many = modalData.deleteManyPending || []
-  if (many.length) {
-    modals.delete = false
-    modalData.deleteManyPending = []
-    const results = await Promise.allSettled(many.map(item => deleteKubeResource(item.type, item.ns, item.name)))
-    const failed = results.filter(result => result.status === 'rejected')
-    const removed = results.length - failed.length
-    if (removed) toast(`Deleted ${removed} resource(s)`, failed.length ? 'warn' : 'success')
-    if (failed.length) toast(`${failed.length} resource(s) failed to delete`, 'error')
-    setTimeout(() => store.loadResources({ silent: true }), 600)
-    return
-  }
-  const { type, ns, name } = modalData.deletePending; modals.delete = false
-  try {
-    await deleteKubeResource(type, ns, name)
-    toast(`Deleted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 600)
-  } catch (e) { toast(e.message, 'error') }
 }
-function deleteKubeResource(type, ns, name) {
-  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`)
-  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`)
+function deleteKubeResource(type, ns, name, expectedContext) {
+  const body = { expectedContext }
+  if (type === 'nodes') return api('DELETE', `/api/nodes/${encodeURIComponent(name)}`, body)
+  return api('DELETE', `/api/${encodeURIComponent(ns)}/${type}/${encodeURIComponent(name)}`, body)
 }
 async function confirmScale(replicas) {
-  const { type, ns, name } = modalData.scalePending; modals.scale = false
-  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas }); toast(`Scaled ${name} to ${replicas}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+  const { type, ns, name, context } = modalData.scalePending; modals.scale = false
+  if (!kubeContextStillActive(context)) return
+  try { await api('POST', `/api/${ns}/${type}/${name}/scale`, { replicas, expectedContext: context }); toast(t('kubeAction.scaled', { name, n: replicas }), 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
+  catch (e) { toastKubeActionError(e) }
 }
-async function doRestart(type, ns, name) {
-  try { await api('POST', `/api/${ns}/${type}/${name}/restart`); toast(`Restarted ${name}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 1000) }
-  catch (e) { toast(e.message, 'error') }
+// Restart, cordon, drain and delete change the cluster, so they are confirmed with the
+// context captured when the action was opened. The server rejects the write if
+// the active context changed in the meantime.
+function openKubeAction(action) {
+  modalData.kubeAction = { ...action, context: store.currentContext }
+  modals.kubeAction = true
 }
-async function doCordon(name, cordon) {
-  try { await api('POST', `/api/nodes/${name}/cordon`, { cordon }); toast(`Node ${name} ${cordon ? 'cordoned' : 'uncordoned'}`, 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+function kubeActionRequest({ kind, type, namespace, name }) {
+  if (kind === 'restart') return { path: `/api/${namespace}/${type}/${name}/restart`, body: {} }
+  if (kind === 'drain') return { path: `/api/nodes/${name}/drain`, body: {} }
+  return { path: `/api/nodes/${name}/cordon`, body: { cordon: kind === 'cordon' } }
 }
-async function confirmDrain() {
-  const name = modalData.drainPending; modals.drain = false
-  try { const r = await api('POST', `/api/nodes/${name}/drain`); toast(`Node ${name} drained. Evicted: ${r.evicted}`, r.failed ? 'warn' : 'success'); setTimeout(() => store.loadResources({ silent: true }), 800) }
-  catch (e) { toast(e.message, 'error') }
+function kubeContextStillActive(context) {
+  if (context === store.currentContext) return true
+  toast(t('kubeAction.contextChanged', { current: store.currentContext, expected: context }), 'error')
+  return false
+}
+function toastKubeActionError(e) {
+  if (e.details?.code === 'KUBE_CONTEXT_CHANGED') toast(t('kubeAction.contextChanged', { current: e.details.currentContext, expected: e.details.expectedContext }), 'error')
+  else toast(e.message, 'error')
+}
+async function confirmKubeDelete(action) {
+  const items = action.items || [{ namespace: action.namespace, name: action.name }]
+  const results = await Promise.allSettled(items.map(item => deleteKubeResource(action.type, item.namespace, item.name, action.context)))
+  const failed = results.filter(result => result.status === 'rejected')
+  const removed = results.length - failed.length
+  if (removed) toast(items.length === 1 ? t('kubeAction.deleted', { name: action.name }) : t('kubeAction.deletedMany', { n: removed }), failed.length ? 'warn' : 'success')
+  if (failed.length === 1) toastKubeActionError(failed[0].reason)
+  else if (failed.length) toast(t('kubeAction.deleteFailed', { n: failed.length }), 'error')
+  setTimeout(() => store.loadResources({ silent: true }), 600)
+}
+async function confirmKubeAction() {
+  const action = modalData.kubeAction
+  modals.kubeAction = false
+  if (!action || !kubeContextStillActive(action.context)) return
+  if (action.kind === 'delete') return confirmKubeDelete(action)
+  const { path, body } = kubeActionRequest(action)
+  try {
+    const r = await api('POST', path, { ...body, expectedContext: action.context })
+    if (action.kind === 'restart') toast(t('kubeAction.restarted', { name: action.name }), 'success')
+    else if (action.kind === 'drain') toast(t('kubeAction.drained', { name: action.name, evicted: r.evicted }), r.failed ? 'warn' : 'success')
+    else toast(t(`kubeAction.${action.kind}ed`, { name: action.name }), 'success')
+    setTimeout(() => store.loadResources({ silent: true }), action.kind === 'restart' ? 1000 : 800)
+  } catch (e) { toastKubeActionError(e) }
 }
 
 function openSponsor() {
@@ -1405,14 +1456,96 @@ function onKey(e) {
 
 syncServerCacheSettings()
 
+// Keep the URL on the Kubernetes view shown: context, namespace, resource list
+// (or overview) and the selected resource. Other views drop these params.
+const KUBE_URL_VIEWS = { 'kube-overview': 'overview', 'kube-logs': 'logs' }
+// Moves within the Kubernetes view add a history entry (Back returns to them);
+// changes arriving together (a context switch loads its namespace and list)
+// are recorded once. While Back/Forward re-applies a view, nothing is recorded.
+let applyingKubeHistory = false
+// Start-up passes through transient states (no context yet, default namespace):
+// the URL follows the view only once the first Kubernetes load is done.
+let kubeUrlReady = false
+let kubeUrlTimer = null
+function scheduleKubeUrlSync() {
+  clearTimeout(kubeUrlTimer)
+  kubeUrlTimer = setTimeout(syncKubeUrl, 250)
+}
+function syncKubeUrl({ replace = false } = {}) {
+  const location = globalThis.location
+  if (!kubeUrlReady || applyingKubeHistory || !location?.href || !globalThis.history?.replaceState) return
+  const kubeView = activeProvider.value === 'kubernetes' && (!cloudView.value || cloudView.value in KUBE_URL_VIEWS)
+  let href
+  try {
+    href = kubeUrlHref(location.href, kubeView ? {
+      context: store.currentContext,
+      namespace: store.namespace,
+      resource: KUBE_URL_VIEWS[cloudView.value] || store.resource,
+      name: cloudView.value ? '' : selectedKubeResource.value?.row?.name || '',
+    } : null)
+    if (!kubeView && activeProvider.value === 'kuapps' && activeApplicationContext.value?.id) {
+      const url = new URL(href)
+      url.searchParams.set('app', activeApplicationContext.value.id)
+      href = url.href
+    }
+  } catch { return }
+  const change = kubeUrlChange(location.href, href)
+  if (change === 'push' && !replace) globalThis.history.pushState(null, '', href)
+  else if (change) globalThis.history.replaceState(globalThis.history.state, '', href)
+}
+watch(() => [activeProvider.value, cloudView.value, store.currentContext, store.namespace, store.resource, selectedKubeResource.value?.row?.name], scheduleKubeUrlSync)
+
+// Back/Forward to a Kubernetes URL shows that view again.
+async function onKubePopState() {
+  const view = readKubeUrl(globalThis.location?.search || '')
+  if (!view) return
+  clearTimeout(kubeUrlTimer)
+  applyingKubeHistory = true
+  try {
+    await setProvider('kubernetes')
+    if (!(await applyKubeUrlView(view))) return
+    if (view.namespace && view.namespace !== store.namespace) store.namespace = view.namespace
+    if (!cloudView.value) {
+      await store.loadResources()
+      const row = view.name ? store.rows.find(r => r.name === view.name) : null
+      selectedKubeResource.value = row ? { type: store.resource, row } : null
+    }
+  } catch (error) {
+    toast(error.message, 'error')
+  } finally {
+    await nextTick()
+    applyingKubeHistory = false
+  }
+}
+
+// Applies ?view=kubernetes once the contexts are known. A context missing from
+// this machine's kubeconfig is said, not silently replaced by another cluster.
+async function applyKubeUrlView(view = urlKubeView) {
+  if (view.context && view.context !== store.currentContext) {
+    if (store.contexts.some(c => c.name === view.context)) {
+      selectedContext.value = view.context
+      await store.switchContext(view.context)
+    } else {
+      toast(t('kubeUrl.contextMissing', { context: view.context }), 'warn')
+      return false
+    }
+  }
+  if (view.resource === 'overview') cloudView.value = 'kube-overview'
+  else if (view.resource === 'logs') cloudView.value = 'kube-logs'
+  else if (view.resource && RESOURCES[view.resource]) { cloudView.value = null; store.resource = view.resource }
+  return true
+}
+
 onMounted(async () => {
   applySettings()
+  if (urlKubeView) setProvider('kubernetes')
   openApplicationFromUrl()
   clockTimer = setInterval(() => { clock.value = new Date().toLocaleTimeString() }, 1000)
   clock.value = new Date().toLocaleTimeString()
   // Shortcuts and listeners work right away, not after the cluster answers.
   lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
+  globalThis.addEventListener('popstate', onKubePopState)
   document.addEventListener('pointerdown', markUserInteraction, { passive: true })
   document.addEventListener('wheel', markUserInteraction, { passive: true, capture: true })
   document.addEventListener('touchstart', markUserInteraction, { passive: true })
@@ -1422,16 +1555,24 @@ onMounted(async () => {
   const kube = (async () => {
     await store.loadContexts()
     selectedContext.value = store.currentContext
+    const urlViewApplied = urlKubeView ? await applyKubeUrlView() : false
     await Promise.all([
       (async () => {
         await store.loadNamespaces()
-        // Restaurar namespace guardado
-        const savedNs = LS.get('kubeNs', '')
-        if (savedNs && store.namespaces.includes(savedNs)) store.namespace = savedNs
+        // The URL namespace wins over the one saved locally.
+        const savedNs = urlViewApplied && urlKubeView.namespace ? urlKubeView.namespace : LS.get('kubeNs', '')
+        if (savedNs && (savedNs === 'all' || store.namespaces.includes(savedNs))) store.namespace = savedNs
         await store.loadResources()
+        if (urlViewApplied && urlKubeView.name) {
+          const row = store.rows.find(r => r.name === urlKubeView.name)
+          if (row) selectKubeResource(store.resource, row)
+          else toast(t('kubeUrl.resourceMissing', { name: urlKubeView.name }), 'warn')
+        }
       })(),
       pfStore.autoRestore(),
     ])
+    kubeUrlReady = true
+    syncKubeUrl({ replace: true })
   })()
   const cloud = (async () => {
     await Promise.all([envStore.fetchProfiles(), loadAwsLocalProfiles(), loadGcpLocalConfigs()])
@@ -1450,6 +1591,8 @@ onMounted(async () => {
   nextTick(() => createIcons({ icons }))
 })
 onUnmounted(() => {
+  globalThis.removeEventListener('popstate', onKubePopState)
+  clearTimeout(kubeUrlTimer)
   clearInterval(clockTimer)
   clearInterval(autoRefreshTimer)
   document.removeEventListener('keydown', onKey)
