@@ -80,8 +80,10 @@ export function useViewUrl({ state, navigation, context = [], onPop, location = 
       const next = nextViewUrl(location.href, state(), stash)
       stash = next.stash
       if (next.href === location.href) return
-      if (push && !applying) history.pushState({ kuaView: state() }, '', next.href)
-      else history.replaceState({ ...(history.state || {}), kuaView: state() }, '', next.href)
+      // No state object: the params are read back from the URL, and a reactive
+      // value (filters) cannot be cloned into history (DataCloneError).
+      if (push && !applying) history.pushState(null, '', next.href)
+      else history.replaceState(history.state, '', next.href)
     } catch { /* non-http locations (tests, file://) keep working without the params */ }
   }
 

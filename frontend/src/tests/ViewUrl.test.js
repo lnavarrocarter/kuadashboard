@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, nextTick, reactive, ref } from 'vue'
 import { readViewUrl, nextViewUrl, useViewUrl } from '../composables/useViewUrl'
 
 const BASE = 'http://localhost:7192/'
@@ -37,6 +37,7 @@ describe('view URL (A15)', () => {
 })
 
 // A browser with its own entries: the test setup replaces window.location with a stub.
+// Like a real one, it clones the state object (a reactive Proxy throws DataCloneError).
 function fakeBrowser(href) {
   const entries = [href]
   let index = 0
@@ -47,8 +48,8 @@ function fakeBrowser(href) {
   const history = {
     state: null,
     get length() { return entries.length },
-    pushState(state, _, url) { entries.splice(index + 1); entries.push(new URL(url, entries[index]).href); index += 1; this.state = state },
-    replaceState(state, _, url) { entries[index] = new URL(url, entries[index]).href; this.state = state },
+    pushState(state, _, url) { const copy = structuredClone(state); entries.splice(index + 1); entries.push(new URL(url, entries[index]).href); index += 1; this.state = copy },
+    replaceState(state, _, url) { const copy = structuredClone(state); entries[index] = new URL(url, entries[index]).href; this.state = copy },
     back() { index -= 1; window.dispatchEvent(new PopStateEvent('popstate')) },
   }
   return { location, history }
@@ -97,6 +98,31 @@ describe('useViewUrl history', () => {
     provider.value = 'kuapps'
     await nextTick()
     expect(new URLSearchParams(location.search).get('app')).toBe('app-1')
+    api.stop()
+  })
+
+  it('keeps writing the URL when the filters are reactive (they are never put in history state)', async () => {
+    const browser = fakeBrowser(`${BASE}?view=aws&service=lambda`)
+    const filters = reactive({ q: 'orders' })
+    const provider = ref('aws')
+    let api
+    scope = effectScope()
+    scope.run(() => {
+      api = useViewUrl({
+        state: () => ({ view: provider.value, service: 'lambda', profile: '', filters: provider.value === 'aws' ? filters : {} }),
+        navigation: [provider], context: [() => JSON.stringify(filters)], onPop: vi.fn(), ...browser,
+      })
+      api.start()
+    })
+    expect(browser.location.search).toBe('?view=aws&service=lambda&q=orders')
+    filters.q = 'billing'
+    await nextTick()
+    expect(browser.location.search).toBe('?view=aws&service=lambda&q=billing')
+    provider.value = 'gcp'
+    await nextTick()
+    provider.value = 'aws'
+    await nextTick()
+    expect(browser.location.search).toBe('?view=aws&service=lambda&q=billing')
     api.stop()
   })
 

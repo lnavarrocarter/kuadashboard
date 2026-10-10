@@ -3896,8 +3896,10 @@ const props = defineProps({
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
-  // Search and filters from a link or a history entry: { service, filters: { q, <facet>: value }, seq }.
-  linkedFilters: { type: Object, default: null },
+  // Search and filters per tab kept by App ({ <tab>: { q, <facet>: value } }), so they survive
+  // this view unmounting; applied on mount and whenever savedFiltersSeq changes (a link, Back).
+  savedFilters: { type: Object, default: null },
+  savedFiltersSeq: { type: Number, default: 0 },
 })
 const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab', 'open-observability', 'filters-change'])
 
@@ -4120,14 +4122,16 @@ function currentFilters(tab) {
   for (const [id, value] of Object.entries(facetState[tab] || {})) if (value) filters[id] = value
   return filters
 }
+function applySavedFilters() {
+  for (const [tab, filters] of Object.entries(props.savedFilters || {})) {
+    if (!(tab in search)) continue
+    search[tab] = filters?.q || ''
+    for (const id of Object.keys(facetState[tab] || {})) facetState[tab][id] = filters?.[id] || ''
+  }
+}
+watch(() => props.savedFiltersSeq, applySavedFilters, { immediate: true })
 watch(() => [activeTab.value, search[activeTab.value], JSON.stringify(facetState[activeTab.value] || {})],
-  () => emit('filters-change', currentFilters(activeTab.value)))
-watch(() => props.linkedFilters, linked => {
-  if (!linked?.service || !(linked.service in search)) return
-  const tab = linked.service
-  search[tab] = linked.filters?.q || ''
-  for (const id of Object.keys(facetState[tab] || {})) facetState[tab][id] = linked.filters?.[id] || ''
-}, { immediate: true })
+  () => emit('filters-change', activeTab.value, currentFilters(activeTab.value)))
 
 // Rows shown in the tables: search, then the Overview incident focus, then the filters.
 const lambdaBaseRows = computed(() => (incidentFocus.value === 'lambda' ? lambdaRows.value.filter(fn => fn.errors24h > 0) : lambdaRows.value))

@@ -401,7 +401,7 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :linked-filters="linkedAwsFilters" @filters-change="filters => { awsFilters = filters }" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :saved-filters="awsFiltersByTab" :saved-filters-seq="awsFiltersSeq" @filters-change="(tab, filters) => { awsFiltersByTab[tab] = filters }" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
@@ -889,19 +889,23 @@ const {
 // ?view=aws&service=lambda&profile=<id> opens that view; Back/Forward move
 // between providers and AWS services (composables/useViewUrl.js).
 const AWS_TABS = new Set(['overview', ...Object.values(AWS_SIDEBAR).flat().map(item => item.id)])
-// Search and filters of the AWS tab (from AwsView), and the ones a link or Back brings to it.
-const awsFilters = ref({})
-const linkedAwsFilters = ref(null)
-let linkedFiltersSeq = 0
+// Search and filters per AWS tab. They live here, not in AwsView, so leaving AWS
+// for another provider and coming back keeps them; a link or Back sets them.
+const awsFiltersByTab = reactive({})
+const awsFiltersSeq = ref(0) // bumped when a link/Back brings filters: AwsView applies them again
+function setLinkedAwsFilters(service, filters) {
+  awsFiltersByTab[service] = { ...(filters || {}) }
+  awsFiltersSeq.value += 1
+}
 const viewUrl = useViewUrl({
   state: () => ({
     view: activeProvider.value,
     service: activeProvider.value === 'aws' ? awsTab.value : '',
     profile: activeProvider.value === 'aws' ? awsProfileId.value : '',
-    filters: activeProvider.value === 'aws' ? awsFilters.value : {},
+    filters: activeProvider.value === 'aws' ? { ...(awsFiltersByTab[awsTab.value] || {}) } : {},
   }),
   navigation: [activeProvider, awsTab],
-  context: [awsProfileId, activeApplicationContext, awsFilters],
+  context: [awsProfileId, activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {})],
   onPop: applyViewFromHistory,
 })
 // A profile named by a link is only selected once it is known to exist here.
@@ -911,7 +915,7 @@ function applyLinkedView(linked) {
   activeProvider.value = linked.view
   if (linked.view === 'aws' && AWS_TABS.has(linked.service)) {
     awsTab.value = linked.service
-    linkedAwsFilters.value = { service: linked.service, filters: linked.filters, seq: ++linkedFiltersSeq }
+    setLinkedAwsFilters(linked.service, linked.filters)
   }
   if (linked.view === 'aws' && linked.profile && linked.profile !== awsProfileId.value) linkedAwsProfile = linked.profile
 }
@@ -932,7 +936,7 @@ async function applyViewFromHistory(linked) {
   if (linked.view !== 'aws') return
   if (AWS_TABS.has(linked.service)) {
     awsTab.value = linked.service
-    linkedAwsFilters.value = { service: linked.service, filters: linked.filters, seq: ++linkedFiltersSeq }
+    setLinkedAwsFilters(linked.service, linked.filters)
   }
   if (linked.profile && linked.profile !== awsProfileId.value) {
     if (!awsProfileExists(linked.profile)) {

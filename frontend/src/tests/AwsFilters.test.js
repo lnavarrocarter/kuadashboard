@@ -59,11 +59,16 @@ describe('AWS filters next to the search (A11)', () => {
     expect(w.find('[data-test="row-count"]').text()).toBe('4 result(s)')
   })
 
-  it('applies search and filters from a link, and reports changes for the URL (R04)', async () => {
+  it('applies saved search and filters, also after remounting, and reports changes (R04)', async () => {
     const store = useAwsStore()
     store.activeProfileId = 'prof-1'
+    // App keeps them per tab, so leaving AWS (AwsView unmounts) and coming back restores them.
+    const saved = { lambda: { q: 'c', runtime: 'python3.12' } }
+    const first = mount(AwsView, { props: { activeService: 'lambda', savedFilters: saved, savedFiltersSeq: 1 }, global: { stubs: { Teleport: true, AwsOverview } } })
+    await flushPromises()
+    first.unmount()
     const w = mount(AwsView, {
-      props: { activeService: 'lambda', linkedFilters: { service: 'lambda', filters: { q: 'c', runtime: 'python3.12' }, seq: 1 } },
+      props: { activeService: 'lambda', savedFilters: saved, savedFiltersSeq: 1 },
       global: { stubs: { Teleport: true, AwsOverview } },
     })
     await flushPromises()
@@ -74,7 +79,7 @@ describe('AWS filters next to the search (A11)', () => {
     expect(names(w)).toEqual(['c'])
 
     await w.find('[data-test="facet-runtime"]').setValue('')
-    expect(w.emitted('filters-change').at(-1)).toEqual([{ q: 'c' }])
+    expect(w.emitted('filters-change').at(-1)).toEqual(['lambda', { q: 'c' }])
     // A later profile change clears the filters, the first profile of the session does not.
     store.activeProfileId = 'prof-2'
     await flushPromises()
