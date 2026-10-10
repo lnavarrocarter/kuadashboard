@@ -54,6 +54,20 @@ describe('KUApp summary (#171)', () => {
     wrapper.unmount()
   })
 
+  it('shows coverage as pending, not zero, while the registry loads (H8)', async () => {
+    respond({ overview: { health: { status: 'unknown', signals: [] }, latestRun: null }, topology: { resources: [{ id: 'api', type: 'lambda', name: 'api' }], analysis: null } })
+    const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws', registryLoading: true, registry: { resources: [], relationships: [] } } })
+    await flushPromises()
+    const coverage = card(wrapper, 'coverage')
+    expect(coverage.find('.kuapp-card-value').text()).toBe('…')
+    expect(coverage.attributes('aria-busy')).toBe('true')
+    expect(coverage.classes()).toContain('unknown')
+    expect(coverage.attributes('aria-describedby')).toBe('kuapp-coverage-hint')
+    await wrapper.setProps({ registryLoading: false, registry: { relationships: [], resources: [{ id: 1, signals: { state: 'current' } }] } })
+    expect(coverage.find('.kuapp-card-value').text()).toMatch(/^1\s*of 1 inventoried$/)
+    wrapper.unmount()
+  })
+
   it('never reads an application without data as healthy', async () => {
     respond({ overview: { health: { status: 'unknown', signals: [] }, latestRun: null }, topology: { resources: [], analysis: null } })
     const wrapper = mount(KUAppSummary, { props: { application: legacy, provider: 'aws' } })
