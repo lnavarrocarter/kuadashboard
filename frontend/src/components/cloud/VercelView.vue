@@ -51,8 +51,16 @@
               <span class="text-dim">{{ t('vercel.overview.production') }}</span>
               <strong :class="overview.production.failed ? 'state-error' : ''">{{ overview.production.healthy }}/{{ overview.projects.total }}</strong>
               <small>{{ t('vercel.overview.productionDetail', { failed: overview.production.failed, building: overview.production.building, none: overview.production.none }) }}</small>
+              <small v-if="overview.production.failedInactive" class="text-dim" data-test="vercel-failed-inactive">{{ t('vercel.overview.failedInactive', { n: overview.production.failedInactive }) }}</small>
             </div>
-            <div class="vercel-ov-metric">
+            <div v-if="activity" class="vercel-ov-metric" data-test="vercel-failure-rate">
+              <span class="text-dim">{{ t('vercel.overview.failureRate30d') }}</span>
+              <strong :class="activity['30d'].failureRate >= 50 ? 'state-error' : ''">{{ activity['30d'].failureRate == null ? '—' : `${activity['30d'].failureRate}%` }}</strong>
+              <small>{{ t('vercel.overview.failureRate30dDetail', { failed: activity['30d'].failed, total: activity['30d'].finished }) }}</small>
+              <small class="text-dim">{{ t('vercel.overview.failureWindows', { day: activity['24h'].failed, dayTotal: activity['24h'].finished, week: activity['7d'].failed, weekTotal: activity['7d'].finished }) }}</small>
+            </div>
+            <!-- Scans cached before the activity windows existed -->
+            <div v-else class="vercel-ov-metric">
               <span class="text-dim">{{ t('vercel.overview.failureRate') }}</span>
               <strong :class="overview.deployments.failureRate >= 50 ? 'state-error' : ''">{{ overview.deployments.failureRate == null ? '—' : `${overview.deployments.failureRate}%` }}</strong>
               <small>{{ t('vercel.overview.failureRateDetail', { failed: overview.deployments.error, total: overview.deployments.ready + overview.deployments.error }) }}</small>
@@ -77,7 +85,13 @@
           <section class="vercel-ov-section">
             <div class="vercel-ov-section-title">
               <span>{{ t('vercel.overview.projectsTitle') }}</span>
-              <span class="text-dim">{{ envSummary }}</span>
+              <span class="vercel-ov-section-tools">
+                <label v-if="inactiveCount" class="vercel-ov-toggle">
+                  <input v-model="hideInactive" type="checkbox" data-test="vercel-hide-inactive" />
+                  {{ t('vercel.overview.hideInactive', { n: inactiveCount }) }}
+                </label>
+                <span class="text-dim">{{ envSummary }}</span>
+              </span>
             </div>
             <div v-if="!overview.rows.length" class="empty-row">{{ t('vercel.noProjects') }}</div>
             <table v-else class="cloud-table">
@@ -91,11 +105,12 @@
                 <th>{{ t('vercel.overview.domains') }}</th>
               </tr></thead>
               <tbody>
-                <tr v-for="row in overview.rows" :key="row.id" :class="{ 'row-selected': vercelStore.selectedProject?.id === row.id }">
+                <tr v-for="row in overviewRows" :key="row.id" :class="{ 'row-selected': vercelStore.selectedProject?.id === row.id }">
                   <td>
                     <a href="#" class="fw-medium" :title="t('vercel.overview.selectProject')" @click.prevent="vercelStore.selectProjectById(row.id)">{{ row.name }}</a>
                     <span v-if="row.paused" class="badge-warn vercel-ov-tag">{{ t('vercel.overview.paused') }}</span>
                     <span v-if="!row.git" class="badge-preview vercel-ov-tag">{{ t('vercel.overview.noGit') }}</span>
+                    <span v-if="row.inactive" class="badge-preview vercel-ov-tag" :title="t('vercel.overview.inactiveHint')" data-test="vercel-inactive">{{ t('vercel.overview.inactive') }}</span>
                   </td>
                   <td>{{ row.framework || '—' }}</td>
                   <td class="mono-xs">{{ row.nodeVersion || '—' }}</td>
@@ -746,6 +761,10 @@ const confirmAction               = ref(null)
 const actionPending               = ref(false)
 const apmViewRef                  = ref(null)
 const overview = computed(() => vercelStore.overview)
+const activity = computed(() => overview.value?.deployments?.windows || null)
+const hideInactive = ref(false)
+const inactiveCount = computed(() => (overview.value?.rows || []).filter(row => row.inactive).length)
+const overviewRows = computed(() => (overview.value?.rows || []).filter(row => !hideInactive.value || !row.inactive))
 // "12 env vars · encrypted 8 · plain 2 …" (counted by type: values are never read)
 const envSummary = computed(() => {
   const env = overview.value?.env
@@ -1164,6 +1183,8 @@ function formatBytes(value) {
 .vercel-ov-section-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .vercel-ov-section-title .text-dim { font-size: 11px; font-weight: 400; }
 .vercel-ov-tag { margin-left: 6px; font-size: 10px; }
+.vercel-ov-section-tools { display: inline-flex; align-items: center; gap: 12px; font-weight: 400; }
+.vercel-ov-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
 @media (max-width: 720px) {
   .vercel-ov-metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .vercel-ov-section { overflow-x: auto; }

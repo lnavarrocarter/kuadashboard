@@ -414,6 +414,13 @@ export const useGcpStore = defineStore('gcp', () => {
   async function fetchVpcSubnets(network) {
     return apiFetch(`/api/cloud/gcp/vpc/networks/${encodeURIComponent(network)}/subnets`, { headers: headers() })
   }
+  // { items, partial } — firewall rules (highest priority first) and routes of a network.
+  async function fetchVpcFirewalls(network) {
+    return apiFetch(`/api/cloud/gcp/vpc/networks/${encodeURIComponent(network)}/firewalls`, { headers: headers() })
+  }
+  async function fetchVpcRoutes(network) {
+    return apiFetch(`/api/cloud/gcp/vpc/networks/${encodeURIComponent(network)}/routes`, { headers: headers() })
+  }
   async function runCloudRunJob(location, job) {
     return apiFetch(`/api/cloud/gcp/cloudrun-jobs/${encodeURIComponent(location)}/${encodeURIComponent(job)}/run`, { method: 'POST', headers: headers() })
   }
@@ -573,6 +580,8 @@ export const useGcpStore = defineStore('gcp', () => {
     fetchAlertPolicies, fetchKmsKeyrings, queryLogs,
     runCloudRunJob, fetchJobExecutions,
     fetchVpcSubnets,
+    fetchVpcFirewalls,
+    fetchVpcRoutes,
     fetchUptimeChecks,
     fetchKmsKeys,
     // Fase 1: Logs por recurso
