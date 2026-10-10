@@ -39,6 +39,7 @@ const { classifyGcpError, httpStatusFor } = require('../lib/gcpErrors');
 const { mapRepository, listArtifactRepositories } = require('../lib/gcpArtifact');
 const { summarizeOverview } = require('../lib/gcpOverview');
 const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
+const { listAllPages } = require('../lib/gcpPaging');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -552,7 +553,8 @@ async function gcpOverview(req, res) {
       if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId }));
     }
 
-    const restList = (url, key) => gcpFetch(url, authCtx).then(data => data[key] || []);
+    // Every page is read (capped); a capped list is reported as partial.
+    const restList = (url, key, opts) => listAllPages(gcpFetch, authCtx, url, key, opts);
     const collectors = [
       { id: 'cloudrun', label: 'Cloud Run', tab: 'cloudrun', load: () => listCloudRunServices({ auth, projectId }) },
       { id: 'gke', label: 'GKE', tab: 'gke', load: async () => {
@@ -562,7 +564,7 @@ async function gcpOverview(req, res) {
       } },
       { id: 'vms', label: 'Compute VMs', tab: 'vms', load: () => listVms({ auth, projectId }) },
       { id: 'sql', label: 'Cloud SQL', tab: 'sql', load: () => listSqlInstances(authCtx) },
-      { id: 'storage', label: 'Storage', tab: 'storage', load: () => restList(`https://storage.googleapis.com/storage/v1/b?project=${encodeURIComponent(projectId)}&maxResults=200`, 'items') },
+      { id: 'storage', label: 'Storage', tab: 'storage', load: () => restList(`https://storage.googleapis.com/storage/v1/b?project=${encodeURIComponent(projectId)}&maxResults=500`, 'items') },
       { id: 'functions', label: 'Functions', tab: 'functions', load: () => restList(`https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions') },
       { id: 'pubsub', label: 'Pub/Sub', tab: 'pubsub', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/topics`, 'topics') },
       { id: 'secrets', label: 'Secret Manager', tab: 'secrets', load: () => restList(`https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`, 'secrets') },
@@ -575,7 +577,8 @@ async function gcpOverview(req, res) {
       { id: 'memorystore', label: 'Memorystore', tab: 'memorystore', load: () => restList(`https://redis.googleapis.com/v1/projects/${projectId}/locations/-/instances`, 'instances') },
       { id: 'tasks', label: 'Cloud Tasks', tab: 'tasks', load: () => restList(`https://cloudtasks.googleapis.com/v2/projects/${projectId}/locations/-/queues`, 'queues') },
       { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', load: () => restList(`https://cloudscheduler.googleapis.com/v1/projects/${projectId}/locations/-/jobs`, 'jobs') },
-      { id: 'build', label: 'Cloud Build', tab: 'build', load: () => restList(`https://cloudbuild.googleapis.com/v1/projects/${projectId}/builds?pageSize=100`, 'builds') },
+      // Builds are execution history, not deployed resources: only the latest page is read.
+      { id: 'build', label: 'Cloud Build', tab: 'build', kind: 'execution', load: () => restList(`https://cloudbuild.googleapis.com/v1/projects/${projectId}/builds?pageSize=100`, 'builds', { maxPages: 1 }) },
       { id: 'iam', label: 'IAM', tab: 'iam', load: () => restList(`https://iam.googleapis.com/v1/projects/${projectId}/serviceAccounts`, 'accounts') },
       { id: 'cloudrunJobs', label: 'Cloud Run Jobs', tab: 'cloudrunJobs', load: () => restList(`https://run.googleapis.com/v2/projects/${projectId}/locations/-/jobs`, 'jobs') },
       { id: 'pubsubSubs', label: 'Pub/Sub Subs', tab: 'pubsubSubs', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions`, 'subscriptions') },
@@ -583,20 +586,23 @@ async function gcpOverview(req, res) {
       { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => createKmsReader(gcpFetch, authCtx).keyRings() },
     ];
     const settled = await Promise.allSettled(collectors.map(collector => collector.load()));
+    // Collectors return an array or { items, partial } (paged REST lists).
+    const rowsOf = value => Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
     const collectedRows = new Map(collectors.map((collector, index) => {
       const result = settled[index];
-      return [collector.id, result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []];
+      return [collector.id, result.status === 'fulfilled' ? rowsOf(result.value) : []];
     }));
     const services = collectors.map((collector, index) => {
       const result = settled[index];
       if (result.status === 'rejected') {
         return {
           id: collector.id, label: collector.label, tab: collector.tab, group: overviewGroup(collector.id),
+          kind: collector.kind || 'resource', partial: false,
           status: 'unavailable', health: 'unavailable', count: 0, active: 0,
           inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [], error: overviewError(result.reason),
         };
       }
-      const items = Array.isArray(result.value) ? result.value : [];
+      const items = rowsOf(result.value);
         const signals = items.map(item => {
           const signal = overviewSignal(collector.id, item);
           return signal ? { ...signal, name: overviewItemName(item) } : null;
@@ -606,6 +612,7 @@ async function gcpOverview(req, res) {
         const status = items.length ? 'available' : 'empty';
       return {
           id: collector.id, label: collector.label, tab: collector.tab, group: overviewGroup(collector.id), status,
+          kind: collector.kind || 'resource', partial: !!result.value?.partial,
           health: overviewHealth(status, signals),
         count: items.length,
         active: items.filter(item => overviewResourceState(collector.id, item)).length,
@@ -1033,11 +1040,8 @@ router.get('/storage/buckets', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=200`,
-      authCtx
-    );
-    res.json((data.items || []).map(mapBucket));
+    const { items } = await listAllPages(gcpFetch, authCtx, `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=500`, 'items');
+    res.json(items.map(mapBucket));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1050,11 +1054,8 @@ router.get('/functions', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`,
-      authCtx
-    );
-    res.json((data.functions || []).map(mapFunction));
+    const { items } = await listAllPages(gcpFetch, authCtx, `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions');
+    res.json(items.map(mapFunction));
   } catch (err) { handleErr(res, err); }
 });
 

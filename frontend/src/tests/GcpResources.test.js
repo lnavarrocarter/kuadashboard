@@ -456,7 +456,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
       projectId: 'demo-project',
       region: 'us-central1',
       identity: { account: 'operator@example.com' },
-      summary: { total: 4, active: 2, empty: 0, unavailable: 1, critical: 1, warning: 1, attention: 3, health: 'critical', services: 4, availableServices: 3 },
+      summary: { total: 4, active: 2, empty: 0, unavailable: 1, critical: 1, warning: 1, attention: 3, health: 'critical', services: 5, availableServices: 4, executions: { count: 100, services: ['build'], partial: true } },
       costs: {
         status: 'partial', source: 'resource-baseline-estimate', estimated: true, currency: 'USD',
         monthlyEstimate: 123.45, modeledResources: 3, unknownResources: 1,
@@ -474,6 +474,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
         { id: 'sql', label: 'Cloud SQL', tab: 'sql', group: 'data', status: 'unavailable', health: 'unavailable', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [], error: { message: 'Permission denied' } },
         { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', group: 'integration', status: 'available', health: 'warning', count: 2, active: 1, inactive: 1, issueCount: 1, critical: 0, warning: 1, signals: [{ level: 'warning', code: 'paused', name: 'nightly-job' }] },
         { id: 'storage', label: 'Storage', tab: 'storage', group: 'data', status: 'available', health: 'healthy', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [] },
+        { id: 'build', label: 'Cloud Build', tab: 'build', group: 'platform', kind: 'execution', partial: true, status: 'available', health: 'healthy', count: 100, active: 97, inactive: 3, issueCount: 0, critical: 0, warning: 0, signals: [] },
       ],
     }
     store.overviewHistory = [
@@ -485,7 +486,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     // G05: resource health, coverage and read errors are separate answers
     expect(w.find('.gcp-overview-health-banner').text()).toContain('Observed resources')
     expect(w.find('.gcp-overview-health-banner').text()).toContain('1 critical')
-    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 3/4 services evaluated')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 4/5 services evaluated')
     expect(w.find('.gcp-overview-health-detail').text()).toContain('1 not evaluated')
     expect(w.find('.gcp-overview-groups').text()).toContain('Compute')
     expect(w.find('.gcp-overview-attention-list').text()).toContain('nightly-job')
@@ -493,12 +494,16 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.find('.gcp-overview-table').text()).toContain('Not evaluated')
     expect(w.find('.gcp-overview-trend-summary').text()).toContain('+1')
     expect(w.find('[data-test="metric-incidents"] strong').text()).toBe('2')
+    // G09: build history is not counted as deployed resources
+    expect(w.find('[data-test="metric-resources"]').text()).toContain('100+ build executions not counted')
+    expect(w.find('.gcp-overview-table').text()).toContain('history')
+    expect(w.find('.gcp-overview-groups').text()).not.toContain('100 resources')
     const pending = w.find('[data-test="pending-reads"]')
     expect(pending.text()).toContain('Cloud SQL')
     expect(pending.text()).toContain('Read error')
     // Declaring the service as not used removes it from coverage without enabling it
     await pending.find('[data-test="toggle-unused"]').trigger('click')
-    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 3/3 services evaluated')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 4/4 services evaluated')
     expect(w.find('.gcp-overview-health-detail').text()).toContain('1 declared not used')
     await w.find('[data-test="toggle-unused"]').trigger('click')
     const costs = w.find('[data-test="overview-costs"]')

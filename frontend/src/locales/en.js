@@ -6604,4 +6604,8 @@ export default {
   "gcpv.audit.metricLastSample": "Last sample {at}",
   "gcpv.audit.metricPartial": "partial result",
   "gcpv.audit.metricsSource": "Source: Cloud Monitoring · last {hours} h · 1-minute alignment",
+  "gcpv.audit.deployedResources": "Deployed resources",
+  "gcpv.audit.executionsApart": "{n}{partial} build executions not counted",
+  "gcpv.audit.partialCount": "Only the first pages were read; there are more.",
+  "gcpv.audit.history": "history",
 }

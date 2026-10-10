@@ -82,7 +82,7 @@
           </section>
 
           <div class="gcp-overview-metrics">
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('apm.resources') }}</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric" data-test="metric-resources"><span class="text-dim">{{ t('gcpv.audit.deployedResources') }}</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}<template v-if="gcpStore.overview?.summary?.executions?.count"> · {{ t('gcpv.audit.executionsApart', { n: gcpStore.overview.summary.executions.count, partial: gcpStore.overview.summary.executions.partial ? '+' : '' }) }}</template></small></div>
             <div class="gcp-overview-metric" data-test="metric-incidents"><span class="text-dim">{{ t('gcpv.audit.incidents') }}</span><strong :class="overviewIncidents ? 'status-warn' : 'status-ok'">{{ overviewIncidents }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
             <div class="gcp-overview-metric" data-test="metric-not-evaluated"><span class="text-dim">{{ t('gcpv.audit.notEvaluated') }}</span><strong :class="overviewCoverageInfo.notEvaluated ? 'status-warn' : 'status-ok'">{{ overviewCoverageInfo.notEvaluated }}</strong><small>{{ overviewCauseSummary || t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
             <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.audit.evaluatedOf', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}</small></div>
@@ -203,8 +203,9 @@
                       </td>
                       <td class="text-dim">{{ overviewGroupLabel(service.group) }}</td>
                       <td><span :class="['gcp-overview-health-pill', overviewHealthTone(overviewServiceHealth(service))]">{{ overviewHealthLabelFor(overviewServiceHealth(service)) }}</span></td>
-                      <td class="font-mono">{{ service.count ?? 0 }}</td>
-                      <td class="font-mono">{{ service.active ?? 0 }}</td>
+                      <td class="font-mono" :title="service.partial ? t('gcpv.audit.partialCount') : ''">{{ service.count ?? 0 }}<span v-if="service.partial">+</span>
+                        <span v-if="service.kind === 'execution'" class="gcp-chip" style="margin-left:4px">{{ t('gcpv.audit.history') }}</span></td>
+                      <td class="font-mono">{{ service.kind === 'execution' ? '—' : (service.active ?? 0) }}</td>
                       <td class="font-mono">{{ service.inactive ?? Math.max(0, (service.count ?? 0) - (service.active ?? 0)) }}</td>
                       <td>
                         <span v-if="service.issueCount" class="status-warn">{{ service.issueCount }}</span>
@@ -2331,9 +2332,10 @@ const overviewCauseSummary = computed(() => {
 })
 const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
   const services = overviewServices.value.filter(service => (service.group || 'other') === group.id)
-  const resources = services.reduce((sum, service) => sum + Number(service.count || 0), 0)
-  const active = services.reduce((sum, service) => sum + Number(service.active || 0), 0)
-  const inactive = services.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
+  const deployed = services.filter(service => service.kind !== 'execution')
+  const resources = deployed.reduce((sum, service) => sum + Number(service.count || 0), 0)
+  const active = deployed.reduce((sum, service) => sum + Number(service.active || 0), 0)
+  const inactive = deployed.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
   const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0), 0)
   const notEvaluated = services.filter(service => service.status === 'unavailable' && !unusedServices.value.includes(service.id)).length
   const healthValues = services.filter(service => service.status !== 'unavailable').map(overviewServiceHealth)
