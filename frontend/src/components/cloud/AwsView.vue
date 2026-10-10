@@ -47,10 +47,20 @@
           :aria-label="t('awsv.searchResourcesLabel')"
           :placeholder="t('awsv.searchResourcesPlaceholder')"
         />
-        <span class="text-dim" style="font-size:12px">
+        <select
+          v-for="facet in activeFacets" :key="`${activeTab}-${facet.id}`"
+          v-model="facetState[activeTab][facet.id]" class="ctrl-select aws-facet" :aria-label="facet.label"
+          :data-test="`facet-${facet.id}`"
+        >
+          <option value="">{{ t('awsFilter.any', { label: facet.label }) }}</option>
+          <option v-for="option in facet.options" :key="option.value" :value="option.value">{{ option.label }} ({{ option.count }})</option>
+        </select>
+        <span class="text-dim" style="font-size:12px" data-test="row-count">
           <template v-if="awsStore.loading">{{ t('state.loading') }}</template>
+          <template v-else-if="hasFilters(activeTab) && activeRowCount !== tabCount(activeTab)">{{ t('awsFilter.resultsOf', { n: activeRowCount, total: tabCount(activeTab) }) }}</template>
           <template v-else>{{ t('awsv.results', { n: activeRowCount }) }}</template>
         </span>
+        <button v-if="hasFilters(activeTab)" class="btn sm" data-test="clear-filters" @click="clearFilters(activeTab)">{{ t('awsFilter.clear') }}</button>
         <button class="btn sm" @click="reloadActiveTab({ force: true })" :disabled="tabLoading" :title="t('awsActivity.refreshHint')"><i data-lucide="refresh-cw"></i></button>
       </div>
 
@@ -81,7 +91,7 @@
 
       <div v-show="activeTab === 'ec2'" class="tab-panel">
         <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
-        <div v-else-if="!filteredEc2.length" class="empty-row">{{ search.ec2 ? t('awsv.lit.noMatches') : t('awsv.lit.noEc2') }}</div>
+        <div v-else-if="!ec2TableRows.length" class="empty-row" data-test="empty-ec2">{{ hasFilters('ec2') ? t('awsv.lit.noMatches') : t('awsv.lit.noEc2') }} <button v-if="hasFilters('ec2')" class="btn sm" @click="clearFilters('ec2')">{{ t('awsFilter.clear') }}</button></div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
@@ -93,7 +103,7 @@
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
-            <tr v-for="i in sortRows(filteredEc2)" :key="i.id">
+            <tr v-for="i in sortRows(ec2TableRows)" :key="i.id">
               <td>
                 <div>{{ i.name }}</div>
                 <div class="text-dim mono-xs">{{ i.id }}</div>
@@ -136,7 +146,7 @@
 
       <div v-show="activeTab === 'ecs'" class="tab-panel">
         <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
-        <div v-else-if="!filteredEcs.length" class="empty-row">{{ search.ecs ? t('awsv.lit.noMatches') : t('awsv.lit.noEcs') }}</div>
+        <div v-else-if="!ecsTableRows.length" class="empty-row" data-test="empty-ecs">{{ hasFilters('ecs') ? t('awsv.lit.noMatches') : t('awsv.lit.noEcs') }} <button v-if="hasFilters('ecs')" class="btn sm" @click="clearFilters('ecs')">{{ t('awsFilter.clear') }}</button></div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('pf.service') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
@@ -148,7 +158,7 @@
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
-            <tr v-for="svc in sortRows(filteredEcs)" :key="`${svc.cluster}/${svc.name}`">
+            <tr v-for="svc in sortRows(ecsTableRows)" :key="`${svc.cluster}/${svc.name}`">
               <td>
                 <div>{{ svc.name }}</div>
                 <div v-if="svc.taskDef" class="text-dim mono-xs">{{ svc.taskDef }}</div>
@@ -232,7 +242,7 @@
           <button v-if="lambdaActivityNotice.access" class="btn sm" @click="activityAccess = lambdaActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
         </div>
         <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
-        <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? t('awsv.lit.noMatches') : t('awsv.lit.noLambda') }}</div>
+        <div v-else-if="!lambdaTableRows.length" class="empty-row" data-test="empty-lambda">{{ hasFilters('lambda') ? t('awsv.lit.noMatches') : t('awsv.lit.noLambda') }} <button v-if="hasFilters('lambda')" class="btn sm" @click="clearFilters('lambda')">{{ t('awsFilter.clear') }}</button></div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
@@ -322,7 +332,7 @@
           <button class="btn sm" style="background:rgba(80,200,120,.18);border-color:#50c878;color:#50c878" @click="openCreateS3Modal">{{ t('awsv.createBucket') }}</button>
         </div>
         <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
-        <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? t('awsv.lit.noMatches') : t('awsv.lit.noS3') }}</div>
+        <div v-else-if="!s3TableRows.length" class="empty-row" data-test="empty-s3">{{ hasFilters('s3') ? t('awsv.lit.noMatches') : t('awsv.lit.noS3') }} <button v-if="hasFilters('s3')" class="btn sm" @click="clearFilters('s3')">{{ t('awsFilter.clear') }}</button></div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">Bucket <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
@@ -331,7 +341,7 @@
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
-            <tr v-for="b in sortRows(filteredS3)" :key="b.name">
+            <tr v-for="b in sortRows(s3TableRows)" :key="b.name">
               <td class="mono-sm">{{ b.name }}</td>
               <td class="text-dim">{{ b.region }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(b.creationDate) }}</td>
@@ -475,7 +485,7 @@
           <button v-if="stepFnActivityNotice.access" class="btn sm" @click="activityAccess = stepFnActivityNotice">{{ t('awsAccess.requestAccess') }}</button>
         </div>
         <div v-if="awsStore.loading" class="empty-row">{{ t('state.loading') }}</div>
-        <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? t('awsv.lit.noMatches') : t('awsv.lit.noStepFunctions') }}</div>
+        <div v-else-if="!stepFnTableRows.length" class="empty-row" data-test="empty-stepfn">{{ hasFilters('stepfn') ? t('awsv.lit.noMatches') : t('awsv.lit.noStepFunctions') }} <button v-if="hasFilters('stepfn')" class="btn sm" @click="clearFilters('stepfn')">{{ t('awsFilter.clear') }}</button></div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
@@ -4056,9 +4066,69 @@ const stepFnRows = computed(() => {
   })
 })
 
-// Rows shown in the tables: only the affected ones while an Overview incident is focused.
-const lambdaTableRows = computed(() => (incidentFocus.value === 'lambda' ? lambdaRows.value.filter(fn => fn.errors24h > 0) : lambdaRows.value))
-const stepFnTableRows = computed(() => (incidentFocus.value === 'stepfn' ? stepFnRows.value.filter(sm => sm.failed24h > 0) : stepFnRows.value))
+// ─── Filters (facets) next to the search ─────────────────────────────────────
+// Per service, values read from the rows themselves (with counts). Rows whose
+// value is unknown (activity not loaded yet) never match a selected filter.
+function activityBucket(total, failures) {
+  if (total == null) return null
+  if (failures > 0) return 'errors'
+  return total > 0 ? 'active' : 'idle'
+}
+const ACTIVITY_ORDER = ['errors', 'active', 'idle']
+const FACETS = {
+  ec2: [{ id: 'state', label: () => t('th.state'), value: r => r.state || null }],
+  ecs: [{ id: 'status', label: () => t('awsFilter.serviceState'), value: r => (r.desired > 0 ? 'running' : 'stopped'), option: v => t(`awsFilter.ecs_${v}`) }],
+  lambda: [
+    { id: 'runtime', label: () => 'Runtime', value: r => r.runtime || null },
+    { id: 'activity', label: () => t('awsFilter.activity'), value: r => activityBucket(r.invocations24h, r.errors24h), option: v => t(`awsFilter.activity_${v}`), order: ACTIVITY_ORDER },
+  ],
+  stepfn: [
+    { id: 'type', label: () => t('th.type'), value: r => r.type || null },
+    { id: 'activity', label: () => t('awsFilter.activity'), value: r => activityBucket(r.started24h, r.failed24h), option: v => t(`awsFilter.activity_${v}`), order: ACTIVITY_ORDER },
+  ],
+  s3: [{ id: 'region', label: () => t('th.region'), value: r => r.region || null }],
+}
+const facetState = reactive(Object.fromEntries(Object.entries(FACETS).map(([tab, facets]) => [tab, Object.fromEntries(facets.map(f => [f.id, '']))])))
+
+function applyFacets(tab, rows) {
+  const selected = (FACETS[tab] || []).filter(f => facetState[tab][f.id])
+  if (!selected.length) return rows
+  return rows.filter(row => selected.every(f => f.value(row) === facetState[tab][f.id]))
+}
+function hasFilters(tab) {
+  return !!search[tab] || Object.values(facetState[tab] || {}).some(Boolean) || incidentFocus.value === tab
+}
+function clearFilters(tab) {
+  search[tab] = ''
+  for (const id of Object.keys(facetState[tab] || {})) facetState[tab][id] = ''
+  if (incidentFocus.value === tab) incidentFocus.value = null
+}
+watch(() => awsStore.activeProfileId, () => {
+  for (const tab of Object.keys(facetState)) for (const id of Object.keys(facetState[tab])) facetState[tab][id] = ''
+})
+
+// Rows shown in the tables: search, then the Overview incident focus, then the filters.
+const lambdaBaseRows = computed(() => (incidentFocus.value === 'lambda' ? lambdaRows.value.filter(fn => fn.errors24h > 0) : lambdaRows.value))
+const stepFnBaseRows = computed(() => (incidentFocus.value === 'stepfn' ? stepFnRows.value.filter(sm => sm.failed24h > 0) : stepFnRows.value))
+const facetBaseRows = { ec2: filteredEc2, ecs: filteredEcs, s3: filteredS3, lambda: lambdaBaseRows, stepfn: stepFnBaseRows }
+const ec2TableRows = computed(() => applyFacets('ec2', filteredEc2.value))
+const ecsTableRows = computed(() => applyFacets('ecs', filteredEcs.value))
+const s3TableRows = computed(() => applyFacets('s3', filteredS3.value))
+const lambdaTableRows = computed(() => applyFacets('lambda', lambdaBaseRows.value))
+const stepFnTableRows = computed(() => applyFacets('stepfn', stepFnBaseRows.value))
+
+// Options of the active tab's filters, counted on the rows the filters start from.
+const activeFacets = computed(() => (FACETS[activeTab.value] || []).map(facet => {
+  const counts = new Map()
+  for (const row of facetBaseRows[activeTab.value]?.value || []) {
+    const value = facet.value(row)
+    if (value != null) counts.set(value, (counts.get(value) || 0) + 1)
+  }
+  const options = [...counts.entries()]
+    .sort((a, b) => (facet.order ? facet.order.indexOf(a[0]) - facet.order.indexOf(b[0]) : String(a[0]).localeCompare(String(b[0]))))
+    .map(([value, count]) => ({ value, count, label: facet.option ? facet.option(value) : value }))
+  return { id: facet.id, label: facet.label(), options }
+}))
 const ELB_ATTENTION = ['warning', 'critical']
 const incidentCount = computed(() => ({
   lambda: lambdaActivityLoading.value ? '…' : lambdaTableRows.value.length,
@@ -4179,9 +4249,9 @@ const dashboardDetail     = ref(null)
 const dashboardView       = ref(null)
 
 const tabFilteredMap = {
-  ec2: filteredEc2, ecs: filteredEcs, eks: filteredEks,
-  lambda: filteredLambda, apigw: filteredApigw, s3: filteredS3,
-  ecr: filteredEcr, vpc: filteredVpc, eventbridge: filteredEventBridge, stepfn: filteredStepFn,
+  ec2: ec2TableRows, ecs: ecsTableRows, eks: filteredEks,
+  lambda: lambdaTableRows, apigw: filteredApigw, s3: s3TableRows,
+  ecr: filteredEcr, vpc: filteredVpc, eventbridge: filteredEventBridge, stepfn: stepFnTableRows,
   dynamodb: filteredDynamo, rds: filteredRds, glue: filteredGlue,
   athena: filteredAthena, datapipeline: filteredPipelines,
   bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,

@@ -852,6 +852,9 @@ body.kube-resizing {
   font-size: 12px;
 }
 
+/* Service filters next to the search (A11). */
+.aws-facet { font-size: 12px; max-width: 220px; }
+
 /* Profile / account / region band shown above every AWS service tab. */
 .aws-context {
   display: flex;
