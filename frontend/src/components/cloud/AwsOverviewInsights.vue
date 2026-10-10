@@ -81,6 +81,7 @@
         <div class="aoi-section-head">
           <h3>{{ t('awsInsights.activity') }}</h3>
           <span class="aoi-dim">{{ t('awsInsights.activityHint') }}</span>
+          <span v-if="insights.generatedAt" class="aoi-dim" data-test="activity-freshness">· {{ t('awsFresh.activityWindow', { ago: agoLabel(Date.parse(insights.generatedAt)) }) }}</span>
         </div>
         <div v-if="usage.cloudwatch" class="aoi-notice">
           <i data-lucide="lock"></i><span>{{ t('awsInsights.cloudwatchUnavailable', { reason: errorText(usage.cloudwatch.error) }) }}</span>

@@ -256,6 +256,7 @@
           {{ t('advisor.unavailable', { list: report.unavailable.map(u => u.action || u.source).join(', ') }) }}
         </p>
         <p class="adv-foot adv-dim">
+          <template v-if="analysedAt">{{ t('advisor.analysedAt', { time: analysedAt }) }} · </template>
           {{ t(lens === 'product' ? 'advisor.footProduct' : 'advisor.foot') }}
           <template v-if="report.scope?.excludes"> {{ t('advisor.excludes', { pattern: report.scope.excludes }) }}</template>
         </p>
@@ -307,6 +308,7 @@ const collapsed = ref(readCollapsed())
 const categories = computed(() => props.report?.categories || [])
 // Most severe first; only the first few until "Show all", so the panel does not
 // push the rest of the page down (the Overview keeps incidents and inventory in reach).
+const analysedAt = computed(() => whenTime(props.report?.generatedAt))
 const SEVERITIES = ['high', 'medium', 'low']
 const INITIAL_FINDINGS = 3
 const showAllFindings = ref(false)

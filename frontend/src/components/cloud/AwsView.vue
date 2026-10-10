@@ -60,6 +60,7 @@
           <template v-else-if="hasFilters(activeTab) && activeRowCount !== tabCount(activeTab)">{{ t('awsFilter.resultsOf', { n: activeRowCount, total: tabCount(activeTab) }) }}</template>
           <template v-else>{{ t('awsv.results', { n: activeRowCount }) }}</template>
         </span>
+        <span v-if="readAt[activeTab] && !awsStore.loading" class="text-dim" style="font-size:12px" :title="t('awsFresh.tabHint')" data-test="read-at">· {{ t('awsFresh.readAgo', { ago: agoText(readAt[activeTab]) }) }}</span>
         <button v-if="hasFilters(activeTab)" class="btn sm" data-test="clear-filters" @click="clearFilters(activeTab)">{{ t('awsFilter.clear') }}</button>
         <button class="btn sm" @click="reloadActiveTab({ force: true })" :disabled="tabLoading" :title="t('awsActivity.refreshHint')"><i data-lucide="refresh-cw"></i></button>
       </div>
@@ -3842,7 +3843,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import jsYaml from 'js-yaml'
 import { useEnvStore }  from '../../stores/useEnvStore'
@@ -4357,6 +4358,21 @@ async function addLoadBalancerToApplication(loadBalancer) {
   }
 }
 
+// When each tab's list was last read, shown next to its counter. A ticking
+// clock keeps "read 3 min ago" current without reloading anything.
+const readAt = reactive({})
+const clockNow = ref(Date.now())
+let freshnessClock = null
+onMounted(() => { freshnessClock = setInterval(() => { clockNow.value = Date.now() }, 30000) })
+onUnmounted(() => clearInterval(freshnessClock))
+watch(() => awsStore.activeProfileId, () => { for (const id of Object.keys(readAt)) delete readAt[id] })
+function agoText(ts) {
+  const seconds = Math.max(0, Math.round((clockNow.value - ts) / 1000))
+  if (seconds < 60) return t('awsFresh.justNow')
+  const minutes = Math.round(seconds / 60)
+  return minutes < 60 ? t('overview.agoMinutes', { n: minutes }) : t('awsFresh.agoHours', { n: Math.round(minutes / 60) })
+}
+
 async function loadTab(id, options = {}) {
   if (loaded[id]) return
   if (!options.background) tabLoading.value = true
@@ -4364,6 +4380,7 @@ async function loadTab(id, options = {}) {
     const load = () => fetchMap[id]?.(options)
     await (options.background ? awsStore.runInBackground(load) : load())
     loaded[id] = true
+    readAt[id] = Date.now()
   } finally {
     if (!options.background) tabLoading.value = false
   }
