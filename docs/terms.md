@@ -1,6 +1,6 @@
 # Terms of Service and Subscriptions
 
-Last updated: 2026-10-03
+Last updated: 2026-10-10. The plan changes in sections 2 and 3 apply from 2026-11-10.
 
 These terms govern the KUA account, the Pro and Team subscriptions and the online services that come with them (sign-in, plan management and, as they become available, cloud backups and team sharing). The KuaDashboard software itself is also covered by the [EULA](/EULA) and its open-source license.
 
@@ -12,14 +12,14 @@ Subscriptions are sold through **Polar** (polar.sh), which acts as our reseller 
 
 ## 2. The free plan stays free
 
-Everything KuaDashboard does on your computer works without an account and without paying. This includes Kubernetes, AWS, GCP and Vercel management, logs, the local log intelligence and local export and import. Signing in is optional. Ending a subscription never removes the free features or deletes your local data.
+Everything KuaDashboard does on your computer to read and manage your resources works without an account and without paying. This includes Kubernetes, AWS, GCP and Vercel management, consoles, logs, the local log intelligence, local export and import, and up to 3 KUA Applications. Signing in is optional. Ending a subscription never removes the free features or deletes your local data: KUA Applications created before stay available, and only creating new ones beyond the Free limit needs a paid plan.
 
 ## 3. Plans
 
 | Plan | Price | Includes |
 |---|---|---|
-| Free | USD 0 | Every local feature, a 256 MB log cache and manual log refresh |
-| Pro | USD 9 per month or USD 90 per year | Advisor, automatic log refresh (every 15 minutes or more) and a 2 GB log cache |
+| Free | USD 0 | Every local feature to read and manage resources, up to 3 KUA Applications, a 256 MB log cache, and manual collection and log refresh |
+| Pro | USD 9 per month or USD 90 per year | Advisor, AI agents through MCP and AI context, scheduled background work (collection, polling, automatic log refresh every 15 minutes or more), unlimited KUA Applications and a 2 GB log cache |
 | Team | USD 29 per month or USD 290 per year | Everything in Pro, refresh every minute, a 20 GB log cache and team sharing for up to 10 members as it becomes available |
 
 Prices are in US dollars. Taxes are calculated at checkout according to your location. The features of each plan are shown in KUA → Help & Options → Account before you buy. If we raise the price of a plan, we will tell you at least 30 days in advance, and the change applies from your next renewal.

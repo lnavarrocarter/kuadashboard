@@ -1,6 +1,6 @@
 # Términos de servicio y suscripciones
 
-Última actualización: 2026-10-03
+Última actualización: 2026-10-10. Los cambios de planes de las secciones 2 y 3 se aplican desde el 2026-11-10.
 
 Estos términos rigen la cuenta KUA, las suscripciones Pro y Team y los servicios en línea que las acompañan: inicio de sesión, gestión del plan y, a medida que estén disponibles, respaldos en la nube y trabajo en equipo. El software KuaDashboard se rige además por el [EULA](/EULA) y su licencia open source.
 
@@ -19,14 +19,14 @@ A la compra se aplican además sus propios [términos para compradores](https://
 
 ## 2. El plan gratuito sigue siendo gratuito
 
-Todo lo que KuaDashboard hace en tu equipo funciona sin cuenta y sin pagar. Eso incluye la gestión de Kubernetes, AWS, GCP y Vercel, los logs, la inteligencia local de logs y la exportación e importación locales. Iniciar sesión es opcional. Cuando termina una suscripción no pierdes las funciones gratuitas ni se borran tus datos locales.
+Todo lo que KuaDashboard hace en tu equipo para leer y gestionar tus recursos funciona sin cuenta y sin pagar. Eso incluye la gestión de Kubernetes, AWS, GCP y Vercel, las consolas, los logs, la inteligencia local de logs, la exportación e importación locales y hasta 3 KUA Applications. Iniciar sesión es opcional. Cuando termina una suscripción no pierdes las funciones gratuitas ni se borran tus datos locales: las KUA Applications creadas antes siguen disponibles, y solo crear nuevas por encima del límite Free requiere un plan de pago.
 
 ## 3. Planes
 
 | Plan | Precio | Incluye |
 |---|---|---|
-| Free | USD 0 | Todas las funciones locales, caché de logs de 256 MB y refresco de logs manual |
-| Pro | USD 9 al mes o USD 90 al año | Advisor, refresco automático de logs (cada 15 minutos o más) y caché de logs de 2 GB |
+| Free | USD 0 | Todas las funciones locales para leer y gestionar recursos, hasta 3 KUA Applications, caché de logs de 256 MB, y recolección y refresco de logs manuales |
+| Pro | USD 9 al mes o USD 90 al año | Advisor, agentes de IA por MCP y contexto para IA, tareas programadas en segundo plano (recolección, sondeo, refresco automático de logs cada 15 minutos o más), KUA Applications ilimitadas y caché de logs de 2 GB |
 | Team | USD 29 al mes o USD 290 al año | Todo lo de Pro, refresco cada minuto, caché de logs de 20 GB y trabajo en equipo para hasta 10 miembros, a medida que esté disponible |
 
 Los precios están en dólares de Estados Unidos. Los impuestos se calculan en el pago según tu ubicación. Antes de comprar puedes ver qué incluye cada plan en KUA → Ayuda y opciones → Cuenta. Si subimos el precio de un plan, te avisaremos con al menos 30 días de anticipación, y el nuevo precio se aplicará desde tu siguiente renovación.
