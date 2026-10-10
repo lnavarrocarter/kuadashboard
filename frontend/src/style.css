@@ -844,6 +844,23 @@ body.kube-resizing {
   font-size: 12px;
 }
 
+/* Profile / account / region band shown above every AWS service tab. */
+.aws-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 6px 4px 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.aws-context strong { font-weight: 600; overflow-wrap: anywhere; }
+.aws-context-global { color: var(--accent); }
+
 .tab-panel {
   overflow: auto;
   flex: 1;

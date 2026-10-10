@@ -245,13 +245,24 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
-  // Account and region of the active profile, shown before write operations.
-  async function fetchAccountContext() {
+  // Account and region of the active profile (context band, write confirmations).
+  // One request per profile; a failure is kept as unknown instead of retried on every tab.
+  let accountRequest = null
+  function fetchAccountContext() {
     const key = activeProfileId.value
-    if (accountContext.value?.profileId === key) return accountContext.value
-    const data = await apiFetch('/api/cloud/aws/account', { headers: headers() })
-    if (activeProfileId.value === key) accountContext.value = { profileId: key, ...data }
-    return { profileId: key, ...data }
+    if (accountContext.value?.profileId === key) return Promise.resolve(accountContext.value)
+    if (accountRequest?.key === key) return accountRequest.promise
+    const promise = Promise.resolve()
+      .then(() => apiFetch('/api/cloud/aws/account', { headers: headers() }))
+      .then(data => ({ profileId: key, account: data?.account || null, region: data?.region || null }))
+      .catch(e => ({ profileId: key, account: null, region: null, error: e?.message || String(e) }))
+      .then(context => {
+        if (activeProfileId.value === key) accountContext.value = context
+        if (accountRequest?.key === key) accountRequest = null
+        return context
+      })
+    accountRequest = { key, promise }
+    return promise
   }
 
   async function fetchEcsServices() {

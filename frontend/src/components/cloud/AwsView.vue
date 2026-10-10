@@ -28,6 +28,13 @@
         @close="accessModalOpen = false"
       />
 
+      <div v-if="!CONTEXT_HIDDEN_TABS.has(activeTab)" class="aws-context" data-test="aws-context">
+        <span><span class="text-dim">{{ t('awsCtx.profile') }}</span> <strong>{{ selectedProfileName }}</strong></span>
+        <span><span class="text-dim">{{ t('awsCtx.account') }}</span> <strong>{{ contextAccount ?? '…' }}</strong></span>
+        <span><span class="text-dim">{{ t('awsCtx.region') }}</span> <strong>{{ awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : '…' }}</strong></span>
+        <span v-if="GLOBAL_TABS.has(activeTab)" class="aws-context-global" data-test="aws-context-global">{{ t(`awsCtx.global.${activeTab}`) }}</span>
+      </div>
+
       <div v-if="!SELF_LOADING_TABS.has(activeTab) && !(activeTab === 'cwdashboards' && dashboardView)" class="aws-toolbar">
         <input
           v-model="search[activeTab]"
@@ -2230,7 +2237,7 @@
           <button class="btn sm" :aria-label="t('action.close')" :title="t('action.close')" @click="invokeModal.open = false">✕</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <div class="alert-warn" style="margin:0;font-size:12px">{{ t('awsv.invokeWarning', { profile: selectedProfileName }) }}</div>
+          <div class="alert-warn" style="margin:0;font-size:12px">{{ t('awsv.invokeWarning', { profile: selectedProfileName, account: contextAccount ?? '…', region: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : '…' }) }}</div>
           <label for="aws-invoke-payload" style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
           <textarea id="aws-invoke-payload" v-model="invokeModal.payload" rows="6"
             style="font-family:monospace;font-size:12px;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:8px;resize:vertical"
@@ -4350,34 +4357,46 @@ function onProfileChange() {
   if (selectedProfileId.value) loadTab(activeTab.value)
 }
 
+// ─── Context band ────────────────────────────────────────────────────────────
+// Profile, account and region stay visible on every service tab, so the
+// destination is known without going back to Overview. Global services say
+// that the selected region does not filter them.
+const GLOBAL_TABS = new Set(['s3', 'cloudfront', 'route53'])
+const CONTEXT_HIDDEN_TABS = new Set(['overview', 'apm']) // Overview shows the full identity
+
+const contextAccount = computed(() => {
+  const ctx = awsStore.accountContext
+  if (!ctx) return null
+  if (!ctx.account) return t('awsv.op.unknown')
+  const alias = awsStore.overview?.identity?.account === ctx.account ? awsStore.overview.identity.alias : null
+  return alias ? `${alias} (${ctx.account})` : ctx.account
+})
+
+watch(() => [awsStore.activeProfileId, activeTab.value], ([id, tab]) => {
+  if (id && !CONTEXT_HIDDEN_TABS.has(tab)) awsStore.fetchAccountContext()
+}, { immediate: true })
+
 // ─── Confirmed operations (EC2/ECS start and stop) ───────────────────────────
 // Each write first shows its destination (resource, account, profile, region)
 // and impact. Cancelling sends nothing; the target is copied when the dialog
 // opens, and the busy state blocks a second request.
 const opConfirm = reactive({
   open: false, title: '', message: '', tone: 'info', confirmLabel: '',
-  resourceLines: [], account: null, region: null, busy: false, error: '', run: null,
+  resourceLines: [], busy: false, error: '', run: null,
 })
 
 const opConfirmLines = computed(() => [
   ...opConfirm.resourceLines,
   t('awsv.op.destination', {
-    account: opConfirm.account ?? t('state.loading'),
+    account: contextAccount.value ?? t('state.loading'),
     profile: selectedProfileName.value,
-    region: opConfirm.region ?? t('state.loading'),
+    region: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : t('state.loading'),
   }),
 ])
 
 function askOperation({ title, message, tone, confirmLabel, resourceLines, run }) {
-  const ctx = awsStore.accountContext
-  Object.assign(opConfirm, {
-    open: true, title, message, tone, confirmLabel, resourceLines, run, busy: false, error: '',
-    account: ctx?.account ?? null, region: ctx?.region ?? null,
-  })
-  if (ctx) return
+  Object.assign(opConfirm, { open: true, title, message, tone, confirmLabel, resourceLines, run, busy: false, error: '' })
   awsStore.fetchAccountContext()
-    .then(data => { opConfirm.account = data.account || t('awsv.op.unknown'); opConfirm.region = data.region || t('awsv.op.unknown') })
-    .catch(() => { opConfirm.account = t('awsv.op.unknown'); opConfirm.region = t('awsv.op.unknown') })
 }
 
 async function confirmOperation() {
@@ -4520,6 +4539,7 @@ const invokeModal = reactive({ open: false, loading: false, name: '', payload: '
 
 function openInvoke(fn) {
   Object.assign(invokeModal, { name: fn.name, payload: '{}', result: null, open: true })
+  awsStore.fetchAccountContext()
 }
 
 async function submitInvoke() {
