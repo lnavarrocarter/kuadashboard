@@ -216,6 +216,8 @@ app.use(express.json({ limit: '10mb' }));
 // Global read-only mode (lib/readOnlyMode.js): refuses changes to clouds and clusters in the
 // backend, whatever the UI shows. After the body parser: a query is allowed only when it reads.
 app.use('/api', readOnlyMode.middleware);
+// AI agents (MCP, X-KUA-Actor: mcp) need a plan with agents (lib/agentPlanGuard.js).
+app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard());
 
 // What KUA spends on AWS: priced SDK calls go to a local ledger (lib/usage),
 // attributed to the profile and feature of the request that triggered them.
