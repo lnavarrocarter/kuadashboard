@@ -20,6 +20,13 @@
         @open-architecture="context => emit('open-architecture', context)"
       />
 
+      <!-- Evidence opened from the Overview: filter stated, one click to drop it -->
+      <div v-if="evidenceFocus && evidenceFocus.tab === activeTab" class="gcp-focus-chip" data-test="evidence-filter" role="status">
+        {{ t('gcpv.audit.evidenceFilter', { label: evidenceFocus.label, n: filteredRows.length }) }}
+        <button class="btn sm" @click="evidenceFocus = null">{{ t('gcpv.audit.showAll') }}</button>
+        <button class="btn sm" @click="switchTab('overview')">{{ t('gcpv.audit.backToOverview') }}</button>
+      </div>
+
       <!-- Toolbar -->
       <div v-if="activeTab !== 'apm' && activeTab !== 'overview'" class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" :placeholder="t('table.filterPlaceholder')" />
@@ -137,7 +144,7 @@
             <section class="gcp-overview-section">
               <div class="gcp-overview-section-title">{{ t('gcpv.healthByArea') }}</div>
               <div class="gcp-overview-groups">
-                <button v-for="group in overviewGroups" :key="group.id" class="gcp-overview-group" @click="group.tab && switchTab(group.tab)">
+                <button v-for="group in overviewGroups" :key="group.id" class="gcp-overview-group" :aria-pressed="overviewAreaFilter === group.id" data-test="area-card" @click="showArea(group.id)">
                   <div class="gcp-overview-group-head">
                     <span>{{ t(group.label) }}</span>
                     <span :class="['gcp-overview-health-pill', overviewHealthTone(group.health)]">{{ overviewHealthLabelFor(group.health) }}</span>
@@ -159,7 +166,7 @@
               <div class="gcp-overview-section-title">{{ t('gcpv.needsAttention') }} <span class="text-dim">({{ overviewAttention.length }})</span></div>
               <div v-if="!overviewAttention.length" class="gcp-overview-empty-callout"><span class="gcp-overview-health-dot healthy"></span>{{ t('gcpv.noActiveServiceSignals') }}</div>
               <div v-else class="gcp-overview-attention-list">
-                <button v-for="item in overviewAttention" :key="`${item.tab}:${item.name || item.code}`" class="gcp-overview-attention" @click="item.tab && switchTab(item.tab)">
+                <button v-for="item in overviewAttention" :key="`${item.tab}:${item.name || item.code}`" class="gcp-overview-attention" data-test="attention-item" @click="openEvidence(item.tab, item.name ? [item.name] : [], `${item.service}: ${overviewSignalText(item)}`)">
                   <span :class="['gcp-overview-signal-dot', item.level]"></span>
                   <span class="gcp-overview-attention-copy">
                     <strong>{{ item.service }}</strong>
@@ -191,12 +198,16 @@
 
           <div class="gcp-overview-grid gcp-overview-grid-services">
             <section class="gcp-overview-section gcp-overview-section-wide">
-              <div class="gcp-overview-section-title">{{ t('gcpv.services') }} <span class="text-dim">{{ t('gcpv.clickOpenToInspectTheFull') }}</span></div>
+              <div class="gcp-overview-section-title" ref="overviewServicesTitle">{{ t('gcpv.services') }} <span class="text-dim">{{ t('gcpv.clickOpenToInspectTheFull') }}</span></div>
+              <div v-if="overviewAreaFilter" class="gcp-focus-chip" data-test="area-filter">
+                {{ t('gcpv.audit.areaFilter', { area: overviewGroupLabel(overviewAreaFilter) }) }}
+                <button class="btn sm" @click="overviewAreaFilter = ''">{{ t('gcpv.audit.showAll') }}</button>
+              </div>
               <div class="gcp-overview-table-wrap">
                 <table class="cloud-table gcp-overview-table">
                   <thead><tr><th>{{ t('pf.service') }}</th><th>{{ t('gcpv.area') }}</th><th>{{ t('health.title') }}</th><th>{{ t('apm.resources') }}</th><th>{{ t('vercel.col.active') }}</th><th>{{ t('quick.inactive') }}</th><th>{{ t('gcpv.signals') }}</th><th></th></tr></thead>
                   <tbody>
-                    <tr v-for="service in overviewServices" :key="service.id">
+                    <tr v-for="service in overviewServicesShown" :key="service.id">
                       <td>
                         <div class="fw-medium">{{ service.label }}</div>
                         <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.raw || service.error.message">{{ t(`gcpv.audit.err.${service.error.kind || 'unknown'}`) }} · {{ service.error.message }}</div>
@@ -211,7 +222,7 @@
                         <span v-if="service.issueCount" class="status-warn">{{ service.issueCount }}</span>
                         <span v-else class="text-dim">—</span>
                       </td>
-                      <td><button class="btn sm" @click="switchTab(service.tab)">{{ t('pf.open') }}</button></td>
+                      <td><button class="btn sm" @click="openServiceEvidence(service)">{{ service.issueCount ? t('gcpv.audit.openAffected') : t('pf.open') }}</button></td>
                     </tr>
                   </tbody>
                 </table>
@@ -412,7 +423,7 @@
                 <button
                   class="btn sm primary gke-connect-btn"
                   :disabled="c.status !== 'RUNNING' || connectingCluster === c.name"
-                  @click="connectGke(c)"
+                  @click="requestGkeConnect(c)"
                   :title="t('gcpv.importThisClusterSKubeconfigAnd')"
                 >
                   <i data-lucide="plug"></i>
@@ -2246,11 +2257,41 @@ async function loadAllTabs() {
   await loadTab(activeTab.value)
 }
 
-function switchTab(id) {
+function switchTab(id, { focus = null } = {}) {
+  evidenceFocus.value = focus
   activeTab.value = id
   search.value = ''
   loadTab(id)
 }
+
+// Overview → evidence (G11): open the service filtered to the affected
+// resources, and the detail when there is exactly one.
+const evidenceFocus = ref(null)   // { tab, names: [], label }
+const overviewAreaFilter = ref('')
+const overviewServicesTitle = ref(null)
+function openEvidence(tab, names = [], label = '') {
+  if (!tab) return
+  switchTab(tab, { focus: names.length ? { tab, names, label } : null })
+}
+function openServiceEvidence(service) {
+  const names = (service.signals || []).map(signal => signal.name).filter(Boolean)
+  openEvidence(service.tab, names, t('gcpv.audit.withSignals', { service: service.label, n: names.length }))
+}
+function showArea(groupId) {
+  overviewAreaFilter.value = overviewAreaFilter.value === groupId ? '' : groupId
+  nextTick(() => overviewServicesTitle.value?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }))
+}
+const overviewServicesShown = computed(() => overviewAreaFilter.value
+  ? overviewServices.value.filter(service => (service.group || 'other') === overviewAreaFilter.value)
+  : overviewServices.value)
+function rowName(row) { return String(row?.name || row?.id || row?.displayName || row?.email || '').split('/').pop() }
+const FOCUS_SELECT = { cloudrun: r => selectCloudRun(r), vms: r => selectVm(r), sql: r => selectSql(r), functions: r => selectFn(r) }
+watch(() => evidenceFocus.value && filteredRows.value, rows => {
+  const focus = evidenceFocus.value
+  if (!focus || focus.tab !== activeTab.value || focus.selected || !Array.isArray(rows) || rows.length !== 1) return
+  focus.selected = true
+  FOCUS_SELECT[focus.tab]?.(rows[0])
+})
 
 watch(() => props.activeService, (newTab) => {
   if (newTab && newTab !== activeTab.value) switchTab(newTab)
@@ -2427,6 +2468,8 @@ function openOverviewBilling() {
 }
 
 function filterRows(rows) {
+  const focus = evidenceFocus.value
+  if (focus && rows === gcpStore.tabs[focus.tab]?.data) rows = rows.filter(row => focus.names.includes(rowName(row)))
   if (!search.value) return rows
   const q = search.value.toLowerCase()
   return rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
@@ -2668,6 +2711,11 @@ async function runAction(acks) {
       actionModal.open = false
       return
     }
+    if (kind === 'gke' && action === 'connect') {
+      actionModal.open = false
+      await connectGke(resource)
+      return
+    }
     if (action === 'delete') {
       await gcpStore.deleteResource(kind, resource, acks.confirmName)
       const panel = panelFor(kind)
@@ -2793,6 +2841,19 @@ function gkeStatusClass(s) {
   if (s === 'PROVISIONING' || s === 'RECONCILING') return 'status-warn'
   return 'status-err'
 }
+// Connect imports a kubeconfig context into KUA: say so, with the destination,
+// before doing it.
+function requestGkeConnect(cluster) {
+  Object.assign(actionModal, {
+    open: true, kind: 'gke', action: 'connect', resource: cluster,
+    profileId: selectedProfileId.value, context: gcpDestinationContext({ name: cluster.name, region: cluster.location }),
+    title: t('gcpv.audit.gkeConnectTitle', { name: cluster.name }), message: t('gcpv.audit.gkeConnectMessage'),
+    lines: [t('gcpv.audit.gkeConnectLine1'), t('gcpv.audit.gkeConnectLine2')], tone: 'info',
+    confirmLabel: t('conn.connect'), requireName: '', costAck: false, blocked: '',
+    estimate: null, estimateLoading: false, estimateUnavailable: false, busy: false, error: '',
+  })
+}
+
 async function connectGke(cluster) {
   connectingCluster.value = cluster.name
   try {
@@ -3909,6 +3970,7 @@ async function openIamKeys(sa) {
 .gcp-overview-attention-copy span { color: var(--text-dim); }
 .gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
 .gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-focus-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
 .gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .gcp-row-link:hover { text-decoration: underline; }
 .gcp-row-link:focus-visible, .sidebar-item[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

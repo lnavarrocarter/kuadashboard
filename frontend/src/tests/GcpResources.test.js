@@ -440,6 +440,17 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(item.attributes('aria-current')).toBe('true')
   })
 
+  it('GKE Connect explains the kubeconfig import before doing it (G11)', async () => {
+    const w = await mountTab('gke')
+    store.tabs.gke.data = [{ name: 'prod', location: 'us-central1', status: 'RUNNING', autopilot: true }]
+    await flushPromises()
+    await w.find('.gke-connect-btn').trigger('click')
+    const modal = openConfirm(w)
+    expect(modal.props('title')).toBe('Conectar con prod')
+    expect(modal.find('[data-test="destination"]').text()).toContain('us-central1')
+    expect(calls.some(c => c.url.includes('/gke/'))).toBe(false)
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)
@@ -547,6 +558,27 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 4/4 services evaluated')
     expect(w.find('.gcp-overview-health-detail').text()).toContain('1 declared not used')
     await w.find('[data-test="toggle-unused"]').trigger('click')
+
+    // G11: areas filter the services table instead of jumping to one service
+    const areas = w.findAll('[data-test="area-card"]')
+    await areas[0].trigger('click')
+    expect(w.find('[data-test="area-filter"]').exists()).toBe(true)
+    expect(w.findAll('.gcp-overview-table tbody tr').length).toBeLessThan(5)
+    await areas[0].trigger('click')
+    expect(w.findAll('.gcp-overview-table tbody tr')).toHaveLength(5)
+
+    // G11: an attention signal opens its service filtered to the affected resource
+    store.tabs.scheduler.data = [{ name: 'nightly-job', state: 'PAUSED' }, { name: 'other-job', state: 'ENABLED' }]
+    await w.find('[data-test="attention-item"]').trigger('click')
+    await flushPromises()
+    store.tabs.scheduler.data = [{ name: 'nightly-job', state: 'PAUSED' }, { name: 'other-job', state: 'ENABLED' }]
+    await flushPromises()
+    const chip = w.find('[data-test="evidence-filter"]')
+    expect(chip.text()).toContain('Cloud Scheduler')
+    expect(w.text()).toContain('nightly-job')
+    expect(w.text()).not.toContain('other-job')
+    await chip.find('button').trigger('click')
+    expect(w.text()).toContain('other-job')
     const costs = w.find('[data-test="overview-costs"]')
     expect(costs.text()).toContain('Estimated costs')
     expect(costs.text()).toContain('$123.45')
