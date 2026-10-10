@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchitectureCanvas from '../components/architecture/ArchitectureCanvas.vue'
 import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout, systemDomainForNode, systemDomainLayout } from '../lib/architectureLayout'
@@ -431,6 +432,34 @@ describe('ArchitectureCanvas', () => {
     expect(nodes.find(node => node.id === 'deploy').data.health).toEqual({ status: 'degraded', label: 'Degraded' })
     expect(nodes.find(node => node.id === 'svc').data.health).toEqual({ status: 'healthy', label: 'Healthy' })
     expect(nodes.find(node => node.id === 'stale-node').data.health.status).toBe('stale')
+  })
+
+  it('goes to the first degraded resource and can take the whole window (H9)', async () => {
+    const graph = {
+      revision: 1,
+      document: {
+        nodes: [
+          { id: 'svc', name: 'orders-svc', resourceType: 'service', provider: 'kubernetes', health: { status: 'healthy' } },
+          { id: 'deploy', name: 'orders-api', resourceType: 'deployment', provider: 'kubernetes', health: { status: 'degraded' } },
+        ],
+        edges: [],
+        layout: {},
+      },
+    }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
+    await nextTick()
+    const goToIssue = wrapper.get('[data-test="canvas-go-to-issue"]')
+    expect(goToIssue.text()).toContain('(1)')
+    await goToIssue.trigger('click')
+    expect(wrapper.emitted('resource-selected').at(-1)[0].id).toBe('deploy')
+
+    const expand = wrapper.get('[data-test="canvas-expand"]')
+    await expand.trigger('click')
+    expect(wrapper.get('[data-test="canvas-shell"]').classes()).toContain('is-expanded')
+    globalThis.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.get('[data-test="canvas-shell"]').classes()).not.toContain('is-expanded')
+    wrapper.unmount()
   })
 
   it('shows opt-in metric summaries on canvas nodes', async () => {
