@@ -498,7 +498,7 @@
             <th :class="thClass('name')"         @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
             <th :class="thClass('type')"         @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
             <th :class="thClass('creationDate')" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
-            <th>{{ t('awsInsights.executions') }}</th>
+            <th :title="t('awsv.sfnCountsHint', { limit: '1000' })">{{ t('awsInsights.executions') }}</th>
             <th :class="thClass('started24h')" @click="sortBy('started24h')" :title="t('awsActivity.sfnHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('started24h') }}</span></th>
             <th :class="thClass('loggingRank')" @click="sortBy('loggingRank')">{{ t('awsActivity.logging') }} <span class="sort-icon">{{ sortIcon('loggingRank') }}</span></th>
             <th>{{ t('th.tags') }}</th><th>ARN</th><th>{{ t('th.actions') }}</th>
@@ -508,19 +508,16 @@
               <td>{{ sm.name }}</td>
               <td><span :class="sm.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ sm.type }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(sm.creationDate) }}</td>
-              <td style="white-space:nowrap">
-                <template v-if="stepFnCounts[sm.arn]?.loading">
-                  <span class="text-dim" style="font-size:11px">…</span>
+              <td style="white-space:nowrap;font-size:11px" data-test="sfn-counts">
+                <template v-if="stepFnCountViews[sm.arn]?.state === 'ok'">
+                  <span v-for="item in stepFnCountViews[sm.arn].items" :key="item.key" :class="item.cls" :title="item.title" style="margin-right:4px">{{ item.icon }} {{ item.label }}</span>
+                  <span v-if="!stepFnCountViews[sm.arn].items.length && !stepFnCountViews[sm.arn].partial" class="text-dim" :title="t('awsv.sfnCountsNone')">0</span>
+                  <span v-if="stepFnCountViews[sm.arn].partial" class="status-warn" :title="stepFnCountViews[sm.arn].partial">⚠ {{ t('awsv.sfnCountsPartialShort') }}</span>
                 </template>
-                <template v-else-if="stepFnCounts[sm.arn]">
-                  <span v-if="stepFnCounts[sm.arn].running > 0"  class="status-ok"  style="font-size:11px;margin-right:4px">▶ {{ stepFnCounts[sm.arn].running }}</span>
-                  <span v-if="stepFnCounts[sm.arn].failed > 0"   class="status-err" style="font-size:11px;margin-right:4px">✗ {{ stepFnCounts[sm.arn].failed }}</span>
-                  <span v-if="stepFnCounts[sm.arn].timedOut > 0" class="status-warn" style="font-size:11px;margin-right:4px">⏱ {{ stepFnCounts[sm.arn].timedOut }}</span>
-                  <span v-if="stepFnCounts[sm.arn].running === 0 && stepFnCounts[sm.arn].failed === 0 && stepFnCounts[sm.arn].timedOut === 0" class="text-dim" style="font-size:11px">—</span>
-                </template>
-                <template v-else>
-                  <span class="text-dim" style="font-size:11px">—</span>
-                </template>
+                <span v-else-if="stepFnCountViews[sm.arn]?.state === 'denied'" class="status-warn" :title="stepFnCountViews[sm.arn].title">⚠ {{ t('awsv.sfnCountsDenied') }}</span>
+                <span v-else-if="stepFnCountViews[sm.arn]?.state === 'error'" class="status-warn" :title="stepFnCountViews[sm.arn].title">⚠ {{ t('awsv.sfnCountsError') }}</span>
+                <span v-else-if="stepFnCountViews[sm.arn]?.state === 'unsupported'" class="text-dim" :title="t('awsv.sfnCountsExpressHint')">{{ t('awsv.sfnCountsExpress') }}</span>
+                <span v-else class="text-dim">…</span>
               </td>
               <td class="activity-cell">
                 <template v-if="sm.started24h == null"><span class="text-dim">{{ stepFnActivityLoading ? '…' : '—' }}</span></template>
@@ -5291,25 +5288,63 @@ function openStepFnDetail(sm) {
 }
 
 // ─── Step Functions Execution Counts ─────────────────────────────────────────
+// Per state machine: { loading } | { unsupported } (Express) | { error } | { result }.
+// A read that failed is shown as such, never as zero executions.
 const stepFnCounts = reactive({})
+const STEPFN_COUNT_STATUSES = [
+  { key: 'running',  icon: '▶', cls: 'status-ok' },
+  { key: 'failed',   icon: '✗', cls: 'status-err' },
+  { key: 'timedOut', icon: '⏱', cls: 'status-warn' },
+]
 
 async function loadStepFnCounts() {
   const sms = awsStore.stepFunctions
   if (!sms?.length) return
   const unloaded = sms.filter(sm => !stepFnCounts[sm.arn])
   if (!unloaded.length) return
+  const standard = []
   for (const sm of unloaded) {
-    stepFnCounts[sm.arn] = { loading: true, running: 0, failed: 0, timedOut: 0 }
+    // ListExecutions does not support Express workflows.
+    if (sm.type === 'EXPRESS') stepFnCounts[sm.arn] = { unsupported: true }
+    else { stepFnCounts[sm.arn] = { loading: true }; standard.push(sm) }
   }
-  await Promise.allSettled(unloaded.map(async sm => {
+  await Promise.allSettled(standard.map(async sm => {
     try {
-      const res = await awsStore.fetchStepFnExecutionCount(sm.arn)
-      stepFnCounts[sm.arn] = { loading: false, running: res?.running ?? 0, failed: res?.failed ?? 0, timedOut: res?.timedOut ?? 0 }
-    } catch {
-      stepFnCounts[sm.arn] = { loading: false, running: 0, failed: 0, timedOut: 0 }
+      stepFnCounts[sm.arn] = { result: await awsStore.fetchStepFnExecutionCount(sm.arn) }
+    } catch (e) {
+      stepFnCounts[sm.arn] = { error: { kind: 'error', message: e?.message || String(e) } }
     }
   }))
 }
+
+function stepFnErrorTitle(errors) {
+  const lines = errors.map(e => (e.kind === 'denied'
+    ? t('awsv.sfnCountsDeniedHint', { action: e.action || 'states:ListExecutions' })
+    : e.message))
+  return [...new Set(lines.filter(Boolean))].join('\n')
+}
+
+function stepFnCountView(c) {
+  if (!c || c.loading) return { state: 'loading' }
+  if (c.unsupported) return { state: 'unsupported' }
+  if (c.error) return { state: 'error', title: stepFnErrorTitle([c.error]) }
+  const items = []
+  const errors = []
+  for (const s of STEPFN_COUNT_STATUSES) {
+    const entry = c.result?.[s.key]
+    if (!entry || entry.error) { errors.push(entry?.error || { kind: 'error', message: '' }); continue }
+    if (!entry.count) continue
+    const label = entry.truncated ? `${entry.count.toLocaleString()}+` : entry.count.toLocaleString()
+    items.push({ ...s, label, title: t(`awsv.sfnCount.${s.key}`, { n: label }) })
+  }
+  if (errors.length === STEPFN_COUNT_STATUSES.length) {
+    return { state: errors.every(e => e.kind === 'denied') ? 'denied' : 'error', title: stepFnErrorTitle(errors) }
+  }
+  return { state: 'ok', items, partial: errors.length ? stepFnErrorTitle(errors) || t('awsv.sfnCountsPartial') : null }
+}
+
+const stepFnCountViews = computed(() =>
+  Object.fromEntries(stepFnRows.value.map(sm => [sm.arn, stepFnCountView(stepFnCounts[sm.arn])])))
 
 watch(activeTab, (tab) => {
   if (tab === 'stepfn') loadStepFnCounts()

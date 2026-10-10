@@ -202,6 +202,7 @@ const { listLoadBalancers, describeLoadBalancer } = require('../lib/awsLoadBalan
 const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
+const { countExecutions } = require('../lib/awsStepFnCounts');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { buildAwsAdvisor, collectS3Advisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -2461,16 +2462,7 @@ router.get('/stepfunctions/executions/count', async (req, res) => {
     const cfg = await resolveAwsConfig(profileId);
     const { SFNClient, ListExecutionsCommand } = require('@aws-sdk/client-sfn');
     const client = new SFNClient(cfg);
-    const [runningRes, failedRes, timedOutRes] = await Promise.allSettled([
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'RUNNING',   maxResults: 1000 })),
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'FAILED',    maxResults: 100  })),
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'TIMED_OUT', maxResults: 100  })),
-    ]);
-    res.json({
-      running:   runningRes.status  === 'fulfilled' ? (runningRes.value.executions?.length  || 0) : 0,
-      failed:    failedRes.status   === 'fulfilled' ? (failedRes.value.executions?.length   || 0) : 0,
-      timedOut:  timedOutRes.status === 'fulfilled' ? (timedOutRes.value.executions?.length || 0) : 0,
-    });
+    res.json(await countExecutions(input => client.send(new ListExecutionsCommand(input)), arn));
   } catch (err) { handleErr(res, err); }
 });
 

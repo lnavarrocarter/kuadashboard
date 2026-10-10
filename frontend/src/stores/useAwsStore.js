@@ -369,10 +369,9 @@ export const useAwsStore = defineStore('aws', () => {
     } catch (e) { setError(e); return null }
   }
 
+  // Throws on failure: a failed read must not look like zero executions.
   async function fetchStepFnExecutionCount(arn) {
-    try {
-      return await apiFetch(`/api/cloud/aws/stepfunctions/executions/count?arn=${encodeURIComponent(arn)}`, { headers: headers() })
-    } catch (e) { return { running: 0, failed: 0, timedOut: 0 } }
+    return apiFetch(`/api/cloud/aws/stepfunctions/executions/count?arn=${encodeURIComponent(arn)}`, { headers: headers() })
   }
 
   async function fetchStepFnVersions(arn) {
