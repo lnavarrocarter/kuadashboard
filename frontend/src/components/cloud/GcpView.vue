@@ -363,11 +363,11 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(crMetrics, CR_METRICS, crPanel.resource)" :disabled="crMetrics.loading">{{ crMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="crMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="crMetrics.error" class="alert-error">{{ crMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="crMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="crMetrics.error" class="alert-error">{{ crMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="crMetrics.data[m.key] || []" :state="crMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(crMetrics, m, crPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: crMetrics.hours }) }}</div>
             </div>
           </div>
           </template>
@@ -543,11 +543,11 @@
                 <button class="btn sm" @click="vmSwitchTab('metrics')" :disabled="vmMetrics.loading">{{ vmMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
                 <span v-if="!vmPanel.detail?.instanceId" class="text-dim" style="font-size:11px">{{ t('gcpv.loadTheOverviewTabFirstTo') }}</span>
               </div>
-              <div v-if="vmMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="vmMetrics.error" class="alert-error">{{ vmMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="vmMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="vmMetrics.error" class="alert-error">{{ vmMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="vmMetrics.data[m.key] || []" :state="vmMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(vmMetrics, m, vmPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: vmMetrics.hours }) }}</div>
             </div>
           </div>
           </template>
@@ -670,11 +670,11 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(sqlMetrics, SQL_METRICS, sqlPanel.resource)" :disabled="sqlMetrics.loading">{{ sqlMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="sqlMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="sqlMetrics.error" class="alert-error">{{ sqlMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="sqlMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="sqlMetrics.error" class="alert-error">{{ sqlMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="sqlMetrics.data[m.key] || []" :state="sqlMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(sqlMetrics, m, sqlPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: sqlMetrics.hours }) }}</div>
             </div>
           </div>
           </template>
@@ -838,11 +838,11 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(fnMetrics, FN_METRICS, fnPanel.resource)" :disabled="fnMetrics.loading">{{ fnMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="fnMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="fnMetrics.error" class="alert-error">{{ fnMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in FN_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="fnMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="fnMetrics.error" class="alert-error">{{ fnMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in FN_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="fnMetrics.data[m.key] || []" :state="fnMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(fnMetrics, m, fnPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: fnMetrics.hours }) }}</div>
             </div>
           </div>
         </div>
@@ -2087,6 +2087,7 @@ import GcpPollingSettings from './GcpPollingSettings.vue'
 import './gcpInfo.css'
 import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
+import { CR_METRICS, VM_METRICS, SQL_METRICS, FN_METRICS, createMetricsPanel, loadMetric, loadMetricSet } from './gcpMetrics'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useTerminalStreams } from '../../composables/useTerminalStreams'
@@ -3082,76 +3083,18 @@ async function arApplyDeploy() {
   } finally { arPanel.deploying = false }
 }
 
-// ── Cloud Monitoring metrics ──────────────────────────────────────────────────
-const crMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
-const vmMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
-const sqlMetrics = reactive({ loading: false, error: null, hours: 1, data: {} })
-const fnMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
+// ── Cloud Monitoring metrics (contracts in ./gcpMetrics.js) ──────────────────
+const crMetrics  = reactive(createMetricsPanel())
+const vmMetrics  = reactive(createMetricsPanel())
+const sqlMetrics = reactive(createMetricsPanel())
+const fnMetrics  = reactive(createMetricsPanel())
 
-async function loadMetrics(panel, metrics, target) {
-  panel.loading = true; panel.error = null; panel.data = {}
-  try {
-    const results = await Promise.all(
-      metrics.map(m => gcpStore.fetchMonitoringTimeSeries(m.metric, m.filter(target), {
-        hours: panel.hours, aligner: m.aligner || 'ALIGN_MEAN', period: m.period || '60', reducer: m.reducer || 'REDUCE_MEAN'
-      }).catch(() => ({ points: [] })))
-    )
-    const data = {}
-    metrics.forEach((m, i) => { data[m.key] = results[i]?.points || [] })
-    panel.data = data
-  } catch (e) { panel.error = e.message }
-  finally { panel.loading = false }
+function loadMetrics(panel, metrics, target) {
+  return loadMetricSet(gcpStore.fetchMonitoringTimeSeries, panel, metrics, target)
 }
-
-const CR_METRICS = [
-  { key: 'requests', metric: 'run.googleapis.com/request_count',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'gcpv.metricRequestRate', unit: 'req/s', color: '#818cf8' },
-  { key: 'latency', metric: 'run.googleapis.com/request_latencies',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_PERCENTILE_99', label: 'gcpv.metricLatencyP99', unit: 'ms', color: '#f59e0b' },
-  { key: 'instances', metric: 'run.googleapis.com/container/instance_count',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gri.instances', unit: '', color: '#34d399' },
-]
-
-const VM_METRICS = [
-  { key: 'cpu', metric: 'compute.googleapis.com/instance/cpu/utilization',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricCpu', unit: '%',
-    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
-  { key: 'netIn', metric: 'compute.googleapis.com/instance/network/received_bytes_count',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'ec2d.networkIn', unit: 'B/s', color: '#818cf8' },
-  { key: 'diskRead', metric: 'compute.googleapis.com/instance/disk/read_bytes_count',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'ec2d.diskRead', unit: 'B/s', color: '#34d399' },
-]
-
-const SQL_METRICS = [
-  { key: 'cpu', metric: 'cloudsql.googleapis.com/database/cpu/utilization',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricCpu', unit: '%',
-    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
-  { key: 'connections', metric: 'cloudsql.googleapis.com/database/network/connections',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricConnections', unit: '', color: '#818cf8' },
-  { key: 'diskBytes', metric: 'cloudsql.googleapis.com/database/disk/bytes_used',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricDiskUsed', unit: 'B', color: '#34d399' },
-]
-
-const FN_METRICS = [
-  { key: 'executions', metric: 'cloudfunctions.googleapis.com/function/execution_count',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_RATE', label: 'gcpv.metricExecutions', unit: 'req/s', color: '#818cf8' },
-  { key: 'duration', metric: 'cloudfunctions.googleapis.com/function/execution_times',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_PERCENTILE_99', label: 'gcpv.metricDurationP99', unit: 'ns', color: '#f59e0b' },
-  { key: 'active', metric: 'cloudfunctions.googleapis.com/function/active_instances',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricActiveInstances', unit: '', color: '#34d399' },
-]
+function retryMetric(panel, m, target) {
+  if (target) return loadMetric(gcpStore.fetchMonitoringTimeSeries, panel, m, target)
+}
 
 // ── Function Invoke ──────────────────────────────────────────────────────────
 const fnInvokeOpen    = ref(false)
@@ -3919,6 +3862,7 @@ async function openIamKeys(sa) {
 .gcp-overview-attention-copy span { color: var(--text-dim); }
 .gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
 .gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .gcp-overview-table-wrap { overflow: auto; max-height: 500px; }
 .gcp-overview-table { margin: 0; }
 .gcp-overview-table th, .gcp-overview-table td { white-space: nowrap; }

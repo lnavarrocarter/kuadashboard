@@ -38,6 +38,7 @@ const { mapBucket } = require('../lib/gcpStorage');
 const { classifyGcpError, httpStatusFor } = require('../lib/gcpErrors');
 const { mapRepository, listArtifactRepositories } = require('../lib/gcpArtifact');
 const { summarizeOverview } = require('../lib/gcpOverview');
+const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -2581,54 +2582,20 @@ router.post('/logging/query', async (req, res) => {
 
 // GET /kms/keyrings → list all key rings (all locations)
 // ─── CLOUD MONITORING — generic timeseries ────────────────────────────────────
-// GET /monitoring/timeseries?metric=<type>&filter=<extra>&hours=1&aligner=ALIGN_MEAN&period=60&reducer=REDUCE_MEAN
+// GET /monitoring/timeseries?metric=<type>&filter=<extra>&hours=1&aligner=ALIGN_MEAN&period=60&reducer=REDUCE_MEAN&groupBy=<field,...>
+// Series are not flattened: see lib/gcpMonitoring.js.
 router.get('/monitoring/timeseries', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
-  const { metric, filter = '', hours = '1', aligner = 'ALIGN_MEAN', period = '60', reducer = 'REDUCE_MEAN' } = req.query;
+  const { metric, filter = '', hours = '1', aligner = 'ALIGN_MEAN', period = '60', reducer = 'REDUCE_MEAN', groupBy = '' } = req.query;
   if (!metric) return res.status(400).json({ error: 'metric param required' });
   try {
+    const query = timeSeriesParams({ metric, filter, hours, aligner, period, reducer, groupBy: String(groupBy).split(',') });
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    let token = authCtx.accessToken;
-    if (!token) {
-      const c = await authCtx.auth.getClient();
-      token = (await c.getAccessToken()).token;
-    }
-    const now   = new Date();
-    const start = new Date(now - Number(hours) * 3600 * 1000);
-    const filterStr = filter ? `metric.type="${metric}" AND ${filter}` : `metric.type="${metric}"`;
-    const params = new URLSearchParams({
-      filter: filterStr,
-      'interval.startTime': start.toISOString(),
-      'interval.endTime':   now.toISOString(),
-      'aggregation.alignmentPeriod':    `${period}s`,
-      'aggregation.perSeriesAligner':   aligner,
-      'aggregation.crossSeriesReducer': reducer,
-    });
-    const resp = await fetch(
-      `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw Object.assign(new Error(text || `HTTP ${resp.status}`), { code: resp.status });
-    }
-    const data = await resp.json();
-    // Normalize: collect all series points, sort ascending
-    const allPoints = [];
-    for (const ts of (data.timeSeries || [])) {
-      for (const pt of (ts.points || [])) {
-        const t = pt.interval.endTime;
-        const val = pt.value;
-        let y = val.doubleValue ?? val.int64Value ?? val.distributionValue?.mean ?? 0;
-        if (typeof val.int64Value === 'string') y = Number(val.int64Value);
-        allPoints.push({ x: t, y: Number(y) || 0 });
-      }
-    }
-    allPoints.sort((a, b) => new Date(a.x) - new Date(b.x));
-    res.json({ points: allPoints, seriesCount: (data.timeSeries || []).length });
+    const data = await gcpFetch(`https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${query.params}`, authCtx);
+    res.json({ ...normalizeTimeSeries(data, { interval: query.interval }), aligner, reducer, periodSeconds: query.periodSeconds });
   } catch (err) { handleErr(res, err); }
 });
 
