@@ -56,6 +56,29 @@ describe('AdvisorPanel', () => {
     expect(wrapper.find('.adv-score').classes()).toContain('bad')
   })
 
+  it('lists the most severe findings first and the rest behind "Show all" (A09)', async () => {
+    const finding = (id, severity, category = 'security') => ({ id, category, severity, count: 1, params: {}, docs: null, resources: [], truncated: false })
+    const findings = [
+      finding('aws.low_a', 'low'), finding('aws.medium_a', 'medium'), finding('aws.high_a', 'high'),
+      finding('aws.low_b', 'low', 'infrastructure'), finding('aws.high_b', 'high', 'infrastructure'),
+    ]
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ findings }) } })
+    const ids = () => wrapper.findAll('.adv-list > .adv-item').map(li => li.attributes('data-test').replace('advisor-finding-', ''))
+    expect(ids()).toEqual(['aws.high_a', 'aws.high_b', 'aws.medium_a'])
+    expect(wrapper.find('[data-test="advisor-severity-summary"]').text()).toBe('2 high·1 medium·2 low')
+    expect(wrapper.find('.adv-score').attributes('title')).toContain('not in the count')
+
+    const more = wrapper.find('[data-test="advisor-show-all"]')
+    expect(more.text()).toBe('Show all 5 findings')
+    await more.trigger('click')
+    expect(ids()).toEqual(['aws.high_a', 'aws.high_b', 'aws.medium_a', 'aws.low_a', 'aws.low_b'])
+
+    // A category resets to the short list; with 2 findings there is nothing to expand.
+    await wrapper.find('[data-test="advisor-cat-infrastructure"]').trigger('click')
+    expect(ids()).toEqual(['aws.high_b', 'aws.low_b'])
+    expect(wrapper.find('[data-test="advisor-show-all"]').exists()).toBe(false)
+  })
+
   it('filters by category and says when a category is clean', async () => {
     const wrapper = mount(AdvisorPanel, { props: { report: report() } })
     await wrapper.find('[data-test="advisor-cat-infrastructure"]').trigger('click')
@@ -167,7 +190,7 @@ describe('AdvisorPanel posture', () => {
     const accepted = [{ id: 'aws.public_ip', category: 'security', severity: 'high', count: 1, params: {}, resources: [], acceptance: ACCEPTANCE }]
     const summary = { ...report().summary, security: bucket({ high: 1, findings: 1, passed: 3, checks: 4, accepted: 1 }) }
     const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, expiringSoon: 1, expired: 2 }, accepted, summary }) } })
-    expect(wrapper.find('.adv-score').text()).toBe('7/9 checks pass · 1 accepted')
+    expect(wrapper.find('.adv-score').text()).toBe('7/9 checks pass · 1 accepted · 1 not checked')
     expect(wrapper.find('[data-test="advisor-expired"]').text()).toContain('2 acceptance(s) expired')
     expect(wrapper.find('[data-test="advisor-expiring"]').text()).toContain('1 acceptance(s) expire in the next 7 days')
 

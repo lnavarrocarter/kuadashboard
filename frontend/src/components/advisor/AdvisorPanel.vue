@@ -9,8 +9,8 @@
         </div>
       </div>
       <div class="adv-head-side">
-        <span v-if="report && totals.checks" class="adv-score" :class="scoreLevel">
-          {{ t('advisor.passed', { passed: totals.passed, checks: totals.checks }) }}<template v-if="totals.accepted"> · {{ t('advisor.acceptedCount', { n: totals.accepted }) }}</template>
+        <span v-if="report && totals.checks" class="adv-score" :class="scoreLevel" :title="t('advisor.passedHint')" data-test="advisor-score">
+          {{ t('advisor.passed', { passed: totals.passed, checks: totals.checks }) }}<template v-if="totals.accepted"> · {{ t('advisor.acceptedCount', { n: totals.accepted }) }}</template><template v-if="report.unavailable?.length"> · {{ t('advisor.notCheckedCount', { n: report.unavailable.length }) }}</template>
         </span>
         <button
           v-if="canDecide" class="btn btn-icon" :class="{ active: showHistory }" :title="t('advisor.history.title')"
@@ -127,8 +127,15 @@
           {{ category === 'all' ? t('advisor.allGood') : t('advisor.categoryGood', { category: t(`advisor.cat.${category}`) }) }}
         </p>
 
-        <ul v-else class="adv-list">
-          <li v-for="finding in visible" :key="finding.id" :class="['adv-item', finding.severity]" :data-test="`advisor-finding-${finding.id}`">
+        <p v-else class="adv-sev-summary" data-test="advisor-severity-summary">
+          <template v-for="(sev, index) in SEVERITIES.filter(level => severityCounts[level])" :key="sev">
+            <span v-if="index" class="adv-dim" aria-hidden="true">·</span>
+            <span :class="['adv-sev', sev]">{{ severityCounts[sev] }} {{ t(`advisor.severity.${sev}`) }}</span>
+          </template>
+        </p>
+
+        <ul v-if="visible.length" class="adv-list">
+          <li v-for="finding in shown" :key="finding.id" :class="['adv-item', finding.severity]" :data-test="`advisor-finding-${finding.id}`">
             <button class="adv-row" :aria-expanded="open === finding.id" @click="open = open === finding.id ? null : finding.id">
               <span :class="['adv-sev', finding.severity]">{{ t(`advisor.severity.${finding.severity}`) }}</span>
               <span class="adv-row-title">{{ t(`advisor.rule.${finding.id}.title`, { count: finding.count, ...finding.params }) }}</span>
@@ -198,6 +205,11 @@
             </div>
           </li>
         </ul>
+
+        <button
+          v-if="visible.length > INITIAL_FINDINGS" class="adv-more" :aria-expanded="showAllFindings ? 'true' : 'false'"
+          data-test="advisor-show-all" @click="showAllFindings = !showAllFindings"
+        >{{ showAllFindings ? t('advisor.showFewer') : t('advisor.showAll', { n: visible.length }) }}</button>
 
         <!-- Accepted and silenced findings: listed apart, outside the score -->
         <div v-if="report.accepted?.length" class="adv-accepted" data-test="advisor-accepted">
@@ -293,8 +305,28 @@ const open = ref(null)
 const collapsed = ref(readCollapsed())
 
 const categories = computed(() => props.report?.categories || [])
+// Most severe first; only the first few until "Show all", so the panel does not
+// push the rest of the page down (the Overview keeps incidents and inventory in reach).
+const SEVERITIES = ['high', 'medium', 'low']
+const INITIAL_FINDINGS = 3
+const showAllFindings = ref(false)
 const visible = computed(() => (props.report?.findings || [])
-  .filter(finding => category.value === 'all' || finding.category === category.value))
+  .filter(finding => category.value === 'all' || finding.category === category.value)
+  .map((finding, index) => ({ finding, index }))
+  .sort((a, b) => (SEVERITIES.indexOf(a.finding.severity) - SEVERITIES.indexOf(b.finding.severity)) || a.index - b.index)
+  .map(({ finding }) => finding))
+const shown = computed(() => {
+  if (showAllFindings.value || visible.value.length <= INITIAL_FINDINGS) return visible.value
+  const first = visible.value.slice(0, INITIAL_FINDINGS)
+  // Keep an opened finding visible when collapsing.
+  const opened = visible.value.find(finding => finding.id === open.value)
+  return opened && !first.includes(opened) ? [...first, opened] : first
+})
+const severityCounts = computed(() => visible.value.reduce((counts, finding) => {
+  counts[finding.severity] = (counts[finding.severity] || 0) + 1
+  return counts
+}, {}))
+watch(category, () => { showAllFindings.value = false })
 const totals = computed(() => Object.values(props.report?.summary || {})
   .reduce((sum, bucket) => ({ passed: sum.passed + bucket.passed, checks: sum.checks + bucket.checks, accepted: sum.accepted + (bucket.accepted || 0) }), { passed: 0, checks: 0, accepted: 0 }))
 
@@ -486,6 +518,9 @@ onUpdated(refreshIcons)
 .adv-score.warn { color: var(--yellow); border-color: var(--yellow); }
 .adv-score.bad { color: var(--red); border-color: var(--red); }
 .adv-cats { display: flex; gap: 4px; flex-wrap: wrap; }
+.adv-sev-summary { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; font-size: 11px; }
+.adv-more { align-self: flex-start; background: none; border: 0; padding: 2px 0; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+.adv-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .adv-budget, .adv-product-insights { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px solid var(--border); }
 .adv-budget h4, .adv-product-insights h4 { margin: 0; font-size: 11px; color: var(--text-dim); }
 .adv-budget-row { display: grid; grid-template-columns: minmax(70px, 0.35fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: baseline; font-size: 11px; }
