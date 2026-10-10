@@ -92,6 +92,18 @@
               <td>{{ t('account.featureLocal') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">✓</td>
             </tr>
+            <tr data-test="account-plan-kuapps">
+              <td>{{ t('account.featureKuaApps') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ plan.plans[name].limits.kuaApps == null ? t('account.unlimited') : plan.plans[name].limits.kuaApps }}</td>
+            </tr>
+            <tr data-test="account-plan-agents">
+              <td>{{ t('account.featureAgents') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.agents) }}</td>
+            </tr>
+            <tr data-test="account-plan-scheduled">
+              <td>{{ t('account.featureScheduled') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ plan.plans[name].features.scheduledTasks ? '✓' : t('account.manual') }}</td>
+            </tr>
             <tr>
               <td>{{ t('account.featureSso') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.sso) }}</td>

@@ -13,8 +13,9 @@
 
         <div v-if="loadError" class="alert-error">{{ loadError }}</div>
         <template v-else-if="form">
+          <PlanNote feature="scheduledTasks" :text="t('gps.planNote')" />
           <label class="gps-toggle">
-            <input v-model="form.enabled" type="checkbox" data-test="poll-enabled" />
+            <input v-model="form.enabled" type="checkbox" data-test="poll-enabled" :disabled="scheduleLocked && !form.enabled" />
             <span>{{ form.enabled ? t('gps.enabled') : t('gps.disabled') }}</span>
           </label>
 
@@ -68,7 +69,13 @@
 import { computed, ref, watch } from 'vue'
 import { useGcpStore } from '../../stores/useGcpStore'
 import { useI18n } from '../../composables/useI18n'
+import { usePlan } from '../../composables/usePlan'
+import PlanNote from '../PlanNote.vue'
 import './gcpInfo.css'
+
+// Free cannot turn scheduled polling on ("Run now" still works); an existing setting can be turned off.
+const { plan: currentPlan } = usePlan()
+const scheduleLocked = computed(() => currentPlan.value?.features?.scheduledTasks === false)
 
 const props = defineProps({
   open:      { type: Boolean, default: false },

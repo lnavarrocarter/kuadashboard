@@ -799,3 +799,29 @@ describe('KUApps navigation', () => {
     wrapper.unmount()
   })
 })
+
+describe('KUApps limit of the Free plan', () => {
+  it('counts against the limit and explains the plan instead of opening the form', async () => {
+    const { usePlan } = await import('../composables/usePlan')
+    const { blockedNotice } = await import('../composables/useBlockedNotice')
+    setActivePinia(createPinia())
+    const apps = ['Orders', 'Billing', 'Search'].map((name, i) => ({ id: `app-${i}`, name, provider: null, profileId: null }))
+    global.fetch = vi.fn(url => Promise.resolve({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(String(url).includes('/api/system/plan')
+        ? { plan: 'free', features: { agents: false }, limits: { kuaApps: 3 } }
+        : apps),
+    }))
+    await usePlan().reload()
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="kuapps-limit"]').text()).toBe('3 of 3')
+    await wrapper.get('[data-test="kuapps-create"]').trigger('click')
+    expect(blockedNotice.open).toBe(true)
+    expect([blockedNotice.kind, blockedNotice.feature, blockedNotice.limit]).toEqual(['plan', 'kuaApps', 3])
+    expect(wrapper.find('.kuapps-create-form').exists()).toBe(false)
+    blockedNotice.open = false
+    wrapper.unmount()
+  })
+})

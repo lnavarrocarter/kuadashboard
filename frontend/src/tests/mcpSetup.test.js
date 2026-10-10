@@ -3,7 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 const apiFetch = vi.fn()
-vi.mock('../composables/useApi', () => ({ useApi: () => ({ apiFetch }) }))
+// api: the plan (usePlan) for the agents note; no plan answer keeps the note hidden.
+vi.mock('../composables/useApi', () => ({ useApi: () => ({ apiFetch }), api: async () => null }))
 
 import { claudeCommand, codexCommand, codexToml, jsonConfig } from '../lib/mcpSetup'
 import { settings } from '../composables/useSettings'
