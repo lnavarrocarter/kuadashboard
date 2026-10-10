@@ -532,6 +532,28 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.find('[data-test="row-count"]').text()).toContain('1+')
   })
 
+  it('detail tabs follow the tablist pattern: arrows, Home/End, roving tabindex, tabpanel (R04)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    const tabs = () => w.findAll('[role="tablist"] [role="tab"]')
+    const selected = () => tabs().find(tab => tab.attributes('aria-selected') === 'true')
+    expect(selected().attributes('tabindex')).toBe('0')
+    expect(tabs().filter(tab => tab.attributes('tabindex') === '0')).toHaveLength(1)
+    expect(selected().attributes('aria-controls')).toBe('gcp-cr-panel')
+    expect(w.find('#gcp-cr-panel').attributes('aria-labelledby')).toBe(selected().attributes('id'))
+    const first = selected()
+    await first.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs()[1].attributes('id'))
+    await selected().trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs().at(-1).attributes('id'))
+    await selected().trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs()[0].attributes('id'))
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

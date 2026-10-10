@@ -346,10 +346,12 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }} · {{ t('gcpv.audit.crScalingLine', { min: cloudRunScaling(crPanel.resource).min, max: cloudRunScaling(crPanel.resource).max ?? '∞' }) }}</div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in CR_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="crPanel.tab === tabItem.id" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="crPanel.tab === tabItem.id"
+                :id="`gcp-cr-tab-${tabItem.id}`" aria-controls="gcp-cr-panel" :tabindex="crPanel.tab === tabItem.id ? 0 : -1" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-cr-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-cr-tab-${crPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','revisions','variables'].includes(crPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="crPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -402,6 +404,7 @@
                 <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="crMetrics.data[m.key] || []" :state="crMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(crMetrics, m, crPanel.resource)" />
               </div>
               <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: crMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -526,10 +529,12 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in VM_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="vmPanel.tab === tabItem.id" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="vmPanel.tab === tabItem.id"
+                :id="`gcp-vm-tab-${tabItem.id}`" aria-controls="gcp-vm-panel" :tabindex="vmPanel.tab === tabItem.id ? 0 : -1" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-vm-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-vm-tab-${vmPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','disks','network'].includes(vmPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="vmPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -582,6 +587,7 @@
                 <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="vmMetrics.data[m.key] || []" :state="vmMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(vmMetrics, m, vmPanel.resource)" />
               </div>
               <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: vmMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -654,10 +660,12 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in SQL_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="sqlPanel.tab === tabItem.id" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="sqlPanel.tab === tabItem.id"
+                :id="`gcp-sql-tab-${tabItem.id}`" aria-controls="gcp-sql-panel" :tabindex="sqlPanel.tab === tabItem.id ? 0 : -1" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-sql-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-sql-tab-${sqlPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','config','connection'].includes(sqlPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="sqlPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -709,6 +717,7 @@
                 <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="sqlMetrics.data[m.key] || []" :state="sqlMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(sqlMetrics, m, sqlPanel.resource)" />
               </div>
               <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: sqlMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -776,10 +785,12 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in [{id:'overview',label:'gcpv.tabOverview'},{id:'variables',label:'gcpv.tabVariables'},{id:'logs',label:'gcpv.tabLogs'},{id:'invoke',label:'gcp.invoke'},{id:'metrics',label:'gcpv.tabMetrics'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id" @click="fnSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id"
+                :id="`gcp-fn-tab-${tabItem.id}`" aria-controls="gcp-fn-panel" :tabindex="fnPanel.tab === tabItem.id ? 0 : -1" @click="fnSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-fn-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-fn-tab-${fnPanel.tab}`">
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
               <div v-if="fnPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('state.loading') }}</div>
@@ -879,6 +890,7 @@
               </div>
               <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: fnMetrics.hours }) }}</div>
             </div>
+            </div>
           </div>
         </div>
       </div>
@@ -961,10 +973,12 @@
               </div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in [{id:'packages',label:'gcpv.audit.tabPackages'},{id:'deploy',label:'gcpv.audit.tabDeploy'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id" @click="arSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id"
+                :id="`gcp-ar-tab-${tabItem.id}`" aria-controls="gcp-ar-panel" :tabindex="arPanel.tab === tabItem.id ? 0 : -1" @click="arSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-ar-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-ar-tab-${arPanel.tab}`">
             <!-- PACKAGES & TAGS -->
             <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
               <!-- Package list -->
@@ -1066,6 +1080,7 @@
                   </span>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -2126,6 +2141,7 @@ import './gcpInfo.css'
 import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
 import { vDialog }       from '../../composables/vDialog'
+import { vTablist }      from '../../composables/vTablist'
 import { CR_METRICS, VM_METRICS, SQL_METRICS, FN_METRICS, createMetricsPanel, loadMetric, loadMetricSet } from './gcpMetrics'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
@@ -4152,6 +4168,7 @@ watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.lo
   .gcp-master-list { width: 100% !important; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); }
 }
 .gcp-focus-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
+.gcp-tabpanel { display: contents; }
 .gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .gcp-row-link:hover { text-decoration: underline; }
 .gcp-row-link:focus-visible, .sidebar-item[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
