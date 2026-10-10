@@ -10,6 +10,10 @@
  * DELETE /logs       → clear all entries
  * GET  /logs/export  → download the matching entries as CSV
  * GET  /stats        → counters per category and level of the matching entries
+ * GET  /verify       → integrity of the chain of entries (lib/auditLog.js verify)
+ * GET  /settings     → retention and forwarding status (never the token)
+ * PUT  /settings     → { retentionDays?, forward?: { enabled?, url?, token? } }
+ * POST /forward/test → sends a test event to the destination
  */
 
 const express  = require('express');
@@ -17,9 +21,33 @@ const auditLog = require('../lib/auditLog');
 
 const router = express.Router();
 
+// External copy of the log (Team plan): every new entry is queued for the destination.
+const forwarder = require('../lib/auditForwarder').createAuditForwarder({
+  settings: {
+    get: () => auditLog.getSettings().forward,
+    save: forward => auditLog.saveSettings({ forward }),
+  },
+});
+auditLog.onEntry(entry => forwarder.enqueue(entry));
+forwarder.start();
+
+function sendError(res, err) {
+  res.status(err.statusCode || 500).json({
+    error: err.message,
+    ...(err.code ? { code: err.code } : {}),
+    ...(err.required ? { required: err.required } : {}),
+    ...(err.feature ? { feature: err.feature } : {}),
+  });
+}
+
+function settingsResponse() {
+  return { retentionDays: auditLog.getSettings().retentionDays, forward: forwarder.status() };
+}
+
 // The same filters apply to the list, the stats and the CSV export.
-function filtersFrom({ category, level, search, from, to }) {
+function filtersFrom({ category, level, search, from, to, actor }) {
   return {
+    actor:    ['ui', 'mcp', 'system'].includes(actor) ? actor : undefined,
     category: category || undefined,
     level:    level    || undefined,
     search:   search   || undefined,
@@ -66,6 +94,30 @@ router.get('/stats', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── Integrity, retention and forwarding ─────────────────────────────────────
+
+router.get('/verify', (_req, res) => {
+  try { res.json(auditLog.verify()); } catch (err) { sendError(res, err); }
+});
+
+router.get('/settings', (_req, res) => res.json(settingsResponse()));
+
+router.put('/settings', (req, res) => {
+  try {
+    const { retentionDays, forward } = req.body || {};
+    if (retentionDays !== undefined) auditLog.saveSettings({ retentionDays });
+    if (forward) forwarder.configure(forward);
+    if (retentionDays !== undefined || forward) {
+      auditLog.log({ category: 'system', action: 'audit.settings.changed', level: 'warning', details: { retentionDays: retentionDays ?? null, forwarding: forward ? { enabled: forward.enabled ?? null, url: forward.url ?? null, token: forward.token === undefined ? 'unchanged' : 'changed' } : null } });
+    }
+    res.json(settingsResponse());
+  } catch (err) { sendError(res, err); }
+});
+
+router.post('/forward/test', async (_req, res) => {
+  try { res.json(await forwarder.test()); } catch (err) { sendError(res, { ...err, message: err.message, statusCode: err.statusCode || 502 }); }
 });
 
 // ─── DELETE /logs ─────────────────────────────────────────────────────────────
