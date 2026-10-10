@@ -25,17 +25,26 @@
         <input v-model="search" class="ctrl-input aws-search" :placeholder="t('table.filterPlaceholder')" />
         <span class="text-dim" style="font-size:12px">
           <template v-if="currentTab.loading">{{ t('state.loading') }}</template>
+          <template v-else-if="currentTab.error && !filteredRows.length">{{ t('gcpv.audit.notRead') }}</template>
           <template v-else>{{ t('gcpv.results', { n: filteredRows.length }) }}</template>
         </span>
         <button class="btn sm" @click="reloadActiveTab" :disabled="currentTab.loading" :title="t('action.refresh')"><i data-lucide="refresh-cw"></i></button>
       </div>
 
       <!-- Permission denied banner -->
-      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && currentTab.error" class="api-disabled-banner">
-        <span>{{ currentTab.error }}</span>
-        <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank"
-           class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0">
-          {{ t('gcp.enableApi') }}
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && currentTab.error" class="api-disabled-banner" role="alert" data-test="tab-error">
+        <div style="flex:1;min-width:0">
+          <strong data-test="error-kind">{{ t(`gcpv.audit.err.${currentTab.errorInfo?.kind || 'unknown'}`) }}</strong>
+          <span> · {{ currentTab.error }}</span>
+          <div class="text-dim" style="font-size:11px;margin-top:2px">{{ t(`gcpv.audit.errHint.${currentTab.errorInfo?.kind || 'unknown'}`) }}</div>
+          <details v-if="currentTab.errorInfo?.raw && currentTab.errorInfo.raw !== currentTab.error" style="margin-top:4px;font-size:11px">
+            <summary style="cursor:pointer">{{ t('gcpv.audit.technicalDetails') }}</summary>
+            <div class="mono-xs" style="white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto">{{ currentTab.errorInfo.raw }}</div>
+          </details>
+        </div>
+        <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank" rel="noopener"
+           class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0" :title="t('gcpv.audit.openApiPageHint')">
+          {{ t('gcpv.audit.openApiPage') }}
         </a>
       </div>
 
@@ -170,7 +179,7 @@
                     <tr v-for="service in overviewServices" :key="service.id">
                       <td>
                         <div class="fw-medium">{{ service.label }}</div>
-                        <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.message">{{ service.error.message }}</div>
+                        <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.raw || service.error.message">{{ t(`gcpv.audit.err.${service.error.kind || 'unknown'}`) }} · {{ service.error.message }}</div>
                       </td>
                       <td class="text-dim">{{ overviewGroupLabel(service.group) }}</td>
                       <td><span :class="['gcp-overview-health-pill', overviewHealthTone(overviewServiceHealth(service))]">{{ overviewHealthLabelFor(overviewServiceHealth(service)) }}</span></td>

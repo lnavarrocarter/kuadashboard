@@ -341,6 +341,19 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(row.find('[data-test="delete"]').exists()).toBe(true)
   })
 
+  it('a rejected request is named as such, without an enable-API link or a zero count (G04)', async () => {
+    const w = await mountTab('artifact')
+    Object.assign(store.tabs.artifact, {
+      data: [], error: 'Invalid project name: projects/p/locations/-', enableUrl: null,
+      errorInfo: { kind: 'invalid_request', code: 'INVALID_ARGUMENT', raw: '{"error":{"code":400}}' },
+    })
+    await flushPromises()
+    const banner = w.find('[data-test="tab-error"]')
+    expect(banner.find('[data-test="error-kind"]').text()).toBe('Petición rechazada')
+    expect(banner.find('a').exists()).toBe(false)
+    expect(w.text()).toContain('Sin leer')
+  })
+
   it('Storage shows prevention and leaves exposure as not verified (G02)', async () => {
     const w = await mountTab('storage')
     store.tabs.storage.data = [

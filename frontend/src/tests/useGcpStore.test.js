@@ -311,14 +311,32 @@ describe('base fetch functions', () => {
 
 // ─── enableUrl extraction ──────────────────────────────────────────────────────
 
-describe('enableUrl extraction from PERMISSION_DENIED', () => {
+describe('enableUrl only for a classified disabled API (G04)', () => {
   beforeEach(() => store.setActiveProfile('proj-1'))
 
-  it('extracts enable URL from plain error message', async () => {
+  function mockClassified(error, errorInfo, status) {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status, headers: { get: () => 'application/json' },
+      json: () => Promise.resolve({ error, errorInfo }), text: () => Promise.resolve(''),
+    })
+  }
+
+  it('uses the activation URL when the backend says api_disabled', async () => {
     const url = 'https://console.developers.google.com/apis/api/cloudbuild.googleapis.com/overview?project=my-proj'
-    mockFetchError(`PERMISSION_DENIED: ${url}`)
+    mockClassified('Cloud Build API is disabled', { kind: 'api_disabled', activationUrl: url }, 403)
     await store.fetchBuilds()
     expect(store.tabs.build.enableUrl).toBe(url)
+    expect(store.tabs.build.errorInfo.kind).toBe('api_disabled')
+  })
+
+  it('does not offer to enable an API for a URL inside a permission or 400 error', async () => {
+    const url = 'https://console.cloud.google.com/iam-admin'
+    mockClassified(`Permission denied ${url}`, { kind: 'permission', activationUrl: null }, 403)
+    await store.fetchBuilds()
+    expect(store.tabs.build.enableUrl).toBeNull()
+    mockFetchError(`PERMISSION_DENIED: ${url}`)
+    await store.fetchBuilds()
+    expect(store.tabs.build.enableUrl).toBeNull()
   })
 
   it('leaves enableUrl null when error has no enable URL', async () => {

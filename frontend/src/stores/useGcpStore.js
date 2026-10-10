@@ -17,7 +17,7 @@ export const useGcpStore = defineStore('gcp', () => {
   const overviewError = ref(null)
 
   function createTab() {
-    return { data: [], loading: false, error: null, enableUrl: null, nextPageToken: null, loadingMore: false }
+    return { data: [], loading: false, error: null, errorInfo: null, enableUrl: null, nextPageToken: null, loadingMore: false }
   }
 
   const tabs = ref({
@@ -38,11 +38,14 @@ export const useGcpStore = defineStore('gcp', () => {
     return { 'X-Profile-Id': activeProfileId.value }
   }
 
+  // The backend classifies GCP errors (lib/gcpErrors.js). The console link to
+  // enable an API is only offered when Google said the API is disabled.
   function setError(e, tabKey) {
-    const msg = e.message || String(e)
-    tabs.value[tabKey].error = msg
-    const match = msg.match(/https?:\/\/[^\s]+/)
-    tabs.value[tabKey].enableUrl = match ? match[0] : null
+    const tab = tabs.value[tabKey]
+    const info = e?.details?.errorInfo || null
+    tab.error = e.message || String(e)
+    tab.errorInfo = info
+    tab.enableUrl = info?.kind === 'api_disabled' ? info.activationUrl || null : null
   }
 
   function apiFetch(path, options = {}) {
@@ -68,6 +71,8 @@ export const useGcpStore = defineStore('gcp', () => {
     if (!background) {
       tab.loading = true
       tab.error = null
+      tab.errorInfo = null
+      tab.enableUrl = null
       tab.nextPageToken = null
     }
     try {
@@ -113,6 +118,7 @@ export const useGcpStore = defineStore('gcp', () => {
       t.data = []
       t.loading = false
       t.error = null
+      t.errorInfo = null
       t.enableUrl = null
       t.nextPageToken = null
       t.loadingMore = false
@@ -416,6 +422,7 @@ export const useGcpStore = defineStore('gcp', () => {
     if (append) tab.loadingMore = true
     else { tab.loading = true; tab.nextPageToken = null; tab.data = [] }
     tab.error = null
+    tab.errorInfo = null
     tab.enableUrl = null
     try {
       const res = await apiFetch('/api/cloud/gcp/logging/query', { method: 'POST', headers: headers(), body: JSON.stringify(query) })

@@ -35,6 +35,8 @@ const { createKmsReader } = require('../lib/gcpKms');
 const { listWorkflows, mapWorkflow } = require('../lib/gcpWorkflows');
 const { mapFunction, functionParamsError, functionLogFilter } = require('../lib/gcpFunctions');
 const { mapBucket } = require('../lib/gcpStorage');
+const { classifyGcpError, httpStatusFor } = require('../lib/gcpErrors');
+const { mapRepository, listArtifactRepositories } = require('../lib/gcpArtifact');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -90,8 +92,10 @@ function handleErr(res, err) {
   console.error('[gcp]', err.message);
   // gRPC ALREADY_EXISTS (6) / REST "already exists" → 409 so the UI can say so clearly
   const alreadyExists = err.code === 6 || /already exists/i.test(err.message || '');
-  const status = alreadyExists ? 409 : [400, 403, 404, 409, 503, 504].includes(err.code) ? err.code : 500;
-  res.status(status).json({ error: err.message });
+  if (alreadyExists) return res.status(409).json({ error: err.message });
+  // Structured cause (lib/gcpErrors): the UI picks the remedy from errorInfo.kind
+  const info = classifyGcpError(err);
+  res.status(httpStatusFor(info)).json({ error: info.message || err.message, errorInfo: info });
 }
 
 function cloudHistory() {
@@ -512,7 +516,8 @@ function overviewHealth(status, signals) {
 }
 
 function overviewError(err) {
-  return { code: err?.code || err?.response?.status || null, message: String(err?.message || err).slice(0, 500) };
+  const info = classifyGcpError(err);
+  return { kind: info.kind, code: info.code || info.status || null, status: info.status, reason: info.reason, message: info.message, activationUrl: info.activationUrl, raw: info.raw.slice(0, 500) };
 }
 
 // The Advisor part of the overview: acceptances applied, fresh scans recorded
@@ -559,7 +564,7 @@ async function gcpOverview(req, res) {
       { id: 'functions', label: 'Functions', tab: 'functions', load: () => restList(`https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions') },
       { id: 'pubsub', label: 'Pub/Sub', tab: 'pubsub', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/topics`, 'topics') },
       { id: 'secrets', label: 'Secret Manager', tab: 'secrets', load: () => restList(`https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`, 'secrets') },
-      { id: 'artifact', label: 'Artifact Registry', tab: 'artifact', load: () => restList(`https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/-/repositories`, 'repositories') },
+      { id: 'artifact', label: 'Artifact Registry', tab: 'artifact', load: () => listArtifactRepositories(gcpFetch, authCtx) },
       { id: 'bigquery', label: 'BigQuery', tab: 'bigquery', load: () => restList(`https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/datasets`, 'datasets') },
       { id: 'workflows', label: 'Workflows', tab: 'workflows', load: () => listWorkflows(gcpFetch, authCtx) },
       { id: 'dns', label: 'Cloud DNS', tab: 'dns', load: () => restList(`https://dns.googleapis.com/dns/v1/projects/${projectId}/managedZones`, 'managedZones') },
@@ -1467,19 +1472,7 @@ router.get('/artifact-registry', async (req, res) => {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://artifactregistry.googleapis.com/v1/projects/${projectId}/locations/-/repositories`,
-      authCtx
-    );
-    res.json((data.repositories || []).map(r => ({
-      name:        r.name?.split('/').pop(),
-      location:    r.name?.split('/')[3],
-      format:      r.format,
-      description: r.description || '',
-      created:     r.createTime,
-      updated:     r.updateTime,
-      sizeBytes:   r.sizeBytes ? parseInt(r.sizeBytes) : null,
-    })));
+    res.json((await listArtifactRepositories(gcpFetch, authCtx)).map(mapRepository));
   } catch (err) { handleErr(res, err); }
 });
 
