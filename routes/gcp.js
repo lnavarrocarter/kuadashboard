@@ -37,6 +37,7 @@ const { mapFunction, functionParamsError, functionLogFilter } = require('../lib/
 const { mapBucket } = require('../lib/gcpStorage');
 const { classifyGcpError, httpStatusFor } = require('../lib/gcpErrors');
 const { mapRepository, listArtifactRepositories } = require('../lib/gcpArtifact');
+const { summarizeOverview } = require('../lib/gcpOverview');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -612,11 +613,7 @@ async function gcpOverview(req, res) {
         error: null,
       };
     });
-    const available = services.filter(service => service.status !== 'unavailable');
     const unavailable = services.filter(service => service.status === 'unavailable');
-      const critical = services.reduce((sum, service) => sum + service.critical, 0);
-      const warning = services.reduce((sum, service) => sum + service.warning, 0);
-      const inactive = services.reduce((sum, service) => sum + service.inactive, 0);
       const costs = estimateOverviewCosts({
         cloudrun: collectedRows.get('cloudrun'),
         vms: collectedRows.get('vms'),
@@ -634,19 +631,7 @@ async function gcpOverview(req, res) {
         identity: { projectId, region: region || null, account: authCtx.account || null },
       projectId,
       region: region || null,
-      summary: {
-        total: services.reduce((sum, service) => sum + service.count, 0),
-        active: services.reduce((sum, service) => sum + service.active, 0),
-          inactive,
-        empty: available.filter(service => service.status === 'empty').length,
-        unavailable: unavailable.length,
-          critical,
-          warning,
-        attention: critical + warning + unavailable.length,
-        health: critical ? 'critical' : (warning || unavailable.length) ? 'degraded' : 'healthy',
-        services: services.length,
-        availableServices: available.length,
-      },
+      summary: summarizeOverview(services),
       costs,
       services,
       advisor: (() => {

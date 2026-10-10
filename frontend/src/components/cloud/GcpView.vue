@@ -67,24 +67,25 @@
         <div v-if="gcpStore.overviewError" class="api-disabled-banner">{{ gcpStore.overviewError }}</div>
         <div v-if="gcpStore.overviewLoading && !gcpStore.overview" class="empty-row">{{ t('gcpv.loadingOverview') }}</div>
         <template v-else-if="gcpStore.overview">
-          <section :class="['gcp-overview-health-banner', overviewHealthClass(overviewHealth)]">
+          <section :class="['gcp-overview-health-banner', overviewHealthClass(overviewHealth)]" data-test="overview-health">
             <div class="gcp-overview-health-main">
               <span class="gcp-overview-health-dot"></span>
-              <span class="gcp-overview-health-label">{{ t('gcpv.projectHealth') }}</span>
+              <span class="gcp-overview-health-label">{{ t('gcpv.audit.observedResources') }}</span>
               <strong>{{ overviewHealthLabel }}</strong>
             </div>
             <div class="gcp-overview-health-detail">
-              {{ t('gcpv.servicesResponding', { p0: gcpStore.overview?.summary?.availableServices ?? 0, p1: gcpStore.overview?.summary?.services ?? 0 }) }}
-              <span v-if="gcpStore.overview?.summary?.attention"> {{ t('gcpv.signalSNeedAttention', { p0: gcpStore.overview.summary.attention }) }}</span>
-              <span v-else> {{ t('gcpv.noActiveSignals') }}</span>
+              {{ t('gcpv.audit.coverageLine', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}
+              <span v-if="overviewCoverageInfo.notEvaluated"> · {{ t('gcpv.audit.notEvaluatedN', { n: overviewCoverageInfo.notEvaluated }) }}</span>
+              <span v-if="overviewCoverageInfo.unused"> · {{ t('gcpv.audit.declaredUnusedN', { n: overviewCoverageInfo.unused }) }}</span>
+              <div class="text-dim" style="font-size:11px;margin-top:2px">{{ t('gcpv.audit.notEndToEnd') }}</div>
             </div>
           </section>
 
           <div class="gcp-overview-metrics">
             <div class="gcp-overview-metric"><span class="text-dim">{{ t('apm.resources') }}</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.needsAttention') }}</span><strong :class="gcpStore.overview?.summary?.attention ? 'status-warn' : 'status-ok'">{{ gcpStore.overview?.summary?.attention ?? 0 }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.apiUnavailable') }}</span><strong :class="gcpStore.overview?.summary?.unavailable ? 'status-err' : 'status-ok'">{{ gcpStore.overview?.summary?.unavailable ?? 0 }}</strong><small>{{ t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.ofResponding', { p0: gcpStore.overview?.summary?.availableServices ?? 0, p1: gcpStore.overview?.summary?.services ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric" data-test="metric-incidents"><span class="text-dim">{{ t('gcpv.audit.incidents') }}</span><strong :class="overviewIncidents ? 'status-warn' : 'status-ok'">{{ overviewIncidents }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric" data-test="metric-not-evaluated"><span class="text-dim">{{ t('gcpv.audit.notEvaluated') }}</span><strong :class="overviewCoverageInfo.notEvaluated ? 'status-warn' : 'status-ok'">{{ overviewCoverageInfo.notEvaluated }}</strong><small>{{ overviewCauseSummary || t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.audit.evaluatedOf', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}</small></div>
           </div>
 
           <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" @posture-changed="gcpStore.fetchOverview()" />
@@ -147,7 +148,8 @@
                     <span>{{ t('gcpv.active', { p0: group.active }) }}</span>
                     <span>{{ t('gcpv.inactive', { p0: group.inactive }) }}</span>
                     <span v-if="group.issues" class="status-warn">{{ t('gcpv.issueS', { p0: group.issues }) }}</span>
-                    <span v-else class="status-ok">{{ t('gcpv.healthy') }}</span>
+                    <span v-else class="status-ok">{{ t('gcpv.audit.noIncidents') }}</span>
+                    <span v-if="group.notEvaluated" class="text-dim">{{ t('gcpv.audit.notEvaluatedN', { n: group.notEvaluated }) }}</span>
                   </div>
                 </button>
               </div>
@@ -165,6 +167,24 @@
                   </span>
                   <span v-if="item.name" class="gcp-overview-attention-name">{{ item.name }}</span>
                 </button>
+              </div>
+            </section>
+
+            <section v-if="overviewPendingReads.length" class="gcp-overview-section" data-test="pending-reads">
+              <div class="gcp-overview-section-title">{{ t('gcpv.audit.pendingReads') }} <span class="text-dim">({{ overviewPendingReads.length }})</span></div>
+              <div class="text-dim" style="font-size:11px;margin-bottom:6px">{{ t('gcpv.audit.pendingReadsHint') }}</div>
+              <div class="gcp-overview-attention-list">
+                <div v-for="item in overviewPendingReads" :key="item.id" class="gcp-overview-attention" data-test="pending-read">
+                  <span :class="['gcp-overview-signal-dot', item.unused ? '' : 'warning']"></span>
+                  <span class="gcp-overview-attention-copy">
+                    <strong>{{ item.label }}</strong>
+                    <span :title="item.error?.raw || item.error?.message">{{ item.unused ? t('gcpv.audit.declaredUnused') : t(`gcpv.audit.err.${item.error?.kind || 'unknown'}`) }}</span>
+                  </span>
+                  <span style="display:flex;gap:4px;margin-left:auto">
+                    <button class="btn sm" @click="switchTab(item.tab)">{{ t('gcpv.audit.diagnose') }}</button>
+                    <button class="btn sm" data-test="toggle-unused" :aria-pressed="item.unused" @click="toggleUnusedService(item.id)">{{ item.unused ? t('gcpv.audit.markUsed') : t('gcpv.audit.markUnused') }}</button>
+                  </span>
+                </div>
               </div>
             </section>
           </div>
@@ -2248,29 +2268,78 @@ const overviewCostStatusLabel = computed(() => ({
   estimated: 'Estimated', partial: 'Partial', 'no-data': 'No data',
 }[overviewCosts.value?.status] || (overviewCosts.value ? 'Estimated' : 'Unavailable')))
 const overviewCostStatusTone = computed(() => overviewCosts.value?.status === 'no-data' ? 'empty' : 'warning')
+// Observed-resource health only counts incidents in what KUA could read; read
+// failures go to coverage (older cached snapshots carried "degraded" for them).
 const overviewHealth = computed(() => {
   const summary = gcpStore.overview?.summary || {}
-  if (summary.health) return summary.health
+  if (summary.resourceHealth) return summary.resourceHealth
   if (summary.critical) return 'critical'
-  if (summary.warning || summary.unavailable) return 'degraded'
+  if (summary.warning) return 'warning'
   return 'healthy'
 })
-const overviewHealthLabel = computed(() => overviewHealthLabelFor(overviewHealth.value))
-const overviewCoverage = computed(() => {
+const overviewIncidents = computed(() => {
   const summary = gcpStore.overview?.summary || {}
-  return summary.services ? Math.round(((summary.availableServices || 0) / summary.services) * 100) : 0
+  return Number(summary.critical || 0) + Number(summary.warning || 0)
+})
+const overviewHealthLabel = computed(() => {
+  const summary = gcpStore.overview?.summary || {}
+  if (overviewHealth.value === 'critical') return t('gcpv.audit.health.critical', { n: summary.critical || 0 })
+  if (overviewHealth.value === 'warning') return t('gcpv.audit.health.warning', { n: summary.warning || 0 })
+  return t('gcpv.audit.health.none')
+})
+
+// Services the user declared as not used in this project leave the coverage
+// denominator instead of being enabled just to reach 100%. Per-viewer
+// preference, so browser storage is enough.
+const unusedServices = ref([])
+function unusedKey() { return `kua.gcp.unusedServices.${gcpStore.overview?.projectId || ''}` }
+function loadUnusedServices() {
+  try { unusedServices.value = JSON.parse(localStorage.getItem(unusedKey()) || '[]') } catch { unusedServices.value = [] }
+}
+function toggleUnusedService(id) {
+  const next = unusedServices.value.includes(id) ? unusedServices.value.filter(x => x !== id) : [...unusedServices.value, id]
+  unusedServices.value = next
+  try { localStorage.setItem(unusedKey(), JSON.stringify(next)) } catch { /* preference only */ }
+}
+watch(() => gcpStore.overview?.projectId, loadUnusedServices, { immediate: true })
+
+const overviewCoverageInfo = computed(() => {
+  const services = overviewServices.value
+  const unavailable = services.filter(service => service.status === 'unavailable')
+  const unused = unavailable.filter(service => unusedServices.value.includes(service.id)).length
+  const total = services.length - unused
+  const notEvaluated = unavailable.length - unused
+  return { evaluated: total - notEvaluated, total, notEvaluated, unused }
+})
+const overviewCoverage = computed(() => {
+  const { evaluated, total } = overviewCoverageInfo.value
+  return total ? Math.round((evaluated / total) * 100) : 0
+})
+const overviewPendingReads = computed(() => overviewServices.value
+  .filter(service => service.status === 'unavailable')
+  .map(service => ({ ...service, unused: unusedServices.value.includes(service.id) }))
+  .sort((a, b) => Number(a.unused) - Number(b.unused)))
+const overviewCauseSummary = computed(() => {
+  const counts = {}
+  for (const item of overviewPendingReads.value) {
+    if (item.unused) continue
+    const kind = item.error?.kind || 'unknown'
+    counts[kind] = (counts[kind] || 0) + 1
+  }
+  return Object.entries(counts).map(([kind, n]) => `${n} ${t(`gcpv.audit.err.${kind}`).toLowerCase()}`).join(' · ')
 })
 const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
   const services = overviewServices.value.filter(service => (service.group || 'other') === group.id)
   const resources = services.reduce((sum, service) => sum + Number(service.count || 0), 0)
   const active = services.reduce((sum, service) => sum + Number(service.active || 0), 0)
   const inactive = services.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
-  const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0) + (service.status === 'unavailable' ? 1 : 0), 0)
-  const healthValues = services.map(overviewServiceHealth)
+  const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0), 0)
+  const notEvaluated = services.filter(service => service.status === 'unavailable' && !unusedServices.value.includes(service.id)).length
+  const healthValues = services.filter(service => service.status !== 'unavailable').map(overviewServiceHealth)
   const health = healthValues.includes('critical') ? 'critical'
-    : healthValues.includes('unavailable') ? 'unavailable'
-      : healthValues.includes('warning') ? 'warning'
-      : healthValues.length && healthValues.every(value => value === 'empty') ? 'empty' : 'healthy'
+    : healthValues.includes('warning') ? 'warning'
+      : !healthValues.length ? 'unavailable'
+      : healthValues.every(value => value === 'empty') ? 'empty' : 'healthy'
   return {
     ...group,
     services,
@@ -2278,6 +2347,7 @@ const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
     active,
     inactive,
     issues,
+    notEvaluated,
     health,
     activePercent: resources ? Math.round((active / resources) * 100) : 0,
     tab: services.find(service => service.status !== 'unavailable')?.tab || services[0]?.tab || null,
@@ -2286,9 +2356,6 @@ const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
 const overviewAttention = computed(() => {
   const rows = []
   for (const service of overviewServices.value) {
-    if (service.status === 'unavailable') {
-      rows.push({ key: `${service.id}:unavailable`, service: service.label, tab: service.tab, level: 'critical', code: 'unavailable', name: null })
-    }
     ;(service.signals || []).forEach((signal, index) => rows.push({
       ...signal,
       key: `${service.id}:${signal.name || signal.code}:${index}`,
@@ -2321,20 +2388,17 @@ function overviewServiceHealth(service) {
   return service.status === 'empty' ? 'empty' : 'healthy'
 }
 function overviewHealthTone(value) {
-  return ['critical', 'unavailable'].includes(value) ? 'critical' : ['warning', 'degraded'].includes(value) ? 'warning' : value === 'empty' ? 'empty' : 'healthy'
+  return value === 'critical' ? 'critical' : ['warning', 'degraded'].includes(value) ? 'warning' : ['empty', 'unavailable'].includes(value) ? 'empty' : 'healthy'
 }
 function overviewHealthClass(value) { return overviewHealthTone(value) }
 function overviewHealthLabelFor(value) {
-  return { healthy: 'Healthy', warning: 'Warning', degraded: 'Degraded', critical: 'Critical', unavailable: 'API unavailable', empty: 'Empty' }[value] || 'Unknown'
+  return t(`gcpv.audit.state.${['healthy', 'warning', 'degraded', 'critical', 'unavailable', 'empty'].includes(value) ? value : 'unknown'}`)
 }
 function overviewGroupLabel(value) { return t(OVERVIEW_GROUP_LABELS[value] || 'gcpv.groupOther') }
 function overviewSignalText(signal) {
-  return {
-    unavailable: 'API unavailable', disabled: 'Disabled', paused: 'Paused', failed: 'Failed', error: 'Error',
-    internal_error: 'Internal error', degraded: 'Degraded', unhealthy: 'Unhealthy', reconciling: 'Reconciling',
-    provisioning: 'Provisioning', staging: 'Staging', starting: 'Starting', stopping: 'Stopping', updating: 'Updating',
-    working: 'Working', pending: 'Pending',
-  }[signal.code] || signal.code || 'Needs review'
+  const known = ['disabled', 'paused', 'failed', 'error', 'internal_error', 'degraded', 'unhealthy', 'reconciling',
+    'provisioning', 'staging', 'starting', 'stopping', 'updating', 'working', 'pending']
+  return known.includes(signal.code) ? t(`gcpv.audit.signal.${signal.code}`) : (signal.code || t('gcpv.audit.signal.review'))
 }
 function overviewTrendHeight(snapshot) {
   return Math.max(8, Math.round((Number(snapshot.payload?.summary?.total || 0) / overviewTrendMax.value) * 100))
