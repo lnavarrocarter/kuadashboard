@@ -11,7 +11,7 @@
             <span class="ec2d-id-badge">{{ instance?.id }}</span>
             <span :class="['ec2d-state', instance?.state]">{{ instance?.state }}</span>
           </div>
-          <button class="ec2d-close" @click="$emit('close')">✕</button>
+          <button class="ec2d-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->

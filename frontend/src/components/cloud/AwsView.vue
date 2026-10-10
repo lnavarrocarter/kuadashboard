@@ -31,7 +31,10 @@
       <div v-if="!SELF_LOADING_TABS.has(activeTab) && !(activeTab === 'cwdashboards' && dashboardView)" class="aws-toolbar">
         <input
           v-model="search[activeTab]"
+          type="search"
           class="ctrl-input aws-search"
+          :aria-label="t('awsv.searchResourcesLabel')"
+          :placeholder="t('awsv.searchResourcesPlaceholder')"
         />
         <span class="text-dim" style="font-size:12px">
           <template v-if="awsStore.loading">{{ t('state.loading') }}</template>
@@ -902,7 +905,7 @@
             <div v-if="athenaEditor.showHistory" class="athena-history-panel">
               <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
                 <span style="font-size:12px;font-weight:600">{{ t('awsv.recentQueries') }}</span>
-                <button class="btn sm" @click="athenaEditor.showHistory = false">✕</button>
+                <button class="btn sm" @click="athenaEditor.showHistory = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
               </div>
               <div v-if="athenaEditor.historyLoading" class="empty-row">{{ t('state.loading') }}</div>
               <div v-else-if="!athenaEditor.history.length" class="empty-row" style="font-size:12px">{{ t('awsv.noHistoryFound') }}</div>
@@ -2019,7 +2022,7 @@
       <div class="modal" style="width:480px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.createS3Bucket') }}</span>
-          <button class="btn sm" @click="createS3Modal.open = false">✕</button>
+          <button class="btn sm" @click="createS3Modal.open = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
         <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
           <div>
@@ -2070,7 +2073,7 @@
       <div class="modal" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.deployToKubernetes', { p0: ecrDeployModal.repoName }) }}</span>
-          <button class="btn sm" @click="ecrDeployModal.open = false">✕</button>
+          <button class="btn sm" @click="ecrDeployModal.open = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
         <div style="padding:12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px">
           <!-- Image tag selector -->
@@ -2209,12 +2212,17 @@
     </div>
 
     <div v-if="invokeModal.open" class="modal-overlay" @click.self="invokeModal.open = false">
-      <div class="modal" style="width:600px;max-width:95vw">
-        <div class="modal-header" style="display:flex;justify-content:space-between">
+      <div class="modal" style="width:600px;max-width:95vw" role="dialog" aria-modal="true" aria-labelledby="aws-invoke-title">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
+          <span id="aws-invoke-title" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
+            {{ t('awsv.invokeTitle', { name: invokeModal.name }) }}
+          </span>
+          <button class="btn sm" :aria-label="t('action.close')" :title="t('action.close')" @click="invokeModal.open = false">✕</button>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
-          <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
-          <textarea v-model="invokeModal.payload" rows="6"
+          <div class="alert-warn" style="margin:0;font-size:12px">{{ t('awsv.invokeWarning', { profile: selectedProfileName }) }}</div>
+          <label for="aws-invoke-payload" style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
+          <textarea id="aws-invoke-payload" v-model="invokeModal.payload" rows="6"
             style="font-family:monospace;font-size:12px;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:8px;resize:vertical"
             placeholder="{}"></textarea>
           <div v-if="invokeModal.result" class="logs-viewer" style="max-height:220px">
@@ -2225,6 +2233,7 @@
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn" @click="submitInvoke" :disabled="invokeModal.loading">
+              {{ invokeModal.loading ? t('awsv.invoking') : t('awsv.invokeAction') }}
             </button>
             <button class="btn sm" @click="invokeModal.open = false">{{ t('action.cancel') }}</button>
           </div>

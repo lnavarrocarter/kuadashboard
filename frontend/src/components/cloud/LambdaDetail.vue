@@ -11,7 +11,7 @@
             <span v-if="fn?.runtime" class="lmd-badge runtime">{{ fn.runtime }}</span>
             <span :class="['lmd-state', fn?.state]">{{ fn?.state }}</span>
           </div>
-          <button class="lmd-close" @click="$emit('close')">✕</button>
+          <button class="lmd-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->

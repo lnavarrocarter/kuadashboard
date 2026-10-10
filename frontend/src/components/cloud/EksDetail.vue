@@ -12,7 +12,7 @@
             <span v-if="cluster?.status" :class="['eksd-state', stateClass(cluster.status)]">{{ cluster.status }}</span>
             <span v-if="cluster?.region" class="badge-gray">{{ cluster.region }}</span>
           </div>
-          <button class="eksd-close" @click="$emit('close')">✕</button>
+          <button class="eksd-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->

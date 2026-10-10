@@ -919,6 +919,16 @@ body.kube-resizing {
   font-size: 12px;
 }
 
+/* Alert warning */
+.alert-warn {
+  background: color-mix(in srgb, var(--yellow) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent);
+  color: var(--yellow);
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
 .modal {
   background: var(--bg-modal);
   border: 1px solid var(--border);
