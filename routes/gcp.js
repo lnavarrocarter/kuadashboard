@@ -41,6 +41,7 @@ const { listArtifactRepositories, listSchedulerJobs, listTaskQueues, listCloudRu
 const { summarizeOverview } = require('../lib/gcpOverview');
 const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
 const { listAllPages } = require('../lib/gcpPaging');
+const { mapFirewall, mapRoute, byPriority } = require('../lib/gcpNetwork');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -2491,6 +2492,29 @@ router.get('/vpc/networks/:network/subnets', async (req, res) => {
     res.json(subnets);
   } catch (err) { handleErr(res, err); }
 });
+
+// GET /vpc/networks/:network/firewalls → firewall rules of a network, highest priority first
+// GET /vpc/networks/:network/routes    → routes of a network
+// Compute Engine list reads (no charge). Mapping and ordering: lib/gcpNetwork.js.
+for (const [path, collection, mapItem] of [['firewalls', 'firewalls', mapFirewall], ['routes', 'routes', mapRoute]]) {
+  router.get(`/vpc/networks/:network/${path}`, async (req, res) => {
+    const profileId = requireProfileId(req, res);
+    if (!profileId) return;
+    const { network } = req.params;
+    if (!/^[a-zA-Z0-9\-]+$/.test(network)) {
+      return res.status(400).json({ error: 'Invalid network name' });
+    }
+    try {
+      const authCtx = await resolveGcpAuth(profileId);
+      const { projectId } = authCtx;
+      if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+      const networkUrl = `https://www.googleapis.com/compute/v1/projects/${projectId}/global/networks/${network}`;
+      const page = await listAllPages(gcpFetch, authCtx,
+        `https://compute.googleapis.com/compute/v1/projects/${projectId}/global/${collection}?filter=${encodeURIComponent(`network="${networkUrl}"`)}`, 'items');
+      sendList(res, page, page.items.map(mapItem).sort(byPriority));
+    } catch (err) { handleErr(res, err); }
+  });
+}
 
 // ── Cloud Monitoring ──────────────────────────────────────────────────────────
 

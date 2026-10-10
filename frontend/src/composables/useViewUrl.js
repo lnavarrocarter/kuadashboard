@@ -3,8 +3,9 @@ import { nextTick, watch } from 'vue'
 // Keeps the URL in step with the main view, so a copied URL opens an equivalent
 // view and Back returns to the previous one. Params owned here:
 //   view     provider (kubernetes | aws | gcp | vercel | kuapps)
-//   service  AWS or GCP service tab
-//   profile  AWS or GCP profile id (a local id, never credentials)
+//   service  AWS, GCP or Vercel service tab
+//   profile  AWS, GCP or Vercel profile id (a local id, never credentials)
+//   project  Vercel project id
 //   q, f.<id> search and filters of that service (they replace the current
 //            entry: reloading or sharing keeps the result without new history)
 //   selected GCP selected resource (region/name), never payloads or values
@@ -18,7 +19,7 @@ const KUBE_PARAMS = ['context', 'ns', 'resource', 'name']
 
 export function readViewUrl(search = '') {
   let params
-  try { params = new URLSearchParams(search) } catch { return { view: '', service: '', profile: '', resource: '', filters: {} } }
+  try { params = new URLSearchParams(search) } catch { return { view: '', service: '', profile: '', resource: '', project: '', filters: {} } }
   const view = params.get('view') || ''
   const filters = {}
   for (const [key, value] of params) {
@@ -31,18 +32,20 @@ export function readViewUrl(search = '') {
     service: params.get('service') || '',
     profile: params.get('profile') || '',
     resource: params.get('selected') || '',
+    project: params.get('project') || '',
     filters,
   }
 }
 
-// Providers whose service, profile and filters live in the URL.
-const SERVICE_VIEWS = new Set(['aws', 'gcp'])
+// Providers whose service and profile live in the URL; AWS and GCP also keep their filters.
+const SERVICE_VIEWS = new Set(['aws', 'gcp', 'vercel'])
+const FILTER_VIEWS = new Set(['aws', 'gcp'])
 
 /**
  * The URL for a view state. `stash` holds the KUApps params removed while
  * another provider is shown; it is returned updated.
  */
-export function nextViewUrl(href, { view, service, profile, resource = '', filters = {} }, stash = {}) {
+export function nextViewUrl(href, { view, service, profile, resource = '', project = '', filters = {} }, stash = {}) {
   const url = new URL(href)
   const kept = { ...stash }
   const scoped = SERVICE_VIEWS.has(view)
@@ -54,9 +57,11 @@ export function nextViewUrl(href, { view, service, profile, resource = '', filte
   else url.searchParams.delete('profile')
   if (view === 'gcp' && resource) url.searchParams.set('selected', resource)
   else url.searchParams.delete('selected')
+  if (view === 'vercel' && project) url.searchParams.set('project', project)
+  else url.searchParams.delete('project')
   for (const key of [...url.searchParams.keys()]) if (key === 'q' || key.startsWith('f.')) url.searchParams.delete(key)
   if (view !== 'kubernetes') for (const key of KUBE_PARAMS) url.searchParams.delete(key)
-  if (scoped) {
+  if (FILTER_VIEWS.has(view)) {
     for (const [key, value] of Object.entries(filters)) {
       if (value) url.searchParams.set(key === 'q' ? 'q' : `f.${key}`, value)
     }

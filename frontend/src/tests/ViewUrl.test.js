@@ -6,9 +6,9 @@ const BASE = 'http://localhost:7192/'
 
 describe('view URL (A15)', () => {
   it('reads the view, AWS service and profile, ignoring unknown views', () => {
-    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev', resource: '', filters: {} })
-    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '', resource: '', filters: {} })
-    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '', resource: '', filters: {} })
+    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev', resource: '', project: '', filters: {} })
+    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '', resource: '', project: '', filters: {} })
+    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '', resource: '', project: '', filters: {} })
   })
 
   it('drops the KUApps params on other views and puts them back on KUApps', () => {
@@ -23,7 +23,7 @@ describe('view URL (A15)', () => {
 
   it('carries the AWS search and filters, and drops them elsewhere (R04)', () => {
     expect(readViewUrl('?view=aws&service=lambda&q=orders&f.runtime=python3.12&f.activity=')).toEqual({
-      view: 'aws', service: 'lambda', profile: '', resource: '', filters: { q: 'orders', runtime: 'python3.12' },
+      view: 'aws', service: 'lambda', profile: '', resource: '', project: '', filters: { q: 'orders', runtime: 'python3.12' },
     })
     const lambda = nextViewUrl(`${BASE}?view=aws&service=ec2&f.state=stopped`, { view: 'aws', service: 'lambda', filters: { q: 'orders', runtime: 'python3.12' } })
     expect(lambda.href).toBe(`${BASE}?view=aws&service=lambda&q=orders&f.runtime=python3.12`)
@@ -38,14 +38,22 @@ describe('view URL (A15)', () => {
   })
 
   it('keeps service params off providers without them and never writes credentials', () => {
-    const { href } = nextViewUrl(`${BASE}?view=aws&service=s3&profile=p1`, { view: 'vercel', service: 's3', profile: 'p1' })
-    expect(href).toBe(`${BASE}?view=vercel`)
+    const { href } = nextViewUrl(`${BASE}?view=aws&service=s3&profile=p1`, { view: 'kuapps', service: 's3', profile: 'p1' })
+    expect(href).toBe(`${BASE}?view=kuapps`)
+  })
+
+  it('carries the Vercel service, profile and project, but no filters', () => {
+    const { href } = nextViewUrl(BASE, { view: 'vercel', service: 'deployments', profile: 'p-1', project: 'prj_1', filters: { q: 'x' } })
+    expect(href).toBe(`${BASE}?view=vercel&service=deployments&profile=p-1&project=prj_1`)
+    expect(readViewUrl(new URL(href).search)).toEqual({ view: 'vercel', service: 'deployments', profile: 'p-1', resource: '', project: 'prj_1', filters: {} })
+    // the project is Vercel-only
+    expect(nextViewUrl(href, { view: 'aws', service: 'lambda', project: 'prj_1' }).href).toBe(`${BASE}?view=aws&service=lambda`)
   })
 
   it('carries the GCP service, profile, filters and selected resource (G15)', () => {
-    const { href } = nextViewUrl(BASE, { view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
+    const { href } = nextViewUrl(BASE, { view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', project: '', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
     const read = readViewUrl(new URL(href).search)
-    expect(read).toEqual({ view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
+    expect(read).toEqual({ view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', project: '', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
     // the resource is GCP-only
     expect(nextViewUrl(href, { view: 'aws', service: 'lambda', resource: 'us-central1/api' }).href).not.toContain('selected=')
   })
@@ -153,7 +161,7 @@ describe('useViewUrl history', () => {
     await nextTick()
     history.back()
     await nextTick(); await nextTick(); await nextTick()
-    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev', resource: '', filters: {} })
+    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev', resource: '', project: '', filters: {} })
     expect(service.value).toBe('overview')
     expect(history.length).toBe(3)
     expect(location.search).toBe('?view=aws&service=overview&profile=local%3Adev')

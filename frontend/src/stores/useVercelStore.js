@@ -167,6 +167,13 @@ export const useVercelStore = defineStore('vercel', () => {
     } catch (e) { setError(e) } finally { loading.value = false }
   }
 
+  /** A link names a project: select it once this profile's projects are loaded. */
+  function linkProject(profileId, projectId) {
+    if (!profileId || !projectId) return
+    rememberProject(profileId, projectId)
+    if (activeProfileId.value === profileId) selectProjectById(projectId)
+  }
+
   /** Select by id from the loaded list ('' / null clears the project context). */
   function selectProjectById(projectId) {
     if (!projectId) {
@@ -495,6 +502,7 @@ export const useVercelStore = defineStore('vercel', () => {
     fetchProjects,
     fetchOverview,
     selectProjectById,
+    linkProject,
     fetchDeployments,
     fetchDomains,
     fetchEnvVars,

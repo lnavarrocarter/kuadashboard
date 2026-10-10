@@ -37,14 +37,19 @@
         <strong class="kuapp-card-value">{{ pendingTotal }}</strong>
         <small>{{ pendingDetail }}</small>
       </button>
-      <button :class="['kuapp-card', coverageTone]" data-test="summary-coverage" @click="$emit('open-tab', 'resources')">
-        <span class="kuapp-card-label" :title="t('kuapps.summary.coverageHint')">{{ t('kuapps.summary.coverage') }}</span>
+      <!-- While the registry loads the counts are pending, not zero: the topology alone has
+           no signal states, so it would show every resource without data. -->
+      <button :class="['kuapp-card', coverageTone]" data-test="summary-coverage" :aria-busy="coverageLoading"
+        :title="t('kuapps.summary.coverageHint')" aria-describedby="kuapp-coverage-hint" @click="$emit('open-tab', 'resources')">
+        <span class="kuapp-card-label">{{ t('kuapps.summary.coverage') }}</span>
         <strong class="kuapp-card-value">
-          <template v-if="registryTotal">{{ coverage.withData }}<small> {{ t('kuapps.summary.ofTotal', { total: registryTotal }) }}</small></template>
+          <template v-if="coverageLoading">…</template>
+          <template v-else-if="registryTotal">{{ coverage.withData }}<small> {{ t('kuapps.summary.ofTotal', { total: registryTotal }) }}</small></template>
           <template v-else>0</template>
         </strong>
-        <span v-if="registryTotal" class="kuapp-card-bar"><i :style="{ width: `${coveragePercent}%` }"></i></span>
-        <small>{{ coverageDetail }}</small>
+        <span v-if="registryTotal && !coverageLoading" class="kuapp-card-bar"><i :style="{ width: `${coveragePercent}%` }"></i></span>
+        <small data-test="summary-coverage-detail">{{ coverageDetail }}</small>
+        <span id="kuapp-coverage-hint" hidden>{{ t('kuapps.summary.coverageHint') }}</span>
       </button>
     </div>
 
@@ -124,6 +129,8 @@ const props = defineProps({
   registry: { type: Object, default: () => ({ resources: [], relationships: [] }) },
   scopeWarnings: { type: Array, default: () => [] },
   reviewCount: { type: Number, default: 0 },
+  // The application registry (signal states per resource) is still loading.
+  registryLoading: { type: Boolean, default: false },
   collecting: { type: Boolean, default: false },
   collectError: { type: String, default: '' },
 })
@@ -281,14 +288,16 @@ const coverage = computed(() => {
   const compatible = sections.filter(section => section.collectsMetrics).reduce((sum, section) => sum + section.resourceCount, 0)
   return { compatible, enabled: null, withData: 0, uncollected: sections.filter(section => !section.collectsMetrics) }
 })
+const coverageLoading = computed(() => props.registryLoading || (loading.value && !props.registry?.resources?.length))
 const coveragePercent = computed(() => registryTotal.value ? Math.round(100 * coverage.value.withData / registryTotal.value) : 0)
 // Green only when most of what can be collected has recent data, never for compatibility alone.
 const coverageTone = computed(() => {
-  if (!registryTotal.value) return 'unknown'
+  if (coverageLoading.value || !registryTotal.value) return 'unknown'
   const { withData, compatible } = coverage.value
   return compatible && withData / compatible >= 0.8 ? 'ok' : 'attention'
 })
 const coverageDetail = computed(() => {
+  if (coverageLoading.value) return t('kuapps.loadingRegistry')
   if (!registryTotal.value) return t('kuapps.noResourcesHint')
   if (!hasSignals.value) return t('kuapps.summary.noSignalsHint')
   const { compatible, enabled, withData } = coverage.value

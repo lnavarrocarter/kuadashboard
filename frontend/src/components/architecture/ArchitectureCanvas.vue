@@ -1,5 +1,5 @@
 <template>
-  <section class="architecture-canvas-shell">
+  <section :class="['architecture-canvas-shell', { 'is-expanded': expanded }]" data-test="canvas-shell">
     <header class="canvas-toolbar">
       <div class="canvas-toolbar-row canvas-layout-controls">
         <label class="canvas-search"><i data-lucide="search"></i><input v-model.trim="nodeSearch" type="search" data-test="canvas-search" :placeholder="t('archCanvas.searchResources')" :aria-label="t('archCanvas.searchResources')" :title="t('archCanvas.searchEnterHint')" @keydown.enter.prevent="goToSearchMatch" /></label>
@@ -25,6 +25,14 @@
           <button v-if="hiddenNodes.length" type="button" :class="['btn', 'sm', { primary: openPanel === 'hidden' }]" :aria-expanded="String(openPanel === 'hidden')" data-test="canvas-panel-hidden" @click="togglePanel('hidden')"><i data-lucide="eye-off"></i>{{ t('archCanvas.hiddenNodes') }}<b class="canvas-panel-count">{{ hiddenNodes.length }}</b></button>
           <button type="button" :class="['btn', 'sm', { primary: openPanel === 'create' }]" :aria-expanded="String(openPanel === 'create')" data-test="canvas-panel-create" @click="togglePanel('create')"><i data-lucide="plus"></i>{{ t('archCanvas.component') }}</button>
         </span>
+        <!-- Start from the problem: the first degraded resource and its neighbours. -->
+        <button v-if="degradedNodes.length" type="button" class="btn sm" data-test="canvas-go-to-issue" :title="t('archCanvas.goToIssueHint')" @click="goToFirstIssue">
+          <i data-lucide="siren"></i>{{ t('archCanvas.goToIssue', { n: degradedNodes.length }) }}
+        </button>
+        <button type="button" class="btn sm btn-icon canvas-expand" data-test="canvas-expand" :aria-pressed="String(expanded)"
+          :title="t(expanded ? 'archCanvas.exitExpanded' : 'archCanvas.expand')" :aria-label="t(expanded ? 'archCanvas.exitExpanded' : 'archCanvas.expand')" @click="toggleExpanded">
+          <i :data-lucide="expanded ? 'minimize-2' : 'maximize-2'"></i>
+        </button>
       </div>
       <div v-show="openPanel === 'create'" class="canvas-panel">
         <div class="canvas-toolbar-row canvas-create-controls">
@@ -292,7 +300,7 @@
 
 <script setup>
 import { awsConsoleUrl, awsViewTarget } from '../../lib/awsResourceLinks'
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -934,6 +942,30 @@ function reviewEdge(decision) {
   clearSelection()
 }
 
+// The map can take the whole window: the page headers and panels leave it little height.
+const expanded = ref(false)
+function toggleExpanded() {
+  expanded.value = !expanded.value
+  nextTick(() => { fitReadable({ duration: 200 }); refreshIcons() })
+}
+function onExpandedKey(event) {
+  if (event.key === 'Escape' && expanded.value) toggleExpanded()
+}
+onMounted(() => globalThis.addEventListener?.('keydown', onExpandedKey))
+onUnmounted(() => globalThis.removeEventListener?.('keydown', onExpandedKey))
+
+// Visible resources whose health says degraded, in map order (with or without the Health layer).
+const degradedNodes = computed(() => {
+  const degraded = new Set((props.graph?.document?.nodes || []).filter(node => node.health?.status === 'degraded').map(node => node.id))
+  return flowNodes.value.filter(node => degraded.has(node.id))
+})
+function goToFirstIssue() {
+  const [first] = degradedNodes.value
+  if (!first) return
+  selectNode({ node: { id: first.id } })
+  nextTick(zoomToNeighbors)
+}
+
 // A large map opens at a readable size around its centre instead of shrinking to fit (#239).
 const READABLE_ZOOM = 0.6
 function fitReadable(options = {}) {
@@ -1137,6 +1169,9 @@ onMounted(refreshIcons)
 
 <style scoped>
 .architecture-canvas-shell { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-panel); }
+.architecture-canvas-shell.is-expanded { position: fixed; inset: 8px; z-index: 700; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.architecture-canvas-shell.is-expanded .canvas-body { flex: 1; height: auto; min-height: 0; }
+.canvas-expand { margin-left: auto; }
 .canvas-toolbar { min-height: 48px; padding: 8px 9px; display: flex; flex-direction: column; align-items: stretch; gap: 7px; border-bottom: 1px solid var(--border); }
 .canvas-toolbar-row { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .canvas-toolbar .ctrl-input { flex: 1 1 210px; min-width: 150px; max-width: 280px; }

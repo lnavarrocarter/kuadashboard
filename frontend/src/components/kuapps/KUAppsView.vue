@@ -83,6 +83,7 @@
               :provider="apmProvider"
               :profile-id="apmProfileId"
               :registry="applicationRegistry"
+              :registry-loading="registryLoading"
               :scope-warnings="scopeWarnings"
               :review-count="reviewCount"
               :collecting="collectionBusy"
