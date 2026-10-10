@@ -22,6 +22,10 @@ stubModule('@aws-sdk/client-lambda', {
   LambdaClient: class { async send() { throw lambdaError; } },
   ListFunctionsCommand: class {},
 });
+stubModule('@aws-sdk/client-resource-groups-tagging-api', {
+  ResourceGroupsTaggingAPIClient: class { async send() { return { ResourceTagMappingList: [] }; } },
+  GetResourcesCommand: class {},
+});
 
 const router = require('./aws');
 
@@ -57,7 +61,7 @@ test('a denied AWS call answers 403 with the actions and policy to request', asy
   assert.equal(body.access.route, 'GET /lambda');
   assert.equal(body.access.account, '123456789012');
   assert.equal(body.access.principal, 'arn:aws:iam::123456789012:user/dev');
-  assert.deepEqual(body.access.policy.Statement, [{ Sid: 'KuaAccess', Effect: 'Allow', Action: ['lambda:ListFunctions'], Resource: '*' }]);
+  assert.deepEqual(body.access.policy.Statement, [{ Sid: 'KuaAccess', Effect: 'Allow', Action: ['lambda:ListFunctions', 'tag:GetResources'], Resource: '*' }]);
 });
 
 test('other AWS errors keep their status and carry no access request', async t => {

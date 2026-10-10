@@ -169,9 +169,12 @@
           <div class="cwl-usage">
             <div class="cwl-usage-label">
               {{ t('awsLogs.cacheUsage', { used: formatBytes(cache.totalBytes), budget: formatBytes(cache.budgetBytes) }) }}
-              <span class="text-dim">· {{ t('awsLogs.eventsCount', { n: cache.totalEvents }) }}</span>
+              <span class="text-dim">· {{ t('awsLogs.eventsCount', { n: Number(cache.totalEvents || 0).toLocaleString() }) }}</span>
             </div>
             <div class="cwl-bar" role="progressbar" :aria-valuenow="usage" aria-valuemin="0" aria-valuemax="100"><div :style="{ width: `${usage}%` }"></div></div>
+            <div v-if="cache.scope" class="cwl-hint" data-test="cache-scope">
+              {{ t('awsLogs.cacheScope', { region: cache.scope.region || cache.region || '—', groups: cache.scope.groups, size: formatBytes(cache.scope.bytes), events: Number(cache.scope.events || 0).toLocaleString() }) }}
+            </div>
           </div>
           <LogCacheBudget @changed="loadCache" />
           <button class="btn sm primary" :disabled="loading.sync || !cache.groups.length" @click="syncAll">{{ loading.sync ? t('awsLogs.syncing') : t('awsLogs.syncAll') }}</button>
@@ -181,7 +184,7 @@
           🔒 {{ t('awsLogs.protection', { algorithm: cache.encryption.algorithm, store: t(`awsLogs.keyStore_${cache.encryption.keyStore || 'pending'}`) }) }}
           <template v-if="cache.totalBytes"> · {{ t('awsLogs.compression', { raw: formatBytes(cache.totalRawBytes), stored: formatBytes(cache.totalBytes), ratio: compressionRatio(cache.totalRawBytes, cache.totalBytes) }) }}</template>
         </div>
-        <div v-if="!cache.groups.length" class="empty-row">{{ t('awsLogs.cacheEmpty') }}</div>
+        <div v-if="!cache.groups.length" class="empty-row">{{ t('awsLogs.cacheEmpty', { region: cache.scope?.region || cache.region || '—' }) }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th>{{ t('awsLogs.colGroup') }}</th>

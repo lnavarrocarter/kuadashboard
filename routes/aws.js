@@ -204,6 +204,7 @@ const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
 const { countExecutions } = require('../lib/awsStepFnCounts');
+const { loadLambdaTags, tagsFor } = require('../lib/awsLambdaTags');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { buildAwsAdvisor, collectS3Advisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -1312,7 +1313,12 @@ router.get('/lambda', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     const { LambdaClient, ListFunctionsCommand } = require('@aws-sdk/client-lambda');
+    const { ResourceGroupsTaggingAPIClient, GetResourcesCommand } = require('@aws-sdk/client-resource-groups-tagging-api');
     const client = new LambdaClient(cfg);
+    const tagging = new ResourceGroupsTaggingAPIClient(cfg);
+    // Tags are optional: without tag:GetResources the list still loads, with tags null (not read).
+    const tagsRead = loadLambdaTags(input => tagging.send(new GetResourcesCommand(input)))
+      .catch(err => { console.warn('[aws] lambda tags:', err.message); return null; });
     const all = [];
     let marker;
     do {
@@ -1320,6 +1326,8 @@ router.get('/lambda', async (req, res) => {
       all.push(...(resp.Functions || []));
       marker = resp.NextMarker;
     } while (marker);
+    const tagResult = await tagsRead;
+    // ListFunctions does not return State; the function detail (GetFunction) shows it.
     res.json(all.map(f => ({
       name:         f.FunctionName,
       runtime:      f.Runtime,
@@ -1328,10 +1336,9 @@ router.get('/lambda', async (req, res) => {
       timeout:      f.Timeout,
       lastModified: f.LastModified,
       description:  f.Description,
-      state:        f.State,
       arn:          f.FunctionArn,
       logGroup:     f.LoggingConfig?.LogGroup || `/aws/lambda/${f.FunctionName}`,
-      tags:         [],
+      tags:         tagsFor(f.FunctionName, tagResult),
     })));
   } catch (err) { handleErr(res, err); }
 });

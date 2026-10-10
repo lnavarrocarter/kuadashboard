@@ -241,7 +241,6 @@
             <th :class="thClass('runtime')"      @click="sortBy('runtime')">Runtime <span class="sort-icon">{{ sortIcon('runtime') }}</span></th>
             <th :class="thClass('memory')"       @click="sortBy('memory')">{{ t('lmd.memory') }} <span class="sort-icon">{{ sortIcon('memory') }}</span></th>
             <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
-            <th :class="thClass('state')"        @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
             <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
             <th :class="thClass('invocations24h')" @click="sortBy('invocations24h')" :title="t('awsActivity.invocationsHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('invocations24h') }}</span></th>
             <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')">{{ t('awsActivity.logs') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
@@ -256,7 +255,6 @@
               <td class="text-dim">{{ fn.runtime }}</td>
               <td class="text-dim">{{ fn.memory }} MB</td>
               <td class="text-dim">{{ fn.timeout }}s</td>
-              <td><span :class="lambdaStateClass(fn.state)">{{ fn.state }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ fn.lastModified ? formatDate(fn.lastModified) : '-' }}</td>
               <td class="activity-cell">
                 <template v-if="fn.invocations24h == null"><span class="text-dim">{{ lambdaActivityLoading ? '…' : '—' }}</span></template>
@@ -272,9 +270,11 @@
                 >{{ t(`awsActivity.log_${fn.logStatus}`) }}</button>
                 <span v-else class="text-dim">{{ lambdaActivityLoading ? '…' : '—' }}</span>
               </td>
-              <td>
-                <div class="tag-chips">
-                  <span v-for="(v, k) in (fn.tags || {})" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
+              <td data-test="lambda-tags">
+                <span v-if="fn.tags === null || fn.tags === undefined" class="text-dim" :title="t('awsv.lambdaTagsNotReadHint')">{{ t('awsv.lambdaTagsNotRead') }}</span>
+                <span v-else-if="!Object.keys(fn.tags).length" class="text-dim">—</span>
+                <div v-else class="tag-chips">
+                  <span v-for="(v, k) in fn.tags" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
                 </div>
               </td>
               <td>
@@ -4560,10 +4560,6 @@ function ecsStatusClass(s) {
 function eksStatusClass(s) {
   return s === 'ACTIVE' ? 'status-ok' : (s === 'CREATING' || s === 'UPDATING') ? 'status-warn' : 'status-err'
 }
-function lambdaStateClass(s) {
-  return s === 'Active' ? 'status-ok' : s === 'Pending' ? 'status-warn' : 'status-err'
-}
-
 // ─── EC2 SSH Shell Modal ──────────────────────────────────────────────────────
 
 function openEc2Shell(instance) {

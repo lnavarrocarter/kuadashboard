@@ -9,7 +9,7 @@
             <span class="lmd-icon">λ</span>
             <span>{{ fn?.name }}</span>
             <span v-if="fn?.runtime" class="lmd-badge runtime">{{ fn.runtime }}</span>
-            <span :class="['lmd-state', fn?.state]">{{ fn?.state }}</span>
+            <span v-if="data?.basic?.state" :class="['lmd-state', data.basic.state]">{{ data.basic.state }}</span>
           </div>
           <button class="lmd-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
