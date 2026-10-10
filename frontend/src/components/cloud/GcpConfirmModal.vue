@@ -34,9 +34,9 @@
             </tr>
           </table>
           <ul v-if="estimate.warnings?.length" class="gcpc-warnings">
-            <li v-for="w in estimate.warnings" :key="w">{{ w }}</li>
+            <li v-for="(w, i) in estimate.warnings" :key="w">{{ estimate.warningKeys?.[i] ? t(`gcc.warn.${estimate.warningKeys[i]}`) : w }}</li>
           </ul>
-          <div v-if="estimate.disclaimer" class="gcpc-disclaimer">{{ estimate.disclaimer }}</div>
+          <div v-if="estimate.disclaimer" class="gcpc-disclaimer">{{ estimate.disclaimerKey ? t(`gcc.disclaimer.${estimate.disclaimerKey}`) : estimate.disclaimer }}</div>
         </div>
         <div v-else-if="estimateUnavailable" class="gcpc-estimate gcpc-estimate-missing" data-test="estimate-unavailable">{{ t('gcc.estimateUnavailable') }}</div>
 

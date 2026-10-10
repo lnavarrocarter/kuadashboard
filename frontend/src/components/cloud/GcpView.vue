@@ -67,7 +67,7 @@
               <span v-if="gcpStore.overview?.generatedAt"> {{ t('gcpv.updated', { p0: new Date(gcpStore.overview.generatedAt).toLocaleString() }) }}</span>
             </div>
           </div>
-          <button class="btn sm" @click="reloadOverview" :disabled="gcpStore.overviewLoading" :title="t('gcpv.refreshOverview')">
+          <button class="btn sm" @click="reloadOverview" :disabled="gcpStore.overviewLoading" :title="t('gcpv.audit.refreshOverviewCost')">
             <i data-lucide="refresh-cw"></i> {{ gcpStore.overviewLoading ? t('common.loading') : t('action.refresh') }}
           </button>
         </div>
@@ -760,8 +760,8 @@
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
-              <button v-for="tabItem in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id" @click="fnSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+              <button v-for="tabItem in [{id:'overview',label:'gcpv.tabOverview'},{id:'variables',label:'gcpv.tabVariables'},{id:'logs',label:'gcpv.tabLogs'},{id:'invoke',label:'gcp.invoke'},{id:'metrics',label:'gcpv.tabMetrics'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id" @click="fnSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
@@ -945,8 +945,8 @@
             </div>
             <!-- Tabs -->
             <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" role="tablist">
-              <button v-for="tabItem in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id" @click="arSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+              <button v-for="tabItem in [{id:'packages',label:'gcpv.audit.tabPackages'},{id:'deploy',label:'gcpv.audit.tabDeploy'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id" @click="arSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
             <!-- PACKAGES & TAGS -->
             <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
@@ -2725,7 +2725,7 @@ async function runAction(acks) {
       await gcpStore.deleteResource(kind, resource, acks.confirmName)
       const panel = panelFor(kind)
       if (panel.resource?.name === resource.name) panel.resource = null
-      toast(kind === 'sql' ? `Eliminando ${resource.name}…` : `${resource.name} eliminado`, 'success')
+      toast(t(kind === 'sql' ? 'gcpv.audit.toastDeleting' : 'gcpv.audit.toastDeleted', { name: resource.name }), 'success')
     } else {
       const res = await ACTION_CALLS[kind][action](resource)
       if (!res) throw new Error(gcpStore.tabs[tab].error || 'Error')
@@ -2876,7 +2876,7 @@ async function connectGke(cluster) {
     toast(t('gcpv.toastClusterConnected', { name: cluster.name, context: result.contextName }), 'success')
     emit('connect-gke', result.contextName)
   } catch (e) {
-    toast(e.message || 'Error al conectar con el cluster', 'error')
+    toast(e.message || t('gcpv.audit.toastConnectFailed'), 'error')
   } finally {
     connectingCluster.value = null
   }

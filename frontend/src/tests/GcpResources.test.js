@@ -451,6 +451,14 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(calls.some(c => c.url.includes('/gke/'))).toBe(false)
   })
 
+  it('estimate warnings and disclaimer are translated (G14)', () => {
+    const estimate = { known: true, monthlyUsd: 8.21, items: [], warnings: ['Min instances are billed 24/7 even with no traffic.'], warningKeys: ['runMin'], disclaimer: 'Approximate…', disclaimerKey: 'listPrice' }
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', estimate } })
+    expect(w.text()).toContain('Las instancias mínimas se facturan 24/7')
+    expect(w.text()).toContain('Precio de lista aproximado')
+    expect(w.text()).not.toContain('Min instances are billed')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)
