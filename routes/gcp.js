@@ -33,6 +33,7 @@ const express  = require('express');
 const { createDatastoreReader } = require('../lib/gcpDatastore');
 const { createKmsReader } = require('../lib/gcpKms');
 const { listWorkflows, mapWorkflow } = require('../lib/gcpWorkflows');
+const { mapFunction, functionParamsError, functionLogFilter } = require('../lib/gcpFunctions');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -1067,15 +1068,7 @@ router.get('/functions', async (req, res) => {
       `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`,
       authCtx
     );
-    res.json((data.functions || []).map(f => ({
-      name:     f.name?.split('/').pop(),
-      location: f.name?.split('/')[5],
-      runtime:  f.buildConfig?.runtime,
-      state:    f.state,
-      trigger:  f.eventTrigger?.eventType ? 'EVENT' : 'HTTPS',
-      url:      f.serviceConfig?.uri,
-      updated:  f.updateTime,
-    })));
+    res.json((data.functions || []).map(mapFunction));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1211,9 +1204,8 @@ router.post('/functions/:location/:name/invoke', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   const { location, name } = req.params;
-  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
-    return res.status(400).json({ error: 'Invalid location or function name' });
-  }
+  const paramsError = functionParamsError({ location, name });
+  if (paramsError) return res.status(400).json({ error: paramsError, code: 'INVALID_ARGUMENT' });
   try {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
@@ -1252,9 +1244,8 @@ router.get('/functions/:location/:name/logs', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   const { location, name } = req.params;
-  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
-    return res.status(400).json({ error: 'Invalid location or function name' });
-  }
+  const paramsError = functionParamsError({ location, name });
+  if (paramsError) return res.status(400).json({ error: paramsError, code: 'INVALID_ARGUMENT' });
   try {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
@@ -1263,11 +1254,7 @@ router.get('/functions/:location/:name/logs', async (req, res) => {
     const hours = Math.min(parseInt(req.query.hours) || 3, 72);
     const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
     // Cloud Functions Gen 2 run as Cloud Run services
-    const filter = [
-      `(resource.type="cloud_run_revision" AND labels."goog-managed-by"="cloudfunctions" AND resource.labels.service_name="${name}")`,
-      `OR (resource.type="cloud_function" AND resource.labels.function_name="${name}")`,
-      `timestamp>="${since}"`,
-    ].join(' ');
+    const filter = functionLogFilter({ location, name, since });
     const data = await gcpFetch('https://logging.googleapis.com/v2/entries:list', authCtx, 'POST', {
       resourceNames: [`projects/${projectId}`],
       filter,
@@ -3175,9 +3162,8 @@ router.get('/functions/:location/:name/detail', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   const { location, name } = req.params;
-  if (!/^[a-zA-Z0-9\-]+$/.test(location) || !/^[a-zA-Z0-9\-_]+$/.test(name)) {
-    return res.status(400).json({ error: 'Invalid location or function name' });
-  }
+  const paramsError = functionParamsError({ location, name });
+  if (paramsError) return res.status(400).json({ error: paramsError, code: 'INVALID_ARGUMENT' });
   try {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
@@ -3193,6 +3179,7 @@ router.get('/functions/:location/:name/detail', async (req, res) => {
     res.json({
       name:            data.name?.split('/').pop(),
       location,
+      fullName:        data.name || null,
       state:           data.state,
       runtime:         bc.runtime,
       trigger:         et.eventType ? 'EVENT' : 'HTTPS',

@@ -6499,4 +6499,9 @@ export default {
   // ── AWS Cognito group errors ──
   'awsv.lit.groupAddFailed': 'Could not add the group',
   'awsv.lit.groupRemoveFailed': 'Could not remove the group',
+
+  // ── GCP UX audit ──
+  "gcpv.audit.technicalDetails": "Technical details",
+  "gcpv.audit.fnDetailError": "Could not read {name} in {location}. The function list may be out of date; retry before reviewing permissions.",
+  "gcpv.audit.fnRegionUnknown": "Region not determined",
 }

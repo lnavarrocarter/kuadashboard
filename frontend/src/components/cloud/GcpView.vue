@@ -684,11 +684,11 @@
         <div v-else style="display:flex;flex:1;overflow:hidden">
           <!-- LEFT -->
           <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
-            <div v-for="fn in filteredFunctions" :key="fn.name"
-              :class="['sidebar-item', fnPanel.resource?.name === fn.name ? 'active' : '']"
+            <div v-for="fn in filteredFunctions" :key="fnKey(fn)"
+              :class="['sidebar-item', fnKey(fnPanel.resource) === fnKey(fn) ? 'active' : '']"
               style="cursor:pointer" @click="selectFn(fn)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ fn.name }}</div>
-              <div class="text-dim" style="font-size:10px">{{ fn.location }}</div>
+              <div class="text-dim" style="font-size:10px">{{ fn.location || t('gcpv.audit.fnRegionUnknown') }}</div>
               <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
                 <span :class="fnStatusClass(fn.state)" style="font-size:10px">{{ fn.state }}</span>
                 <span class="text-dim" style="font-size:10px">{{ fn.runtime }}</span>
@@ -717,7 +717,11 @@
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
               <div v-if="fnPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('state.loading') }}</div>
-              <div v-else-if="fnPanel.detailError" class="alert-error">{{ fnPanel.detailError }}</div>
+              <div v-else-if="fnPanel.detailError" class="alert-error" role="alert">
+                <div>{{ t('gcpv.audit.fnDetailError', { name: fnPanel.resource.name, location: fnPanel.resource.location || '?' }) }}</div>
+                <details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px">{{ t('gcpv.audit.technicalDetails') }}</summary><div class="mono-xs" style="word-break:break-word;margin-top:4px">{{ fnPanel.detailError }}</div></details>
+                <button class="btn sm" style="margin-top:8px" @click="fnRetryDetail()">{{ t('common.retry') }}</button>
+              </div>
               <div v-else-if="fnPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                 <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
                   <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('vercel.col.functionName') }}</div>
@@ -2851,8 +2855,9 @@ const fnPanel = reactive({
   logs: [], logsLoading: false, logsError: null, logsHours: 3,
   invokePayload: '{}', invokeResult: null, invoking: false
 })
+function fnKey(fn) { return fn ? (fn.fullName || `${fn.location}/${fn.name}`) : '' }
 function selectFn(fn) {
-  const same = fnPanel.resource?.name === fn.name
+  const same = fnKey(fnPanel.resource) === fnKey(fn)
   fnPanel.resource = fn
   if (!same) { fnPanel.tab = 'overview'; fnPanel.detail = null; fnPanel.logs = []; fnPanel.invokeResult = null }
   fnSwitchTab(fnPanel.tab)
@@ -2861,11 +2866,11 @@ async function fnSwitchTab(tab) {
   fnPanel.tab = tab
   const fn = fnPanel.resource; if (!fn) return
   if (tab === 'overview' || tab === 'variables') {
-    if (fnPanel.detail && fnPanel.detail._fn === fn.name) return
+    if (fnPanel.detail && fnPanel.detail._fn === fnKey(fn)) return
     fnPanel.detailLoading = true; fnPanel.detailError = null
     try {
       const d = await gcpStore.fetchFunctionDetail(fn.location, fn.name)
-      fnPanel.detail = { ...d, _fn: fn.name }
+      fnPanel.detail = { ...d, _fn: fnKey(fn) }
     } catch (e) { fnPanel.detailError = e.message }
     finally { fnPanel.detailLoading = false }
   } else if (tab === 'logs') {
@@ -2883,6 +2888,7 @@ async function fnLoadLogs() {
   } catch (e) { fnPanel.logsError = e.message }
   finally { fnPanel.logsLoading = false }
 }
+function fnRetryDetail() { fnPanel.detail = null; fnSwitchTab(fnPanel.tab) }
 function fnPanelInvoke() { fnPanel.tab = 'invoke' }
 async function fnPanelDoInvoke() {
   const fn = fnPanel.resource; if (!fn) return

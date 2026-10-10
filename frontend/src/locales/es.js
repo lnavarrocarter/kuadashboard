@@ -6498,4 +6498,9 @@ export default {
   // ── AWS Cognito group errors ──
   'awsv.lit.groupAddFailed': 'No se pudo asignar el grupo',
   'awsv.lit.groupRemoveFailed': 'No se pudo quitar el grupo',
+
+  // ── GCP UX audit ──
+  "gcpv.audit.technicalDetails": "Detalles técnicos",
+  "gcpv.audit.fnDetailError": "No se pudo leer {name} en {location}. La lista de funciones puede estar desactualizada; reintentá antes de revisar permisos.",
+  "gcpv.audit.fnRegionUnknown": "Región no determinada",
 }
