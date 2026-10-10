@@ -104,9 +104,10 @@
             </div>
             <template v-if="overviewCosts">
               <div class="gcp-overview-costs-head">
-                <div class="gcp-overview-cost-total">
-                  <span class="text-dim">{{ t('gcpv.monthlyResourceBaseline') }}</span>
-                  <strong>{{ formatOverviewUsd(overviewCosts.monthlyEstimate) }}</strong>
+                <div class="gcp-overview-cost-total" data-test="cost-total">
+                  <span class="text-dim">{{ t('gcpv.audit.idleBaseline') }}</span>
+                  <strong>{{ overviewCosts.monthlyEstimate == null ? t('gcpv.audit.notEstimated') : formatOverviewUsd(overviewCosts.monthlyEstimate) }}</strong>
+                  <small class="text-dim" data-test="cost-coverage">{{ t('gcpv.audit.costCoverage', { modeled: overviewCosts.modeledResources ?? 0, total: gcpStore.overview?.summary?.total ?? 0, services: overviewCosts.unmodeledServices?.length ?? 0 }) }}</small>
                 </div>
                 <div class="gcp-overview-cost-meta">
                   <span>{{ t('gcpv.modeledResourceS', { p0: overviewCosts.modeledResources ?? 0 }) }}</span>
@@ -131,7 +132,11 @@
               <div v-if="overviewCosts.unavailableServices?.length" class="gcp-overview-cost-warning">
                 <strong>{{ t('gcpv.inventoryUnavailable') }}</strong> {{ overviewCosts.unavailableServices.join(', ') }}
               </div>
-              <div class="gcp-overview-cost-disclaimer">{{ overviewCosts.disclaimer }}</div>
+              <dl class="gcp-overview-cost-scope" data-test="cost-scope">
+                <dt>{{ t('gcpv.audit.costIncluded') }}</dt><dd>{{ t('gcpv.audit.costIncludedList') }}</dd>
+                <dt>{{ t('gcpv.audit.costExcluded') }}</dt><dd>{{ t('gcpv.audit.costExcludedList') }}</dd>
+              </dl>
+              <div class="gcp-overview-cost-disclaimer">{{ t('gcpv.audit.costDisclaimer', { region: overviewCosts.pricingRegion || 'us-central1' }) }}</div>
               <div class="gcp-overview-cost-footer">
                 <span class="text-dim">{{ t('gcpv.thisIsNotActualSpendOr') }}</span>
                 <button class="btn sm" data-test="open-billing" @click="openOverviewBilling">{{ t('gcpv.openCloudBilling') }}</button>
@@ -2312,9 +2317,9 @@ const OVERVIEW_GROUP_LABELS = Object.fromEntries(OVERVIEW_GROUP_DEFINITIONS.map(
 const overviewServices = computed(() => gcpStore.overview?.services || [])
 const overviewCosts = computed(() => gcpStore.overview?.costs || null)
 const overviewCostMax = computed(() => Math.max(1, ...(overviewCosts.value?.byService || []).map(service => Number(service.monthlyUsd || 0))))
-const overviewCostStatusLabel = computed(() => ({
-  estimated: 'Estimated', partial: 'Partial', 'no-data': 'No data',
-}[overviewCosts.value?.status] || (overviewCosts.value ? 'Estimated' : 'Unavailable')))
+// Every estimate here is partial by construction: only the idle 24/7 baseline
+// of Cloud Run minimums, VMs and Cloud SQL is modeled (G08).
+const overviewCostStatusLabel = computed(() => t(`gcpv.audit.costStatus.${overviewCosts.value ? (['estimated', 'partial', 'no-data'].includes(overviewCosts.value.status) ? overviewCosts.value.status : 'estimated') : 'unavailable'}`))
 const overviewCostStatusTone = computed(() => overviewCosts.value?.status === 'no-data' ? 'empty' : 'warning')
 // Observed-resource health only counts incidents in what KUA could read; read
 // failures go to coverage (older cached snapshots carried "degraded" for them).
@@ -3970,6 +3975,9 @@ async function openIamKeys(sa) {
 .gcp-overview-attention-copy span { color: var(--text-dim); }
 .gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
 .gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-overview-cost-scope { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 8px 0 0; font-size: 11px; }
+.gcp-overview-cost-scope dt { color: var(--text-dim); }
+.gcp-overview-cost-scope dd { margin: 0; }
 .gcp-focus-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
 .gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .gcp-row-link:hover { text-decoration: underline; }

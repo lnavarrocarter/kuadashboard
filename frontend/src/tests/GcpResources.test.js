@@ -583,6 +583,10 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(costs.text()).toContain('Estimated costs')
     expect(costs.text()).toContain('$123.45')
     expect(costs.text()).toContain('Partial')
+    // G08: the amount says what it covers and what it leaves out
+    expect(costs.find('[data-test="cost-total"]').text()).toContain('Idle monthly baseline of modeled resources')
+    expect(costs.find('[data-test="cost-coverage"]').text()).toContain('Covers 3 of 4 resources')
+    expect(costs.find('[data-test="cost-scope"]').text()).toContain('egress')
     expect(costs.text()).toContain('a3-megagpu-8g')
     expect(costs.text()).toContain('BigQuery')
     expect(costs.text()).toContain('Cloud Scheduler')
