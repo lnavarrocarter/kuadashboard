@@ -6,9 +6,9 @@ const BASE = 'http://localhost:7192/'
 
 describe('view URL (A15)', () => {
   it('reads the view, AWS service and profile, ignoring unknown views', () => {
-    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev' })
-    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '' })
-    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '' })
+    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev', filters: {} })
+    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '', filters: {} })
+    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '', filters: {} })
   })
 
   it('drops the KUApps params on other views and puts them back on KUApps', () => {
@@ -19,6 +19,15 @@ describe('view URL (A15)', () => {
     const back = nextViewUrl(left.href, { view: 'kuapps' }, left.stash)
     expect(new URL(back.href).searchParams.toString()).toBe('view=kuapps&app=app-1&tab=signals')
     expect(back.stash).toEqual({})
+  })
+
+  it('carries the AWS search and filters, and drops them elsewhere (R04)', () => {
+    expect(readViewUrl('?view=aws&service=lambda&q=orders&f.runtime=python3.12&f.activity=')).toEqual({
+      view: 'aws', service: 'lambda', profile: '', filters: { q: 'orders', runtime: 'python3.12' },
+    })
+    const lambda = nextViewUrl(`${BASE}?view=aws&service=ec2&f.state=stopped`, { view: 'aws', service: 'lambda', filters: { q: 'orders', runtime: 'python3.12' } })
+    expect(lambda.href).toBe(`${BASE}?view=aws&service=lambda&q=orders&f.runtime=python3.12`)
+    expect(nextViewUrl(lambda.href, { view: 'gcp', filters: { q: 'orders' } }).href).toBe(`${BASE}?view=gcp`)
   })
 
   it('keeps AWS-only params off other providers and never writes credentials', () => {
@@ -103,7 +112,7 @@ describe('useViewUrl history', () => {
     await nextTick()
     history.back()
     await nextTick(); await nextTick(); await nextTick()
-    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev' })
+    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev', filters: {} })
     expect(service.value).toBe('overview')
     expect(history.length).toBe(3)
     expect(location.search).toBe('?view=aws&service=overview&profile=local%3Adev')

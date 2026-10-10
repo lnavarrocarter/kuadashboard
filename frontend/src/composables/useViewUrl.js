@@ -5,6 +5,8 @@ import { nextTick, watch } from 'vue'
 //   view     provider (kubernetes | aws | gcp | vercel | kuapps)
 //   service  AWS service tab
 //   profile  AWS profile id (a local id, never credentials)
+//   q, f.<id> AWS search and filters of that service (they replace the current
+//            entry: reloading or sharing keeps the result without new history)
 // KUApps owns ?app= and ?tab=. They are removed while another provider is
 // shown (a stale ?app= reopened KUApps on load) and put back when KUApps returns.
 
@@ -13,12 +15,19 @@ const KUAPPS_PARAMS = ['app', 'tab']
 
 export function readViewUrl(search = '') {
   let params
-  try { params = new URLSearchParams(search) } catch { return { view: '', service: '', profile: '' } }
+  try { params = new URLSearchParams(search) } catch { return { view: '', service: '', profile: '', filters: {} } }
   const view = params.get('view') || ''
+  const filters = {}
+  for (const [key, value] of params) {
+    if (!value) continue
+    if (key === 'q') filters.q = value
+    else if (key.startsWith('f.')) filters[key.slice(2)] = value
+  }
   return {
     view: VIEWS.includes(view) ? view : '',
     service: params.get('service') || '',
     profile: params.get('profile') || '',
+    filters,
   }
 }
 
@@ -26,7 +35,7 @@ export function readViewUrl(search = '') {
  * The URL for a view state. `stash` holds the KUApps params removed while
  * another provider is shown; it is returned updated.
  */
-export function nextViewUrl(href, { view, service, profile }, stash = {}) {
+export function nextViewUrl(href, { view, service, profile, filters = {} }, stash = {}) {
   const url = new URL(href)
   const kept = { ...stash }
   if (view) url.searchParams.set('view', view)
@@ -35,6 +44,12 @@ export function nextViewUrl(href, { view, service, profile }, stash = {}) {
   else url.searchParams.delete('service')
   if (view === 'aws' && profile) url.searchParams.set('profile', profile)
   else url.searchParams.delete('profile')
+  for (const key of [...url.searchParams.keys()]) if (key === 'q' || key.startsWith('f.')) url.searchParams.delete(key)
+  if (view === 'aws') {
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) url.searchParams.set(key === 'q' ? 'q' : `f.${key}`, value)
+    }
+  }
   for (const key of KUAPPS_PARAMS) {
     if (view === 'kuapps') {
       if (kept[key] && !url.searchParams.has(key)) url.searchParams.set(key, kept[key])

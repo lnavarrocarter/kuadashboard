@@ -59,6 +59,28 @@ describe('AWS filters next to the search (A11)', () => {
     expect(w.find('[data-test="row-count"]').text()).toBe('4 result(s)')
   })
 
+  it('applies search and filters from a link, and reports changes for the URL (R04)', async () => {
+    const store = useAwsStore()
+    store.activeProfileId = 'prof-1'
+    const w = mount(AwsView, {
+      props: { activeService: 'lambda', linkedFilters: { service: 'lambda', filters: { q: 'c', runtime: 'python3.12' }, seq: 1 } },
+      global: { stubs: { Teleport: true, AwsOverview } },
+    })
+    await flushPromises()
+    store.lambdas = [fn('a', 'nodejs20.x'), fn('c', 'python3.12'), fn('cc', 'nodejs20.x')]
+    await flushPromises()
+    expect(w.find('.aws-search').element.value).toBe('c')
+    expect(w.find('[data-test="facet-runtime"]').element.value).toBe('python3.12')
+    expect(names(w)).toEqual(['c'])
+
+    await w.find('[data-test="facet-runtime"]').setValue('')
+    expect(w.emitted('filters-change').at(-1)).toEqual([{ q: 'c' }])
+    // A later profile change clears the filters, the first profile of the session does not.
+    store.activeProfileId = 'prof-2'
+    await flushPromises()
+    expect(w.find('[data-test="facet-runtime"]').element.value).toBe('')
+  })
+
   it('filters EC2 by state and S3 by region; other tabs have no filters', async () => {
     const store = useAwsStore()
     store.activeProfileId = 'prof-1'

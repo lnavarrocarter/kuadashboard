@@ -401,7 +401,7 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :linked-filters="linkedAwsFilters" @filters-change="filters => { awsFilters = filters }" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
@@ -889,14 +889,19 @@ const {
 // ?view=aws&service=lambda&profile=<id> opens that view; Back/Forward move
 // between providers and AWS services (composables/useViewUrl.js).
 const AWS_TABS = new Set(['overview', ...Object.values(AWS_SIDEBAR).flat().map(item => item.id)])
+// Search and filters of the AWS tab (from AwsView), and the ones a link or Back brings to it.
+const awsFilters = ref({})
+const linkedAwsFilters = ref(null)
+let linkedFiltersSeq = 0
 const viewUrl = useViewUrl({
   state: () => ({
     view: activeProvider.value,
     service: activeProvider.value === 'aws' ? awsTab.value : '',
     profile: activeProvider.value === 'aws' ? awsProfileId.value : '',
+    filters: activeProvider.value === 'aws' ? awsFilters.value : {},
   }),
   navigation: [activeProvider, awsTab],
-  context: [awsProfileId, activeApplicationContext],
+  context: [awsProfileId, activeApplicationContext, awsFilters],
   onPop: applyViewFromHistory,
 })
 // A profile named by a link is only selected once it is known to exist here.
@@ -904,7 +909,10 @@ let linkedAwsProfile = ''
 function applyLinkedView(linked) {
   if (!linked.view) return
   activeProvider.value = linked.view
-  if (linked.view === 'aws' && AWS_TABS.has(linked.service)) awsTab.value = linked.service
+  if (linked.view === 'aws' && AWS_TABS.has(linked.service)) {
+    awsTab.value = linked.service
+    linkedAwsFilters.value = { service: linked.service, filters: linked.filters, seq: ++linkedFiltersSeq }
+  }
   if (linked.view === 'aws' && linked.profile && linked.profile !== awsProfileId.value) linkedAwsProfile = linked.profile
 }
 function awsProfileExists(id) {
@@ -922,7 +930,10 @@ async function applyViewFromHistory(linked) {
   if (!linked.view) return
   await setProvider(linked.view)
   if (linked.view !== 'aws') return
-  if (AWS_TABS.has(linked.service)) awsTab.value = linked.service
+  if (AWS_TABS.has(linked.service)) {
+    awsTab.value = linked.service
+    linkedAwsFilters.value = { service: linked.service, filters: linked.filters, seq: ++linkedFiltersSeq }
+  }
   if (linked.profile && linked.profile !== awsProfileId.value) {
     if (!awsProfileExists(linked.profile)) {
       toast(t('viewUrl.profileMissing', { profile: linked.profile }), 'warn')

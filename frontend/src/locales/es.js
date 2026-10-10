@@ -1622,6 +1622,7 @@ export default {
   'tagList.showFewer': 'Ver menos etiquetas',
   'tagList.fewer': 'menos',
   'rowMenu.more': 'Más',
+  'rowMenu.moreFor': 'Más acciones para {name}',
   'awsv.act.invoke': 'Invocar…',
   'awsActivity.logGroup': 'Log group',
   'awsActivity.logGroupHint': 'Estado del log group de CloudWatch (si recibe eventos). No es la salud de la función: mira los errores en la columna 24 h.',

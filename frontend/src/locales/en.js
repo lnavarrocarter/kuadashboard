@@ -1623,6 +1623,7 @@ export default {
   'tagList.showFewer': 'Show fewer tags',
   'tagList.fewer': 'less',
   'rowMenu.more': 'More',
+  'rowMenu.moreFor': 'More actions for {name}',
   'awsv.act.invoke': 'Invoke…',
   'awsActivity.logGroup': 'Log group',
   'awsActivity.logGroupHint': 'State of the CloudWatch log group (receiving events or not). It is not the function health: see errors in the 24 h column.',

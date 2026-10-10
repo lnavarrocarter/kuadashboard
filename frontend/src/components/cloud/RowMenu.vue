@@ -1,7 +1,7 @@
 <template>
   <span class="row-menu">
     <button
-      ref="trigger" type="button" class="btn sm" aria-haspopup="menu"
+      ref="trigger" type="button" class="btn sm" aria-haspopup="menu" :aria-label="resource ? t('rowMenu.moreFor', { name: resource }) : undefined"
       :aria-expanded="open ? 'true' : 'false'" :aria-controls="open ? menuId : undefined"
       @click="toggle" @keydown.down.prevent="openAndFocus(0)" @keydown.up.prevent="openAndFocus(-1)"
     >{{ label || t('rowMenu.more') }} ▾</button>
@@ -35,6 +35,8 @@ const props = defineProps({
   // [{ id, label, onSelect, disabled?, danger?, title?, separator? (line before) }]
   items: { type: Array, required: true },
   label: { type: String, default: '' },
+  // Names the trigger for screen readers: "More actions for <resource>".
+  resource: { type: String, default: '' },
 })
 const { t } = useI18n()
 const open = ref(false)

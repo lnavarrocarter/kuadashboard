@@ -86,6 +86,11 @@ describe('RowMenu (A10)', () => {
     expect(menuItems()).toHaveLength(0)
   })
 
+  it('names the trigger after its resource for screen readers', () => {
+    wrapper = mount(RowMenu, { props: { items: [], resource: 'web-1' } })
+    expect(wrapper.find('[aria-haspopup="menu"]').attributes('aria-label')).toBe('More actions for web-1')
+  })
+
   it('disabled items do not run', async () => {
     const { selected } = mountMenu()
     await wrapper.find('[aria-haspopup="menu"]').trigger('click')

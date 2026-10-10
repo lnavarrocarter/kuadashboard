@@ -137,7 +137,7 @@
                     @click="openEc2Ssm(i)" :disabled="i.state !== 'running'">
                     ⚡ SSM
                   </button>
-                  <RowMenu :items="ec2MenuItems(i)" />
+                  <RowMenu :items="ec2MenuItems(i)" :resource="i.name || i.id" />
                 </div>
               </td>
             </tr>
@@ -175,7 +175,7 @@
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('awsv.act.viewLogs') }}</button>
-                  <RowMenu :items="ecsMenuItems(svc)" />
+                  <RowMenu :items="ecsMenuItems(svc)" :resource="svc.name" />
                 </div>
               </td>
             </tr>
@@ -287,7 +287,7 @@
                 <div class="row-actions">
                   <button class="btn sm" @click="openLambdaDetail(fn)">{{ t('awsv.act.details') }}</button>
                   <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('awsv.act.viewLogs') }}</button>
-                  <RowMenu :items="lambdaMenuItems(fn)" />
+                  <RowMenu :items="lambdaMenuItems(fn)" :resource="fn.name" />
                 </div>
               </td>
             </tr>
@@ -532,10 +532,9 @@
               <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="sm.arn">{{ sm.arn }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags)">{{ t('th.tags') }}</button>
-                  <button class="btn sm" @click="openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn })">{{ t('sidebar.config') }}</button>
-                  <button class="btn sm" style="background:rgba(99,102,241,0.2);border-color:#6366f1" @click="openDiagram(sm)">{{ t('awsv.diagram') }}</button>
-                  <button class="btn sm" style="background:rgba(96,165,250,0.15);border-color:#60a5fa;color:#60a5fa" @click="openStepFnDetail(sm)">{{ t('awsv.act.details') }}</button>
+                  <button class="btn sm" @click="openStepFnDetail(sm)">{{ t('awsv.act.details') }}</button>
+                  <button class="btn sm" @click="openDiagram(sm)">{{ t('awsv.diagram') }}</button>
+                  <RowMenu :items="stepFnMenuItems(sm)" :resource="sm.name" />
                 </div>
               </td>
             </tr>
@@ -3897,8 +3896,10 @@ const props = defineProps({
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
+  // Search and filters from a link or a history entry: { service, filters: { q, <facet>: value }, seq }.
+  linkedFilters: { type: Object, default: null },
 })
-const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab', 'open-observability'])
+const emit = defineEmits(['open-architecture', 'open-kubernetes-logs', 'navigate-tab', 'open-observability', 'filters-change'])
 
 const envStore = useEnvStore()
 const awsStore = useAwsStore()
@@ -4105,9 +4106,28 @@ function clearFilters(tab) {
   for (const id of Object.keys(facetState[tab] || {})) facetState[tab][id] = ''
   if (incidentFocus.value === tab) incidentFocus.value = null
 }
-watch(() => awsStore.activeProfileId, () => {
+// Filters belong to a profile's data; the first profile of a session (often from a link) keeps them.
+watch(() => awsStore.activeProfileId, (id, previous) => {
+  if (!previous) return
   for (const tab of Object.keys(facetState)) for (const id of Object.keys(facetState[tab])) facetState[tab][id] = ''
 })
+
+// The active tab's search and filters travel in the URL (App -> useViewUrl):
+// emitted on change, and applied when a link or a history entry brings them.
+function currentFilters(tab) {
+  const filters = {}
+  if (search[tab]) filters.q = search[tab]
+  for (const [id, value] of Object.entries(facetState[tab] || {})) if (value) filters[id] = value
+  return filters
+}
+watch(() => [activeTab.value, search[activeTab.value], JSON.stringify(facetState[activeTab.value] || {})],
+  () => emit('filters-change', currentFilters(activeTab.value)))
+watch(() => props.linkedFilters, linked => {
+  if (!linked?.service || !(linked.service in search)) return
+  const tab = linked.service
+  search[tab] = linked.filters?.q || ''
+  for (const id of Object.keys(facetState[tab] || {})) facetState[tab][id] = linked.filters?.[id] || ''
+}, { immediate: true })
 
 // Rows shown in the tables: search, then the Overview incident focus, then the filters.
 const lambdaBaseRows = computed(() => (incidentFocus.value === 'lambda' ? lambdaRows.value.filter(fn => fn.errors24h > 0) : lambdaRows.value))
@@ -4596,6 +4616,12 @@ function lambdaMenuItems(fn) {
     { id: 'config', label: t('sidebar.config'), onSelect: () => openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name }) },
     { id: 'logging', label: t('awsv.act.configureLogging'), title: t('awsv.act.configureLoggingHint'), onSelect: () => openLogging('lambda', fn) },
     { id: 'invoke', separator: true, label: t('awsv.act.invoke'), onSelect: () => openInvoke(fn) },
+  ]
+}
+function stepFnMenuItems(sm) {
+  return [
+    { id: 'tags', label: t('th.tags'), onSelect: () => openTags('stepfn', `SF: ${sm.name}`, sm.arn, sm.tags) },
+    { id: 'config', label: t('sidebar.config'), onSelect: () => openConfig('stepfn', `SF: ${sm.name}`, sm, { arn: sm.arn }) },
   ]
 }
 function ecsMenuItems(svc) {
