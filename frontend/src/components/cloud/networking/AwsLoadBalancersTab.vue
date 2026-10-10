@@ -163,6 +163,8 @@ import { filterRows, formatDate, HEALTH_RANK } from '../messaging/messagingForma
 
 const props = defineProps({
   search: { type: String, default: '' },
+  // Overview incident focus: only load balancers that need attention.
+  attentionOnly: { type: Boolean, default: false },
   applicationId: { type: String, default: '' },
   profileId: { type: String, default: '' },
   addingResourceId: { type: String, default: '' },
@@ -179,7 +181,9 @@ const detailError = ref('')
 
 const TYPE_LABELS = { application: 'ALB', network: 'NLB', gateway: 'GWLB', classic: 'Classic' }
 
-const rows = computed(() => filterRows(awsStore.loadBalancers, props.search).map(lb => {
+const rows = computed(() => filterRows(awsStore.loadBalancers, props.search)
+  .filter(lb => !props.attentionOnly || ['warning', 'critical'].includes(lb.health?.status))
+  .map(lb => {
   const targets = lb.targetGroups.reduce((sum, group) => ({
     total: sum.total + group.targets.total,
     healthy: sum.healthy + group.targets.healthy,

@@ -7,6 +7,9 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import AwsView from '../components/cloud/AwsView.vue'
 import { useAwsStore } from '../stores/useAwsStore'
 
+// The real Overview needs a full payload; these tests only look at the band.
+const AwsOverview = { name: 'AwsOverview', template: '<div />', methods: { load() {} } }
+
 function json(body, status = 200) {
   return { ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => body, text: async () => '' }
 }
@@ -32,7 +35,7 @@ describe('AWS context band (A07)', () => {
   async function mountOn(tab) {
     const store = useAwsStore()
     store.activeProfileId = 'local:dev'
-    const w = mount(AwsView, { props: { activeService: tab }, global: { stubs: { Teleport: true } } })
+    const w = mount(AwsView, { props: { activeService: tab }, global: { stubs: { Teleport: true, AwsOverview } } })
     await flushPromises()
     return { w, store }
   }

@@ -34,6 +34,10 @@
         <span><span class="text-dim">{{ t('awsCtx.region') }}</span> <strong>{{ awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : '…' }}</strong></span>
         <span v-if="GLOBAL_TABS.has(activeTab)" class="aws-context-global" data-test="aws-context-global">{{ t(`awsCtx.global.${activeTab}`) }}</span>
       </div>
+      <div v-if="incidentFocus && incidentFocus === activeTab" class="aws-incident-filter" data-test="incident-filter">
+        <span>{{ t(`awsIncident.filter.${activeTab}`, { n: incidentCount }) }}</span>
+        <button class="btn sm" @click="incidentFocus = null">{{ t('awsIncident.showAll') }}</button>
+      </div>
 
       <div v-if="!SELF_LOADING_TABS.has(activeTab) && !(activeTab === 'cwdashboards' && dashboardView)" class="aws-toolbar">
         <input
@@ -254,7 +258,7 @@
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
-            <tr v-for="fn in sortRows(lambdaRows)" :key="fn.name">
+            <tr v-for="fn in sortRows(lambdaTableRows)" :key="fn.name">
               <td>
                 <div>{{ fn.name }}</div>
                 <div v-if="fn.description" class="text-dim mono-xs">{{ fn.description }}</div>
@@ -511,7 +515,7 @@
             <th>{{ t('th.tags') }}</th><th>ARN</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
-            <tr v-for="sm in sortRows(stepFnRows)" :key="sm.arn">
+            <tr v-for="sm in sortRows(stepFnTableRows)" :key="sm.arn">
               <td>{{ sm.name }}</td>
               <td><span :class="sm.type === 'EXPRESS' ? 'status-warn' : 'status-ok'">{{ sm.type }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(sm.creationDate) }}</td>
@@ -1593,6 +1597,7 @@
       <div v-show="activeTab === 'elb'" class="tab-panel">
         <AwsLoadBalancersTab
           :search="search.elb"
+          :attention-only="incidentFocus === 'elb'"
           :application-id="applicationId"
           :profile-id="selectedProfileId"
           :adding-resource-id="addingLoadBalancerId"
@@ -3980,8 +3985,18 @@ function openResourceFromStack({ tab, name }) {
   emit('navigate-tab', tab)
 }
 
-function openTabFromOverview(tab) {
+// Overview opens a tab, or ({ tab, incident }) a tab focused on the
+// resources with failures in the last 24 h, worst first, until cleared.
+const INCIDENT_SORT = { lambda: 'errors24h', stepfn: 'failed24h', elb: 'healthRank' }
+const incidentFocus = ref(null)
+
+function openTabFromOverview(target) {
+  const { tab, incident } = typeof target === 'string' ? { tab: target, incident: false } : target
   switchTab(tab)
+  if (incident && INCIDENT_SORT[tab]) {
+    incidentFocus.value = tab
+    if (tab !== 'elb') { sortBy(INCIDENT_SORT[tab]); sortBy(INCIDENT_SORT[tab]) } // descending
+  }
   emit('navigate-tab', tab)
 }
 const tabLoading = ref(false)
@@ -4067,6 +4082,17 @@ const stepFnRows = computed(() => {
       : sm
   })
 })
+
+// Rows shown in the tables: only the affected ones while an Overview incident is focused.
+const lambdaTableRows = computed(() => (incidentFocus.value === 'lambda' ? lambdaRows.value.filter(fn => fn.errors24h > 0) : lambdaRows.value))
+const stepFnTableRows = computed(() => (incidentFocus.value === 'stepfn' ? stepFnRows.value.filter(sm => sm.failed24h > 0) : stepFnRows.value))
+const ELB_ATTENTION = ['warning', 'critical']
+const incidentCount = computed(() => ({
+  lambda: lambdaActivityLoading.value ? '…' : lambdaTableRows.value.length,
+  stepfn: stepFnActivityLoading.value ? '…' : stepFnTableRows.value.length,
+  elb: (awsStore.loadBalancers || []).filter(lb => ELB_ATTENTION.includes(lb.health?.status)).length,
+}[incidentFocus.value] ?? 0))
+
 function stepFnLoggingTitle(sm) {
   if (sm.logging.level === 'OFF') return t('awsActivity.loggingOffHint')
   return `${sm.logging.logGroup || ''} · ${sm.logging.includeExecutionData ? t('awsActivity.withExecutionData') : t('awsActivity.withoutExecutionData')}`
@@ -4326,6 +4352,7 @@ defineExpose({ reloadActiveTab, focusResourceByName, openLambdaLogsByName })
 
 function switchTab(id) {
   activeTab.value = id
+  incidentFocus.value = null
   resetSort()
   loadTab(id)
 }

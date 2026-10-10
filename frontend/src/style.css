@@ -860,6 +860,18 @@ body.kube-resizing {
 }
 .aws-context strong { font-weight: 600; overflow-wrap: anywhere; }
 .aws-context-global { color: var(--accent); }
+.aws-incident-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 4px 0;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
+  border-radius: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
 
 .tab-panel {
   overflow: auto;
