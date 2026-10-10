@@ -34,6 +34,7 @@ const { createDatastoreReader } = require('../lib/gcpDatastore');
 const { createKmsReader } = require('../lib/gcpKms');
 const { listWorkflows, mapWorkflow } = require('../lib/gcpWorkflows');
 const { mapFunction, functionParamsError, functionLogFilter } = require('../lib/gcpFunctions');
+const { mapBucket } = require('../lib/gcpStorage');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -1045,13 +1046,7 @@ router.get('/storage/buckets', async (req, res) => {
       `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=200`,
       authCtx
     );
-    res.json((data.items || []).map(b => ({
-      name:         b.name,
-      location:     b.location,
-      storageClass: b.storageClass,
-      created:      b.timeCreated,
-      publicAccess: b.iamConfiguration?.publicAccessPrevention !== 'enforced',
-    })));
+    res.json((data.items || []).map(mapBucket));
   } catch (err) { handleErr(res, err); }
 });
 

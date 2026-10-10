@@ -6520,4 +6520,13 @@ export default {
   "gca.run.endpointStays": "No deshabilita el servicio: sigue atendiendo peticiones y crea instancias por demanda.",
   "gca.run.alreadyWarm": "El mínimo ya es {min}; fijarlo en 1 no mantendría más instancias calientes.",
   "gca.run.alreadyZero": "El mínimo ya es 0.",
+  "gcpv.audit.pap": "Prevención de acceso público",
+  "gcpv.audit.papHint": "Bloquea concesiones públicas futuras. No indica si el bucket es público hoy.",
+  "gcpv.audit.pap.enforced": "Forzada",
+  "gcpv.audit.pap.inherited": "Heredada",
+  "gcpv.audit.pap.unknown": "No determinada",
+  "gcpv.audit.uniformAccess": "Acceso uniforme",
+  "gcpv.audit.exposure": "Exposición pública",
+  "gcpv.audit.exposureHint": "Requiere la política IAM y las ACL del bucket (allUsers / allAuthenticatedUsers). KUA no las lee en esta lista.",
+  "gcpv.audit.exposureNotVerified": "No verificada",
 }

@@ -658,13 +658,15 @@
         <div v-else-if="gcpStore.tabs.storage.error && !filteredStorage.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
         <div v-else-if="!filteredStorage.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuckets') }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('gcpv.storageClass') }}</th><th>{{ t('awsv.zonePublic') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
+          <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('gcpv.storageClass') }}</th><th :title="t('gcpv.audit.papHint')">{{ t('gcpv.audit.pap') }}</th><th>{{ t('gcpv.audit.uniformAccess') }}</th><th :title="t('gcpv.audit.exposureHint')">{{ t('gcpv.audit.exposure') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
             <tr v-for="b in filteredStorage" :key="b.name">
               <td>{{ b.name }}</td>
               <td class="text-dim">{{ b.location }}</td>
               <td class="text-dim">{{ b.storageClass }}</td>
-              <td><span :class="b.publicAccess ? 'status-warn' : 'status-ok'">{{ b.publicAccess ? t('awsv.zonePublic') : t('awsv.zonePrivate') }}</span></td>
+              <td data-test="pap"><span :class="b.publicAccessPrevention === 'enforced' ? 'status-ok' : 'text-dim'">{{ t(`gcpv.audit.pap.${b.publicAccessPrevention || 'unknown'}`) }}</span></td>
+              <td class="text-dim">{{ b.uniformAccess == null ? '—' : (b.uniformAccess ? t('common.yes') : t('common.no')) }}</td>
+              <td data-test="exposure" class="text-dim" :title="t('gcpv.audit.exposureHint')">{{ t('gcpv.audit.exposureNotVerified') }}</td>
               <td class="text-dim">{{ b.created ? new Date(b.created).toLocaleDateString() : '--' }}</td>
               <td>
                 <button class="btn sm" @click="openGcsBrowser(b.name)">

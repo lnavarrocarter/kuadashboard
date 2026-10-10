@@ -341,6 +341,19 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(row.find('[data-test="delete"]').exists()).toBe(true)
   })
 
+  it('Storage shows prevention and leaves exposure as not verified (G02)', async () => {
+    const w = await mountTab('storage')
+    store.tabs.storage.data = [
+      { name: 'src', location: 'US', storageClass: 'STANDARD', publicAccessPrevention: 'inherited', uniformAccess: false, exposure: 'not_verified' },
+      { name: 'locked', location: 'US', storageClass: 'STANDARD', publicAccessPrevention: 'enforced', uniformAccess: true, exposure: 'not_verified' },
+    ]
+    await flushPromises()
+    const cells = w.findAll('[data-test="pap"]').map(c => c.text())
+    expect(cells).toEqual(['Heredada', 'Forzada'])
+    expect(w.findAll('[data-test="exposure"]').every(c => c.text() === 'No verificada')).toBe(true)
+    expect(w.text()).not.toContain('Pública')
+  })
+
   it('VM table shows network, disks, Spot and protection; buttons follow the status', async () => {
     const w = await mountTab('vms')
     const rows = w.findAll('[data-test="vm-table"] tbody tr')
