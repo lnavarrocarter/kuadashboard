@@ -160,8 +160,8 @@
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="startEcs(svc)">{{ t('action.start') }}</button>
-                  <button class="btn sm danger" @click="stopEcs(svc)">{{ t('action.stop') }}</button>
+                  <button class="btn sm" @click="startEcs(svc)" :disabled="svc.desired > 0" :title="svc.desired > 0 ? t('awsv.op.ecsAlreadyRunning') : ''">{{ t('action.start') }}</button>
+                  <button class="btn sm danger" @click="stopEcs(svc)" :disabled="svc.desired === 0">{{ t('action.stop') }}</button>
                   <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('action.logs') }}</button>
                   <button class="btn sm" @click="openLogging('ecs', svc)">CW Logs</button>
                   <button class="btn sm" @click="openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name })">{{ t('sidebar.config') }}</button>
@@ -2208,6 +2208,19 @@
       </div>
     </div>
 
+    <GcpConfirmModal
+      :open="opConfirm.open"
+      :title="opConfirm.title"
+      :message="opConfirm.message"
+      :lines="opConfirmLines"
+      :tone="opConfirm.tone"
+      :confirm-label="opConfirm.confirmLabel"
+      :busy="opConfirm.busy"
+      :error="opConfirm.error"
+      @confirm="confirmOperation"
+      @cancel="opConfirm.open = false"
+    />
+
     <div v-if="invokeModal.open" class="modal-overlay" @click.self="invokeModal.open = false">
       <div class="modal" style="width:600px;max-width:95vw" role="dialog" aria-modal="true" aria-labelledby="aws-invoke-title">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -3866,6 +3879,7 @@ import EksDetail           from './EksDetail.vue'
 import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
+import GcpConfirmModal     from './GcpConfirmModal.vue'
 import {
   displayName, filterRecords, hostnameOf, recordKey, recordTypes,
   recordsForExport, recordsToCsv, testResultKey, testsForRecord,
@@ -4336,27 +4350,111 @@ function onProfileChange() {
   if (selectedProfileId.value) loadTab(activeTab.value)
 }
 
-async function startEc2(i) {
-  const r = await awsStore.startEc2Instance(i.id)
-  if (r) { toast(t('awsv.toastStarting', { name: i.name }), 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
-  else toast(awsStore.error || 'Error', 'error')
-}
-async function stopEc2(i) {
-  const r = await awsStore.stopEc2Instance(i.id)
-  if (r) { toast(t('awsv.toastStopping', { name: i.name }), 'success'); setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500) }
-  else toast(awsStore.error || 'Error', 'error')
+// ─── Confirmed operations (EC2/ECS start and stop) ───────────────────────────
+// Each write first shows its destination (resource, account, profile, region)
+// and impact. Cancelling sends nothing; the target is copied when the dialog
+// opens, and the busy state blocks a second request.
+const opConfirm = reactive({
+  open: false, title: '', message: '', tone: 'info', confirmLabel: '',
+  resourceLines: [], account: null, region: null, busy: false, error: '', run: null,
+})
+
+const opConfirmLines = computed(() => [
+  ...opConfirm.resourceLines,
+  t('awsv.op.destination', {
+    account: opConfirm.account ?? t('state.loading'),
+    profile: selectedProfileName.value,
+    region: opConfirm.region ?? t('state.loading'),
+  }),
+])
+
+function askOperation({ title, message, tone, confirmLabel, resourceLines, run }) {
+  const ctx = awsStore.accountContext
+  Object.assign(opConfirm, {
+    open: true, title, message, tone, confirmLabel, resourceLines, run, busy: false, error: '',
+    account: ctx?.account ?? null, region: ctx?.region ?? null,
+  })
+  if (ctx) return
+  awsStore.fetchAccountContext()
+    .then(data => { opConfirm.account = data.account || t('awsv.op.unknown'); opConfirm.region = data.region || t('awsv.op.unknown') })
+    .catch(() => { opConfirm.account = t('awsv.op.unknown'); opConfirm.region = t('awsv.op.unknown') })
 }
 
-async function startEcs(svc) {
-  const r = await awsStore.startEcsService(svc.cluster, svc.name)
-  if (r) { toast(t('awsv.toastStarted', { name: svc.name }), 'success'); loaded.ecs = false; loadTab('ecs') }
-  else toast(awsStore.error || 'Error', 'error')
+async function confirmOperation() {
+  if (opConfirm.busy || !opConfirm.run) return
+  opConfirm.busy = true
+  opConfirm.error = ''
+  try {
+    const error = await opConfirm.run()
+    if (error) opConfirm.error = error
+    else opConfirm.open = false
+  } finally {
+    opConfirm.busy = false
+  }
 }
-async function stopEcs(svc) {
-  const r = await awsStore.stopEcsService(svc.cluster, svc.name)
-  if (r) { toast(t('awsv.toastStopped', { name: svc.name }), 'success'); loaded.ecs = false; loadTab('ecs') }
-  else toast(awsStore.error || 'Error', 'error')
+
+// EKS nodes and Auto Scaling members are replaced or drained by their owner.
+function ec2ManagedLines(tags = []) {
+  const value = key => tags.find(tag => tag.Key === key)?.Value
+  const eks = value('eks:cluster-name')
+    || tags.find(tag => tag.Key?.startsWith('kubernetes.io/cluster/'))?.Key.slice('kubernetes.io/cluster/'.length)
+  const asg = value('aws:autoscaling:groupName')
+  return [
+    ...(eks ? [t('awsv.op.managedEks', { cluster: eks })] : []),
+    ...(asg ? [t('awsv.op.managedAsg', { group: asg })] : []),
+  ]
 }
+
+function ec2Operation(instance, action) {
+  const i = { ...instance, tags: [...(instance.tags || [])] }
+  const stop = action === 'stop'
+  askOperation({
+    title: t(stop ? 'awsv.op.stopEc2Title' : 'awsv.op.startEc2Title', { name: i.name || i.id }),
+    message: t(stop ? 'awsv.op.stopEc2Impact' : 'awsv.op.startEc2Impact'),
+    tone: stop ? 'danger' : 'warning',
+    confirmLabel: t(stop ? 'awsv.op.stopEc2' : 'awsv.op.startEc2'),
+    resourceLines: [
+      t('awsv.op.instance', { name: i.name || '—', id: i.id }),
+      t('awsv.op.currentState', { state: i.state || '?' }),
+      ...ec2ManagedLines(i.tags),
+    ],
+    run: async () => {
+      const r = stop ? await awsStore.stopEc2Instance(i.id) : await awsStore.startEc2Instance(i.id)
+      if (!r) return awsStore.error || 'Error'
+      toast(t(stop ? 'awsv.toastStopping' : 'awsv.toastStarting', { name: i.name || i.id }), 'success')
+      setTimeout(() => { loaded.ec2 = false; loadTab('ec2') }, 2500)
+    },
+  })
+}
+const startEc2 = i => ec2Operation(i, 'start')
+const stopEc2 = i => ec2Operation(i, 'stop')
+
+// Start sets desiredCount to 1 and Stop to 0 (routes/aws.js).
+function ecsOperation(service, action) {
+  const svc = { ...service }
+  const stop = action === 'stop'
+  askOperation({
+    title: t(stop ? 'awsv.op.stopEcsTitle' : 'awsv.op.startEcsTitle', { name: svc.name }),
+    message: stop
+      ? t('awsv.op.stopEcsImpact', { desired: svc.desired ?? '?', running: svc.running ?? '?' })
+      : t('awsv.op.startEcsImpact', { desired: svc.desired ?? '?' }),
+    tone: stop ? 'danger' : 'warning',
+    confirmLabel: t(stop ? 'awsv.op.stopEcs' : 'awsv.op.startEcs'),
+    resourceLines: [
+      t('awsv.op.ecsService', { name: svc.name, cluster: svc.cluster }),
+      t('awsv.op.ecsCounts', { desired: svc.desired ?? '?', running: svc.running ?? '?' }),
+    ],
+    run: async () => {
+      const r = stop ? await awsStore.stopEcsService(svc.cluster, svc.name) : await awsStore.startEcsService(svc.cluster, svc.name)
+      if (!r) return awsStore.error || 'Error'
+      toast(t(stop ? 'awsv.toastStopped' : 'awsv.toastStarted', { name: svc.name }), 'success')
+      loaded.ecs = false
+      loadTab('ecs')
+    },
+  })
+}
+const startEcs = svc => ecsOperation(svc, 'start')
+const stopEcs = svc => ecsOperation(svc, 'stop')
 
 const configModal = reactive({
   open: false, loading: false, error: null, fullLoaded: false,

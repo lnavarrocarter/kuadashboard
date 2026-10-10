@@ -35,6 +35,7 @@ export const useAwsStore = defineStore('aws', () => {
   const overviewAdvisor  = ref(null)
   const s3Advisor        = ref(null)
   const regions          = ref([])
+  const accountContext   = ref(null) // { profileId, account, region } for operation confirmations
   const eksClusters      = ref([])
   const ecsServices      = ref([])
   const ec2Instances     = ref([])
@@ -132,6 +133,7 @@ export const useAwsStore = defineStore('aws', () => {
     overviewAdvisor.value  = null
     s3Advisor.value        = null
     regions.value          = []
+    accountContext.value   = null
     eksClusters.value      = []
     ecsServices.value      = []
     ec2Instances.value     = []
@@ -241,6 +243,15 @@ export const useAwsStore = defineStore('aws', () => {
     try {
       eksClusters.value = await apiFetch('/api/cloud/aws/eks', { headers: headers() })
     } catch (e) { setError(e) } finally { loading.value = false }
+  }
+
+  // Account and region of the active profile, shown before write operations.
+  async function fetchAccountContext() {
+    const key = activeProfileId.value
+    if (accountContext.value?.profileId === key) return accountContext.value
+    const data = await apiFetch('/api/cloud/aws/account', { headers: headers() })
+    if (activeProfileId.value === key) accountContext.value = { profileId: key, ...data }
+    return { profileId: key, ...data }
   }
 
   async function fetchEcsServices() {
@@ -1363,7 +1374,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, overview, overviewInsights, overviewAdvisor, s3Advisor, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, accountContext, fetchAccountContext, overview, overviewInsights, overviewAdvisor, s3Advisor, regions, eksClusters, ecsServices, ec2Instances,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,

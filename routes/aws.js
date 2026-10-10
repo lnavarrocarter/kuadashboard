@@ -26,6 +26,7 @@
  *   GET  /cloudwatch/dashboards/:name/widgets/:index/logs/estimate → bytes a log widget would scan
  *   POST /cloudwatch/dashboards/:name/widgets/:index/logs/query    → start a log widget's Logs Insights query
  *   GET  /cloudwatch/logs-query/:queryId                           → Logs Insights query status and results
+ *   GET  /account                           → account ID and region of the profile (STS, free; cached 1 h)
  *   GET  /eks                               → list EKS clusters
  *   GET  /elb                               → load balancers (ALB/NLB/GWLB/Classic) with listeners and target health
  *   GET  /elb/detail?arn=|name=             → listener rules, attributes and tags of one load balancer
@@ -1019,6 +1020,18 @@ router.post('/ecs/:cluster/:service/stop', async (req, res) => {
       level: 'warning', context: profileId,
     });
     res.json({ success: true, cluster: req.params.cluster, service: req.params.service, desiredCount: 0 });
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /account ─────────────────────────────────────────────────────────────
+// Destination shown before write operations (EC2/ECS start and stop).
+
+router.get('/account', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    res.json({ account: await awsAccountId(profileId, cfg), region: cfg.region || null });
   } catch (err) { handleErr(res, err); }
 });
 
