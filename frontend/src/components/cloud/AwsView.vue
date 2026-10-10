@@ -2013,6 +2013,7 @@
           <span style="font-weight:600">{{ t('awsv.createS3Bucket') }}</span>
           <button class="btn sm" @click="createS3Modal.open = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
+        <AwsDestination />
         <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
           <div>
             <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.bucketName') }} <span style="color:#f85149">*</span></label>
@@ -2205,6 +2206,7 @@
       :title="opConfirm.title"
       :message="opConfirm.message"
       :lines="opConfirmLines"
+      :context="opDestination"
       :tone="opConfirm.tone"
       :confirm-label="opConfirm.confirmLabel"
       :busy="opConfirm.busy"
@@ -2221,6 +2223,7 @@
           </span>
           <button class="btn sm" :aria-label="t('action.close')" :title="t('action.close')" @click="invokeModal.open = false">✕</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div class="alert-warn" style="margin:0;font-size:12px">{{ t('awsv.invokeWarning', { profile: selectedProfileName, account: contextAccount ?? '…', region: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : '…' }) }}</div>
           <label for="aws-invoke-payload" style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
@@ -2389,6 +2392,7 @@
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">Tags — {{ tagsModal.title }}</span>
           <button class="btn sm" @click="tagsModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div v-if="tagsModal.loading" class="empty-row">{{ t('state.loading') }}</div>
           <div v-else>
@@ -2422,6 +2426,7 @@
           <span style="font-weight:600">{{ t('awsv.enableCloudwatchLogs', { p0: loggingModal.title }) }}</span>
           <button class="btn sm" @click="loggingModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:12px">
           <div v-if="loggingModal.service === 'lambda'" style="display:flex;flex-direction:column;gap:8px">
             <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.logFormat') }}</label>
@@ -2501,6 +2506,7 @@
           <span style="font-weight:600">{{ t('awsv.createInvalidation', { p0: invalidateModal.dist?.domainName }) }}</span>
           <button class="btn sm" @click="invalidateModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <label style="font-size:12px;color:var(--text-dim)">{{ t('awsv.pathsToInvalidateOnePerLine') }}</label>
           <textarea v-model="invalidateModal.paths" rows="4" class="ctrl-input"
@@ -2597,6 +2603,7 @@
           <span style="font-weight:600">{{ t('awsv.createCloudfrontDistributionFromS3') }}</span>
           <button class="btn sm" @click="cfCreateModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
           <div>
             <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">{{ t('awsv.s3Bucket') }}</label>
@@ -2995,6 +3002,7 @@
           <span style="font-weight:600">{{ t('awsv.createDynamodbTable') }}</span>
           <button class="btn sm" @click="dynamoCreate.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
           <div>
             <label class="ctrl-label">{{ t('awsv.tableName') }}</label>
@@ -3256,6 +3264,7 @@
           <span style="font-weight:600;font-size:13px">{{ t('awsv.editItem2', { p0: dynamoEdit.table }) }}</span>
           <button class="btn sm" @click="dynamoEdit.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:10px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">
           {{ t('awsv.keys') }} <span class="mono-xs" style="color:var(--text)">{{ dynamoEdit.keySchema.map(k => k.name).join(', ') }}</span>
           {{ t('awsv.editTheJsonBelowAndSave') }}
@@ -3461,6 +3470,7 @@
           <span style="font-weight:600">{{ t('awsv.resetMasterPassword', { p0: rdsResetPwdModal.id }) }}</span>
           <button class="btn sm" @click="rdsResetPwdModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
           <label class="field-label">
             {{ t('awsv.newPassword') }}
@@ -3625,6 +3635,7 @@
           <span style="font-weight:600">{{ t('awsv.createUser2', { p0: cognitoState.selectedPool?.name }) }}</span>
           <button class="btn sm" @click="cognitoCreateModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;flex-direction:column;gap:4px">
             <label style="font-size:12px;color:var(--text-muted)">{{ t('awsv.username2') }}</label>
@@ -3661,6 +3672,7 @@
           <span style="font-weight:600">{{ t('awsv.createGroup2', { p0: cognitoState.selectedPool?.name }) }}</span>
           <button class="btn sm" @click="cognitoGroupModal.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;flex-direction:column;gap:4px">
             <label style="font-size:12px;color:var(--text-muted)">{{ t('awsv.groupName2') }}</label>
@@ -3692,6 +3704,7 @@
           </div>
           <button class="btn sm" @click="cognitoUserDetail.open = false">{{ t('action.close') }}</button>
         </div>
+        <AwsDestination />
         <div v-if="cognitoUserDetail.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="cognitoUserDetail.data" style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
 
@@ -3873,6 +3886,8 @@ import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
 import GcpConfirmModal     from './GcpConfirmModal.vue'
+import AwsDestination      from './AwsDestination.vue'
+import { cloudProfileEnvironment } from '../../lib/profileEnvironment'
 import TagList             from './TagList.vue'
 import RowMenu             from './RowMenu.vue'
 import { vDialog }         from '../../composables/vDialog'
@@ -4508,14 +4523,20 @@ const opConfirm = reactive({
   resourceLines: [], busy: false, error: '', run: null, profileId: '',
 })
 
-const opConfirmLines = computed(() => [
-  ...opConfirm.resourceLines,
-  t('awsv.op.destination', {
-    account: contextAccount.value ?? t('state.loading'),
-    profile: selectedProfileName.value,
-    region: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : t('state.loading'),
-  }),
+const opEnvironment = computed(() => cloudProfileEnvironment('aws', awsStore.activeProfileId || '', { awsProfiles: envStore.awsProfiles }))
+// Where the write goes, as the GCP and Kubernetes confirmations show it.
+const opDestination = computed(() => [
+  {
+    label: t('kubeAction.environment'),
+    value: t(`kubeAction.env.${opEnvironment.value || 'unknown'}`),
+    warning: opEnvironment.value === 'production' ? t('awsv.dest.productionWarning') : '',
+  },
+  { label: t('awsv.dest.account'), value: contextAccount.value ?? t('state.loading') },
+  { label: t('awsv.dest.profile'), value: selectedProfileName.value },
+  { label: t('awsv.dest.region'), value: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : t('state.loading') },
+  ...(props.applicationId ? [{ label: t('awsv.dest.application'), value: props.applicationId }] : []),
 ])
+const opConfirmLines = computed(() => opConfirm.resourceLines)
 
 function askOperation({ title, message, tone, confirmLabel, resourceLines, run }) {
   // The destination is the profile active now; the request is refused if it changes (see below).
@@ -5751,10 +5772,19 @@ async function openGlueRuns(job) {
   } finally { glueRunsModal.loading = false }
 }
 
-async function runGlueJob(job) {
-  const r = await awsStore.runGlueJob(job.name)
-  if (r?.jobRunId) toast(t('awsv.toastGlueStarted', { id: r.jobRunId }), 'success')
-  else toast(awsStore.error || 'Failed to start job', 'error')
+function runGlueJob(job) {
+  askOperation({
+    title: t('awsv.op.runGlueTitle', { name: job.name }),
+    message: t('awsv.op.runGlueImpact'),
+    tone: 'warning',
+    confirmLabel: t('awsv.op.runGlue'),
+    resourceLines: [t('awsv.op.glueJob', { name: job.name })],
+    run: async () => {
+      const r = await awsStore.runGlueJob(job.name)
+      if (!r?.jobRunId) return awsStore.error || 'Error'
+      toast(t('awsv.toastGlueStarted', { id: r.jobRunId }), 'success')
+    },
+  })
 }
 
 // ─── Athena Query Panel ───────────────────────────────────────────────────────
@@ -5797,17 +5827,24 @@ async function submitAthenaQuery() {
 
 // ─── Data Pipeline Actions ────────────────────────────────────────────────────
 
-async function activatePipeline(p) {
-  const r = await awsStore.activateDataPipeline(p.id)
-  if (r?.success) { toast(t('awsv.toastActivated', { name: p.name }), 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
-  else toast(awsStore.error || 'Error', 'error')
+function pipelineOperation(p, activate) {
+  askOperation({
+    title: t(activate ? 'awsv.op.activatePipelineTitle' : 'awsv.op.pausePipelineTitle', { name: p.name }),
+    message: t(activate ? 'awsv.op.activatePipelineImpact' : 'awsv.op.pausePipelineImpact'),
+    tone: activate ? 'warning' : 'danger',
+    confirmLabel: t(activate ? 'awsv.op.activatePipeline' : 'awsv.op.pausePipeline'),
+    resourceLines: [t('awsv.op.pipeline', { name: p.name, id: p.id })],
+    run: async () => {
+      const r = activate ? await awsStore.activateDataPipeline(p.id) : await awsStore.deactivateDataPipeline(p.id)
+      if (!r?.success) return awsStore.error || 'Error'
+      toast(t(activate ? 'awsv.toastActivated' : 'awsv.toastPaused', { name: p.name }), 'success')
+      loaded.datapipeline = false
+      loadTab('datapipeline')
+    },
+  })
 }
-
-async function deactivatePipeline(p) {
-  const r = await awsStore.deactivateDataPipeline(p.id)
-  if (r?.success) { toast(t('awsv.toastPaused', { name: p.name }), 'success'); loaded.datapipeline = false; loadTab('datapipeline') }
-  else toast(awsStore.error || 'Error', 'error')
-}
+const activatePipeline = p => pipelineOperation(p, true)
+const deactivatePipeline = p => pipelineOperation(p, false)
 
 // ─── CloudFront Invalidation Modal ────────────────────────────────────────────
 
@@ -6120,24 +6157,32 @@ async function loadCognitoPoolConfig() {
   } finally { cognitoState.loadingConfig = false }
 }
 
-async function doCognitoResetPassword(user) {
-  if (!confirm(t('awsv.confirmResetEmail', { user: user.username }))) return
-  const r = await awsStore.resetCognitoUserPassword(cognitoState.selectedPool.id, user.username)
-  if (r?.success) toast(t('awsv.toastResetSent'), 'success')
-  else toast(awsStore.error || 'Failed', 'error')
+// Cognito user writes: the pool and user are copied when the dialog opens.
+function cognitoUserOperation(user, kind) {
+  const pool = cognitoState.selectedPool
+  const runs = {
+    reset:   () => awsStore.resetCognitoUserPassword(pool.id, user.username),
+    enable:  () => awsStore.enableCognitoUser(pool.id, user.username),
+    disable: () => awsStore.disableCognitoUser(pool.id, user.username),
+  }
+  askOperation({
+    title: t(`awsv.op.cognito.${kind}Title`, { user: user.username }),
+    message: t(`awsv.op.cognito.${kind}Impact`),
+    tone: kind === 'enable' ? 'warning' : 'danger',
+    confirmLabel: t(`awsv.op.cognito.${kind}`),
+    resourceLines: [t('awsv.op.cognitoUser', { user: user.username, pool: pool.name || pool.id })],
+    run: async () => {
+      const r = await runs[kind]()
+      if (!r?.success) return awsStore.error || 'Error'
+      if (kind === 'reset') toast(t('awsv.toastResetSent'), 'success')
+      if (kind === 'enable') { toast(t('awsv.toastUserEnabled'), 'success'); user.enabled = true }
+      if (kind === 'disable') { toast(t('awsv.toastUserDisabled'), 'success'); user.enabled = false }
+    },
+  })
 }
-
-async function doCognitoEnable(user) {
-  const r = await awsStore.enableCognitoUser(cognitoState.selectedPool.id, user.username)
-  if (r?.success) { toast(t('awsv.toastUserEnabled'), 'success'); user.enabled = true }
-  else toast(awsStore.error || 'Failed', 'error')
-}
-
-async function doCognitoDisable(user) {
-  const r = await awsStore.disableCognitoUser(cognitoState.selectedPool.id, user.username)
-  if (r?.success) { toast(t('awsv.toastUserDisabled'), 'success'); user.enabled = false }
-  else toast(awsStore.error || 'Failed', 'error')
-}
+const doCognitoResetPassword = user => cognitoUserOperation(user, 'reset')
+const doCognitoEnable = user => cognitoUserOperation(user, 'enable')
+const doCognitoDisable = user => cognitoUserOperation(user, 'disable')
 
 // ─── Cognito Create User Modal ────────────────────────────────────────────────
 const cognitoCreateModal = reactive({ open: false, loading: false, username: '', email: '', temporaryPassword: '', suppressMessage: false, error: null, result: null })
@@ -6410,19 +6455,26 @@ async function addCognitoUserGroup() {
   } finally { cognitoUserDetail.savingGroup = false }
 }
 
-async function removeCognitoUserGroup(groupName) {
+function removeCognitoUserGroup(groupName) {
   if (!cognitoUserDetail.username) return
-  if (!confirm(t('awsv.confirmRemoveFromGroup', { user: cognitoUserDetail.username, group: groupName }))) return
-  cognitoUserDetail.savingGroup = true
-  try {
-    const r = await awsStore.removeCognitoUserFromGroup(cognitoState.selectedPool.id, cognitoUserDetail.username, groupName)
-    if (r?.success) {
-      toast(t('awsv.toastGroupRemoved'), 'success')
-      await refreshCognitoUserDetail()
-    } else {
-      toast(awsStore.error || t('awsv.lit.groupRemoveFailed'), 'error')
-    }
-  } finally { cognitoUserDetail.savingGroup = false }
+  const username = cognitoUserDetail.username
+  const pool = cognitoState.selectedPool
+  askOperation({
+    title: t('awsv.op.cognito.removeGroupTitle', { user: username, group: groupName }),
+    message: t('awsv.op.cognito.removeGroupImpact'),
+    tone: 'danger',
+    confirmLabel: t('awsv.op.cognito.removeGroup'),
+    resourceLines: [t('awsv.op.cognitoUser', { user: username, pool: pool.name || pool.id })],
+    run: async () => {
+      cognitoUserDetail.savingGroup = true
+      try {
+        const r = await awsStore.removeCognitoUserFromGroup(pool.id, username, groupName)
+        if (!r?.success) return awsStore.error || t('awsv.lit.groupRemoveFailed')
+        toast(t('awsv.toastGroupRemoved'), 'success')
+        await refreshCognitoUserDetail()
+      } finally { cognitoUserDetail.savingGroup = false }
+    },
+  })
 }
 
 watch(() => cognitoState.poolConfig, () => {
@@ -6797,11 +6849,20 @@ async function deleteDynamoItemFromRow(item) {
     if (item[k.name] === undefined) { toast(t('awsv.toastKeyMissing', { name: k.name }), 'error'); return }
     keyAttrs[k.name] = item[k.name]
   }
-  if (!confirm(t('awsv.confirmDeleteItem', { key: JSON.stringify(keyAttrs) }))) return
-  const result = await awsStore.deleteDynamoItem(dynamoBrowse.table, keyAttrs)
-  if (!result) { toast(awsStore.error || 'Failed to delete item', 'error'); return }
-  toast(t('awsv.toastItemDeleted'), 'success')
-  await executeDynamoBrowse(dynamoBrowse.prevKeys[dynamoBrowse.prevKeys.length - 1])
+  const table = dynamoBrowse.table
+  askOperation({
+    title: t('awsv.op.deleteItemTitle', { table }),
+    message: t('awsv.op.deleteItemImpact'),
+    tone: 'danger',
+    confirmLabel: t('awsv.op.deleteItem'),
+    resourceLines: [t('awsv.op.dynamoItem', { table, key: JSON.stringify(keyAttrs) })],
+    run: async () => {
+      const result = await awsStore.deleteDynamoItem(table, keyAttrs)
+      if (!result) return awsStore.error || 'Error'
+      toast(t('awsv.toastItemDeleted'), 'success')
+      await executeDynamoBrowse(dynamoBrowse.prevKeys[dynamoBrowse.prevKeys.length - 1])
+    },
+  })
 }
 
 // ─── RDS actions/modals ──────────────────────────────────────────────────────

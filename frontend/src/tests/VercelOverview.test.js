@@ -62,3 +62,35 @@ describe('Vercel overview: activity windows and inactive projects', () => {
     expect(view.text()).toContain('shop')
   })
 })
+
+describe('Vercel deployment actions show their destination', () => {
+  beforeEach(() => {
+    settings.lang = 'en'
+    setActivePinia(createPinia())
+    localStorage.clear()
+    vi.spyOn(ApiModule, 'useApi').mockReturnValue({ apiFetch: vi.fn(async () => []) })
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('promote names profile, project, deployment and warns that production changes', async () => {
+    const store = useVercelStore()
+    store.setActiveProfile('profile-1')
+    const view = mount(VercelView, { props: { activeService: 'deployments' }, global: { stubs: { Teleport: true, AdvisorPanel: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    store.selectedProject = { id: 'prj_1', name: 'shop' }
+    await flushPromises()   // the project change reloads its deployments (mocked empty)
+    store.loading = false
+    store.deployments = [{ id: 'dpl_1', uid: 'dpl_1', url: 'shop-abc.vercel.app', state: 'READY', target: null, createdAt: 1 }]
+    await flushPromises()
+    await view.findAll('button').find(b => b.text() === 'Promote to Prod').trigger('click')
+    const destination = view.get('[data-test="vercel-destination"]').text()
+    expect(destination).toContain('Projectshop')
+    expect(destination).toContain('Deploymentshop-abc.vercel.app')
+    expect(destination).toContain('Targetproduction')
+    expect(view.text()).toContain('This changes what production serves')
+
+    store.setActiveProfile('profile-2')
+    await flushPromises()
+    expect(view.find('[data-test="vercel-destination"]').exists()).toBe(false)
+  })
+})

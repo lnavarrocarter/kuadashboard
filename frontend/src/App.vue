@@ -108,6 +108,7 @@
           <button class="btn btn-icon" :title="t('nav.addVercel')" @click="openAddConnection('vercel')"><i data-lucide="plus-circle"></i></button>
           <button class="btn btn-icon" :title="t('nav.deleteVercel')" :disabled="!vercelProfileId" @click="deleteConnectionConfirm('vercel')"><i data-lucide="trash-2"></i></button>
         </template>
+        <ReadOnlyToggle />
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
         <button class="btn btn-icon" :title="t('nav.localShell')" @click="openLocalShell()"><i data-lucide="terminal"></i></button>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'console' }" :title="t('nav.console')" @click="toggleConsole"><i data-lucide="square-terminal"></i></button>
@@ -553,6 +554,7 @@ import PortForwardPanel from './components/PortForwardPanel.vue'
 import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
 import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
+import ReadOnlyToggle from './components/ReadOnlyToggle.vue'
 import { contextEnvironment, shortContextName } from './lib/kubeContext'
 import { cloudProfileEnvironment, cloudProfileText } from './lib/profileEnvironment'
 import { kubeUrlChange, kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
