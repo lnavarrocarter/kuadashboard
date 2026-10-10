@@ -2,180 +2,77 @@
 
 > **K**now · **U**nified · **A**dministration
 
-Idioma: Español · [English](README.en.md)
+Language: English · [Español](README.es.md)
 
-KUA es una plataforma open source para observar y operar infraestructura distribuida en Kubernetes y varios proveedores cloud. Reúne inventario, actividad, logs y arquitectura de aplicaciones en una sola interfaz.
+[![Release](https://img.shields.io/github/v/release/lnavarrocarter/kuadashboard)](https://github.com/lnavarrocarter/kuadashboard/releases/latest)
+[![Desktop build](https://github.com/lnavarrocarter/kuadashboard/actions/workflows/electron-build.yml/badge.svg)](https://github.com/lnavarrocarter/kuadashboard/actions/workflows/electron-build.yml)
+[![Stars](https://img.shields.io/github/stars/lnavarrocarter/kuadashboard)](https://github.com/lnavarrocarter/kuadashboard/stargazers)
+[![Forks](https://img.shields.io/github/forks/lnavarrocarter/kuadashboard)](https://github.com/lnavarrocarter/kuadashboard/forks)
+[![Documentation](https://img.shields.io/badge/docs-English%20%7C%20Espa%C3%B1ol-008060)](docs/index.md)
 
-Versión actual: **v1.17.0**. Construido con **Node.js + Express** y **Vue 3 + Vite + Pinia**; disponible como aplicación web o escritorio con Electron para **Windows**, **macOS** y **Linux**.
+KUA is an open-source dashboard for observing and operating infrastructure across Kubernetes and multiple cloud providers. It brings inventory, activity, logs, and application architecture into one interface.
 
-Consulta el [changelog](docs/changelog.md) para las entregas y el [roadmap](docs/ROADMAP.md) para el backlog y la dirección futura. Las funciones listadas abajo describen el producto disponible; las ideas del roadmap no implican que ya estén implementadas.
+For developers and DevOps/SRE teams managing Kubernetes, AWS, GCP, or Vercel who need to inspect their environments without constantly switching consoles.
 
-## Capturas
+**[Download the desktop app](https://github.com/lnavarrocarter/kuadashboard/releases/latest)** · [English documentation](docs/index.md) · [Install from source](#getting-started)
 
-![Vista de Pods de KUA](screenshots/dashboard-main.png)
+## First try
 
-![Vista de Deployments de KUA](screenshots/dashboard-deployments.png)
+1. Download and install the package for your system from Releases. The desktop app includes the server and does not require Node.js.
+2. For Kubernetes, use a test-environment kubeconfig and an available `kubectl`; for cloud, configure only the provider you want to inspect and use read permissions.
+3. Select a context or profile and, where applicable, a namespace or region. Open the inventory and inspect an existing resource.
+4. Check that its data loads without authentication errors. Do not perform write operations during this first try.
 
----
+You need access to your own environment: this walkthrough does not provide a public demo or cloud resources. Queries may incur provider charges. If resources are missing, check the context, namespace, region, and permissions before changing credentials.
 
-## ¿Por qué KUA?
+Built with **Node.js, Express, Vue 3, Vite, and Pinia**. Available as a web app or an Electron desktop app for **Windows, macOS, and Linux**. See the [changelog](docs/changelog.md) for the current release.
 
-| Problema | Solución KUA |
-| --- | --- |
-| Consolas separadas para cada entorno | Un solo lugar para Kubernetes, AWS, GCP y Vercel |
-| Recursos sin contexto de aplicación | KUApps vincula arquitectura, recursos y observabilidad |
-| Operación manual repetitiva | Acciones guiadas, consola integrada y recomendaciones con evidencia |
+## Screenshots
 
----
+![KUA Pods view](screenshots/dashboard-main.png)
 
-## Funcionalidades
+![KUA Deployments view](screenshots/dashboard-deployments.png)
 
-### Kubernetes
+## Features
 
-- Gestión completa: Pods, Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, ConfigMaps, Secrets, PVCs, PVs, StorageClasses, Nodes, Events y recursos de policy/RBAC/scheduling/admission
-- Tablas con selección múltiple, eliminación masiva y ordenamiento correcto por `Age` usando duración real
-- Auto-refresh por vista activa sin perder contexto
-- Live log streaming (WebSocket, multi-container) para Pods y workloads (Deployments, StatefulSets, DaemonSets)
-- Búsqueda, filtro por fecha y descarga de logs
-- Interactive shell (exec) en pods
-- Scale, restart, cordon/uncordon, drain con un clic
-- Panel lateral de detalle por recurso con YAML estructurado, secciones especializadas, edición de ConfigMaps/Secrets/envs, métricas y eventos relacionados
-- YAML viewer/editor con búsqueda confirmada, validación/lint, guardado y autocompletado
-- Port-forward visual con resolución de Pods para Services, estado persistente y auto-reconexión
-- Soporte multi-contexto y multi-namespace
-- Import kubeconfigs desde YAML pegado, archivo local o ruta registrada
-- Helm: búsqueda de charts, instalación en el cluster, releases instalados, desinstalación y preset para metrics-server
+- **Kubernetes:** multi-context and multi-namespace resource management, logs, pod exec, metrics, events, YAML editing, port forwarding, and Helm.
+- **AWS and GCP:** browse and operate supported compute, storage, networking, database, messaging, security, and observability services.
+- **Vercel:** browse projects, deployments, and deployment logs.
+- **KUApps:** connect application resources, architecture, and observability signals.
+- **Insights:** deterministic Advisor checks, local log analysis, CloudWatch dashboards, and estimated KUA API costs.
+- **AI tools:** read-only MCP tools for compatible clients.
+- **Desktop:** native Electron app with an integrated backend and automatic updates.
 
-### AWS
+## Getting started
 
-- **Cómputo**: EC2 (start/stop, SSH/RDP persistente en tabs), ECS (clusters, servicios, tareas), EKS, Lambda (invoke)
-- **Almacenamiento**: S3 (file browser + download + **crear bucket** + test endpoint), ECR (**deploy directo a Kubernetes**)
-- **Red**: VPC (**details panel** — subnets, SGs, route tables, IGWs, NAT GWs), API Gateway (REST & HTTP), CloudFront, Route 53
-- **Mensajería & eventos**: EventBridge (reglas + logs), Step Functions (state machines + diagrama visual), Amazon Lex V2 (bots)
-- **AI**: Bedrock (foundation models), CloudFormation para stacks de AgentCore
-- **Base de datos**: DynamoDB, DocumentDB
-- **Analítica & ETL**: Glue, Athena, Data Pipeline
-- **Seguridad**: Secrets Manager (import al Env Manager), Cognito (**grupos por user pool**)
-
-### GCP
-
-- **Cómputo**: Cloud Run (start/stop), Cloud Run Jobs (run + historial de ejecuciones), GKE, Compute Engine VMs (start/stop)
-- **Base de datos**: Cloud SQL (start/stop), Cloud Spanner (SQL query editor), Firestore (document browser), Memorystore Redis
-- **Almacenamiento**: Cloud Storage (file browser + preview + download), Artifact Registry (paquetes)
-- **Serverless**: Cloud Functions (invoke + logs)
-- **Mensajería**: Pub/Sub Topics, Pub/Sub Subscriptions
-- **Seguridad**: Secret Manager (preview + import al Env Manager), Cloud KMS (key rings + crypto keys)
-- **Analítica**: BigQuery (SQL query editor + job polling)
-- **Flujos de trabajo**: Cloud Workflows (ejecuciones + source viewer)
-- **Red**: Cloud DNS (zonas + registros), VPC Networks (redes + subnets)
-- **Async**: Cloud Tasks (colas + tareas), Cloud Scheduler (run/pause/resume)
-- **DevOps**: Cloud Build (builds + log viewer)
-- **Observabilidad**: Cloud Monitoring (alert policies + uptime checks), Cloud Logging (panel de query interactivo)
-- **IAM**: Service Accounts (lista paginada + keys)
-
-### 🔐 Env Manager
-
-- Perfiles de credenciales cifradas (AES-256-GCM) para AWS, GCP y genéricos
-- Import/Export de archivos `.env`
-- Import de secretos directamente desde Secret Manager (AWS y GCP)
-- Credenciales seleccionadas persisten entre sesiones
-
-### Vercel, arquitectura y observabilidad
-
-- Vercel: proyectos, despliegues y sus logs.
-- KUApps reúne recursos, relaciones, arquitectura y señales de observabilidad por aplicación.
-- Resúmenes de Kubernetes, AWS y GCP incluyen Advisor determinista; los logs admiten caché local cifrada, análisis y consultas.
-- El servidor MCP permite a clientes compatibles consultar datos y resúmenes de KUA en modo de solo lectura.
-
-### 🖥️ Desktop App (Electron)
-
-- Aplicación nativa para Windows, macOS y Linux
-- Auto-inicia el servidor backend
-- Auto-update integrado con `electron-updater`
-- Interfaz bilingüe EN/ES con cambio reactivo
-
----
-
-## Arquitectura
-
-El backend Express expone las API locales y conexiones WebSocket; el frontend Vue presenta vistas por proveedor y KUApps. La app Electron empaqueta ambos para escritorio.
-
----
-
-## Instalación
-
-### Prerrequisitos
-
-- Node.js ≥ 18 (recomendado: 20+)
-- `kubectl` configurado con kubeconfig válido (`~/.kube/config`)
-- Para AWS: `aws` CLI o credenciales en `~/.aws/`
-- Para GCP: `gcloud` CLI autenticado (`gcloud auth application-default login`)
-
-### Modo web
+Source installation requires Git, Node.js 22.12+ on the 22 LTS branch, and npm. Kubernetes requires `kubectl` with a configured kubeconfig; configure credentials only for the cloud services you use. AWS can use the AWS CLI or credentials in `~/.aws/`; for GCP application default credentials, use `gcloud auth application-default login`.
 
 ```bash
 git clone https://github.com/lnavarrocarter/kuadashboard.git
 cd kuadashboard
 npm install
-cd frontend && npm install && cd ..
+npm install --prefix frontend
+npm run build:frontend
 npm start
-# → http://localhost:7190
 ```
 
-### Dev (hot-reload)
+Check `http://localhost:7190/api/health` and open `http://localhost:7190`, then follow the read-only first try above. If the port is occupied, stop your previous instance or run `node server.js` with the `PORT` environment variable set to a free port. If the interface is missing, run `npm run build:frontend` again. For hot reload, run `npm run dev:full`; the backend uses port 7192 and Vite uses port 7191.
 
-```bash
-npm run dev:full
-# backend en :7192, frontend Vite en :7191
-```
+If startup fails with a kubeconfig `ENOENT` error, check that `KUBECONFIG` points to an existing file or unset it to use the default configuration. See the [validation and baseline record (Spanish)](docs/growth-baseline.md) for the tested environment and limitations.
 
-### App Electron (dev)
+## Documentation
 
-```bash
-npm run electron:dev
-```
+- [Documentation in English](docs/index.md)
+- [Documentación en español](docs/es/index.md)
+- [Changelog](docs/changelog.md)
+- [Product roadmap](docs/ROADMAP.md)
 
-### Build de producción
+The README describes available product capabilities. The roadmap lists planned work and does not imply that those items are already implemented.
 
-```bash
-# Solo frontend
-cd frontend && npm run build
+## Security
 
-# App Electron (macOS)
-npm run electron:build:mac
+KUA stores credential profiles encrypted with AES-256-GCM. The local server binds to `127.0.0.1` by default. Setting `KUA_HOST` exposes its unauthenticated API, so only do this on a trusted network with appropriate access controls.
 
-# App Electron (todas las plataformas)
-npm run electron:build:all
-```
+## License
 
----
-
-## Tests
-
-```bash
-cd frontend && npm test
-cd .. && npm test
-```
-
----
-
-## Nota de seguridad
-
-- Las credenciales se almacenan cifradas con AES-256-GCM; la clave se deriva de la máquina.
-- Los valores de Secrets K8s se muestran como `[REDACTED]` en el YAML viewer.
-- El preload de Electron usa `contextBridge` — el renderer nunca accede directamente a Node.js.
-- El servidor escucha en `127.0.0.1` por defecto. Configura `KUA_HOST` solo si necesitas exponerlo en una red confiable: la API permite operar sobre los entornos configurados y no sustituye autenticación.
-
----
-
-## Changelog
-
-La versión actual es **v1.17.0**. Entre las entregas recientes están Cloud Insights y costos de AWS, dashboards de CloudWatch, servicios SQS/SNS/SES, sesiones de consola unificadas, KUApps y análisis inteligente de logs. El [changelog completo](docs/changelog.md) contiene el detalle por versión.
-
-## Roadmap
-
-El backlog activo incluye cerrar brechas de KUA Application, ampliar los adaptadores de arquitectura y avanzar el centro de control con guardas y auditoría. Azure, DigitalOcean, CRD y otras ideas siguen siendo trabajo futuro; consulta el [roadmap actualizado](docs/ROADMAP.md) antes de tratarlas como funciones disponibles.
-
-## Licencia
-
-MIT. [Apoya el proyecto](https://github.com/sponsors/lnavarrocarter/).
+MIT. [Sponsor the project](https://github.com/sponsors/lnavarrocarter/).
