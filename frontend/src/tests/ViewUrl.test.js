@@ -6,9 +6,9 @@ const BASE = 'http://localhost:7192/'
 
 describe('view URL (A15)', () => {
   it('reads the view, AWS service and profile, ignoring unknown views', () => {
-    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev', filters: {} })
-    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '', filters: {} })
-    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '', filters: {} })
+    expect(readViewUrl('?view=aws&service=lambda&profile=local%3Adev')).toEqual({ view: 'aws', service: 'lambda', profile: 'local:dev', resource: '', filters: {} })
+    expect(readViewUrl('?view=nope&service=x')).toEqual({ view: '', service: 'x', profile: '', resource: '', filters: {} })
+    expect(readViewUrl('')).toEqual({ view: '', service: '', profile: '', resource: '', filters: {} })
   })
 
   it('drops the KUApps params on other views and puts them back on KUApps', () => {
@@ -23,11 +23,11 @@ describe('view URL (A15)', () => {
 
   it('carries the AWS search and filters, and drops them elsewhere (R04)', () => {
     expect(readViewUrl('?view=aws&service=lambda&q=orders&f.runtime=python3.12&f.activity=')).toEqual({
-      view: 'aws', service: 'lambda', profile: '', filters: { q: 'orders', runtime: 'python3.12' },
+      view: 'aws', service: 'lambda', profile: '', resource: '', filters: { q: 'orders', runtime: 'python3.12' },
     })
     const lambda = nextViewUrl(`${BASE}?view=aws&service=ec2&f.state=stopped`, { view: 'aws', service: 'lambda', filters: { q: 'orders', runtime: 'python3.12' } })
     expect(lambda.href).toBe(`${BASE}?view=aws&service=lambda&q=orders&f.runtime=python3.12`)
-    expect(nextViewUrl(lambda.href, { view: 'gcp', filters: { q: 'orders' } }).href).toBe(`${BASE}?view=gcp`)
+    expect(nextViewUrl(lambda.href, { view: 'vercel', filters: { q: 'orders' } }).href).toBe(`${BASE}?view=vercel`)
   })
 
   it('drops the Kubernetes params on other views and leaves them to lib/kubeUrl on Kubernetes', () => {
@@ -37,9 +37,17 @@ describe('view URL (A15)', () => {
       .toBe(`${BASE}?view=kubernetes&context=prod&ns=api`)
   })
 
-  it('keeps AWS-only params off other providers and never writes credentials', () => {
-    const { href } = nextViewUrl(`${BASE}?view=aws&service=s3&profile=p1`, { view: 'gcp', service: 's3', profile: 'p1' })
-    expect(href).toBe(`${BASE}?view=gcp`)
+  it('keeps service params off providers without them and never writes credentials', () => {
+    const { href } = nextViewUrl(`${BASE}?view=aws&service=s3&profile=p1`, { view: 'vercel', service: 's3', profile: 'p1' })
+    expect(href).toBe(`${BASE}?view=vercel`)
+  })
+
+  it('carries the GCP service, profile, filters and selected resource (G15)', () => {
+    const { href } = nextViewUrl(BASE, { view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
+    const read = readViewUrl(new URL(href).search)
+    expect(read).toEqual({ view: 'gcp', service: 'cloudrun', profile: 'local:ncaicloud', resource: 'us-central1/api', filters: { q: 'api', region: 'us-central1', sort: 'name' } })
+    // the resource is GCP-only
+    expect(nextViewUrl(href, { view: 'aws', service: 'lambda', resource: 'us-central1/api' }).href).not.toContain('selected=')
   })
 })
 
@@ -145,7 +153,7 @@ describe('useViewUrl history', () => {
     await nextTick()
     history.back()
     await nextTick(); await nextTick(); await nextTick()
-    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev', filters: {} })
+    expect(onPop).toHaveBeenCalledWith({ view: 'aws', service: 'overview', profile: 'local:dev', resource: '', filters: {} })
     expect(service.value).toBe('overview')
     expect(history.length).toBe(3)
     expect(location.search).toBe('?view=aws&service=overview&profile=local%3Adev')

@@ -2130,9 +2130,15 @@ const props = defineProps({
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
+  // Search/filters/sort and selected resource per tab, kept by App so they
+  // survive this view unmounting; applied on mount and when savedFiltersSeq
+  // changes (a link, Back). See composables/useViewUrl.js (G15).
+  savedFilters: { type: Object, default: null },
+  savedResources: { type: Object, default: null },
+  savedFiltersSeq: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['connect-gke', 'open-architecture'])
+const emit = defineEmits(['connect-gke', 'open-architecture', 'navigate-tab', 'filters-change', 'resource-change'])
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
@@ -2199,7 +2205,12 @@ const TABS = [
 
 const activeTab = ref('cloudrun')
 const loaded    = reactive({ apm: false, overview: false, cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
-const search    = ref('')
+// Search per service: changing service no longer wipes the previous search.
+const searchByTab = reactive({})
+const search = computed({
+  get: () => searchByTab[activeTab.value] || '',
+  set: value => { searchByTab[activeTab.value] = value },
+})
 
 const fetchMap = {
   apm:         async () => {
@@ -2253,7 +2264,6 @@ async function loadTab(id, options = {}) {
 async function reloadActiveTab(options = {}) {
   if (options.background && refreshGate.fresh(`${selectedProfileId.value}|${activeTab.value}`, appSettings.gcpListRefreshSec)) return
   loaded[activeTab.value] = false
-  if (!options.preserveSearch) search.value = ''
   await loadTab(activeTab.value, options)
 }
 
@@ -2276,7 +2286,8 @@ async function loadAllTabs() {
 function switchTab(id, { focus = null } = {}) {
   evidenceFocus.value = focus
   activeTab.value = id
-  search.value = ''
+  // Keeps App's sidebar and the URL in step when the view navigates by itself
+  if (id !== props.activeService) emit('navigate-tab', id)
   loadTab(id)
 }
 
@@ -2544,7 +2555,15 @@ function clearFilters() {
   for (const f of FACETS) facetState[facetKey(activeTab.value, f.id)] = ''
   if (evidenceFocus.value?.tab === activeTab.value) evidenceFocus.value = null
 }
-watch(selectedProfileId, () => { for (const key of Object.keys(facetState)) facetState[key] = '' })
+// Filters belong to a profile's data; the first profile of a session (often
+// from a link) keeps the ones the link brought.
+watch(selectedProfileId, (id, previous) => {
+  if (!previous) return
+  for (const key of Object.keys(facetState)) facetState[key] = ''
+  for (const key of Object.keys(searchByTab)) searchByTab[key] = ''
+  for (const key of Object.keys(pendingResource)) delete pendingResource[key]
+})
+
 
 const filteredCloudRun   = computed(() => filterRows(gcpStore.tabs.cloudrun.data))
 const filteredGke        = computed(() => filterRows(gcpStore.tabs.gke.data))
@@ -3814,7 +3833,58 @@ async function openIamKeys(sa) {
     iamKeysList.value = await gcpStore.fetchIamKeys(sa.email)
   } catch (e) { iamKeysError.value = e.message }
   finally { iamKeysLoading.value = false }
-}</script>
+}
+// ── The view in the URL (G15) ────────────────────────────────────────────────
+// The active tab's search, filters and order are emitted to App (which writes
+// ?q=&f.state=&f.region=&f.sort=) and the selected resource as ?resource=.
+function currentFilters(tab) {
+  const filters = {}
+  if (searchByTab[tab]) filters.q = searchByTab[tab]
+  for (const f of FACETS) if (facetState[facetKey(tab, f.id)]) filters[f.id] = facetState[facetKey(tab, f.id)]
+  if (sortState[tab]) filters.sort = sortState[tab]
+  return filters
+}
+watch(() => [activeTab.value, JSON.stringify(currentFilters(activeTab.value))],
+  () => emit('filters-change', activeTab.value, currentFilters(activeTab.value)))
+
+const RESOURCE_KEYS = {
+  cloudrun: r => r && `${r.region}/${r.name}`,
+  vms: r => r && `${r.zone}/${r.name}`,
+  sql: r => r && r.name,
+  functions: r => r && `${r.location}/${r.name}`,
+}
+const RESOURCE_PANELS = { cloudrun: () => crPanel.resource, vms: () => vmPanel.resource, sql: () => sqlPanel.resource, functions: () => fnPanel.resource }
+for (const [tab, panel] of Object.entries(RESOURCE_PANELS)) {
+  watch(panel, resource => emit('resource-change', tab, RESOURCE_KEYS[tab](resource) || ''))
+}
+
+// A link or Back reopens its resource once the list is loaded, or says it is
+// not visible with this profile (the list's own error banner explains access).
+const pendingResource = reactive({})
+function applySavedFilters() {
+  for (const [tab, filters] of Object.entries(props.savedFilters || {})) {
+    searchByTab[tab] = filters?.q || ''
+    for (const f of FACETS) facetState[facetKey(tab, f.id)] = filters?.[f.id] || ''
+    sortState[tab] = filters?.sort || ''
+  }
+  for (const [tab, key] of Object.entries(props.savedResources || {})) {
+    if (key && RESOURCE_KEYS[tab] && RESOURCE_KEYS[tab](RESOURCE_PANELS[tab]()) !== key) pendingResource[tab] = key
+  }
+}
+watch(() => props.savedFiltersSeq, applySavedFilters, { immediate: true })
+watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.loading, gcpStore.tabs[tab]?.data?.length, gcpStore.tabs[tab]?.error]), () => {
+  for (const tab of Object.keys(pendingResource)) {
+    const state = gcpStore.tabs[tab]
+    if (!state || state.loading || !loaded[tab]) continue
+    const key = pendingResource[tab]
+    delete pendingResource[tab]
+    if (state.error) continue
+    const row = (state.data || []).find(r => RESOURCE_KEYS[tab](r) === key)
+    if (row) FOCUS_SELECT[tab]?.(row)
+    else toast(t('gcpv.audit.linkResourceMissing', { name: key }), 'warn')
+  }
+}, { deep: true })
+</script>
 
 <style scoped>
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */

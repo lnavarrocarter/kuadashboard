@@ -479,6 +479,32 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(names()).toHaveLength(3)
   })
 
+  it('search is kept per service and the view state is reported to App (G15)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('.aws-search').setValue('api')
+    expect(w.emitted('filters-change').at(-1)).toEqual(['cloudrun', { q: 'api' }])
+    await w.setProps({ activeService: 'vms' })
+    expect(w.find('.aws-search').element.value).toBe('')
+    await w.setProps({ activeService: 'cloudrun' })
+    expect(w.find('.aws-search').element.value).toBe('api')
+    await w.find('.aws-search').setValue('')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    expect(w.emitted('resource-change').at(-1)).toEqual(['cloudrun', 'us-central1/api'])
+  })
+
+  it('a link reopens its filters and resource, or says the resource is missing (G15)', async () => {
+    const w = mount(GcpView, {
+      props: { activeService: 'cloudrun', savedFilters: { cloudrun: { q: 'api', sort: 'name' } }, savedResources: { cloudrun: 'us-central1/api' }, savedFiltersSeq: 1 },
+      global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    store.tabs.cloudrun.data = CLOUD_RUN
+    await flushPromises()
+    expect(w.find('.aws-search').element.value).toBe('api')
+    expect(w.find('[data-test="cloudrun-table"] .gcp-row-link').attributes('aria-expanded')).toBe('true')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

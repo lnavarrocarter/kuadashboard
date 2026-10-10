@@ -407,7 +407,9 @@
             </div>
           </template>
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :saved-filters="awsFiltersByTab" :saved-filters-seq="awsFiltersSeq" @filters-change="(tab, filters) => { awsFiltersByTab[tab] = filters }" />
-          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
+          <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture"
+            @navigate-tab="tab => { gcpTab = tab }" :saved-filters="gcpFiltersByTab" :saved-resources="gcpResourceByTab" :saved-filters-seq="gcpFiltersSeq"
+            @filters-change="(tab, filters) => { gcpFiltersByTab[tab] = filters }" @resource-change="(tab, key) => { gcpResourceByTab[tab] = key }" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
             v-else-if="activeProvider === 'kuapps'"
@@ -924,15 +926,27 @@ function setLinkedAwsFilters(service, filters) {
   awsFiltersByTab[service] = { ...(filters || {}) }
   awsFiltersSeq.value += 1
 }
+// The same for GCP (G15): service, profile, search/filters/sort and the
+// selected resource per tab, kept here so leaving GCP and coming back keeps them.
+const GCP_TABS = new Set(['apm', 'overview', ...Object.values(GCP_SIDEBAR).flat().map(item => item.id)])
+const gcpFiltersByTab = reactive({})
+const gcpResourceByTab = reactive({})
+const gcpFiltersSeq = ref(0)
+function setLinkedGcpState(service, filters, resource) {
+  gcpFiltersByTab[service] = { ...(filters || {}) }
+  gcpResourceByTab[service] = resource || ''
+  gcpFiltersSeq.value += 1
+}
+function serviceState() {
+  if (activeProvider.value === 'aws') return { service: awsTab.value, profile: awsProfileId.value, filters: { ...(awsFiltersByTab[awsTab.value] || {}) } }
+  if (activeProvider.value === 'gcp') return { service: gcpTab.value, profile: gcpProfileId.value, filters: { ...(gcpFiltersByTab[gcpTab.value] || {}) }, resource: gcpResourceByTab[gcpTab.value] || '' }
+  return { service: '', profile: '', filters: {} }
+}
 const viewUrl = useViewUrl({
-  state: () => ({
-    view: activeProvider.value,
-    service: activeProvider.value === 'aws' ? awsTab.value : '',
-    profile: activeProvider.value === 'aws' ? awsProfileId.value : '',
-    filters: activeProvider.value === 'aws' ? { ...(awsFiltersByTab[awsTab.value] || {}) } : {},
-  }),
-  navigation: [activeProvider, awsTab],
-  context: [awsProfileId, activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {})],
+  state: () => ({ view: activeProvider.value, ...serviceState() }),
+  navigation: [activeProvider, awsTab, gcpTab],
+  context: [awsProfileId, gcpProfileId, activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {}),
+    () => JSON.stringify(gcpFiltersByTab[gcpTab.value] || {}), () => gcpResourceByTab[gcpTab.value] || ''],
   onPop: applyViewFromHistory,
 })
 // A profile named by a link is only selected once it is known to exist here.
@@ -945,6 +959,23 @@ function applyLinkedView(linked) {
     setLinkedAwsFilters(linked.service, linked.filters)
   }
   if (linked.view === 'aws' && linked.profile && linked.profile !== awsProfileId.value) linkedAwsProfile = linked.profile
+  if (linked.view === 'gcp' && GCP_TABS.has(linked.service)) {
+    gcpTab.value = linked.service
+    setLinkedGcpState(linked.service, linked.filters, linked.resource)
+  }
+  if (linked.view === 'gcp' && linked.profile && linked.profile !== gcpProfileId.value) linkedGcpProfile = linked.profile
+}
+let linkedGcpProfile = ''
+function gcpProfileExists(id) {
+  if (id.startsWith('local:')) return gcpLocalConfigs.value.some(config => `local:${config.name}` === id)
+  return envStore.profiles.some(profile => profile.id === id && profile.provider === 'gcp')
+}
+function applyLinkedGcpProfile() {
+  if (!linkedGcpProfile) return
+  const id = linkedGcpProfile
+  linkedGcpProfile = ''
+  if (gcpProfileExists(id)) selectProfile('gcp', id)
+  else toast(t('viewUrl.profileMissing', { profile: id }), 'warn')
 }
 function awsProfileExists(id) {
   if (id.startsWith('local:')) return awsLocalProfiles.value.some(profile => `local:${profile.name}` === id)
@@ -961,6 +992,7 @@ async function applyViewFromHistory(linked) {
   // Kubernetes entries are applied by onKubePopState (context, namespace, resource).
   if (!linked.view || linked.view === 'kubernetes') return
   await setProvider(linked.view)
+  if (linked.view === 'gcp') return applyGcpFromHistory(linked)
   if (linked.view !== 'aws') return
   if (AWS_TABS.has(linked.service)) {
     awsTab.value = linked.service
@@ -973,6 +1005,21 @@ async function applyViewFromHistory(linked) {
     }
     selectProfile('aws', linked.profile)
     // Never a silent switch: the view now reads another account.
+    toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
+  }
+}
+function applyGcpFromHistory(linked) {
+  if (GCP_TABS.has(linked.service)) {
+    gcpTab.value = linked.service
+    setLinkedGcpState(linked.service, linked.filters, linked.resource)
+  }
+  if (linked.profile && linked.profile !== gcpProfileId.value) {
+    if (!gcpProfileExists(linked.profile)) {
+      toast(t('viewUrl.profileMissing', { profile: linked.profile }), 'warn')
+      return
+    }
+    selectProfile('gcp', linked.profile)
+    // Never a silent switch: the view now reads another project.
     toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
   }
 }
@@ -1651,6 +1698,7 @@ onMounted(async () => {
       observabilityProvider.value = availableObservabilityProviders.value[0].id
     }
     applyLinkedAwsProfile()
+    applyLinkedGcpProfile()
     // Restaurar perfiles AWS/GCP guardados
     if (awsProfileId.value) awsStore.setActiveProfile(awsProfileId.value)
     if (gcpProfileId.value) gcpStore.setActiveProfile(gcpProfileId.value)

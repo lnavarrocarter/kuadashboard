@@ -6659,4 +6659,5 @@ export default {
   "gcpv.audit.sort.state": "Order: state",
   "gcpv.audit.sort.region": "Order: region",
   "gcpv.audit.sort.updated": "Order: most recent",
+  "gcpv.audit.linkResourceMissing": "The linked resource {name} is not in this project's list with the current profile.",
 }
