@@ -409,7 +409,7 @@
           <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :saved-filters="awsFiltersByTab" :saved-filters-seq="awsFiltersSeq" @filters-change="(tab, filters) => { awsFiltersByTab[tab] = filters }" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture"
             @navigate-tab="tab => { gcpTab = tab }" :saved-filters="gcpFiltersByTab" :saved-resources="gcpResourceByTab" :saved-filters-seq="gcpFiltersSeq"
-            @filters-change="(tab, filters) => { gcpFiltersByTab[tab] = filters }" @resource-change="(tab, key) => { gcpResourceByTab[tab] = key }" />
+            @filters-change="(tab, filters) => { gcpFiltersByTab[tab] = filters }" @resource-change="(tab, key) => { gcpResourceByTab[tab] = key }" @manage-connections="openEnvManager" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
             v-else-if="activeProvider === 'kuapps'"
@@ -1323,6 +1323,10 @@ function deleteConnectionConfirm(provider) {
 }
 function toggleEnvManager() {
   cloudView.value = cloudView.value === 'envs' ? null : 'envs'
+  nextTick(() => createIcons({ icons }))
+}
+function openEnvManager() {
+  cloudView.value = 'envs'
   nextTick(() => createIcons({ icons }))
 }
 function toggleAuditLog() {

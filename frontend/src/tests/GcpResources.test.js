@@ -732,3 +732,42 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.text()).not.toContain('Estimated costs')
   })
 })
+
+describe('GcpView — expired credentials (H7)', () => {
+  let store
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    stubFetch()
+    store = useGcpStore()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  async function mountWithAuthError(profileId) {
+    store.activeProfileId = profileId
+    const w = mount(GcpView, { props: { activeService: 'cloudrun' }, global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    Object.assign(store.tabs.cloudrun, { data: [], loading: false, error: 'Request had invalid authentication credentials', errorInfo: { kind: 'auth' } })
+    await flushPromises()
+    return w
+  }
+
+  it('a failed read is not counted as zero services', async () => {
+    const w = await mountWithAuthError('gcp-1')
+    expect(w.find('[data-test="cloudrun-count"]').text()).toBe('Sin leer')
+  })
+
+  it('a stored profile offers to review the connection and to retry', async () => {
+    const w = await mountWithAuthError('gcp-1')
+    const recovery = w.find('[data-test="auth-recovery"]')
+    expect(recovery.find('[data-test="auth-command"]').exists()).toBe(false)
+    await recovery.find('[data-test="manage-connection"]').trigger('click')
+    expect(w.emitted('manage-connections')).toHaveLength(1)
+    expect(recovery.find('[data-test="retry-auth"]').exists()).toBe(true)
+  })
+
+  it('a gcloud configuration shows the command to renew it instead of running it', async () => {
+    const w = await mountWithAuthError('local:work')
+    expect(w.find('[data-test="auth-command"]').text()).toBe('gcloud auth login --configuration=work')
+    expect(w.find('[data-test="manage-connection"]').exists()).toBe(false)
+  })
+})

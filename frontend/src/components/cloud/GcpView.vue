@@ -65,6 +65,16 @@
             <summary style="cursor:pointer">{{ t('gcpv.audit.technicalDetails') }}</summary>
             <div class="mono-xs" style="white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto">{{ currentTab.errorInfo.raw }}</div>
           </details>
+          <!-- Expired or invalid credentials: say how to renew them for this kind of profile -->
+          <div v-if="authRecovery" class="gcp-auth-recovery" data-test="auth-recovery">
+            <template v-if="authRecovery.command">
+              <span class="text-dim">{{ t('gcpv.audit.authLocalHint') }}</span>
+              <code class="mono-xs" data-test="auth-command">{{ authRecovery.command }}</code>
+              <button class="btn sm" data-test="copy-auth-command" @click="copyAuthCommand">{{ t('gcpv.audit.copyCommand') }}</button>
+            </template>
+            <button v-else class="btn sm" data-test="manage-connection" @click="emit('manage-connections')">{{ t('gcpv.audit.manageConnection') }}</button>
+            <button class="btn sm primary" data-test="retry-auth" :disabled="currentTab.loading" @click="reloadActiveTab">{{ t('gcpv.audit.retry') }}</button>
+          </div>
         </div>
         <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank" rel="noopener"
            class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0" :title="t('gcpv.audit.openApiPageHint')">
@@ -276,7 +286,7 @@
       <!-- Cloud Run -->
       <div v-show="activeTab === 'cloudrun'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div class="gcp-list-toolbar">
-          <span class="text-dim">{{ t('gcpv.serviceS', { p0: filteredCloudRun.length }) }}</span>
+          <span class="text-dim" data-test="cloudrun-count">{{ gcpStore.tabs.cloudrun.error && !filteredCloudRun.length ? t('gcpv.audit.notRead') : t('gcpv.serviceS', { p0: filteredCloudRun.length }) }}</span>
           <span class="gcp-toolbar-actions">
             <button class="btn sm" :title="pollingTitle" @click="pollingModal.open = true">{{ t('gcpv.history', { p0: pollingBadge }) }}</button>
             <button class="btn sm primary" data-test="create-cloudrun" @click="openCreate('cloudrun')">{{ t('gcpv.newService') }}</button>
@@ -597,7 +607,7 @@
       <!-- Cloud SQL -->
       <div v-show="activeTab === 'sql'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div class="gcp-list-toolbar">
-          <span class="text-dim">{{ t('gcpv.instanceS', { p0: filteredSql.length }) }}</span>
+          <span class="text-dim" data-test="sql-count">{{ gcpStore.tabs.sql.error && !filteredSql.length ? t('gcpv.audit.notRead') : t('gcpv.instanceS', { p0: filteredSql.length }) }}</span>
           <span class="gcp-toolbar-actions">
             <button class="btn sm" :title="pollingTitle" @click="pollingModal.open = true">{{ t('gcpv.history', { p0: pollingBadge }) }}</button>
             <button class="btn sm primary" data-test="create-sql" @click="openCreate('sql')">{{ t('gcpv.newInstance') }}</button>
@@ -2160,7 +2170,7 @@ const props = defineProps({
   savedFiltersSeq: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['connect-gke', 'open-architecture', 'navigate-tab', 'filters-change', 'resource-change'])
+const emit = defineEmits(['connect-gke', 'open-architecture', 'navigate-tab', 'filters-change', 'resource-change', 'manage-connections'])
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
@@ -2347,6 +2357,23 @@ watch(() => props.activeService, (newTab) => {
 }, { immediate: true })
 
 const currentTab = computed(() => gcpStore.tabs[activeTab.value] || { data: [], loading: false, error: null })
+// A gcloud configuration is renewed with gcloud itself; a stored profile in the Env Manager.
+// Nothing is run from here: running `gcloud auth login` would also change the active configuration.
+const authRecovery = computed(() => {
+  if (currentTab.value.errorInfo?.kind !== 'auth') return null
+  const profileId = gcpStore.activeProfileId || ''
+  return profileId.startsWith('local:')
+    ? { command: `gcloud auth login --configuration=${profileId.slice('local:'.length)}` }
+    : { command: '' }
+})
+async function copyAuthCommand() {
+  try {
+    await navigator.clipboard.writeText(authRecovery.value.command)
+    toast(t('gcpv.audit.commandCopied'), 'success')
+  } catch {
+    toast(t('gcpv.audit.copyFailed'), 'error')
+  }
+}
 const overviewTrend = computed(() => [...gcpStore.overviewHistory].sort((a, b) => a.capturedAt - b.capturedAt))
 const OVERVIEW_GROUP_DEFINITIONS = [
   { id: 'compute', label: 'gcpv.groupCompute' },
@@ -3962,6 +3989,8 @@ watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.lo
 </script>
 
 <style scoped>
+.gcp-auth-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+.gcp-auth-recovery code { padding: 2px 6px; border-radius: 4px; background: var(--bg-input, rgba(0,0,0,.2)); word-break: break-all; }
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */
 .gcp-toolbar-actions { display: flex; gap: 6px; align-items: center; }
 .gcp-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 12px; }
