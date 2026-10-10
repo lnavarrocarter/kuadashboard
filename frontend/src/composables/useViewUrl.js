@@ -12,6 +12,8 @@ import { nextTick, watch } from 'vue'
 
 export const VIEWS = ['kubernetes', 'aws', 'gcp', 'vercel', 'kuapps']
 const KUAPPS_PARAMS = ['app', 'tab']
+// Owned by lib/kubeUrl.js while Kubernetes is shown; dropped on the other views.
+const KUBE_PARAMS = ['context', 'ns', 'resource', 'name']
 
 export function readViewUrl(search = '') {
   let params
@@ -45,6 +47,7 @@ export function nextViewUrl(href, { view, service, profile, filters = {} }, stas
   if (view === 'aws' && profile) url.searchParams.set('profile', profile)
   else url.searchParams.delete('profile')
   for (const key of [...url.searchParams.keys()]) if (key === 'q' || key.startsWith('f.')) url.searchParams.delete(key)
+  if (view !== 'kubernetes') for (const key of KUBE_PARAMS) url.searchParams.delete(key)
   if (view === 'aws') {
     for (const [key, value] of Object.entries(filters)) {
       if (value) url.searchParams.set(key === 'q' ? 'q' : `f.${key}`, value)

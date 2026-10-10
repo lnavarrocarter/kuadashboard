@@ -407,11 +407,21 @@ watch([logSearch, logFrom, logTo], () => {
 })
 
 watch(isShellTab, v => { if (v) nextTick(() => inputRef.value?.focus()) })
-watch(activeTab,  () => { showPrevious.value = false })
+// The checkbox mirrors the tab (a tab opened from the inspector for the
+// previous instance starts checked); syncing it on a tab switch is not a
+// request to restart that tab's stream.
+let syncingPrevious = false
+watch(activeTab, tab => {
+  if (showPrevious.value === !!tab?.previous) return
+  syncingPrevious = true
+  showPrevious.value = !!tab?.previous
+  nextTick(() => { syncingPrevious = false })
+}, { immediate: true })
 
 watch(showPrevious, val => {
   const tab = activeTab.value
-  if (!tab || isShellTab.value) return
+  if (syncingPrevious || !tab || isShellTab.value) return
+  tab.previous = val
   store.stopStream(tab)
   clearLogs()
   emit('restartStream', tab, val)

@@ -30,6 +30,13 @@ describe('view URL (A15)', () => {
     expect(nextViewUrl(lambda.href, { view: 'gcp', filters: { q: 'orders' } }).href).toBe(`${BASE}?view=gcp`)
   })
 
+  it('drops the Kubernetes params on other views and leaves them to lib/kubeUrl on Kubernetes', () => {
+    expect(nextViewUrl(`${BASE}?view=kubernetes&context=prod&ns=api&resource=pods`, { view: 'aws', service: 'ec2' }).href)
+      .toBe(`${BASE}?view=aws&service=ec2`)
+    expect(nextViewUrl(`${BASE}?view=kubernetes&context=prod&ns=api`, { view: 'kubernetes' }).href)
+      .toBe(`${BASE}?view=kubernetes&context=prod&ns=api`)
+  })
+
   it('keeps AWS-only params off other providers and never writes credentials', () => {
     const { href } = nextViewUrl(`${BASE}?view=aws&service=s3&profile=p1`, { view: 'gcp', service: 's3', profile: 'p1' })
     expect(href).toBe(`${BASE}?view=gcp`)
