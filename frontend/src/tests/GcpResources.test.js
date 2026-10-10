@@ -554,6 +554,35 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(selected().attributes('id')).toBe(tabs()[0].attributes('id'))
   })
 
+  it('evidence filter, detail tab and Artifact repository are part of the reported view (R05)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    await w.findAll('[role="tablist"] [role="tab"]').find(tab => tab.attributes('id') === 'gcp-cr-tab-metrics').trigger('click')
+    await flushPromises()
+    expect(w.emitted('filters-change').at(-1)).toEqual(['cloudrun', { panel: 'metrics' }])
+
+    const art = await mountTab('artifact')
+    store.tabs.artifact.data = [{ name: 'app', location: 'us-central1', format: 'DOCKER' }]
+    await flushPromises()
+    await art.find('.sidebar-item[role="button"]').trigger('click')
+    await flushPromises()
+    expect(art.emitted('resource-change').at(-1)).toEqual(['artifact', 'us-central1/app'])
+  })
+
+  it('a link restores the evidence filter and the detail tab (R05)', async () => {
+    const w = mount(GcpView, {
+      props: { activeService: 'cloudrun', savedFilters: { cloudrun: { evidence: 'api', panel: 'metrics' } }, savedResources: { cloudrun: 'us-central1/api' }, savedFiltersSeq: 1 },
+      global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    store.tabs.cloudrun.data = [...CLOUD_RUN, { ...CLOUD_RUN[0], name: 'other' }]
+    await flushPromises()
+    expect(w.find('[data-test="evidence-filter"]').exists()).toBe(true)
+    expect(w.findAll('[data-test="cloudrun-table"] tbody tr')).toHaveLength(1)
+    expect(w.find('#gcp-cr-tab-metrics').attributes('aria-selected')).toBe('true')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

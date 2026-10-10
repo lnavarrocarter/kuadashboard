@@ -3234,8 +3234,9 @@ const arPanel = reactive({
   nsLoading: false, depsLoading: false, deploying: false, deployResult: null,
 })
 
+const arKey = r => r ? `${r.location}/${r.name}` : ''
 async function selectArtifactRepo(repo) {
-  const same = arPanel.repo?.name === repo.name
+  const same = arKey(arPanel.repo) === arKey(repo)
   arPanel.repo = repo
   if (!same) {
     arPanel.tab = 'packages'; arPanel.info = null
@@ -3247,6 +3248,7 @@ async function selectArtifactRepo(repo) {
       gcpStore.fetchArtifactPackages(repo.location, repo.name).catch(() => []),
       gcpStore.fetchArtifactRepoInfo(repo.location, repo.name).catch(() => null),
     ])
+    if (arKey(arPanel.repo) !== arKey(repo)) return   // another repository was selected meanwhile (R01)
     arPanel.pkgs = pkgs || []
     arPanel.info = info
     arPanel.pkgsLoading = false
@@ -3261,11 +3263,12 @@ function arSwitchTab(tab) {
 async function selectArtifactPkg(pkg) {
   arPanel.selectedPkg = pkg
   arPanel.tags = []; arPanel.tagsLoading = true
+  const current = () => arPanel.selectedPkg === pkg
   try {
     const tags = await gcpStore.fetchArtifactTags(arPanel.repo.location, arPanel.repo.name, pkg.name)
-    arPanel.tags = tags || []
-  } catch (e) { toast(e.message, 'error') }
-  finally { arPanel.tagsLoading = false }
+    if (current()) arPanel.tags = tags || []
+  } catch (e) { if (current()) toast(e.message, 'error') }
+  finally { if (current()) arPanel.tagsLoading = false }
 }
 
 function arStartDeploy(tag) {
@@ -3881,26 +3884,40 @@ async function openIamKeys(sa) {
   } catch (e) { iamKeysError.value = e.message }
   finally { iamKeysLoading.value = false }
 }
-// ── The view in the URL (G15) ────────────────────────────────────────────────
-// The active tab's search, filters and order are emitted to App (which writes
-// ?q=&f.state=&f.region=&f.sort=) and the selected resource as ?resource=.
-function currentFilters(tab) {
-  const filters = {}
-  if (searchByTab[tab]) filters.q = searchByTab[tab]
-  for (const f of FACETS) if (facetState[facetKey(tab, f.id)]) filters[f.id] = facetState[facetKey(tab, f.id)]
-  if (sortState[tab]) filters.sort = sortState[tab]
-  return filters
-}
-watch(() => [activeTab.value, JSON.stringify(currentFilters(activeTab.value))],
-  () => emit('filters-change', activeTab.value, currentFilters(activeTab.value)))
-
+// ── The view in the URL (G15, R05) ───────────────────────────────────────────
+// Restorable destinations, and only these:
+//   every list      search, State/Region filters, order   ?q=&f.state=&f.region=&f.sort=
+//   every list      the Overview evidence filter          ?f.evidence=name1,name2
+//   master-detail   the selected resource                 ?selected=<location>/<name>
+//   (Cloud Run, VMs, SQL, Functions, Artifact Registry)   and its detail tab ?f.panel=metrics
+// Other selections (dialogs, Firestore documents, Storage objects...) are not
+// part of a link. Values never include payloads, variables or secrets.
 const RESOURCE_KEYS = {
   cloudrun: r => r && `${r.region}/${r.name}`,
   vms: r => r && `${r.zone}/${r.name}`,
   sql: r => r && r.name,
   functions: r => r && `${r.location}/${r.name}`,
+  artifact: r => r && `${r.location}/${r.name}`,
 }
-const RESOURCE_PANELS = { cloudrun: () => crPanel.resource, vms: () => vmPanel.resource, sql: () => sqlPanel.resource, functions: () => fnPanel.resource }
+const RESOURCE_PANELS = { cloudrun: () => crPanel.resource, vms: () => vmPanel.resource, sql: () => sqlPanel.resource, functions: () => fnPanel.resource, artifact: () => arPanel.repo }
+const DETAIL_TABS = { cloudrun: () => crPanel.tab, vms: () => vmPanel.tab, sql: () => sqlPanel.tab, functions: () => fnPanel.tab, artifact: () => arPanel.tab }
+const DETAIL_SWITCH = { cloudrun: crSwitchTab, vms: vmSwitchTab, sql: sqlSwitchTab, functions: fnSwitchTab, artifact: arSwitchTab }
+const DEFAULT_DETAIL_TAB = { artifact: 'packages' }
+FOCUS_SELECT.artifact = r => selectArtifactRepo(r)
+
+function currentFilters(tab) {
+  const filters = {}
+  if (searchByTab[tab]) filters.q = searchByTab[tab]
+  for (const f of FACETS) if (facetState[facetKey(tab, f.id)]) filters[f.id] = facetState[facetKey(tab, f.id)]
+  if (sortState[tab]) filters.sort = sortState[tab]
+  if (evidenceFocus.value?.tab === tab && evidenceFocus.value.names.length) filters.evidence = evidenceFocus.value.names.join(',')
+  const detailTab = RESOURCE_PANELS[tab]?.() && DETAIL_TABS[tab]?.()
+  if (detailTab && detailTab !== (DEFAULT_DETAIL_TAB[tab] || 'overview')) filters.panel = detailTab
+  return filters
+}
+watch(() => [activeTab.value, JSON.stringify(currentFilters(activeTab.value))],
+  () => emit('filters-change', activeTab.value, currentFilters(activeTab.value)))
+
 for (const [tab, panel] of Object.entries(RESOURCE_PANELS)) {
   watch(panel, resource => emit('resource-change', tab, RESOURCE_KEYS[tab](resource) || ''))
 }
@@ -3908,14 +3925,21 @@ for (const [tab, panel] of Object.entries(RESOURCE_PANELS)) {
 // A link or Back reopens its resource once the list is loaded, or says it is
 // not visible with this profile (the list's own error banner explains access).
 const pendingResource = reactive({})
+const pendingDetailTab = {}
 function applySavedFilters() {
   for (const [tab, filters] of Object.entries(props.savedFilters || {})) {
     searchByTab[tab] = filters?.q || ''
     for (const f of FACETS) facetState[facetKey(tab, f.id)] = filters?.[f.id] || ''
     sortState[tab] = filters?.sort || ''
+    const names = String(filters?.evidence || '').split(',').filter(Boolean)
+    if (names.length) evidenceFocus.value = { tab, names, label: t('gcpv.audit.linkedEvidence') }
+    else if (evidenceFocus.value?.tab === tab) evidenceFocus.value = null
+    if (filters?.panel && DETAIL_SWITCH[tab]) pendingDetailTab[tab] = filters.panel
   }
   for (const [tab, key] of Object.entries(props.savedResources || {})) {
-    if (key && RESOURCE_KEYS[tab] && RESOURCE_KEYS[tab](RESOURCE_PANELS[tab]()) !== key) pendingResource[tab] = key
+    if (!key || !RESOURCE_KEYS[tab]) continue
+    if (RESOURCE_KEYS[tab](RESOURCE_PANELS[tab]()) !== key) pendingResource[tab] = key
+    else if (pendingDetailTab[tab]) { DETAIL_SWITCH[tab](pendingDetailTab[tab]); delete pendingDetailTab[tab] }
   }
 }
 watch(() => props.savedFiltersSeq, applySavedFilters, { immediate: true })
@@ -3927,8 +3951,9 @@ watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.lo
     delete pendingResource[tab]
     if (state.error) continue
     const row = (state.data || []).find(r => RESOURCE_KEYS[tab](r) === key)
-    if (row) FOCUS_SELECT[tab]?.(row)
-    else toast(t('gcpv.audit.linkResourceMissing', { name: key }), 'warn')
+    if (!row) { toast(t('gcpv.audit.linkResourceMissing', { name: key }), 'warn'); continue }
+    FOCUS_SELECT[tab]?.(row)
+    if (pendingDetailTab[tab]) { DETAIL_SWITCH[tab](pendingDetailTab[tab]); delete pendingDetailTab[tab] }
   }
 }, { deep: true })
 </script>

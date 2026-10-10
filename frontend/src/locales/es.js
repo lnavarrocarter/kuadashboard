@@ -6666,4 +6666,5 @@ export default {
   "gst.action.run_start": "Mínimo fijado en 1",
   "gst.action.run_stop": "Mínimo fijado en 0",
   "gst.minInstances": "instancias mínimas: {n}",
+  "gcpv.audit.linkedEvidence": "recursos de un enlace compartido",
 }

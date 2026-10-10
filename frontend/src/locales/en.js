@@ -6667,4 +6667,5 @@ export default {
   "gst.action.run_start": "Minimum set to 1",
   "gst.action.run_stop": "Minimum set to 0",
   "gst.minInstances": "minimum instances: {n}",
+  "gcpv.audit.linkedEvidence": "resources from a shared link",
 }
