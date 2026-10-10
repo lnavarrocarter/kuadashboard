@@ -89,6 +89,38 @@ describe('AWS write operations ask for confirmation (A01)', () => {
     expect(w.find('[role="dialog"]').exists()).toBe(false)
   })
 
+  it('a profile change with the dialog open closes it and sends nothing (R02)', async () => {
+    const w = await mountTab('ec2', store => { store.ec2Instances = [NODE, OTHER] })
+    await (await menuItem(w, 'bastion', 'stop')).trigger('click')
+    await flushPromises()
+    expect(w.find('[role="dialog"]').exists()).toBe(true)
+    useAwsStore().activeProfileId = 'prof-2' // e.g. Back to an entry with another profile
+    await flushPromises()
+    expect(w.find('[role="dialog"]').exists()).toBe(false)
+    expect(posts).toEqual([])
+  })
+
+  it('the Lambda invoke dialog validates JSON inline and closes on a profile change (R02)', async () => {
+    const w = await mountTab('lambda', store => {
+      store.lambdas = [{ name: 'orders', runtime: 'nodejs20.x', memory: 128, timeout: 3, arn: 'arn:aws:lambda:us-east-1:1:function:orders', tags: {} }]
+    })
+    await (await menuItem(w, 'orders', 'invoke')).trigger('click')
+    await flushPromises()
+    const dialog = () => w.find('.modal[role="dialog"]')
+    await dialog().find('textarea').setValue('{"id": ')
+    expect(dialog().find('#aws-invoke-json-error').text()).toMatch(/^Invalid JSON/)
+    expect(dialog().find('textarea').attributes('aria-invalid')).toBe('true')
+    const run = dialog().findAll('button').find(b => b.text() === 'Invoke')
+    expect(run.attributes('disabled')).toBeDefined()
+    await dialog().find('textarea').setValue('{"id": 1}')
+    expect(run.attributes('disabled')).toBeUndefined()
+
+    useAwsStore().activeProfileId = 'prof-2'
+    await flushPromises()
+    expect(w.find('.modal[role="dialog"]').exists()).toBe(false)
+    expect(posts).toEqual([])
+  })
+
   it('ECS: Start is disabled while the service runs (it would set desired to 1); Stop states the impact', async () => {
     const w = await mountTab('ecs', store => {
       store.ecsServices = [

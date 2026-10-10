@@ -2225,9 +2225,10 @@
         <div style="padding:12px;display:flex;flex-direction:column;gap:10px">
           <div class="alert-warn" style="margin:0;font-size:12px">{{ t('awsv.invokeWarning', { profile: selectedProfileName, account: contextAccount ?? '…', region: awsStore.accountContext ? (awsStore.accountContext.region || t('awsv.op.unknown')) : '…' }) }}</div>
           <label for="aws-invoke-payload" style="font-size:12px;color:var(--text-dim)">{{ t('awsv.jsonPayloadOptional') }}</label>
-          <textarea id="aws-invoke-payload" v-model="invokeModal.payload" rows="6"
+          <textarea id="aws-invoke-payload" v-model="invokeModal.payload" rows="6" :aria-invalid="invokeJsonError ? 'true' : 'false'" aria-describedby="aws-invoke-json-error"
             style="font-family:monospace;font-size:12px;background:var(--bg-input,#1e1e1e);color:var(--text,#ccc);border:1px solid var(--border,#444);border-radius:4px;padding:8px;resize:vertical"
             placeholder="{}"></textarea>
+          <div id="aws-invoke-json-error" :class="invokeJsonError ? 'status-err' : ''" style="font-size:11px;min-height:14px" aria-live="polite">{{ invokeJsonError }}</div>
           <div v-if="invokeModal.result" class="logs-viewer" style="max-height:220px">
             <div v-if="invokeModal.result.functionError" class="alert-error" style="margin:0 0 4px 0">
               FunctionError: {{ invokeModal.result.functionError }}
@@ -2235,7 +2236,7 @@
             <pre style="margin:0;font-size:11px;white-space:pre-wrap">{{ JSON.stringify(invokeModal.result.payload, null, 2) }}</pre>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn" @click="submitInvoke" :disabled="invokeModal.loading">
+            <button class="btn" @click="submitInvoke" :disabled="invokeModal.loading || !!invokeJsonError">
               {{ invokeModal.loading ? t('awsv.invoking') : t('awsv.invokeAction') }}
             </button>
             <button class="btn sm" @click="invokeModal.open = false">{{ t('action.cancel') }}</button>
@@ -4444,6 +4445,15 @@ function onProfileChange() {
   if (selectedProfileId.value) loadTab(activeTab.value)
 }
 
+// A dialog that would write to AWS belongs to the profile it was opened with.
+// If the profile changes underneath (selector, Back/Forward), it closes.
+watch(() => awsStore.activeProfileId, id => {
+  const stale = [opConfirm.open && !opConfirm.busy && opConfirm.profileId !== id, invokeModal.open && !invokeModal.loading && invokeModal.profileId !== id]
+  if (stale[0]) opConfirm.open = false
+  if (stale[1]) invokeModal.open = false
+  if (stale.some(Boolean)) toast(t('awsv.op.closedProfileChanged'), 'warn')
+})
+
 // ─── Context band ────────────────────────────────────────────────────────────
 // Profile, account and region stay visible on every service tab, so the
 // destination is known without going back to Overview. Global services say
@@ -4469,7 +4479,7 @@ watch(() => [awsStore.activeProfileId, activeTab.value], ([id, tab]) => {
 // opens, and the busy state blocks a second request.
 const opConfirm = reactive({
   open: false, title: '', message: '', tone: 'info', confirmLabel: '',
-  resourceLines: [], busy: false, error: '', run: null,
+  resourceLines: [], busy: false, error: '', run: null, profileId: '',
 })
 
 const opConfirmLines = computed(() => [
@@ -4482,12 +4492,18 @@ const opConfirmLines = computed(() => [
 ])
 
 function askOperation({ title, message, tone, confirmLabel, resourceLines, run }) {
-  Object.assign(opConfirm, { open: true, title, message, tone, confirmLabel, resourceLines, run, busy: false, error: '' })
+  // The destination is the profile active now; the request is refused if it changes (see below).
+  Object.assign(opConfirm, { open: true, title, message, tone, confirmLabel, resourceLines, run, busy: false, error: '', profileId: awsStore.activeProfileId })
   awsStore.fetchAccountContext()
 }
 
 async function confirmOperation() {
   if (opConfirm.busy || !opConfirm.run) return
+  // The store sends the active profile: never let a profile switched meanwhile receive the write.
+  if (awsStore.activeProfileId !== opConfirm.profileId) {
+    opConfirm.error = t('awsv.op.profileChanged')
+    return
+  }
   opConfirm.busy = true
   opConfirm.error = ''
   try {
@@ -4649,19 +4665,29 @@ async function reloadLogs() {
   finally     { logsModal.loading = false }
 }
 
-const invokeModal = reactive({ open: false, loading: false, name: '', payload: '{}', result: null })
+const invokeModal = reactive({ open: false, loading: false, name: '', payload: '{}', result: null, profileId: '' })
 
 function openInvoke(fn) {
-  Object.assign(invokeModal, { name: fn.name, payload: '{}', result: null, open: true })
+  Object.assign(invokeModal, { name: fn.name, payload: '{}', result: null, open: true, profileId: awsStore.activeProfileId })
   awsStore.fetchAccountContext()
 }
 
+// Shown next to the payload field; an empty payload sends {}.
+const invokeJsonError = computed(() => {
+  if (!invokeModal.payload.trim()) return ''
+  try { JSON.parse(invokeModal.payload); return '' } catch (e) { return t('awsv.invokeJsonInvalid', { error: e.message }) }
+})
+
 async function submitInvoke() {
+  if (invokeJsonError.value || invokeModal.loading) return
+  if (awsStore.activeProfileId !== invokeModal.profileId) {
+    toast(t('awsv.op.profileChanged'), 'error')
+    invokeModal.open = false
+    return
+  }
   invokeModal.loading = true; invokeModal.result = null
   try {
-    let payload = {}
-    try { payload = JSON.parse(invokeModal.payload) }
-    catch { toast(t('awsv.toastInvalidJson'), 'error'); invokeModal.loading = false; return }
+    const payload = invokeModal.payload.trim() ? JSON.parse(invokeModal.payload) : {}
     const data = await awsStore.invokeLambda(invokeModal.name, payload)
     invokeModal.result = data
     if (data?.functionError) toast(t('awsv.toastLambdaError', { error: data.functionError }), 'error')
