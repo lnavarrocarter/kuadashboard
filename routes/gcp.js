@@ -36,7 +36,8 @@ const { listWorkflows, mapWorkflow } = require('../lib/gcpWorkflows');
 const { mapFunction, functionParamsError, functionLogFilter } = require('../lib/gcpFunctions');
 const { mapBucket } = require('../lib/gcpStorage');
 const { classifyGcpError, httpStatusFor } = require('../lib/gcpErrors');
-const { mapRepository, listArtifactRepositories } = require('../lib/gcpArtifact');
+const { mapRepository } = require('../lib/gcpArtifact');
+const { listArtifactRepositories, listSchedulerJobs, listTaskQueues, listCloudRunJobs } = require('../lib/gcpLocations');
 const { summarizeOverview } = require('../lib/gcpOverview');
 const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
 const { listAllPages } = require('../lib/gcpPaging');
@@ -575,12 +576,12 @@ async function gcpOverview(req, res) {
       { id: 'firestore', label: 'Firestore', tab: 'firestore', load: () => restList(`https://firestore.googleapis.com/v1/projects/${projectId}/databases`, 'databases') },
       { id: 'spanner', label: 'Spanner', tab: 'spanner', load: () => restList(`https://spanner.googleapis.com/v1/projects/${projectId}/instances`, 'instances') },
       { id: 'memorystore', label: 'Memorystore', tab: 'memorystore', load: () => restList(`https://redis.googleapis.com/v1/projects/${projectId}/locations/-/instances`, 'instances') },
-      { id: 'tasks', label: 'Cloud Tasks', tab: 'tasks', load: () => restList(`https://cloudtasks.googleapis.com/v2/projects/${projectId}/locations/-/queues`, 'queues') },
-      { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', load: () => restList(`https://cloudscheduler.googleapis.com/v1/projects/${projectId}/locations/-/jobs`, 'jobs') },
+      { id: 'tasks', label: 'Cloud Tasks', tab: 'tasks', load: () => listTaskQueues(gcpFetch, authCtx) },
+      { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', load: () => listSchedulerJobs(gcpFetch, authCtx) },
       // Builds are execution history, not deployed resources: only the latest page is read.
       { id: 'build', label: 'Cloud Build', tab: 'build', kind: 'execution', load: () => restList(`https://cloudbuild.googleapis.com/v1/projects/${projectId}/builds?pageSize=100`, 'builds', { maxPages: 1 }) },
       { id: 'iam', label: 'IAM', tab: 'iam', load: () => restList(`https://iam.googleapis.com/v1/projects/${projectId}/serviceAccounts`, 'accounts') },
-      { id: 'cloudrunJobs', label: 'Cloud Run Jobs', tab: 'cloudrunJobs', load: () => restList(`https://run.googleapis.com/v2/projects/${projectId}/locations/-/jobs`, 'jobs') },
+      { id: 'cloudrunJobs', label: 'Cloud Run Jobs', tab: 'cloudrunJobs', load: () => listCloudRunJobs(gcpFetch, authCtx) },
       { id: 'pubsubSubs', label: 'Pub/Sub Subs', tab: 'pubsubSubs', load: () => restList(`https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions`, 'subscriptions') },
       { id: 'vpc', label: 'VPC Networks', tab: 'vpc', load: () => restList(`https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`, 'items') },
       { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => createKmsReader(gcpFetch, authCtx).keyRings() },
@@ -1459,7 +1460,7 @@ router.get('/artifact-registry', async (req, res) => {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    res.json((await listArtifactRepositories(gcpFetch, authCtx)).map(mapRepository));
+    res.json((await listArtifactRepositories(gcpFetch, authCtx)).items.map(mapRepository));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2043,10 +2044,7 @@ router.get('/tasks/queues', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://cloudtasks.googleapis.com/v2/projects/${projectId}/locations/-/queues?pageSize=100`,
-      authCtx
-    );
+    const data = { queues: (await listTaskQueues(gcpFetch, authCtx)).items };
     const queues = (data.queues || []).map(q => {
       const parts = q.name?.split('/');
       return {
@@ -2110,10 +2108,7 @@ router.get('/scheduler/jobs', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://cloudscheduler.googleapis.com/v1/projects/${projectId}/locations/-/jobs?pageSize=100`,
-      authCtx
-    );
+    const data = { jobs: (await listSchedulerJobs(gcpFetch, authCtx)).items };
     const jobs = (data.jobs || []).map(j => {
       const parts = j.name?.split('/');
       return {
@@ -2343,10 +2338,7 @@ router.get('/cloudrun-jobs', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://run.googleapis.com/v2/projects/${projectId}/locations/-/jobs`,
-      authCtx
-    );
+    const data = { jobs: (await listCloudRunJobs(gcpFetch, authCtx)).items };
     const jobs = (data.jobs || []).map(j => {
       const parts = j.name?.split('/');
       return {
