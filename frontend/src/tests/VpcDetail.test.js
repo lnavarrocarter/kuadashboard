@@ -163,3 +163,62 @@ describe('useAwsStore.fetchResourceConfig("vpc") — regression', () => {
     expect(opts.headers['X-Profile-Id']).toBe('prof-1')
   })
 })
+
+describe('VpcDetail.vue — security group search and outbound rules (H4)', () => {
+  let store
+  const GROUPS = [
+    { GroupId: 'sg-web', GroupName: 'web', Description: 'public web', IpPermissions: [
+      { IpProtocol: 'tcp', FromPort: 443, ToPort: 443, IpRanges: [{ CidrIp: '0.0.0.0/0' }], Ipv6Ranges: [{ CidrIpv6: '::/0' }] },
+    ], IpPermissionsEgress: [
+      { IpProtocol: 'tcp', FromPort: 5432, ToPort: 5432, UserIdGroupPairs: [{ GroupId: 'sg-db' }] },
+    ] },
+    { GroupId: 'sg-db', GroupName: 'db', Description: 'postgres', IpPermissions: [
+      { IpProtocol: 'tcp', FromPort: 5432, ToPort: 5432, UserIdGroupPairs: [{ GroupId: 'sg-web' }] },
+    ], IpPermissionsEgress: [] },
+    { GroupId: 'sg-admin', GroupName: 'admin', Description: 'bastion', IpPermissions: [
+      { IpProtocol: 'tcp', FromPort: 20, ToPort: 25, PrefixListIds: [{ PrefixListId: 'pl-office' }] },
+    ], IpPermissionsEgress: [{ IpProtocol: '-1', IpRanges: [{ CidrIp: '0.0.0.0/0' }] }] },
+  ]
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useAwsStore()
+    vi.spyOn(store, 'fetchResourceConfig').mockResolvedValue({ ...VPC_CONFIG, securityGroups: GROUPS })
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  async function openGroups() {
+    const w = mountDetail()
+    await flushPromises()
+    const tab = w.findAll('.vpcd-tab').find(item => item.text().startsWith('Grupos de seguridad') || item.text().startsWith('Security groups'))
+    await tab.trigger('click')
+    return w
+  }
+  const shown = w => w.findAll('[data-test="sg-card"]').map(card => card.find('.vpcd-card-title').text().split(' ')[1])
+
+  it('shows outbound rules with the referenced group named', async () => {
+    const w = await openGroups()
+    const outbound = w.findAll('[data-test="sg-outbound"]')[0].text()
+    expect(outbound).toContain('5432')
+    expect(outbound).toContain('sg-db (db)')
+    expect(w.findAll('[data-test="sg-inbound"]')[0].text()).toContain('::/0')
+  })
+
+  it('finds groups by port, CIDR, referenced group or prefix list', async () => {
+    const w = await openGroups()
+    const search = w.find('[data-test="sg-search"]')
+    await search.setValue('5432')
+    expect(shown(w)).toEqual(['web', 'db', 'admin'])   // admin allows all outbound traffic
+    await search.setValue('22')
+    expect(shown(w)).toEqual(['admin'])
+    await search.setValue('::/0')
+    expect(shown(w)).toEqual(['web'])
+    await search.setValue('sg-web')
+    expect(shown(w)).toEqual(['web', 'db'])
+    await search.setValue('pl-office')
+    expect(shown(w)).toEqual(['admin'])
+    await search.setValue('nothing-here')
+    expect(shown(w)).toEqual([])
+    expect(w.find('[data-test="sg-count"]').text()).toMatch(/^0 /)
+  })
+})

@@ -10,9 +10,9 @@
             <span>{{ vpc?.name || vpc?.id }}</span>
             <span class="vpcd-id-badge">{{ vpc?.id }}</span>
             <span v-if="vpc?.state" :class="['vpcd-state', vpc.state]">{{ vpc.state }}</span>
-            <span v-if="vpc?.default" class="badge-yellow">default</span>
+            <span v-if="vpc?.default" class="badge-yellow">{{ t('vpcd.default') }}</span>
           </div>
-          <button class="vpcd-close" @click="$emit('close')">✕</button>
+          <button class="vpcd-close" :aria-label="t('action.close')" :title="t('action.close')" @click="$emit('close')">✕</button>
         </div>
 
         <!-- Tabs -->
@@ -20,10 +20,10 @@
           <button v-for="tab in TABS" :key="tab.id"
             :class="['vpcd-tab', { active: activeTab === tab.id }]"
             @click="activeTab = tab.id">
-            {{ tab.label }}<span v-if="data && tab.count" class="vpcd-tab-count">{{ tab.count(data) }}</span>
+            {{ t(tab.label) }}<span v-if="data && tab.count" class="vpcd-tab-count">{{ tab.count(data) }}</span>
           </button>
           <div class="vpcd-tabs-right">
-            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" :title="t('action.refresh')">↺</button>
+            <button v-if="loaded" class="btn sm" @click="load" :disabled="loading" :title="t('action.refresh')" :aria-label="t('action.refresh')">↺</button>
           </div>
         </div>
 
@@ -48,27 +48,27 @@
                     <dt>VPC ID</dt>    <dd class="mono copyable">{{ data.vpc?.VpcId || '—' }}<button v-if="data.vpc?.VpcId" class="copy-btn" @click.stop="copyField(data.vpc.VpcId,'vpcid')" :title="copiedKey==='vpcid' ? t('res.copied') : t('action.copy')">{{ copiedKey==='vpcid' ? '✓' : '⧉' }}</button></dd>
                     <dt>CIDR</dt>      <dd class="mono copyable">{{ data.vpc?.CidrBlock || '—' }}<button v-if="data.vpc?.CidrBlock" class="copy-btn" @click.stop="copyField(data.vpc.CidrBlock,'cidr')" :title="copiedKey==='cidr' ? t('res.copied') : t('action.copy')">{{ copiedKey==='cidr' ? '✓' : '⧉' }}</button></dd>
                     <dt>{{ t('res.state') }}</dt>    <dd><span :class="['vpcd-state', data.vpc?.State]">{{ data.vpc?.State || '—' }}</span></dd>
-                    <dt>Default</dt>   <dd><span :class="data.vpc?.IsDefault ? 'badge-yellow' : 'badge-gray'">{{ yesNo(data.vpc?.IsDefault) }}</span></dd>
+                    <dt>{{ t('vpcd.defaultVpc') }}</dt>   <dd><span :class="data.vpc?.IsDefault ? 'badge-yellow' : 'badge-gray'">{{ yesNo(data.vpc?.IsDefault) }}</span></dd>
                     <dt>{{ t('ec2d.tenancy') }}</dt>  <dd>{{ data.vpc?.InstanceTenancy || '—' }}</dd>
-                    <dt>DHCP Options</dt><dd class="mono copyable">{{ data.vpc?.DhcpOptionsId || '—' }}<button v-if="data.vpc?.DhcpOptionsId" class="copy-btn" @click.stop="copyField(data.vpc.DhcpOptionsId,'dhcp')" :title="copiedKey==='dhcp' ? t('res.copied') : t('action.copy')">{{ copiedKey==='dhcp' ? '✓' : '⧉' }}</button></dd>
+                    <dt>{{ t('vpcd.dhcpOptions') }}</dt><dd class="mono copyable">{{ data.vpc?.DhcpOptionsId || '—' }}<button v-if="data.vpc?.DhcpOptionsId" class="copy-btn" @click.stop="copyField(data.vpc.DhcpOptionsId,'dhcp')" :title="copiedKey==='dhcp' ? t('res.copied') : t('action.copy')">{{ copiedKey==='dhcp' ? '✓' : '⧉' }}</button></dd>
                   </dl>
                 </div>
 
                 <div class="vpcd-card">
                   <div class="vpcd-card-title">{{ t('vpcd.summary') }}</div>
                   <dl>
-                    <dt>Subnets</dt>           <dd>{{ data.subnets?.length ?? 0 }}</dd>
-                    <dt>Security Groups</dt>   <dd>{{ data.securityGroups?.length ?? 0 }}</dd>
-                    <dt>Route Tables</dt>      <dd>{{ data.routeTables?.length ?? 0 }}</dd>
-                    <dt>Internet Gateways</dt> <dd>{{ data.internetGateways?.length ?? 0 }}</dd>
-                    <dt>NAT Gateways</dt>      <dd>{{ data.natGateways?.length ?? 0 }}</dd>
+                    <dt>{{ t('vpcd.tab.subnets') }}</dt>           <dd>{{ data.subnets?.length ?? 0 }}</dd>
+                    <dt>{{ t('vpcd.tab.sgs') }}</dt>   <dd>{{ data.securityGroups?.length ?? 0 }}</dd>
+                    <dt>{{ t('vpcd.tab.routes') }}</dt>      <dd>{{ data.routeTables?.length ?? 0 }}</dd>
+                    <dt>{{ t('vpcd.internetGateways') }}</dt> <dd>{{ data.internetGateways?.length ?? 0 }}</dd>
+                    <dt>{{ t('vpcd.natGateways') }}</dt>      <dd>{{ data.natGateways?.length ?? 0 }}</dd>
                   </dl>
                 </div>
               </div>
 
               <!-- Tags -->
               <div class="vpcd-card" style="margin-top:12px">
-                <div class="vpcd-card-title">Tags ({{ data.vpc?.Tags?.length ?? 0 }})</div>
+                <div class="vpcd-card-title">{{ t('vpcd.tags', { n: data.vpc?.Tags?.length ?? 0 }) }}</div>
                 <table class="vpcd-table" v-if="data.vpc?.Tags?.length">
                   <thead><tr><th>{{ t('res.key') }}</th><th>{{ t('res.value') }}</th></tr></thead>
                   <tbody>
@@ -105,26 +105,41 @@
             <!-- ══ SECURITY GROUPS ══════════════════════════════════════════ -->
             <div v-show="activeTab === 'sgs'" class="vpcd-section" data-tab="sgs">
               <div v-if="!data.securityGroups?.length" class="vpcd-empty">{{ t('eksd.noSecurityGroups') }}</div>
-              <div v-for="sg in (data.securityGroups || [])" :key="sg.GroupId" class="vpcd-card" style="margin-bottom:12px">
+              <template v-else>
+                <div class="vpcd-sg-toolbar">
+                  <input v-model="sgSearch" class="vpcd-sg-search" type="search" data-test="sg-search"
+                    :placeholder="t('vpcd.sgSearch')" :aria-label="t('vpcd.sgSearch')" />
+                  <span class="text-dim" data-test="sg-count">{{ t('vpcd.sgCount', { n: shownGroups.length, total: data.securityGroups.length }) }}</span>
+                </div>
+                <div class="text-dim vpcd-sg-note">{{ t('vpcd.sgExposureNote') }}</div>
+                <div v-if="!shownGroups.length" class="vpcd-empty">{{ t('vpcd.sgNoMatches') }}</div>
+              </template>
+              <div v-for="sg in shownGroups" :key="sg.GroupId" class="vpcd-card" style="margin-bottom:12px" data-test="sg-card">
                 <div class="vpcd-card-title">
                   🔒 {{ sg.GroupName }}
                   <span class="text-dim mono-xs">{{ sg.GroupId }}</span>
                   <span class="text-dim vpcd-card-desc">{{ sg.Description }}</span>
                 </div>
-                <div class="vpcd-sg-label">{{ t('ec2d.inbound', { n: sg.IpPermissions?.length ?? 0 }) }}</div>
-                <table class="vpcd-table" v-if="sg.IpPermissions?.length">
-                  <thead><tr><th>{{ t('ec2d.protocol') }}</th><th>{{ t('ec2d.ports') }}</th><th>{{ t('ec2d.source') }}</th></tr></thead>
-                  <tbody>
-                    <tr v-for="(rule, i) in sg.IpPermissions" :key="i">
-                      <td class="mono">{{ fmtProtocol(rule) }}</td>
-                      <td class="mono">{{ fmtPortRange(rule) }}</td>
-                      <td>
-                        <span v-for="src in ruleSources(rule)" :key="src" class="vpcd-src-chip">{{ src }}</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div v-else class="text-dim" style="font-size:.8rem">{{ t('ec2d.noInbound') }}</div>
+                <template v-for="direction in SG_DIRECTIONS" :key="direction.id">
+                  <div class="vpcd-sg-label">{{ t(direction.label, { n: sg[direction.field]?.length ?? 0 }) }}</div>
+                  <table class="vpcd-table" v-if="sg[direction.field]?.length" :data-test="`sg-${direction.id}`">
+                    <thead><tr><th>{{ t('ec2d.protocol') }}</th><th>{{ t('ec2d.ports') }}</th><th>{{ t(direction.peer) }}</th></tr></thead>
+                    <tbody>
+                      <tr v-for="(rule, i) in sg[direction.field]" :key="i">
+                        <td class="mono">{{ fmtProtocol(rule) }}</td>
+                        <td class="mono">{{ fmtPortRange(rule) }}</td>
+                        <td>
+                          <span v-for="peer in rulePeers(rule, groupNames)" :key="`${peer.kind}:${peer.value}`" class="vpcd-src-chip" :title="peer.description || t(`vpcd.peer.${peer.kind}`)">
+                            <span class="vpcd-peer-kind">{{ t(`vpcd.peer.${peer.kind}`) }}</span>
+                            {{ peer.value }}<template v-if="peer.name"> ({{ peer.name }})</template>
+                          </span>
+                          <span v-if="!rulePeers(rule, groupNames).length" class="text-dim">—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div v-else class="text-dim" style="font-size:.8rem">{{ t(direction.empty) }}</div>
+                </template>
               </div>
             </div>
 
@@ -134,11 +149,11 @@
               <div v-for="rt in (data.routeTables || [])" :key="rt.RouteTableId" class="vpcd-card" style="margin-bottom:12px">
                 <div class="vpcd-card-title">
                   🧭 <span class="mono">{{ rt.RouteTableId }}</span>
-                  <span v-if="rt.Associations?.some(a => a.Main)" class="badge-blue">Main</span>
+                  <span v-if="rt.Associations?.some(a => a.Main)" class="badge-blue">{{ t('vpcd.mainRouteTable') }}</span>
                   <span class="text-dim vpcd-card-desc">{{ tagName(rt.Tags) }}</span>
                 </div>
                 <table class="vpcd-table">
-                  <thead><tr><th>{{ t('ec2d.destination') }}</th><th>Target</th><th>{{ t('res.state') }}</th></tr></thead>
+                  <thead><tr><th>{{ t('ec2d.destination') }}</th><th>{{ t('vpcd.target') }}</th><th>{{ t('res.state') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="(r, i) in (rt.Routes || [])" :key="i">
                       <td class="mono">{{ r.DestinationCidrBlock || r.DestinationIpv6CidrBlock || r.DestinationPrefixListId }}</td>
@@ -172,7 +187,7 @@
               <div v-if="!data.natGateways?.length" class="vpcd-empty">{{ t('vpcd.noNatGateways') }}</div>
               <div v-else class="vpcd-card">
                 <table class="vpcd-table">
-                  <thead><tr><th>NAT ID</th><th>Subnet</th><th>{{ t('ec2d.publicIp') }}</th><th>{{ t('ec2d.privateIp') }}</th><th>{{ t('res.state') }}</th></tr></thead>
+                  <thead><tr><th>NAT ID</th><th>{{ t('vpcd.subnet') }}</th><th>{{ t('ec2d.publicIp') }}</th><th>{{ t('ec2d.privateIp') }}</th><th>{{ t('res.state') }}</th></tr></thead>
                   <tbody>
                     <tr v-for="nat in data.natGateways" :key="nat.NatGatewayId">
                       <td class="mono copyable">{{ nat.NatGatewayId }}<button class="copy-btn" @click.stop="copyField(nat.NatGatewayId, nat.NatGatewayId)" :title="copiedKey===nat.NatGatewayId ? t('res.copied') : t('action.copy')">{{ copiedKey===nat.NatGatewayId ? '✓' : '⧉' }}</button></td>
@@ -194,7 +209,8 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { filterSecurityGroups, rulePeers } from './vpcSecurityGroups'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
 import { vDialog } from '../../composables/vDialog'
@@ -210,15 +226,21 @@ const { t } = useI18n()
 const yesNo = value => t(value ? 'common.yes' : 'common.no')
 
 const TABS = [
-  { id: 'overview', label: '📋 Overview' },
-  { id: 'subnets',  label: 'Subnets',           count: d => d.subnets?.length ?? 0 },
-  { id: 'sgs',      label: 'Security Groups',   count: d => d.securityGroups?.length ?? 0 },
-  { id: 'routes',   label: 'Route Tables',      count: d => d.routeTables?.length ?? 0 },
-  { id: 'igws',     label: 'Internet GWs',      count: d => d.internetGateways?.length ?? 0 },
-  { id: 'nats',     label: 'NAT GWs',           count: d => d.natGateways?.length ?? 0 },
+  { id: 'overview', label: 'sidebar.overview' },
+  { id: 'subnets',  label: 'vpcd.tab.subnets',  count: d => d.subnets?.length ?? 0 },
+  { id: 'sgs',      label: 'vpcd.tab.sgs',      count: d => d.securityGroups?.length ?? 0 },
+  { id: 'routes',   label: 'vpcd.tab.routes',   count: d => d.routeTables?.length ?? 0 },
+  { id: 'igws',     label: 'vpcd.tab.igws',     count: d => d.internetGateways?.length ?? 0 },
+  { id: 'nats',     label: 'vpcd.tab.nats',     count: d => d.natGateways?.length ?? 0 },
+]
+// Inbound and outbound rules share the table; only the field and the peer column change.
+const SG_DIRECTIONS = [
+  { id: 'inbound',  field: 'IpPermissions',       label: 'ec2d.inbound',  peer: 'ec2d.source',      empty: 'ec2d.noInbound' },
+  { id: 'outbound', field: 'IpPermissionsEgress', label: 'ec2d.outbound', peer: 'ec2d.destination', empty: 'ec2d.noOutbound' },
 ]
 
 const activeTab = ref('overview')
+const sgSearch  = ref('')
 const data      = ref(null)
 const loading   = ref(false)
 const loaded    = ref(false)
@@ -227,6 +249,7 @@ const error     = ref('')
 watch(() => props.open, val => {
   if (val) {
     activeTab.value = 'overview'
+    sgSearch.value = ''
     data.value   = null
     loaded.value = false
     error.value  = ''
@@ -268,14 +291,8 @@ function fmtPortRange(rule) {
   return `${rule.FromPort}–${rule.ToPort}`
 }
 
-function ruleSources(rule) {
-  const srcs = [
-    ...(rule.IpRanges || []).map(r => r.CidrIp),
-    ...(rule.Ipv6Ranges || []).map(r => r.CidrIpv6),
-    ...(rule.UserIdGroupPairs || []).map(p => p.GroupId),
-  ].filter(Boolean)
-  return srcs.length ? srcs : ['*']
-}
+const shownGroups = computed(() => filterSecurityGroups(data.value?.securityGroups || [], sgSearch.value))
+const groupNames  = computed(() => Object.fromEntries((data.value?.securityGroups || []).map(group => [group.GroupId, group.GroupName])))
 
 // ── Copy helpers ─────────────────────────────────────────────────────────────
 const copiedKey = ref(null)
@@ -288,6 +305,10 @@ function copyField(val, key) {
 </script>
 
 <style scoped>
+.vpcd-sg-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.vpcd-sg-search { flex: 1; max-width: 420px; padding: 5px 10px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; color: inherit; font-size: .8rem; }
+.vpcd-sg-note { font-size: .72rem; margin-bottom: 10px; }
+.vpcd-peer-kind { opacity: .65; margin-right: 4px; font-size: .68rem; text-transform: uppercase; }
 .vpcd-backdrop {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.6);
