@@ -1589,6 +1589,8 @@ export default {
   'awsIncident.showAll': 'Mostrar todos',
   'awsFilter.any': '{label}: todos',
   'awsFilter.clear': 'Limpiar filtros',
+  'viewUrl.profileMissing': 'El perfil AWS del enlace ({profile}) no está configurado en esta máquina; se mantiene el perfil actual.',
+  'viewUrl.profileFromHistory': 'Se cambió al perfil AWS {profile} (desde el historial del navegador).',
   'awsFresh.overviewRefreshHint': 'Vuelve a leer el inventario, la actividad de 24 h (CloudWatch GetMetricData se factura: unos USD 0,01 por cada 1.000 métricas) y el Asesor. Los costos mantienen su caché de 12 h de Cost Explorer; actualízalos desde la tarjeta de costos.',
   'awsFresh.activityWindow': 'últimas 24 h · leído {ago}',
   'awsFresh.readAgo': 'leído {ago}',

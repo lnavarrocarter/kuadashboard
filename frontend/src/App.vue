@@ -521,6 +521,7 @@ import { useVercelStore }      from './stores/useVercelStore'
 import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
+import { useViewUrl }          from './composables/useViewUrl'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { syncServerCacheSettings } from './composables/serverCacheSettings'
@@ -884,9 +885,62 @@ const {
   urlApplicationId,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
+// ─── View in the URL ──────────────────────────────────────────────────────────
+// ?view=aws&service=lambda&profile=<id> opens that view; Back/Forward move
+// between providers and AWS services (composables/useViewUrl.js).
+const AWS_TABS = new Set(['overview', ...Object.values(AWS_SIDEBAR).flat().map(item => item.id)])
+const viewUrl = useViewUrl({
+  state: () => ({
+    view: activeProvider.value,
+    service: activeProvider.value === 'aws' ? awsTab.value : '',
+    profile: activeProvider.value === 'aws' ? awsProfileId.value : '',
+  }),
+  navigation: [activeProvider, awsTab],
+  context: [awsProfileId, activeApplicationContext],
+  onPop: applyViewFromHistory,
+})
+// A profile named by a link is only selected once it is known to exist here.
+let linkedAwsProfile = ''
+function applyLinkedView(linked) {
+  if (!linked.view) return
+  activeProvider.value = linked.view
+  if (linked.view === 'aws' && AWS_TABS.has(linked.service)) awsTab.value = linked.service
+  if (linked.view === 'aws' && linked.profile && linked.profile !== awsProfileId.value) linkedAwsProfile = linked.profile
+}
+function awsProfileExists(id) {
+  if (id.startsWith('local:')) return awsLocalProfiles.value.some(profile => `local:${profile.name}` === id)
+  return envStore.profiles.some(profile => profile.id === id && profile.provider === 'aws')
+}
+function applyLinkedAwsProfile() {
+  if (!linkedAwsProfile) return
+  const id = linkedAwsProfile
+  linkedAwsProfile = ''
+  if (awsProfileExists(id)) awsProfileId.value = id
+  else toast(t('viewUrl.profileMissing', { profile: id }), 'warn')
+}
+async function applyViewFromHistory(linked) {
+  if (!linked.view) return
+  await setProvider(linked.view)
+  if (linked.view !== 'aws') return
+  if (AWS_TABS.has(linked.service)) awsTab.value = linked.service
+  if (linked.profile && linked.profile !== awsProfileId.value) {
+    if (!awsProfileExists(linked.profile)) {
+      toast(t('viewUrl.profileMissing', { profile: linked.profile }), 'warn')
+      return
+    }
+    selectProfile('aws', linked.profile)
+    // Never a silent switch: the view now reads another account.
+    toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
+  }
+}
+applyLinkedView(viewUrl.initial)
+viewUrl.start()
+onUnmounted(() => viewUrl.stop())
+
 // A link with ?app=<id> opens that KUA Application in KUApps (#149).
 async function openApplicationFromUrl() {
-  if (!urlApplicationId) return
+  // A link that names another view wins over a leftover ?app= (older URLs kept it everywhere).
+  if (!urlApplicationId || (viewUrl.initial.view && viewUrl.initial.view !== 'kuapps')) return
   try {
     const context = applicationContextFromView(await api('GET', `/api/kua-apps/applications/${encodeURIComponent(urlApplicationId)}`))
     if (!context) return
@@ -1439,6 +1493,7 @@ onMounted(async () => {
     if (hasCloudConnections.value && !availableObservabilityProviders.value.some(provider => provider.id === observabilityProvider.value)) {
       observabilityProvider.value = availableObservabilityProviders.value[0].id
     }
+    applyLinkedAwsProfile()
     // Restaurar perfiles AWS/GCP guardados
     if (awsProfileId.value) awsStore.setActiveProfile(awsProfileId.value)
     if (gcpProfileId.value) gcpStore.setActiveProfile(gcpProfileId.value)
