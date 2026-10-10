@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="eksd-backdrop" @mousedown.self="$emit('close')">
-      <div class="eksd-modal">
+      <div class="eksd-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="eksd-header">
@@ -235,6 +235,7 @@
 import { computed, ref, watch } from 'vue'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 
 const props = defineProps({

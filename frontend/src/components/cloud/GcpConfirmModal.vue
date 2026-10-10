@@ -1,6 +1,6 @@
 <template>
   <div v-if="open" class="modal-overlay" @click.self="!busy && $emit('cancel')">
-    <div class="modal gcpc-modal" role="dialog" aria-modal="true" :aria-labelledby="titleId">
+    <div class="modal gcpc-modal" role="dialog" aria-modal="true" :aria-labelledby="titleId" v-dialog="() => !busy && $emit('cancel')">
       <div :class="['gcpc-header', `tone-${tone}`]">
         <span class="gcpc-icon">{{ tone === 'danger' ? '⚠' : tone === 'warning' ? '$' : 'ℹ' }}</span>
         <span :id="titleId" class="gcpc-title">{{ title }}</span>
@@ -70,6 +70,7 @@
 // the backend, which validates them again.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 
 const { t } = useI18n()
 

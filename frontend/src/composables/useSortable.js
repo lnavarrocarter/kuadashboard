@@ -7,7 +7,9 @@ import { ref } from 'vue'
  *   const { sortBy, sortRows, sortIcon, thClass, resetSort } = useSortable()
  *
  *   <!-- template -->
- *   <th :class="thClass('name')" @click="sortBy('name')">Name {{ sortIcon('name') }}</th>
+ *   <th :class="thClass('name')" :aria-sort="ariaSort('name')">
+ *     <button type="button" class="th-sort" @click="sortBy('name')">Name {{ sortIcon('name') }}</button>
+ *   </th>
  *   <tr v-for="row in sortRows(filteredRows)" ...>
  */
 export function useSortable() {
@@ -51,9 +53,15 @@ export function useSortable() {
     return sortDir.value === 'asc' ? '↑' : '↓'
   }
 
+  /** aria-sort value for a sortable <th>: ascending, descending or none. */
+  function ariaSort(key) {
+    if (sortKey.value !== key) return 'none'
+    return sortDir.value === 'asc' ? 'ascending' : 'descending'
+  }
+
   function thClass(key) {
     return sortKey.value === key ? 'sortable-th th-sorted' : 'sortable-th'
   }
 
-  return { sortKey, sortDir, sortBy, resetSort, sortRows, sortIcon, thClass }
+  return { sortKey, sortDir, sortBy, resetSort, sortRows, sortIcon, thClass, ariaSort }
 }

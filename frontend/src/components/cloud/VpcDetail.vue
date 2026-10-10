@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="vpcd-backdrop" @mousedown.self="$emit('close')">
-      <div class="vpcd-modal">
+      <div class="vpcd-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="vpcd-header">
@@ -197,6 +197,7 @@
 import { ref, watch } from 'vue'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

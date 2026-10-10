@@ -63,10 +63,10 @@
       <div v-if="!identities.length" class="empty-row">{{ search ? t('awsMsg.noMatches') : t('ses.emptyIdentities') }}</div>
       <table v-else class="cloud-table">
         <thead><tr>
-          <th :class="thClass('name')" @click="sortBy('name')">{{ t('ses.identity') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-          <th :class="thClass('type')" @click="sortBy('type')">{{ t('ses.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-          <th :class="thClass('verification')" @click="sortBy('verification')">{{ t('ses.verification') }} <span class="sort-icon">{{ sortIcon('verification') }}</span></th>
-          <th :class="thClass('dkim')" @click="sortBy('dkim')">DKIM <span class="sort-icon">{{ sortIcon('dkim') }}</span></th>
+          <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('ses.identity') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+          <th :class="thClass('type')" :aria-sort="ariaSort('type')"><button type="button" class="th-sort" @click="sortBy('type')">{{ t('ses.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('type') }}</span></button></th>
+          <th :class="thClass('verification')" :aria-sort="ariaSort('verification')"><button type="button" class="th-sort" @click="sortBy('verification')">{{ t('ses.verification') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('verification') }}</span></button></th>
+          <th :class="thClass('dkim')" :aria-sort="ariaSort('dkim')"><button type="button" class="th-sort" @click="sortBy('dkim')">DKIM <span class="sort-icon" aria-hidden="true">{{ sortIcon('dkim') }}</span></button></th>
           <th :title="t('ses.spfHint')">SPF / MAIL FROM</th>
           <th>{{ t('ses.configSet') }}</th>
           <th></th>
@@ -164,7 +164,7 @@ const props = defineProps({ search: { type: String, default: '' }, metricsLoadin
 const emit = defineEmits(['request-access'])
 const awsStore = useAwsStore()
 const { t } = useI18n()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 const selected = ref(null)
 const selectedSet = ref(null)
 const chartsOpen = ref(false)

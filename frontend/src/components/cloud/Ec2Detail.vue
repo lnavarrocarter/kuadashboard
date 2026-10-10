@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="ec2d-backdrop" @mousedown.self="$emit('close')">
-      <div class="ec2d-modal">
+      <div class="ec2d-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="ec2d-header">
@@ -301,6 +301,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 
 const props = defineProps({

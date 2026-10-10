@@ -84,12 +84,12 @@
         <div v-else-if="!filteredEc2.length" class="empty-row">{{ search.ec2 ? t('awsv.lit.noMatches') : t('awsv.lit.noEc2') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"       @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"       @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-            <th :class="thClass('state')"      @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('publicIp')"   @click="sortBy('publicIp')">{{ t('ec2d.publicIp') }} <span class="sort-icon">{{ sortIcon('publicIp') }}</span></th>
-            <th :class="thClass('az')"         @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
-            <th :class="thClass('launchTime')" @click="sortBy('launchTime')">{{ t('eksd.launched') }} <span class="sort-icon">{{ sortIcon('launchTime') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('type')" :aria-sort="ariaSort('type')"><button type="button" class="th-sort" @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('type') }}</span></button></th>
+            <th :class="thClass('state')" :aria-sort="ariaSort('state')"><button type="button" class="th-sort" @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('state') }}</span></button></th>
+            <th :class="thClass('publicIp')" :aria-sort="ariaSort('publicIp')"><button type="button" class="th-sort" @click="sortBy('publicIp')">{{ t('ec2d.publicIp') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('publicIp') }}</span></button></th>
+            <th :class="thClass('az')" :aria-sort="ariaSort('az')"><button type="button" class="th-sort" @click="sortBy('az')">AZ <span class="sort-icon" aria-hidden="true">{{ sortIcon('az') }}</span></button></th>
+            <th :class="thClass('launchTime')" :aria-sort="ariaSort('launchTime')"><button type="button" class="th-sort" @click="sortBy('launchTime')">{{ t('eksd.launched') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('launchTime') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -145,12 +145,12 @@
         <div v-else-if="!filteredEcs.length" class="empty-row">{{ search.ecs ? t('awsv.lit.noMatches') : t('awsv.lit.noEcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('pf.service') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('cluster')"   @click="sortBy('cluster')">{{ t('sidebar.cluster') }} <span class="sort-icon">{{ sortIcon('cluster') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('desired')"   @click="sortBy('desired')">{{ t('detail.desired') }} <span class="sort-icon">{{ sortIcon('desired') }}</span></th>
-            <th :class="thClass('running')"   @click="sortBy('running')">{{ t('apm.status.running') }} <span class="sort-icon">{{ sortIcon('running') }}</span></th>
-            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('pf.service') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('cluster')" :aria-sort="ariaSort('cluster')"><button type="button" class="th-sort" @click="sortBy('cluster')">{{ t('sidebar.cluster') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('cluster') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
+            <th :class="thClass('desired')" :aria-sort="ariaSort('desired')"><button type="button" class="th-sort" @click="sortBy('desired')">{{ t('detail.desired') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('desired') }}</span></button></th>
+            <th :class="thClass('running')" :aria-sort="ariaSort('running')"><button type="button" class="th-sort" @click="sortBy('running')">{{ t('apm.status.running') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('running') }}</span></button></th>
+            <th :class="thClass('createdAt')" :aria-sort="ariaSort('createdAt')"><button type="button" class="th-sort" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdAt') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -188,13 +188,13 @@
         <div v-else-if="!filteredEks.length" class="empty-row">{{ search.eks ? t('awsv.lit.noMatches') : t('awsv.lit.noEks') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('region')"    @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon">{{ sortIcon('region') }}</span></th>
-            <th :class="thClass('version')"   @click="sortBy('version')">{{ t('th.version') }} <span class="sort-icon">{{ sortIcon('version') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('region')" :aria-sort="ariaSort('region')"><button type="button" class="th-sort" @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('region') }}</span></button></th>
+            <th :class="thClass('version')" :aria-sort="ariaSort('version')"><button type="button" class="th-sort" @click="sortBy('version')">{{ t('th.version') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('version') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
             <th>{{ t('eksd.sectionNodegroups') }}</th>
-            <th :class="thClass('instanceCount')" @click="sortBy('instanceCount')" :title="t('awsv.ec2InstancesRunningAsNodesOf')">EC2 <span class="sort-icon">{{ sortIcon('instanceCount') }}</span></th>
-            <th :class="thClass('createdAt')" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th :class="thClass('instanceCount')" :title="t('awsv.ec2InstancesRunningAsNodesOf')" :aria-sort="ariaSort('instanceCount')"><button type="button" class="th-sort" @click="sortBy('instanceCount')">EC2 <span class="sort-icon" aria-hidden="true">{{ sortIcon('instanceCount') }}</span></button></th>
+            <th :class="thClass('createdAt')" :aria-sort="ariaSort('createdAt')"><button type="button" class="th-sort" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdAt') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -248,13 +248,13 @@
         <div v-else-if="!filteredLambda.length" class="empty-row">{{ search.lambda ? t('awsv.lit.noMatches') : t('awsv.lit.noLambda') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('runtime')"      @click="sortBy('runtime')">Runtime <span class="sort-icon">{{ sortIcon('runtime') }}</span></th>
-            <th :class="thClass('memory')"       @click="sortBy('memory')">{{ t('lmd.memory') }} <span class="sort-icon">{{ sortIcon('memory') }}</span></th>
-            <th :class="thClass('timeout')"      @click="sortBy('timeout')">Timeout <span class="sort-icon">{{ sortIcon('timeout') }}</span></th>
-            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
-            <th :class="thClass('invocations24h')" @click="sortBy('invocations24h')" :title="t('awsActivity.invocationsHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('invocations24h') }}</span></th>
-            <th :class="thClass('logStatusRank')" @click="sortBy('logStatusRank')" :title="t('awsActivity.logGroupHint')">{{ t('awsActivity.logGroup') }} <span class="sort-icon">{{ sortIcon('logStatusRank') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('runtime')" :aria-sort="ariaSort('runtime')"><button type="button" class="th-sort" @click="sortBy('runtime')">Runtime <span class="sort-icon" aria-hidden="true">{{ sortIcon('runtime') }}</span></button></th>
+            <th :class="thClass('memory')" :aria-sort="ariaSort('memory')"><button type="button" class="th-sort" @click="sortBy('memory')">{{ t('lmd.memory') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('memory') }}</span></button></th>
+            <th :class="thClass('timeout')" :aria-sort="ariaSort('timeout')"><button type="button" class="th-sort" @click="sortBy('timeout')">Timeout <span class="sort-icon" aria-hidden="true">{{ sortIcon('timeout') }}</span></button></th>
+            <th :class="thClass('lastModified')" :aria-sort="ariaSort('lastModified')"><button type="button" class="th-sort" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lastModified') }}</span></button></th>
+            <th :class="thClass('invocations24h')" :title="t('awsActivity.invocationsHint')" :aria-sort="ariaSort('invocations24h')"><button type="button" class="th-sort" @click="sortBy('invocations24h')">{{ t('awsActivity.last24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('invocations24h') }}</span></button></th>
+            <th :class="thClass('logStatusRank')" :title="t('awsActivity.logGroupHint')" :aria-sort="ariaSort('logStatusRank')"><button type="button" class="th-sort" @click="sortBy('logStatusRank')">{{ t('awsActivity.logGroup') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('logStatusRank') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -308,10 +308,10 @@
         <div v-else-if="!filteredApigw.length" class="empty-row">{{ search.apigw ? t('awsv.lit.noMatches') : t('awsv.lit.noApis') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"        @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('type')" :aria-sort="ariaSort('type')"><button type="button" class="th-sort" @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('type') }}</span></button></th>
             <th>{{ t('sns.endpoint') }}</th>
-            <th :class="thClass('createdDate')" @click="sortBy('createdDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdDate') }}</span></th>
+            <th :class="thClass('createdDate')" :aria-sort="ariaSort('createdDate')"><button type="button" class="th-sort" @click="sortBy('createdDate')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdDate') }}</span></button></th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -344,9 +344,9 @@
         <div v-else-if="!filteredS3.length" class="empty-row">{{ search.s3 ? t('awsv.lit.noMatches') : t('awsv.lit.noS3') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">Bucket <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('region')"       @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon">{{ sortIcon('region') }}</span></th>
-            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">Bucket <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('region')" :aria-sort="ariaSort('region')"><button type="button" class="th-sort" @click="sortBy('region')">{{ t('th.region') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('region') }}</span></button></th>
+            <th :class="thClass('creationDate')" :aria-sort="ariaSort('creationDate')"><button type="button" class="th-sort" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('creationDate') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -381,11 +381,11 @@
         <div v-else-if="!filteredEcr.length" class="empty-row">{{ search.ecr ? t('awsv.lit.noMatches') : t('awsv.lit.noEcr') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"               @click="sortBy('name')">{{ t('awsv.repository') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.repository') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
             <th>URI</th>
-            <th :class="thClass('imageTagMutability')" @click="sortBy('imageTagMutability')">{{ t('awsv.mutability') }} <span class="sort-icon">{{ sortIcon('imageTagMutability') }}</span></th>
-            <th :class="thClass('scanOnPush')"         @click="sortBy('scanOnPush')">{{ t('awsLogs.scan.button') }} <span class="sort-icon">{{ sortIcon('scanOnPush') }}</span></th>
-            <th :class="thClass('createdAt')"          @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th :class="thClass('imageTagMutability')" :aria-sort="ariaSort('imageTagMutability')"><button type="button" class="th-sort" @click="sortBy('imageTagMutability')">{{ t('awsv.mutability') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('imageTagMutability') }}</span></button></th>
+            <th :class="thClass('scanOnPush')" :aria-sort="ariaSort('scanOnPush')"><button type="button" class="th-sort" @click="sortBy('scanOnPush')">{{ t('awsLogs.scan.button') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('scanOnPush') }}</span></button></th>
+            <th :class="thClass('createdAt')" :aria-sort="ariaSort('createdAt')"><button type="button" class="th-sort" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdAt') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -425,10 +425,10 @@
         <div v-else-if="!filteredVpc.length" class="empty-row">{{ search.vpc ? t('awsv.lit.noMatches') : t('awsv.lit.noVpcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"    @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('cidr')"    @click="sortBy('cidr')">CIDR <span class="sort-icon">{{ sortIcon('cidr') }}</span></th>
-            <th :class="thClass('state')"   @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('default')" @click="sortBy('default')">{{ t('gri.defaultValue') }} <span class="sort-icon">{{ sortIcon('default') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.nameId') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('cidr')" :aria-sort="ariaSort('cidr')"><button type="button" class="th-sort" @click="sortBy('cidr')">CIDR <span class="sort-icon" aria-hidden="true">{{ sortIcon('cidr') }}</span></button></th>
+            <th :class="thClass('state')" :aria-sort="ariaSort('state')"><button type="button" class="th-sort" @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('state') }}</span></button></th>
+            <th :class="thClass('default')" :aria-sort="ariaSort('default')"><button type="button" class="th-sort" @click="sortBy('default')">{{ t('gri.defaultValue') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('default') }}</span></button></th>
             <th>{{ t('eksd.sectionSubnets') }}</th><th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -464,10 +464,10 @@
         <div v-else-if="!filteredEventBridge.length" class="empty-row">{{ search.eventbridge ? t('awsv.lit.noMatches') : t('awsv.lit.noEventBridge') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('awsv.ruleName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('busName')"       @click="sortBy('busName')">Bus <span class="sort-icon">{{ sortIcon('busName') }}</span></th>
-            <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('scheduleExpr')"  @click="sortBy('scheduleExpr')">{{ t('awsv.schedulePattern') }} <span class="sort-icon">{{ sortIcon('scheduleExpr') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.ruleName') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('busName')" :aria-sort="ariaSort('busName')"><button type="button" class="th-sort" @click="sortBy('busName')">Bus <span class="sort-icon" aria-hidden="true">{{ sortIcon('busName') }}</span></button></th>
+            <th :class="thClass('state')" :aria-sort="ariaSort('state')"><button type="button" class="th-sort" @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('state') }}</span></button></th>
+            <th :class="thClass('scheduleExpr')" :aria-sort="ariaSort('scheduleExpr')"><button type="button" class="th-sort" @click="sortBy('scheduleExpr')">{{ t('awsv.schedulePattern') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('scheduleExpr') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -506,12 +506,12 @@
         <div v-else-if="!filteredStepFn.length" class="empty-row">{{ search.stepfn ? t('awsv.lit.noMatches') : t('awsv.lit.noStepFunctions') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('type')"         @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('type') }}</span></th>
-            <th :class="thClass('creationDate')" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDate') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('th.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('type')" :aria-sort="ariaSort('type')"><button type="button" class="th-sort" @click="sortBy('type')">{{ t('th.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('type') }}</span></button></th>
+            <th :class="thClass('creationDate')" :aria-sort="ariaSort('creationDate')"><button type="button" class="th-sort" @click="sortBy('creationDate')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('creationDate') }}</span></button></th>
             <th :title="t('awsv.sfnCountsHint', { limit: '1000' })">{{ t('awsInsights.executions') }}</th>
-            <th :class="thClass('started24h')" @click="sortBy('started24h')" :title="t('awsActivity.sfnHint')">{{ t('awsActivity.last24h') }} <span class="sort-icon">{{ sortIcon('started24h') }}</span></th>
-            <th :class="thClass('loggingRank')" @click="sortBy('loggingRank')">{{ t('awsActivity.logging') }} <span class="sort-icon">{{ sortIcon('loggingRank') }}</span></th>
+            <th :class="thClass('started24h')" :title="t('awsActivity.sfnHint')" :aria-sort="ariaSort('started24h')"><button type="button" class="th-sort" @click="sortBy('started24h')">{{ t('awsActivity.last24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('started24h') }}</span></button></th>
+            <th :class="thClass('loggingRank')" :aria-sort="ariaSort('loggingRank')"><button type="button" class="th-sort" @click="sortBy('loggingRank')">{{ t('awsActivity.logging') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('loggingRank') }}</span></button></th>
             <th>{{ t('th.tags') }}</th><th>ARN</th><th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -581,12 +581,12 @@
         <div v-else-if="!filteredDynamo.length" class="empty-row">{{ search.dynamodb ? t('awsv.lit.noMatches') : t('awsv.lit.noDynamo') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"      @click="sortBy('name')">{{ t('storage.table') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('status')"    @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('billingMode')" @click="sortBy('billingMode')">{{ t('awsv.billing') }} <span class="sort-icon">{{ sortIcon('billingMode') }}</span></th>
-            <th :class="thClass('itemCount')" @click="sortBy('itemCount')">{{ t('vercel.edgeConfig.itemCount') }} <span class="sort-icon">{{ sortIcon('itemCount') }}</span></th>
-            <th :class="thClass('sizeBytes')" @click="sortBy('sizeBytes')">{{ t('th.size') }} <span class="sort-icon">{{ sortIcon('sizeBytes') }}</span></th>
-            <th :class="thClass('creationDateTime')" @click="sortBy('creationDateTime')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('creationDateTime') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('storage.table') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
+            <th :class="thClass('billingMode')" :aria-sort="ariaSort('billingMode')"><button type="button" class="th-sort" @click="sortBy('billingMode')">{{ t('awsv.billing') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('billingMode') }}</span></button></th>
+            <th :class="thClass('itemCount')" :aria-sort="ariaSort('itemCount')"><button type="button" class="th-sort" @click="sortBy('itemCount')">{{ t('vercel.edgeConfig.itemCount') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('itemCount') }}</span></button></th>
+            <th :class="thClass('sizeBytes')" :aria-sort="ariaSort('sizeBytes')"><button type="button" class="th-sort" @click="sortBy('sizeBytes')">{{ t('th.size') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('sizeBytes') }}</span></button></th>
+            <th :class="thClass('creationDateTime')" :aria-sort="ariaSort('creationDateTime')"><button type="button" class="th-sort" @click="sortBy('creationDateTime')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('creationDateTime') }}</span></button></th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -618,14 +618,14 @@
         <div v-else-if="!filteredRds.length" class="empty-row">{{ search.rds ? t('awsv.lit.noMatches') : t('awsv.lit.noRds') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('id')"            @click="sortBy('id')">{{ t('ec2d.instance') }} <span class="sort-icon">{{ sortIcon('id') }}</span></th>
-            <th :class="thClass('engine')"        @click="sortBy('engine')">{{ t('gsi.engine') }} <span class="sort-icon">{{ sortIcon('engine') }}</span></th>
-            <th :class="thClass('class')"         @click="sortBy('class')">{{ t('detail.class') }} <span class="sort-icon">{{ sortIcon('class') }}</span></th>
-            <th :class="thClass('status')"        @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('endpoint')"      @click="sortBy('endpoint')">{{ t('sns.endpoint') }} <span class="sort-icon">{{ sortIcon('endpoint') }}</span></th>
-            <th :class="thClass('az')"            @click="sortBy('az')">AZ <span class="sort-icon">{{ sortIcon('az') }}</span></th>
-            <th :class="thClass('storageGb')"     @click="sortBy('storageGb')">{{ t('sidebar.storage') }} <span class="sort-icon">{{ sortIcon('storageGb') }}</span></th>
-            <th :class="thClass('createdAt')"     @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdAt') }}</span></th>
+            <th :class="thClass('id')" :aria-sort="ariaSort('id')"><button type="button" class="th-sort" @click="sortBy('id')">{{ t('ec2d.instance') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('id') }}</span></button></th>
+            <th :class="thClass('engine')" :aria-sort="ariaSort('engine')"><button type="button" class="th-sort" @click="sortBy('engine')">{{ t('gsi.engine') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('engine') }}</span></button></th>
+            <th :class="thClass('class')" :aria-sort="ariaSort('class')"><button type="button" class="th-sort" @click="sortBy('class')">{{ t('detail.class') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('class') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
+            <th :class="thClass('endpoint')" :aria-sort="ariaSort('endpoint')"><button type="button" class="th-sort" @click="sortBy('endpoint')">{{ t('sns.endpoint') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('endpoint') }}</span></button></th>
+            <th :class="thClass('az')" :aria-sort="ariaSort('az')"><button type="button" class="th-sort" @click="sortBy('az')">AZ <span class="sort-icon" aria-hidden="true">{{ sortIcon('az') }}</span></button></th>
+            <th :class="thClass('storageGb')" :aria-sort="ariaSort('storageGb')"><button type="button" class="th-sort" @click="sortBy('storageGb')">{{ t('sidebar.storage') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('storageGb') }}</span></button></th>
+            <th :class="thClass('createdAt')" :aria-sort="ariaSort('createdAt')"><button type="button" class="th-sort" @click="sortBy('createdAt')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdAt') }}</span></button></th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -662,12 +662,12 @@
         <div v-else-if="!filteredGlue.length" class="empty-row">{{ search.glue ? t('awsv.lit.noMatches') : t('awsv.lit.noGlue') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('awsv.jobName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('command')"     @click="sortBy('command')">{{ t('th.type') }} <span class="sort-icon">{{ sortIcon('command') }}</span></th>
-            <th :class="thClass('glueVersion')" @click="sortBy('glueVersion')">{{ t('awsv.glueVer') }} <span class="sort-icon">{{ sortIcon('glueVersion') }}</span></th>
-            <th :class="thClass('workerType')"  @click="sortBy('workerType')">Worker <span class="sort-icon">{{ sortIcon('workerType') }}</span></th>
-            <th :class="thClass('numWorkers')"  @click="sortBy('numWorkers')">Workers</th>
-            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.jobName') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('command')" :aria-sort="ariaSort('command')"><button type="button" class="th-sort" @click="sortBy('command')">{{ t('th.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('command') }}</span></button></th>
+            <th :class="thClass('glueVersion')" :aria-sort="ariaSort('glueVersion')"><button type="button" class="th-sort" @click="sortBy('glueVersion')">{{ t('awsv.glueVer') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('glueVersion') }}</span></button></th>
+            <th :class="thClass('workerType')" :aria-sort="ariaSort('workerType')"><button type="button" class="th-sort" @click="sortBy('workerType')">Worker <span class="sort-icon" aria-hidden="true">{{ sortIcon('workerType') }}</span></button></th>
+            <th :class="thClass('numWorkers')" :aria-sort="ariaSort('numWorkers')"><button type="button" class="th-sort" @click="sortBy('numWorkers')">Workers</button></th>
+            <th :class="thClass('lastModified')" :aria-sort="ariaSort('lastModified')"><button type="button" class="th-sort" @click="sortBy('lastModified')">{{ t('lmd.modified') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lastModified') }}</span></button></th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -722,12 +722,12 @@
           </div>
           <table v-else class="cloud-table">
             <thead><tr>
-              <th :class="thClass('name')"          @click="sortBy('name')">Workgroup <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-              <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
+              <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">Workgroup <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+              <th :class="thClass('state')" :aria-sort="ariaSort('state')"><button type="button" class="th-sort" @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('state') }}</span></button></th>
               <th>{{ t('awsv.engineVersion') }}</th>
               <th>{{ t('awsv.outputLocation') }}</th>
-              <th :class="thClass('bytesScanned')"  @click="sortBy('bytesScanned')">{{ t('awsv.bytesScanned') }} <span class="sort-icon">{{ sortIcon('bytesScanned') }}</span></th>
-              <th :class="thClass('queriesRun')"    @click="sortBy('queriesRun')">{{ t('awsv.queriesRun') }} <span class="sort-icon">{{ sortIcon('queriesRun') }}</span></th>
+              <th :class="thClass('bytesScanned')" :aria-sort="ariaSort('bytesScanned')"><button type="button" class="th-sort" @click="sortBy('bytesScanned')">{{ t('awsv.bytesScanned') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('bytesScanned') }}</span></button></th>
+              <th :class="thClass('queriesRun')" :aria-sort="ariaSort('queriesRun')"><button type="button" class="th-sort" @click="sortBy('queriesRun')">{{ t('awsv.queriesRun') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('queriesRun') }}</span></button></th>
               <th>{{ t('th.description') }}</th>
               <th>{{ t('th.actions') }}</th>
             </tr></thead>
@@ -940,10 +940,10 @@
         <div v-else-if="!filteredPipelines.length" class="empty-row">{{ search.datapipeline ? t('awsv.lit.noMatches') : t('awsv.lit.noDataPipelines') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"          @click="sortBy('name')">Pipeline <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('state')"         @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon">{{ sortIcon('state') }}</span></th>
-            <th :class="thClass('latestRunTime')" @click="sortBy('latestRunTime')">{{ t('awsv.lastRun') }} <span class="sort-icon">{{ sortIcon('latestRunTime') }}</span></th>
-            <th :class="thClass('nextRunTime')"   @click="sortBy('nextRunTime')">{{ t('awsv.nextRun') }} <span class="sort-icon">{{ sortIcon('nextRunTime') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">Pipeline <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('state')" :aria-sort="ariaSort('state')"><button type="button" class="th-sort" @click="sortBy('state')">{{ t('th.state') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('state') }}</span></button></th>
+            <th :class="thClass('latestRunTime')" :aria-sort="ariaSort('latestRunTime')"><button type="button" class="th-sort" @click="sortBy('latestRunTime')">{{ t('awsv.lastRun') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('latestRunTime') }}</span></button></th>
+            <th :class="thClass('nextRunTime')" :aria-sort="ariaSort('nextRunTime')"><button type="button" class="th-sort" @click="sortBy('nextRunTime')">{{ t('awsv.nextRun') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('nextRunTime') }}</span></button></th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
           <tbody>
@@ -972,12 +972,12 @@
         <div v-else-if="!filteredBedrock.length" class="empty-row">{{ search.bedrock ? t('awsv.lit.noMatches') : t('awsv.lit.noBedrock') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('modelName')"        @click="sortBy('modelName')">{{ t('gvi.model') }} <span class="sort-icon">{{ sortIcon('modelName') }}</span></th>
-            <th :class="thClass('providerName')"     @click="sortBy('providerName')">{{ t('profile.providerLabel') }} <span class="sort-icon">{{ sortIcon('providerName') }}</span></th>
-            <th :class="thClass('inputModalities')"  @click="sortBy('inputModalities')">{{ t('awsv.input') }}</th>
-            <th :class="thClass('outputModalities')" @click="sortBy('outputModalities')">{{ t('awsv.output') }}</th>
-            <th :class="thClass('responseStreamingSupported')" @click="sortBy('responseStreamingSupported')">Streaming</th>
-            <th :class="thClass('lifecycleStatus')"  @click="sortBy('lifecycleStatus')">{{ t('eksd.lifecycle') }} <span class="sort-icon">{{ sortIcon('lifecycleStatus') }}</span></th>
+            <th :class="thClass('modelName')" :aria-sort="ariaSort('modelName')"><button type="button" class="th-sort" @click="sortBy('modelName')">{{ t('gvi.model') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('modelName') }}</span></button></th>
+            <th :class="thClass('providerName')" :aria-sort="ariaSort('providerName')"><button type="button" class="th-sort" @click="sortBy('providerName')">{{ t('profile.providerLabel') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('providerName') }}</span></button></th>
+            <th :class="thClass('inputModalities')" :aria-sort="ariaSort('inputModalities')"><button type="button" class="th-sort" @click="sortBy('inputModalities')">{{ t('awsv.input') }}</button></th>
+            <th :class="thClass('outputModalities')" :aria-sort="ariaSort('outputModalities')"><button type="button" class="th-sort" @click="sortBy('outputModalities')">{{ t('awsv.output') }}</button></th>
+            <th :class="thClass('responseStreamingSupported')" :aria-sort="ariaSort('responseStreamingSupported')"><button type="button" class="th-sort" @click="sortBy('responseStreamingSupported')">Streaming</button></th>
+            <th :class="thClass('lifecycleStatus')" :aria-sort="ariaSort('lifecycleStatus')"><button type="button" class="th-sort" @click="sortBy('lifecycleStatus')">{{ t('eksd.lifecycle') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lifecycleStatus') }}</span></button></th>
           </tr></thead>
           <tbody>
             <tr v-for="m in sortRows(filteredBedrock)" :key="m.modelId">
@@ -1004,8 +1004,8 @@
           <div style="width:260px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
             <div v-for="b in sortRows(filteredLex)" :key="b.id"
               :class="['sidebar-item', lexPanel.bot?.id === b.id ? 'active' : '']"
-              style="cursor:pointer"
-              @click="selectLexBot(b)">
+              style="cursor:pointer" role="button" tabindex="0" :aria-current="lexPanel.bot?.id === b.id ? 'true' : undefined"
+              @click="selectLexBot(b)" @keydown.enter.prevent="selectLexBot(b)" @keydown.space.prevent="selectLexBot(b)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.name }}</div>
               <div class="mono-xs text-dim" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.id }}</div>
               <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
@@ -1571,10 +1571,10 @@
         <div v-else-if="!filteredAgentCoreCfn.length" class="empty-row">{{ search.agentcorecfn ? t('awsv.lit.noMatches') : t('awsv.lit.noAgentCore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"        @click="sortBy('name')">{{ t('cfn.colStack') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('status')"      @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('createdTime')" @click="sortBy('createdTime')">{{ t('th.created') }} <span class="sort-icon">{{ sortIcon('createdTime') }}</span></th>
-            <th :class="thClass('updatedTime')" @click="sortBy('updatedTime')">{{ t('th.updated') }} <span class="sort-icon">{{ sortIcon('updatedTime') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('cfn.colStack') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
+            <th :class="thClass('createdTime')" :aria-sort="ariaSort('createdTime')"><button type="button" class="th-sort" @click="sortBy('createdTime')">{{ t('th.created') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('createdTime') }}</span></button></th>
+            <th :class="thClass('updatedTime')" :aria-sort="ariaSort('updatedTime')"><button type="button" class="th-sort" @click="sortBy('updatedTime')">{{ t('th.updated') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('updatedTime') }}</span></button></th>
             <th>Stack ID</th>
           </tr></thead>
           <tbody>
@@ -1614,10 +1614,10 @@
         <div v-else-if="!filteredCloudfront.length" class="empty-row">{{ search.cloudfront ? t('awsv.lit.noMatches') : t('awsv.lit.noCloudfront') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('domainName')" @click="sortBy('domainName')">{{ t('vercel.col.domain') }} <span class="sort-icon">{{ sortIcon('domainName') }}</span></th>
-            <th :class="thClass('status')"     @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
-            <th :class="thClass('enabled')"    @click="sortBy('enabled')">{{ t('apm.enabled') }}</th>
-            <th :class="thClass('priceClass')" @click="sortBy('priceClass')">Price Class <span class="sort-icon">{{ sortIcon('priceClass') }}</span></th>
+            <th :class="thClass('domainName')" :aria-sort="ariaSort('domainName')"><button type="button" class="th-sort" @click="sortBy('domainName')">{{ t('vercel.col.domain') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('domainName') }}</span></button></th>
+            <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('th.status') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
+            <th :class="thClass('enabled')" :aria-sort="ariaSort('enabled')"><button type="button" class="th-sort" @click="sortBy('enabled')">{{ t('apm.enabled') }}</button></th>
+            <th :class="thClass('priceClass')" :aria-sort="ariaSort('priceClass')"><button type="button" class="th-sort" @click="sortBy('priceClass')">Price Class <span class="sort-icon" aria-hidden="true">{{ sortIcon('priceClass') }}</span></button></th>
             <th>Aliases</th>
             <th>{{ t('awsv.origins') }}</th>
             <th>{{ t('th.actions') }}</th>
@@ -1663,8 +1663,8 @@
             <div v-else-if="!filteredRoute53.length" class="empty-row">{{ t('awsv.noZones') }}</div>
             <div v-for="z in filteredRoute53" :key="z.id"
               :class="['sidebar-item', { active: route53State.selectedZoneId === z.id }]"
-              style="cursor:pointer;padding:6px 12px"
-              @click="loadRoute53Records(z)">
+              style="cursor:pointer;padding:6px 12px" role="button" tabindex="0" :aria-current="route53State.selectedZoneId === z.id ? 'true' : undefined"
+              @click="loadRoute53Records(z)" @keydown.enter.prevent="loadRoute53Records(z)" @keydown.space.prevent="loadRoute53Records(z)">
               <div>{{ z.name }}</div>
               <div class="text-dim mono-xs">{{ t('awsv.zoneRecords', { n: z.recordCount, kind: z.private ? t('awsv.zonePrivate') : t('awsv.zonePublic') }) }}</div>
             </div>
@@ -1740,8 +1740,8 @@
             <div v-else-if="!filteredCognito.length" class="empty-row">{{ t('awsv.noUserPools') }}</div>
             <div v-for="p in filteredCognito" :key="p.id"
               :class="['sidebar-item', { active: cognitoState.selectedPool?.id === p.id }]"
-              style="cursor:pointer;padding:8px 12px"
-              @click="loadCognitoPool(p)">
+              style="cursor:pointer;padding:8px 12px" role="button" tabindex="0" :aria-current="cognitoState.selectedPool?.id === p.id ? 'true' : undefined"
+              @click="loadCognitoPool(p)" @keydown.enter.prevent="loadCognitoPool(p)" @keydown.space.prevent="loadCognitoPool(p)">
               <div style="font-weight:500">{{ p.name }}</div>
               <div class="text-dim mono-xs">{{ t('awsv.usersMfa', { p0: p.userCount?.toLocaleString() ?? '?', p1: p.mfaConfig }) }}</div>
               <div class="text-dim mono-xs" style="font-size:10px">{{ p.id }}</div>
@@ -1956,9 +1956,9 @@
         <div v-else-if="!filteredSecrets.length" class="empty-row">{{ search.secrets ? t('awsv.lit.noMatches') : t('awsv.lit.noSecrets') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"            @click="sortBy('name')">{{ t('awsv.secretName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('rotationEnabled')" @click="sortBy('rotationEnabled')">{{ t('awsv.rotation') }}</th>
-            <th :class="thClass('lastChanged')"     @click="sortBy('lastChanged')">{{ t('awsv.lastChanged') }} <span class="sort-icon">{{ sortIcon('lastChanged') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsv.secretName') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('rotationEnabled')" :aria-sort="ariaSort('rotationEnabled')"><button type="button" class="th-sort" @click="sortBy('rotationEnabled')">{{ t('awsv.rotation') }}</button></th>
+            <th :class="thClass('lastChanged')" :aria-sort="ariaSort('lastChanged')"><button type="button" class="th-sort" @click="sortBy('lastChanged')">{{ t('awsv.lastChanged') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lastChanged') }}</span></button></th>
             <th>ARN</th>
             <th>{{ t('th.actions') }}</th>
           </tr></thead>
@@ -2000,9 +2000,9 @@
         <div v-else-if="!filteredCwDashboards.length" class="empty-row">{{ search.cwdashboards ? t('awsDashboards.noMatches') : t('awsDashboards.empty') }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
-            <th :class="thClass('name')"         @click="sortBy('name')">{{ t('awsDashboards.colName') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-            <th :class="thClass('lastModified')" @click="sortBy('lastModified')">{{ t('awsDashboards.colModified') }} <span class="sort-icon">{{ sortIcon('lastModified') }}</span></th>
-            <th :class="thClass('size')"         @click="sortBy('size')">{{ t('awsDashboards.colSize') }} <span class="sort-icon">{{ sortIcon('size') }}</span></th>
+            <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsDashboards.colName') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+            <th :class="thClass('lastModified')" :aria-sort="ariaSort('lastModified')"><button type="button" class="th-sort" @click="sortBy('lastModified')">{{ t('awsDashboards.colModified') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lastModified') }}</span></button></th>
+            <th :class="thClass('size')" :aria-sort="ariaSort('size')"><button type="button" class="th-sort" @click="sortBy('size')">{{ t('awsDashboards.colSize') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('size') }}</span></button></th>
             <th>{{ t('awsDashboards.colActions') }}</th>
           </tr></thead>
           <tbody>
@@ -2028,7 +2028,7 @@
 
     <!-- ── Create S3 Bucket Modal ─────────────────────────────────────────── -->
     <div v-if="createS3Modal.open" class="modal-overlay" @click.self="createS3Modal.open = false">
-      <div class="modal" style="width:480px;max-width:95vw">
+      <div class="modal" v-dialog="() => (createS3Modal.open = false)" style="width:480px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.createS3Bucket') }}</span>
           <button class="btn sm" @click="createS3Modal.open = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
@@ -2079,7 +2079,7 @@
 
     <!-- ── ECR Deploy to K8s Modal ────────────────────────────────────────── -->
     <div v-if="ecrDeployModal.open" class="modal-overlay" @click.self="ecrDeployModal.open = false">
-      <div class="modal" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (ecrDeployModal.open = false)" style="width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.deployToKubernetes', { p0: ecrDeployModal.repoName }) }}</span>
           <button class="btn sm" @click="ecrDeployModal.open = false" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
@@ -2171,7 +2171,7 @@
 
 
     <div v-if="configModal.open" class="modal-overlay" @click.self="configModal.open = false">
-      <div class="modal" style="width:900px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (configModal.open = false)" style="width:900px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
             {{ configModal.title }}
@@ -2193,7 +2193,7 @@
     </div>
 
     <div v-if="logsModal.open" class="modal-overlay" @click.self="logsModal.open = false">
-      <div class="modal" style="width:860px;max-width:95vw;max-height:82vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (logsModal.open = false)" style="width:860px;max-width:95vw;max-height:82vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
             <span v-if="logsModal.logGroupName" class="text-dim mono-xs" style="margin-left:8px">{{ logsModal.logGroupName }}</span>
@@ -2234,7 +2234,7 @@
     />
 
     <div v-if="invokeModal.open" class="modal-overlay" @click.self="invokeModal.open = false">
-      <div class="modal" style="width:600px;max-width:95vw" role="dialog" aria-modal="true" aria-labelledby="aws-invoke-title">
+      <div class="modal" v-dialog="() => (invokeModal.open = false)" style="width:600px;max-width:95vw" role="dialog" aria-modal="true" aria-labelledby="aws-invoke-title">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span id="aws-invoke-title" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
             {{ t('awsv.invokeTitle', { name: invokeModal.name }) }}
@@ -2265,7 +2265,7 @@
 
     <!-- EventBridge Rule Logs Modal -->
     <div v-if="ebLogsModal.open" class="modal-overlay" @click.self="ebLogsModal.open = false">
-      <div class="modal" style="width:min(840px,96vw);max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (ebLogsModal.open = false)" style="width:min(840px,96vw);max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
             {{ t('awsv.logsMetrics', { p0: ebLogsModal.ruleName }) }}
@@ -2298,7 +2298,7 @@
 
     <!-- EventBridge Rule Details Modal -->
     <div v-if="ebDetailsModal.open" class="modal-overlay" @click.self="ebDetailsModal.open = false">
-      <div class="modal" style="width:min(860px,96vw);max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (ebDetailsModal.open = false)" style="width:min(860px,96vw);max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
             EventBridge &mdash; {{ ebDetailsModal.name }}
@@ -2321,7 +2321,7 @@
 
     <!-- Step Functions Diagram Modal -->
     <div v-if="diagramModal.open" class="modal-overlay" @click.self="diagramModal.open = false">
-      <div class="modal" style="width:min(900px,96vw);height:min(680px,90vh);display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (diagramModal.open = false)" style="width:min(900px,96vw);height:min(680px,90vh);display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">
             {{ t('awsv.stepFunctionDiagram', { p0: diagramModal.name }) }}
@@ -2403,7 +2403,7 @@
 
     <!-- Tags Modal -->
     <div v-if="tagsModal.open" class="modal-overlay" @click.self="tagsModal.open = false">
-      <div class="modal" style="width:620px;max-width:95vw">
+      <div class="modal" v-dialog="() => (tagsModal.open = false)" style="width:620px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">Tags — {{ tagsModal.title }}</span>
           <button class="btn sm" @click="tagsModal.open = false">{{ t('action.close') }}</button>
@@ -2436,7 +2436,7 @@
 
     <!-- CloudWatch Logging Modal -->
     <div v-if="loggingModal.open" class="modal-overlay" @click.self="loggingModal.open = false">
-      <div class="modal" style="width:500px;max-width:95vw">
+      <div class="modal" v-dialog="() => (loggingModal.open = false)" style="width:500px;max-width:95vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.enableCloudwatchLogs', { p0: loggingModal.title }) }}</span>
           <button class="btn sm" @click="loggingModal.open = false">{{ t('action.close') }}</button>
@@ -2490,7 +2490,7 @@
 
     <!-- Glue Job Runs Modal -->
     <div v-if="glueRunsModal.open" class="modal-overlay" @click.self="glueRunsModal.open = false">
-      <div class="modal" style="width:720px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (glueRunsModal.open = false)" style="width:720px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.recentRuns', { p0: glueRunsModal.job?.name }) }}</span>
           <button class="btn sm" @click="glueRunsModal.open = false">{{ t('action.close') }}</button>
@@ -2515,7 +2515,7 @@
 
     <!-- CloudFront Invalidation Modal -->
     <div v-if="invalidateModal.open" class="modal-overlay" @click.self="invalidateModal.open = false">
-      <div class="modal" style="width:500px;max-width:96vw">
+      <div class="modal" v-dialog="() => (invalidateModal.open = false)" style="width:500px;max-width:96vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.createInvalidation', { p0: invalidateModal.dist?.domainName }) }}</span>
           <button class="btn sm" @click="invalidateModal.open = false">{{ t('action.close') }}</button>
@@ -2538,7 +2538,7 @@
 
     <!-- CloudFront Stats Modal -->
     <div v-if="cfStatsModal.open" class="modal-overlay" @click.self="cfStatsModal.open = false">
-      <div class="modal" style="width:min(740px,96vw);max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (cfStatsModal.open = false)" style="width:min(740px,96vw);max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;flex:1">{{ t('awsv.cloudfrontStats', { p0: cfStatsModal.domainName }) }}</span>
           <button class="btn sm" @click="cfStatsModal.open = false">{{ t('action.close') }}</button>
@@ -2611,7 +2611,7 @@
 
     <!-- CloudFront Create from S3 Modal -->
     <div v-if="cfCreateModal.open" class="modal-overlay" @click.self="cfCreateModal.open = false">
-      <div class="modal" style="width:540px;max-width:96vw">
+      <div class="modal" v-dialog="() => (cfCreateModal.open = false)" style="width:540px;max-width:96vw">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">{{ t('awsv.createCloudfrontDistributionFromS3') }}</span>
           <button class="btn sm" @click="cfCreateModal.open = false">{{ t('action.close') }}</button>
@@ -2661,7 +2661,7 @@
 
     <!-- ══ Secret Config Modal ═══════════════════════════════════════════════ -->
     <div v-if="secretConfigModal.open" class="modal-overlay" @click.self="secretConfigModal.open = false">
-      <div class="modal-box" style="width:640px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (secretConfigModal.open = false)" style="width:640px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
             <div style="font-weight:600;font-size:14px">{{ secretConfigModal.secret?.name?.split('/').pop() }}</div>
@@ -2714,7 +2714,7 @@
 
     <!-- ══ Secret Integration Examples Modal ═════════════════════════════════ -->
     <div v-if="secretIntegrationModal.open" class="modal-overlay" @click.self="secretIntegrationModal.open = false">
-      <div class="modal-box" style="width:780px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (secretIntegrationModal.open = false)" style="width:780px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
             <div style="font-weight:600;font-size:14px">{{ t('awsv.integrationExamples') }}</div>
@@ -2780,7 +2780,7 @@
 
     <!-- ══ Import Secret to Env Manager Modal (con selección de variables) ══ -->
     <div v-if="importSecretModal.open" class="modal-overlay" @click.self="importSecretModal.open = false">
-      <div class="modal-box" style="width:600px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (importSecretModal.open = false)" style="width:600px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
             <div style="font-weight:600;font-size:13px">{{ t('awsv.importToEnvManager') }}</div>
@@ -2855,7 +2855,7 @@
 
     <!-- ══ Athena Workgroup Config Modal ════════════════════════════════════ -->
     <div v-if="athenaWgInfo.open" class="modal-overlay" @click.self="athenaWgInfo.open = false">
-      <div class="modal" style="width:660px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (athenaWgInfo.open = false)" style="width:660px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">Athena Workgroup — {{ athenaWgInfo.wg?.name }}</span>
           <div style="display:flex;gap:6px">
@@ -2923,7 +2923,7 @@
 
     <!-- ══ Athena Workgroup Query Modal ══════════════════════════════════════ -->
     <div v-if="athenaModal.open" class="modal-overlay" @click.self="athenaModal.open = false">
-      <div class="modal" style="width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (athenaModal.open = false)" style="width:700px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">{{ t('awsv.queryWorkgroup', { p0: athenaModal.workgroup?.name }) }}</span>
           <div style="display:flex;gap:6px">
@@ -2966,7 +2966,7 @@
 
     <!-- ══ Athena Catalog Info Modal ════════════════════════════════════════ -->
     <div v-if="athenaCatInfo.open" class="modal-overlay" @click.self="athenaCatInfo.open = false">
-      <div class="modal" style="width:560px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (athenaCatInfo.open = false)" style="width:560px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">Data Source — {{ athenaCatInfo.cat?.name }}</span>
           <div style="display:flex;gap:6px">
@@ -3009,7 +3009,7 @@
 
     <!-- ══ DynamoDB Create Table Modal ═══════════════════════════════════════ -->
     <div v-if="dynamoCreate.open" class="modal-overlay" @click.self="dynamoCreate.open = false">
-      <div class="modal-box" style="width:560px;max-width:98vw">
+      <div class="modal-box" v-dialog="() => (dynamoCreate.open = false)" style="width:560px;max-width:98vw">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.createDynamodbTable') }}</span>
           <button class="btn sm" @click="dynamoCreate.open = false">{{ t('action.close') }}</button>
@@ -3076,7 +3076,7 @@
 
     <!-- ══ Glue Job Info Modal ════════════════════════════════════════════════ -->
     <div v-if="glueInfo.open" class="modal-overlay" @click.self="glueInfo.open = false">
-      <div class="modal" style="width:700px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal" v-dialog="() => (glueInfo.open = false)" style="width:700px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
         <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
           <span style="font-weight:600">Glue Job — {{ glueInfo.job?.name }}</span>
           <button class="btn sm" @click="glueInfo.open = false">{{ t('action.close') }}</button>
@@ -3163,7 +3163,7 @@
 
     <!-- ══ DynamoDB Browse Modal ══════════════════════════════════════════════ -->
     <div v-if="dynamoBrowse.open" class="modal-overlay" @click.self="dynamoBrowse.open = false">
-      <div class="modal-box" style="width:900px;max-width:98vw;height:80vh;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (dynamoBrowse.open = false)" style="width:900px;max-width:98vw;height:80vh;display:flex;flex-direction:column">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.browse2', { p0: dynamoBrowse.table }) }}</span>
           <button class="btn sm" @click="dynamoBrowse.open = false">{{ t('action.close') }}</button>
@@ -3254,7 +3254,7 @@
 
     <!-- ══ DynamoDB Cell Expand Modal ══════════════════════════════════════════ -->
     <div v-if="dynamoCellModal.open" class="modal-overlay" @click.self="dynamoCellModal.open = false" style="z-index:3000">
-      <div class="modal-box" style="width:660px;max-width:98vw;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (dynamoCellModal.open = false)" style="width:660px;max-width:98vw;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <span style="font-weight:600;font-size:13px">{{ dynamoCellModal.column }}</span>
           <div style="display:flex;gap:6px">
@@ -3270,7 +3270,7 @@
 
     <!-- ══ DynamoDB Edit Item Modal ════════════════════════════════════════════ -->
     <div v-if="dynamoEdit.open" class="modal-overlay" @click.self="dynamoEdit.open = false" style="z-index:3000">
-      <div class="modal-box" style="width:660px;max-width:98vw;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (dynamoEdit.open = false)" style="width:660px;max-width:98vw;max-height:90vh;display:flex;flex-direction:column">
         <div class="modal-header">
           <span style="font-weight:600;font-size:13px">{{ t('awsv.editItem2', { p0: dynamoEdit.table }) }}</span>
           <button class="btn sm" @click="dynamoEdit.open = false">{{ t('action.close') }}</button>
@@ -3301,7 +3301,7 @@
 
     <!-- ══ RDS Info Modal ══════════════════════════════════════════════════════ -->
     <div v-if="rdsInfoModal.open" class="modal-overlay" @click.self="rdsInfoModal.open = false">
-      <div class="modal-box" style="width:900px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (rdsInfoModal.open = false)" style="width:900px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
             <span style="font-weight:600">{{ t('awsv.rdsInfo', { p0: rdsInfoModal.id }) }}</span>
@@ -3446,7 +3446,7 @@
 
     <!-- ══ RDS Connect Modal ═══════════════════════════════════════════════════ -->
     <div v-if="rdsConnectModal.open" class="modal-overlay" @click.self="rdsConnectModal.open = false">
-      <div class="modal-box" style="width:760px;max-width:98vw">
+      <div class="modal-box" v-dialog="() => (rdsConnectModal.open = false)" style="width:760px;max-width:98vw">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.rdsConnection', { p0: rdsConnectModal.id }) }}</span>
           <button class="btn sm" @click="rdsConnectModal.open = false">{{ t('action.close') }}</button>
@@ -3475,7 +3475,7 @@
 
     <!-- ══ RDS Reset Password Modal ═══════════════════════════════════════════ -->
     <div v-if="rdsResetPwdModal.open" class="modal-overlay" @click.self="rdsResetPwdModal.open = false">
-      <div class="modal-box" style="width:460px;max-width:98vw">
+      <div class="modal-box" v-dialog="() => (rdsResetPwdModal.open = false)" style="width:460px;max-width:98vw">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.resetMasterPassword', { p0: rdsResetPwdModal.id }) }}</span>
           <button class="btn sm" @click="rdsResetPwdModal.open = false">{{ t('action.close') }}</button>
@@ -3503,7 +3503,7 @@
 
     <!-- ══ Glue Job Config Modal ═══════════════════════════════════════════════ -->
     <div v-if="glueConfigModal.open" class="modal-overlay" @click.self="glueConfigModal.open = false">
-      <div class="modal-box" style="width:860px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (glueConfigModal.open = false)" style="width:860px;max-width:98vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-weight:600;font-size:14px">{{ glueConfigModal.job?.name }}</span>
@@ -3611,7 +3611,7 @@
 
     <!-- ══ Glue Logs Modal ════════════════════════════════════════════════════ -->
     <div v-if="glueLogsModal.open" class="modal-overlay" @click.self="glueLogsModal.open = false">
-      <div class="modal-box" style="width:900px;max-width:98vw;height:80vh;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (glueLogsModal.open = false)" style="width:900px;max-width:98vw;height:80vh;display:flex;flex-direction:column">
         <div class="modal-header">
           <span style="font-weight:600">Logs — {{ glueLogsModal.job?.name }}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -3639,7 +3639,7 @@
 
     <!-- ══ Cognito Create User Modal ══════════════════════════════════════════ -->
     <div v-if="cognitoCreateModal.open" class="modal-overlay" @click.self="cognitoCreateModal.open = false">
-      <div class="modal-box" style="width:460px;max-width:98vw">
+      <div class="modal-box" v-dialog="() => (cognitoCreateModal.open = false)" style="width:460px;max-width:98vw">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.createUser2', { p0: cognitoState.selectedPool?.name }) }}</span>
           <button class="btn sm" @click="cognitoCreateModal.open = false">{{ t('action.close') }}</button>
@@ -3675,7 +3675,7 @@
 
     <!-- ══ Cognito Create Group Modal ═════════════════════════════════════════ -->
     <div v-if="cognitoGroupModal.open" class="modal-overlay" @click.self="cognitoGroupModal.open = false">
-      <div class="modal-box" style="width:460px;max-width:98vw">
+      <div class="modal-box" v-dialog="() => (cognitoGroupModal.open = false)" style="width:460px;max-width:98vw">
         <div class="modal-header">
           <span style="font-weight:600">{{ t('awsv.createGroup2', { p0: cognitoState.selectedPool?.name }) }}</span>
           <button class="btn sm" @click="cognitoGroupModal.open = false">{{ t('action.close') }}</button>
@@ -3703,7 +3703,7 @@
 
     <!-- ══ Cognito User Detail Slide-over ═════════════════════════════════════ -->
     <div v-if="cognitoUserDetail.open" class="modal-overlay" @click.self="cognitoUserDetail.open = false">
-      <div class="modal-box" style="width:760px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
+      <div class="modal-box" v-dialog="() => (cognitoUserDetail.open = false)" style="width:760px;max-width:98vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column">
         <div class="modal-header">
           <div>
             <div style="font-weight:600;font-size:13px">{{ cognitoUserDetail.username }}</div>
@@ -3892,6 +3892,7 @@ import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
 import GcpConfirmModal     from './GcpConfirmModal.vue'
+import { vDialog }         from '../../composables/vDialog'
 import {
   displayName, filterRecords, hostnameOf, recordKey, recordTypes,
   recordsForExport, recordsToCsv, testResultKey, testsForRecord,
@@ -3921,7 +3922,7 @@ const apmStore = useApmStore()
 const termStore = useTerminalStore()
 const { toast }    = useToast()
 const { apiFetch } = useApi()
-const { sortBy, sortRows, sortIcon, thClass, resetSort } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, resetSort, ariaSort } = useSortable()
 
 const selectedProfileId = ref(awsStore.activeProfileId || '')
 const localProfiles     = ref([])

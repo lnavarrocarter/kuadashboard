@@ -52,10 +52,10 @@
       <div v-else-if="!rows.length" class="empty-row">{{ search ? t('awsLogs.noMatches') : t('awsLogs.empty') }}</div>
       <table v-else class="cloud-table">
         <thead><tr>
-          <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsLogs.colGroup') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-          <th :class="thClass('kind')" @click="sortBy('kind')">{{ t('awsLogs.colSource') }} <span class="sort-icon">{{ sortIcon('kind') }}</span></th>
-          <th :class="thClass('storedBytes')" @click="sortBy('storedBytes')" :title="t('awsLogs.storedHint')">{{ t('awsLogs.colStored') }} <span class="sort-icon">{{ sortIcon('storedBytes') }}</span></th>
-          <th :class="thClass('retentionInDays')" @click="sortBy('retentionInDays')">{{ t('awsLogs.colRetention') }} <span class="sort-icon">{{ sortIcon('retentionInDays') }}</span></th>
+          <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsLogs.colGroup') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+          <th :class="thClass('kind')" :aria-sort="ariaSort('kind')"><button type="button" class="th-sort" @click="sortBy('kind')">{{ t('awsLogs.colSource') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('kind') }}</span></button></th>
+          <th :class="thClass('storedBytes')" :title="t('awsLogs.storedHint')" :aria-sort="ariaSort('storedBytes')"><button type="button" class="th-sort" @click="sortBy('storedBytes')">{{ t('awsLogs.colStored') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('storedBytes') }}</span></button></th>
+          <th :class="thClass('retentionInDays')" :aria-sort="ariaSort('retentionInDays')"><button type="button" class="th-sort" @click="sortBy('retentionInDays')">{{ t('awsLogs.colRetention') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('retentionInDays') }}</span></button></th>
           <th>{{ t('awsLogs.colCache') }}</th>
           <th></th>
         </tr></thead>
@@ -384,7 +384,7 @@ const emit = defineEmits(['request-access'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 
 const VIEWS = ['groups', 'cache', 'backup']
 const KINDS = ['all', 'aws', 'machine', 'custom']

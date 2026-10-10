@@ -11,16 +11,16 @@
     <div v-else-if="!rows.length" class="empty-row">{{ search ? t('awsMsg.noMatches') : t('sqs.empty') }}</div>
     <table v-else class="cloud-table">
       <thead><tr>
-        <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-        <th :class="thClass('healthRank')" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon">{{ sortIcon('healthRank') }}</span></th>
-        <th :class="thClass('visible')" @click="sortBy('visible')" :title="t('sqs.visibleHint')">{{ t('sqs.visible') }} <span class="sort-icon">{{ sortIcon('visible') }}</span></th>
-        <th :class="thClass('inFlight')" @click="sortBy('inFlight')" :title="t('sqs.inFlightHint')">{{ t('sqs.inFlight') }} <span class="sort-icon">{{ sortIcon('inFlight') }}</span></th>
-        <th :class="thClass('sent24h')" @click="sortBy('sent24h')" :title="t('sqs.activityHint')">{{ t('sqs.sent24h') }} <span class="sort-icon">{{ sortIcon('sent24h') }}</span></th>
-        <th :class="thClass('received24h')" @click="sortBy('received24h')">{{ t('sqs.received24h') }} <span class="sort-icon">{{ sortIcon('received24h') }}</span></th>
-        <th :class="thClass('deleted24h')" @click="sortBy('deleted24h')">{{ t('sqs.deleted24h') }} <span class="sort-icon">{{ sortIcon('deleted24h') }}</span></th>
+        <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+        <th :class="thClass('healthRank')" :aria-sort="ariaSort('healthRank')"><button type="button" class="th-sort" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('healthRank') }}</span></button></th>
+        <th :class="thClass('visible')" :title="t('sqs.visibleHint')" :aria-sort="ariaSort('visible')"><button type="button" class="th-sort" @click="sortBy('visible')">{{ t('sqs.visible') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('visible') }}</span></button></th>
+        <th :class="thClass('inFlight')" :title="t('sqs.inFlightHint')" :aria-sort="ariaSort('inFlight')"><button type="button" class="th-sort" @click="sortBy('inFlight')">{{ t('sqs.inFlight') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('inFlight') }}</span></button></th>
+        <th :class="thClass('sent24h')" :title="t('sqs.activityHint')" :aria-sort="ariaSort('sent24h')"><button type="button" class="th-sort" @click="sortBy('sent24h')">{{ t('sqs.sent24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('sent24h') }}</span></button></th>
+        <th :class="thClass('received24h')" :aria-sort="ariaSort('received24h')"><button type="button" class="th-sort" @click="sortBy('received24h')">{{ t('sqs.received24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('received24h') }}</span></button></th>
+        <th :class="thClass('deleted24h')" :aria-sort="ariaSort('deleted24h')"><button type="button" class="th-sort" @click="sortBy('deleted24h')">{{ t('sqs.deleted24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('deleted24h') }}</span></button></th>
         <th>{{ t('sqs.dlq') }}</th>
-        <th :class="thClass('encryption')" @click="sortBy('encryption')">{{ t('sqs.encryption') }} <span class="sort-icon">{{ sortIcon('encryption') }}</span></th>
-        <th :class="thClass('retentionSeconds')" @click="sortBy('retentionSeconds')">{{ t('sqs.retention') }} <span class="sort-icon">{{ sortIcon('retentionSeconds') }}</span></th>
+        <th :class="thClass('encryption')" :aria-sort="ariaSort('encryption')"><button type="button" class="th-sort" @click="sortBy('encryption')">{{ t('sqs.encryption') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('encryption') }}</span></button></th>
+        <th :class="thClass('retentionSeconds')" :aria-sort="ariaSort('retentionSeconds')"><button type="button" class="th-sort" @click="sortBy('retentionSeconds')">{{ t('sqs.retention') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('retentionSeconds') }}</span></button></th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -71,7 +71,7 @@ const props = defineProps({ search: { type: String, default: '' }, activityLoadi
 const emit = defineEmits(['request-access'])
 const awsStore = useAwsStore()
 const { t } = useI18n()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 const selected = ref(null)
 
 

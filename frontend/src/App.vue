@@ -131,124 +131,124 @@
         <!-- Kubernetes sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'kubernetes'">
           <div class="sidebar-section">
-            <a :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
-               @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
+               @click="setCloudView('kube-overview')" :aria-current="(cloudView === 'kube-overview') ? 'page' : undefined">{{ t('sidebar.overview') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
-            <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
+            <button type="button" v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
-            <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
+            <button type="button" v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
-            <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
+            <button type="button" v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
+            <button type="button" v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
-              @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+              @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
-            <a v-for="r in ['nodes','namespaces','events']" :key="r"
+            <button type="button" v-for="r in ['nodes','namespaces','events']" :key="r"
                :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.logs') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
-               @click.prevent="setCloudView('kube-logs')">{{ t('sidebar.logsIntelligence') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
+               @click="setCloudView('kube-logs')" :aria-current="(cloudView === 'kube-logs') ? 'page' : undefined">{{ t('sidebar.logsIntelligence') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'helm' }]"
-               @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
-            <a :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
-               @click.prevent="setCloudView('helm-repos')">{{ t('sidebar.repositories') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'helm' }]"
+               @click="setCloudView('helm')" :aria-current="(cloudView === 'helm') ? 'page' : undefined">{{ t('sidebar.releases') }}</button>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
+               @click="setCloudView('helm-repos')" :aria-current="(cloudView === 'helm-repos') ? 'page' : undefined">{{ t('sidebar.repositories') }}</button>
           </div>
         </nav>
 
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
           <div class="sidebar-section">
-            <a :class="['sidebar-item', { active: awsTab === 'overview' }]"
-               @click.prevent="awsTab = 'overview'">{{ t('sidebar.overview') }}</a>
+            <button type="button" :class="['sidebar-item', { active: awsTab === 'overview' }]"
+               @click="awsTab = 'overview'" :aria-current="(awsTab === 'overview') ? 'page' : undefined">{{ t('sidebar.overview') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
-            <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.containers') }}</div>
-            <a v-for="r in AWS_SIDEBAR.containers" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.containers" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
-            <a v-for="r in AWS_SIDEBAR.networking" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in AWS_SIDEBAR.storage" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
-            <a v-for="r in AWS_SIDEBAR.database" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
-            <a v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.integration') }}</div>
-            <a v-for="r in AWS_SIDEBAR.integration" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.integration" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">AI</div>
-            <a v-for="r in AWS_SIDEBAR.ai" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.ai" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
-            <a v-for="r in AWS_SIDEBAR.security" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.monitoring') }}</div>
-            <a v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.management') }}</div>
-            <a v-for="r in AWS_SIDEBAR.management" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.management" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 
@@ -256,33 +256,33 @@
         <nav class="sidebar" v-if="activeProvider === 'vercel'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.projects') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.deployments') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.config') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.advanced') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.account') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 
@@ -290,81 +290,81 @@
         <nav class="sidebar" v-if="activeProvider === 'gcp'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
-            <a v-for="r in GCP_SIDEBAR.compute" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
-            <a v-for="r in GCP_SIDEBAR.database" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in GCP_SIDEBAR.storage" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.serverless') }}</div>
-            <a v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.messaging') }}</div>
-            <a v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
-            <a v-for="r in GCP_SIDEBAR.security" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
-            <a v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workflows') }}</div>
-            <a v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
-            <a v-for="r in GCP_SIDEBAR.networking" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cache') }}</div>
-            <a v-for="r in GCP_SIDEBAR.cache" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.cache" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.async') }}</div>
-            <a v-for="r in GCP_SIDEBAR.async" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.async" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.devops') }}</div>
-            <a v-for="r in GCP_SIDEBAR.devops" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.devops" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.iam') }}</div>
-            <a v-for="r in GCP_SIDEBAR.iam" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.iam" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 

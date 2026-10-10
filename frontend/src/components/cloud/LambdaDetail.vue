@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="lmd-backdrop" @mousedown.self="$emit('close')">
-      <div class="lmd-modal">
+      <div class="lmd-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="lmd-header">
@@ -377,6 +377,7 @@
 
 <script setup>
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 import { ref, computed, watch } from 'vue'
 

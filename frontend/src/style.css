@@ -260,6 +260,9 @@ input, select, textarea { font: inherit; color: var(--text); }
 }
 .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
 .sidebar-item.active { background: var(--bg-sel); color: #fff; font-weight: 500; }
+/* Sidebar entries are buttons (keyboard operable); keep the link look. */
+button.sidebar-item { width: 100%; text-align: left; background: none; border: 0; font: inherit; cursor: pointer; }
+.sidebar-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .observability-provider-tab {
   width: calc(100% - 16px);
@@ -511,6 +514,11 @@ body.kube-resizing {
 .sortable-th:hover .sort-icon { opacity: .8; }
 .sortable-th.th-sorted { color: var(--accent); }
 .sortable-th.th-sorted .sort-icon { opacity: 1; }
+/* Sort control inside a sortable <th>: a real button, styled as the header text. */
+.th-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; text-align: inherit; cursor: pointer; white-space: inherit; }
+.th-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+/* v-dialog focuses the dialog itself when it has no field; the container needs no ring. */
+[role="dialog"][tabindex="-1"]:focus { outline: none; }
 
 /* ── Status Badges ───────────────────────────────────────────────────────────── */
 .badge {

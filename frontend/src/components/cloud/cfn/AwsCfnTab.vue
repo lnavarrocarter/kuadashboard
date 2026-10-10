@@ -27,10 +27,10 @@
     <div v-else-if="!rows.length" class="empty-row">{{ search || group !== 'all' ? t('cfn.noMatches') : t('cfn.empty') }}</div>
     <table v-else class="cloud-table">
       <thead><tr>
-        <th :class="thClass('name')" @click="sortBy('name')">{{ t('cfn.colStack') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-        <th :class="thClass('status')" @click="sortBy('status')">{{ t('cfn.colStatus') }} <span class="sort-icon">{{ sortIcon('status') }}</span></th>
+        <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('cfn.colStack') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+        <th :class="thClass('status')" :aria-sort="ariaSort('status')"><button type="button" class="th-sort" @click="sortBy('status')">{{ t('cfn.colStatus') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('status') }}</span></button></th>
         <th>{{ t('cfn.colDrift') }}</th>
-        <th :class="thClass('lastChange')" @click="sortBy('lastChange')">{{ t('cfn.colUpdated') }} <span class="sort-icon">{{ sortIcon('lastChange') }}</span></th>
+        <th :class="thClass('lastChange')" :aria-sort="ariaSort('lastChange')"><button type="button" class="th-sort" @click="sortBy('lastChange')">{{ t('cfn.colUpdated') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('lastChange') }}</span></button></th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -218,7 +218,7 @@ const emit = defineEmits(['request-access', 'open-resource', 'open-application']
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 
 const GROUPS = ['all', 'ok', 'progress', 'failed', 'rollback', 'review', 'drifted']
 const DETAIL_TABS = ['overview', 'resources', 'events', 'template', 'drift', 'changesets', 'operations']
