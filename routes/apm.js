@@ -34,6 +34,7 @@ function createApmRouter({
   processTracer = createAwsProcessTracer(),
   logCache = () => require('../lib/awsLogCache').getLogCache(),
   syncProviderLogs = null,
+  checkApplicationLimit = count => require('../lib/plans').checkKuaAppLimit(count),
 }) {
   if (!database || !scheduler) throw new Error('database and scheduler are required');
   const router = express.Router();
@@ -73,6 +74,7 @@ function createApmRouter({
       error: error.message || 'Internal server error',
       ...(error.code ? { code: error.code } : {}),
       ...(error.revision !== undefined ? { revision: error.revision } : {}),
+      ...(error.required ? { required: error.required } : {}),
     });
   }
 
@@ -214,6 +216,7 @@ function createApmRouter({
     const profile = profileId(req, res);
     if (!profile) return;
     try {
+      checkApplicationLimit(database.listApplications().length);
       const application = database.createApplication({ ...req.body, provider, profileId: profile });
       log('Application created', application.name, profile, { region: application.region });
       res.status(201).json(application);
