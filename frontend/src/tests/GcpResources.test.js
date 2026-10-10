@@ -505,6 +505,25 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.find('[data-test="cloudrun-table"] .gcp-row-link').attributes('aria-expanded')).toBe('true')
   })
 
+  it('a late Functions detail for the previous selection is discarded (R01)', async () => {
+    const w = await mountTab('functions')
+    const a = { name: 'a', location: 'us-central1', fullName: 'projects/p/locations/us-central1/functions/a', state: 'ACTIVE', trigger: 'HTTPS' }
+    const b = { ...a, name: 'b', fullName: 'projects/p/locations/us-central1/functions/b' }
+    store.tabs.functions.data = [a, b]
+    await flushPromises()
+    const pending = {}
+    store.fetchFunctionDetail = (location, name) => new Promise(resolve => { pending[name] = resolve })
+    const items = w.findAll('.sidebar-item[role="button"]')
+    await items[0].trigger('click')
+    await items[1].trigger('click')
+    pending.b({ name: 'b', state: 'ACTIVE', runtime: 'nodejs22' })
+    await flushPromises()
+    pending.a({ name: 'a', state: 'ACTIVE', runtime: 'python312' })
+    await flushPromises()
+    expect(w.text()).toContain('nodejs22')
+    expect(w.text()).not.toContain('python312')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

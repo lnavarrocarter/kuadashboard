@@ -3005,8 +3005,25 @@ const crPanel = reactive({
   detail: null, detailLoading: false, detailError: null,
   logs: [], logsLoading: false, logsError: null, logsHours: 3
 })
+// A detail/log response is applied only if it is still the newest read for that
+// panel and the panel still shows the same resource with the same profile
+// (re-evaluation R01): a late answer for A never lands under B's header.
+const readTickets = new WeakMap()
+function readTicket(panel, slot, keyOf) {
+  const own = readTickets.get(panel) || {}
+  readTickets.set(panel, own)
+  const id = (own[slot] || 0) + 1
+  own[slot] = id
+  const key = keyOf(panel.resource)
+  const profile = selectedProfileId.value
+  return () => own[slot] === id && keyOf(panel.resource) === key && selectedProfileId.value === profile
+}
+const crKey = r => r ? `${r.region}/${r.name}` : ''
+const vmKey = r => r ? `${r.zone}/${r.name}` : ''
+const sqlKey = r => r ? r.name : ''
+
 function selectCloudRun(svc) {
-  const same = crPanel.resource?.name === svc.name
+  const same = crKey(crPanel.resource) === crKey(svc)
   crPanel.resource = svc
   if (!same) { crPanel.tab = 'overview'; crPanel.detail = null; crPanel.logs = [] }
   crSwitchTab(crPanel.tab)
@@ -3015,32 +3032,29 @@ async function crSwitchTab(tab) {
   crPanel.tab = tab
   const svc = crPanel.resource; if (!svc) return
   if (tab === 'overview' || tab === 'revisions' || tab === 'variables' || tab === 'labels') {
-    if (crPanel.detail && crPanel.detail._svc === svc.name) return
+    if (crPanel.detail && crPanel.detail._svc === crKey(svc)) return
+    const current = readTicket(crPanel, 'detail', crKey)
     crPanel.detailLoading = true; crPanel.detailError = null
     try {
       const d = await gcpStore.fetchCloudRunDetail(svc.region, svc.name)
-      crPanel.detail = { ...d, _svc: svc.name }
-    } catch (e) { crPanel.detailError = e.message }
-    finally { crPanel.detailLoading = false }
+      if (current()) crPanel.detail = { ...d, _svc: crKey(svc) }
+    } catch (e) { if (current()) crPanel.detailError = e.message }
+    finally { if (current()) crPanel.detailLoading = false }
   } else if (tab === 'logs') {
-    crPanel.logsLoading = true; crPanel.logsError = null
-    try {
-      const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
-      crPanel.logs = r?.entries || []
-    } catch (e) { crPanel.logsError = e.message }
-    finally { crPanel.logsLoading = false }
+    await crLoadLogs()
   } else if (tab === 'metrics') {
     await loadMetrics(crMetrics, CR_METRICS, svc)
   }
 }
 async function crLoadLogs() {
   const svc = crPanel.resource; if (!svc) return
+  const current = readTicket(crPanel, 'logs', crKey)
   crPanel.logsLoading = true; crPanel.logsError = null
   try {
     const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
-    crPanel.logs = r?.entries || []
-  } catch (e) { crPanel.logsError = e.message }
-  finally { crPanel.logsLoading = false }
+    if (current()) crPanel.logs = r?.entries || []
+  } catch (e) { if (current()) crPanel.logsError = e.message }
+  finally { if (current()) crPanel.logsLoading = false }
 }
 
 // ── Compute VMs master-detail panel ──────────────────────────────────────────
@@ -3060,12 +3074,13 @@ async function vmSwitchTab(tab) {
   const vm = vmPanel.resource; if (!vm) return
   if (tab === 'overview' || tab === 'disks' || tab === 'network' || tab === 'labels') {
     if (vmPanel.detail && vmPanel.detail._key === `${vm.zone}/${vm.name}`) return
+    const current = readTicket(vmPanel, 'detail', vmKey)
     vmPanel.detailLoading = true; vmPanel.detailError = null
     try {
       const d = await gcpStore.fetchVmDetail(vm.zone, vm.name)
-      vmPanel.detail = { ...d, _key: `${vm.zone}/${vm.name}` }
-    } catch (e) { vmPanel.detailError = e.message }
-    finally { vmPanel.detailLoading = false }
+      if (current()) vmPanel.detail = { ...d, _key: vmKey(vm) }
+    } catch (e) { if (current()) vmPanel.detailError = e.message }
+    finally { if (current()) vmPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await vmLoadLogs()
   } else if (tab === 'metrics') {
@@ -3075,12 +3090,13 @@ async function vmSwitchTab(tab) {
 }
 async function vmLoadLogs() {
   const vm = vmPanel.resource; if (!vm) return
+  const current = readTicket(vmPanel, 'logs', vmKey)
   vmPanel.logsLoading = true; vmPanel.logsError = null
   try {
     const r = await gcpStore.fetchVmLogs(vm.zone, vm.name, { hours: vmPanel.logsHours })
-    vmPanel.logs = r?.entries || []
-  } catch (e) { vmPanel.logsError = e.message }
-  finally { vmPanel.logsLoading = false }
+    if (current()) vmPanel.logs = r?.entries || []
+  } catch (e) { if (current()) vmPanel.logsError = e.message }
+  finally { if (current()) vmPanel.logsLoading = false }
 }
 
 // ── Cloud SQL master-detail panel ─────────────────────────────────────────────
@@ -3100,12 +3116,13 @@ async function sqlSwitchTab(tab) {
   const inst = sqlPanel.resource; if (!inst) return
   if (tab === 'overview' || tab === 'config' || tab === 'connection' || tab === 'labels') {
     if (sqlPanel.detail && sqlPanel.detail._inst === inst.name) return
+    const current = readTicket(sqlPanel, 'detail', sqlKey)
     sqlPanel.detailLoading = true; sqlPanel.detailError = null
     try {
       const d = await gcpStore.fetchSqlDetail(inst.name)
-      sqlPanel.detail = { ...d, _inst: inst.name }
-    } catch (e) { sqlPanel.detailError = e.message }
-    finally { sqlPanel.detailLoading = false }
+      if (current()) sqlPanel.detail = { ...d, _inst: inst.name }
+    } catch (e) { if (current()) sqlPanel.detailError = e.message }
+    finally { if (current()) sqlPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await sqlLoadLogs()
   } else if (tab === 'metrics') {
@@ -3114,12 +3131,13 @@ async function sqlSwitchTab(tab) {
 }
 async function sqlLoadLogs() {
   const inst = sqlPanel.resource; if (!inst) return
+  const current = readTicket(sqlPanel, 'logs', sqlKey)
   sqlPanel.logsLoading = true; sqlPanel.logsError = null
   try {
     const r = await gcpStore.fetchSqlLogs(inst.name, { hours: sqlPanel.logsHours })
-    sqlPanel.logs = r?.entries || []
-  } catch (e) { sqlPanel.logsError = e.message }
-  finally { sqlPanel.logsLoading = false }
+    if (current()) sqlPanel.logs = r?.entries || []
+  } catch (e) { if (current()) sqlPanel.logsError = e.message }
+  finally { if (current()) sqlPanel.logsLoading = false }
 }
 
 // ── Cloud Functions master-detail panel ───────────────────────────────────────
@@ -3141,12 +3159,13 @@ async function fnSwitchTab(tab) {
   const fn = fnPanel.resource; if (!fn) return
   if (tab === 'overview' || tab === 'variables') {
     if (fnPanel.detail && fnPanel.detail._fn === fnKey(fn)) return
+    const current = readTicket(fnPanel, 'detail', fnKey)
     fnPanel.detailLoading = true; fnPanel.detailError = null
     try {
       const d = await gcpStore.fetchFunctionDetail(fn.location, fn.name)
-      fnPanel.detail = { ...d, _fn: fnKey(fn) }
-    } catch (e) { fnPanel.detailError = e.message }
-    finally { fnPanel.detailLoading = false }
+      if (current()) fnPanel.detail = { ...d, _fn: fnKey(fn) }
+    } catch (e) { if (current()) fnPanel.detailError = e.message }
+    finally { if (current()) fnPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await fnLoadLogs()
   } else if (tab === 'metrics') {
@@ -3155,12 +3174,13 @@ async function fnSwitchTab(tab) {
 }
 async function fnLoadLogs() {
   const fn = fnPanel.resource; if (!fn) return
+  const current = readTicket(fnPanel, 'logs', fnKey)
   fnPanel.logsLoading = true; fnPanel.logsError = null
   try {
     const r = await gcpStore.fetchFunctionLogs(fn.location, fn.name, { hours: fnPanel.logsHours })
-    fnPanel.logs = r?.entries || []
-  } catch (e) { fnPanel.logsError = e.message }
-  finally { fnPanel.logsLoading = false }
+    if (current()) fnPanel.logs = r?.entries || []
+  } catch (e) { if (current()) fnPanel.logsError = e.message }
+  finally { if (current()) fnPanel.logsLoading = false }
 }
 function fnRetryDetail() { fnPanel.detail = null; fnSwitchTab(fnPanel.tab) }
 function fnPanelInvoke() { fnPanel.tab = 'invoke' }
@@ -3171,7 +3191,7 @@ async function fnPanelDoInvoke() {
     let payload = {}
     try { payload = JSON.parse(fnPanel.invokePayload || '{}') } catch { toast(t('awsv.toastInvalidJson'), 'error'); return }
     const res = await gcpStore.invokeFunction(fn.location, fn.name, payload)
-    fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
+    if (fnKey(fnPanel.resource) === fnKey(fn)) fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
   } catch (e) { toast(e.message, 'error') }
   finally { fnPanel.invoking = false }
 }

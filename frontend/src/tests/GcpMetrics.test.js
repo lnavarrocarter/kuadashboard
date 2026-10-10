@@ -46,6 +46,21 @@ describe('per-metric states (G06)', () => {
     expect(panel.state.requests.status).toBe('ok')
   })
 
+  it('a late answer for a previous resource never overwrites the current one (R01)', async () => {
+    const panel = createMetricsPanel()
+    const pending = {}
+    const fetchSeries = (metric, filter) => new Promise(resolve => { pending[filter.includes('"a"') ? 'a' : 'b'] = resolve })
+    const one = [CR_METRICS[0]]
+    const first = loadMetricSet(fetchSeries, panel, one, { name: 'a', region: 'r' })
+    const second = loadMetricSet(fetchSeries, panel, one, { name: 'b', region: 'r' })
+    pending.b({ points: [{ x: 't', y: 200 }], seriesCount: 1 })
+    await second
+    pending.a({ points: [{ x: 't', y: 100 }], seriesCount: 1 })
+    await first
+    expect(panel.data.requests[0].y).toBe(200)
+    expect(panel.loading).toBe(false)
+  })
+
   it('the chart shows the error with Retry, and "no samples" for an empty series', async () => {
     const err = mount(GcpMetricsChart, { props: { label: 'Latency', state: { status: 'error', error: 'denied', errorKind: 'permission' } } })
     expect(err.text()).toContain('Insufficient permission')

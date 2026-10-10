@@ -50,6 +50,18 @@ export const FN_METRICS = [
     aligner: 'ALIGN_MEAN', reducer: 'REDUCE_SUM', label: 'gcpv.metricActiveInstances', unit: '', note: 'gcpv.audit.agg.avgInstances', color: '#34d399' },
 ]
 
+// Each read takes a ticket per metric (and per set): a response is applied only
+// while its ticket is the newest, so a late answer for the previous resource,
+// range or retry never overwrites the current chart (re-evaluation R01).
+const tickets = new WeakMap()
+function take(panel, key) {
+  const own = tickets.get(panel) || {}
+  tickets.set(panel, own)
+  own[key] = (own[key] || 0) + 1
+  const id = own[key]
+  return () => tickets.get(panel)?.[key] === id
+}
+
 export function createMetricsPanel() {
   return { loading: false, error: null, hours: 1, data: {}, state: {} }
 }
@@ -60,11 +72,13 @@ export function scalePoints(points = [], scale = 1) {
 
 // Loads one metric into panel.data/panel.state. Errors stay on that metric.
 export async function loadMetric(fetchSeries, panel, m, target) {
+  const current = take(panel, m.key)
   panel.state = { ...panel.state, [m.key]: { status: 'loading' } }
   try {
     const res = await fetchSeries(m.metric, m.filter(target), {
       hours: panel.hours, aligner: m.aligner, period: m.period || '60', reducer: m.reducer,
     })
+    if (!current()) return
     const points = scalePoints(res?.points || [], m.scale || 1)
     // Several series (unexpected without groupBy) are reported, not merged.
     const multi = (res?.seriesCount || 0) > 1 && !points.length
@@ -77,13 +91,15 @@ export async function loadMetric(fetchSeries, panel, m, target) {
       partial: !!res?.partial,
     } }
   } catch (e) {
+    if (!current()) return
     panel.data = { ...panel.data, [m.key]: [] }
     panel.state = { ...panel.state, [m.key]: { status: 'error', error: e.message, errorKind: e.details?.errorInfo?.kind || 'unknown' } }
   }
 }
 
 export async function loadMetricSet(fetchSeries, panel, metrics, target) {
+  const current = take(panel, '*set')
   panel.loading = true; panel.error = null; panel.data = {}; panel.state = {}
   try { await Promise.all(metrics.map(m => loadMetric(fetchSeries, panel, m, target))) }
-  finally { panel.loading = false }
+  finally { if (current()) panel.loading = false }
 }
