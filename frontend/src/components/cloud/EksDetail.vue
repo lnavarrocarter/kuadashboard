@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="eksd-backdrop" @mousedown.self="$emit('close')">
-      <div class="eksd-modal">
+      <div class="eksd-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="eksd-header">
@@ -12,7 +12,7 @@
             <span v-if="cluster?.status" :class="['eksd-state', stateClass(cluster.status)]">{{ cluster.status }}</span>
             <span v-if="cluster?.region" class="badge-gray">{{ cluster.region }}</span>
           </div>
-          <button class="eksd-close" @click="$emit('close')">✕</button>
+          <button class="eksd-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->
@@ -235,6 +235,7 @@
 import { computed, ref, watch } from 'vue'
 import { useAwsStore } from '../../stores/useAwsStore'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 
 const props = defineProps({

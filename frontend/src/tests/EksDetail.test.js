@@ -162,7 +162,7 @@ describe('AwsView EKS table (#69)', () => {
     return w.find('.tab-panel table')
   }
 
-  it('adds Node groups and EC2 columns and an Info action', async () => {
+  it('adds Node groups and EC2 columns and a Details action', async () => {
     const table = await mountEksTable([
       { ...CLUSTER_ROW, endpoint: 'https://abc.eks.amazonaws.com', tags: {}, nodegroups: ['general', 'arm'], instanceCount: 3 },
     ])
@@ -173,7 +173,7 @@ describe('AwsView EKS table (#69)', () => {
     expect(row).toContain('general')
     expect(row).toContain('arm')
     expect(row).toContain('3')
-    expect(row).toContain('Info')
+    expect(row).toContain('Details')
   })
 
   it('shows "?" when node groups or instances could not be read, and "—" for none', async () => {

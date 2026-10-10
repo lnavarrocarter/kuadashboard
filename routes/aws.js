@@ -26,6 +26,7 @@
  *   GET  /cloudwatch/dashboards/:name/widgets/:index/logs/estimate → bytes a log widget would scan
  *   POST /cloudwatch/dashboards/:name/widgets/:index/logs/query    → start a log widget's Logs Insights query
  *   GET  /cloudwatch/logs-query/:queryId                           → Logs Insights query status and results
+ *   GET  /account                           → account ID and region of the profile (STS, free; cached 1 h)
  *   GET  /eks                               → list EKS clusters
  *   GET  /elb                               → load balancers (ALB/NLB/GWLB/Classic) with listeners and target health
  *   GET  /elb/detail?arn=|name=             → listener rules, attributes and tags of one load balancer
@@ -202,6 +203,8 @@ const { listLoadBalancers, describeLoadBalancer } = require('../lib/awsLoadBalan
 const { getMetricHistory } = require('../lib/metricHistory');
 const { getCloudHistory } = require('../lib/cloudHistory');
 const { classifyAwsError, buildAccessRequest } = require('../lib/awsAccess');
+const { countExecutions } = require('../lib/awsStepFnCounts');
+const { loadLambdaTags, tagsFor } = require('../lib/awsLambdaTags');
 const { buildAwsInsights, createCostCache } = require('../lib/awsInsights');
 const { buildAwsAdvisor, collectS3Advisor } = require('../lib/advisor/aws');
 const { dashboardConsoleUrl, summarizeDashboard } = require('../lib/cloudwatchDashboards');
@@ -1021,6 +1024,18 @@ router.post('/ecs/:cluster/:service/stop', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /account ─────────────────────────────────────────────────────────────
+// Destination shown before write operations (EC2/ECS start and stop).
+
+router.get('/account', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    res.json({ account: await awsAccountId(profileId, cfg), region: cfg.region || null });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /ec2 ─────────────────────────────────────────────────────────────────
 
 router.get('/ec2', async (req, res) => {
@@ -1298,7 +1313,12 @@ router.get('/lambda', async (req, res) => {
   try {
     const cfg = await resolveAwsConfig(profileId);
     const { LambdaClient, ListFunctionsCommand } = require('@aws-sdk/client-lambda');
+    const { ResourceGroupsTaggingAPIClient, GetResourcesCommand } = require('@aws-sdk/client-resource-groups-tagging-api');
     const client = new LambdaClient(cfg);
+    const tagging = new ResourceGroupsTaggingAPIClient(cfg);
+    // Tags are optional: without tag:GetResources the list still loads, with tags null (not read).
+    const tagsRead = loadLambdaTags(input => tagging.send(new GetResourcesCommand(input)))
+      .catch(err => { console.warn('[aws] lambda tags:', err.message); return null; });
     const all = [];
     let marker;
     do {
@@ -1306,6 +1326,8 @@ router.get('/lambda', async (req, res) => {
       all.push(...(resp.Functions || []));
       marker = resp.NextMarker;
     } while (marker);
+    const tagResult = await tagsRead;
+    // ListFunctions does not return State; the function detail (GetFunction) shows it.
     res.json(all.map(f => ({
       name:         f.FunctionName,
       runtime:      f.Runtime,
@@ -1314,10 +1336,9 @@ router.get('/lambda', async (req, res) => {
       timeout:      f.Timeout,
       lastModified: f.LastModified,
       description:  f.Description,
-      state:        f.State,
       arn:          f.FunctionArn,
       logGroup:     f.LoggingConfig?.LogGroup || `/aws/lambda/${f.FunctionName}`,
-      tags:         [],
+      tags:         tagsFor(f.FunctionName, tagResult),
     })));
   } catch (err) { handleErr(res, err); }
 });
@@ -2461,16 +2482,7 @@ router.get('/stepfunctions/executions/count', async (req, res) => {
     const cfg = await resolveAwsConfig(profileId);
     const { SFNClient, ListExecutionsCommand } = require('@aws-sdk/client-sfn');
     const client = new SFNClient(cfg);
-    const [runningRes, failedRes, timedOutRes] = await Promise.allSettled([
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'RUNNING',   maxResults: 1000 })),
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'FAILED',    maxResults: 100  })),
-      client.send(new ListExecutionsCommand({ stateMachineArn: arn, statusFilter: 'TIMED_OUT', maxResults: 100  })),
-    ]);
-    res.json({
-      running:   runningRes.status  === 'fulfilled' ? (runningRes.value.executions?.length  || 0) : 0,
-      failed:    failedRes.status   === 'fulfilled' ? (failedRes.value.executions?.length   || 0) : 0,
-      timedOut:  timedOutRes.status === 'fulfilled' ? (timedOutRes.value.executions?.length || 0) : 0,
-    });
+    res.json(await countExecutions(input => client.send(new ListExecutionsCommand(input)), arn));
   } catch (err) { handleErr(res, err); }
 });
 

@@ -16,12 +16,12 @@
       </div>
       <table class="cloud-table">
         <thead><tr>
-          <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-          <th :class="thClass('healthRank')" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon">{{ sortIcon('healthRank') }}</span></th>
-          <th :class="thClass('typeLabel')" @click="sortBy('typeLabel')">{{ t('elb.type') }} <span class="sort-icon">{{ sortIcon('typeLabel') }}</span></th>
+          <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+          <th :class="thClass('healthRank')" :aria-sort="ariaSort('healthRank')"><button type="button" class="th-sort" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('healthRank') }}</span></button></th>
+          <th :class="thClass('typeLabel')" :aria-sort="ariaSort('typeLabel')"><button type="button" class="th-sort" @click="sortBy('typeLabel')">{{ t('elb.type') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('typeLabel') }}</span></button></th>
           <th>{{ t('elb.dnsName') }}</th>
           <th>{{ t('elb.listeners') }}</th>
-          <th :class="thClass('healthyRatio')" @click="sortBy('healthyRatio')" :title="t('elb.targetsHint')">{{ t('elb.targets') }} <span class="sort-icon">{{ sortIcon('healthyRatio') }}</span></th>
+          <th :class="thClass('healthyRatio')" :title="t('elb.targetsHint')" :aria-sort="ariaSort('healthyRatio')"><button type="button" class="th-sort" @click="sortBy('healthyRatio')">{{ t('elb.targets') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('healthyRatio') }}</span></button></th>
           <th></th>
         </tr></thead>
         <tbody>
@@ -163,6 +163,8 @@ import { filterRows, formatDate, HEALTH_RANK } from '../messaging/messagingForma
 
 const props = defineProps({
   search: { type: String, default: '' },
+  // Overview incident focus: only load balancers that need attention.
+  attentionOnly: { type: Boolean, default: false },
   applicationId: { type: String, default: '' },
   profileId: { type: String, default: '' },
   addingResourceId: { type: String, default: '' },
@@ -170,7 +172,7 @@ const props = defineProps({
 const emit = defineEmits(['request-access', 'add-to-application'])
 const awsStore = useAwsStore()
 const { t } = useI18n()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 
 const selected = ref(null)
 const detail = ref(null)
@@ -179,7 +181,9 @@ const detailError = ref('')
 
 const TYPE_LABELS = { application: 'ALB', network: 'NLB', gateway: 'GWLB', classic: 'Classic' }
 
-const rows = computed(() => filterRows(awsStore.loadBalancers, props.search).map(lb => {
+const rows = computed(() => filterRows(awsStore.loadBalancers, props.search)
+  .filter(lb => !props.attentionOnly || ['warning', 'critical'].includes(lb.health?.status))
+  .map(lb => {
   const targets = lb.targetGroups.reduce((sum, group) => ({
     total: sum.total + group.targets.total,
     healthy: sum.healthy + group.targets.healthy,

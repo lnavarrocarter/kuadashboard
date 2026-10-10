@@ -134,124 +134,124 @@
         <div v-if="activeProvider === 'kubernetes' && kubeNavOpen" class="kube-nav-backdrop" @click="closeKubeNav"></div>
         <nav id="kube-nav" ref="kubeNavRef" :class="['sidebar', 'kube-nav', { open: kubeNavOpen }]" v-if="activeProvider === 'kubernetes'" :aria-label="t('nav.kubeResources')" :inert="narrowLayout && !kubeNavOpen ? true : undefined" @keydown.esc="closeKubeNav">
           <div class="sidebar-section">
-            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-overview' }]" :aria-current="(cloudView === 'kube-overview') ? 'page' : undefined"
-               @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
+               @click="setCloudView('kube-overview')" :aria-current="(cloudView === 'kube-overview') ? 'page' : undefined">{{ t('sidebar.overview') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
-            <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
-               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+            <button type="button" v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
-            <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
-               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+            <button type="button" v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
-            <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
-               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+            <button type="button" v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
-              href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
-              @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+            <button type="button" v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
+              :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+              @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
-            <a v-for="r in ['nodes','namespaces','events']" :key="r"
-               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
-               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
+            <button type="button" v-for="r in ['nodes','namespaces','events']" :key="r"
+               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               @click="setResource(r)" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined">{{ LABELS[r] }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.logs') }}</div>
-            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" :aria-current="(cloudView === 'kube-logs') ? 'page' : undefined" data-test="sidebar-kube-logs"
-               @click.prevent="setCloudView('kube-logs')">{{ t('sidebar.logsIntelligence') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
+               @click="setCloudView('kube-logs')" :aria-current="(cloudView === 'kube-logs') ? 'page' : undefined">{{ t('sidebar.logsIntelligence') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
-            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm' }]" :aria-current="(cloudView === 'helm') ? 'page' : undefined"
-               @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
-            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm-repos' }]" :aria-current="(cloudView === 'helm-repos') ? 'page' : undefined"
-               @click.prevent="setCloudView('helm-repos')">{{ t('sidebar.repositories') }}</a>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'helm' }]"
+               @click="setCloudView('helm')" :aria-current="(cloudView === 'helm') ? 'page' : undefined">{{ t('sidebar.releases') }}</button>
+            <button type="button" :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
+               @click="setCloudView('helm-repos')" :aria-current="(cloudView === 'helm-repos') ? 'page' : undefined">{{ t('sidebar.repositories') }}</button>
           </div>
         </nav>
 
         <!-- AWS sidebar -->
         <nav class="sidebar" v-if="activeProvider === 'aws'">
           <div class="sidebar-section">
-            <a :class="['sidebar-item', { active: awsTab === 'overview' }]"
-               @click.prevent="awsTab = 'overview'">{{ t('sidebar.overview') }}</a>
+            <button type="button" :class="['sidebar-item', { active: awsTab === 'overview' }]"
+               @click="awsTab = 'overview'" :aria-current="(awsTab === 'overview') ? 'page' : undefined">{{ t('sidebar.overview') }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
-            <a v-for="r in AWS_SIDEBAR.compute" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.containers') }}</div>
-            <a v-for="r in AWS_SIDEBAR.containers" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.containers" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
-            <a v-for="r in AWS_SIDEBAR.networking" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in AWS_SIDEBAR.storage" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
-            <a v-for="r in AWS_SIDEBAR.database" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
-            <a v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.integration') }}</div>
-            <a v-for="r in AWS_SIDEBAR.integration" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.integration" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">AI</div>
-            <a v-for="r in AWS_SIDEBAR.ai" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.ai" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
-            <a v-for="r in AWS_SIDEBAR.security" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.monitoring') }}</div>
-            <a v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.monitoring" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.management') }}</div>
-            <a v-for="r in AWS_SIDEBAR.management" :key="r.id"
+            <button type="button" v-for="r in AWS_SIDEBAR.management" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
-               @click.prevent="awsTab = r.id">{{ r.label }}</a>
+               @click="awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 
@@ -259,33 +259,33 @@
         <nav class="sidebar" v-if="activeProvider === 'vercel'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.projects') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.projects" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.deployments') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.deployments" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.config') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.config" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.advanced') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.advanced" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('vercel.sidebar.account') }}</div>
-            <a v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
+            <button type="button" v-for="r in VERCEL_SIDEBAR.account" :key="r.id"
                :class="['sidebar-item', { active: vercelTab === r.id }]"
-               @click.prevent="vercelTab = r.id">{{ r.label }}</a>
+               @click="vercelTab = r.id" :aria-current="(vercelTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 
@@ -293,81 +293,81 @@
         <nav class="sidebar" v-if="activeProvider === 'gcp'">
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.compute') }}</div>
-            <a v-for="r in GCP_SIDEBAR.compute" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.compute" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.database') }}</div>
-            <a v-for="r in GCP_SIDEBAR.database" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.database" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
-            <a v-for="r in GCP_SIDEBAR.storage" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.storage" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.serverless') }}</div>
-            <a v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.serverless" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.messaging') }}</div>
-            <a v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.messaging" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.security') }}</div>
-            <a v-for="r in GCP_SIDEBAR.security" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.security" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.analytics') }}</div>
-            <a v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.analytics" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workflows') }}</div>
-            <a v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.workflows" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.networking') }}</div>
-            <a v-for="r in GCP_SIDEBAR.networking" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.networking" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cache') }}</div>
-            <a v-for="r in GCP_SIDEBAR.cache" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.cache" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.async') }}</div>
-            <a v-for="r in GCP_SIDEBAR.async" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.async" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.devops') }}</div>
-            <a v-for="r in GCP_SIDEBAR.devops" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.devops" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.iam') }}</div>
-            <a v-for="r in GCP_SIDEBAR.iam" :key="r.id"
+            <button type="button" v-for="r in GCP_SIDEBAR.iam" :key="r.id"
                :class="['sidebar-item', { active: gcpTab === r.id }]"
-               @click.prevent="gcpTab = r.id">{{ r.label }}</a>
+               @click="gcpTab = r.id" :aria-current="(gcpTab === r.id) ? 'page' : undefined">{{ r.label }}</button>
           </div>
         </nav>
 
@@ -406,7 +406,7 @@
               />
             </div>
           </template>
-          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" />
+          <AwsView     ref="awsViewRef" v-else-if="activeProvider === 'aws'"    :active-service="awsTab" :application-id="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'aws' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" @open-kubernetes-logs="openObservabilityKubernetesLogs" @navigate-tab="tab => { awsTab = tab }" @open-observability="openApplicationObservability" :saved-filters="awsFiltersByTab" :saved-filters-seq="awsFiltersSeq" @filters-change="(tab, filters) => { awsFiltersByTab[tab] = filters }" />
           <GcpView     ref="gcpViewRef" v-else-if="activeProvider === 'gcp'"    :active-service="gcpTab" :application-id="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'gcp' ? activeApplicationContext.environment : ''" @connect-gke="handleGkeConnect" @open-architecture="openApplicationArchitecture" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
           <KUAppsView
@@ -526,6 +526,7 @@ import { useVercelStore }      from './stores/useVercelStore'
 import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
+import { useViewUrl }          from './composables/useViewUrl'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { syncServerCacheSettings } from './composables/serverCacheSettings'
@@ -911,12 +912,81 @@ const {
   urlApplicationId,
 } = useArchitectureContext({ storage: LS, awsProfileId, setProvider })
 
-// A link with ?view=kubernetes names a cluster view; it wins over a stale ?app=.
+// ─── View in the URL ──────────────────────────────────────────────────────────
+// ?view=aws&service=lambda&profile=<id> opens that view; Back/Forward move
+// between providers and AWS services (composables/useViewUrl.js).
+const AWS_TABS = new Set(['overview', ...Object.values(AWS_SIDEBAR).flat().map(item => item.id)])
+// Search and filters per AWS tab. They live here, not in AwsView, so leaving AWS
+// for another provider and coming back keeps them; a link or Back sets them.
+const awsFiltersByTab = reactive({})
+const awsFiltersSeq = ref(0) // bumped when a link/Back brings filters: AwsView applies them again
+function setLinkedAwsFilters(service, filters) {
+  awsFiltersByTab[service] = { ...(filters || {}) }
+  awsFiltersSeq.value += 1
+}
+const viewUrl = useViewUrl({
+  state: () => ({
+    view: activeProvider.value,
+    service: activeProvider.value === 'aws' ? awsTab.value : '',
+    profile: activeProvider.value === 'aws' ? awsProfileId.value : '',
+    filters: activeProvider.value === 'aws' ? { ...(awsFiltersByTab[awsTab.value] || {}) } : {},
+  }),
+  navigation: [activeProvider, awsTab],
+  context: [awsProfileId, activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {})],
+  onPop: applyViewFromHistory,
+})
+// A profile named by a link is only selected once it is known to exist here.
+let linkedAwsProfile = ''
+function applyLinkedView(linked) {
+  if (!linked.view) return
+  activeProvider.value = linked.view
+  if (linked.view === 'aws' && AWS_TABS.has(linked.service)) {
+    awsTab.value = linked.service
+    setLinkedAwsFilters(linked.service, linked.filters)
+  }
+  if (linked.view === 'aws' && linked.profile && linked.profile !== awsProfileId.value) linkedAwsProfile = linked.profile
+}
+function awsProfileExists(id) {
+  if (id.startsWith('local:')) return awsLocalProfiles.value.some(profile => `local:${profile.name}` === id)
+  return envStore.profiles.some(profile => profile.id === id && profile.provider === 'aws')
+}
+function applyLinkedAwsProfile() {
+  if (!linkedAwsProfile) return
+  const id = linkedAwsProfile
+  linkedAwsProfile = ''
+  if (awsProfileExists(id)) awsProfileId.value = id
+  else toast(t('viewUrl.profileMissing', { profile: id }), 'warn')
+}
+async function applyViewFromHistory(linked) {
+  // Kubernetes entries are applied by onKubePopState (context, namespace, resource).
+  if (!linked.view || linked.view === 'kubernetes') return
+  await setProvider(linked.view)
+  if (linked.view !== 'aws') return
+  if (AWS_TABS.has(linked.service)) {
+    awsTab.value = linked.service
+    setLinkedAwsFilters(linked.service, linked.filters)
+  }
+  if (linked.profile && linked.profile !== awsProfileId.value) {
+    if (!awsProfileExists(linked.profile)) {
+      toast(t('viewUrl.profileMissing', { profile: linked.profile }), 'warn')
+      return
+    }
+    selectProfile('aws', linked.profile)
+    // Never a silent switch: the view now reads another account.
+    toast(t('viewUrl.profileFromHistory', { profile: linked.profile }), 'info')
+  }
+}
+applyLinkedView(viewUrl.initial)
+viewUrl.start()
+onUnmounted(() => viewUrl.stop())
+
+// A link with ?view=kubernetes names a cluster view (lib/kubeUrl.js, its own params and Back).
 const urlKubeView = readKubeUrl(globalThis.location?.search || '')
 
 // A link with ?app=<id> opens that KUA Application in KUApps (#149).
 async function openApplicationFromUrl() {
-  if (!urlApplicationId || urlKubeView) return
+  // A link that names another view wins over a leftover ?app= (older URLs kept it everywhere).
+  if (!urlApplicationId || urlKubeView || (viewUrl.initial.view && viewUrl.initial.view !== 'kuapps')) return
   try {
     const context = applicationContextFromView(await api('GET', `/api/kua-apps/applications/${encodeURIComponent(urlApplicationId)}`))
     if (!context) return
@@ -1580,6 +1650,7 @@ onMounted(async () => {
     if (hasCloudConnections.value && !availableObservabilityProviders.value.some(provider => provider.id === observabilityProvider.value)) {
       observabilityProvider.value = availableObservabilityProviders.value[0].id
     }
+    applyLinkedAwsProfile()
     // Restaurar perfiles AWS/GCP guardados
     if (awsProfileId.value) awsStore.setActiveProfile(awsProfileId.value)
     if (gcpProfileId.value) gcpStore.setActiveProfile(gcpProfileId.value)

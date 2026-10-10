@@ -13,7 +13,7 @@
           <div class="rdpc-hdr-right">
             <span :class="['rdpc-status', sessionStatus]">{{ statusLabel }}</span>
             <button class="rdpc-tbtn" :title="t('conn.fullscreen')" @click="toggleFullscreen">⛶</button>
-            <button class="rdpc-close" @click="$emit('close')">✕</button>
+            <button class="rdpc-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
           </div>
         </div>
 
@@ -91,7 +91,7 @@
           <div v-if="pasteModalOpen" class="rdpc-paste-panel">
             <div class="rdpc-paste-head">
               <span>{{ t('conn.pasteTitle') }}</span>
-              <button class="rdpc-close" @click="closePasteModal">✕</button>
+              <button class="rdpc-close" @click="closePasteModal" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
             </div>
             <textarea
               v-model="pasteText"

@@ -100,7 +100,10 @@ function selectNode(node) {
   selectedName.value = node.name
   selectedId.value = visit?.id ?? null
 }
-function date(value) { return value == null ? '-' : new Date(value).toLocaleString() }
+function date(value) {
+  const parsed = value == null || (typeof value === 'object' && !(value instanceof Date)) ? null : new Date(value)
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleString() : '-'
+}
 function duration(visit) {
   if (visit.start == null) return '-'
   if (!visit.end && visit.status === 'RUNNING') return t('sfx.status.RUNNING')

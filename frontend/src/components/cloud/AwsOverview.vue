@@ -8,7 +8,7 @@
           <span v-if="data">· {{ t('overview.updated', { ago: updatedLabel }) }}</span>
         </div>
       </div>
-      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('awsActivity.refreshHint')" @click="load({ force: true })">
+      <button class="btn btn-icon" :class="{ refreshing: loading }" :disabled="loading" :title="t('awsFresh.overviewRefreshHint')" @click="load({ force: true })">
         <i data-lucide="refresh-cw"></i>
       </button>
     </div>

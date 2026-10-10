@@ -22,7 +22,10 @@ export function readKubeUrl(search = '') {
 /** The href for `state`, or with the Kubernetes params removed when `state` is null. */
 export function kubeUrlHref(href, state) {
   const url = new URL(href)
-  for (const key of KUBE_PARAMS) url.searchParams.delete(key)
+  // `view` also names the other providers (composables/useViewUrl.js): only drop ours.
+  for (const key of KUBE_PARAMS) {
+    if (key !== 'view' || url.searchParams.get('view') === 'kubernetes') url.searchParams.delete(key)
+  }
   if (state) {
     for (const key of OTHER_VIEW_PARAMS) url.searchParams.delete(key)
     url.searchParams.set('view', 'kubernetes')
@@ -44,7 +47,8 @@ export function kubeUrlChange(currentHref, nextHref) {
   if (currentHref === nextHref) return null
   const current = readKubeUrl(new URL(currentHref).search)
   const next = readKubeUrl(new URL(nextHref).search)
-  if (!current || !next) return 'replace'
+  // Entering: the provider switch already added ?view=kubernetes as its own entry.
+  if (!current || !next || !current.context) return 'replace'
   const moved = ['context', 'namespace', 'resource', 'name'].some(key => current[key] !== next[key])
   return moved ? 'push' : 'replace'
 }

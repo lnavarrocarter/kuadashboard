@@ -11,16 +11,16 @@
     <div v-else-if="!rows.length" class="empty-row">{{ search ? t('awsMsg.noMatches') : t('sns.empty') }}</div>
     <table v-else class="cloud-table">
       <thead><tr>
-        <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-        <th :class="thClass('healthRank')" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon">{{ sortIcon('healthRank') }}</span></th>
-        <th :class="thClass('subscriptionsConfirmed')" @click="sortBy('subscriptionsConfirmed')">{{ t('sns.subscriptions') }} <span class="sort-icon">{{ sortIcon('subscriptionsConfirmed') }}</span></th>
+        <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsMsg.name') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+        <th :class="thClass('healthRank')" :aria-sort="ariaSort('healthRank')"><button type="button" class="th-sort" @click="sortBy('healthRank')">{{ t('health.title') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('healthRank') }}</span></button></th>
+        <th :class="thClass('subscriptionsConfirmed')" :aria-sort="ariaSort('subscriptionsConfirmed')"><button type="button" class="th-sort" @click="sortBy('subscriptionsConfirmed')">{{ t('sns.subscriptions') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('subscriptionsConfirmed') }}</span></button></th>
         <th>{{ t('sns.protocols') }}</th>
-        <th :class="thClass('published24h')" @click="sortBy('published24h')" :title="t('sns.activityHint')">{{ t('sns.published24h') }} <span class="sort-icon">{{ sortIcon('published24h') }}</span></th>
-        <th :class="thClass('delivered24h')" @click="sortBy('delivered24h')">{{ t('sns.delivered24h') }} <span class="sort-icon">{{ sortIcon('delivered24h') }}</span></th>
-        <th :class="thClass('failed24h')" @click="sortBy('failed24h')">{{ t('sns.failed24h') }} <span class="sort-icon">{{ sortIcon('failed24h') }}</span></th>
-        <th :class="thClass('successRate')" @click="sortBy('successRate')" :title="t('sns.successRateHint')">{{ t('sns.successRate') }} <span class="sort-icon">{{ sortIcon('successRate') }}</span></th>
-        <th :class="thClass('filtered24h')" @click="sortBy('filtered24h')" :title="t('sns.filteredHint')">{{ t('sns.filtered24h') }} <span class="sort-icon">{{ sortIcon('filtered24h') }}</span></th>
-        <th :class="thClass('logRank')" @click="sortBy('logRank')" :title="t('sns.loggingHint')">{{ t('sns.logging') }} <span class="sort-icon">{{ sortIcon('logRank') }}</span></th>
+        <th :class="thClass('published24h')" :title="t('sns.activityHint')" :aria-sort="ariaSort('published24h')"><button type="button" class="th-sort" @click="sortBy('published24h')">{{ t('sns.published24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('published24h') }}</span></button></th>
+        <th :class="thClass('delivered24h')" :aria-sort="ariaSort('delivered24h')"><button type="button" class="th-sort" @click="sortBy('delivered24h')">{{ t('sns.delivered24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('delivered24h') }}</span></button></th>
+        <th :class="thClass('failed24h')" :aria-sort="ariaSort('failed24h')"><button type="button" class="th-sort" @click="sortBy('failed24h')">{{ t('sns.failed24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('failed24h') }}</span></button></th>
+        <th :class="thClass('successRate')" :title="t('sns.successRateHint')" :aria-sort="ariaSort('successRate')"><button type="button" class="th-sort" @click="sortBy('successRate')">{{ t('sns.successRate') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('successRate') }}</span></button></th>
+        <th :class="thClass('filtered24h')" :title="t('sns.filteredHint')" :aria-sort="ariaSort('filtered24h')"><button type="button" class="th-sort" @click="sortBy('filtered24h')">{{ t('sns.filtered24h') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('filtered24h') }}</span></button></th>
+        <th :class="thClass('logRank')" :title="t('sns.loggingHint')" :aria-sort="ariaSort('logRank')"><button type="button" class="th-sort" @click="sortBy('logRank')">{{ t('sns.logging') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('logRank') }}</span></button></th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -75,7 +75,7 @@ const props = defineProps({ search: { type: String, default: '' }, activityLoadi
 const emit = defineEmits(['request-access'])
 const awsStore = useAwsStore()
 const { t } = useI18n()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 const selected = ref(null)
 
 const LOG_BADGE = { ok: 'ok', empty: 'empty', missing: 'missing', off: 'missing', unknown: 'empty', loading: 'empty' }

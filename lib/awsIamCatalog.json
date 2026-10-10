@@ -61,7 +61,8 @@
     "ec2:StopInstances"
   ],
   "GET /lambda": [
-    "lambda:ListFunctions"
+    "lambda:ListFunctions",
+    "tag:GetResources"
   ],
   "POST /lambda/:name/invoke": [
     "lambda:InvokeFunction"

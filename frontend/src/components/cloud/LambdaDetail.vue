@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="lmd-backdrop" @mousedown.self="$emit('close')">
-      <div class="lmd-modal">
+      <div class="lmd-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="lmd-header">
@@ -9,9 +9,9 @@
             <span class="lmd-icon">λ</span>
             <span>{{ fn?.name }}</span>
             <span v-if="fn?.runtime" class="lmd-badge runtime">{{ fn.runtime }}</span>
-            <span :class="['lmd-state', fn?.state]">{{ fn?.state }}</span>
+            <span v-if="data?.basic?.state" :class="['lmd-state', data.basic.state]">{{ data.basic.state }}</span>
           </div>
-          <button class="lmd-close" @click="$emit('close')">✕</button>
+          <button class="lmd-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->
@@ -377,6 +377,7 @@
 
 <script setup>
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 import { ref, computed, watch } from 'vue'
 

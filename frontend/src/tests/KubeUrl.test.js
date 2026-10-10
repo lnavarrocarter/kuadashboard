@@ -36,3 +36,15 @@ describe('Kubernetes view in the URL', () => {
   })
 })
 
+describe('Kubernetes and the other views share ?view= (useViewUrl)', () => {
+  const BASE = 'http://localhost:7192/'
+  it('leaving Kubernetes keeps the view another provider set', () => {
+    expect(kubeUrlHref(`${BASE}?view=aws&service=lambda&context=prod&ns=api`, null)).toBe(`${BASE}?view=aws&service=lambda`)
+    expect(kubeUrlHref(`${BASE}?view=kubernetes&context=prod`, null)).toBe(BASE)
+  })
+
+  it('the first cluster state after the provider switch replaces that entry', () => {
+    expect(kubeUrlChange(`${BASE}?view=kubernetes`, `${BASE}?view=kubernetes&context=prod&ns=api&resource=pods`)).toBe('replace')
+    expect(kubeUrlChange(`${BASE}?view=kubernetes&context=prod&resource=pods`, `${BASE}?view=kubernetes&context=prod&resource=services`)).toBe('push')
+  })
+})

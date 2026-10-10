@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="ec2d-backdrop" @mousedown.self="$emit('close')">
-      <div class="ec2d-modal">
+      <div class="ec2d-modal" v-dialog="() => $emit('close')">
 
         <!-- Header -->
         <div class="ec2d-header">
@@ -11,7 +11,7 @@
             <span class="ec2d-id-badge">{{ instance?.id }}</span>
             <span :class="['ec2d-state', instance?.state]">{{ instance?.state }}</span>
           </div>
-          <button class="ec2d-close" @click="$emit('close')">✕</button>
+          <button class="ec2d-close" @click="$emit('close')" :aria-label="t('action.close')" :title="t('action.close')">✕</button>
         </div>
 
         <!-- Tabs -->
@@ -301,6 +301,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from '../../composables/useI18n'
+import { vDialog } from '../../composables/vDialog'
 import { settings } from '../../composables/useSettings'
 
 const props = defineProps({

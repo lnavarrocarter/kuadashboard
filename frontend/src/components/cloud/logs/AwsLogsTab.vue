@@ -52,10 +52,10 @@
       <div v-else-if="!rows.length" class="empty-row">{{ search ? t('awsLogs.noMatches') : t('awsLogs.empty') }}</div>
       <table v-else class="cloud-table">
         <thead><tr>
-          <th :class="thClass('name')" @click="sortBy('name')">{{ t('awsLogs.colGroup') }} <span class="sort-icon">{{ sortIcon('name') }}</span></th>
-          <th :class="thClass('kind')" @click="sortBy('kind')">{{ t('awsLogs.colSource') }} <span class="sort-icon">{{ sortIcon('kind') }}</span></th>
-          <th :class="thClass('storedBytes')" @click="sortBy('storedBytes')" :title="t('awsLogs.storedHint')">{{ t('awsLogs.colStored') }} <span class="sort-icon">{{ sortIcon('storedBytes') }}</span></th>
-          <th :class="thClass('retentionInDays')" @click="sortBy('retentionInDays')">{{ t('awsLogs.colRetention') }} <span class="sort-icon">{{ sortIcon('retentionInDays') }}</span></th>
+          <th :class="thClass('name')" :aria-sort="ariaSort('name')"><button type="button" class="th-sort" @click="sortBy('name')">{{ t('awsLogs.colGroup') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('name') }}</span></button></th>
+          <th :class="thClass('kind')" :aria-sort="ariaSort('kind')"><button type="button" class="th-sort" @click="sortBy('kind')">{{ t('awsLogs.colSource') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('kind') }}</span></button></th>
+          <th :class="thClass('storedBytes')" :title="t('awsLogs.storedHint')" :aria-sort="ariaSort('storedBytes')"><button type="button" class="th-sort" @click="sortBy('storedBytes')">{{ t('awsLogs.colStored') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('storedBytes') }}</span></button></th>
+          <th :class="thClass('retentionInDays')" :aria-sort="ariaSort('retentionInDays')"><button type="button" class="th-sort" @click="sortBy('retentionInDays')">{{ t('awsLogs.colRetention') }} <span class="sort-icon" aria-hidden="true">{{ sortIcon('retentionInDays') }}</span></button></th>
           <th>{{ t('awsLogs.colCache') }}</th>
           <th></th>
         </tr></thead>
@@ -169,9 +169,12 @@
           <div class="cwl-usage">
             <div class="cwl-usage-label">
               {{ t('awsLogs.cacheUsage', { used: formatBytes(cache.totalBytes), budget: formatBytes(cache.budgetBytes) }) }}
-              <span class="text-dim">· {{ t('awsLogs.eventsCount', { n: cache.totalEvents }) }}</span>
+              <span class="text-dim">· {{ t('awsLogs.eventsCount', { n: Number(cache.totalEvents || 0).toLocaleString() }) }}</span>
             </div>
             <div class="cwl-bar" role="progressbar" :aria-valuenow="usage" aria-valuemin="0" aria-valuemax="100"><div :style="{ width: `${usage}%` }"></div></div>
+            <div v-if="cache.scope" class="cwl-hint" data-test="cache-scope">
+              {{ t('awsLogs.cacheScope', { region: cache.scope.region || cache.region || '—', groups: cache.scope.groups, size: formatBytes(cache.scope.bytes), events: Number(cache.scope.events || 0).toLocaleString() }) }}
+            </div>
           </div>
           <LogCacheBudget @changed="loadCache" />
           <button class="btn sm primary" :disabled="loading.sync || !cache.groups.length" @click="syncAll">{{ loading.sync ? t('awsLogs.syncing') : t('awsLogs.syncAll') }}</button>
@@ -181,7 +184,7 @@
           🔒 {{ t('awsLogs.protection', { algorithm: cache.encryption.algorithm, store: t(`awsLogs.keyStore_${cache.encryption.keyStore || 'pending'}`) }) }}
           <template v-if="cache.totalBytes"> · {{ t('awsLogs.compression', { raw: formatBytes(cache.totalRawBytes), stored: formatBytes(cache.totalBytes), ratio: compressionRatio(cache.totalRawBytes, cache.totalBytes) }) }}</template>
         </div>
-        <div v-if="!cache.groups.length" class="empty-row">{{ t('awsLogs.cacheEmpty') }}</div>
+        <div v-if="!cache.groups.length" class="empty-row">{{ t('awsLogs.cacheEmpty', { region: cache.scope?.region || cache.region || '—' }) }}</div>
         <table v-else class="cloud-table">
           <thead><tr>
             <th>{{ t('awsLogs.colGroup') }}</th>
@@ -381,7 +384,7 @@ const emit = defineEmits(['request-access'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const { toast } = useToast()
-const { sortBy, sortRows, sortIcon, thClass } = useSortable()
+const { sortBy, sortRows, sortIcon, thClass, ariaSort } = useSortable()
 
 const VIEWS = ['groups', 'cache', 'backup']
 const KINDS = ['all', 'aws', 'machine', 'custom']

@@ -79,6 +79,24 @@ describe('AwsLogsTab', () => {
     wrapper.unmount()
   })
 
+  it('labels the shared cache budget separately from this profile and region (A06)', async () => {
+    stubApi({
+      '/api/cloud/aws/cloudwatch/log-groups': { groups: [] },
+      '/api/cloud/aws/cloudwatch/log-cache': {
+        region: 'us-east-1', budgetBytes: 1024 * 1024 * 1024, totalBytes: 497 * 1024 * 1024, totalEvents: 13585236, maxWindowMs: 168 * HOUR, groups: [],
+        scope: { profileId: 'local:dev', region: 'us-east-1', groups: 0, bytes: 0, rawBytes: 0, events: 0 },
+      },
+    })
+    const wrapper = mount(AwsLogsTab, { props: { profileId: 'local:dev' } })
+    await flushPromises()
+    await wrapper.findAll('[role="tab"]')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.cwl-usage-label').text()).toMatch(/^This machine, all profiles: 497 MB of 1\.0 GB used · 13[,.]?585[,.]?236 events$/)
+    expect(wrapper.find('[data-test="cache-scope"]').text()).toBe('This profile in us-east-1: 0 group(s) · 0 B · 0 events')
+    expect(wrapper.find('.empty-row').text()).toContain('No cached log groups for this profile in us-east-1')
+    wrapper.unmount()
+  })
+
   it('shows backup coverage and opens an export in the archive browser', async () => {
     const calls = stubApi({
       '/api/cloud/aws/cloudwatch/log-groups': { groups: [] },
