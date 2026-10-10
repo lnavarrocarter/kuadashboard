@@ -27,8 +27,11 @@ describe('AwsView Lambda table (A05)', () => {
     const headers = w.findAll('.tab-panel table thead th').map(th => th.text())
     expect(headers.some(h => h.startsWith('State'))).toBe(false)
     expect(headers.some(h => h.startsWith('Log group'))).toBe(true)
-    const actions = w.find('tbody tr').findAll('button').map(b => b.text())
-    expect(actions).toEqual(expect.arrayContaining(['View logs', 'Configure logging', 'Details']))
+    const row = w.find('tbody tr')
+    expect(row.find('.row-actions').findAll(':scope > button').map(b => b.text())).toEqual(['Details', 'View logs'])
+    await row.find('[aria-haspopup="menu"]').trigger('click')
+    await flushPromises()
+    expect(row.findAll('[role="menuitem"]').map(b => b.text())).toEqual(['Tags', 'Config', 'Configure logging', 'Invoke…'])
 
     const tags = Object.fromEntries(w.findAll('tbody tr').map(tr => [tr.find('td').text(), tr.find('[data-test="lambda-tags"]')]))
     expect(tags.tagged.text()).toBe('team=shop')

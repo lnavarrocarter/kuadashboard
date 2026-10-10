@@ -46,12 +46,18 @@ describe('AWS write operations ask for confirmation (A01)', () => {
     await flushPromises()
     return w
   }
-  const rowButton = (w, rowText, label) => w.findAll('tbody tr')
-    .find(tr => tr.text().includes(rowText)).findAll('button').find(b => b.text() === label)
+  // Start/Stop live in the row "More" menu (A10).
+  async function menuItem(w, rowText, id) {
+    const row = w.findAll('tbody tr').find(tr => tr.text().includes(rowText))
+    const toggle = row.find('[aria-haspopup="menu"]')
+    if (toggle.attributes('aria-expanded') !== 'true') await toggle.trigger('click')
+    await flushPromises()
+    return row.find(`[data-test="menu-${id}"]`)
+  }
 
   it('shows destination, state and EKS/ASG ownership; cancelling sends nothing', async () => {
     const w = await mountTab('ec2', store => { store.ec2Instances = [NODE, OTHER] })
-    await rowButton(w, 'eks-node-1', 'Stop').trigger('click')
+    await (await menuItem(w, 'eks-node-1', 'stop')).trigger('click')
     await flushPromises()
     const dialog = w.find('[role="dialog"]')
     expect(dialog.text()).toContain('Stop EC2 instance eks-node-1?')
@@ -70,7 +76,7 @@ describe('AWS write operations ask for confirmation (A01)', () => {
   it('confirming stops only the shown instance, once, even with a double click', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     const w = await mountTab('ec2', store => { store.ec2Instances = [NODE, OTHER] })
-    await rowButton(w, 'bastion', 'Stop').trigger('click')
+    await (await menuItem(w, 'bastion', 'stop')).trigger('click')
     await flushPromises()
     const confirm = w.find('[data-test="confirm"]')
     expect(confirm.text()).toBe('Stop instance')
@@ -90,9 +96,9 @@ describe('AWS write operations ask for confirmation (A01)', () => {
         { name: 'worker', cluster: 'prod', status: 'ACTIVE', desired: 0, running: 0, tags: [] },
       ]
     })
-    expect(rowButton(w, 'api', 'Start').attributes('disabled')).toBeDefined()
-    expect(rowButton(w, 'worker', 'Stop').attributes('disabled')).toBeDefined()
-    await rowButton(w, 'api', 'Stop').trigger('click')
+    expect((await menuItem(w, 'api', 'start')).attributes('disabled')).toBeDefined()
+    expect((await menuItem(w, 'worker', 'stop')).attributes('disabled')).toBeDefined()
+    await (await menuItem(w, 'api', 'stop')).trigger('click')
     await flushPromises()
     expect(w.find('[role="dialog"]').text()).toContain('Sets the desired count to 0 (now 4)')
     expect(posts).toEqual([])

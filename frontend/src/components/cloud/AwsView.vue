@@ -104,18 +104,11 @@
               <td class="text-dim">{{ i.az }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ i.launchTime ? formatDate(i.launchTime) : '-' }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (i.tags || []).filter(tagEntry => tagEntry.Key !== 'Name')"
-                    :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="i.tags" />
               </td>
               <td>
                 <div class="row-actions">
                   <button class="btn sm" @click="openEc2Detail(i)">{{ t('awsv.act.details') }}</button>
-                  <button class="btn sm" @click="startEc2(i)" :disabled="i.state === 'running'">{{ t('action.start') }}</button>
-                  <button class="btn sm danger" @click="stopEc2(i)" :disabled="i.state === 'stopped'">{{ t('action.stop') }}</button>
-                  <button class="btn sm" @click="openTags('ec2', `EC2: ${i.name}`, i.id, i.tags)">{{ t('th.tags') }}</button>
-                  <button class="btn sm" @click="openConfig('ec2', `EC2: ${i.name}`, i, { id: i.id })">{{ t('sidebar.config') }}</button>
                   <!-- Linux → SSH, Windows → RDP -->
                   <template v-if="i.platform !== 'windows'">
                     <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e"
@@ -133,6 +126,7 @@
                     @click="openEc2Ssm(i)" :disabled="i.state !== 'running'">
                     ⚡ SSM
                   </button>
+                  <RowMenu :items="ec2MenuItems(i)" />
                 </div>
               </td>
             </tr>
@@ -165,17 +159,12 @@
               <td>{{ svc.running }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ svc.createdAt ? formatDate(svc.createdAt) : '-' }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (svc.tags || [])" :key="tagEntry.key || tagEntry.Key" class="tag-chip">{{ tagEntry.key || tagEntry.Key }}={{ tagEntry.value || tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="svc.tags" />
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="startEcs(svc)" :disabled="svc.desired > 0" :title="svc.desired > 0 ? t('awsv.op.ecsAlreadyRunning') : ''">{{ t('action.start') }}</button>
-                  <button class="btn sm danger" @click="stopEcs(svc)" :disabled="svc.desired === 0">{{ t('action.stop') }}</button>
                   <button class="btn sm" @click="openLogs('ecs', svc.name, svc.cluster)">{{ t('awsv.act.viewLogs') }}</button>
-                  <button class="btn sm" :title="t('awsv.act.configureLoggingHint')" @click="openLogging('ecs', svc)">{{ t('awsv.act.configureLogging') }}</button>
-                  <button class="btn sm" @click="openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name })">{{ t('sidebar.config') }}</button>
+                  <RowMenu :items="ecsMenuItems(svc)" />
                 </div>
               </td>
             </tr>
@@ -219,9 +208,7 @@
               </td>
               <td class="text-dim" style="white-space:nowrap">{{ c.createdAt ? formatDate(c.createdAt) : '-' }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="(v, k) in (c.tags || {})" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
-                </div>
+                <TagList :tags="c.tags" />
               </td>
               <td>
                 <div class="row-actions">
@@ -283,19 +270,13 @@
               </td>
               <td data-test="lambda-tags">
                 <span v-if="fn.tags === null || fn.tags === undefined" class="text-dim" :title="t('awsv.lambdaTagsNotReadHint')">{{ t('awsv.lambdaTagsNotRead') }}</span>
-                <span v-else-if="!Object.keys(fn.tags).length" class="text-dim">—</span>
-                <div v-else class="tag-chips">
-                  <span v-for="(v, k) in fn.tags" :key="k" class="tag-chip">{{ k }}={{ v }}</span>
-                </div>
+                <TagList v-else :tags="fn.tags" />
               </td>
               <td>
                 <div class="row-actions">
-                  <button class="btn sm" @click="openInvoke(fn)">{{ t('gcp.invoke') }}</button>
-                  <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('awsv.act.viewLogs') }}</button>
-                  <button class="btn sm" :title="t('awsv.act.configureLoggingHint')" @click="openLogging('lambda', fn)">{{ t('awsv.act.configureLogging') }}</button>
-                  <button class="btn sm" @click="openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags)">{{ t('th.tags') }}</button>
-                  <button class="btn sm" @click="openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name })">{{ t('sidebar.config') }}</button>
                   <button class="btn sm" @click="openLambdaDetail(fn)">{{ t('awsv.act.details') }}</button>
+                  <button class="btn sm" @click="openLogs('lambda', fn.name)">{{ t('awsv.act.viewLogs') }}</button>
+                  <RowMenu :items="lambdaMenuItems(fn)" />
                 </div>
               </td>
             </tr>
@@ -355,9 +336,7 @@
               <td class="text-dim">{{ b.region }}</td>
               <td class="text-dim" style="white-space:nowrap">{{ formatDate(b.creationDate) }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (b.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="b.tags" />
               </td>
               <td>
                 <div class="row-actions">
@@ -403,9 +382,7 @@
               <td><span :class="r.scanOnPush ? 'status-ok' : 'status-err'">{{ r.scanOnPush ? t('common.yes') : t('common.no') }}</span></td>
               <td class="text-dim" style="white-space:nowrap">{{ r.createdAt ? formatDate(r.createdAt) : '-' }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (r.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="r.tags" />
               </td>
               <td>
                 <div class="row-actions">
@@ -442,10 +419,7 @@
               <td><span :class="v.default ? 'status-warn' : 'text-dim'">{{ v.default ? t('common.yes') : t('common.no') }}</span></td>
               <td class="text-dim">{{ v.subnets.length }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (v.tags || []).filter(tagEntry => tagEntry.Key !== 'Name')"
-                    :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="v.tags" />
               </td>
               <td>
                 <div class="row-actions">
@@ -480,9 +454,7 @@
               <td><span :class="r.state === 'ENABLED' ? 'status-ok' : 'status-err'">{{ r.state }}</span></td>
               <td class="text-dim mono-xs">{{ r.scheduleExpr || (r.eventPattern ? 'pattern' : '-') }}</td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (r.tags || [])" :key="tagEntry.Key" class="tag-chip">{{ tagEntry.Key }}={{ tagEntry.Value }}</span>
-                </div>
+                <TagList :tags="r.tags" />
               </td>
               <td>
                 <div class="row-actions">
@@ -544,9 +516,7 @@
                 <span v-else class="text-dim">{{ stepFnActivityLoading ? '…' : '—' }}</span>
               </td>
               <td>
-                <div class="tag-chips">
-                  <span v-for="tagEntry in (sm.tags || [])" :key="tagEntry.key" class="tag-chip">{{ tagEntry.key }}={{ tagEntry.value }}</span>
-                </div>
+                <TagList :tags="sm.tags" />
               </td>
               <td class="text-dim mono-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="sm.arn">{{ sm.arn }}</td>
               <td>
@@ -3892,6 +3862,8 @@ import EksObservabilityDashboard from './EksObservabilityDashboard.vue'
 import ApiGwIntegrations   from './ApiGwIntegrations.vue'
 import S3Browser           from './S3Browser.vue'
 import GcpConfirmModal     from './GcpConfirmModal.vue'
+import TagList             from './TagList.vue'
+import RowMenu             from './RowMenu.vue'
 import { vDialog }         from '../../composables/vDialog'
 import {
   displayName, filterRecords, hostnameOf, recordKey, recordTypes,
@@ -4502,6 +4474,33 @@ function ecsOperation(service, action) {
 }
 const startEcs = svc => ecsOperation(svc, 'start')
 const stopEcs = svc => ecsOperation(svc, 'stop')
+
+// Row "More" menus: secondary actions, then (after a separator) the ones that
+// change or run the resource, so reading and diagnosing do not sit next to them.
+function ec2MenuItems(i) {
+  return [
+    { id: 'tags', label: t('th.tags'), onSelect: () => openTags('ec2', `EC2: ${i.name}`, i.id, i.tags) },
+    { id: 'config', label: t('sidebar.config'), onSelect: () => openConfig('ec2', `EC2: ${i.name}`, i, { id: i.id }) },
+    { id: 'start', separator: true, label: t('awsv.op.startEc2'), disabled: i.state === 'running', onSelect: () => startEc2(i) },
+    { id: 'stop', label: t('awsv.op.stopEc2'), danger: true, disabled: i.state === 'stopped', onSelect: () => stopEc2(i) },
+  ]
+}
+function lambdaMenuItems(fn) {
+  return [
+    { id: 'tags', label: t('th.tags'), onSelect: () => openTags('lambda', `Lambda: ${fn.name}`, fn.arn, fn.tags) },
+    { id: 'config', label: t('sidebar.config'), onSelect: () => openConfig('lambda', `Lambda: ${fn.name}`, fn, { name: fn.name }) },
+    { id: 'logging', label: t('awsv.act.configureLogging'), title: t('awsv.act.configureLoggingHint'), onSelect: () => openLogging('lambda', fn) },
+    { id: 'invoke', separator: true, label: t('awsv.act.invoke'), onSelect: () => openInvoke(fn) },
+  ]
+}
+function ecsMenuItems(svc) {
+  return [
+    { id: 'config', label: t('sidebar.config'), onSelect: () => openConfig('ecs', `ECS: ${svc.name}`, svc, { cluster: svc.cluster, name: svc.name }) },
+    { id: 'logging', label: t('awsv.act.configureLogging'), title: t('awsv.act.configureLoggingHint'), onSelect: () => openLogging('ecs', svc) },
+    { id: 'start', separator: true, label: t('awsv.op.startEcs'), disabled: svc.desired > 0, title: svc.desired > 0 ? t('awsv.op.ecsAlreadyRunning') : '', onSelect: () => startEcs(svc) },
+    { id: 'stop', label: t('awsv.op.stopEcs'), danger: true, disabled: svc.desired === 0, onSelect: () => stopEcs(svc) },
+  ]
+}
 
 const configModal = reactive({
   open: false, loading: false, error: null, fullLoaded: false,
