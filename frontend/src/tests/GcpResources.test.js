@@ -404,6 +404,26 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(calls.some(c => c.url === '/api/cloud/gcp/sql/db/start' && c.method === 'POST')).toBe(true)
   })
 
+  it('the dialog shows its destination and closes without sending if the profile changes (G10)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] [data-test="delete"]').trigger('click')
+    const modal = openConfirm(w)
+    const dest = modal.find('[data-test="destination"]').text()
+    expect(dest).toContain('Región')
+    expect(dest).toContain('us-central1')
+    expect(dest).toContain('api')
+    expect(dest).toContain('Proyecto')
+    store.activeProfileId = 'gcp-2'
+    await flushPromises()
+    expect(w.findAllComponents(GcpConfirmModal).some(c => c.props('open'))).toBe(false)
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+  })
+
+  it('an expected estimate that fails is shown as unknown (G10)', () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
+    expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)
+  })
+
   it('inline Delete sends the typed name to the DELETE endpoint', async () => {
     const w = await mountTab('cloudrun')
     await w.find('[data-test="cloudrun-table"] [data-test="delete"]').trigger('click')

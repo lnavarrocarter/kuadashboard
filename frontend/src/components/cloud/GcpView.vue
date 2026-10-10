@@ -1508,13 +1508,14 @@
 
   <!-- ══ Create / confirm modals (Cloud Run, VM, Cloud SQL) ═══════════════════ -->
   <GcpPollingSettings :open="pollingModal.open" :profile-id="selectedProfileId" @close="pollingModal.open = false" @saved="onPollingSaved" />
-  <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion"
+  <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion" :destination="gcpDestinationContext()"
     @close="createModal.open = false" @created="onCreated" />
   <GcpConfirmModal
     :open="actionModal.open" :title="actionModal.title" :message="actionModal.message" :lines="actionModal.lines"
     :tone="actionModal.tone" :confirm-label="actionModal.confirmLabel" :require-name="actionModal.requireName"
     :cost-ack="actionModal.costAck" :estimate="actionModal.estimate" :estimate-loading="actionModal.estimateLoading"
     :busy="actionModal.busy" :error="actionModal.error" :blocked="actionModal.blocked"
+    :context="actionModal.context" :estimate-unavailable="actionModal.estimateUnavailable"
     @cancel="actionModal.open = false" @confirm="runAction" />
 
   <!-- ══ Resource Logs Modal (cloudrun, gke, vms, sql, workflows) ═══════════ -->
@@ -2585,26 +2586,61 @@ const TAB_BY_KIND = { cloudrun: 'cloudrun', vm: 'vms', sql: 'sql' }
 const panelFor = kind => ({ cloudrun: crPanel, vm: vmPanel, sql: sqlPanel })[kind]
 
 const actionModal = reactive({
-  open: false, kind: '', action: '', resource: null,
+  open: false, kind: '', action: '', resource: null, profileId: '', context: [],
   title: '', message: '', lines: [], tone: 'info', confirmLabel: 'Confirmar',
   requireName: '', costAck: false, blocked: '',
-  estimate: null, estimateLoading: false, busy: false, error: '',
+  estimate: null, estimateLoading: false, estimateUnavailable: false, busy: false, error: '',
 })
+
+// Where a write goes (G10): project, profile, location and resource, shown in
+// the dialog. The dialog keeps the profile it was opened with; a profile change
+// closes it and nothing is sent.
+function gcpDestinationContext(resource = null) {
+  const profileId = selectedProfileId.value
+  const local = localConfigs.value.find(c => `local:${c.name}` === profileId)
+  const profile = envStore.findById?.(profileId)
+  const project = gcpStore.overview?.projectId || local?.project || profile?.projectId || ''
+  const rows = [
+    { label: t('gcpv.audit.ctx.project'), value: project || t('gcpv.audit.ctx.unknown') },
+    { label: t('gcpv.audit.ctx.profile'), value: profile?.name || local?.name || profileId },
+  ]
+  if (resource) {
+    const location = resource.region || resource.zone || resource.location
+    if (location) rows.push({ label: t(resource.zone ? 'gcpv.audit.ctx.zone' : 'gcpv.audit.ctx.region'), value: location })
+    rows.push({ label: t('gcpv.audit.ctx.resource'), value: resource.fullName || resource.name })
+  }
+  return rows
+}
 
 async function requestAction(kind, action, resource) {
   const cfg = gcpActionConfig(kind, action, resource)
   Object.assign(actionModal, {
     open: true, kind, action, resource,
+    profileId: selectedProfileId.value, context: gcpDestinationContext(resource),
     title: cfg.title, message: cfg.message || '', lines: cfg.lines || [], tone: cfg.tone,
     confirmLabel: cfg.confirmLabel, requireName: cfg.requireName || '', costAck: !!cfg.costAck,
-    blocked: cfg.blocked || '', estimate: null, estimateLoading: !!cfg.estimateSpec, busy: false, error: '',
+    blocked: cfg.blocked || '', estimate: null, estimateLoading: !!cfg.estimateSpec, estimateUnavailable: false, busy: false, error: '',
   })
   if (cfg.estimateSpec) {
     try { actionModal.estimate = await gcpStore.estimateResource(cfg.estimateKind, cfg.estimateSpec) }
     catch (e) { actionModal.estimate = null }
-    finally { actionModal.estimateLoading = false }
+    finally {
+      actionModal.estimateLoading = false
+      actionModal.estimateUnavailable = !actionModal.estimate
+    }
   }
 }
+
+watch(selectedProfileId, id => {
+  if (actionModal.open && !actionModal.busy && id !== actionModal.profileId) {
+    actionModal.open = false
+    toast(t('gcpv.audit.dialogClosedProfile'), 'info')
+  }
+  if (createModal.open) {
+    createModal.open = false
+    toast(t('gcpv.audit.dialogClosedProfile'), 'info')
+  }
+})
 
 const ACTION_CALLS = {
   cloudrun: { start: r => gcpStore.startCloudRunService(r.region, r.name), stop: r => gcpStore.stopCloudRunService(r.region, r.name) },
@@ -2615,6 +2651,11 @@ const ACTION_CALLS = {
 async function runAction(acks) {
   const { kind, action, resource } = actionModal
   const tab = TAB_BY_KIND[kind]
+  if (actionModal.busy) return
+  if (selectedProfileId.value !== actionModal.profileId) {
+    actionModal.error = t('gcpv.audit.profileChanged')
+    return
+  }
   actionModal.busy = true
   actionModal.error = ''
   try {

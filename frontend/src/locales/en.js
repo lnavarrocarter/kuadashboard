@@ -6608,4 +6608,13 @@ export default {
   "gcpv.audit.executionsApart": "{n}{partial} build executions not counted",
   "gcpv.audit.partialCount": "Only the first pages were read; there are more.",
   "gcpv.audit.history": "history",
+  "gcpv.audit.ctx.project": "Project",
+  "gcpv.audit.ctx.profile": "Profile",
+  "gcpv.audit.ctx.region": "Region",
+  "gcpv.audit.ctx.zone": "Zone",
+  "gcpv.audit.ctx.resource": "Resource",
+  "gcpv.audit.ctx.unknown": "Not determined",
+  "gcpv.audit.dialogClosedProfile": "The profile changed: the dialog was closed and nothing was sent.",
+  "gcpv.audit.profileChanged": "The active profile is not the one this dialog was opened with. Nothing was sent.",
+  "gcc.estimateUnavailable": "Cost estimate unavailable: the cost of this change is unknown.",
 }

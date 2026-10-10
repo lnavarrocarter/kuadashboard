@@ -155,6 +155,7 @@
     :busy="creating"
     :error="createError"
     :confirm-label="t('gcn.createResource')"
+    :context="destination"
     @cancel="reviewing = false; createError = ''"
     @confirm="create"
   />
@@ -170,6 +171,8 @@ const props = defineProps({
   open:          { type: Boolean, default: false },
   kind:          { type: String,  required: true },   // cloudrun | vm | sql
   defaultRegion: { type: String,  default: 'us-central1' },
+  // Project/profile rows for the review dialog (the region is in the lines)
+  destination:   { type: Array,   default: () => [] },
 })
 const emit = defineEmits(['close', 'created'])
 
