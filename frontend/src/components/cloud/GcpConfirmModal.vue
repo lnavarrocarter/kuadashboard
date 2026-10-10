@@ -7,6 +7,13 @@
       </div>
 
       <div class="gcpc-body">
+        <!-- Destination: where the operation goes; fixed while the dialog is open -->
+        <dl v-if="context.length" class="gcpc-context" data-test="destination">
+          <template v-for="item in context" :key="item.label">
+            <dt>{{ item.label }}</dt><dd :title="item.value">{{ item.value || '—' }}</dd>
+          </template>
+        </dl>
+
         <p v-if="message" class="gcpc-message">{{ message }}</p>
 
         <ul v-if="lines.length" class="gcpc-lines">
@@ -27,10 +34,11 @@
             </tr>
           </table>
           <ul v-if="estimate.warnings?.length" class="gcpc-warnings">
-            <li v-for="w in estimate.warnings" :key="w">{{ w }}</li>
+            <li v-for="(w, i) in estimate.warnings" :key="w">{{ estimate.warningKeys?.[i] ? t(`gcc.warn.${estimate.warningKeys[i]}`) : w }}</li>
           </ul>
-          <div v-if="estimate.disclaimer" class="gcpc-disclaimer">{{ estimate.disclaimer }}</div>
+          <div v-if="estimate.disclaimer" class="gcpc-disclaimer">{{ estimate.disclaimerKey ? t(`gcc.disclaimer.${estimate.disclaimerKey}`) : estimate.disclaimer }}</div>
         </div>
+        <div v-else-if="estimateUnavailable" class="gcpc-estimate gcpc-estimate-missing" data-test="estimate-unavailable">{{ t('gcc.estimateUnavailable') }}</div>
 
         <!-- Acknowledgements -->
         <label v-if="costAck && !blocked" class="gcpc-check">
@@ -89,6 +97,10 @@ const props = defineProps({
   error:           { type: String,  default: '' },
   // Reason the action cannot proceed (e.g. deletion protection); disables confirm
   blocked:         { type: String,  default: '' },
+  // [{ label, value }]: project, profile, region/zone, resource
+  context:         { type: Array,   default: () => [] },
+  // An estimate was expected but could not be computed: say so instead of hiding it
+  estimateUnavailable: { type: Boolean, default: false },
 })
 const emit = defineEmits(['confirm', 'cancel'])
 
@@ -136,6 +148,10 @@ function formatUsd(n) {
 .gcpc-title { font-weight: 600; font-size: 14px; }
 .gcpc-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
 .gcpc-message { margin: 0; }
+.gcpc-context { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-hover); font-size: 12px; }
+.gcpc-context dt { color: var(--text-dim); }
+.gcpc-context dd { margin: 0; font-family: monospace; overflow-wrap: anywhere; }
+.gcpc-estimate-missing { color: var(--yellow); font-size: 12px; }
 .gcpc-lines { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--text); }
 .gcpc-estimate { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .gcpc-estimate.high { border-color: var(--red); background: color-mix(in srgb, var(--red) 6%, transparent); }

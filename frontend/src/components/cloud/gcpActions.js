@@ -10,15 +10,41 @@ import { useI18n } from '../../composables/useI18n'
 
 const { t } = useI18n()
 
+// Cloud Run "start/stop" only change template.scaling.minInstanceCount (1 or 0).
+// Nothing is switched off: with minimum 0 the service still serves requests and
+// starts instances on demand. Table and detail share these conditions.
+function minOf(r) { return Number(r?.minInstances ?? r?.scaling?.minInstances ?? 0) || 0 }
+export function cloudRunScaling(r) {
+  const min = minOf(r)
+  return { min, max: r?.maxInstances ?? r?.scaling?.maxInstances ?? null, canWarm: min < 1, canScaleToZero: min > 0 }
+}
+
+// '1000m' → '1 vCPU', '2' → '2 vCPU'; the raw value stays available as a title.
+export function formatCloudRunCpu(cpu) {
+  if (cpu == null || cpu === '') return '—'
+  const raw = String(cpu)
+  const n = raw.endsWith('m') ? Number(raw.slice(0, -1)) / 1000 : Number(raw)
+  return Number.isFinite(n) ? `${n} vCPU` : raw
+}
+// '512Mi' → '512 MiB', '1Gi' → '1 GiB', '1G' → '1 GB'
+export function formatCloudRunMemory(memory) {
+  if (memory == null || memory === '') return '—'
+  const m = String(memory).match(/^(\d+(?:\.\d+)?)(Ki|Mi|Gi|Ti|K|M|G|T)?$/)
+  if (!m) return String(memory)
+  return `${m[1]} ${m[2] || ''}B`
+}
+
 const KIND_LABEL = { cloudrun: 'gca.kind.cloudrun', vm: 'gca.kind.vm', sql: 'gca.kind.sql' }
 
 function startConfig(kind, r) {
   const base = { tone: 'warning', costAck: true, confirmLabel: t('gca.start') }
   if (kind === 'cloudrun') return {
     ...base,
-    title: t('gca.startTitle', { name: r.name }),
+    confirmLabel: t('gca.run.warmConfirm'),
+    title: t('gca.run.warmTitle', { name: r.name }),
     message: t('gca.startRunMessage'),
-    lines: [t('gca.startRunLine')],
+    lines: [t('gca.run.minChange', { from: minOf(r), to: 1 }), t('gca.startRunLine'), t('gca.run.trafficUnchanged')],
+    blocked: cloudRunScaling(r).canWarm ? '' : t('gca.run.alreadyWarm', { min: minOf(r) }),
     estimateKind: 'cloudrun',
     estimateSpec: { cpu: r.cpu || '1', memory: r.memory || '512Mi', minInstances: 1 },
   }
@@ -54,9 +80,11 @@ function stopConfig(kind, r) {
   const base = { tone: 'info', confirmLabel: t('gca.stop') }
   if (kind === 'cloudrun') return {
     ...base,
-    title: t('gca.stopTitle', { name: r.name }),
+    confirmLabel: t('gca.run.scaleToZeroConfirm'),
+    title: t('gca.run.scaleToZeroTitle', { name: r.name }),
     message: t('gca.stopRunMessage'),
-    lines: [t('gca.stopRunLine')],
+    lines: [t('gca.run.minChange', { from: minOf(r), to: 0 }), t('gca.run.endpointStays'), t('gca.stopRunLine')],
+    blocked: cloudRunScaling(r).canScaleToZero ? '' : t('gca.run.alreadyZero'),
   }
   if (kind === 'vm') return {
     ...base,

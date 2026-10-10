@@ -17,7 +17,7 @@ export const useGcpStore = defineStore('gcp', () => {
   const overviewError = ref(null)
 
   function createTab() {
-    return { data: [], loading: false, error: null, enableUrl: null, nextPageToken: null, loadingMore: false }
+    return { data: [], loading: false, error: null, errorInfo: null, enableUrl: null, nextPageToken: null, loadingMore: false, partial: false, failedLocations: [], skippedLocations: [] }
   }
 
   const tabs = ref({
@@ -38,11 +38,14 @@ export const useGcpStore = defineStore('gcp', () => {
     return { 'X-Profile-Id': activeProfileId.value }
   }
 
+  // The backend classifies GCP errors (lib/gcpErrors.js). The console link to
+  // enable an API is only offered when Google said the API is disabled.
   function setError(e, tabKey) {
-    const msg = e.message || String(e)
-    tabs.value[tabKey].error = msg
-    const match = msg.match(/https?:\/\/[^\s]+/)
-    tabs.value[tabKey].enableUrl = match ? match[0] : null
+    const tab = tabs.value[tabKey]
+    const info = e?.details?.errorInfo || null
+    tab.error = e.message || String(e)
+    tab.errorInfo = info
+    tab.enableUrl = info?.kind === 'api_disabled' ? info.activationUrl || null : null
   }
 
   function apiFetch(path, options = {}) {
@@ -68,7 +71,12 @@ export const useGcpStore = defineStore('gcp', () => {
     if (!background) {
       tab.loading = true
       tab.error = null
+      tab.errorInfo = null
+      tab.enableUrl = null
       tab.nextPageToken = null
+      tab.partial = false
+      tab.failedLocations = []
+      tab.skippedLocations = []
     }
     try {
       const res = await apiFetch(url, { headers: headers() })
@@ -77,6 +85,10 @@ export const useGcpStore = defineStore('gcp', () => {
       } else if (res && res.items) {
         if (tab.data !== res.items) tab.data = res.items
         tab.nextPageToken = res.nextPageToken || null
+        // Scope of the list (re-evaluation R02): kept so the table can say it is partial
+        tab.partial = !!res.partial
+        tab.failedLocations = res.failedLocations || []
+        tab.skippedLocations = res.skippedLocations || []
       } else {
         tab.data = []
       }
@@ -113,6 +125,7 @@ export const useGcpStore = defineStore('gcp', () => {
       t.data = []
       t.loading = false
       t.error = null
+      t.errorInfo = null
       t.enableUrl = null
       t.nextPageToken = null
       t.loadingMore = false
@@ -390,7 +403,7 @@ export const useGcpStore = defineStore('gcp', () => {
   async function fetchUptimeChecks() {
     try {
       const res = await apiFetch('/api/cloud/gcp/monitoring/uptime-checks', { headers: headers() })
-      tabs.value.monitoring.data = Array.isArray(res) ? res : (res?.uptimeChecks || [])
+      tabs.value.monitoring.data = Array.isArray(res) ? res : (res?.items || res?.uptimeChecks || [])
       return tabs.value.monitoring.data
     } catch (e) { setError(e, 'monitoring'); return [] }
   }
@@ -416,6 +429,7 @@ export const useGcpStore = defineStore('gcp', () => {
     if (append) tab.loadingMore = true
     else { tab.loading = true; tab.nextPageToken = null; tab.data = [] }
     tab.error = null
+    tab.errorInfo = null
     tab.enableUrl = null
     try {
       const res = await apiFetch('/api/cloud/gcp/logging/query', { method: 'POST', headers: headers(), body: JSON.stringify(query) })

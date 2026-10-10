@@ -7,7 +7,7 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 import GcpConfirmModal from '../components/cloud/GcpConfirmModal.vue'
 import GcpCreateModal from '../components/cloud/GcpCreateModal.vue'
 import GcpView from '../components/cloud/GcpView.vue'
-import { gcpActionConfig } from '../components/cloud/gcpActions'
+import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from '../components/cloud/gcpActions'
 import { useGcpStore } from '../stores/useGcpStore'
 import { useTerminalStore } from '../stores/useTerminalStore'
 import { settings } from '../composables/useSettings'
@@ -59,6 +59,29 @@ function stubFetch(estimate = LOW_ESTIMATE, { presets = PRESETS } = {}) {
 
 // ── gcpActions ───────────────────────────────────────────────────────────────
 
+describe('Cloud Run scaling actions (G01)', () => {
+  it('start/stop only change the minimum and say the endpoint stays', () => {
+    const zero = { ...CLOUD_RUN[0], minInstances: 0 }
+    expect(cloudRunScaling(zero)).toMatchObject({ canWarm: true, canScaleToZero: false })
+    expect(cloudRunScaling(CLOUD_RUN[0])).toMatchObject({ canWarm: false, canScaleToZero: true })
+    const warm = gcpActionConfig('cloudrun', 'start', zero)
+    expect(warm.blocked).toBe('')
+    expect(warm.lines.join(' ')).toMatch(/0 → 1/)
+    const toZero = gcpActionConfig('cloudrun', 'stop', CLOUD_RUN[0])
+    expect(toZero.blocked).toBe('')
+    expect(toZero.lines.join(' ')).toMatch(/1 → 0/)
+    expect(gcpActionConfig('cloudrun', 'stop', zero).blocked).toBeTruthy()
+    expect(gcpActionConfig('cloudrun', 'start', { ...CLOUD_RUN[0], minInstances: 3 }).blocked).toBeTruthy()
+  })
+  it('normalizes CPU and memory', () => {
+    expect(formatCloudRunCpu('1000m')).toBe('1 vCPU')
+    expect(formatCloudRunCpu('2')).toBe('2 vCPU')
+    expect(formatCloudRunMemory('512Mi')).toBe('512 MiB')
+    expect(formatCloudRunMemory('1Gi')).toBe('1 GiB')
+    expect(formatCloudRunMemory('weird')).toBe('weird')
+  })
+})
+
 describe('gcpActionConfig (#74)', () => {
   it('start asks for a cost acknowledgement with an estimate spec', () => {
     const vm = gcpActionConfig('vm', 'start', VMS[0])
@@ -66,7 +89,7 @@ describe('gcpActionConfig (#74)', () => {
     expect(vm.estimateSpec).toEqual({ machineType: 'e2-small', diskSizeGb: 120, externalIp: true, spot: true })
     const run = gcpActionConfig('cloudrun', 'start', CLOUD_RUN[0])
     expect(run.estimateSpec.minInstances).toBe(1)
-    expect(run.lines[0]).toMatch(/24\/7/)
+    expect(run.lines.join(' ')).toMatch(/24\/7/)
     const sql = gcpActionConfig('sql', 'start', SQL[0])
     expect(sql.estimateSpec).toEqual({ tier: 'db-custom-2-7680', storageGb: 50, storageType: 'PD_SSD', availabilityType: 'REGIONAL' })
   })
@@ -308,11 +331,40 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     const w = await mountTab('cloudrun')
     const row = w.find('[data-test="cloudrun-table"] tbody tr')
     expect(row.text()).toContain('api:1')
-    expect(row.text()).toContain('1 / 512Mi')
+    expect(row.text()).toContain('1 vCPU / 512 MiB')
     expect(row.text()).toContain('1–5')
     expect(row.text()).toContain('api-00002')
-    expect(row.find('[data-test="start"]').exists()).toBe(true)
+    // minimum is already 1: "keep warm" is off, "allow scale to zero" is on
+    expect(row.find('[data-test="start"]').attributes('disabled')).toBeDefined()
+    expect(row.find('[data-test="stop"]').attributes('disabled')).toBeUndefined()
+    expect(row.find('[data-test="delete"]').attributes('aria-label')).toBeTruthy()
     expect(row.find('[data-test="delete"]').exists()).toBe(true)
+  })
+
+  it('a rejected request is named as such, without an enable-API link or a zero count (G04)', async () => {
+    const w = await mountTab('artifact')
+    Object.assign(store.tabs.artifact, {
+      data: [], error: 'Invalid project name: projects/p/locations/-', enableUrl: null,
+      errorInfo: { kind: 'invalid_request', code: 'INVALID_ARGUMENT', raw: '{"error":{"code":400}}' },
+    })
+    await flushPromises()
+    const banner = w.find('[data-test="tab-error"]')
+    expect(banner.find('[data-test="error-kind"]').text()).toBe('Petición rechazada')
+    expect(banner.find('a').exists()).toBe(false)
+    expect(w.text()).toContain('Sin leer')
+  })
+
+  it('Storage shows prevention and leaves exposure as not verified (G02)', async () => {
+    const w = await mountTab('storage')
+    store.tabs.storage.data = [
+      { name: 'src', location: 'US', storageClass: 'STANDARD', publicAccessPrevention: 'inherited', uniformAccess: false, exposure: 'not_verified' },
+      { name: 'locked', location: 'US', storageClass: 'STANDARD', publicAccessPrevention: 'enforced', uniformAccess: true, exposure: 'not_verified' },
+    ]
+    await flushPromises()
+    const cells = w.findAll('[data-test="pap"]').map(c => c.text())
+    expect(cells).toEqual(['Heredada', 'Forzada'])
+    expect(w.findAll('[data-test="exposure"]').every(c => c.text() === 'No verificada')).toBe(true)
+    expect(w.text()).not.toContain('Pública')
   })
 
   it('VM table shows network, disks, Spot and protection; buttons follow the status', async () => {
@@ -350,6 +402,190 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     await modal.find('[data-test="confirm"]').trigger('click')
     await flushPromises()
     expect(calls.some(c => c.url === '/api/cloud/gcp/sql/db/start' && c.method === 'POST')).toBe(true)
+  })
+
+  it('the dialog shows its destination and closes without sending if the profile changes (G10)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] [data-test="delete"]').trigger('click')
+    const modal = openConfirm(w)
+    const dest = modal.find('[data-test="destination"]').text()
+    expect(dest).toContain('Región')
+    expect(dest).toContain('us-central1')
+    expect(dest).toContain('api')
+    expect(dest).toContain('Proyecto')
+    store.activeProfileId = 'gcp-2'
+    await flushPromises()
+    expect(w.findAllComponents(GcpConfirmModal).some(c => c.props('open'))).toBe(false)
+    expect(calls.some(c => c.method === 'DELETE')).toBe(false)
+  })
+
+  it('rows, side lists and detail tabs work from the keyboard (G12)', async () => {
+    const w = await mountTab('cloudrun')
+    const link = w.find('[data-test="cloudrun-table"] .gcp-row-link')
+    expect(link.element.tagName).toBe('BUTTON')
+    await link.trigger('click')
+    await flushPromises()
+    expect(link.attributes('aria-expanded')).toBe('true')
+    const tabs = w.findAll('[role="tablist"] [role="tab"]')
+    expect(tabs.length).toBeGreaterThan(1)
+    expect(tabs.filter(tab => tab.attributes('aria-selected') === 'true')).toHaveLength(1)
+
+    const fns = await mountTab('functions')
+    store.tabs.functions.data = [{ name: 'api', location: 'us-central1', fullName: 'projects/p/locations/us-central1/functions/api', state: 'ACTIVE', trigger: 'HTTPS' }]
+    await flushPromises()
+    const item = fns.find('.sidebar-item[role="button"]')
+    expect(item.attributes('tabindex')).toBe('0')
+    await item.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(item.attributes('aria-current')).toBe('true')
+  })
+
+  it('GKE Connect explains the kubeconfig import before doing it (G11)', async () => {
+    const w = await mountTab('gke')
+    store.tabs.gke.data = [{ name: 'prod', location: 'us-central1', status: 'RUNNING', autopilot: true }]
+    await flushPromises()
+    await w.find('.gke-connect-btn').trigger('click')
+    const modal = openConfirm(w)
+    expect(modal.props('title')).toBe('Conectar con prod')
+    expect(modal.find('[data-test="destination"]').text()).toContain('us-central1')
+    expect(calls.some(c => c.url.includes('/gke/'))).toBe(false)
+  })
+
+  it('estimate warnings and disclaimer are translated (G14)', () => {
+    const estimate = { known: true, monthlyUsd: 8.21, items: [], warnings: ['Min instances are billed 24/7 even with no traffic.'], warningKeys: ['runMin'], disclaimer: 'Approximate…', disclaimerKey: 'listPrice' }
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', estimate } })
+    expect(w.text()).toContain('Las instancias mínimas se facturan 24/7')
+    expect(w.text()).toContain('Precio de lista aproximado')
+    expect(w.text()).not.toContain('Min instances are billed')
+  })
+
+  it('state/region filters and sort come from the rows, with "n of total" and clear (G13)', async () => {
+    const w = await mountTab('cloudrun')
+    store.tabs.cloudrun.data = [
+      { ...CLOUD_RUN[0], name: 'b-api', region: 'us-central1', status: 'ready' },
+      { ...CLOUD_RUN[0], name: 'a-web', region: 'europe-west1', status: 'ready' },
+      { ...CLOUD_RUN[0], name: 'c-job', region: 'us-central1', status: 'failed' },
+    ]
+    await flushPromises()
+    const names = () => w.findAll('[data-test="cloudrun-table"] tbody tr .gcp-row-link').map(b => b.text())
+    await w.find('[data-test="facet-region"]').setValue('us-central1')
+    expect(names()).toEqual(['b-api', 'c-job'])
+    expect(w.find('[data-test="row-count"]').text()).toBe('2 de 3')
+    await w.find('[data-test="sort"]').setValue('name')
+    await w.find('[data-test="facet-region"]').setValue('')
+    expect(names()).toEqual(['a-web', 'b-api', 'c-job'])
+    await w.find('[data-test="facet-state"]').setValue('failed')
+    await w.find('[data-test="clear-filters"]').trigger('click')
+    expect(names()).toHaveLength(3)
+  })
+
+  it('search is kept per service and the view state is reported to App (G15)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('.aws-search').setValue('api')
+    expect(w.emitted('filters-change').at(-1)).toEqual(['cloudrun', { q: 'api' }])
+    await w.setProps({ activeService: 'vms' })
+    expect(w.find('.aws-search').element.value).toBe('')
+    await w.setProps({ activeService: 'cloudrun' })
+    expect(w.find('.aws-search').element.value).toBe('api')
+    await w.find('.aws-search').setValue('')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    expect(w.emitted('resource-change').at(-1)).toEqual(['cloudrun', 'us-central1/api'])
+  })
+
+  it('a link reopens its filters and resource, or says the resource is missing (G15)', async () => {
+    const w = mount(GcpView, {
+      props: { activeService: 'cloudrun', savedFilters: { cloudrun: { q: 'api', sort: 'name' } }, savedResources: { cloudrun: 'us-central1/api' }, savedFiltersSeq: 1 },
+      global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    store.tabs.cloudrun.data = CLOUD_RUN
+    await flushPromises()
+    expect(w.find('.aws-search').element.value).toBe('api')
+    expect(w.find('[data-test="cloudrun-table"] .gcp-row-link').attributes('aria-expanded')).toBe('true')
+  })
+
+  it('a late Functions detail for the previous selection is discarded (R01)', async () => {
+    const w = await mountTab('functions')
+    const a = { name: 'a', location: 'us-central1', fullName: 'projects/p/locations/us-central1/functions/a', state: 'ACTIVE', trigger: 'HTTPS' }
+    const b = { ...a, name: 'b', fullName: 'projects/p/locations/us-central1/functions/b' }
+    store.tabs.functions.data = [a, b]
+    await flushPromises()
+    const pending = {}
+    store.fetchFunctionDetail = (location, name) => new Promise(resolve => { pending[name] = resolve })
+    const items = w.findAll('.sidebar-item[role="button"]')
+    await items[0].trigger('click')
+    await items[1].trigger('click')
+    pending.b({ name: 'b', state: 'ACTIVE', runtime: 'nodejs22' })
+    await flushPromises()
+    pending.a({ name: 'a', state: 'ACTIVE', runtime: 'python312' })
+    await flushPromises()
+    expect(w.text()).toContain('nodejs22')
+    expect(w.text()).not.toContain('python312')
+  })
+
+  it('a partial list says which regions are missing and counts "n+" (R02)', async () => {
+    const w = await mountTab('artifact')
+    Object.assign(store.tabs.artifact, { data: [{ name: 'app', location: 'us-central1', format: 'DOCKER' }], partial: true, failedLocations: ['europe-west1'], error: null })
+    await flushPromises()
+    expect(w.find('[data-test="partial-list"]').text()).toContain('europe-west1')
+    expect(w.find('[data-test="row-count"]').text()).toContain('1+')
+  })
+
+  it('detail tabs follow the tablist pattern: arrows, Home/End, roving tabindex, tabpanel (R04)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    const tabs = () => w.findAll('[role="tablist"] [role="tab"]')
+    const selected = () => tabs().find(tab => tab.attributes('aria-selected') === 'true')
+    expect(selected().attributes('tabindex')).toBe('0')
+    expect(tabs().filter(tab => tab.attributes('tabindex') === '0')).toHaveLength(1)
+    expect(selected().attributes('aria-controls')).toBe('gcp-cr-panel')
+    expect(w.find('#gcp-cr-panel').attributes('aria-labelledby')).toBe(selected().attributes('id'))
+    const first = selected()
+    await first.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs()[1].attributes('id'))
+    await selected().trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs().at(-1).attributes('id'))
+    await selected().trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(selected().attributes('id')).toBe(tabs()[0].attributes('id'))
+  })
+
+  it('evidence filter, detail tab and Artifact repository are part of the reported view (R05)', async () => {
+    const w = await mountTab('cloudrun')
+    await w.find('[data-test="cloudrun-table"] .gcp-row-link').trigger('click')
+    await flushPromises()
+    await w.findAll('[role="tablist"] [role="tab"]').find(tab => tab.attributes('id') === 'gcp-cr-tab-metrics').trigger('click')
+    await flushPromises()
+    expect(w.emitted('filters-change').at(-1)).toEqual(['cloudrun', { panel: 'metrics' }])
+
+    const art = await mountTab('artifact')
+    store.tabs.artifact.data = [{ name: 'app', location: 'us-central1', format: 'DOCKER' }]
+    await flushPromises()
+    await art.find('.sidebar-item[role="button"]').trigger('click')
+    await flushPromises()
+    expect(art.emitted('resource-change').at(-1)).toEqual(['artifact', 'us-central1/app'])
+  })
+
+  it('a link restores the evidence filter and the detail tab (R05)', async () => {
+    const w = mount(GcpView, {
+      props: { activeService: 'cloudrun', savedFilters: { cloudrun: { evidence: 'api', panel: 'metrics' } }, savedResources: { cloudrun: 'us-central1/api' }, savedFiltersSeq: 1 },
+      global: { stubs: { Teleport: true, GcpMetricsChart: true, GcsBrowser: true, ApmObservabilityView: true } },
+    })
+    await flushPromises()
+    store.tabs.cloudrun.data = [...CLOUD_RUN, { ...CLOUD_RUN[0], name: 'other' }]
+    await flushPromises()
+    expect(w.find('[data-test="evidence-filter"]').exists()).toBe(true)
+    expect(w.findAll('[data-test="cloudrun-table"] tbody tr')).toHaveLength(1)
+    expect(w.find('#gcp-cr-tab-metrics').attributes('aria-selected')).toBe('true')
+  })
+
+  it('an expected estimate that fails is shown as unknown (G10)', () => {
+    const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
+    expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)
   })
 
   it('inline Delete sends the typed name to the DELETE endpoint', async () => {
@@ -404,7 +640,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
       projectId: 'demo-project',
       region: 'us-central1',
       identity: { account: 'operator@example.com' },
-      summary: { total: 4, active: 2, empty: 0, unavailable: 1, critical: 1, warning: 1, attention: 3, health: 'critical', services: 4, availableServices: 3 },
+      summary: { total: 4, active: 2, empty: 0, unavailable: 1, critical: 1, warning: 1, attention: 3, health: 'critical', services: 5, availableServices: 4, executions: { count: 100, services: ['build'], partial: true } },
       costs: {
         status: 'partial', source: 'resource-baseline-estimate', estimated: true, currency: 'USD',
         monthlyEstimate: 123.45, modeledResources: 3, unknownResources: 1,
@@ -422,6 +658,7 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
         { id: 'sql', label: 'Cloud SQL', tab: 'sql', group: 'data', status: 'unavailable', health: 'unavailable', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [], error: { message: 'Permission denied' } },
         { id: 'scheduler', label: 'Cloud Scheduler', tab: 'scheduler', group: 'integration', status: 'available', health: 'warning', count: 2, active: 1, inactive: 1, issueCount: 1, critical: 0, warning: 1, signals: [{ level: 'warning', code: 'paused', name: 'nightly-job' }] },
         { id: 'storage', label: 'Storage', tab: 'storage', group: 'data', status: 'available', health: 'healthy', count: 0, active: 0, inactive: 0, issueCount: 0, critical: 0, warning: 0, signals: [] },
+        { id: 'build', label: 'Cloud Build', tab: 'build', group: 'platform', kind: 'execution', partial: true, status: 'available', health: 'healthy', count: 100, active: 97, inactive: 3, issueCount: 0, critical: 0, warning: 0, signals: [] },
       ],
     }
     store.overviewHistory = [
@@ -430,17 +667,58 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     ]
     await flushPromises()
 
-    expect(w.find('.gcp-overview-health-banner').text()).toContain('Critical')
-    expect(w.find('.gcp-overview-health-detail').text()).toContain('3/4 services responding')
+    // G05: resource health, coverage and read errors are separate answers
+    expect(w.find('.gcp-overview-health-banner').text()).toContain('Observed resources')
+    expect(w.find('.gcp-overview-health-banner').text()).toContain('1 critical')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 4/5 services evaluated')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('1 not evaluated')
     expect(w.find('.gcp-overview-groups').text()).toContain('Compute')
     expect(w.find('.gcp-overview-attention-list').text()).toContain('nightly-job')
-    expect(w.find('.gcp-overview-table').text()).toContain('API unavailable')
+    expect(w.find('.gcp-overview-attention-list').text()).not.toContain('Cloud SQL')
+    expect(w.find('.gcp-overview-table').text()).toContain('Not evaluated')
     expect(w.find('.gcp-overview-trend-summary').text()).toContain('+1')
-    expect(w.findAll('.gcp-overview-attention')).toHaveLength(2)
+    expect(w.find('[data-test="metric-incidents"] strong').text()).toBe('2')
+    // G09: build history is not counted as deployed resources
+    expect(w.find('[data-test="metric-resources"]').text()).toContain('100+ build executions not counted')
+    expect(w.find('.gcp-overview-table').text()).toContain('history')
+    expect(w.find('.gcp-overview-groups').text()).not.toContain('100 resources')
+    const pending = w.find('[data-test="pending-reads"]')
+    expect(pending.text()).toContain('Cloud SQL')
+    expect(pending.text()).toContain('Read error')
+    // Declaring the service as not used removes it from coverage without enabling it
+    await pending.find('[data-test="toggle-unused"]').trigger('click')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('Coverage: 4/4 services evaluated')
+    expect(w.find('.gcp-overview-health-detail').text()).toContain('1 declared not used')
+    await w.find('[data-test="toggle-unused"]').trigger('click')
+
+    // G11: areas filter the services table instead of jumping to one service
+    const areas = w.findAll('[data-test="area-card"]')
+    await areas[0].trigger('click')
+    expect(w.find('[data-test="area-filter"]').exists()).toBe(true)
+    expect(w.findAll('.gcp-overview-table tbody tr').length).toBeLessThan(5)
+    await areas[0].trigger('click')
+    expect(w.findAll('.gcp-overview-table tbody tr')).toHaveLength(5)
+
+    // G11: an attention signal opens its service filtered to the affected resource
+    store.tabs.scheduler.data = [{ name: 'nightly-job', state: 'PAUSED' }, { name: 'other-job', state: 'ENABLED' }]
+    await w.find('[data-test="attention-item"]').trigger('click')
+    await flushPromises()
+    store.tabs.scheduler.data = [{ name: 'nightly-job', state: 'PAUSED' }, { name: 'other-job', state: 'ENABLED' }]
+    await flushPromises()
+    const chip = w.find('[data-test="evidence-filter"]')
+    expect(chip.text()).toContain('Cloud Scheduler')
+    expect(w.text()).toContain('nightly-job')
+    expect(w.text()).not.toContain('other-job')
+    await chip.find('button').trigger('click')
+    expect(w.text()).toContain('other-job')
     const costs = w.find('[data-test="overview-costs"]')
     expect(costs.text()).toContain('Estimated costs')
     expect(costs.text()).toContain('$123.45')
     expect(costs.text()).toContain('Partial')
+    // G08: the amount says what it covers and what it leaves out
+    expect(costs.find('[data-test="cost-total"]').text()).toContain('Idle monthly baseline of modeled resources')
+    expect(costs.find('[data-test="cost-coverage"]').text()).toContain('Covers 3 of 4 resources')
+    expect(costs.find('[data-test="cost-scope"]').text()).toContain('egress')
     expect(costs.text()).toContain('a3-megagpu-8g')
     expect(costs.text()).toContain('BigQuery')
     expect(costs.text()).toContain('Cloud Scheduler')

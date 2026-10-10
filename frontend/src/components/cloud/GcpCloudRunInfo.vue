@@ -39,7 +39,7 @@
           <dl>
             <dt>{{ t('lmd.image') }}</dt><dd class="gi-mono gi-wrap">{{ d.container?.image || '—' }}</dd>
             <dt>{{ t('gri.port') }}</dt><dd>{{ d.container?.port || '—' }}</dd>
-            <dt>{{ t('gri.cpuMemory') }}</dt><dd>{{ d.container?.cpu || '—' }} / {{ d.container?.memory || '—' }}</dd>
+            <dt>{{ t('gri.cpuMemory') }}</dt><dd :title="`${d.container?.cpu || '—'} / ${d.container?.memory || '—'}`">{{ formatCloudRunCpu(d.container?.cpu) }} / {{ formatCloudRunMemory(d.container?.memory) }}</dd>
             <dt>{{ t('gri.cpuAllocation') }}</dt><dd>{{ d.container?.cpuAlwaysAllocated ? t('gri.cpuAlways') : t('gri.cpuRequests') }}<span v-if="d.container?.startupCpuBoost" class="gi-dim"> · {{ t('gri.startupBoost') }}</span></dd>
             <dt v-if="d.container?.command?.length">{{ t('gri.command') }}</dt><dd v-if="d.container?.command?.length" class="gi-mono">{{ [...d.container.command, ...(d.container.args || [])].join(' ') }}</dd>
             <dt>{{ t('gri.startupProbe') }}</dt><dd>{{ probeText(d.container?.startupProbe) }}</dd>
@@ -50,9 +50,9 @@
         <div class="gi-card">
           <div class="gi-card-title">{{ t('eksd.scaling') }}</div>
           <dl>
-            <dt>{{ t('gri.instances') }}</dt><dd>{{ d.scaling?.minInstances ?? 0 }} – {{ d.scaling?.maxInstances ?? '∞' }}<span v-if="d.scaling?.minInstances > 0" class="gi-badge warn" style="margin-left:6px">24/7</span></dd>
+            <dt>{{ t('gcpv.audit.crScaling') }}</dt><dd data-test="scaling" :title="d.scaling?.minInstances > 0 ? t('gcpv.audit.crWarmHint') : t('gcpv.audit.crZeroHint')">{{ d.scaling?.minInstances ?? 0 }} – {{ d.scaling?.maxInstances ?? '∞' }}<span v-if="d.scaling?.minInstances > 0" class="gi-badge warn" style="margin-left:6px">24/7</span><span v-else class="gi-dim"> · {{ t('gcpv.audit.crScalesToZero') }}</span></dd>
             <dt>{{ t('gri.concurrency') }}</dt><dd>{{ t('gri.concurrencyValue', { n: d.scaling?.concurrency ?? '—' }) }}</dd>
-            <dt>Timeout</dt><dd>{{ d.scaling?.timeoutSeconds ? `${d.scaling.timeoutSeconds} s` : '—' }}</dd>
+            <dt>{{ t('gcpv.audit.kv.timeout') }}</dt><dd>{{ d.scaling?.timeoutSeconds ? `${d.scaling.timeoutSeconds} s` : '—' }}</dd>
             <dt>{{ t('gri.environment') }}</dt><dd>{{ d.scaling?.executionEnvironment || t('gri.defaultValue') }}</dd>
             <dt>{{ t('gri.sessionAffinity') }}</dt><dd>{{ yesNo(d.scaling?.sessionAffinity) }}</dd>
           </dl>
@@ -141,6 +141,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import { useI18n } from '../../composables/useI18n'
 import { settings } from '../../composables/useSettings'
 import './gcpInfo.css'

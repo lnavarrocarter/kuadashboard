@@ -25,7 +25,7 @@
           <dl>
             <dt>{{ t('gsi.typeSize') }}</dt><dd>{{ d.storage?.type || '—' }} · {{ d.storage?.sizeGb ? `${d.storage.sizeGb} GB` : '—' }}</dd>
             <dt>Auto-resize</dt><dd>{{ d.storage?.autoResize ? (d.storage.autoResizeLimitGb ? t('gsi.autoResizeUpTo', { gb: d.storage.autoResizeLimitGb }) : t('gsi.autoResizeUnlimited')) : t('common.no') }}</dd>
-            <dt>Data cache</dt><dd>{{ yesNo(d.storage?.dataCache) }}</dd>
+            <dt>{{ t('gcpv.audit.kv.dataCache') }}</dt><dd>{{ yesNo(d.storage?.dataCache) }}</dd>
             <dt>{{ t('ec2d.encrypted') }}</dt><dd>{{ d.storage?.encryption || '—' }}</dd>
           </dl>
         </div>
@@ -79,7 +79,7 @@
         <div class="gi-card">
           <div class="gi-card-title">{{ t('gsi.addresses') }}</div>
           <dl>
-            <dt>Connection name</dt><dd class="gi-mono gi-wrap">{{ d.connectionName || '—' }}</dd>
+            <dt>{{ t('gcpv.audit.kv.connectionName') }}</dt><dd class="gi-mono gi-wrap">{{ d.connectionName || '—' }}</dd>
             <dt>{{ t('ec2d.publicIp') }}</dt><dd class="gi-mono">{{ d.network?.publicIp || '—' }}<span v-if="d.network && !d.network.ipv4Enabled" class="gi-dim"> ({{ t('gsi.disabledF') }})</span></dd>
             <dt>{{ t('ec2d.privateIp') }}</dt><dd class="gi-mono">{{ d.network?.privateIp || '—' }}<span v-if="d.network?.privateNetwork" class="gi-dim"> · VPC {{ d.network.privateNetwork }}</span></dd>
             <dt>{{ t('gsi.outgoingIp') }}</dt><dd class="gi-mono">{{ d.network?.outgoingIp || '—' }}</dd>

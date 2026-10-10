@@ -1,15 +1,25 @@
 <template>
-  <div class="gmc-wrap">
+  <div class="gmc-wrap" :data-status="status">
     <div class="gmc-title">{{ label }}<span v-if="unit" class="gmc-unit"> ({{ unit }})</span></div>
-    <div v-if="!points?.length" class="gmc-empty">No data</div>
+    <div v-if="note" class="gmc-note">{{ note }}</div>
+    <div v-if="status === 'loading'" class="gmc-empty">{{ t('state.loading') }}</div>
+    <div v-else-if="status === 'error'" class="gmc-empty gmc-error" role="alert">
+      <div>{{ t(`gcpv.audit.err.${state.errorKind || 'unknown'}`) }}</div>
+      <div class="gmc-detail" :title="state.error">{{ state.error }}</div>
+      <button class="btn sm" style="margin-top:6px" @click="$emit('retry')">{{ t('common.retry') }}</button>
+    </div>
+    <div v-else-if="status === 'multi'" class="gmc-empty">{{ t('gcpv.audit.metricMultiSeries', { n: state.seriesCount }) }}</div>
+    <div v-else-if="!points?.length" class="gmc-empty">{{ t('gcpv.audit.metricNoSamples') }}</div>
     <div v-else style="position:relative;height:130px">
       <canvas ref="canvasEl"></canvas>
     </div>
+    <div v-if="state.lastSampleAt" class="gmc-note">{{ t('gcpv.audit.metricLastSample', { at: new Date(state.lastSampleAt).toLocaleTimeString() }) }}<span v-if="state.partial"> · {{ t('gcpv.audit.metricPartial') }}</span></div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from '../../composables/useI18n'
 import {
   Chart, LineController, LineElement, PointElement,
   LinearScale, CategoryScale, Filler, Tooltip
@@ -23,7 +33,14 @@ const props = defineProps({
   color:  { type: String,   default: '#818cf8' },
   unit:   { type: String,   default: '' },
   fmt:    { type: Function, default: null },
+  // { status: loading | ok | empty | multi | error, error, errorKind, lastSampleAt, partial }
+  state:  { type: Object,   default: () => ({}) },
+  note:   { type: String,   default: '' },
 })
+defineEmits(['retry'])
+
+const { t } = useI18n()
+const status = computed(() => props.state?.status || (props.points?.length ? 'ok' : 'empty'))
 
 const canvasEl = ref(null)
 let chart = null
@@ -92,7 +109,7 @@ function buildChart() {
   })
 }
 
-watch(() => props.points, () => { buildChart() }, { deep: true })
+watch(() => [props.points, status.value], () => { buildChart() }, { deep: true, flush: 'post' })
 onMounted(()        => { buildChart() })
 onBeforeUnmount(()  => { if (chart) { chart.destroy(); chart = null } })
 </script>
@@ -102,4 +119,7 @@ onBeforeUnmount(()  => { if (chart) { chart.destroy(); chart = null } })
 .gmc-title { font-size: 11px; font-weight: 600; color: var(--text-dim, #8b949e); margin-bottom: 6px; }
 .gmc-unit  { font-weight: 400; }
 .gmc-empty { font-size: 11px; color: var(--text-dim, #8b949e); text-align: center; padding: 24px 0; }
+.gmc-error { color: var(--red, #f87171); padding: 14px 4px; }
+.gmc-detail { color: var(--text-dim, #8b949e); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gmc-note  { font-size: 10px; color: var(--text-dim, #8b949e); margin: -2px 0 4px; }
 </style>

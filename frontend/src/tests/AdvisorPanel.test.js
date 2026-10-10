@@ -260,6 +260,17 @@ describe('AdvisorPanel scheduled analysis', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/advisor/schedules?scope=aws%3Ap1%3Aus-east-1', { method: 'DELETE' })
   })
 
+  it('the GCP read estimate follows the selected frequency (GCP R06)', async () => {
+    const scope = 'gcp:p1:'
+    apiFetch.mockResolvedValue([{ scope, intervalHours: 1, lastStatus: 'ok' }])
+    const wrapper = mount(AdvisorPanel, { props: { report: report({ posture: { ...POSTURE, historyScope: scope, acceptanceScope: 'gcp:p1' } }) } })
+    await flushPromises()
+    const cost = wrapper.find('[data-test="advisor-schedule-cost"]').text()
+    expect(cost).toContain('About 720 runs a month')
+    expect(cost).toContain('150 GCP list calls')
+    expect(cost).not.toContain('every 6 h')
+  })
+
   it('says why a Kubernetes schedule is waiting', async () => {
     const scope = 'kubernetes:other:all'
     apiFetch.mockResolvedValue([{ scope, intervalHours: 6, lastStatus: 'skipped', lastError: 'context not active' }])

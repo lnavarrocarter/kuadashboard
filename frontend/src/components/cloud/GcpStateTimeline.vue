@@ -101,7 +101,11 @@ function tone(e) {
   if (['TERMINATED', 'STOPPED'].includes(s)) return ''
   return 'warn'
 }
-function actionLabel(a) { return ACTIONS.includes(a) ? t(`gst.action.${a}`) : a }
+// Cloud Run "start"/"stop" were minimum-instance changes: the history says so.
+function actionLabel(a) {
+  if (props.resourceType === 'gcp-cloud-run' && (a === 'start' || a === 'stop')) return t(`gst.action.run_${a}`)
+  return ACTIONS.includes(a) ? t(`gst.action.${a}`) : a
+}
 function actionDetail(e) {
   const d = e.details || {}
   if (e.action === 'labels') {
@@ -113,7 +117,7 @@ function actionDetail(e) {
     return parts.join(', ')
   }
   if (e.action === 'ssh') return `${d.user || ''}${d.keyRenewed ? t('gst.keyRenewed') : ''}`
-  if (d.minInstances != null) return `min instances = ${d.minInstances}`
+  if (d.minInstances != null) return t('gst.minInstances', { n: d.minInstances })
   if (d.estimatedMonthlyUsd != null) return t('gst.perMonth', { usd: Number(d.estimatedMonthlyUsd).toFixed(2) })
   return ''
 }

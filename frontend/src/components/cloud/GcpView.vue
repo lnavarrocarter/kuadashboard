@@ -20,22 +20,55 @@
         @open-architecture="context => emit('open-architecture', context)"
       />
 
+      <!-- Evidence opened from the Overview: filter stated, one click to drop it -->
+      <div v-if="evidenceFocus && evidenceFocus.tab === activeTab" class="gcp-focus-chip" data-test="evidence-filter" role="status">
+        {{ t('gcpv.audit.evidenceFilter', { label: evidenceFocus.label, n: filteredRows.length }) }}
+        <button class="btn sm" @click="evidenceFocus = null">{{ t('gcpv.audit.showAll') }}</button>
+        <button class="btn sm" @click="switchTab('overview')">{{ t('gcpv.audit.backToOverview') }}</button>
+      </div>
+
       <!-- Toolbar -->
       <div v-if="activeTab !== 'apm' && activeTab !== 'overview'" class="aws-toolbar">
         <input v-model="search" class="ctrl-input aws-search" :placeholder="t('table.filterPlaceholder')" />
-        <span class="text-dim" style="font-size:12px">
+        <select v-for="facet in activeFacets" :key="`${activeTab}-${facet.id}`" v-model="facetState[facetKey(activeTab, facet.id)]"
+          class="ctrl-select aws-facet" :aria-label="facet.label" :data-test="`facet-${facet.id}`">
+          <option value="">{{ t('awsFilter.any', { label: facet.label }) }}</option>
+          <option v-for="option in facet.options" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
+        </select>
+        <select v-if="currentTab.data?.length > 1" v-model="sortState[activeTab]" class="ctrl-select aws-facet" :aria-label="t('gcpv.audit.sortBy')" data-test="sort">
+          <option value="">{{ t('gcpv.audit.sortDefault') }}</option>
+          <option v-for="key in SORT_KEYS" :key="key" :value="key">{{ t(`gcpv.audit.sort.${key}`) }}</option>
+        </select>
+        <span class="text-dim" style="font-size:12px" data-test="row-count">
           <template v-if="currentTab.loading">{{ t('state.loading') }}</template>
-          <template v-else>{{ t('gcpv.results', { n: filteredRows.length }) }}</template>
+          <template v-else-if="currentTab.error && !filteredRows.length">{{ t('gcpv.audit.notRead') }}</template>
+          <template v-else-if="hasFilters && filteredRows.length !== (currentTab.data?.length || 0)">{{ t('awsFilter.resultsOf', { n: filteredRows.length, total: `${currentTab.data?.length || 0}${currentTab.partial ? '+' : ''}` }) }}</template>
+          <template v-else>{{ t('gcpv.results', { n: `${filteredRows.length}${currentTab.partial ? '+' : ''}` }) }}</template>
         </span>
+        <button v-if="hasFilters" class="btn sm" data-test="clear-filters" @click="clearFilters()">{{ t('awsFilter.clear') }}</button>
         <button class="btn sm" @click="reloadActiveTab" :disabled="currentTab.loading" :title="t('action.refresh')"><i data-lucide="refresh-cw"></i></button>
       </div>
 
+      <!-- Partial list: some regions failed or the page cap was reached (R02) -->
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && !currentTab.error && currentTab.partial" class="api-disabled-banner" role="status" data-test="partial-list">
+        <span v-if="currentTab.failedLocations?.length">{{ t('gcpv.audit.partialRegions', { n: currentTab.failedLocations.length, regions: currentTab.failedLocations.join(', ') }) }}</span>
+        <span v-else>{{ t('gcpv.audit.partialPages') }}</span>
+      </div>
+
       <!-- Permission denied banner -->
-      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && currentTab.error" class="api-disabled-banner">
-        <span>{{ currentTab.error }}</span>
-        <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank"
-           class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0">
-          {{ t('gcp.enableApi') }}
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && currentTab.error" class="api-disabled-banner" role="alert" data-test="tab-error">
+        <div style="flex:1;min-width:0">
+          <strong data-test="error-kind">{{ t(`gcpv.audit.err.${currentTab.errorInfo?.kind || 'unknown'}`) }}</strong>
+          <span> · {{ currentTab.error }}</span>
+          <div class="text-dim" style="font-size:11px;margin-top:2px">{{ t(`gcpv.audit.errHint.${currentTab.errorInfo?.kind || 'unknown'}`) }}</div>
+          <details v-if="currentTab.errorInfo?.raw && currentTab.errorInfo.raw !== currentTab.error" style="margin-top:4px;font-size:11px">
+            <summary style="cursor:pointer">{{ t('gcpv.audit.technicalDetails') }}</summary>
+            <div class="mono-xs" style="white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto">{{ currentTab.errorInfo.raw }}</div>
+          </details>
+        </div>
+        <a v-if="currentTab.enableUrl" :href="currentTab.enableUrl" target="_blank" rel="noopener"
+           class="btn sm" style="margin-left:12px;white-space:nowrap;flex-shrink:0" :title="t('gcpv.audit.openApiPageHint')">
+          {{ t('gcpv.audit.openApiPage') }}
         </a>
       </div>
 
@@ -51,31 +84,32 @@
               <span v-if="gcpStore.overview?.generatedAt"> {{ t('gcpv.updated', { p0: new Date(gcpStore.overview.generatedAt).toLocaleString() }) }}</span>
             </div>
           </div>
-          <button class="btn sm" @click="reloadOverview" :disabled="gcpStore.overviewLoading" :title="t('gcpv.refreshOverview')">
+          <button class="btn sm" @click="reloadOverview" :disabled="gcpStore.overviewLoading" :title="t('gcpv.audit.refreshOverviewCost')">
             <i data-lucide="refresh-cw"></i> {{ gcpStore.overviewLoading ? t('common.loading') : t('action.refresh') }}
           </button>
         </div>
         <div v-if="gcpStore.overviewError" class="api-disabled-banner">{{ gcpStore.overviewError }}</div>
         <div v-if="gcpStore.overviewLoading && !gcpStore.overview" class="empty-row">{{ t('gcpv.loadingOverview') }}</div>
         <template v-else-if="gcpStore.overview">
-          <section :class="['gcp-overview-health-banner', overviewHealthClass(overviewHealth)]">
+          <section :class="['gcp-overview-health-banner', overviewHealthClass(overviewHealth)]" data-test="overview-health">
             <div class="gcp-overview-health-main">
               <span class="gcp-overview-health-dot"></span>
-              <span class="gcp-overview-health-label">{{ t('gcpv.projectHealth') }}</span>
+              <span class="gcp-overview-health-label">{{ t('gcpv.audit.observedResources') }}</span>
               <strong>{{ overviewHealthLabel }}</strong>
             </div>
             <div class="gcp-overview-health-detail">
-              {{ t('gcpv.servicesResponding', { p0: gcpStore.overview?.summary?.availableServices ?? 0, p1: gcpStore.overview?.summary?.services ?? 0 }) }}
-              <span v-if="gcpStore.overview?.summary?.attention"> {{ t('gcpv.signalSNeedAttention', { p0: gcpStore.overview.summary.attention }) }}</span>
-              <span v-else> {{ t('gcpv.noActiveSignals') }}</span>
+              {{ t('gcpv.audit.coverageLine', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}
+              <span v-if="overviewCoverageInfo.notEvaluated"> · {{ t('gcpv.audit.notEvaluatedN', { n: overviewCoverageInfo.notEvaluated }) }}</span>
+              <span v-if="overviewCoverageInfo.unused"> · {{ t('gcpv.audit.declaredUnusedN', { n: overviewCoverageInfo.unused }) }}</span>
+              <div class="text-dim" style="font-size:11px;margin-top:2px">{{ t('gcpv.audit.notEndToEnd') }}</div>
             </div>
           </section>
 
           <div class="gcp-overview-metrics">
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('apm.resources') }}</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.needsAttention') }}</span><strong :class="gcpStore.overview?.summary?.attention ? 'status-warn' : 'status-ok'">{{ gcpStore.overview?.summary?.attention ?? 0 }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.apiUnavailable') }}</span><strong :class="gcpStore.overview?.summary?.unavailable ? 'status-err' : 'status-ok'">{{ gcpStore.overview?.summary?.unavailable ?? 0 }}</strong><small>{{ t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
-            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.ofResponding', { p0: gcpStore.overview?.summary?.availableServices ?? 0, p1: gcpStore.overview?.summary?.services ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric" data-test="metric-resources"><span class="text-dim">{{ t('gcpv.audit.deployedResources') }}</span><strong :title="overviewResourcesPartial ? t('gcpv.audit.partialCount') : ''">{{ gcpStore.overview?.summary?.total ?? 0 }}{{ overviewResourcesPartial ? '+' : '' }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}<template v-if="gcpStore.overview?.summary?.executions?.count"> · {{ t('gcpv.audit.executionsApart', { n: gcpStore.overview.summary.executions.count, partial: gcpStore.overview.summary.executions.partial ? '+' : '' }) }}</template></small></div>
+            <div class="gcp-overview-metric" data-test="metric-incidents"><span class="text-dim">{{ t('gcpv.audit.incidents') }}</span><strong :class="overviewIncidents ? 'status-warn' : 'status-ok'">{{ overviewIncidents }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric" data-test="metric-not-evaluated"><span class="text-dim">{{ t('gcpv.audit.notEvaluated') }}</span><strong :class="overviewCoverageInfo.notEvaluated ? 'status-warn' : 'status-ok'">{{ overviewCoverageInfo.notEvaluated }}</strong><small>{{ overviewCauseSummary || t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
+            <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.audit.evaluatedOf', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}</small></div>
           </div>
 
           <AdvisorPanel :report="gcpStore.overview?.advisor || null" :loading="gcpStore.overviewLoading" storage-key="advisor.gcp" @posture-changed="gcpStore.fetchOverview()" />
@@ -87,9 +121,10 @@
             </div>
             <template v-if="overviewCosts">
               <div class="gcp-overview-costs-head">
-                <div class="gcp-overview-cost-total">
-                  <span class="text-dim">{{ t('gcpv.monthlyResourceBaseline') }}</span>
-                  <strong>{{ formatOverviewUsd(overviewCosts.monthlyEstimate) }}</strong>
+                <div class="gcp-overview-cost-total" data-test="cost-total">
+                  <span class="text-dim">{{ t('gcpv.audit.idleBaseline') }}</span>
+                  <strong>{{ overviewCosts.monthlyEstimate == null ? t('gcpv.audit.notEstimated') : formatOverviewUsd(overviewCosts.monthlyEstimate) }}</strong>
+                  <small class="text-dim" data-test="cost-coverage">{{ t('gcpv.audit.costCoverage', { modeled: overviewCosts.modeledResources ?? 0, total: gcpStore.overview?.summary?.total ?? 0, services: overviewCosts.unmodeledServices?.length ?? 0 }) }}</small>
                 </div>
                 <div class="gcp-overview-cost-meta">
                   <span>{{ t('gcpv.modeledResourceS', { p0: overviewCosts.modeledResources ?? 0 }) }}</span>
@@ -114,7 +149,11 @@
               <div v-if="overviewCosts.unavailableServices?.length" class="gcp-overview-cost-warning">
                 <strong>{{ t('gcpv.inventoryUnavailable') }}</strong> {{ overviewCosts.unavailableServices.join(', ') }}
               </div>
-              <div class="gcp-overview-cost-disclaimer">{{ overviewCosts.disclaimer }}</div>
+              <dl class="gcp-overview-cost-scope" data-test="cost-scope">
+                <dt>{{ t('gcpv.audit.costIncluded') }}</dt><dd>{{ t('gcpv.audit.costIncludedList') }}</dd>
+                <dt>{{ t('gcpv.audit.costExcluded') }}</dt><dd>{{ t('gcpv.audit.costExcludedList') }}</dd>
+              </dl>
+              <div class="gcp-overview-cost-disclaimer">{{ t('gcpv.audit.costDisclaimer', { region: overviewCosts.pricingRegion || 'us-central1' }) }}</div>
               <div class="gcp-overview-cost-footer">
                 <span class="text-dim">{{ t('gcpv.thisIsNotActualSpendOr') }}</span>
                 <button class="btn sm" data-test="open-billing" @click="openOverviewBilling">{{ t('gcpv.openCloudBilling') }}</button>
@@ -127,7 +166,7 @@
             <section class="gcp-overview-section">
               <div class="gcp-overview-section-title">{{ t('gcpv.healthByArea') }}</div>
               <div class="gcp-overview-groups">
-                <button v-for="group in overviewGroups" :key="group.id" class="gcp-overview-group" @click="group.tab && switchTab(group.tab)">
+                <button v-for="group in overviewGroups" :key="group.id" class="gcp-overview-group" :aria-pressed="overviewAreaFilter === group.id" data-test="area-card" @click="showArea(group.id)">
                   <div class="gcp-overview-group-head">
                     <span>{{ t(group.label) }}</span>
                     <span :class="['gcp-overview-health-pill', overviewHealthTone(group.health)]">{{ overviewHealthLabelFor(group.health) }}</span>
@@ -138,7 +177,8 @@
                     <span>{{ t('gcpv.active', { p0: group.active }) }}</span>
                     <span>{{ t('gcpv.inactive', { p0: group.inactive }) }}</span>
                     <span v-if="group.issues" class="status-warn">{{ t('gcpv.issueS', { p0: group.issues }) }}</span>
-                    <span v-else class="status-ok">{{ t('gcpv.healthy') }}</span>
+                    <span v-else class="status-ok">{{ t('gcpv.audit.noIncidents') }}</span>
+                    <span v-if="group.notEvaluated" class="text-dim">{{ t('gcpv.audit.notEvaluatedN', { n: group.notEvaluated }) }}</span>
                   </div>
                 </button>
               </div>
@@ -148,7 +188,7 @@
               <div class="gcp-overview-section-title">{{ t('gcpv.needsAttention') }} <span class="text-dim">({{ overviewAttention.length }})</span></div>
               <div v-if="!overviewAttention.length" class="gcp-overview-empty-callout"><span class="gcp-overview-health-dot healthy"></span>{{ t('gcpv.noActiveServiceSignals') }}</div>
               <div v-else class="gcp-overview-attention-list">
-                <button v-for="item in overviewAttention" :key="`${item.tab}:${item.name || item.code}`" class="gcp-overview-attention" @click="item.tab && switchTab(item.tab)">
+                <button v-for="item in overviewAttention" :key="`${item.tab}:${item.name || item.code}`" class="gcp-overview-attention" data-test="attention-item" @click="openEvidence(item.tab, item.name ? [item.name] : [], `${item.service}: ${overviewSignalText(item)}`)">
                   <span :class="['gcp-overview-signal-dot', item.level]"></span>
                   <span class="gcp-overview-attention-copy">
                     <strong>{{ item.service }}</strong>
@@ -158,30 +198,53 @@
                 </button>
               </div>
             </section>
+
+            <section v-if="overviewPendingReads.length" class="gcp-overview-section" data-test="pending-reads">
+              <div class="gcp-overview-section-title">{{ t('gcpv.audit.pendingReads') }} <span class="text-dim">({{ overviewPendingReads.length }})</span></div>
+              <div class="text-dim" style="font-size:11px;margin-bottom:6px">{{ t('gcpv.audit.pendingReadsHint') }}</div>
+              <div class="gcp-overview-attention-list">
+                <div v-for="item in overviewPendingReads" :key="item.id" class="gcp-overview-attention" data-test="pending-read">
+                  <span :class="['gcp-overview-signal-dot', item.unused ? '' : 'warning']"></span>
+                  <span class="gcp-overview-attention-copy">
+                    <strong>{{ item.label }}</strong>
+                    <span :title="item.error?.raw || item.error?.message">{{ item.unused ? t('gcpv.audit.declaredUnused') : t(`gcpv.audit.err.${item.error?.kind || 'unknown'}`) }}</span>
+                  </span>
+                  <span style="display:flex;gap:4px;margin-left:auto">
+                    <button class="btn sm" @click="switchTab(item.tab)">{{ t('gcpv.audit.diagnose') }}</button>
+                    <button class="btn sm" data-test="toggle-unused" :aria-pressed="item.unused" @click="toggleUnusedService(item.id)">{{ item.unused ? t('gcpv.audit.markUsed') : t('gcpv.audit.markUnused') }}</button>
+                  </span>
+                </div>
+              </div>
+            </section>
           </div>
 
           <div class="gcp-overview-grid gcp-overview-grid-services">
             <section class="gcp-overview-section gcp-overview-section-wide">
-              <div class="gcp-overview-section-title">{{ t('gcpv.services') }} <span class="text-dim">{{ t('gcpv.clickOpenToInspectTheFull') }}</span></div>
+              <div class="gcp-overview-section-title" ref="overviewServicesTitle">{{ t('gcpv.services') }} <span class="text-dim">{{ t('gcpv.clickOpenToInspectTheFull') }}</span></div>
+              <div v-if="overviewAreaFilter" class="gcp-focus-chip" data-test="area-filter">
+                {{ t('gcpv.audit.areaFilter', { area: overviewGroupLabel(overviewAreaFilter) }) }}
+                <button class="btn sm" @click="overviewAreaFilter = ''">{{ t('gcpv.audit.showAll') }}</button>
+              </div>
               <div class="gcp-overview-table-wrap">
                 <table class="cloud-table gcp-overview-table">
                   <thead><tr><th>{{ t('pf.service') }}</th><th>{{ t('gcpv.area') }}</th><th>{{ t('health.title') }}</th><th>{{ t('apm.resources') }}</th><th>{{ t('vercel.col.active') }}</th><th>{{ t('quick.inactive') }}</th><th>{{ t('gcpv.signals') }}</th><th></th></tr></thead>
                   <tbody>
-                    <tr v-for="service in overviewServices" :key="service.id">
+                    <tr v-for="service in overviewServicesShown" :key="service.id">
                       <td>
                         <div class="fw-medium">{{ service.label }}</div>
-                        <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.message">{{ service.error.message }}</div>
+                        <div v-if="service.error" class="gcp-overview-service-error" :title="service.error.raw || service.error.message">{{ t(`gcpv.audit.err.${service.error.kind || 'unknown'}`) }} · {{ service.error.message }}</div>
                       </td>
                       <td class="text-dim">{{ overviewGroupLabel(service.group) }}</td>
                       <td><span :class="['gcp-overview-health-pill', overviewHealthTone(overviewServiceHealth(service))]">{{ overviewHealthLabelFor(overviewServiceHealth(service)) }}</span></td>
-                      <td class="font-mono">{{ service.count ?? 0 }}</td>
-                      <td class="font-mono">{{ service.active ?? 0 }}</td>
+                      <td class="font-mono" :title="service.partial ? t('gcpv.audit.partialCount') : ''">{{ service.count ?? 0 }}<span v-if="service.partial">+</span>
+                        <span v-if="service.kind === 'execution'" class="gcp-chip" style="margin-left:4px">{{ t('gcpv.audit.history') }}</span></td>
+                      <td class="font-mono">{{ service.kind === 'execution' ? '—' : (service.active ?? 0) }}</td>
                       <td class="font-mono">{{ service.inactive ?? Math.max(0, (service.count ?? 0) - (service.active ?? 0)) }}</td>
                       <td>
                         <span v-if="service.issueCount" class="status-warn">{{ service.issueCount }}</span>
                         <span v-else class="text-dim">—</span>
                       </td>
-                      <td><button class="btn sm" @click="switchTab(service.tab)">{{ t('pf.open') }}</button></td>
+                      <td><button class="btn sm" @click="openServiceEvidence(service)">{{ service.issueCount ? t('gcpv.audit.openAffected') : t('pf.open') }}</button></td>
                     </tr>
                   </tbody>
                 </table>
@@ -221,20 +284,20 @@
         </div>
         <div v-if="gcpStore.tabs.cloudrun.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.cloudrun.error && !filteredCloudRun.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunServices') }}</div>
+        <div v-else-if="!filteredCloudRun.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunServices') }}</div>
         <SplitPane v-else :split="!!crPanel.resource" storage-key="gcp-cloudrun">
           <template #top>
   <div class="gcp-list-table">
             <table class="cloud-table gcp-table" data-test="cloudrun-table">
               <thead><tr>
-                <th>{{ t('gri.service') }}</th><th>{{ t('res.state') }}</th><th>{{ t('lmd.image') }}</th><th>CPU / Mem</th><th>{{ t('gri.instances') }}</th><th>Ingress</th><th>{{ t('gri.revision') }}</th><th>{{ t('res.updated') }}</th><th>{{ t('gcpv.actions') }}</th>
+                <th>{{ t('gri.service') }}</th><th>{{ t('res.state') }}</th><th>{{ t('lmd.image') }}</th><th>CPU / Mem</th><th>{{ t('gcpv.audit.crScaling') }}</th><th>Ingress</th><th>{{ t('gri.revision') }}</th><th>{{ t('res.updated') }}</th><th>{{ t('gcpv.actions') }}</th>
               </tr></thead>
               <tbody>
                 <tr v-for="svc in filteredCloudRun" :key="`${svc.region}/${svc.name}`"
                   :class="{ 'row-selected': crPanel.resource?.name === svc.name && crPanel.resource?.region === svc.region }"
                   @click="selectCloudRun(svc)">
                   <td>
-                    <div class="fw-medium">{{ svc.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="crPanel.resource?.name === svc.name && crPanel.resource?.region === svc.region" @click.stop="selectCloudRun(svc)">{{ svc.name }}</button>
                     <div class="text-dim mono-xs">{{ svc.region }}</div>
                   </td>
                   <td>
@@ -242,9 +305,9 @@
                     <div v-if="svc.statusMessage && svc.status === 'failed'" class="text-dim mono-xs gcp-ellipsis" :title="svc.statusMessage">{{ svc.statusMessage }}</div>
                   </td>
                   <td class="mono-xs text-dim gcp-ellipsis" :title="svc.image">{{ shortImage(svc.image) }}</td>
-                  <td class="text-dim">{{ svc.cpu || '—' }} / {{ svc.memory || '—' }}</td>
+                  <td class="text-dim" :title="`${svc.cpu || '—'} / ${svc.memory || '—'}`">{{ formatCloudRunCpu(svc.cpu) }} / {{ formatCloudRunMemory(svc.memory) }}</td>
                   <td>
-                    <span :class="svc.minInstances > 0 ? 'gcp-chip warm' : 'gcp-chip'" :title="svc.minInstances > 0 ? 'Instancias siempre encendidas: facturan 24/7' : 'Escala a cero'">{{ svc.minInstances }}–{{ svc.maxInstances ?? '∞' }}</span>
+                    <span :class="svc.minInstances > 0 ? 'gcp-chip warm' : 'gcp-chip'" :title="svc.minInstances > 0 ? t('gcpv.audit.crWarmHint') : t('gcpv.audit.crZeroHint')">{{ svc.minInstances }}–{{ svc.maxInstances ?? '∞' }}</span>
                   </td>
                   <td class="text-dim">{{ svc.ingress || '—' }}</td>
                   <td class="mono-xs text-dim">
@@ -254,9 +317,9 @@
                   <td class="text-dim" style="white-space:nowrap">{{ svc.updatedAt ? new Date(svc.updatedAt).toLocaleString() : '—' }}</td>
                   <td @click.stop>
                     <div class="row-actions">
-                      <button class="btn sm" data-test="start" @click="requestAction('cloudrun', 'start', svc)" :title="'Fijar min instances = 1'">{{ t('action.start') }}</button>
-                      <button class="btn sm" data-test="stop" :disabled="svc.minInstances === 0" @click="requestAction('cloudrun', 'stop', svc)" :title="'Fijar min instances = 0'">{{ t('action.stop') }}</button>
-                      <button class="btn sm danger" data-test="delete" @click="requestAction('cloudrun', 'delete', svc)">🗑</button>
+                      <button class="btn sm" data-test="start" :disabled="!cloudRunScaling(svc).canWarm" @click="requestAction('cloudrun', 'start', svc)" :title="t('gcpv.audit.crWarmTitle')">{{ t('gcpv.audit.crWarm') }}</button>
+                      <button class="btn sm" data-test="stop" :disabled="!cloudRunScaling(svc).canScaleToZero" @click="requestAction('cloudrun', 'stop', svc)" :title="t('gcpv.audit.crScaleToZeroTitle')">{{ t('gcpv.audit.crScaleToZero') }}</button>
+                      <button class="btn sm danger" data-test="delete" :aria-label="t('gcpv.delete')" :title="t('gcpv.delete')" @click="requestAction('cloudrun', 'delete', svc)">🗑</button>
                     </div>
                   </td>
                 </tr>
@@ -274,19 +337,21 @@
                 <span :class="statusClass(crPanel.resource.status)" style="font-size:11px">{{ crPanel.resource.status }}</span>
                 <a v-if="crPanel.resource.uri" :href="crPanel.resource.uri" target="_blank" class="link" style="font-size:11px">{{ t('gcpv.openUrl') }}</a>
                 <div style="margin-left:auto;display:flex;gap:6px">
-                  <button class="btn sm" @click="requestAction('cloudrun', 'start', crPanel.resource)">{{ t('action.start') }}</button>
-                  <button class="btn sm" @click="requestAction('cloudrun', 'stop', crPanel.resource)">{{ t('action.stop') }}</button>
+                  <button class="btn sm" :disabled="!cloudRunScaling(crPanel.resource).canWarm" :title="t('gcpv.audit.crWarmTitle')" @click="requestAction('cloudrun', 'start', crPanel.resource)">{{ t('gcpv.audit.crWarm') }}</button>
+                  <button class="btn sm" :disabled="!cloudRunScaling(crPanel.resource).canScaleToZero" :title="t('gcpv.audit.crScaleToZeroTitle')" @click="requestAction('cloudrun', 'stop', crPanel.resource)">{{ t('gcpv.audit.crScaleToZero') }}</button>
                   <button class="btn sm danger" @click="requestAction('cloudrun', 'delete', crPanel.resource)">{{ t('gcpv.delete') }}</button>
                   <button class="btn sm" :title="t('gcpv.closeDetail')" @click="crPanel.resource = null">✕</button>
                 </div>
               </div>
-              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }}</div>
+              <div class="text-dim" style="font-size:11px;margin-top:3px">{{ crPanel.resource.region }} · {{ t('gcpv.audit.crScalingLine', { min: cloudRunScaling(crPanel.resource).min, max: cloudRunScaling(crPanel.resource).max ?? '∞' }) }}</div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in CR_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', crPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="crPanel.tab === tabItem.id"
+                :id="`gcp-cr-tab-${tabItem.id}`" aria-controls="gcp-cr-panel" :tabindex="crPanel.tab === tabItem.id ? 0 : -1" @click="crSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-cr-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-cr-tab-${crPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','revisions','variables'].includes(crPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="crPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -334,11 +399,12 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(crMetrics, CR_METRICS, crPanel.resource)" :disabled="crMetrics.loading">{{ crMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="crMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="crMetrics.error" class="alert-error">{{ crMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="crMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="crMetrics.error" class="alert-error">{{ crMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in CR_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="crMetrics.data[m.key] || []" :state="crMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(crMetrics, m, crPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: crMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -349,7 +415,7 @@
       <div v-show="activeTab === 'gke'" class="tab-panel">
         <div v-if="gcpStore.tabs.gke.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.gke.error && !filteredGke.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredGke.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noGke') }}</div>
+        <div v-else-if="!filteredGke.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noGke') }}</div>
         <table v-else class="cloud-table">
           <thead>
             <tr>
@@ -382,7 +448,7 @@
                 <button
                   class="btn sm primary gke-connect-btn"
                   :disabled="c.status !== 'RUNNING' || connectingCluster === c.name"
-                  @click="connectGke(c)"
+                  @click="requestGkeConnect(c)"
                   :title="t('gcpv.importThisClusterSKubeconfigAnd')"
                 >
                   <i data-lucide="plug"></i>
@@ -406,7 +472,7 @@
         </div>
         <div v-if="gcpStore.tabs.vms.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.vms.error && !filteredVms.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredVms.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noVms') }}</div>
+        <div v-else-if="!filteredVms.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noVms') }}</div>
         <SplitPane v-else :split="!!vmPanel.resource" storage-key="gcp-vms">
           <template #top>
   <div class="gcp-list-table">
@@ -419,7 +485,7 @@
                   :class="{ 'row-selected': vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone }"
                   @click="selectVm(vm)">
                   <td>
-                    <div class="fw-medium">{{ vm.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="vmPanel.resource?.name === vm.name && vmPanel.resource?.zone === vm.zone" @click.stop="selectVm(vm)">{{ vm.name }}</button>
                     <div class="text-dim mono-xs">{{ vm.zone }}</div>
                   </td>
                   <td><span :class="vmStatusClass(vm.status)">{{ vm.status }}</span></td>
@@ -463,10 +529,12 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ vmPanel.resource.zone }} · {{ vmPanel.resource.machineType }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in VM_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', vmPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="vmPanel.tab === tabItem.id"
+                :id="`gcp-vm-tab-${tabItem.id}`" aria-controls="gcp-vm-panel" :tabindex="vmPanel.tab === tabItem.id ? 0 : -1" @click="vmSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-vm-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-vm-tab-${vmPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','disks','network'].includes(vmPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="vmPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -514,11 +582,12 @@
                 <button class="btn sm" @click="vmSwitchTab('metrics')" :disabled="vmMetrics.loading">{{ vmMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
                 <span v-if="!vmPanel.detail?.instanceId" class="text-dim" style="font-size:11px">{{ t('gcpv.loadTheOverviewTabFirstTo') }}</span>
               </div>
-              <div v-if="vmMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="vmMetrics.error" class="alert-error">{{ vmMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="vmMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="vmMetrics.error" class="alert-error">{{ vmMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in VM_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="vmMetrics.data[m.key] || []" :state="vmMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(vmMetrics, m, vmPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: vmMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -536,7 +605,7 @@
         </div>
         <div v-if="gcpStore.tabs.sql.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.sql.error && !filteredSql.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSql.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSql') }}</div>
+        <div v-else-if="!filteredSql.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSql') }}</div>
         <SplitPane v-else :split="!!sqlPanel.resource" storage-key="gcp-sql">
           <template #top>
   <div class="gcp-list-table">
@@ -549,7 +618,7 @@
                   :class="{ 'row-selected': sqlPanel.resource?.name === inst.name }"
                   @click="selectSql(inst)">
                   <td>
-                    <div class="fw-medium">{{ inst.name }}</div>
+                    <button type="button" class="gcp-row-link fw-medium" :aria-expanded="sqlPanel.resource?.name === inst.name" @click.stop="selectSql(inst)">{{ inst.name }}</button>
                     <div class="text-dim mono-xs">{{ inst.zone || inst.region }}</div>
                   </td>
                   <td>
@@ -591,10 +660,12 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ sqlPanel.resource.database }} · {{ sqlPanel.resource.region }} · {{ sqlPanel.resource.tier }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
               <button v-for="tabItem in SQL_TABS" :key="tabItem.id"
-                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
+                :class="['aws-tab-btn', sqlPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="sqlPanel.tab === tabItem.id"
+                :id="`gcp-sql-tab-${tabItem.id}`" aria-controls="gcp-sql-panel" :tabindex="sqlPanel.tab === tabItem.id ? 0 : -1" @click="sqlSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-sql-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-sql-tab-${sqlPanel.tab}`">
             <!-- DETAIL SECTIONS -->
             <div v-show="['overview','config','connection'].includes(sqlPanel.tab)" style="flex:1;overflow:auto;padding:14px 16px">
               <div v-if="sqlPanel.detailLoading" class="gi-empty" style="text-align:center;padding:32px">{{ t('gcpv.loadingDetail') }}</div>
@@ -641,11 +712,12 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(sqlMetrics, SQL_METRICS, sqlPanel.resource)" :disabled="sqlMetrics.loading">{{ sqlMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="sqlMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="sqlMetrics.error" class="alert-error">{{ sqlMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :points="sqlMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="sqlMetrics.error" class="alert-error">{{ sqlMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in SQL_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="sqlMetrics.data[m.key] || []" :state="sqlMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(sqlMetrics, m, sqlPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: sqlMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
           </template>
@@ -656,15 +728,17 @@
       <div v-show="activeTab === 'storage'" class="tab-panel">
         <div v-if="gcpStore.tabs.storage.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.storage.error && !filteredStorage.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredStorage.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuckets') }}</div>
+        <div v-else-if="!filteredStorage.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuckets') }}</div>
         <table v-else class="cloud-table">
-          <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('gcpv.storageClass') }}</th><th>{{ t('awsv.zonePublic') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
+          <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('gcpv.storageClass') }}</th><th :title="t('gcpv.audit.papHint')">{{ t('gcpv.audit.pap') }}</th><th>{{ t('gcpv.audit.uniformAccess') }}</th><th :title="t('gcpv.audit.exposureHint')">{{ t('gcpv.audit.exposure') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
             <tr v-for="b in filteredStorage" :key="b.name">
               <td>{{ b.name }}</td>
               <td class="text-dim">{{ b.location }}</td>
               <td class="text-dim">{{ b.storageClass }}</td>
-              <td><span :class="b.publicAccess ? 'status-warn' : 'status-ok'">{{ b.publicAccess ? t('awsv.zonePublic') : t('awsv.zonePrivate') }}</span></td>
+              <td data-test="pap"><span :class="b.publicAccessPrevention === 'enforced' ? 'status-ok' : 'text-dim'">{{ t(`gcpv.audit.pap.${b.publicAccessPrevention || 'unknown'}`) }}</span></td>
+              <td class="text-dim">{{ b.uniformAccess == null ? '—' : (b.uniformAccess ? t('common.yes') : t('common.no')) }}</td>
+              <td data-test="exposure" class="text-dim" :title="t('gcpv.audit.exposureHint')">{{ t('gcpv.audit.exposureNotVerified') }}</td>
               <td class="text-dim">{{ b.created ? new Date(b.created).toLocaleDateString() : '--' }}</td>
               <td>
                 <button class="btn sm" @click="openGcsBrowser(b.name)">
@@ -680,15 +754,16 @@
       <div v-show="activeTab === 'functions'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.functions.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.functions.error && !filteredFunctions.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredFunctions.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noFunctions') }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
+        <div v-else-if="!filteredFunctions.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noFunctions') }}</div>
+        <div v-else class="gcp-master-detail">
           <!-- LEFT -->
-          <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
-            <div v-for="fn in filteredFunctions" :key="fn.name"
-              :class="['sidebar-item', fnPanel.resource?.name === fn.name ? 'active' : '']"
-              style="cursor:pointer" @click="selectFn(fn)">
+          <div class="gcp-master-list" style="width:240px">
+            <div v-for="fn in filteredFunctions" :key="fnKey(fn)"
+              :class="['sidebar-item', fnKey(fnPanel.resource) === fnKey(fn) ? 'active' : '']"
+              style="cursor:pointer" role="button" tabindex="0" :aria-current="fnKey(fnPanel.resource) === fnKey(fn) ? 'true' : undefined"
+              @click="selectFn(fn)" @keydown.enter.prevent="selectFn(fn)" @keydown.space.prevent="selectFn(fn)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ fn.name }}</div>
-              <div class="text-dim" style="font-size:10px">{{ fn.location }}</div>
+              <div class="text-dim" style="font-size:10px">{{ fn.location || t('gcpv.audit.fnRegionUnknown') }}</div>
               <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
                 <span :class="fnStatusClass(fn.state)" style="font-size:10px">{{ fn.state }}</span>
                 <span class="text-dim" style="font-size:10px">{{ fn.runtime }}</span>
@@ -710,21 +785,27 @@
               </div>
               <div class="text-dim" style="font-size:11px;margin-top:3px">{{ fnPanel.resource.location }} · {{ fnPanel.resource.runtime }} · {{ fnPanel.resource.trigger }}</div>
             </div>
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="tabItem in [{id:'overview',label:'Overview'},{id:'variables',label:'Variables'},{id:'logs',label:'Logs'},{id:'invoke',label:'Invoke'},{id:'metrics',label:'Metrics'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" @click="fnSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
+              <button v-for="tabItem in [{id:'overview',label:'gcpv.tabOverview'},{id:'variables',label:'gcpv.tabVariables'},{id:'logs',label:'gcpv.tabLogs'},{id:'invoke',label:'gcp.invoke'},{id:'metrics',label:'gcpv.tabMetrics'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', fnPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="fnPanel.tab === tabItem.id"
+                :id="`gcp-fn-tab-${tabItem.id}`" aria-controls="gcp-fn-panel" :tabindex="fnPanel.tab === tabItem.id ? 0 : -1" @click="fnSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-fn-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-fn-tab-${fnPanel.tab}`">
             <!-- OVERVIEW -->
             <div v-show="fnPanel.tab === 'overview'" style="flex:1;overflow:auto;padding:16px">
               <div v-if="fnPanel.detailLoading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('state.loading') }}</div>
-              <div v-else-if="fnPanel.detailError" class="alert-error">{{ fnPanel.detailError }}</div>
+              <div v-else-if="fnPanel.detailError" class="alert-error" role="alert">
+                <div>{{ t('gcpv.audit.fnDetailError', { name: fnPanel.resource.name, location: fnPanel.resource.location || '?' }) }}</div>
+                <details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px">{{ t('gcpv.audit.technicalDetails') }}</summary><div class="mono-xs" style="word-break:break-word;margin-top:4px">{{ fnPanel.detailError }}</div></details>
+                <button class="btn sm" style="margin-top:8px" @click="fnRetryDetail()">{{ t('common.retry') }}</button>
+              </div>
               <div v-else-if="fnPanel.detail" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                 <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
                   <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('vercel.col.functionName') }}</div>
                   <div class="kv-list">
                     <div class="kv-row"><span class="kv-k">{{ t('th.state') }}</span><span :class="fnStatusClass(fnPanel.detail.state)">{{ fnPanel.detail.state }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Runtime</span><span class="text-dim">{{ fnPanel.detail.runtime }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Trigger</span><span class="text-dim">{{ fnPanel.detail.trigger }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.runtime') }}</span><span class="text-dim">{{ fnPanel.detail.runtime }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.trigger') }}</span><span class="text-dim">{{ fnPanel.detail.trigger }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcpv.entryPoint') }}</span><span class="mono-xs text-dim">{{ fnPanel.detail.entryPoint || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gri.serviceAccount') }}</span><span class="mono-xs text-dim" style="word-break:break-all">{{ fnPanel.detail.serviceAccount || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">Ingress</span><span class="text-dim">{{ fnPanel.detail.ingressSettings || '--' }}</span></div>
@@ -736,7 +817,7 @@
                   <div class="kv-list">
                     <div class="kv-row"><span class="kv-k">{{ t('lmd.memory') }}</span><span class="text-dim">{{ fnPanel.detail.memory || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">CPU</span><span class="text-dim">{{ fnPanel.detail.cpu || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Timeout</span><span class="text-dim">{{ fnPanel.detail.timeout || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.timeout') }}</span><span class="text-dim">{{ fnPanel.detail.timeout || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcn.minInstances') }}</span><span class="text-dim">{{ fnPanel.detail.minInstances ?? '0' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcn.maxInstances') }}</span><span class="text-dim">{{ fnPanel.detail.maxInstances ?? '∞' }}</span></div>
                     <div class="kv-row"><span class="kv-k">URL</span><a v-if="fnPanel.detail.url" :href="fnPanel.detail.url" target="_blank" class="link mono-xs" style="word-break:break-all">{{ fnPanel.detail.url }}</a><span v-else class="text-dim">--</span></div>
@@ -803,11 +884,12 @@
                 </select>
                 <button class="btn sm" @click="loadMetrics(fnMetrics, FN_METRICS, fnPanel.resource)" :disabled="fnMetrics.loading">{{ fnMetrics.loading ? t('common.loading') : t('action.refresh') }}</button>
               </div>
-              <div v-if="fnMetrics.loading" style="text-align:center;padding:32px;color:var(--text-dim)">{{ t('detail.loadingMetrics') }}</div>
-              <div v-else-if="fnMetrics.error" class="alert-error">{{ fnMetrics.error }}</div>
-              <div v-else style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-                <GcpMetricsChart v-for="m in FN_METRICS" :key="m.key" :label="m.label" :unit="m.unit" :points="fnMetrics.data[m.key] || []" :color="m.color" />
+              <div v-if="fnMetrics.error" class="alert-error">{{ fnMetrics.error }}</div>
+              <div class="gcp-metrics-grid">
+                <GcpMetricsChart v-for="m in FN_METRICS" :key="m.key" :label="t(m.label)" :unit="m.unit" :note="t(m.note)" :points="fnMetrics.data[m.key] || []" :state="fnMetrics.state[m.key] || { status: 'loading' }" :color="m.color" @retry="retryMetric(fnMetrics, m, fnPanel.resource)" />
               </div>
+              <div class="text-dim" style="font-size:10px;margin-top:6px">{{ t('gcpv.audit.metricsSource', { hours: fnMetrics.hours }) }}</div>
+            </div>
             </div>
           </div>
         </div>
@@ -817,7 +899,7 @@
       <div v-show="activeTab === 'pubsub'" class="tab-panel">
         <div v-if="gcpStore.tabs.pubsub.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.pubsub.error && !filteredPubSub.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredPubSub.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noTopics') }}</div>
+        <div v-else-if="!filteredPubSub.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noTopics') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.topicName') }}</th><th>{{ t('detail.labels') }}</th></tr></thead>
           <tbody>
@@ -833,7 +915,7 @@
       <div v-show="activeTab === 'secrets'" class="tab-panel">
         <div v-if="gcpStore.tabs.secrets.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.secrets.error && !filteredSecrets.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSecrets') }}</div>
+        <div v-else-if="!filteredSecrets.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSecrets') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('gsi.replication') }}</th><th>{{ t('th.created') }}</th><th>{{ t('detail.labels') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -861,13 +943,14 @@
       <div v-show="activeTab === 'artifact'" class="tab-panel" style="display:flex;flex-direction:column;overflow:hidden;padding:0">
         <div v-if="gcpStore.tabs.artifact.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.artifact.error && !filteredArtifact.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredArtifact.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noArtifact') }}</div>
-        <div v-else style="display:flex;flex:1;overflow:hidden">
+        <div v-else-if="!filteredArtifact.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noArtifact') }}</div>
+        <div v-else class="gcp-master-detail">
           <!-- LEFT: repo list -->
-          <div style="width:220px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+          <div class="gcp-master-list" style="width:220px">
             <div v-for="r in filteredArtifact" :key="r.name"
               :class="['sidebar-item', arPanel.repo?.name === r.name ? 'active' : '']"
-              style="cursor:pointer" @click="selectArtifactRepo(r)">
+              style="cursor:pointer" role="button" tabindex="0" :aria-current="arPanel.repo?.name === r.name ? 'true' : undefined"
+              @click="selectArtifactRepo(r)" @keydown.enter.prevent="selectArtifactRepo(r)" @keydown.space.prevent="selectArtifactRepo(r)">
               <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</div>
               <div class="text-dim" style="font-size:10px">{{ r.location }}</div>
               <div style="margin-top:4px">
@@ -890,10 +973,12 @@
               </div>
             </div>
             <!-- Tabs -->
-            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-              <button v-for="tabItem in [{id:'packages',label:'Packages & Tags'},{id:'deploy',label:'🚀 Deploy to K8s'}]" :key="tabItem.id"
-                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" @click="arSwitchTab(tabItem.id)">{{ tabItem.label }}</button>
+            <div style="display:flex;gap:2px;padding:6px 12px;border-bottom:1px solid var(--border);flex-shrink:0" v-tablist>
+              <button v-for="tabItem in [{id:'packages',label:'gcpv.audit.tabPackages'},{id:'deploy',label:'gcpv.audit.tabDeploy'}]" :key="tabItem.id"
+                :class="['aws-tab-btn', arPanel.tab === tabItem.id ? 'active' : '']" role="tab" :aria-selected="arPanel.tab === tabItem.id"
+                :id="`gcp-ar-tab-${tabItem.id}`" aria-controls="gcp-ar-panel" :tabindex="arPanel.tab === tabItem.id ? 0 : -1" @click="arSwitchTab(tabItem.id)">{{ t(tabItem.label) }}</button>
             </div>
+            <div role="tabpanel" id="gcp-ar-panel" class="gcp-tabpanel" :aria-labelledby="`gcp-ar-tab-${arPanel.tab}`">
             <!-- PACKAGES & TAGS -->
             <div v-show="arPanel.tab === 'packages'" style="flex:1;display:flex;overflow:hidden">
               <!-- Package list -->
@@ -902,7 +987,8 @@
                 <div v-else-if="!arPanel.pkgs.length" style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">{{ t('gcpv.noPackages') }}</div>
                 <div v-for="pkg in arPanel.pkgs" :key="pkg.name"
                   :class="['sidebar-item', arPanel.selectedPkg?.name === pkg.name ? 'active' : '']"
-                  style="cursor:pointer;padding:8px 12px" @click="selectArtifactPkg(pkg)">
+                  style="cursor:pointer;padding:8px 12px" role="button" tabindex="0" :aria-current="arPanel.selectedPkg?.name === pkg.name ? 'true' : undefined"
+                  @click="selectArtifactPkg(pkg)" @keydown.enter.prevent="selectArtifactPkg(pkg)" @keydown.space.prevent="selectArtifactPkg(pkg)">
                   <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ pkg.displayName }}</div>
                   <div class="text-dim" style="font-size:10px">{{ pkg.updated ? new Date(pkg.updated).toLocaleDateString() : '' }}</div>
                 </div>
@@ -995,6 +1081,7 @@
                 </div>
               </div>
             </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1003,7 +1090,7 @@
       <div v-show="activeTab === 'bigquery'" class="tab-panel">
         <div v-if="gcpStore.tabs.bigquery.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.bigquery.error && !filteredBigQuery.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredBigQuery.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBigQuery') }}</div>
+        <div v-else-if="!filteredBigQuery.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBigQuery') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Dataset</th><th>{{ t('apm.location') }}</th><th>{{ t('detail.labels') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1029,7 +1116,7 @@
       <div v-show="activeTab === 'workflows'" class="tab-panel">
         <div v-if="gcpStore.tabs.workflows.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.workflows.error && !filteredWorkflows.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredWorkflows.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noWorkflows') }}</div>
+        <div v-else-if="!filteredWorkflows.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noWorkflows') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.state') }}</th><th>{{ t('th.description') }}</th><th>{{ t('th.updated') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1055,7 +1142,7 @@
       <div v-show="activeTab === 'dns'" class="tab-panel">
         <div v-if="gcpStore.tabs.dns.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.dns.error && !filteredDns.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredDns.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noDns') }}</div>
+        <div v-else-if="!filteredDns.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noDns') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.zoneName') }}</th><th>{{ t('gcpv.dnsName') }}</th><th>{{ t('gcpv.visibility') }}</th><th>{{ t('th.description') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1079,7 +1166,7 @@
       <div v-show="activeTab === 'firestore'" class="tab-panel">
         <div v-if="gcpStore.tabs.firestore.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.firestore.error && !filteredFirestore.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredFirestore.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noFirestore') }}</div>
+        <div v-else-if="!filteredFirestore.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noFirestore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('sidebar.database') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.type') }}</th><th>{{ t('th.state') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1103,7 +1190,7 @@
       <div v-show="activeTab === 'spanner'" class="tab-panel">
         <div v-if="gcpStore.tabs.spanner.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.spanner.error && !filteredSpanner.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredSpanner.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSpanner') }}</div>
+        <div v-else-if="!filteredSpanner.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSpanner') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('ec2d.instance') }}</th><th>{{ t('sidebar.config') }}</th><th>{{ t('th.state') }}</th><th>Nodes / PUs</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1124,7 +1211,7 @@
       <div v-show="activeTab === 'memorystore'" class="tab-panel">
         <div v-if="gcpStore.tabs.memorystore.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.memorystore.error && !filteredMemory.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredMemory.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noMemorystore') }}</div>
+        <div v-else-if="!filteredMemory.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noMemorystore') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.version') }}</th><th>Tier</th><th>{{ t('th.size') }}</th><th>Host:Port</th><th>Auth</th><th>{{ t('th.state') }}</th></tr></thead>
           <tbody>
@@ -1149,7 +1236,7 @@
       <div v-show="activeTab === 'tasks'" class="tab-panel">
         <div v-if="gcpStore.tabs.tasks.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.tasks.error && !filteredTasks.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredTasks.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noTasks') }}</div>
+        <div v-else-if="!filteredTasks.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noTasks') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('gcpv.queue') }}</th><th>{{ t('apm.location') }}</th><th>{{ t('th.state') }}</th><th>Max/s</th><th>{{ t('gcpv.maxConcurrent') }}</th><th>{{ t('awsv.maxRetries') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1172,7 +1259,7 @@
       <div v-show="activeTab === 'scheduler'" class="tab-panel">
         <div v-if="gcpStore.tabs.scheduler.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.scheduler.error && !filteredScheduler.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredScheduler.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noScheduler') }}</div>
+        <div v-else-if="!filteredScheduler.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noScheduler') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Job</th><th>{{ t('apm.location') }}</th><th>{{ t('vercel.col.schedule') }}</th><th>{{ t('gcpv.timezone') }}</th><th>{{ t('vercel.col.target') }}</th><th>{{ t('th.state') }}</th><th>{{ t('awsv.lastRun') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1206,7 +1293,7 @@
       <div v-show="activeTab === 'build'" class="tab-panel">
         <div v-if="gcpStore.tabs.build.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.build.error && !filteredBuild.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredBuild.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuilds') }}</div>
+        <div v-else-if="!filteredBuild.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noBuilds') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>ID</th><th>{{ t('th.status') }}</th><th>Trigger</th><th>{{ t('vercel.col.gitBranch') }}</th><th>Commit</th><th>{{ t('awsv.duration') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1235,7 +1322,7 @@
       <div v-show="activeTab === 'iam'" class="tab-panel">
         <div v-if="gcpStore.tabs.iam.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.iam.error && !filteredIam.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredIam.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noServiceAccounts') }}</div>
+        <div v-else-if="!filteredIam.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noServiceAccounts') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('ses.type_email') }}</th><th>{{ t('sns.displayName') }}</th><th>{{ t('th.description') }}</th><th>{{ t('help.autoRefreshOff') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1264,7 +1351,7 @@
       <div v-show="activeTab === 'cloudrunJobs'" class="tab-panel">
         <div v-if="gcpStore.tabs.cloudrunJobs.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.cloudrunJobs.error && !filteredCloudRunJobs.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredCloudRunJobs.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunJobs') }}</div>
+        <div v-else-if="!filteredCloudRunJobs.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noRunJobs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('th.region') }}</th><th>{{ t('awsv.lastRun') }}</th><th>{{ t('gcpv.lastStatus') }}</th><th>{{ t('gcpv.tasks') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1292,7 +1379,7 @@
       <div v-show="activeTab === 'pubsubSubs'" class="tab-panel">
         <div v-if="gcpStore.tabs.pubsubSubs.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.pubsubSubs.error && !filteredPubSubSubs.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredPubSubSubs.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noSubscriptions') }}</div>
+        <div v-else-if="!filteredPubSubSubs.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noSubscriptions') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>Topic</th><th>{{ t('th.type') }}</th><th>Ack Deadline</th><th>{{ t('table.filterPlaceholder') }}</th></tr></thead>
           <tbody>
@@ -1311,7 +1398,7 @@
       <div v-show="activeTab === 'vpc'" class="tab-panel">
         <div v-if="gcpStore.tabs.vpc.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.vpc.error && !filteredVpc.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredVpc.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noVpcs') }}</div>
+        <div v-else-if="!filteredVpc.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noVpcs') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>{{ t('th.name') }}</th><th>{{ t('vercel.col.mode') }}</th><th>Routing</th><th>{{ t('eksd.sectionSubnets') }}</th><th>MTU</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1333,7 +1420,7 @@
       <div v-show="activeTab === 'monitoring'" class="tab-panel">
         <div v-if="gcpStore.tabs.monitoring.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.monitoring.error && !filteredMonitoring.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredMonitoring.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noAlerts') }}</div>
+        <div v-else-if="!filteredMonitoring.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noAlerts') }}</div>
         <div class="monitoring-row">
           <div class="monitoring-section">
             <div class="monitoring-title">{{ t('gcpv.alertPolicies') }}</div>
@@ -1389,7 +1476,7 @@
       <div v-show="activeTab === 'kms'" class="tab-panel">
         <div v-if="gcpStore.tabs.kms.loading" class="empty-row">{{ t('state.loading') }}</div>
         <div v-else-if="gcpStore.tabs.kms.error && !filteredKms.length" class="empty-row text-dim">{{ t('gcpv.apiNotAvailableSeeBannerAbove') }}</div>
-        <div v-else-if="!filteredKms.length" class="empty-row">{{ search ? t('awsv.lit.noMatches') : t('gcpv.lit.noKms') }}</div>
+        <div v-else-if="!filteredKms.length" class="empty-row">{{ hasFilters ? t('awsv.lit.noMatches') : t('gcpv.lit.noKms') }}</div>
         <table v-else class="cloud-table">
           <thead><tr><th>Key Ring</th><th>{{ t('apm.location') }}</th><th>{{ t('th.created') }}</th><th>{{ t('th.actions') }}</th></tr></thead>
           <tbody>
@@ -1418,7 +1505,7 @@
     <!-- ══ Function Invoke Modal ════════════════════════════════════════════════ -->
     <Teleport to="body">
     <div v-if="fnInvokeOpen" class="gcp-modal-backdrop" @mousedown.self="fnInvokeOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (fnInvokeOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.invoke', { p0: fnInvokeTarget?.name }) }}</span>
           <button class="s3b-close" @click="fnInvokeOpen = false">&#x2715;</button>
@@ -1446,7 +1533,7 @@
   <!-- ══ Function Logs Modal ══════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fnLogsOpen" class="gcp-modal-backdrop" @mousedown.self="fnLogsOpen = false">
-      <div class="gcp-modal gcp-modal-wide">
+      <div class="gcp-modal gcp-modal-wide" v-dialog="() => (fnLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>&#x1F4DC; Logs: {{ fnLogsTarget?.name }}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -1472,19 +1559,20 @@
 
   <!-- ══ Create / confirm modals (Cloud Run, VM, Cloud SQL) ═══════════════════ -->
   <GcpPollingSettings :open="pollingModal.open" :profile-id="selectedProfileId" @close="pollingModal.open = false" @saved="onPollingSaved" />
-  <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion"
+  <GcpCreateModal :open="createModal.open" :kind="createModal.kind" :default-region="defaultGcpRegion" :destination="gcpDestinationContext()"
     @close="createModal.open = false" @created="onCreated" />
   <GcpConfirmModal
     :open="actionModal.open" :title="actionModal.title" :message="actionModal.message" :lines="actionModal.lines"
     :tone="actionModal.tone" :confirm-label="actionModal.confirmLabel" :require-name="actionModal.requireName"
     :cost-ack="actionModal.costAck" :estimate="actionModal.estimate" :estimate-loading="actionModal.estimateLoading"
     :busy="actionModal.busy" :error="actionModal.error" :blocked="actionModal.blocked"
+    :context="actionModal.context" :estimate-unavailable="actionModal.estimateUnavailable"
     @cancel="actionModal.open = false" @confirm="runAction" />
 
   <!-- ══ Resource Logs Modal (cloudrun, gke, vms, sql, workflows) ═══════════ -->
   <Teleport to="body">
     <div v-if="resLogsOpen" class="gcp-modal-backdrop" @mousedown.self="resLogsOpen = false">
-      <div class="gcp-modal gcp-modal-wide">
+      <div class="gcp-modal gcp-modal-wide" v-dialog="() => (resLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.logs', { p0: resLogsType, p1: resLogsTarget?.name || resLogsTarget?.service }) }}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -1511,7 +1599,7 @@
   <!-- ══ Secret Preview & Import Modal ═══════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="secretPreviewOpen" class="gcp-modal-backdrop" @mousedown.self="secretPreviewOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (secretPreviewOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.secret', { p0: secretPreviewName }) }}</span>
           <button class="s3b-close" @click="secretPreviewOpen = false">&#x2715;</button>
@@ -1552,7 +1640,7 @@
   <!-- ══ Artifact Packages Modal ══════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="artifactPkgOpen" class="gcp-modal-backdrop" @mousedown.self="artifactPkgOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (artifactPkgOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.packages', { p0: artifactPkgRepo?.name }) }}</span>
           <button class="s3b-close" @click="artifactPkgOpen = false">&#x2715;</button>
@@ -1578,7 +1666,7 @@
   <!-- ══ BigQuery Tables Modal ═════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="bqTablesOpen" class="gcp-modal-backdrop" @mousedown.self="bqTablesOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (bqTablesOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.tables2', { p0: bqTablesDataset?.id }) }}</span>
           <button class="s3b-close" @click="bqTablesOpen = false">&#x2715;</button>
@@ -1607,7 +1695,7 @@
   <!-- ══ BigQuery Query Modal ══════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="bqQueryOpen" class="gcp-modal-backdrop" @mousedown.self="bqQueryOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (bqQueryOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.queryBigquery', { p0: bqQueryDataset?.id }) }}</span>
           <button class="s3b-close" @click="bqQueryOpen = false">&#x2715;</button>
@@ -1644,7 +1732,7 @@
   <!-- ══ Workflow Executions Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="wfExecOpen" class="gcp-modal-backdrop" @mousedown.self="wfExecOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (wfExecOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.executions', { p0: wfExecTarget?.name }) }}</span>
           <button class="s3b-close" @click="wfExecOpen = false">&#x2715;</button>
@@ -1673,7 +1761,7 @@
   <!-- ══ Workflow Definition Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="wfDefOpen" class="gcp-modal-backdrop" @mousedown.self="wfDefOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (wfDefOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.definition2', { p0: wfDefTarget?.name }) }}</span>
           <button class="s3b-close" @click="wfDefOpen = false">&#x2715;</button>
@@ -1690,7 +1778,7 @@
   <!-- ══ DNS Records Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="dnsRecordsOpen" class="gcp-modal-backdrop" @mousedown.self="dnsRecordsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (dnsRecordsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.records2', { p0: dnsRecordsZone?.dnsName }) }}</span>
           <button class="s3b-close" @click="dnsRecordsOpen = false">&#x2715;</button>
@@ -1721,7 +1809,7 @@
   <!-- ══ Firestore Collections Modal ═══════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fsColOpen" class="gcp-modal-backdrop" @mousedown.self="fsColOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (fsColOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.collections2', { p0: fsColDb?.name }) }}</span>
           <button class="s3b-close" @click="fsColOpen = false">&#x2715;</button>
@@ -1750,7 +1838,7 @@
   <!-- ══ Firestore Documents Modal ═════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="fsDocsOpen" class="gcp-modal-backdrop" @mousedown.self="fsDocsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (fsDocsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.docs', { p0: fsDocsDb?.name, p1: fsDocsCol?.id }) }}</span>
           <button class="s3b-close" @click="fsDocsOpen = false">&#x2715;</button>
@@ -1788,7 +1876,7 @@
   <!-- ══ Spanner Databases Modal ════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="spannerDbOpen" class="gcp-modal-backdrop" @mousedown.self="spannerDbOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (spannerDbOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.databases', { p0: spannerInst?.displayName || spannerInst?.name }) }}</span>
           <button class="s3b-close" @click="spannerDbOpen = false">&#x2715;</button>
@@ -1819,7 +1907,7 @@
   <!-- ══ Spanner Query Modal ════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="spannerQOpen" class="gcp-modal-backdrop" @mousedown.self="spannerQOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (spannerQOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.query', { p0: spannerQInst?.name, p1: spannerQDb?.name }) }}</span>
           <button class="s3b-close" @click="spannerQOpen = false">&#x2715;</button>
@@ -1853,7 +1941,7 @@
   <!-- ══ Cloud Tasks Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="tasksOpen" class="gcp-modal-backdrop" @mousedown.self="tasksOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (tasksOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.tasks2', { p0: tasksQueue?.name }) }}</span>
           <button class="s3b-close" @click="tasksOpen = false">&#x2715;</button>
@@ -1882,7 +1970,7 @@
   <!-- ══ Cloud Build Logs Modal ════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="buildLogsOpen" class="gcp-modal-backdrop" @mousedown.self="buildLogsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (buildLogsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.buildLogs', { p0: buildLogsBuild?.id?.slice(0,8) }) }}</span>
           <button class="s3b-close" @click="buildLogsOpen = false">&#x2715;</button>
@@ -1904,7 +1992,7 @@
   <!-- ══ IAM Keys Modal ════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="iamKeysOpen" class="gcp-modal-backdrop" @mousedown.self="iamKeysOpen = false">
-      <div class="gcp-modal">
+      <div class="gcp-modal" v-dialog="() => (iamKeysOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.keys', { p0: iamKeysSa?.email }) }}</span>
           <button class="s3b-close" @click="iamKeysOpen = false">&#x2715;</button>
@@ -1934,7 +2022,7 @@
   <!-- ══ Job Executions Modal ═══════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="jobExecOpen" class="gcp-modal-backdrop" @mousedown.self="jobExecOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (jobExecOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.executions', { p0: jobExecTarget?.name }) }}</span>
           <button class="s3b-close" @click="jobExecOpen = false">&#x2715;</button>
@@ -1968,7 +2056,7 @@
   <!-- ══ VPC Subnets Modal ══════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="vpcSubnetsOpen" class="gcp-modal-backdrop" @mousedown.self="vpcSubnetsOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (vpcSubnetsOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.subnets', { p0: vpcSubnetsNetwork?.name }) }}</span>
           <button class="s3b-close" @click="vpcSubnetsOpen = false">&#x2715;</button>
@@ -1998,7 +2086,7 @@
   <!-- ══ KMS Keys Modal ════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div v-if="kmsKeysOpen" class="gcp-modal-backdrop" @mousedown.self="kmsKeysOpen = false">
-      <div class="gcp-modal gcp-modal--wide">
+      <div class="gcp-modal gcp-modal--wide" v-dialog="() => (kmsKeysOpen = false)">
         <div class="gcp-modal-header">
           <span>{{ t('gcpv.keys', { p0: kmsKeysRing?.name }) }}</span>
           <button class="s3b-close" @click="kmsKeysOpen = false">&#x2715;</button>
@@ -2050,8 +2138,11 @@ import GcpLabelsEditor  from './GcpLabelsEditor.vue'
 import GcpStateTimeline from './GcpStateTimeline.vue'
 import GcpPollingSettings from './GcpPollingSettings.vue'
 import './gcpInfo.css'
-import { gcpActionConfig } from './gcpActions'
+import { gcpActionConfig, cloudRunScaling, formatCloudRunCpu, formatCloudRunMemory } from './gcpActions'
 import GcpMetricsChart  from './GcpMetricsChart.vue'
+import { vDialog }       from '../../composables/vDialog'
+import { vTablist }      from '../../composables/vTablist'
+import { CR_METRICS, VM_METRICS, SQL_METRICS, FN_METRICS, createMetricsPanel, loadMetric, loadMetricSet } from './gcpMetrics'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useTerminalStreams } from '../../composables/useTerminalStreams'
@@ -2061,9 +2152,15 @@ const props = defineProps({
   applicationId: { type: String, default: '' },
   environment: { type: String, default: '' },
   apmFocusResource: { type: Object, default: null },
+  // Search/filters/sort and selected resource per tab, kept by App so they
+  // survive this view unmounting; applied on mount and when savedFiltersSeq
+  // changes (a link, Back). See composables/useViewUrl.js (G15).
+  savedFilters: { type: Object, default: null },
+  savedResources: { type: Object, default: null },
+  savedFiltersSeq: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['connect-gke', 'open-architecture'])
+const emit = defineEmits(['connect-gke', 'open-architecture', 'navigate-tab', 'filters-change', 'resource-change'])
 
 const envStore = useEnvStore()
 const gcpStore = useGcpStore()
@@ -2130,7 +2227,12 @@ const TABS = [
 
 const activeTab = ref('cloudrun')
 const loaded    = reactive({ apm: false, overview: false, cloudrun: false, gke: false, vms: false, sql: false, storage: false, functions: false, pubsub: false, secrets: false, artifact: false, bigquery: false, workflows: false, dns: false, firestore: false, spanner: false, memorystore: false, tasks: false, scheduler: false, build: false, iam: false, cloudrunJobs: false, pubsubSubs: false, vpc: false, monitoring: false, logging: false, kms: false })
-const search    = ref('')
+// Search per service: changing service no longer wipes the previous search.
+const searchByTab = reactive({})
+const search = computed({
+  get: () => searchByTab[activeTab.value] || '',
+  set: value => { searchByTab[activeTab.value] = value },
+})
 
 const fetchMap = {
   apm:         async () => {
@@ -2184,7 +2286,6 @@ async function loadTab(id, options = {}) {
 async function reloadActiveTab(options = {}) {
   if (options.background && refreshGate.fresh(`${selectedProfileId.value}|${activeTab.value}`, appSettings.gcpListRefreshSec)) return
   loaded[activeTab.value] = false
-  if (!options.preserveSearch) search.value = ''
   await loadTab(activeTab.value, options)
 }
 
@@ -2204,11 +2305,42 @@ async function loadAllTabs() {
   await loadTab(activeTab.value)
 }
 
-function switchTab(id) {
+function switchTab(id, { focus = null } = {}) {
+  evidenceFocus.value = focus
   activeTab.value = id
-  search.value = ''
+  // Keeps App's sidebar and the URL in step when the view navigates by itself
+  if (id !== props.activeService) emit('navigate-tab', id)
   loadTab(id)
 }
+
+// Overview → evidence (G11): open the service filtered to the affected
+// resources, and the detail when there is exactly one.
+const evidenceFocus = ref(null)   // { tab, names: [], label }
+const overviewAreaFilter = ref('')
+const overviewServicesTitle = ref(null)
+function openEvidence(tab, names = [], label = '') {
+  if (!tab) return
+  switchTab(tab, { focus: names.length ? { tab, names, label } : null })
+}
+function openServiceEvidence(service) {
+  const names = (service.signals || []).map(signal => signal.name).filter(Boolean)
+  openEvidence(service.tab, names, t('gcpv.audit.withSignals', { service: service.label, n: names.length }))
+}
+function showArea(groupId) {
+  overviewAreaFilter.value = overviewAreaFilter.value === groupId ? '' : groupId
+  nextTick(() => overviewServicesTitle.value?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }))
+}
+const overviewServicesShown = computed(() => overviewAreaFilter.value
+  ? overviewServices.value.filter(service => (service.group || 'other') === overviewAreaFilter.value)
+  : overviewServices.value)
+function rowName(row) { return String(row?.name || row?.id || row?.displayName || row?.email || '').split('/').pop() }
+const FOCUS_SELECT = { cloudrun: r => selectCloudRun(r), vms: r => selectVm(r), sql: r => selectSql(r), functions: r => selectFn(r) }
+watch(() => evidenceFocus.value && filteredRows.value, rows => {
+  const focus = evidenceFocus.value
+  if (!focus || focus.tab !== activeTab.value || focus.selected || !Array.isArray(rows) || rows.length !== 1) return
+  focus.selected = true
+  FOCUS_SELECT[focus.tab]?.(rows[0])
+})
 
 watch(() => props.activeService, (newTab) => {
   if (newTab && newTab !== activeTab.value) switchTab(newTab)
@@ -2229,33 +2361,85 @@ const OVERVIEW_GROUP_LABELS = Object.fromEntries(OVERVIEW_GROUP_DEFINITIONS.map(
 const overviewServices = computed(() => gcpStore.overview?.services || [])
 const overviewCosts = computed(() => gcpStore.overview?.costs || null)
 const overviewCostMax = computed(() => Math.max(1, ...(overviewCosts.value?.byService || []).map(service => Number(service.monthlyUsd || 0))))
-const overviewCostStatusLabel = computed(() => ({
-  estimated: 'Estimated', partial: 'Partial', 'no-data': 'No data',
-}[overviewCosts.value?.status] || (overviewCosts.value ? 'Estimated' : 'Unavailable')))
+// Every estimate here is partial by construction: only the idle 24/7 baseline
+// of Cloud Run minimums, VMs and Cloud SQL is modeled (G08).
+const overviewCostStatusLabel = computed(() => t(`gcpv.audit.costStatus.${overviewCosts.value ? (['estimated', 'partial', 'no-data'].includes(overviewCosts.value.status) ? overviewCosts.value.status : 'estimated') : 'unavailable'}`))
 const overviewCostStatusTone = computed(() => overviewCosts.value?.status === 'no-data' ? 'empty' : 'warning')
+// Observed-resource health only counts incidents in what KUA could read; read
+// failures go to coverage (older cached snapshots carried "degraded" for them).
 const overviewHealth = computed(() => {
   const summary = gcpStore.overview?.summary || {}
-  if (summary.health) return summary.health
+  if (summary.resourceHealth) return summary.resourceHealth
   if (summary.critical) return 'critical'
-  if (summary.warning || summary.unavailable) return 'degraded'
+  if (summary.warning) return 'warning'
   return 'healthy'
 })
-const overviewHealthLabel = computed(() => overviewHealthLabelFor(overviewHealth.value))
-const overviewCoverage = computed(() => {
+// The deployed-resources total is a lower bound when a resource list was capped
+const overviewResourcesPartial = computed(() => overviewServices.value.some(service => service.partial && service.kind !== 'execution'))
+const overviewIncidents = computed(() => {
   const summary = gcpStore.overview?.summary || {}
-  return summary.services ? Math.round(((summary.availableServices || 0) / summary.services) * 100) : 0
+  return Number(summary.critical || 0) + Number(summary.warning || 0)
+})
+const overviewHealthLabel = computed(() => {
+  const summary = gcpStore.overview?.summary || {}
+  if (overviewHealth.value === 'critical') return t('gcpv.audit.health.critical', { n: summary.critical || 0 })
+  if (overviewHealth.value === 'warning') return t('gcpv.audit.health.warning', { n: summary.warning || 0 })
+  return t('gcpv.audit.health.none')
+})
+
+// Services the user declared as not used in this project leave the coverage
+// denominator instead of being enabled just to reach 100%. Per-viewer
+// preference, so browser storage is enough.
+const unusedServices = ref([])
+function unusedKey() { return `kua.gcp.unusedServices.${gcpStore.overview?.projectId || ''}` }
+function loadUnusedServices() {
+  try { unusedServices.value = JSON.parse(localStorage.getItem(unusedKey()) || '[]') } catch { unusedServices.value = [] }
+}
+function toggleUnusedService(id) {
+  const next = unusedServices.value.includes(id) ? unusedServices.value.filter(x => x !== id) : [...unusedServices.value, id]
+  unusedServices.value = next
+  try { localStorage.setItem(unusedKey(), JSON.stringify(next)) } catch { /* preference only */ }
+}
+watch(() => gcpStore.overview?.projectId, loadUnusedServices, { immediate: true })
+
+const overviewCoverageInfo = computed(() => {
+  const services = overviewServices.value
+  const unavailable = services.filter(service => service.status === 'unavailable')
+  const unused = unavailable.filter(service => unusedServices.value.includes(service.id)).length
+  const total = services.length - unused
+  const notEvaluated = unavailable.length - unused
+  return { evaluated: total - notEvaluated, total, notEvaluated, unused }
+})
+const overviewCoverage = computed(() => {
+  const { evaluated, total } = overviewCoverageInfo.value
+  return total ? Math.round((evaluated / total) * 100) : 0
+})
+const overviewPendingReads = computed(() => overviewServices.value
+  .filter(service => service.status === 'unavailable')
+  .map(service => ({ ...service, unused: unusedServices.value.includes(service.id) }))
+  .sort((a, b) => Number(a.unused) - Number(b.unused)))
+const overviewCauseSummary = computed(() => {
+  const counts = {}
+  for (const item of overviewPendingReads.value) {
+    if (item.unused) continue
+    const kind = item.error?.kind || 'unknown'
+    counts[kind] = (counts[kind] || 0) + 1
+  }
+  return Object.entries(counts).map(([kind, n]) => `${n} ${t(`gcpv.audit.err.${kind}`).toLowerCase()}`).join(' · ')
 })
 const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
   const services = overviewServices.value.filter(service => (service.group || 'other') === group.id)
-  const resources = services.reduce((sum, service) => sum + Number(service.count || 0), 0)
-  const active = services.reduce((sum, service) => sum + Number(service.active || 0), 0)
-  const inactive = services.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
-  const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0) + (service.status === 'unavailable' ? 1 : 0), 0)
-  const healthValues = services.map(overviewServiceHealth)
+  const deployed = services.filter(service => service.kind !== 'execution')
+  const resources = deployed.reduce((sum, service) => sum + Number(service.count || 0), 0)
+  const active = deployed.reduce((sum, service) => sum + Number(service.active || 0), 0)
+  const inactive = deployed.reduce((sum, service) => sum + Number(service.inactive ?? Math.max(0, Number(service.count || 0) - Number(service.active || 0))), 0)
+  const issues = services.reduce((sum, service) => sum + Number(service.issueCount || 0), 0)
+  const notEvaluated = services.filter(service => service.status === 'unavailable' && !unusedServices.value.includes(service.id)).length
+  const healthValues = services.filter(service => service.status !== 'unavailable').map(overviewServiceHealth)
   const health = healthValues.includes('critical') ? 'critical'
-    : healthValues.includes('unavailable') ? 'unavailable'
-      : healthValues.includes('warning') ? 'warning'
-      : healthValues.length && healthValues.every(value => value === 'empty') ? 'empty' : 'healthy'
+    : healthValues.includes('warning') ? 'warning'
+      : !healthValues.length ? 'unavailable'
+      : healthValues.every(value => value === 'empty') ? 'empty' : 'healthy'
   return {
     ...group,
     services,
@@ -2263,6 +2447,7 @@ const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
     active,
     inactive,
     issues,
+    notEvaluated,
     health,
     activePercent: resources ? Math.round((active / resources) * 100) : 0,
     tab: services.find(service => service.status !== 'unavailable')?.tab || services[0]?.tab || null,
@@ -2271,9 +2456,6 @@ const overviewGroups = computed(() => OVERVIEW_GROUP_DEFINITIONS.map(group => {
 const overviewAttention = computed(() => {
   const rows = []
   for (const service of overviewServices.value) {
-    if (service.status === 'unavailable') {
-      rows.push({ key: `${service.id}:unavailable`, service: service.label, tab: service.tab, level: 'critical', code: 'unavailable', name: null })
-    }
     ;(service.signals || []).forEach((signal, index) => rows.push({
       ...signal,
       key: `${service.id}:${signal.name || signal.code}:${index}`,
@@ -2306,20 +2488,17 @@ function overviewServiceHealth(service) {
   return service.status === 'empty' ? 'empty' : 'healthy'
 }
 function overviewHealthTone(value) {
-  return ['critical', 'unavailable'].includes(value) ? 'critical' : ['warning', 'degraded'].includes(value) ? 'warning' : value === 'empty' ? 'empty' : 'healthy'
+  return value === 'critical' ? 'critical' : ['warning', 'degraded'].includes(value) ? 'warning' : ['empty', 'unavailable'].includes(value) ? 'empty' : 'healthy'
 }
 function overviewHealthClass(value) { return overviewHealthTone(value) }
 function overviewHealthLabelFor(value) {
-  return { healthy: 'Healthy', warning: 'Warning', degraded: 'Degraded', critical: 'Critical', unavailable: 'API unavailable', empty: 'Empty' }[value] || 'Unknown'
+  return t(`gcpv.audit.state.${['healthy', 'warning', 'degraded', 'critical', 'unavailable', 'empty'].includes(value) ? value : 'unknown'}`)
 }
 function overviewGroupLabel(value) { return t(OVERVIEW_GROUP_LABELS[value] || 'gcpv.groupOther') }
 function overviewSignalText(signal) {
-  return {
-    unavailable: 'API unavailable', disabled: 'Disabled', paused: 'Paused', failed: 'Failed', error: 'Error',
-    internal_error: 'Internal error', degraded: 'Degraded', unhealthy: 'Unhealthy', reconciling: 'Reconciling',
-    provisioning: 'Provisioning', staging: 'Staging', starting: 'Starting', stopping: 'Stopping', updating: 'Updating',
-    working: 'Working', pending: 'Pending',
-  }[signal.code] || signal.code || 'Needs review'
+  const known = ['disabled', 'paused', 'failed', 'error', 'internal_error', 'degraded', 'unhealthy', 'reconciling',
+    'provisioning', 'staging', 'starting', 'stopping', 'updating', 'working', 'pending']
+  return known.includes(signal.code) ? t(`gcpv.audit.signal.${signal.code}`) : (signal.code || t('gcpv.audit.signal.review'))
 }
 function overviewTrendHeight(snapshot) {
   return Math.max(8, Math.round((Number(snapshot.payload?.summary?.total || 0) / overviewTrendMax.value) * 100))
@@ -2340,10 +2519,75 @@ function openOverviewBilling() {
 }
 
 function filterRows(rows) {
-  if (!search.value) return rows
-  const q = search.value.toLowerCase()
-  return rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
+  const tab = tabOfRows(rows)
+  const focus = evidenceFocus.value
+  if (focus && focus.tab === tab) rows = rows.filter(row => focus.names.includes(rowName(row)))
+  rows = applyFacets(tab, rows)
+  if (search.value && tab === activeTab.value) {
+    const q = search.value.toLowerCase()
+    rows = rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(q)))
+  }
+  return sortRows(tab, rows)
 }
+
+// ── Filters and sort next to the search (G13) ────────────────────────────────
+// Built from the rows themselves, with counts; shown only when they split the
+// list. They combine with the search and the Overview evidence filter.
+function tabOfRows(rows) { return Object.keys(gcpStore.tabs).find(key => gcpStore.tabs[key].data === rows) || null }
+const rowState = r => r?.status || r?.state || r?.lifecycleState || null
+const rowRegion = r => r?.region || r?.location || (r?.zone ? String(r.zone).replace(/-[a-z]$/, '') : null)
+const FACETS = [
+  { id: 'state', label: () => t('th.state'), value: rowState },
+  { id: 'region', label: () => t('gcpv.audit.ctx.region'), value: rowRegion },
+]
+const facetState = reactive({})
+const facetKey = (tab, id) => `${tab}:${id}`
+function applyFacets(tab, rows) {
+  const selected = FACETS.filter(f => facetState[facetKey(tab, f.id)])
+  if (!selected.length) return rows
+  return rows.filter(row => selected.every(f => String(f.value(row)) === facetState[facetKey(tab, f.id)]))
+}
+const activeFacets = computed(() => {
+  const rows = gcpStore.tabs[activeTab.value]?.data || []
+  return FACETS.map(facet => {
+    const counts = new Map()
+    for (const row of rows) {
+      const value = facet.value(row)
+      if (value != null && value !== '') counts.set(String(value), (counts.get(String(value)) || 0) + 1)
+    }
+    const options = [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+    return { id: facet.id, label: facet.label(), options }
+  }).filter(facet => facet.options.length > 1 || facetState[facetKey(activeTab.value, facet.id)])
+})
+const SORT_KEYS = ['name', 'state', 'region', 'updated']
+const sortState = reactive({})
+const SORTERS = {
+  name: (a, b) => rowName(a).localeCompare(rowName(b)),
+  state: (a, b) => String(rowState(a) || '').localeCompare(String(rowState(b) || '')),
+  region: (a, b) => String(rowRegion(a) || '').localeCompare(String(rowRegion(b) || '')),
+  updated: (a, b) => String(b.updatedAt || b.updated || b.created || '').localeCompare(String(a.updatedAt || a.updated || a.created || '')),
+}
+function sortRows(tab, rows) {
+  const key = tab && sortState[tab]
+  return key && SORTERS[key] ? [...rows].sort(SORTERS[key]) : rows
+}
+const hasFilters = computed(() => !!search.value
+  || FACETS.some(f => facetState[facetKey(activeTab.value, f.id)])
+  || evidenceFocus.value?.tab === activeTab.value)
+function clearFilters() {
+  search.value = ''
+  for (const f of FACETS) facetState[facetKey(activeTab.value, f.id)] = ''
+  if (evidenceFocus.value?.tab === activeTab.value) evidenceFocus.value = null
+}
+// Filters belong to a profile's data; the first profile of a session (often
+// from a link) keeps the ones the link brought.
+watch(selectedProfileId, (id, previous) => {
+  if (!previous) return
+  for (const key of Object.keys(facetState)) facetState[key] = ''
+  for (const key of Object.keys(searchByTab)) searchByTab[key] = ''
+  for (const key of Object.keys(pendingResource)) delete pendingResource[key]
+})
+
 
 const filteredCloudRun   = computed(() => filterRows(gcpStore.tabs.cloudrun.data))
 const filteredGke        = computed(() => filterRows(gcpStore.tabs.gke.data))
@@ -2503,26 +2747,61 @@ const TAB_BY_KIND = { cloudrun: 'cloudrun', vm: 'vms', sql: 'sql' }
 const panelFor = kind => ({ cloudrun: crPanel, vm: vmPanel, sql: sqlPanel })[kind]
 
 const actionModal = reactive({
-  open: false, kind: '', action: '', resource: null,
+  open: false, kind: '', action: '', resource: null, profileId: '', context: [],
   title: '', message: '', lines: [], tone: 'info', confirmLabel: 'Confirmar',
   requireName: '', costAck: false, blocked: '',
-  estimate: null, estimateLoading: false, busy: false, error: '',
+  estimate: null, estimateLoading: false, estimateUnavailable: false, busy: false, error: '',
 })
+
+// Where a write goes (G10): project, profile, location and resource, shown in
+// the dialog. The dialog keeps the profile it was opened with; a profile change
+// closes it and nothing is sent.
+function gcpDestinationContext(resource = null) {
+  const profileId = selectedProfileId.value
+  const local = localConfigs.value.find(c => `local:${c.name}` === profileId)
+  const profile = envStore.findById?.(profileId)
+  const project = gcpStore.overview?.projectId || local?.project || profile?.projectId || ''
+  const rows = [
+    { label: t('gcpv.audit.ctx.project'), value: project || t('gcpv.audit.ctx.unknown') },
+    { label: t('gcpv.audit.ctx.profile'), value: profile?.name || local?.name || profileId },
+  ]
+  if (resource) {
+    const location = resource.region || resource.zone || resource.location
+    if (location) rows.push({ label: t(resource.zone ? 'gcpv.audit.ctx.zone' : 'gcpv.audit.ctx.region'), value: location })
+    rows.push({ label: t('gcpv.audit.ctx.resource'), value: resource.fullName || resource.name })
+  }
+  return rows
+}
 
 async function requestAction(kind, action, resource) {
   const cfg = gcpActionConfig(kind, action, resource)
   Object.assign(actionModal, {
     open: true, kind, action, resource,
+    profileId: selectedProfileId.value, context: gcpDestinationContext(resource),
     title: cfg.title, message: cfg.message || '', lines: cfg.lines || [], tone: cfg.tone,
     confirmLabel: cfg.confirmLabel, requireName: cfg.requireName || '', costAck: !!cfg.costAck,
-    blocked: cfg.blocked || '', estimate: null, estimateLoading: !!cfg.estimateSpec, busy: false, error: '',
+    blocked: cfg.blocked || '', estimate: null, estimateLoading: !!cfg.estimateSpec, estimateUnavailable: false, busy: false, error: '',
   })
   if (cfg.estimateSpec) {
     try { actionModal.estimate = await gcpStore.estimateResource(cfg.estimateKind, cfg.estimateSpec) }
     catch (e) { actionModal.estimate = null }
-    finally { actionModal.estimateLoading = false }
+    finally {
+      actionModal.estimateLoading = false
+      actionModal.estimateUnavailable = !actionModal.estimate
+    }
   }
 }
+
+watch(selectedProfileId, id => {
+  if (actionModal.open && !actionModal.busy && id !== actionModal.profileId) {
+    actionModal.open = false
+    toast(t('gcpv.audit.dialogClosedProfile'), 'info')
+  }
+  if (createModal.open) {
+    createModal.open = false
+    toast(t('gcpv.audit.dialogClosedProfile'), 'info')
+  }
+})
 
 const ACTION_CALLS = {
   cloudrun: { start: r => gcpStore.startCloudRunService(r.region, r.name), stop: r => gcpStore.stopCloudRunService(r.region, r.name) },
@@ -2533,6 +2812,11 @@ const ACTION_CALLS = {
 async function runAction(acks) {
   const { kind, action, resource } = actionModal
   const tab = TAB_BY_KIND[kind]
+  if (actionModal.busy) return
+  if (selectedProfileId.value !== actionModal.profileId) {
+    actionModal.error = t('gcpv.audit.profileChanged')
+    return
+  }
   actionModal.busy = true
   actionModal.error = ''
   try {
@@ -2541,15 +2825,23 @@ async function runAction(acks) {
       actionModal.open = false
       return
     }
+    if (kind === 'gke' && action === 'connect') {
+      actionModal.open = false
+      await connectGke(resource)
+      return
+    }
     if (action === 'delete') {
       await gcpStore.deleteResource(kind, resource, acks.confirmName)
       const panel = panelFor(kind)
       if (panel.resource?.name === resource.name) panel.resource = null
-      toast(kind === 'sql' ? `Eliminando ${resource.name}…` : `${resource.name} eliminado`, 'success')
+      toast(t(kind === 'sql' ? 'gcpv.audit.toastDeleting' : 'gcpv.audit.toastDeleted', { name: resource.name }), 'success')
     } else {
       const res = await ACTION_CALLS[kind][action](resource)
       if (!res) throw new Error(gcpStore.tabs[tab].error || 'Error')
-      toast(t(action === 'start' ? 'awsv.toastStarting' : 'awsv.toastStopping', { name: resource.name }), 'success')
+      // Cloud Run start/stop only set the minimum instances: say that, not "starting"
+      toast(kind === 'cloudrun'
+        ? t('gcpv.audit.toastMinSet', { name: resource.name, n: action === 'start' ? 1 : 0 })
+        : t(action === 'start' ? 'awsv.toastStarting' : 'awsv.toastStopping', { name: resource.name }), 'success')
     }
     actionModal.open = false
     historyToken.value++
@@ -2615,13 +2907,16 @@ async function loadPollingSettings() {
 function onPollingSaved(settings) {
   pollingSettings.value = settings
   historyToken.value++
-  toast(settings.enabled ? `Sondeo activado cada ${settings.intervalMinutes} min` : 'Sondeo desactivado', 'success')
+  toast(settings.enabled ? t('gcpv.audit.pollingOn', { every: pollingEvery(settings.intervalMinutes) }) : t('gcpv.audit.pollingOff'), 'success')
 }
 const pollingBadge = computed(() => {
   const s = pollingSettings.value
   if (!s) return '—'
-  return s.enabled ? `cada ${s.intervalMinutes < 60 ? `${s.intervalMinutes} min` : `${s.intervalMinutes / 60} h`}` : 'sin sondeo'
+  return s.enabled ? pollingEvery(s.intervalMinutes) : t('gcpv.audit.pollingNone')
 })
+function pollingEvery(minutes) {
+  return minutes < 60 ? t('gcpv.audit.everyMinutes', { n: minutes }) : t('gcpv.audit.everyHours', { n: minutes / 60 })
+}
 const pollingTitle = computed(() => t('gcpv.pollingTitle'))
 watch(selectedProfileId, id => { if (id) loadPollingSettings() }, { immediate: true })
 
@@ -2666,6 +2961,19 @@ function gkeStatusClass(s) {
   if (s === 'PROVISIONING' || s === 'RECONCILING') return 'status-warn'
   return 'status-err'
 }
+// Connect imports a kubeconfig context into KUA: say so, with the destination,
+// before doing it.
+function requestGkeConnect(cluster) {
+  Object.assign(actionModal, {
+    open: true, kind: 'gke', action: 'connect', resource: cluster,
+    profileId: selectedProfileId.value, context: gcpDestinationContext({ name: cluster.name, region: cluster.location }),
+    title: t('gcpv.audit.gkeConnectTitle', { name: cluster.name }), message: t('gcpv.audit.gkeConnectMessage'),
+    lines: [t('gcpv.audit.gkeConnectLine1'), t('gcpv.audit.gkeConnectLine2')], tone: 'info',
+    confirmLabel: t('conn.connect'), requireName: '', costAck: false, blocked: '',
+    estimate: null, estimateLoading: false, estimateUnavailable: false, busy: false, error: '',
+  })
+}
+
 async function connectGke(cluster) {
   connectingCluster.value = cluster.name
   try {
@@ -2683,7 +2991,7 @@ async function connectGke(cluster) {
     toast(t('gcpv.toastClusterConnected', { name: cluster.name, context: result.contextName }), 'success')
     emit('connect-gke', result.contextName)
   } catch (e) {
-    toast(e.message || 'Error al conectar con el cluster', 'error')
+    toast(e.message || t('gcpv.audit.toastConnectFailed'), 'error')
   } finally {
     connectingCluster.value = null
   }
@@ -2727,8 +3035,25 @@ const crPanel = reactive({
   detail: null, detailLoading: false, detailError: null,
   logs: [], logsLoading: false, logsError: null, logsHours: 3
 })
+// A detail/log response is applied only if it is still the newest read for that
+// panel and the panel still shows the same resource with the same profile
+// (re-evaluation R01): a late answer for A never lands under B's header.
+const readTickets = new WeakMap()
+function readTicket(panel, slot, keyOf) {
+  const own = readTickets.get(panel) || {}
+  readTickets.set(panel, own)
+  const id = (own[slot] || 0) + 1
+  own[slot] = id
+  const key = keyOf(panel.resource)
+  const profile = selectedProfileId.value
+  return () => own[slot] === id && keyOf(panel.resource) === key && selectedProfileId.value === profile
+}
+const crKey = r => r ? `${r.region}/${r.name}` : ''
+const vmKey = r => r ? `${r.zone}/${r.name}` : ''
+const sqlKey = r => r ? r.name : ''
+
 function selectCloudRun(svc) {
-  const same = crPanel.resource?.name === svc.name
+  const same = crKey(crPanel.resource) === crKey(svc)
   crPanel.resource = svc
   if (!same) { crPanel.tab = 'overview'; crPanel.detail = null; crPanel.logs = [] }
   crSwitchTab(crPanel.tab)
@@ -2737,32 +3062,29 @@ async function crSwitchTab(tab) {
   crPanel.tab = tab
   const svc = crPanel.resource; if (!svc) return
   if (tab === 'overview' || tab === 'revisions' || tab === 'variables' || tab === 'labels') {
-    if (crPanel.detail && crPanel.detail._svc === svc.name) return
+    if (crPanel.detail && crPanel.detail._svc === crKey(svc)) return
+    const current = readTicket(crPanel, 'detail', crKey)
     crPanel.detailLoading = true; crPanel.detailError = null
     try {
       const d = await gcpStore.fetchCloudRunDetail(svc.region, svc.name)
-      crPanel.detail = { ...d, _svc: svc.name }
-    } catch (e) { crPanel.detailError = e.message }
-    finally { crPanel.detailLoading = false }
+      if (current()) crPanel.detail = { ...d, _svc: crKey(svc) }
+    } catch (e) { if (current()) crPanel.detailError = e.message }
+    finally { if (current()) crPanel.detailLoading = false }
   } else if (tab === 'logs') {
-    crPanel.logsLoading = true; crPanel.logsError = null
-    try {
-      const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
-      crPanel.logs = r?.entries || []
-    } catch (e) { crPanel.logsError = e.message }
-    finally { crPanel.logsLoading = false }
+    await crLoadLogs()
   } else if (tab === 'metrics') {
     await loadMetrics(crMetrics, CR_METRICS, svc)
   }
 }
 async function crLoadLogs() {
   const svc = crPanel.resource; if (!svc) return
+  const current = readTicket(crPanel, 'logs', crKey)
   crPanel.logsLoading = true; crPanel.logsError = null
   try {
     const r = await gcpStore.fetchCloudRunLogs(svc.region, svc.name, { hours: crPanel.logsHours })
-    crPanel.logs = r?.entries || []
-  } catch (e) { crPanel.logsError = e.message }
-  finally { crPanel.logsLoading = false }
+    if (current()) crPanel.logs = r?.entries || []
+  } catch (e) { if (current()) crPanel.logsError = e.message }
+  finally { if (current()) crPanel.logsLoading = false }
 }
 
 // ── Compute VMs master-detail panel ──────────────────────────────────────────
@@ -2782,12 +3104,13 @@ async function vmSwitchTab(tab) {
   const vm = vmPanel.resource; if (!vm) return
   if (tab === 'overview' || tab === 'disks' || tab === 'network' || tab === 'labels') {
     if (vmPanel.detail && vmPanel.detail._key === `${vm.zone}/${vm.name}`) return
+    const current = readTicket(vmPanel, 'detail', vmKey)
     vmPanel.detailLoading = true; vmPanel.detailError = null
     try {
       const d = await gcpStore.fetchVmDetail(vm.zone, vm.name)
-      vmPanel.detail = { ...d, _key: `${vm.zone}/${vm.name}` }
-    } catch (e) { vmPanel.detailError = e.message }
-    finally { vmPanel.detailLoading = false }
+      if (current()) vmPanel.detail = { ...d, _key: vmKey(vm) }
+    } catch (e) { if (current()) vmPanel.detailError = e.message }
+    finally { if (current()) vmPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await vmLoadLogs()
   } else if (tab === 'metrics') {
@@ -2797,12 +3120,13 @@ async function vmSwitchTab(tab) {
 }
 async function vmLoadLogs() {
   const vm = vmPanel.resource; if (!vm) return
+  const current = readTicket(vmPanel, 'logs', vmKey)
   vmPanel.logsLoading = true; vmPanel.logsError = null
   try {
     const r = await gcpStore.fetchVmLogs(vm.zone, vm.name, { hours: vmPanel.logsHours })
-    vmPanel.logs = r?.entries || []
-  } catch (e) { vmPanel.logsError = e.message }
-  finally { vmPanel.logsLoading = false }
+    if (current()) vmPanel.logs = r?.entries || []
+  } catch (e) { if (current()) vmPanel.logsError = e.message }
+  finally { if (current()) vmPanel.logsLoading = false }
 }
 
 // ── Cloud SQL master-detail panel ─────────────────────────────────────────────
@@ -2822,12 +3146,13 @@ async function sqlSwitchTab(tab) {
   const inst = sqlPanel.resource; if (!inst) return
   if (tab === 'overview' || tab === 'config' || tab === 'connection' || tab === 'labels') {
     if (sqlPanel.detail && sqlPanel.detail._inst === inst.name) return
+    const current = readTicket(sqlPanel, 'detail', sqlKey)
     sqlPanel.detailLoading = true; sqlPanel.detailError = null
     try {
       const d = await gcpStore.fetchSqlDetail(inst.name)
-      sqlPanel.detail = { ...d, _inst: inst.name }
-    } catch (e) { sqlPanel.detailError = e.message }
-    finally { sqlPanel.detailLoading = false }
+      if (current()) sqlPanel.detail = { ...d, _inst: inst.name }
+    } catch (e) { if (current()) sqlPanel.detailError = e.message }
+    finally { if (current()) sqlPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await sqlLoadLogs()
   } else if (tab === 'metrics') {
@@ -2836,12 +3161,13 @@ async function sqlSwitchTab(tab) {
 }
 async function sqlLoadLogs() {
   const inst = sqlPanel.resource; if (!inst) return
+  const current = readTicket(sqlPanel, 'logs', sqlKey)
   sqlPanel.logsLoading = true; sqlPanel.logsError = null
   try {
     const r = await gcpStore.fetchSqlLogs(inst.name, { hours: sqlPanel.logsHours })
-    sqlPanel.logs = r?.entries || []
-  } catch (e) { sqlPanel.logsError = e.message }
-  finally { sqlPanel.logsLoading = false }
+    if (current()) sqlPanel.logs = r?.entries || []
+  } catch (e) { if (current()) sqlPanel.logsError = e.message }
+  finally { if (current()) sqlPanel.logsLoading = false }
 }
 
 // ── Cloud Functions master-detail panel ───────────────────────────────────────
@@ -2851,8 +3177,9 @@ const fnPanel = reactive({
   logs: [], logsLoading: false, logsError: null, logsHours: 3,
   invokePayload: '{}', invokeResult: null, invoking: false
 })
+function fnKey(fn) { return fn ? (fn.fullName || `${fn.location}/${fn.name}`) : '' }
 function selectFn(fn) {
-  const same = fnPanel.resource?.name === fn.name
+  const same = fnKey(fnPanel.resource) === fnKey(fn)
   fnPanel.resource = fn
   if (!same) { fnPanel.tab = 'overview'; fnPanel.detail = null; fnPanel.logs = []; fnPanel.invokeResult = null }
   fnSwitchTab(fnPanel.tab)
@@ -2861,13 +3188,14 @@ async function fnSwitchTab(tab) {
   fnPanel.tab = tab
   const fn = fnPanel.resource; if (!fn) return
   if (tab === 'overview' || tab === 'variables') {
-    if (fnPanel.detail && fnPanel.detail._fn === fn.name) return
+    if (fnPanel.detail && fnPanel.detail._fn === fnKey(fn)) return
+    const current = readTicket(fnPanel, 'detail', fnKey)
     fnPanel.detailLoading = true; fnPanel.detailError = null
     try {
       const d = await gcpStore.fetchFunctionDetail(fn.location, fn.name)
-      fnPanel.detail = { ...d, _fn: fn.name }
-    } catch (e) { fnPanel.detailError = e.message }
-    finally { fnPanel.detailLoading = false }
+      if (current()) fnPanel.detail = { ...d, _fn: fnKey(fn) }
+    } catch (e) { if (current()) fnPanel.detailError = e.message }
+    finally { if (current()) fnPanel.detailLoading = false }
   } else if (tab === 'logs') {
     await fnLoadLogs()
   } else if (tab === 'metrics') {
@@ -2876,13 +3204,15 @@ async function fnSwitchTab(tab) {
 }
 async function fnLoadLogs() {
   const fn = fnPanel.resource; if (!fn) return
+  const current = readTicket(fnPanel, 'logs', fnKey)
   fnPanel.logsLoading = true; fnPanel.logsError = null
   try {
     const r = await gcpStore.fetchFunctionLogs(fn.location, fn.name, { hours: fnPanel.logsHours })
-    fnPanel.logs = r?.entries || []
-  } catch (e) { fnPanel.logsError = e.message }
-  finally { fnPanel.logsLoading = false }
+    if (current()) fnPanel.logs = r?.entries || []
+  } catch (e) { if (current()) fnPanel.logsError = e.message }
+  finally { if (current()) fnPanel.logsLoading = false }
 }
+function fnRetryDetail() { fnPanel.detail = null; fnSwitchTab(fnPanel.tab) }
 function fnPanelInvoke() { fnPanel.tab = 'invoke' }
 async function fnPanelDoInvoke() {
   const fn = fnPanel.resource; if (!fn) return
@@ -2891,7 +3221,7 @@ async function fnPanelDoInvoke() {
     let payload = {}
     try { payload = JSON.parse(fnPanel.invokePayload || '{}') } catch { toast(t('awsv.toastInvalidJson'), 'error'); return }
     const res = await gcpStore.invokeFunction(fn.location, fn.name, payload)
-    fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
+    if (fnKey(fnPanel.resource) === fnKey(fn)) fnPanel.invokeResult = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
   } catch (e) { toast(e.message, 'error') }
   finally { fnPanel.invoking = false }
 }
@@ -2907,8 +3237,9 @@ const arPanel = reactive({
   nsLoading: false, depsLoading: false, deploying: false, deployResult: null,
 })
 
+const arKey = r => r ? `${r.location}/${r.name}` : ''
 async function selectArtifactRepo(repo) {
-  const same = arPanel.repo?.name === repo.name
+  const same = arKey(arPanel.repo) === arKey(repo)
   arPanel.repo = repo
   if (!same) {
     arPanel.tab = 'packages'; arPanel.info = null
@@ -2920,6 +3251,7 @@ async function selectArtifactRepo(repo) {
       gcpStore.fetchArtifactPackages(repo.location, repo.name).catch(() => []),
       gcpStore.fetchArtifactRepoInfo(repo.location, repo.name).catch(() => null),
     ])
+    if (arKey(arPanel.repo) !== arKey(repo)) return   // another repository was selected meanwhile (R01)
     arPanel.pkgs = pkgs || []
     arPanel.info = info
     arPanel.pkgsLoading = false
@@ -2934,11 +3266,12 @@ function arSwitchTab(tab) {
 async function selectArtifactPkg(pkg) {
   arPanel.selectedPkg = pkg
   arPanel.tags = []; arPanel.tagsLoading = true
+  const current = () => arPanel.selectedPkg === pkg
   try {
     const tags = await gcpStore.fetchArtifactTags(arPanel.repo.location, arPanel.repo.name, pkg.name)
-    arPanel.tags = tags || []
-  } catch (e) { toast(e.message, 'error') }
-  finally { arPanel.tagsLoading = false }
+    if (current()) arPanel.tags = tags || []
+  } catch (e) { if (current()) toast(e.message, 'error') }
+  finally { if (current()) arPanel.tagsLoading = false }
 }
 
 function arStartDeploy(tag) {
@@ -3001,76 +3334,18 @@ async function arApplyDeploy() {
   } finally { arPanel.deploying = false }
 }
 
-// ── Cloud Monitoring metrics ──────────────────────────────────────────────────
-const crMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
-const vmMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
-const sqlMetrics = reactive({ loading: false, error: null, hours: 1, data: {} })
-const fnMetrics  = reactive({ loading: false, error: null, hours: 1, data: {} })
+// ── Cloud Monitoring metrics (contracts in ./gcpMetrics.js) ──────────────────
+const crMetrics  = reactive(createMetricsPanel())
+const vmMetrics  = reactive(createMetricsPanel())
+const sqlMetrics = reactive(createMetricsPanel())
+const fnMetrics  = reactive(createMetricsPanel())
 
-async function loadMetrics(panel, metrics, target) {
-  panel.loading = true; panel.error = null; panel.data = {}
-  try {
-    const results = await Promise.all(
-      metrics.map(m => gcpStore.fetchMonitoringTimeSeries(m.metric, m.filter(target), {
-        hours: panel.hours, aligner: m.aligner || 'ALIGN_MEAN', period: m.period || '60', reducer: m.reducer || 'REDUCE_MEAN'
-      }).catch(() => ({ points: [] })))
-    )
-    const data = {}
-    metrics.forEach((m, i) => { data[m.key] = results[i]?.points || [] })
-    panel.data = data
-  } catch (e) { panel.error = e.message }
-  finally { panel.loading = false }
+function loadMetrics(panel, metrics, target) {
+  return loadMetricSet(gcpStore.fetchMonitoringTimeSeries, panel, metrics, target)
 }
-
-const CR_METRICS = [
-  { key: 'requests', metric: 'run.googleapis.com/request_count',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'gcpv.metricRequestRate', unit: 'req/s', color: '#818cf8' },
-  { key: 'latency', metric: 'run.googleapis.com/request_latencies',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_PERCENTILE_99', label: 'gcpv.metricLatencyP99', unit: 'ms', color: '#f59e0b' },
-  { key: 'instances', metric: 'run.googleapis.com/container/instance_count',
-    filter: s => `resource.type="cloud_run_revision" AND resource.labels.service_name="${s.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gri.instances', unit: '', color: '#34d399' },
-]
-
-const VM_METRICS = [
-  { key: 'cpu', metric: 'compute.googleapis.com/instance/cpu/utilization',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricCpu', unit: '%',
-    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
-  { key: 'netIn', metric: 'compute.googleapis.com/instance/network/received_bytes_count',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'ec2d.networkIn', unit: 'B/s', color: '#818cf8' },
-  { key: 'diskRead', metric: 'compute.googleapis.com/instance/disk/read_bytes_count',
-    filter: s => `resource.type="gce_instance" AND resource.labels.instance_id="${s.instanceId || s.name}"`,
-    aligner: 'ALIGN_RATE', label: 'ec2d.diskRead', unit: 'B/s', color: '#34d399' },
-]
-
-const SQL_METRICS = [
-  { key: 'cpu', metric: 'cloudsql.googleapis.com/database/cpu/utilization',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricCpu', unit: '%',
-    color: '#f87171', fmt: v => (v * 100).toFixed(1) + '%' },
-  { key: 'connections', metric: 'cloudsql.googleapis.com/database/network/connections',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricConnections', unit: '', color: '#818cf8' },
-  { key: 'diskBytes', metric: 'cloudsql.googleapis.com/database/disk/bytes_used',
-    filter: s => `resource.type="cloudsql_database" AND resource.labels.database_id=ends_with("${s.name}")`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricDiskUsed', unit: 'B', color: '#34d399' },
-]
-
-const FN_METRICS = [
-  { key: 'executions', metric: 'cloudfunctions.googleapis.com/function/execution_count',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_RATE', label: 'gcpv.metricExecutions', unit: 'req/s', color: '#818cf8' },
-  { key: 'duration', metric: 'cloudfunctions.googleapis.com/function/execution_times',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_PERCENTILE_99', label: 'gcpv.metricDurationP99', unit: 'ns', color: '#f59e0b' },
-  { key: 'active', metric: 'cloudfunctions.googleapis.com/function/active_instances',
-    filter: f => `resource.type="cloud_function" AND resource.labels.function_name="${f.name}"`,
-    aligner: 'ALIGN_MEAN', label: 'gcpv.metricActiveInstances', unit: '', color: '#34d399' },
-]
+function retryMetric(panel, m, target) {
+  if (target) return loadMetric(gcpStore.fetchMonitoringTimeSeries, panel, m, target)
+}
 
 // ── Function Invoke ──────────────────────────────────────────────────────────
 const fnInvokeOpen    = ref(false)
@@ -3611,7 +3886,80 @@ async function openIamKeys(sa) {
     iamKeysList.value = await gcpStore.fetchIamKeys(sa.email)
   } catch (e) { iamKeysError.value = e.message }
   finally { iamKeysLoading.value = false }
-}</script>
+}
+// ── The view in the URL (G15, R05) ───────────────────────────────────────────
+// Restorable destinations, and only these:
+//   every list      search, State/Region filters, order   ?q=&f.state=&f.region=&f.sort=
+//   every list      the Overview evidence filter          ?f.evidence=name1,name2
+//   master-detail   the selected resource                 ?selected=<location>/<name>
+//   (Cloud Run, VMs, SQL, Functions, Artifact Registry)   and its detail tab ?f.panel=metrics
+// Other selections (dialogs, Firestore documents, Storage objects...) are not
+// part of a link. Values never include payloads, variables or secrets.
+const RESOURCE_KEYS = {
+  cloudrun: r => r && `${r.region}/${r.name}`,
+  vms: r => r && `${r.zone}/${r.name}`,
+  sql: r => r && r.name,
+  functions: r => r && `${r.location}/${r.name}`,
+  artifact: r => r && `${r.location}/${r.name}`,
+}
+const RESOURCE_PANELS = { cloudrun: () => crPanel.resource, vms: () => vmPanel.resource, sql: () => sqlPanel.resource, functions: () => fnPanel.resource, artifact: () => arPanel.repo }
+const DETAIL_TABS = { cloudrun: () => crPanel.tab, vms: () => vmPanel.tab, sql: () => sqlPanel.tab, functions: () => fnPanel.tab, artifact: () => arPanel.tab }
+const DETAIL_SWITCH = { cloudrun: crSwitchTab, vms: vmSwitchTab, sql: sqlSwitchTab, functions: fnSwitchTab, artifact: arSwitchTab }
+const DEFAULT_DETAIL_TAB = { artifact: 'packages' }
+FOCUS_SELECT.artifact = r => selectArtifactRepo(r)
+
+function currentFilters(tab) {
+  const filters = {}
+  if (searchByTab[tab]) filters.q = searchByTab[tab]
+  for (const f of FACETS) if (facetState[facetKey(tab, f.id)]) filters[f.id] = facetState[facetKey(tab, f.id)]
+  if (sortState[tab]) filters.sort = sortState[tab]
+  if (evidenceFocus.value?.tab === tab && evidenceFocus.value.names.length) filters.evidence = evidenceFocus.value.names.join(',')
+  const detailTab = RESOURCE_PANELS[tab]?.() && DETAIL_TABS[tab]?.()
+  if (detailTab && detailTab !== (DEFAULT_DETAIL_TAB[tab] || 'overview')) filters.panel = detailTab
+  return filters
+}
+watch(() => [activeTab.value, JSON.stringify(currentFilters(activeTab.value))],
+  () => emit('filters-change', activeTab.value, currentFilters(activeTab.value)))
+
+for (const [tab, panel] of Object.entries(RESOURCE_PANELS)) {
+  watch(panel, resource => emit('resource-change', tab, RESOURCE_KEYS[tab](resource) || ''))
+}
+
+// A link or Back reopens its resource once the list is loaded, or says it is
+// not visible with this profile (the list's own error banner explains access).
+const pendingResource = reactive({})
+const pendingDetailTab = {}
+function applySavedFilters() {
+  for (const [tab, filters] of Object.entries(props.savedFilters || {})) {
+    searchByTab[tab] = filters?.q || ''
+    for (const f of FACETS) facetState[facetKey(tab, f.id)] = filters?.[f.id] || ''
+    sortState[tab] = filters?.sort || ''
+    const names = String(filters?.evidence || '').split(',').filter(Boolean)
+    if (names.length) evidenceFocus.value = { tab, names, label: t('gcpv.audit.linkedEvidence') }
+    else if (evidenceFocus.value?.tab === tab) evidenceFocus.value = null
+    if (filters?.panel && DETAIL_SWITCH[tab]) pendingDetailTab[tab] = filters.panel
+  }
+  for (const [tab, key] of Object.entries(props.savedResources || {})) {
+    if (!key || !RESOURCE_KEYS[tab]) continue
+    if (RESOURCE_KEYS[tab](RESOURCE_PANELS[tab]()) !== key) pendingResource[tab] = key
+    else if (pendingDetailTab[tab]) { DETAIL_SWITCH[tab](pendingDetailTab[tab]); delete pendingDetailTab[tab] }
+  }
+}
+watch(() => props.savedFiltersSeq, applySavedFilters, { immediate: true })
+watch(() => Object.keys(pendingResource).map(tab => [tab, gcpStore.tabs[tab]?.loading, gcpStore.tabs[tab]?.data?.length, gcpStore.tabs[tab]?.error]), () => {
+  for (const tab of Object.keys(pendingResource)) {
+    const state = gcpStore.tabs[tab]
+    if (!state || state.loading || !loaded[tab]) continue
+    const key = pendingResource[tab]
+    delete pendingResource[tab]
+    if (state.error) continue
+    const row = (state.data || []).find(r => RESOURCE_KEYS[tab](r) === key)
+    if (!row) { toast(t('gcpv.audit.linkResourceMissing', { name: key }), 'warn'); continue }
+    FOCUS_SELECT[tab]?.(row)
+    if (pendingDetailTab[tab]) { DETAIL_SWITCH[tab](pendingDetailTab[tab]); delete pendingDetailTab[tab] }
+  }
+}, { deep: true })
+</script>
 
 <style scoped>
 /* ── Cloud Run / VM / Cloud SQL tables (list above, detail below) ── */
@@ -3838,6 +4186,21 @@ async function openIamKeys(sa) {
 .gcp-overview-attention-copy span { color: var(--text-dim); }
 .gcp-overview-attention-name { margin-left: auto; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: monospace; font-size: 10px; }
 .gcp-overview-service-error { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--red); font-size: 10px; }
+.gcp-overview-cost-scope { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 8px 0 0; font-size: 11px; }
+.gcp-overview-cost-scope dt { color: var(--text-dim); }
+.gcp-overview-cost-scope dd { margin: 0; }
+.gcp-master-detail { display: flex; flex: 1; overflow: hidden; }
+.gcp-master-list { border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+@media (max-width: 760px) {
+  .gcp-master-detail { flex-direction: column; overflow: auto; }
+  .gcp-master-list { width: 100% !important; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+.gcp-focus-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
+.gcp-tabpanel { display: contents; }
+.gcp-row-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.gcp-row-link:hover { text-decoration: underline; }
+.gcp-row-link:focus-visible, .sidebar-item[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gcp-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .gcp-overview-table-wrap { overflow: auto; max-height: 500px; }
 .gcp-overview-table { margin: 0; }
 .gcp-overview-table th, .gcp-overview-table td { white-space: nowrap; }

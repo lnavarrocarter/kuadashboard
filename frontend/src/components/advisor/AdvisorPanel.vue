@@ -246,7 +246,7 @@
               </option>
             </select>
           </label>
-          <span class="adv-dim">{{ t(`advisor.schedule.cost.${scopeKind}`) }}</span>
+          <span class="adv-dim" data-test="advisor-schedule-cost">{{ scheduleCostText }}</span>
           <span v-if="scheduleStatus" :class="['adv-schedule-status', { 'adv-warn': schedule.lastStatus !== 'ok' }]" data-test="advisor-schedule-status">{{ scheduleStatus }}</span>
           <span v-if="scheduleError" class="adv-warn">{{ scheduleError }}</span>
         </div>
@@ -392,6 +392,20 @@ const scheduleError = ref('')
 const scopeKind = computed(() => {
   const kind = String(props.report?.posture?.historyScope || '').split(':')[0]
   return ['aws', 'gcp', 'vercel', 'kubernetes', 'product'].includes(kind) ? kind : ''
+})
+// What a scheduled run reads, tied to the selected frequency (GCP re-evaluation
+// R06). GCP: ~25 inventory lists plus one call per location for the regional
+// ones (Artifact Registry, Scheduler, Run Jobs, Tasks), ~150 calls a run with
+// one page each. Only the Storage and Secret Manager lists are billed, at list
+// price about USD 0.000008 together per run.
+const GCP_BILLED_USD_PER_RUN = 0.000008
+const scheduleCostText = computed(() => {
+  if (scopeKind.value !== 'gcp') return t(`advisor.schedule.cost.${scopeKind.value}`)
+  const hours = schedule.value?.intervalHours || 0
+  if (!hours) return t('advisor.schedule.cost.gcpOff')
+  const runs = Math.round((24 / hours) * 30)
+  const usd = runs * GCP_BILLED_USD_PER_RUN
+  return t('advisor.schedule.cost.gcpEvery', { runs, usd: usd < 0.01 ? '< 0.01' : usd.toFixed(2) })
 })
 const scheduleStatus = computed(() => {
   const current = schedule.value

@@ -69,9 +69,9 @@
         <div class="gi-card wide">
           <div class="gi-card-title">{{ t('gvi.tagsMetadata') }}</div>
           <dl>
-            <dt>Network tags</dt>
+            <dt>{{ t('gcpv.audit.kv.networkTags') }}</dt>
             <dd><span v-for="tag in d.tags" :key="tag" class="gi-chip">{{ tag }}</span><span v-if="!d.tags?.length" class="gi-dim">—</span></dd>
-            <dt>Metadata</dt>
+            <dt>{{ t('gcpv.audit.kv.metadata') }}</dt>
             <dd>
               <span v-if="!d.metadata?.length" class="gi-dim">—</span>
               <div v-for="m in d.metadata" :key="m.key" class="gi-mono">
@@ -117,7 +117,7 @@
           <dt>{{ t('gvi.internalIp') }}</dt><dd class="gi-mono">{{ n.internalIp || '—' }}</dd>
           <dt>{{ t('gvi.externalIp') }}</dt><dd class="gi-mono">{{ n.externalIp || '—' }} <span v-if="n.networkTier" class="gi-badge">{{ n.networkTier }}</span></dd>
           <dt v-if="n.ipv6">IPv6</dt><dd v-if="n.ipv6" class="gi-mono">{{ n.ipv6 }}</dd>
-          <dt>Stack</dt><dd>{{ n.stackType || 'IPV4_ONLY' }}</dd>
+          <dt>{{ t('gcpv.audit.kv.stack') }}</dt><dd>{{ n.stackType || 'IPV4_ONLY' }}</dd>
           <dt v-if="n.aliasRanges?.length">{{ t('gvi.aliasRanges') }}</dt><dd v-if="n.aliasRanges?.length"><span v-for="r in n.aliasRanges" :key="r" class="gi-chip">{{ r }}</span></dd>
         </dl>
       </div>

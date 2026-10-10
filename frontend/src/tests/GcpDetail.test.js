@@ -71,6 +71,14 @@ const RUN = {
   traffic: [{ latest: true, percent: 100, revision: null }],
 }
 
+describe('GcpCloudRunInfo scaling and units (R03)', () => {
+  it('uses the scaling label and normalized CPU/memory like the table', () => {
+    const w = mount(GcpCloudRunInfo, { props: { detail: RUN, section: 'overview' } })
+    expect(w.find('[data-test="scaling"]').text()).toContain('1 – 5')
+    expect(w.text()).toContain('1 vCPU / 512 MiB')
+  })
+})
+
 describe('GcpCloudRunInfo (#81)', () => {
   it('flags public access, 24/7 min instances, default service account and plaintext secrets', () => {
     const notes = mount(GcpCloudRunInfo, { props: { detail: RUN, section: 'overview' } }).find('[data-test="notes"]').text()
@@ -195,6 +203,21 @@ describe('GcpStateTimeline (#81)', () => {
     expect(w.text()).toContain('desactivado')
     expect(calls[0].url).toContain('type=gcp-vm')
     expect(calls[0].url).toContain('key=us-central1-a%2Fweb')
+  })
+
+  it('Cloud Run start/stop read as minimum changes in the history (R03)', async () => {
+    stubFetch({
+      '/api/cloud/gcp/history/polling': POLL,
+      '/api/cloud/gcp/history': [
+        { id: 1, kind: 'action', source: 'user', action: 'start', details: { minInstances: 1 }, observedAt: '2026-09-28T12:00:00Z' },
+      ],
+    })
+    const w = mount(GcpStateTimeline, { props: { resourceType: 'gcp-cloud-run', resourceKey: 'us-central1/api' } })
+    await flushPromises()
+    const item = w.find('[data-test="timeline"] li').text()
+    expect(item).toContain('Mínimo fijado en 1')
+    expect(item).toContain('instancias mínimas: 1')
+    expect(item).not.toContain('Iniciado')
   })
 
   it('shows an explanatory empty state and loads only when active', async () => {
