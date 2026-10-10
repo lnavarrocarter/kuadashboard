@@ -2822,7 +2822,10 @@ async function runAction(acks) {
     } else {
       const res = await ACTION_CALLS[kind][action](resource)
       if (!res) throw new Error(gcpStore.tabs[tab].error || 'Error')
-      toast(t(action === 'start' ? 'awsv.toastStarting' : 'awsv.toastStopping', { name: resource.name }), 'success')
+      // Cloud Run start/stop only set the minimum instances: say that, not "starting"
+      toast(kind === 'cloudrun'
+        ? t('gcpv.audit.toastMinSet', { name: resource.name, n: action === 'start' ? 1 : 0 })
+        : t(action === 'start' ? 'awsv.toastStarting' : 'awsv.toastStopping', { name: resource.name }), 'success')
     }
     actionModal.open = false
     historyToken.value++

@@ -6662,4 +6662,9 @@ export default {
   "gcpv.audit.linkResourceMissing": "The linked resource {name} is not in this project's list with the current profile.",
   "gcpv.audit.partialRegions": "Partial list: {n} region(s) could not be read ({regions}). Resources there are not shown.",
   "gcpv.audit.partialPages": "Partial list: only the first pages were read; there are more resources.",
+  "gcpv.audit.crScalesToZero": "scales to zero",
+  "gcpv.audit.toastMinSet": "{name}: minimum instances set to {n}",
+  "gst.action.run_start": "Minimum set to 1",
+  "gst.action.run_stop": "Minimum set to 0",
+  "gst.minInstances": "minimum instances: {n}",
 }
