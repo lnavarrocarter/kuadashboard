@@ -23,7 +23,7 @@ const { buildOverview, lastRestartAt, parseCpu, parseMemory, podProblem } = requ
 const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
 const {
-  isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries,
+  isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries, nodeQueries, promRegexOf, promString,
   parseMatrix, nodeMetricsFromPrometheus, summarizeSeries,
 } = require('./lib/kubePrometheus');
 const { closeApmDatabase, getApmDatabase } = require('./lib/apm/database');
@@ -797,11 +797,18 @@ async function prometheusRequest(svc, proxyName, apiPath) {
   return body;
 }
 
+function isPrometheusQueryRejection(err) {
+  return (err?.statusCode === 400 || err?.statusCode === 422) && /"status"\s*:\s*"error"|bad_data|parse error/i.test(err.message || '');
+}
+
 async function prometheusApi(apiPath) {
   if (prometheusTarget?.context === currentContext) {
     try {
       return { body: await prometheusRequest(prometheusTarget.svc, prometheusTarget.proxyName, apiPath), service: prometheusTarget.svc };
-    } catch { /* fall back to trying every candidate */ }
+    } catch (err) {
+      if (isPrometheusQueryRejection(err)) throw err;
+      /* fall back to trying every candidate */
+    }
   }
   const services = await cachedPrometheusServices();
   let lastErr = null;
@@ -812,6 +819,9 @@ async function prometheusApi(apiPath) {
         prometheusTarget = { context: currentContext, svc, proxyName };
         return { body, service: svc };
       } catch (err) {
+        // Prometheus answered and rejected the query: other candidates would
+        // reject it too, so stop instead of walking every service and port.
+        if (isPrometheusQueryRejection(err)) throw err;
         lastErr = err;
       }
     }
@@ -827,13 +837,12 @@ function prometheusQueryRange(query, { start, end, step }) {
   return prometheusApi(`query_range?query=${encodeURIComponent(query)}&start=${start}&end=${end}&step=${step}`);
 }
 
-function regexEscape(value = '') { return String(value).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&'); }
 
 async function prometheusMetricsForPods(namespace, pods = []) {
   const names = pods.map(pod => pod.metadata?.name).filter(Boolean);
   if (!names.length) throw new Error('No pods found for Prometheus metrics');
-  const podMatcher = names.length === 1 ? `pod="${names[0]}"` : `pod=~"${names.map(regexEscape).join('|')}"`;
-  const scope = `namespace="${namespace}",${podMatcher},container!="",container!="POD"`;
+  const podMatcher = names.length === 1 ? `pod="${promString(names[0])}"` : `pod=~"${promRegexOf(names)}"`;
+  const scope = `namespace="${promString(namespace)}",${podMatcher},container!="",container!="POD"`;
   const [cpuResult, memoryResult] = await Promise.all([
     prometheusQuery(`sum by (pod) (rate(container_cpu_usage_seconds_total{${scope}}[5m]))`),
     prometheusQuery(`sum by (pod) (container_memory_working_set_bytes{${scope}})`),
@@ -844,20 +853,31 @@ async function prometheusMetricsForPods(namespace, pods = []) {
 }
 
 async function prometheusMetricsForNode(name) {
-  const instanceMatcher = `instance=~"${regexEscape(name)}(:[0-9]+)?"`;
   const { core } = clients();
+  const queries = nodeQueries(name);
   const [cpuResult, memoryResult, nodeResult] = await Promise.all([
-    prometheusQuery(`sum(rate(node_cpu_seconds_total{${instanceMatcher},mode!="idle"}[5m]))`),
-    prometheusQuery(`sum(node_memory_MemTotal_bytes{${instanceMatcher}} - node_memory_MemAvailable_bytes{${instanceMatcher}})`),
+    prometheusQuery(queries.nodeExporter.cpu),
+    prometheusQuery(queries.nodeExporter.memory),
     core.readNode(name),
   ]);
+  let cores = prometheusValue(cpuResult.body);
+  let memoryBytes = prometheusValue(memoryResult.body);
+  let source = `Prometheus node-exporter (${cpuResult.service.namespace}/${cpuResult.service.name})`;
+  if (cores == null && memoryBytes == null) {
+    const [cpuFallback, memoryFallback] = await Promise.all([
+      prometheusQuery(queries.cadvisor.cpu),
+      prometheusQuery(queries.cadvisor.memory),
+    ]);
+    cores = prometheusValue(cpuFallback.body);
+    memoryBytes = prometheusValue(memoryFallback.body);
+    source = `Prometheus cAdvisor, containers only (${cpuFallback.service.namespace}/${cpuFallback.service.name})`;
+  }
   const node = nodeResult.body || nodeResult || {};
-  const cores = prometheusValue(cpuResult.body);
-  const memoryBytes = prometheusValue(memoryResult.body);
+  const cpuNano = cores == null ? null : cores * 1e9;
   return metricPayload({
-    source: `Prometheus (${cpuResult.service.namespace}/${cpuResult.service.name})`,
-    items: [{ name, cpu: null, memory: null }],
-    cpuNano: cores == null ? null : cores * 1e9,
+    source,
+    items: [{ name, cpu: formatCpu(cpuNano), memory: formatBytes(memoryBytes) }],
+    cpuNano,
     memoryBytes,
     cpuReference: nodeReference(node, 'cpu'),
     memoryReference: nodeReference(node, 'memory'),
