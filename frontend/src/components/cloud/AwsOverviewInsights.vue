@@ -13,7 +13,7 @@
         <ul>
           <li v-for="item in incidents" :key="item.id" :data-test="`incident-${item.id}`">
             <span class="aoi-incident-text"><strong>{{ item.title }}</strong> {{ item.text }}</span>
-            <button class="btn sm" @click="emit('open-tab', { tab: item.tab, incident: item.filter })">{{ item.filter ? t('awsIncident.viewAffected') : t('awsIncident.openService') }}</button>
+            <button class="btn sm" @click="emit('open-tab', { tab: item.tab, incident: item.filter })">{{ item.action || (item.filter ? t('awsIncident.viewAffected') : t('awsIncident.openService')) }}</button>
           </li>
         </ul>
       </section>
@@ -248,7 +248,8 @@ const incidents = computed(() => {
     items.push({ id: 'lambda', tab: 'lambda', filter: true, title: 'Lambda', text: t('awsIncident.lambda', { n: num(u.lambda.errors), rate: u.lambda.errorRate }) })
   }
   if (metrics.elb?.errors5xx > 0) {
-    items.push({ id: 'elb', tab: 'elb', filter: true, title: t('awsInsights.loadBalancers'), text: t('awsIncident.elb', { n: num(u.elb.errors5xx), elb: num(u.elb.elbGenerated5xx || 0) }) })
+    // Per-balancer 5xx are not read here: the link opens the current health, and says so.
+    items.push({ id: 'elb', tab: 'elb', filter: true, action: t('awsIncident.viewHealth'), title: t('awsInsights.loadBalancers'), text: t('awsIncident.elb', { n: num(metrics.elb.errors5xx), elb: num(metrics.elb.elbGenerated5xx || 0) }) })
   }
   const sfnFailed = (metrics.stepfn?.failed || 0) + (metrics.stepfn?.timedOut || 0)
   if (sfnFailed > 0) {

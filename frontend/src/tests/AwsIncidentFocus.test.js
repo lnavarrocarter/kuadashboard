@@ -43,6 +43,21 @@ describe('Overview incidents open the affected resources (A08)', () => {
     expect(names(w)).toHaveLength(3)
   })
 
+  it('load balancers: the focus is current health, and the counter matches the rows (R03)', async () => {
+    const store = useAwsStore()
+    store.activeProfileId = 'prof-1'
+    const w = mount(AwsView, { props: { activeService: 'overview' }, global: { stubs: { Teleport: true, AwsOverview } } })
+    await flushPromises()
+    w.findComponent(AwsOverview).vm.$emit('open-tab', { tab: 'elb', incident: true })
+    await flushPromises()
+    const lb = (name, status) => ({ id: name, arn: `arn:${name}`, name, type: 'application', public: false, dnsName: `${name}.elb`, listeners: [], targetGroups: [], health: { status } })
+    store.loadBalancers = [lb('api', 'critical'), lb('web', 'warning'), lb('quiet', 'ok')]
+    await flushPromises()
+    expect(w.find('[data-test="incident-filter"]').text()).toContain('does not say which one returned the 5xx')
+    expect(w.findAll('tbody tr').filter(tr => tr.text().includes('.elb'))).toHaveLength(2)
+    expect(w.find('[data-test="row-count"]').text()).toBe('2 of 3')
+  })
+
   it('a plain tab link and later navigation do not keep the filter', async () => {
     const { w } = await openFromOverview('lambda')
     expect(w.find('[data-test="incident-filter"]').exists()).toBe(false)

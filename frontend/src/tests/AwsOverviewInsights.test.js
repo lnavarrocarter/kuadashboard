@@ -86,6 +86,8 @@ describe('AwsOverviewInsights', () => {
     expect(block.find('[data-test="incident-stepfn"]').text()).toContain('3 failed or timed-out executions')
     expect(block.find('[data-test="incident-glue"]').text()).toContain('12 failed job runs')
     expect(block.find('[data-test="incident-eventbridge"]').exists()).toBe(false)
+    // Current health is not 5xx attribution: the button says what it opens (R03).
+    expect(block.find('[data-test="incident-elb"] button').text()).toBe('View current health')
     await block.find('[data-test="incident-lambda"] button').trigger('click')
     await block.find('[data-test="incident-glue"] button').trigger('click')
     expect(w.emitted('open-tab')).toEqual([[{ tab: 'lambda', incident: true }], [{ tab: 'glue', incident: false }]])

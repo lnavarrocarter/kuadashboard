@@ -4257,7 +4257,9 @@ const tabFilteredMap = {
   dynamodb: filteredDynamo, rds: filteredRds, glue: filteredGlue,
   athena: filteredAthena, datapipeline: filteredPipelines,
   bedrock: filteredBedrock, lex: filteredLex, agentcorecfn: filteredAgentCoreCfn,
-  elb: computed(() => filterRows(awsStore.loadBalancers, search.elb)),
+  // Same rows as AwsLoadBalancersTab renders, incident focus included.
+  elb: computed(() => filterRows(awsStore.loadBalancers, search.elb)
+    .filter(lb => incidentFocus.value !== 'elb' || ELB_ATTENTION.includes(lb.health?.status))),
   cloudfront: filteredCloudfront, route53: filteredRoute53,
   cognito: filteredCognito, secrets: filteredSecrets,
   cwdashboards: filteredCwDashboards,
