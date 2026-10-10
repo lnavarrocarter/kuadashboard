@@ -804,8 +804,8 @@
                   <div style="font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">{{ t('vercel.col.functionName') }}</div>
                   <div class="kv-list">
                     <div class="kv-row"><span class="kv-k">{{ t('th.state') }}</span><span :class="fnStatusClass(fnPanel.detail.state)">{{ fnPanel.detail.state }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Runtime</span><span class="text-dim">{{ fnPanel.detail.runtime }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Trigger</span><span class="text-dim">{{ fnPanel.detail.trigger }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.runtime') }}</span><span class="text-dim">{{ fnPanel.detail.runtime }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.trigger') }}</span><span class="text-dim">{{ fnPanel.detail.trigger }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcpv.entryPoint') }}</span><span class="mono-xs text-dim">{{ fnPanel.detail.entryPoint || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gri.serviceAccount') }}</span><span class="mono-xs text-dim" style="word-break:break-all">{{ fnPanel.detail.serviceAccount || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">Ingress</span><span class="text-dim">{{ fnPanel.detail.ingressSettings || '--' }}</span></div>
@@ -817,7 +817,7 @@
                   <div class="kv-list">
                     <div class="kv-row"><span class="kv-k">{{ t('lmd.memory') }}</span><span class="text-dim">{{ fnPanel.detail.memory || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">CPU</span><span class="text-dim">{{ fnPanel.detail.cpu || '--' }}</span></div>
-                    <div class="kv-row"><span class="kv-k">Timeout</span><span class="text-dim">{{ fnPanel.detail.timeout || '--' }}</span></div>
+                    <div class="kv-row"><span class="kv-k">{{ t('gcpv.audit.kv.timeout') }}</span><span class="text-dim">{{ fnPanel.detail.timeout || '--' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcn.minInstances') }}</span><span class="text-dim">{{ fnPanel.detail.minInstances ?? '0' }}</span></div>
                     <div class="kv-row"><span class="kv-k">{{ t('gcn.maxInstances') }}</span><span class="text-dim">{{ fnPanel.detail.maxInstances ?? '∞' }}</span></div>
                     <div class="kv-row"><span class="kv-k">URL</span><a v-if="fnPanel.detail.url" :href="fnPanel.detail.url" target="_blank" class="link mono-xs" style="word-break:break-all">{{ fnPanel.detail.url }}</a><span v-else class="text-dim">--</span></div>
@@ -2907,13 +2907,16 @@ async function loadPollingSettings() {
 function onPollingSaved(settings) {
   pollingSettings.value = settings
   historyToken.value++
-  toast(settings.enabled ? `Sondeo activado cada ${settings.intervalMinutes} min` : 'Sondeo desactivado', 'success')
+  toast(settings.enabled ? t('gcpv.audit.pollingOn', { every: pollingEvery(settings.intervalMinutes) }) : t('gcpv.audit.pollingOff'), 'success')
 }
 const pollingBadge = computed(() => {
   const s = pollingSettings.value
   if (!s) return '—'
-  return s.enabled ? `cada ${s.intervalMinutes < 60 ? `${s.intervalMinutes} min` : `${s.intervalMinutes / 60} h`}` : 'sin sondeo'
+  return s.enabled ? pollingEvery(s.intervalMinutes) : t('gcpv.audit.pollingNone')
 })
+function pollingEvery(minutes) {
+  return minutes < 60 ? t('gcpv.audit.everyMinutes', { n: minutes }) : t('gcpv.audit.everyHours', { n: minutes / 60 })
+}
 const pollingTitle = computed(() => t('gcpv.pollingTitle'))
 watch(selectedProfileId, id => { if (id) loadPollingSettings() }, { immediate: true })
 

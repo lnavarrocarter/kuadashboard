@@ -52,7 +52,7 @@
           <dl>
             <dt>{{ t('gcpv.audit.crScaling') }}</dt><dd data-test="scaling" :title="d.scaling?.minInstances > 0 ? t('gcpv.audit.crWarmHint') : t('gcpv.audit.crZeroHint')">{{ d.scaling?.minInstances ?? 0 }} – {{ d.scaling?.maxInstances ?? '∞' }}<span v-if="d.scaling?.minInstances > 0" class="gi-badge warn" style="margin-left:6px">24/7</span><span v-else class="gi-dim"> · {{ t('gcpv.audit.crScalesToZero') }}</span></dd>
             <dt>{{ t('gri.concurrency') }}</dt><dd>{{ t('gri.concurrencyValue', { n: d.scaling?.concurrency ?? '—' }) }}</dd>
-            <dt>Timeout</dt><dd>{{ d.scaling?.timeoutSeconds ? `${d.scaling.timeoutSeconds} s` : '—' }}</dd>
+            <dt>{{ t('gcpv.audit.kv.timeout') }}</dt><dd>{{ d.scaling?.timeoutSeconds ? `${d.scaling.timeoutSeconds} s` : '—' }}</dd>
             <dt>{{ t('gri.environment') }}</dt><dd>{{ d.scaling?.executionEnvironment || t('gri.defaultValue') }}</dd>
             <dt>{{ t('gri.sessionAffinity') }}</dt><dd>{{ yesNo(d.scaling?.sessionAffinity) }}</dd>
           </dl>
