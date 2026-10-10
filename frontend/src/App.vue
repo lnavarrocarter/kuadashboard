@@ -51,6 +51,7 @@
               </option>
             </optgroup>
           </select>
+          <span v-if="cloudProfileId" :class="['kube-env-badge', `env-${cloudEnvironment || 'unknown'}`]" :title="cloudProfileTitle" data-test="cloud-env-badge">{{ t(`kubeAction.env.${cloudEnvironment || 'unknown'}`) }}</span>
         </template>
         <template v-else-if="activeProvider === 'gcp'">
           <select class="ctrl-select" v-model="gcpProfileId" @change="onGcpProfileChange">
@@ -64,6 +65,7 @@
               </option>
             </optgroup>
           </select>
+          <span v-if="cloudProfileId" :class="['kube-env-badge', `env-${cloudEnvironment || 'unknown'}`]" :title="cloudProfileTitle" data-test="cloud-env-badge">{{ t(`kubeAction.env.${cloudEnvironment || 'unknown'}`) }}</span>
         </template>
         <template v-else-if="activeProvider === 'vercel'">
           <select class="ctrl-select" v-model="vercelProfileId" @change="onVercelProfileChange">
@@ -72,6 +74,7 @@
               <option v-for="p in envStore.vercelProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
             </optgroup>
           </select>
+          <span v-if="cloudProfileId" :class="['kube-env-badge', `env-${cloudEnvironment || 'unknown'}`]" :title="cloudProfileTitle" data-test="cloud-env-badge">{{ t(`kubeAction.env.${cloudEnvironment || 'unknown'}`) }}</span>
           <VercelProjectSelector />
         </template>
         <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
@@ -551,6 +554,7 @@ import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
 import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
 import { contextEnvironment, shortContextName } from './lib/kubeContext'
+import { cloudProfileEnvironment, cloudProfileText } from './lib/profileEnvironment'
 import { kubeUrlChange, kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
@@ -729,6 +733,14 @@ function closeKubeNav() {
   nextTick(() => kubeNavToggleRef.value?.focus())
 }
 const kubeEnvironment = computed(() => contextEnvironment(store.currentContext))
+// The same badge for the cloud profile in the header: a restored "prod" profile must
+// be as visible as a production cluster.
+const cloudProfileId = computed(() => ({ aws: awsProfileId.value, gcp: gcpProfileId.value, vercel: vercelProfileId.value })[activeProvider.value] || '')
+const cloudProfileLists = computed(() => ({
+  awsProfiles: envStore.awsProfiles, gcpProfiles: envStore.gcpProfiles, vercelProfiles: envStore.vercelProfiles, gcpLocalConfigs: gcpLocalConfigs.value,
+}))
+const cloudEnvironment = computed(() => cloudProfileEnvironment(activeProvider.value, cloudProfileId.value, cloudProfileLists.value))
+const cloudProfileTitle = computed(() => cloudProfileText(activeProvider.value, cloudProfileId.value, cloudProfileLists.value))
 const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
 const selectedKubeResource = ref(null)
