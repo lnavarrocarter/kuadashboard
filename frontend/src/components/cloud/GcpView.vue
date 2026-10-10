@@ -42,11 +42,17 @@
         <span class="text-dim" style="font-size:12px" data-test="row-count">
           <template v-if="currentTab.loading">{{ t('state.loading') }}</template>
           <template v-else-if="currentTab.error && !filteredRows.length">{{ t('gcpv.audit.notRead') }}</template>
-          <template v-else-if="hasFilters && filteredRows.length !== (currentTab.data?.length || 0)">{{ t('awsFilter.resultsOf', { n: filteredRows.length, total: currentTab.data?.length || 0 }) }}</template>
-          <template v-else>{{ t('gcpv.results', { n: filteredRows.length }) }}</template>
+          <template v-else-if="hasFilters && filteredRows.length !== (currentTab.data?.length || 0)">{{ t('awsFilter.resultsOf', { n: filteredRows.length, total: `${currentTab.data?.length || 0}${currentTab.partial ? '+' : ''}` }) }}</template>
+          <template v-else>{{ t('gcpv.results', { n: `${filteredRows.length}${currentTab.partial ? '+' : ''}` }) }}</template>
         </span>
         <button v-if="hasFilters" class="btn sm" data-test="clear-filters" @click="clearFilters()">{{ t('awsFilter.clear') }}</button>
         <button class="btn sm" @click="reloadActiveTab" :disabled="currentTab.loading" :title="t('action.refresh')"><i data-lucide="refresh-cw"></i></button>
+      </div>
+
+      <!-- Partial list: some regions failed or the page cap was reached (R02) -->
+      <div v-if="activeTab !== 'apm' && activeTab !== 'overview' && !currentTab.error && currentTab.partial" class="api-disabled-banner" role="status" data-test="partial-list">
+        <span v-if="currentTab.failedLocations?.length">{{ t('gcpv.audit.partialRegions', { n: currentTab.failedLocations.length, regions: currentTab.failedLocations.join(', ') }) }}</span>
+        <span v-else>{{ t('gcpv.audit.partialPages') }}</span>
       </div>
 
       <!-- Permission denied banner -->
@@ -100,7 +106,7 @@
           </section>
 
           <div class="gcp-overview-metrics">
-            <div class="gcp-overview-metric" data-test="metric-resources"><span class="text-dim">{{ t('gcpv.audit.deployedResources') }}</span><strong>{{ gcpStore.overview?.summary?.total ?? 0 }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}<template v-if="gcpStore.overview?.summary?.executions?.count"> · {{ t('gcpv.audit.executionsApart', { n: gcpStore.overview.summary.executions.count, partial: gcpStore.overview.summary.executions.partial ? '+' : '' }) }}</template></small></div>
+            <div class="gcp-overview-metric" data-test="metric-resources"><span class="text-dim">{{ t('gcpv.audit.deployedResources') }}</span><strong :title="overviewResourcesPartial ? t('gcpv.audit.partialCount') : ''">{{ gcpStore.overview?.summary?.total ?? 0 }}{{ overviewResourcesPartial ? '+' : '' }}</strong><small>{{ t('gcpv.active', { p0: gcpStore.overview?.summary?.active ?? 0 }) }}<template v-if="gcpStore.overview?.summary?.executions?.count"> · {{ t('gcpv.audit.executionsApart', { n: gcpStore.overview.summary.executions.count, partial: gcpStore.overview.summary.executions.partial ? '+' : '' }) }}</template></small></div>
             <div class="gcp-overview-metric" data-test="metric-incidents"><span class="text-dim">{{ t('gcpv.audit.incidents') }}</span><strong :class="overviewIncidents ? 'status-warn' : 'status-ok'">{{ overviewIncidents }}</strong><small>{{ t('gcpv.criticalWarning', { p0: gcpStore.overview?.summary?.critical ?? 0, p1: gcpStore.overview?.summary?.warning ?? 0 }) }}</small></div>
             <div class="gcp-overview-metric" data-test="metric-not-evaluated"><span class="text-dim">{{ t('gcpv.audit.notEvaluated') }}</span><strong :class="overviewCoverageInfo.notEvaluated ? 'status-warn' : 'status-ok'">{{ overviewCoverageInfo.notEvaluated }}</strong><small>{{ overviewCauseSummary || t('gcpv.emptyServices', { p0: gcpStore.overview?.summary?.empty ?? 0 }) }}</small></div>
             <div class="gcp-overview-metric"><span class="text-dim">{{ t('gcpv.serviceCoverage') }}</span><strong>{{ overviewCoverage }}%</strong><small>{{ t('gcpv.audit.evaluatedOf', { evaluated: overviewCoverageInfo.evaluated, total: overviewCoverageInfo.total }) }}</small></div>
@@ -2352,6 +2358,8 @@ const overviewHealth = computed(() => {
   if (summary.warning) return 'warning'
   return 'healthy'
 })
+// The deployed-resources total is a lower bound when a resource list was capped
+const overviewResourcesPartial = computed(() => overviewServices.value.some(service => service.partial && service.kind !== 'execution'))
 const overviewIncidents = computed(() => {
   const summary = gcpStore.overview?.summary || {}
   return Number(summary.critical || 0) + Number(summary.warning || 0)

@@ -524,6 +524,14 @@ describe('GcpView — Cloud Run / VM / Cloud SQL tables (#74)', () => {
     expect(w.text()).not.toContain('python312')
   })
 
+  it('a partial list says which regions are missing and counts "n+" (R02)', async () => {
+    const w = await mountTab('artifact')
+    Object.assign(store.tabs.artifact, { data: [{ name: 'app', location: 'us-central1', format: 'DOCKER' }], partial: true, failedLocations: ['europe-west1'], error: null })
+    await flushPromises()
+    expect(w.find('[data-test="partial-list"]').text()).toContain('europe-west1')
+    expect(w.find('[data-test="row-count"]').text()).toContain('1+')
+  })
+
   it('an expected estimate that fails is shown as unknown (G10)', () => {
     const w = mount(GcpConfirmModal, { props: { open: true, title: 'x', costAck: true, estimateUnavailable: true } })
     expect(w.find('[data-test="estimate-unavailable"]').exists()).toBe(true)

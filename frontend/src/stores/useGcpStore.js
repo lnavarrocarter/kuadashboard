@@ -17,7 +17,7 @@ export const useGcpStore = defineStore('gcp', () => {
   const overviewError = ref(null)
 
   function createTab() {
-    return { data: [], loading: false, error: null, errorInfo: null, enableUrl: null, nextPageToken: null, loadingMore: false }
+    return { data: [], loading: false, error: null, errorInfo: null, enableUrl: null, nextPageToken: null, loadingMore: false, partial: false, failedLocations: [], skippedLocations: [] }
   }
 
   const tabs = ref({
@@ -74,6 +74,9 @@ export const useGcpStore = defineStore('gcp', () => {
       tab.errorInfo = null
       tab.enableUrl = null
       tab.nextPageToken = null
+      tab.partial = false
+      tab.failedLocations = []
+      tab.skippedLocations = []
     }
     try {
       const res = await apiFetch(url, { headers: headers() })
@@ -82,6 +85,10 @@ export const useGcpStore = defineStore('gcp', () => {
       } else if (res && res.items) {
         if (tab.data !== res.items) tab.data = res.items
         tab.nextPageToken = res.nextPageToken || null
+        // Scope of the list (re-evaluation R02): kept so the table can say it is partial
+        tab.partial = !!res.partial
+        tab.failedLocations = res.failedLocations || []
+        tab.skippedLocations = res.skippedLocations || []
       } else {
         tab.data = []
       }
@@ -396,7 +403,7 @@ export const useGcpStore = defineStore('gcp', () => {
   async function fetchUptimeChecks() {
     try {
       const res = await apiFetch('/api/cloud/gcp/monitoring/uptime-checks', { headers: headers() })
-      tabs.value.monitoring.data = Array.isArray(res) ? res : (res?.uptimeChecks || [])
+      tabs.value.monitoring.data = Array.isArray(res) ? res : (res?.items || res?.uptimeChecks || [])
       return tabs.value.monitoring.data
     } catch (e) { setError(e, 'monitoring'); return [] }
   }

@@ -92,6 +92,18 @@ async function readGcloudConfigs() {
   }
 }
 
+// List responses keep their scope (re-evaluation R02): items plus whether the
+// list is partial (page cap reached, or some regions failed) and which regions
+// were skipped or failed, so the table and counters can say so.
+function sendList(res, page, items) {
+  res.json({
+    items,
+    partial: !!page?.partial,
+    failedLocations: page?.failedLocations || [],
+    skippedLocations: page?.skippedLocations || [],
+  });
+}
+
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
   // gRPC ALREADY_EXISTS (6) / REST "already exists" → 409 so the UI can say so clearly
@@ -1041,8 +1053,8 @@ router.get('/storage/buckets', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const { items } = await listAllPages(gcpFetch, authCtx, `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=500`, 'items');
-    res.json(items.map(mapBucket));
+    const page = await listAllPages(gcpFetch, authCtx, `https://storage.googleapis.com/storage/v1/b?project=${projectId}&maxResults=500`, 'items');
+    sendList(res, page, page.items.map(mapBucket));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1055,8 +1067,8 @@ router.get('/functions', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const { items } = await listAllPages(gcpFetch, authCtx, `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions');
-    res.json(items.map(mapFunction));
+    const page = await listAllPages(gcpFetch, authCtx, `https://cloudfunctions.googleapis.com/v2/projects/${projectId}/locations/-/functions`, 'functions');
+    sendList(res, page, page.items.map(mapFunction));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1069,11 +1081,8 @@ router.get('/pubsub/topics', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://pubsub.googleapis.com/v1/projects/${projectId}/topics`,
-      authCtx
-    );
-    res.json((data.topics || []).map(t => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://pubsub.googleapis.com/v1/projects/${projectId}/topics`, 'topics');
+    sendList(res, page, page.items.map(t => ({
       name:   t.name?.split('/').pop(),
       labels: Object.entries(t.labels || {}).map(([k, v]) => `${k}=${v}`).join(', '),
     })));
@@ -1092,11 +1101,8 @@ router.get('/secrets', async (req, res) => {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`,
-      authCtx
-    );
-    res.json((data.secrets || []).map(s => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets`, 'secrets');
+    sendList(res, page, page.items.map(s => ({
       name:        s.name?.split('/').pop(),
       replication: s.replication?.automatic ? 'automatic' : 'user-managed',
       created:     s.createTime,
@@ -1460,7 +1466,8 @@ router.get('/artifact-registry', async (req, res) => {
     const authCtx   = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    res.json((await listArtifactRepositories(gcpFetch, authCtx)).items.map(mapRepository));
+    const page = await listArtifactRepositories(gcpFetch, authCtx);
+    sendList(res, page, page.items.map(mapRepository));
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1550,11 +1557,8 @@ router.get('/bigquery/datasets', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/datasets?all=false`,
-      authCtx
-    );
-    res.json((data.datasets || []).map(d => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/datasets?all=false`, 'datasets');
+    sendList(res, page, page.items.map(d => ({
       id:          d.datasetReference?.datasetId,
       location:    d.location,
       friendlyName: d.friendlyName || d.datasetReference?.datasetId,
@@ -1752,11 +1756,8 @@ router.get('/dns/zones', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://dns.googleapis.com/dns/v1/projects/${projectId}/managedZones`,
-      authCtx
-    );
-    res.json((data.managedZones || []).map(z => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://dns.googleapis.com/dns/v1/projects/${projectId}/managedZones`, 'managedZones');
+    sendList(res, page, page.items.map(z => ({
       id:          z.id,
       name:        z.name,
       dnsName:     z.dnsName,
@@ -1805,11 +1806,8 @@ router.get('/firestore/databases', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://firestore.googleapis.com/v1/projects/${projectId}/databases`,
-      authCtx
-    );
-    res.json((data.databases || []).map(db => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://firestore.googleapis.com/v1/projects/${projectId}/databases`, 'databases');
+    sendList(res, page, page.items.map(db => ({
       name:        db.name?.split('/').pop(),
       location:    db.locationId,
       type:        db.type || 'FIRESTORE_NATIVE',
@@ -1922,8 +1920,8 @@ router.get('/spanner/instances', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(`https://spanner.googleapis.com/v1/projects/${projectId}/instances?pageSize=50`, authCtx);
-    const instances = (data.instances || []).map(i => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://spanner.googleapis.com/v1/projects/${projectId}/instances?pageSize=50`, 'instances');
+    const instances = page.items.map(i => ({
       name:        i.name?.split('/').pop(),
       displayName: i.displayName,
       config:      i.config?.split('/').pop(),
@@ -1932,7 +1930,7 @@ router.get('/spanner/instances', async (req, res) => {
       processingUnits: i.processingUnits,
       labels:      i.labels || {},
     }));
-    res.json(instances);
+    sendList(res, page, instances);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2010,11 +2008,8 @@ router.get('/memorystore/instances', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://redis.googleapis.com/v1/projects/${projectId}/locations/-/instances?pageSize=50`,
-      authCtx
-    );
-    const instances = (data.instances || []).map(i => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://redis.googleapis.com/v1/projects/${projectId}/locations/-/instances?pageSize=50`, 'instances');
+    const instances = page.items.map(i => ({
       name:          i.name?.split('/').pop(),
       location:      i.locationId,
       displayName:   i.displayName,
@@ -2030,7 +2025,7 @@ router.get('/memorystore/instances', async (req, res) => {
       created:       i.createTime,
       labels:        i.labels || {},
     }));
-    res.json(instances);
+    sendList(res, page, instances);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2044,7 +2039,8 @@ router.get('/tasks/queues', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = { queues: (await listTaskQueues(gcpFetch, authCtx)).items };
+    const page = await listTaskQueues(gcpFetch, authCtx);
+    const data = { queues: page.items };
     const queues = (data.queues || []).map(q => {
       const parts = q.name?.split('/');
       return {
@@ -2062,7 +2058,7 @@ router.get('/tasks/queues', async (req, res) => {
         },
       };
     });
-    res.json(queues);
+    sendList(res, page, queues);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2108,7 +2104,8 @@ router.get('/scheduler/jobs', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = { jobs: (await listSchedulerJobs(gcpFetch, authCtx)).items };
+    const page = await listSchedulerJobs(gcpFetch, authCtx);
+    const data = { jobs: page.items };
     const jobs = (data.jobs || []).map(j => {
       const parts = j.name?.split('/');
       return {
@@ -2124,7 +2121,7 @@ router.get('/scheduler/jobs', async (req, res) => {
         targetType:  j.httpTarget ? 'HTTP' : j.pubsubTarget ? 'Pub/Sub' : j.appEngineHttpTarget ? 'App Engine' : 'Unknown',
       };
     });
-    res.json(jobs);
+    sendList(res, page, jobs);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2338,7 +2335,8 @@ router.get('/cloudrun-jobs', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = { jobs: (await listCloudRunJobs(gcpFetch, authCtx)).items };
+    const page = await listCloudRunJobs(gcpFetch, authCtx);
+    const data = { jobs: page.items };
     const jobs = (data.jobs || []).map(j => {
       const parts = j.name?.split('/');
       return {
@@ -2355,7 +2353,7 @@ router.get('/cloudrun-jobs', async (req, res) => {
         image:       j.template?.template?.containers?.[0]?.image || null,
       };
     });
-    res.json(jobs);
+    sendList(res, page, jobs);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2419,11 +2417,8 @@ router.get('/pubsub/subscriptions', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions?pageSize=200`,
-      authCtx
-    );
-    res.json((data.subscriptions || []).map(s => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://pubsub.googleapis.com/v1/projects/${projectId}/subscriptions?pageSize=200`, 'subscriptions');
+    sendList(res, page, page.items.map(s => ({
       name:               s.name?.split('/').pop(),
       topic:              s.topic?.split('/').pop(),
       ackDeadlineSecs:    s.ackDeadlineSeconds,
@@ -2447,11 +2442,8 @@ router.get('/vpc/networks', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`,
-      authCtx
-    );
-    const networks = (data.items || []).map(n => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`, 'items');
+    const networks = page.items.map(n => ({
       name:         n.name,
       description:  n.description || '',
       autoSubnet:   n.autoCreateSubnetworks || false,
@@ -2461,7 +2453,7 @@ router.get('/vpc/networks', async (req, res) => {
       created:      n.creationTimestamp,
       selfLink:     n.selfLink,
     }));
-    res.json(networks);
+    sendList(res, page, networks);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2510,11 +2502,8 @@ router.get('/monitoring/alerts', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://monitoring.googleapis.com/v3/projects/${projectId}/alertPolicies`,
-      authCtx
-    );
-    const policies = (data.alertPolicies || []).map(p => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://monitoring.googleapis.com/v3/projects/${projectId}/alertPolicies`, 'alertPolicies');
+    const policies = page.items.map(p => ({
       name:        p.name?.split('/').pop(),
       displayName: p.displayName,
       enabled:     p.enabled !== false,
@@ -2524,7 +2513,7 @@ router.get('/monitoring/alerts', async (req, res) => {
       created:     p.creationRecord?.mutateTime,
       updated:     p.mutationRecord?.mutateTime,
     }));
-    res.json(policies);
+    sendList(res, page, policies);
   } catch (err) { handleErr(res, err); }
 });
 
@@ -2536,11 +2525,8 @@ router.get('/monitoring/uptime-checks', async (req, res) => {
     const authCtx = await resolveGcpAuth(profileId);
     const { projectId } = authCtx;
     if (!projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
-    const data = await gcpFetch(
-      `https://monitoring.googleapis.com/v3/projects/${projectId}/uptimeCheckConfigs`,
-      authCtx
-    );
-    const checks = (data.uptimeCheckConfigs || []).map(c => ({
+    const page = await listAllPages(gcpFetch, authCtx, `https://monitoring.googleapis.com/v3/projects/${projectId}/uptimeCheckConfigs`, 'uptimeCheckConfigs');
+    const checks = page.items.map(c => ({
       name:        c.name?.split('/').pop(),
       displayName: c.displayName,
       period:      c.period,
@@ -2549,7 +2535,7 @@ router.get('/monitoring/uptime-checks', async (req, res) => {
       host:        c.httpCheck?.host || c.tcpCheck?.port ? `${c.monitoredResource?.labels?.host || ''}:${c.tcpCheck?.port || ''}` : c.monitoredResource?.labels?.host || '',
       regions:     c.selectedRegions || [],
     }));
-    res.json(checks);
+    sendList(res, page, checks);
   } catch (err) { handleErr(res, err); }
 });
 

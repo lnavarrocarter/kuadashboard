@@ -6659,4 +6659,6 @@ export default {
   "gcpv.audit.sort.region": "Orden: región",
   "gcpv.audit.sort.updated": "Orden: más reciente",
   "gcpv.audit.linkResourceMissing": "El recurso del enlace {name} no está en la lista de este proyecto con el perfil actual.",
+  "gcpv.audit.partialRegions": "Lista parcial: no se pudieron leer {n} región(es) ({regions}). Sus recursos no se muestran.",
+  "gcpv.audit.partialPages": "Lista parcial: solo se leyeron las primeras páginas; hay más recursos.",
 }

@@ -309,6 +309,21 @@ describe('base fetch functions', () => {
   })
 })
 
+describe('list scope (R02)', () => {
+  beforeEach(() => store.setActiveProfile('proj-1'))
+  it('keeps partial and failed regions from the response, and clears them on the next load', async () => {
+    mockFetchOk({ items: [{ name: 'app' }], partial: true, failedLocations: ['europe-west1'], skippedLocations: ['me-central2'] })
+    await store.fetchArtifactRegistry()
+    expect(store.tabs.artifact.data).toEqual([{ name: 'app' }])
+    expect(store.tabs.artifact.partial).toBe(true)
+    expect(store.tabs.artifact.failedLocations).toEqual(['europe-west1'])
+    mockFetchOk({ items: [], partial: false, failedLocations: [] })
+    await store.fetchArtifactRegistry()
+    expect(store.tabs.artifact.partial).toBe(false)
+    expect(store.tabs.artifact.failedLocations).toEqual([])
+  })
+})
+
 // ─── enableUrl extraction ──────────────────────────────────────────────────────
 
 describe('enableUrl only for a classified disabled API (G04)', () => {
