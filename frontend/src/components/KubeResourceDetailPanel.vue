@@ -439,7 +439,11 @@ const metricMeters = computed(() => metrics.value ? [
 const metricCoverageText = computed(() => {
   const coverage = metrics.value?.coverage
   if (!coverage?.pods) return ''
-  return t(coverage.sampled === coverage.pods ? 'detail.coverageFull' : 'detail.coveragePartial', { sampled: coverage.sampled, pods: coverage.pods })
+  const { pods, cpu, memory } = coverage
+  if (cpu === pods && memory === pods) return t('detail.coverageFull', { sampled: pods, pods })
+  // CPU and memory can be sampled on different pods: say each one.
+  if (cpu === memory) return t('detail.coveragePartial', { sampled: cpu, pods })
+  return t('detail.coverageSplit', { cpu, memory, pods })
 })
 const metricsError = ref('')
 const metricsLoading = ref(false)

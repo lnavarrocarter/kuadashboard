@@ -33,3 +33,18 @@ export function kubeUrlHref(href, state) {
   }
   return url.href
 }
+
+/**
+ * How to record a move from `currentHref` to `nextHref`: 'push' when the user
+ * moved within the Kubernetes view (another resource, selection, namespace or
+ * context), so Back returns to it; 'replace' for entering or leaving the view
+ * and other parameter changes; null when nothing changes.
+ */
+export function kubeUrlChange(currentHref, nextHref) {
+  if (currentHref === nextHref) return null
+  const current = readKubeUrl(new URL(currentHref).search)
+  const next = readKubeUrl(new URL(nextHref).search)
+  if (!current || !next) return 'replace'
+  const moved = ['context', 'namespace', 'resource', 'name'].some(key => current[key] !== next[key])
+  return moved ? 'push' : 'replace'
+}

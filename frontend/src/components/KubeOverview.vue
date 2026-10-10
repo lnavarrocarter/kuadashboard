@@ -57,7 +57,7 @@
           <thead><tr><th>{{ t('overview.colPod') }}</th><th>{{ t('overview.colNamespace') }}</th><th>{{ t('overview.colReason') }}</th><th class="num">{{ t('overview.colRestartsTotal') }}</th></tr></thead>
           <tbody>
             <tr v-for="p in pods.problems" :key="p.namespace + p.name" @click="go('pods', { filter: p.name })">
-              <td class="kov-link">{{ p.name }}</td>
+              <td><button type="button" class="kov-link" data-test="incident-link" @click.stop="go('pods', { filter: p.name })">{{ p.name }}</button></td>
               <td>{{ p.namespace }}</td>
               <td><span class="badge failed">{{ p.reason }}</span></td>
               <td class="num">{{ p.restarts }}</td>
@@ -169,7 +169,7 @@
             <thead><tr><th>{{ t('overview.colNode') }}</th><th>{{ t('overview.colStatus') }}</th><th>{{ t('overview.colRoles') }}</th><th>{{ t('overview.colConditions') }}</th><th>CPU</th><th>{{ t('overview.memory') }}</th></tr></thead>
             <tbody>
               <tr v-for="n in nodes.items" :key="n.name" @click="go('nodes', { filter: n.name })">
-                <td class="kov-link">{{ n.name }}</td>
+                <td><button type="button" class="kov-link" @click.stop="go('nodes', { filter: n.name })">{{ n.name }}</button></td>
                 <td><span :class="['badge', n.ready ? (n.cordoned ? 'cordoned' : 'ready') : 'notready']">{{ n.ready ? (n.cordoned ? 'Cordoned' : 'Ready') : 'NotReady' }}</span></td>
                 <td>{{ n.roles }}</td>
                 <td>{{ n.pressures.length ? n.pressures.join(', ') : '—' }}</td>
@@ -187,7 +187,7 @@
           <p v-else-if="!notReadyWorkloads.length" class="kov-empty">{{ t('overview.allWorkloadsReady') }}</p>
           <ul v-else class="kov-list">
             <li v-for="w in notReadyWorkloads" :key="w.kind + w.namespace + w.name" @click="go(w.kind, { filter: w.name, quick: ['not-ready'] })">
-              <span class="kov-link">{{ w.name }}</span>
+              <button type="button" class="kov-link" @click.stop="go(w.kind, { filter: w.name, quick: ['not-ready'] })">{{ w.name }}</button>
               <span class="kov-dim">{{ KIND_LABELS[w.kind] }}{{ w.namespace ? ` · ${w.namespace}` : '' }}</span>
               <span class="kov-list-value">{{ w.ready }}/{{ w.desired }}</span>
             </li>
@@ -201,7 +201,7 @@
           <p v-else-if="!events.recent?.length" class="kov-empty">{{ t('overview.noRecentWarnings') }}</p>
           <ul v-else class="kov-list">
             <li v-for="(e, i) in events.recent" :key="i" :title="e.message" @click="go('events', { filter: e.object.split('/')[1] || '' })">
-              <span class="kov-link">{{ e.reason }}</span>
+              <button type="button" class="kov-link" @click.stop="go('events', { filter: e.object.split('/')[1] || '' })">{{ e.reason }}</button>
               <span class="kov-dim kov-ellipsis">{{ e.object }} · {{ e.message }}</span>
               <span class="kov-list-value">×{{ e.count }}</span>
             </li>
@@ -482,7 +482,8 @@ defineExpose({ load })
 .kov-table tbody tr { cursor: pointer; }
 .kov-table tbody tr:hover td { background: var(--bg-hover); }
 .kov-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-.kov-link { color: var(--accent); }
+.kov-link { color: var(--accent); padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.kov-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
 .kov-mini { display: inline-flex; align-items: center; gap: 6px; }
 .kov-mini-track { width: 64px; height: 6px; }

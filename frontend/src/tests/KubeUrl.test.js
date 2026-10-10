@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kubeUrlHref, readKubeUrl } from '../lib/kubeUrl'
+import { kubeUrlChange, kubeUrlHref, readKubeUrl } from '../lib/kubeUrl'
 
 describe('Kubernetes view in the URL', () => {
   it('writes context, namespace, resource and selection, dropping stale KUApps params', () => {
@@ -23,4 +23,16 @@ describe('Kubernetes view in the URL', () => {
     expect(readKubeUrl('?app=orders')).toBeNull()
     expect(readKubeUrl('?view=kubernetes')).toEqual({ context: '', namespace: '', resource: '', name: '' })
   })
+
+  it('adds a history entry for moves inside the view and replaces otherwise', () => {
+    const base = 'http://localhost/?view=kubernetes&context=dev&ns=shop&resource=pods'
+    expect(kubeUrlChange(base, base)).toBeNull()
+    expect(kubeUrlChange(base, `${base}&name=web-a`)).toBe('push')
+    expect(kubeUrlChange(base, base.replace('pods', 'services'))).toBe('push')
+    expect(kubeUrlChange(base, base.replace('resource=pods', 'resource=logs'))).toBe('push')
+    expect(kubeUrlChange('http://localhost/?app=orders', base)).toBe('replace')
+    expect(kubeUrlChange(base, 'http://localhost/')).toBe('replace')
+    expect(kubeUrlChange(base, `${base}&utm=x`)).toBe('replace')
+  })
 })
+

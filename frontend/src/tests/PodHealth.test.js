@@ -69,7 +69,7 @@ describe('KubeResourceDetailPanel pod health and metrics', () => {
     vi.restoreAllMocks()
     metricsResponse = {
       source: 'Prometheus (monitoring/prometheus)',
-      coverage: { pods: 1, sampled: 0 },
+      coverage: { pods: 1, cpu: 0, memory: 0 },
       items: [{ name: 'sot360-abc', cpu: null, memory: null }],
       cpu: { available: false, nano: null, display: null, percent: null, reference: null },
       memory: { available: false, bytes: null, display: null, percent: null, reference: null },
@@ -157,10 +157,19 @@ describe('KubeResourceDetailPanel pod health and metrics', () => {
     expect(wrapper.get('[data-test="metric-coverage"]').text()).toContain('only 0 of 1 pods')
   })
 
+  it('gives CPU and memory coverage apart when they were sampled on different pods', async () => {
+    metricsResponse = { ...metricsResponse, coverage: { pods: 2, cpu: 1, memory: 2 } }
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.findAll('.kdp-tab').find(tab => tab.text().includes('Metrics')).trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="metric-coverage"]').text()).toBe('CPU samples for 1 of 2 pods, memory for 2 of 2; each percent counts only its sampled pods')
+  })
+
   it('draws the bar against its real reference and keeps values above it', async () => {
     metricsResponse = {
       ...metricsResponse,
-      coverage: { pods: 1, sampled: 1 },
+      coverage: { pods: 1, cpu: 1, memory: 1 },
       cpu: { available: true, nano: 1.5e8, display: '150m', percent: 150, reference: { kind: 'limit', nano: 1e8, display: '100m' } },
       memory: { available: true, bytes: 1024, display: '1 KiB', percent: null, reference: null },
     }

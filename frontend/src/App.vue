@@ -29,7 +29,7 @@
           </button>
         </div>
         <template v-if="activeProvider === 'kubernetes'">
-          <button class="btn btn-icon kube-nav-toggle" :aria-expanded="kubeNavOpen" aria-controls="kube-nav" :title="t('nav.kubeResources')" :aria-label="t('nav.kubeResources')" @click="kubeNavOpen = !kubeNavOpen"><i data-lucide="menu"></i></button>
+          <button ref="kubeNavToggleRef" class="btn btn-icon kube-nav-toggle" :aria-expanded="kubeNavOpen" aria-controls="kube-nav" :title="t('nav.kubeResources')" :aria-label="t('nav.kubeResources')" @click="kubeNavOpen = !kubeNavOpen"><i data-lucide="menu"></i></button>
           <span :class="['kube-env-badge', `env-${kubeEnvironment || 'unknown'}`]" :title="store.currentContext" data-test="kube-env-badge">{{ t(`kubeAction.env.${kubeEnvironment || 'unknown'}`) }}</span>
           <select class="ctrl-select kube-context-select" v-model="selectedContext" :title="selectedContext" :aria-label="t('nav.kubeContext')" @change="switchContext">
             <option v-for="c in store.contexts" :key="c.name" :value="c.name" :title="c.name">{{ shortContextName(c.name) }}</option>
@@ -131,52 +131,52 @@
     <div class="page-body">
       <div class="layout">
         <!-- Kubernetes sidebar -->
-        <div v-if="activeProvider === 'kubernetes' && kubeNavOpen" class="kube-nav-backdrop" @click="kubeNavOpen = false"></div>
-        <nav id="kube-nav" :class="['sidebar', 'kube-nav', { open: kubeNavOpen }]" v-if="activeProvider === 'kubernetes'" :aria-label="t('nav.kubeResources')">
+        <div v-if="activeProvider === 'kubernetes' && kubeNavOpen" class="kube-nav-backdrop" @click="closeKubeNav"></div>
+        <nav id="kube-nav" ref="kubeNavRef" :class="['sidebar', 'kube-nav', { open: kubeNavOpen }]" v-if="activeProvider === 'kubernetes'" :aria-label="t('nav.kubeResources')" :inert="narrowLayout && !kubeNavOpen ? true : undefined" @keydown.esc="closeKubeNav">
           <div class="sidebar-section">
-            <a :class="['sidebar-item', { active: cloudView === 'kube-overview' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-overview' }]" :aria-current="(cloudView === 'kube-overview') ? 'page' : undefined"
                @click.prevent="setCloudView('kube-overview')">{{ t('sidebar.overview') }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.workloads') }}</div>
             <a v-for="r in ['pods','deployments','statefulsets','daemonsets','replicasets','jobs','cronjobs']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.network') }}</div>
             <a v-for="r in ['services','endpointslices','endpoints','ingresses','ingressclasses','networkpolicies']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.config') }}</div>
             <a v-for="r in ['configmaps','secrets','resourcequotas','limitranges','hpas','pdbs','priorityclasses','runtimeclasses','leases','mutatingwebhookconfigurations','validatingwebhookconfigurations']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.storage') }}</div>
             <a v-for="r in ['pvcs','pvs','storageclasses']" :key="r"
-              :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+              href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
               @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.cluster') }}</div>
             <a v-for="r in ['nodes','namespaces','events']" :key="r"
-               :class="['sidebar-item', { active: cloudView === null && store.resource === r }]"
+               href="#" :class="['sidebar-item', { active: cloudView === null && store.resource === r }]" :aria-current="(cloudView === null && store.resource === r) ? 'page' : undefined"
                @click.prevent="setResource(r)">{{ LABELS[r] }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.logs') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" data-test="sidebar-kube-logs"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'kube-logs' }]" :aria-current="(cloudView === 'kube-logs') ? 'page' : undefined" data-test="sidebar-kube-logs"
                @click.prevent="setCloudView('kube-logs')">{{ t('sidebar.logsIntelligence') }}</a>
           </div>
           <div class="sidebar-section">
             <div class="sidebar-section-title">{{ t('sidebar.helm') }}</div>
-            <a :class="['sidebar-item', { active: cloudView === 'helm' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm' }]" :aria-current="(cloudView === 'helm') ? 'page' : undefined"
                @click.prevent="setCloudView('helm')">{{ t('sidebar.releases') }}</a>
-            <a :class="['sidebar-item', { active: cloudView === 'helm-repos' }]"
+            <a href="#" :class="['sidebar-item', { active: cloudView === 'helm-repos' }]" :aria-current="(cloudView === 'helm-repos') ? 'page' : undefined"
                @click.prevent="setCloudView('helm-repos')">{{ t('sidebar.repositories') }}</a>
           </div>
         </nav>
@@ -548,7 +548,7 @@ import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
 import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
 import { contextEnvironment, shortContextName } from './lib/kubeContext'
-import { kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
+import { kubeUrlChange, kubeUrlHref, readKubeUrl } from './lib/kubeUrl'
 import YamlModal        from './components/modals/YamlModal.vue'
 import PortForwardModal from './components/modals/PortForwardModal.vue'
 import KubeconfigModal  from './components/modals/KubeconfigModal.vue'
@@ -707,8 +707,24 @@ const activeProvider  = ref(['architecture', 'observability'].includes(storedPro
 const kuappsView      = ref(LS.get('kuappsView', storedProvider === 'observability' ? 'observability' : 'architecture'))
 const cloudView       = ref(null)   // null = Kubernetes view, 'envs' = Env Manager
 const selectedContext = ref('')
-// Narrow windows show the Kubernetes resource menu as a drawer.
+// Narrow windows show the Kubernetes resource menu as a drawer: opening it moves
+// focus to the active item, Escape or the backdrop close it and return focus to
+// the toggle.
 const kubeNavOpen = ref(false)
+const kubeNavRef = ref(null)
+const kubeNavToggleRef = ref(null)
+const narrowQuery = globalThis.matchMedia?.('(max-width: 900px)')
+const narrowLayout = ref(!!narrowQuery?.matches)
+narrowQuery?.addEventListener?.('change', event => { narrowLayout.value = event.matches; if (!event.matches) kubeNavOpen.value = false })
+watch(kubeNavOpen, open => {
+  if (!open || !narrowLayout.value) return
+  nextTick(() => (kubeNavRef.value?.querySelector('.sidebar-item.active') || kubeNavRef.value?.querySelector('.sidebar-item'))?.focus())
+})
+function closeKubeNav() {
+  if (!kubeNavOpen.value) return
+  kubeNavOpen.value = false
+  nextTick(() => kubeNavToggleRef.value?.focus())
+}
 const kubeEnvironment = computed(() => contextEnvironment(store.currentContext))
 const awsTab          = ref('overview')
 const gcpTab          = ref('cloudrun')
@@ -1442,16 +1458,29 @@ syncServerCacheSettings()
 
 // Keep the URL on the Kubernetes view shown: context, namespace, resource list
 // (or overview) and the selected resource. Other views drop these params.
-function syncKubeUrl() {
+const KUBE_URL_VIEWS = { 'kube-overview': 'overview', 'kube-logs': 'logs' }
+// Moves within the Kubernetes view add a history entry (Back returns to them);
+// changes arriving together (a context switch loads its namespace and list)
+// are recorded once. While Back/Forward re-applies a view, nothing is recorded.
+let applyingKubeHistory = false
+// Start-up passes through transient states (no context yet, default namespace):
+// the URL follows the view only once the first Kubernetes load is done.
+let kubeUrlReady = false
+let kubeUrlTimer = null
+function scheduleKubeUrlSync() {
+  clearTimeout(kubeUrlTimer)
+  kubeUrlTimer = setTimeout(syncKubeUrl, 250)
+}
+function syncKubeUrl({ replace = false } = {}) {
   const location = globalThis.location
-  if (!location?.href || !globalThis.history?.replaceState) return
-  const kubeView = activeProvider.value === 'kubernetes' && (!cloudView.value || cloudView.value === 'kube-overview')
+  if (!kubeUrlReady || applyingKubeHistory || !location?.href || !globalThis.history?.replaceState) return
+  const kubeView = activeProvider.value === 'kubernetes' && (!cloudView.value || cloudView.value in KUBE_URL_VIEWS)
   let href
   try {
     href = kubeUrlHref(location.href, kubeView ? {
       context: store.currentContext,
       namespace: store.namespace,
-      resource: cloudView.value === 'kube-overview' ? 'overview' : store.resource,
+      resource: KUBE_URL_VIEWS[cloudView.value] || store.resource,
       name: cloudView.value ? '' : selectedKubeResource.value?.row?.name || '',
     } : null)
     if (!kubeView && activeProvider.value === 'kuapps' && activeApplicationContext.value?.id) {
@@ -1460,14 +1489,38 @@ function syncKubeUrl() {
       href = url.href
     }
   } catch { return }
-  if (href !== location.href) globalThis.history.replaceState(globalThis.history.state, '', href)
+  const change = kubeUrlChange(location.href, href)
+  if (change === 'push' && !replace) globalThis.history.pushState(null, '', href)
+  else if (change) globalThis.history.replaceState(globalThis.history.state, '', href)
 }
-watch(() => [activeProvider.value, cloudView.value, store.currentContext, store.namespace, store.resource, selectedKubeResource.value?.row?.name], syncKubeUrl)
+watch(() => [activeProvider.value, cloudView.value, store.currentContext, store.namespace, store.resource, selectedKubeResource.value?.row?.name], scheduleKubeUrlSync)
+
+// Back/Forward to a Kubernetes URL shows that view again.
+async function onKubePopState() {
+  const view = readKubeUrl(globalThis.location?.search || '')
+  if (!view) return
+  clearTimeout(kubeUrlTimer)
+  applyingKubeHistory = true
+  try {
+    await setProvider('kubernetes')
+    if (!(await applyKubeUrlView(view))) return
+    if (view.namespace && view.namespace !== store.namespace) store.namespace = view.namespace
+    if (!cloudView.value) {
+      await store.loadResources()
+      const row = view.name ? store.rows.find(r => r.name === view.name) : null
+      selectedKubeResource.value = row ? { type: store.resource, row } : null
+    }
+  } catch (error) {
+    toast(error.message, 'error')
+  } finally {
+    await nextTick()
+    applyingKubeHistory = false
+  }
+}
 
 // Applies ?view=kubernetes once the contexts are known. A context missing from
 // this machine's kubeconfig is said, not silently replaced by another cluster.
-async function applyKubeUrlView() {
-  const view = urlKubeView
+async function applyKubeUrlView(view = urlKubeView) {
   if (view.context && view.context !== store.currentContext) {
     if (store.contexts.some(c => c.name === view.context)) {
       selectedContext.value = view.context
@@ -1478,7 +1531,8 @@ async function applyKubeUrlView() {
     }
   }
   if (view.resource === 'overview') cloudView.value = 'kube-overview'
-  else if (view.resource && RESOURCES[view.resource]) store.resource = view.resource
+  else if (view.resource === 'logs') cloudView.value = 'kube-logs'
+  else if (view.resource && RESOURCES[view.resource]) { cloudView.value = null; store.resource = view.resource }
   return true
 }
 
@@ -1491,6 +1545,7 @@ onMounted(async () => {
   // Shortcuts and listeners work right away, not after the cluster answers.
   lastUserInteractionAt = Date.now()
   document.addEventListener('keydown', onKey)
+  globalThis.addEventListener('popstate', onKubePopState)
   document.addEventListener('pointerdown', markUserInteraction, { passive: true })
   document.addEventListener('wheel', markUserInteraction, { passive: true, capture: true })
   document.addEventListener('touchstart', markUserInteraction, { passive: true })
@@ -1516,6 +1571,8 @@ onMounted(async () => {
       })(),
       pfStore.autoRestore(),
     ])
+    kubeUrlReady = true
+    syncKubeUrl({ replace: true })
   })()
   const cloud = (async () => {
     await Promise.all([envStore.fetchProfiles(), loadAwsLocalProfiles(), loadGcpLocalConfigs()])
@@ -1534,6 +1591,8 @@ onMounted(async () => {
   nextTick(() => createIcons({ icons }))
 })
 onUnmounted(() => {
+  globalThis.removeEventListener('popstate', onKubePopState)
+  clearTimeout(kubeUrlTimer)
   clearInterval(clockTimer)
   clearInterval(autoRefreshTimer)
   document.removeEventListener('keydown', onKey)

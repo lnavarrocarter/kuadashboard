@@ -170,6 +170,16 @@ describe('KubeOverview', () => {
     ])
   })
 
+  it('reaches an active incident from the keyboard through a real button', async () => {
+    const wrapper = mount(KubeOverview)
+    await flushPromises()
+    const link = wrapper.get('[data-test="incident-link"]')
+    expect(link.element.tagName).toBe('BUTTON')
+    await link.trigger('click')
+    // The row click does not fire a second navigation.
+    expect(wrapper.emitted('navigate')).toEqual([[{ resource: 'pods', filter: 'api-7d9' }]])
+  })
+
   it('reloads when the namespace changes', async () => {
     mount(KubeOverview)
     await flushPromises()
