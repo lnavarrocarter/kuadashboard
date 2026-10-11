@@ -42,6 +42,7 @@ const { summarizeOverview } = require('../lib/gcpOverview');
 const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
 const { listAllPages } = require('../lib/gcpPaging');
 const { mapFirewall, mapRoute, byPriority } = require('../lib/gcpNetwork');
+const { requireFeature } = require('../lib/plans');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
 const { exec }       = require('child_process');
 const { promisify }  = require('util');
@@ -2758,6 +2759,13 @@ router.put('/history/polling', (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
+    if (req.body?.enabled === true) {
+      try {
+        requireFeature('scheduledTasks', 'Scheduled state polling is part of the Pro and Team plans; "Run now" works on every plan');
+      } catch (planErr) {
+        return res.status(403).json({ error: planErr.message, code: planErr.code, required: planErr.required, feature: 'scheduledTasks' });
+      }
+    }
     const before = getStateHistory().getPollSettings('gcp', profileId);
     getStateHistory().updatePollSettings('gcp', profileId, req.body || {});
     const after = pollSettingsResponse(profileId);

@@ -502,6 +502,7 @@
     <PortForwardModal :show="modals.portForward"    :namespace="modalData.pfNamespace"       :service="modalData.pfService" :ports="modalData.pfPorts" :label="modalData.pfLabel" :manual-mode="modalData.pfManual" :resource-type="modalData.pfResourceType" @close="modals.portForward = false" @started="pfPanelVisible = true" />
     <KubeconfigModal  :show="modals.kubeconfig"                                              @close="modals.kubeconfig = false" />
     <HelpModal        :show="modals.help" :initial-tab="helpTab"                             @close="modals.help = false; helpTab = ''" />
+    <BlockedNotice />
     <ProfileModal
       :show="modals.addConnection"
       :profile="null"
@@ -555,6 +556,7 @@ import DeleteModal      from './components/modals/DeleteModal.vue'
 import ScaleModal       from './components/modals/ScaleModal.vue'
 import KubeActionConfirmModal from './components/modals/KubeActionConfirmModal.vue'
 import ReadOnlyToggle from './components/ReadOnlyToggle.vue'
+import BlockedNotice from './components/BlockedNotice.vue'
 import { contextEnvironment, shortContextName } from './lib/kubeContext'
 import { cloudProfileEnvironment, cloudProfileText } from './lib/profileEnvironment'
 import { kubeUrlChange, kubeUrlHref, readKubeUrl } from './lib/kubeUrl'

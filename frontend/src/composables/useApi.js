@@ -1,4 +1,5 @@
 import { noteReadOnlyRefusal } from './useReadOnly'
+import { showBlockedNotice } from './useBlockedNotice'
 import { useI18n } from './useI18n'
 
 const { t } = useI18n()
@@ -6,7 +7,7 @@ const READ_ONLY_AREAS = { aws: 'AWS', gcp: 'GCP', vercel: 'Vercel', helm: 'Helm'
 
 // Error with the server message; `status` and the JSON body (`details`) are
 // kept so callers can react to structured errors (e.g. AWS access requests).
-async function responseError(res, ct) {
+export async function responseError(res, ct) {
   const body = ct.includes('json') ? await res.json().catch(() => null) : null
   let message = body ? body.error : await res.text().catch(() => '')
   // Read-only mode refused a change: say it in the UI language, whatever the view shows.
@@ -14,6 +15,8 @@ async function responseError(res, ct) {
     noteReadOnlyRefusal()
     message = t(body.area === 'console' ? 'readOnly.refusedTerminal' : 'readOnly.refused', { area: READ_ONLY_AREAS[body.area] || body.area })
   }
+  // Read-only mode or the plan: one notice says why and offers the way out.
+  showBlockedNotice(body || {})
   return Object.assign(new Error(message || `HTTP ${res.status}`), { status: res.status, details: body })
 }
 

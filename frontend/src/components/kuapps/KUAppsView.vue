@@ -5,8 +5,11 @@
       <aside class="kuapps-applications">
         <div class="kuapps-list-heading">
           <button class="btn btn-icon kuapps-sidebar-toggle" data-test="kuapps-sidebar-toggle" :aria-expanded="String(!sidebarCollapsed)" :title="t(sidebarCollapsed ? 'kuapps.sidebar.expand' : 'kuapps.sidebar.collapse')" :aria-label="t(sidebarCollapsed ? 'kuapps.sidebar.expand' : 'kuapps.sidebar.collapse')" @click="sidebarCollapsed = !sidebarCollapsed"><i data-lucide="sidebar"></i></button>
-          <span>{{ t('kuapps.applications') }}</span><strong>{{ applications.length }}</strong>
-          <button class="btn btn-icon" :title="t('kuapps.createApplication')" @click="startCreate"><i data-lucide="plus"></i></button>
+          <span>{{ t('kuapps.applications') }}</span>
+          <strong v-if="applicationLimit == null">{{ applications.length }}</strong>
+          <!-- Free counts against its limit: say how many are left before the create button refuses -->
+          <strong v-else :class="{ 'kuapps-at-limit': atApplicationLimit }" :title="t('kuapps.limitHint', { limit: applicationLimit })" data-test="kuapps-limit">{{ t('kuapps.limitCount', { n: applications.length, limit: applicationLimit }) }}</strong>
+          <button class="btn btn-icon" :title="t(atApplicationLimit ? 'kuapps.limitReached' : 'kuapps.createApplication')" data-test="kuapps-create" @click="startCreate"><i :data-lucide="atApplicationLimit ? 'lock' : 'plus'"></i></button>
           <button class="btn btn-icon" :title="t('kuapps.refreshApplications')" :disabled="catalogLoading" @click="loadCatalog"><i data-lucide="refresh-cw"></i></button>
         </div>
         <div v-for="application in applications" :key="application.id" class="kuapps-application-item">
@@ -127,6 +130,7 @@
                 <label class="kuapps-collection-schedule"><input v-model="settingsDraft.pollingEnabled" type="checkbox" data-test="kuapps-collection-schedule" /> {{ t('apm.polling') }}</label>
               </div>
               <small class="kuapps-collection-schedule-hint">{{ t('kuapps.collectionScheduleHint') }}</small>
+              <PlanNote feature="scheduledTasks" :text="t('kuapps.schedulePlanNote')" />
               <div class="kuapps-collection-estimate" data-test="kuapps-collection-estimate">
                 <p v-if="collectionEstimate.metricsPerCollection">{{ t('apm.cloudWatchMonthlyEstimate', {
                   metrics: formatNumber(collectionEstimate.metricsPerCollection),
@@ -531,6 +535,9 @@ import KUAppMissingResources from './KUAppMissingResources.vue'
 import KUAppResourceInspector from './KUAppResourceInspector.vue'
 import KUAppPossibleDuplicates from './KUAppPossibleDuplicates.vue'
 import { api } from '../../composables/useApi'
+import { usePlan } from '../../composables/usePlan'
+import { showBlockedNotice } from '../../composables/useBlockedNotice'
+import PlanNote from '../PlanNote.vue'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
 
@@ -586,6 +593,10 @@ const localApplicationId = ref(props.applicationId)
 // list with the applications of one profile, which would hide the others from the sidebar.
 const catalog = ref([])
 const applications = computed(() => catalog.value)
+// KUA Applications the plan allows on this computer (null: no limit). The backend enforces it.
+const { plan: currentPlan } = usePlan()
+const applicationLimit = computed(() => currentPlan.value?.limits?.kuaApps ?? null)
+const atApplicationLimit = computed(() => applicationLimit.value != null && applications.value.length >= applicationLimit.value)
 // Overview first: it says how the application is and what is waiting for a decision.
 // The tab also travels in the URL next to ?app= (#152), so a reload or a link opens the same tab.
 const WORKSPACE_TABS = new Set(['overview', 'resources', 'map', 'signals', 'review', 'settings'])
@@ -1328,6 +1339,11 @@ async function collectFromSummary() {
 }
 
 function startCreate() {
+  // At the plan limit the form would only end in a refusal: explain it first.
+  if (atApplicationLimit.value) {
+    showBlockedNotice({ code: 'PLAN_REQUIRED', feature: 'kuaApps', required: 'pro', limit: applicationLimit.value })
+    return
+  }
   draft.value = { name: '', environment: '', team: '' }
   createError.value = ''
   creating.value = true
@@ -1393,6 +1409,7 @@ defineExpose({ reloadActiveTab })
 </script>
 
 <style scoped>
+.kuapps-at-limit { color: var(--yellow); }
 .kuapps-view { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
 .kuapps-application-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 225px minmax(0, 1fr); }
 .kuapps-applications { min-height: 0; overflow: auto; padding: 9px; border-right: 1px solid var(--border); background: var(--surface); }

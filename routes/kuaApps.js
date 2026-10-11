@@ -73,6 +73,8 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
       error: error.message || 'Internal server error',
       ...(error.code ? { code: error.code } : {}),
       ...(error.revision !== undefined ? { revision: error.revision } : {}),
+      ...(error.required ? { required: error.required } : {}),
+      ...(error.limit != null ? { feature: 'kuaApps', limit: error.limit, current: error.current } : {}),
     });
   }
 

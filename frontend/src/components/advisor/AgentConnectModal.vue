@@ -3,6 +3,7 @@
     <template #title>{{ t('agentConnect.title') }}</template>
     <div class="acm" data-test="agent-connect">
       <p class="acm-intro">{{ t('agentConnect.intro') }}</p>
+      <PlanNote feature="agents" />
       <p v-if="loading" class="acm-dim">{{ t('common.loading') }}</p>
       <p v-else-if="error" class="acm-notice"><i data-lucide="alert-triangle"></i>{{ error }}</p>
       <template v-else-if="launch">
@@ -50,6 +51,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import BaseModal from '../BaseModal.vue'
+import PlanNote from '../PlanNote.vue'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'

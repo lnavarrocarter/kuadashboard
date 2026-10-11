@@ -114,6 +114,8 @@ async function startBackend() {
       KUA_DATA_DIR:            app.getPath('userData'),
       // Activate KeytarStore automatically (we are in Electron)
       KUADASHBOARD_STORE:      'keytar',
+      // The packaged app ignores KUA_PLAN: the plan comes from the KUA account (lib/plans.js).
+      ...(app.isPackaged ? { KUA_PACKAGED: '1' } : {}),
       // Disable color codes in child process stdout
       FORCE_COLOR:             '0',
     };
