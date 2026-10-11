@@ -120,6 +120,7 @@
           <i :data-lucide="settings.theme === 'dark' ? 'sun' : 'moon'"></i>
         </button>
         <AlertsBell :profile-name="profileNameById" />
+        <button class="btn btn-icon" :class="{ primary: cloudView === 'plugins' }" :title="t('nav.plugins')" data-test="nav-plugins" @click="cloudView = cloudView === 'plugins' ? null : 'plugins'"><i data-lucide="plug"></i></button>
         <button class="btn btn-icon" :class="{ primary: cloudView === 'audit' }" :title="t('nav.auditLog')" @click="toggleAuditLog"><i data-lucide="shield-check"></i></button>
         <button class="btn btn-icon" @click="modals.help = true" :title="t('nav.help')"><i data-lucide="help-circle"></i></button>
         <button class="btn btn-icon btn-donate" @click="openSponsor" :title="t('nav.supportProject')">
@@ -378,6 +379,7 @@
         <main class="main">
           <EnvManagerView v-if="cloudView === 'envs'" />
           <AuditLogView  v-else-if="cloudView === 'audit'" />
+          <PluginsView   v-else-if="cloudView === 'plugins'" />
           <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
           <KubeOverview ref="kubeOverviewRef" v-else-if="cloudView === 'kube-overview' && activeProvider === 'kubernetes'" @navigate="openKubeFromOverview" />
           <KubeLogsView v-else-if="cloudView === 'kube-logs' && activeProvider === 'kubernetes'" />
@@ -600,6 +602,7 @@ const lazyView = loader => defineAsyncComponent({
 })
 const HelmView             = lazyView(() => import('./components/HelmView.vue'))
 const KubeLogsView         = lazyView(() => import('./components/cloud/logs/KubeLogsView.vue'))
+const PluginsView          = lazyView(() => import('./components/PluginsView.vue'))
 const AuditLogView         = lazyView(() => import('./components/AuditLogView.vue'))
 const ConsoleWorkspaceView = lazyView(() => import('./components/ConsoleWorkspaceView.vue'))
 const EnvManagerView       = lazyView(() => import('./components/cloud/EnvManagerView.vue'))

@@ -37,7 +37,7 @@ const busy = ref(false)
 
 const AREAS = { aws: 'AWS', gcp: 'GCP', vercel: 'Vercel', helm: 'Helm', kubernetes: 'Kubernetes' }
 // Features with their own explanation; anything else uses the server message.
-const PLAN_FEATURES = new Set(['agents', 'scheduledTasks', 'kuaApps', 'advisor', 'logAutoRefresh', 'auditForwarding'])
+const PLAN_FEATURES = new Set(['agents', 'scheduledTasks', 'kuaApps', 'advisor', 'logAutoRefresh', 'auditForwarding', 'savedPathFilters'])
 
 const isReadOnly = computed(() => blockedNotice.kind === 'readOnly')
 const planName = computed(() => t(`plan.name_${blockedNotice.required || 'pro'}`))

@@ -12,6 +12,7 @@ const { resourceSignalStates } = require('../lib/kua/resourceSignalState');
 const { signalCapabilities } = require('../lib/apm/signalCapabilities');
 const { applicationForResource } = require('../lib/kua/scopeCredentials');
 const { canonicalFromApm } = require('../lib/kua/applicationRegistryService');
+const { createGithubCicd } = require('../lib/kua/githubCicd');
 const { createResourceObserver } = require('../lib/kua/resourceObserver');
 const { applicationIssues } = require('../lib/kua/applicationIssues');
 const { readCollection } = require('../lib/apm/resourcePresence');
@@ -19,8 +20,10 @@ const { createChangePlanService } = require('../lib/kua/changePlans');
 const { createAgentAccess } = require('../lib/kua/agentAccess');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
+const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
+const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -31,7 +34,11 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'kuapps', details }),
   });
   const applicationRegistry = new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database });
-  const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database });
+  const github = githubCicd || createGithubCicd({ apmDatabase });
+  // First-party plugins (#193): GitHub CI/CD answers only while it is turned on.
+  const pluginRegistry = plugins || createPluginRegistry({ plugins: [githubCicdPlugin(github)] });
+  const githubOn = () => pluginRegistry.isActive('github.cicd');
+  const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database, dynamicAdapters: pluginRegistry.adapters });
   const changePlans = createChangePlanService({
     apmDatabase, architectureDatabase: database, applications, registry: applicationRegistry, access: agentAccess,
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'mcp', details }),
@@ -193,7 +200,37 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   // the Kubernetes API. Replacing attaches the successor and detaches the missing resource;
   // nothing is replaced automatically and nothing changes in the cluster.
   const observer = createResourceObserver({ database: apmDatabase, registry: applicationRegistry, ...(kubeLister ? { kubeLister } : {}) });
-  router.get('/applications/:applicationId/observer', (req, res) => sendAsync(res, 200, () => observer.gone(applicationOr404(req.params.applicationId))));
+  router.get('/applications/:applicationId/observer', (req, res) => sendAsync(res, 200, async () => {
+    const application = applicationOr404(req.params.applicationId);
+    const result = await observer.gone(application);
+    // #238: the deploy that probably made each resource disappear, when GitHub CI/CD is connected.
+    return { ...result, resources: githubOn() ? await github.explainMissing(application.id, result.resources) : result.resources };
+  }));
+
+  // Plugin GitHub CI/CD (#238), read-only, through the GitHub CLI logged in on this computer: KUA
+  // stores no token. Syncing with GitHub is an option of each application (Settings → Sync).
+  router.use(['/github', '/applications/:applicationId/github'], pluginRegistry.guard('github.cicd'));
+  router.get('/github/connection', (req, res) => sendAsync(res, 200, () => github.connection({ refresh: req.query.refresh === 'true' })));
+  router.get('/github/owners', (_req, res) => sendAsync(res, 200, async () => ({ owners: await github.owners() })));
+  router.get('/github/repositories', (req, res) => sendAsync(res, 200, async () => ({
+    repositories: await github.availableRepositories({ owner: req.query.owner, query: req.query.q }),
+  })));
+  router.get('/applications/:applicationId/github', (req, res) => send(res, 200, () =>
+    github.settings(applicationOr404(req.params.applicationId).id)));
+  router.put('/applications/:applicationId/github', (req, res) => send(res, 200, () => {
+    const application = applicationOr404(req.params.applicationId);
+    const result = github.configure(application.id, { enabled: req.body?.enabled, repositories: req.body?.repositories });
+    auditLog?.log({ category: 'kua', action: 'GitHub sync of application changed', resource: application.name, context: 'kuapps', details: { applicationId: application.id, ...result } });
+    return result;
+  }));
+  router.get('/applications/:applicationId/github/activity', (req, res) => sendAsync(res, 200, async () => {
+    const application = applicationOr404(req.params.applicationId);
+    const activity = await github.activity(application.id, { refresh: req.query.refresh === 'true' });
+    return { ...activity, events: activity.events.slice(0, 30), metrics: await github.metrics(application.id) };
+  }));
+  router.get('/applications/:applicationId/github/causes', (req, res) => sendAsync(res, 200, async () => ({
+    causes: await github.causes(applicationOr404(req.params.applicationId).id),
+  })));
   router.post('/applications/:applicationId/observer/replace', (req, res) => sendAsync(res, 200, async () => {
     const application = applicationOr404(req.params.applicationId);
     const result = await observer.replace(application, req.body?.resourceId, req.body?.successor, revisionOf(req));

@@ -391,12 +391,22 @@ const applicationSyncTask = backgroundTaskRegistry.register({
   id: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
 });
 applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask));
+// First-party plugins (#193): what this computer has turned on. GitHub CI/CD is the first one.
+const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
+const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
+  dataDir: require('./lib/account/account').resolveDataDir(),
+  plugins: [require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd)],
+});
+app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog }));
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
   apmDatabase,
   auditLog,
   syncEngine,
   teamEngine,
+  // Plugin GitHub CI/CD (#238): read-only, through the GitHub CLI of this computer.
+  githubCicd,
+  plugins: pluginRegistry,
   // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
   agentAccess: require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() }),
 }));

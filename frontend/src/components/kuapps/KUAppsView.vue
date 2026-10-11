@@ -157,6 +157,8 @@
               <template v-else-if="settingsSection === 'sources'">
                 <header class="kuapps-section-heading"><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.sync.title') }}</h3><small>{{ t('kuapps.sync.hint') }}</small></div></header>
                 <KUAppSync :application="selectedApplication" :provider="apmProvider" :profile-id="apmProfileId" :architecture-profile-id="architectureProfileId" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
+                <KUAppGithubCicd v-if="githubPluginActive" :key="selectedApplication.id" :application-id="selectedApplication.id" />
+                <p v-else class="kuapps-add-explain" data-test="github-plugin-off"><i data-lucide="plug"></i><span>{{ t('kuapps.github.pluginOff') }}</span></p>
                 <section class="kuapp-cfn-sync">
                   <h4>{{ t('kuapps.sync.cfnTitle') }}</h4>
                   <p class="kuapps-add-explain"><i data-lucide="info"></i><span><strong>{{ t('kuapps.sync.what') }}</strong> {{ t('kuapps.sync.cfnExplain') }}</span></p>
@@ -533,6 +535,7 @@ import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
 import KUAppMissingResources from './KUAppMissingResources.vue'
+import KUAppGithubCicd from './KUAppGithubCicd.vue'
 import KUAppResourceInspector from './KUAppResourceInspector.vue'
 import KUAppPossibleDuplicates from './KUAppPossibleDuplicates.vue'
 import { api } from '../../composables/useApi'
@@ -1403,7 +1406,13 @@ watch(() => props.activeView, value => {
 })
 watch(() => [selectedApplication.value?.id, advisorProfileId.value], () => { productAdvisor.value = null; loadProductAdvisor() }, { immediate: true })
 watch(() => [props.activeView, props.observabilityProvider], () => nextTick(() => createIcons({ icons })))
+const githubPluginActive = ref(false)
+async function loadPlugins() {
+  try { githubPluginActive.value = ((await api('GET', '/api/plugins'))?.plugins || []).some(plugin => plugin.manifest.id === 'github.cicd' && plugin.active) } catch { githubPluginActive.value = false }
+}
+watch(settingsSection, section => { if (section === 'sources') loadPlugins() })
 onMounted(async () => {
+  loadPlugins()
   await Promise.all([
     loadCatalog(),
     api('GET', '/api/account').then(status => { teamInfo.value = status?.entitlements?.team || null }).catch(() => {}),

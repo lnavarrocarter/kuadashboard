@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd, plugins } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -465,4 +465,41 @@ test('API registry: a cluster-scoped object of an EKS context has no namespace (
   } finally {
     await subject.close();
   }
+});
+
+test('GitHub CI/CD plugin (#238): sync is an option of the application and uses the gh CLI', async () => {
+  const { createGithubCicd } = require('../lib/kua/githubCicd');
+  const client = {
+    user: async () => ({ login: 'octocat' }),
+    availableRepositories: async () => [{ nameWithOwner: 'acme/api' }],
+    workflowRuns: async () => ({ workflow_runs: [{ id: 1, run_number: 5, name: 'Deploy', status: 'completed', conclusion: 'success', head_sha: 'c'.repeat(40), head_branch: 'main', triggering_actor: { login: 'ana' }, updated_at: new Date().toISOString(), html_url: 'https://github.com/acme/api/actions/runs/1' }] }),
+    deployments: async () => [],
+  };
+  const github = createGithubCicd({ client });
+  const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
+  const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
+  const plugins = createPluginRegistry({ plugins: [githubCicdPlugin(github)] });
+  const subject = await fixture({ githubCicd: github, plugins });
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Desarrollo' });
+    const base = `/applications/${application.id}/github`;
+    const off = await subject.request('/github/connection');
+    assert.equal(off.status, 404);
+    assert.equal(off.body.code, 'PLUGIN_DISABLED', 'a plugin that is off mounts no routes');
+    assert.equal((await subject.request(base)).status, 404);
+    await plugins.setActive('github.cicd', true);
+    assert.deepEqual((await subject.request('/github/connection')).body, { available: true, authenticated: true, login: 'octocat', readOnly: true });
+    assert.deepEqual((await subject.request('/github/repositories')).body, { repositories: ['acme/api'] });
+    assert.deepEqual((await subject.request(base)).body, { enabled: false, repositories: [], discovered: [] });
+    assert.equal((await subject.request(base, { method: 'PUT', body: { repositories: ['not a repo'] } })).status, 400);
+    assert.deepEqual((await subject.request(base, { method: 'PUT', body: { enabled: true, repositories: ['https://github.com/acme/api'] } })).body, { enabled: true, repositories: ['acme/api'], discovered: [] });
+    const activity = await subject.request(`${base}/activity`);
+    assert.equal(activity.status, 200);
+    assert.equal(activity.body.events[0].number, 5);
+    assert.equal(activity.body.metrics.deploys, 1);
+    assert.deepEqual((await subject.request(`${base}/causes`)).body, { causes: [] });
+    assert.equal((await subject.request('/applications/missing/github/causes')).status, 404);
+    assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
+    assert.equal((await subject.request('/applications/missing/github', { method: 'PUT', body: { enabled: true } })).status, 404);
+  } finally { await subject.close(); }
 });
