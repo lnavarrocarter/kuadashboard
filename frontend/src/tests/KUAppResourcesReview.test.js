@@ -32,6 +32,30 @@ describe('KUApps resources and review (#239)', () => {
     settings.lang = 'en'
   })
 
+  it('fills the icons again when the Resources tab, the filtered list or the selection change', async () => {
+    const { createIcons } = await import('lucide')
+    const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
+    respond(url => (url.includes('/catalog') ? [application]
+      : url.includes('/registry') ? { resources: RESOURCES, relationships: [] }
+        : url.includes('/api/kua-apps/applications/app-1') && !url.includes('/views') ? { id: 'app-1', scopes: [], local: { bindings: [], legacy: null } } : []))
+    const wrapper = mount(KUAppsView, { props: { activeView: 'architecture', applicationId: 'app-1' }, global: { stubs: { ArchitectureView: true, ApmObservabilityView: true } } })
+    await flushPromises()
+    const calls = () => createIcons.mock.calls.length
+    let before = calls()
+    await wrapper.findAll('.kuapps-workspace-tab')[1].trigger('click')
+    await flushPromises()
+    expect(calls()).toBeGreaterThan(before)
+    before = calls()
+    await wrapper.get('[data-test="resource-search"]').setValue('api')
+    await flushPromises()
+    expect(calls()).toBeGreaterThan(before)
+    before = calls()
+    await wrapper.find('.kuapps-resource-list .kuapps-resource-row').trigger('click')
+    await flushPromises()
+    expect(calls()).toBeGreaterThan(before)
+    wrapper.unmount()
+  })
+
   it('finds a resource among many: search, filters by provider, connection, namespace and state, readable connection', async () => {
     const application = { id: 'app-1', name: 'Dev', provider: 'aws', profileId: 'local:prod' }
     respond(url => (url.includes('/catalog') ? [application]
