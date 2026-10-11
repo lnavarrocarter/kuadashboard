@@ -13,37 +13,42 @@ function respond(handler) {
   })
 }
 
-describe('KUApp GitHub CI/CD', () => {
+describe('KUApp GitHub sync option', () => {
   beforeEach(() => { settings.lang = 'en' })
 
-  it('connects with a token, then associates repositories and shows activity (#238)', async () => {
-    let connected = false
-    let repositories = []
+  it('enables the sync and picks repositories using the gh CLI of this computer (#238)', async () => {
+    let state = { enabled: false, repositories: [] }
     respond((url, options) => {
       const method = options.method || 'GET'
-      if (url.endsWith('/github/connection') && method === 'GET') return { body: { connected, login: connected ? 'octocat' : null } }
-      if (url.endsWith('/github/connection') && method === 'PUT') { connected = true; return { body: { connected: true } } }
-      if (url.endsWith('/github/repositories') && method === 'GET') return { body: { repositories } }
-      if (url.endsWith('/github/repositories') && method === 'PUT') { repositories = JSON.parse(options.body).repositories; return { body: { repositories } } }
+      if (url.includes('/github/connection')) return { body: { available: true, authenticated: true, login: 'octocat' } }
+      if (url.endsWith('/api/kua-apps/github/repositories')) return { body: { repositories: ['acme/api', 'acme/web'] } }
       if (url.endsWith('/github/activity')) return { body: { errors: [], metrics: { days: 30, deploys: 2, perWeek: 0.5, leadTimeHours: 3 }, events: [{ id: 'e1', repository: 'acme/api', number: 7, name: 'Deploy', conclusion: 'success', actor: 'ana', at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7' }] } }
+      if (url.endsWith('/github') && method === 'PUT') { state = JSON.parse(options.body); return { body: state } }
+      if (url.endsWith('/github')) return { body: state }
       return { body: {} }
     })
     const wrapper = mount(KUAppGithubCicd, { props: { applicationId: 'app-1' } })
     await flushPromises()
-    expect(wrapper.text()).toContain('Not connected')
+    expect(wrapper.get('[data-test="github-status"]').text()).toBe('Connected as octocat')
+    expect(wrapper.find('input[type="password"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="github-repo-acme/api"]').exists()).toBe(false)
 
-    await wrapper.get('[data-test="github-token"]').setValue('ghp_secret')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('[data-test="github-enabled"]').setValue(true)
     await flushPromises()
-    expect(wrapper.text()).toContain('Connected as octocat')
-    expect(wrapper.find('[data-test="github-token"]').exists()).toBe(false)
-
-    await wrapper.get('[data-test="github-repos"]').setValue('acme/api\n')
-    await wrapper.get('[data-test="github-save"]').trigger('click')
+    await wrapper.get('[data-test="github-repo-acme/api"]').setValue(true)
     await flushPromises()
-    const [, put] = global.fetch.mock.calls.find(([url, request]) => String(url).endsWith('/github/repositories') && request?.method === 'PUT')
-    expect(JSON.parse(put.body)).toEqual({ repositories: ['acme/api'] })
+    expect(state).toEqual({ enabled: true, repositories: ['acme/api'] })
     expect(wrapper.get('[data-test="github-metrics"]').text()).toContain('2 deploys (0.5/week) · lead time 3 h')
     expect(wrapper.text()).toContain('acme/api #7 · Deploy')
+  })
+
+  it('explains what to do when the gh CLI is missing or logged out', async () => {
+    respond(url => (url.includes('/github/connection')
+      ? { body: { available: false, authenticated: false, code: 'GH_NOT_INSTALLED' } }
+      : { body: { enabled: false, repositories: [] } }))
+    const wrapper = mount(KUAppGithubCicd, { props: { applicationId: 'app-1' } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="github-unavailable"]').text()).toContain('gh auth login')
+    expect(wrapper.find('[data-test="github-enabled"]').exists()).toBe(false)
   })
 })

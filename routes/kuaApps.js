@@ -202,25 +202,17 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return { ...result, resources: await github.explainMissing(application.id, result.resources) };
   }));
 
-  // Plugin GitHub CI/CD (#238), read-only: the token stays on this computer and is never returned.
-  router.get('/github/connection', (_req, res) => sendAsync(res, 200, () => github.connection()));
-  router.put('/github/connection', (req, res) => sendAsync(res, 200, async () => {
-    const result = await github.connect(req.body?.token);
-    auditLog?.log({ category: 'kua', action: 'GitHub CI/CD connected', resource: result.login || 'github', context: 'kuapps' });
-    return result;
-  }));
-  router.delete('/github/connection', (_req, res) => sendAsync(res, 200, async () => {
-    const result = await github.disconnect();
-    auditLog?.log({ category: 'kua', action: 'GitHub CI/CD disconnected', resource: 'github', context: 'kuapps' });
-    return result;
-  }));
-  router.get('/applications/:applicationId/github/repositories', (req, res) => send(res, 200, () =>
-    ({ repositories: github.repositories(applicationOr404(req.params.applicationId).id) })));
-  router.put('/applications/:applicationId/github/repositories', (req, res) => send(res, 200, () => {
+  // Plugin GitHub CI/CD (#238), read-only, through the GitHub CLI logged in on this computer: KUA
+  // stores no token. Syncing with GitHub is an option of each application (Settings → Sync).
+  router.get('/github/connection', (req, res) => sendAsync(res, 200, () => github.connection({ refresh: req.query.refresh === 'true' })));
+  router.get('/github/repositories', (_req, res) => sendAsync(res, 200, async () => ({ repositories: await github.availableRepositories() })));
+  router.get('/applications/:applicationId/github', (req, res) => send(res, 200, () =>
+    github.settings(applicationOr404(req.params.applicationId).id)));
+  router.put('/applications/:applicationId/github', (req, res) => send(res, 200, () => {
     const application = applicationOr404(req.params.applicationId);
-    const repositories = github.setRepositories(application.id, req.body?.repositories);
-    auditLog?.log({ category: 'kua', action: 'GitHub repositories associated with application', resource: application.name, context: 'kuapps', details: { applicationId: application.id, repositories } });
-    return { repositories };
+    const result = github.configure(application.id, { enabled: req.body?.enabled, repositories: req.body?.repositories });
+    auditLog?.log({ category: 'kua', action: 'GitHub sync of application changed', resource: application.name, context: 'kuapps', details: { applicationId: application.id, ...result } });
+    return result;
   }));
   router.get('/applications/:applicationId/github/activity', (req, res) => sendAsync(res, 200, async () => {
     const application = applicationOr404(req.params.applicationId);

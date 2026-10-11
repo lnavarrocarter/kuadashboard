@@ -467,10 +467,11 @@ test('API registry: a cluster-scoped object of an EKS context has no namespace (
   }
 });
 
-test('GitHub CI/CD plugin (#238): connect, associate repositories and read activity without exposing the token', async () => {
+test('GitHub CI/CD plugin (#238): sync is an option of the application and uses the gh CLI', async () => {
   const { createGithubCicd } = require('../lib/kua/githubCicd');
   const client = {
     user: async () => ({ login: 'octocat' }),
+    availableRepositories: async () => [{ nameWithOwner: 'acme/api' }],
     workflowRuns: async () => ({ workflow_runs: [{ id: 1, run_number: 5, name: 'Deploy', status: 'completed', conclusion: 'success', head_sha: 'c'.repeat(40), head_branch: 'main', triggering_actor: { login: 'ana' }, updated_at: new Date().toISOString(), html_url: 'https://github.com/acme/api/actions/runs/1' }] }),
     deployments: async () => [],
   };
@@ -478,18 +479,16 @@ test('GitHub CI/CD plugin (#238): connect, associate repositories and read activ
   try {
     const application = subject.apmDatabase.createApplication({ name: 'Desarrollo' });
     const base = `/applications/${application.id}/github`;
-    assert.equal((await subject.request('/github/connection')).body.connected, false);
-    assert.equal((await subject.request('/github/connection', { method: 'PUT', body: { token: '' } })).status, 400);
-    const connected = await subject.request('/github/connection', { method: 'PUT', body: { token: 'ghp_secret' } });
-    assert.deepEqual(connected.body, { connected: true, login: 'octocat', readOnly: true });
-    assert.equal((await subject.request(`${base}/repositories`, { method: 'PUT', body: { repositories: ['not a repo'] } })).status, 400);
-    assert.deepEqual((await subject.request(`${base}/repositories`, { method: 'PUT', body: { repositories: ['https://github.com/acme/api'] } })).body, { repositories: ['acme/api'] });
+    assert.deepEqual((await subject.request('/github/connection')).body, { available: true, authenticated: true, login: 'octocat', readOnly: true });
+    assert.deepEqual((await subject.request('/github/repositories')).body, { repositories: ['acme/api'] });
+    assert.deepEqual((await subject.request(base)).body, { enabled: false, repositories: [] });
+    assert.equal((await subject.request(base, { method: 'PUT', body: { repositories: ['not a repo'] } })).status, 400);
+    assert.deepEqual((await subject.request(base, { method: 'PUT', body: { enabled: true, repositories: ['https://github.com/acme/api'] } })).body, { enabled: true, repositories: ['acme/api'] });
     const activity = await subject.request(`${base}/activity`);
     assert.equal(activity.status, 200);
     assert.equal(activity.body.events[0].number, 5);
     assert.equal(activity.body.metrics.deploys, 1);
-    assert.ok(!JSON.stringify(activity.body).includes('ghp_secret'));
     assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
-    assert.equal((await subject.request('/github/connection', { method: 'DELETE' })).body.connected, false);
+    assert.equal((await subject.request('/applications/missing/github', { method: 'PUT', body: { enabled: true } })).status, 404);
   } finally { await subject.close(); }
 });

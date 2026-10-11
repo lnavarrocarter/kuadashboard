@@ -157,6 +157,7 @@
               <template v-else-if="settingsSection === 'sources'">
                 <header class="kuapps-section-heading"><div><span class="kuapps-kicker">{{ t('kuapps.settings') }}</span><h3>{{ t('kuapps.sync.title') }}</h3><small>{{ t('kuapps.sync.hint') }}</small></div></header>
                 <KUAppSync :application="selectedApplication" :provider="apmProvider" :profile-id="apmProfileId" :architecture-profile-id="architectureProfileId" @open-tab="selectWorkspaceTab" @reconciled="loadApplicationRegistry()" @select-resource="id => { selectedResourceId = id; workspaceView = 'resources' }" />
+                <KUAppGithubCicd :key="selectedApplication.id" :application-id="selectedApplication.id" />
                 <section class="kuapp-cfn-sync">
                   <h4>{{ t('kuapps.sync.cfnTitle') }}</h4>
                   <p class="kuapps-add-explain"><i data-lucide="info"></i><span><strong>{{ t('kuapps.sync.what') }}</strong> {{ t('kuapps.sync.cfnExplain') }}</span></p>
@@ -336,8 +337,7 @@
                 <button class="btn sm" @click="selectWorkspaceTab('settings')">{{ t('kuapps.review.bindProfile') }}</button>
               </div>
             </div>
-            <KUAppMissingResources ref="missingResources" :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
-            <KUAppGithubCicd :application-id="selectedApplicationId" @changed="missingResources?.reload?.()" />
+            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -563,7 +563,6 @@ const emit = defineEmits([
 const { t } = useI18n()
 const { toast } = useToast()
 const architectureRef = ref(null)
-const missingResources = ref(null)
 const observabilityRef = ref(null)
 const summaryRef = ref(null)
 const resourceSignalsRef = ref(null)
