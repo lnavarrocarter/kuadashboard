@@ -708,7 +708,16 @@
               <span>{{ confirmAction.title }}</span>
               <button class="btn-close" @click="confirmAction = null">✕</button>
             </div>
-            <div class="modal-body">{{ confirmAction.message }}</div>
+            <div class="modal-body">
+              <!-- Where the change goes, copied when the dialog opened -->
+              <dl class="vercel-destination" data-test="vercel-destination">
+                <template v-for="item in confirmAction.destination || []" :key="item.label">
+                  <dt>{{ item.label }}</dt><dd>{{ item.value || '—' }}</dd>
+                </template>
+              </dl>
+              <p v-if="confirmAction.production" class="vercel-destination-warning" role="alert">{{ t('vercel.confirm.productionWarning') }}</p>
+              <p>{{ confirmAction.message }}</p>
+            </div>
             <div class="modal-footer">
               <button class="btn" @click="confirmAction = null">{{ t('action.cancel') }}</button>
               <button
@@ -737,6 +746,7 @@ import VercelDeploymentLogs from './VercelDeploymentLogs.vue'
 import ApmObservabilityView from './apm/ApmObservabilityView.vue'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useTerminalStore } from '../../stores/useTerminalStore'
+import { cloudProfileEnvironment } from '../../lib/profileEnvironment'
 
 const props = defineProps({
   activeService: { type: String, default: 'overview' },
@@ -772,6 +782,30 @@ const envSummary = computed(() => {
   const types = Object.entries(env.byType).sort((a, b) => b[1] - a[1]).map(([type, n]) => `${type} ${n}`)
   return [t('vercel.overview.envSummary', { n: env.total }), ...types].join(' · ')
 })
+// Destination of a deployment action: environment, profile, team, project, deployment and target.
+function actionDestination(deployment, { production = false } = {}) {
+  const profileId = vercelStore.activeProfileId || ''
+  const profile = envStore.vercelProfiles.find(item => item.id === profileId)
+  const environment = cloudProfileEnvironment('vercel', profileId, { vercelProfiles: envStore.vercelProfiles })
+  const target = production ? 'production' : (deployment.target || 'preview')
+  return {
+    production: target === 'production' || environment === 'production',
+    profileId,
+    destination: [
+      { label: t('kubeAction.environment'), value: t(`kubeAction.env.${environment || 'unknown'}`) },
+      { label: t('vercel.confirm.profile'), value: profile?.name || profileId },
+      { label: t('vercel.confirm.team'), value: overview.value?.teamId || t('vercel.overview.personal') },
+      { label: t('vercel.confirm.project'), value: vercelStore.selectedProject?.name || '' },
+      { label: t('vercel.confirm.deployment'), value: deployment.url || deployment.id },
+      { label: t('vercel.confirm.target'), value: target },
+    ],
+  }
+}
+// Another profile must never receive a change confirmed for this one.
+watch(() => vercelStore.activeProfileId, id => {
+  if (confirmAction.value && confirmAction.value.profileId !== id) confirmAction.value = null
+})
+
 const advisorBriefContext = computed(() => {
   const profile = envStore.vercelProfiles.find(item => item.id === vercelStore.activeProfileId)
   return profile ? { [t('agentBrief.field.profile')]: profile.name } : {}
@@ -939,6 +973,7 @@ function triggerRedeploy(deployment) {
   confirmAction.value = {
     title:   t('vercel.confirm.redeployTitle'),
     message: t('vercel.confirm.redeployMsg', { id: deployment.id }),
+    ...actionDestination(deployment),
     label:   t('vercel.action.redeploy'),
     danger:  false,
     run: async () => {
@@ -957,6 +992,7 @@ function triggerPromote(deployment) {
   confirmAction.value = {
     title:   t('vercel.confirm.promoteTitle'),
     message: t('vercel.confirm.promoteMsg', { id: deployment.id }),
+    ...actionDestination(deployment, { production: true }),
     label:   t('vercel.action.promote'),
     danger:  false,
     run: async () => {
@@ -973,6 +1009,7 @@ function triggerCancel(deployment) {
   confirmAction.value = {
     title:   t('vercel.confirm.cancelTitle'),
     message: t('vercel.confirm.cancelMsg', { id: deployment.id }),
+    ...actionDestination(deployment),
     label:   t('vercel.action.cancel'),
     danger:  true,
     run: async () => {
@@ -1162,6 +1199,10 @@ function formatBytes(value) {
 </script>
 
 <style scoped>
+.vercel-destination { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 0 0 8px; font-size: 12px; }
+.vercel-destination dt { color: var(--text-dim); }
+.vercel-destination dd { margin: 0; overflow-wrap: anywhere; }
+.vercel-destination-warning { margin: 0 0 8px; color: var(--red); font-weight: 600; font-size: 12px; }
 /* Overview */
 .vercel-ov-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .vercel-ov-title { font-size: 15px; font-weight: 600; }

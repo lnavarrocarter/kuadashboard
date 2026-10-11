@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
 import AwsView from '../components/cloud/AwsView.vue'
+import { useEnvStore } from '../stores/useEnvStore'
 import { useAwsStore } from '../stores/useAwsStore'
 
 function json(body, status = 200) {
@@ -63,8 +64,10 @@ describe('AWS write operations ask for confirmation (A01)', () => {
     expect(dialog.text()).toContain('Stop EC2 instance eks-node-1?')
     expect(dialog.text()).toContain('i-0abc')
     expect(dialog.text()).toContain('Current state: running')
-    expect(dialog.text()).toContain('account 123456789012')
-    expect(dialog.text()).toContain('region us-east-1')
+    const destination = dialog.find('[data-test="destination"]').text()
+    expect(destination).toContain('Account123456789012')
+    expect(destination).toContain('Regionus-east-1')
+    expect(destination).toContain('EnvironmentUnidentified environment')
     expect(dialog.text()).toContain('EKS node of cluster prod')
     expect(dialog.text()).toContain('Auto Scaling group eks-general')
     await dialog.findAll('button').find(b => b.text() === 'Cancel').trigger('click')
@@ -133,6 +136,21 @@ describe('AWS write operations ask for confirmation (A01)', () => {
     await (await menuItem(w, 'api', 'stop')).trigger('click')
     await flushPromises()
     expect(w.find('[role="dialog"]').text()).toContain('Sets the desired count to 0 (now 4)')
+    expect(posts).toEqual([])
+  })
+
+  it('a Glue run waits for the destination dialog and warns on a production profile', async () => {
+    const w = await mountTab('glue', store => {
+      store.glueJobs = [{ name: 'nightly-etl', role: 'r', glueVersion: '4.0' }]
+      useEnvStore().profiles = [{ id: 'prof-1', name: 'prod', provider: 'aws' }]
+    })
+    const run = w.findAll('tbody tr').find(tr => tr.text().includes('nightly-etl')).findAll('button').find(b => b.text() === 'Run')
+    await run.trigger('click')
+    await flushPromises()
+    const dialog = w.find('[role="dialog"]')
+    expect(dialog.text()).toContain('Run Glue job nightly-etl?')
+    expect(dialog.find('[data-test="destination"]').text()).toContain('EnvironmentProduction')
+    expect(dialog.text()).toContain('This profile reads as production')
     expect(posts).toEqual([])
   })
 })

@@ -13,6 +13,8 @@
             <dt>{{ item.label }}</dt><dd :title="item.value">{{ item.value || '—' }}</dd>
           </template>
         </dl>
+        <!-- A destination row may carry a warning (a production account or project) -->
+        <p v-for="item in context.filter(row => row.warning)" :key="`warning:${item.label}`" class="gcpc-dest-warning" role="alert" data-test="destination-warning">{{ item.warning }}</p>
 
         <p v-if="message" class="gcpc-message">{{ message }}</p>
 
@@ -97,7 +99,7 @@ const props = defineProps({
   error:           { type: String,  default: '' },
   // Reason the action cannot proceed (e.g. deletion protection); disables confirm
   blocked:         { type: String,  default: '' },
-  // [{ label, value }]: project, profile, region/zone, resource
+  // [{ label, value, warning? }]: environment, project/account, profile, region/zone, resource
   context:         { type: Array,   default: () => [] },
   // An estimate was expected but could not be computed: say so instead of hiding it
   estimateUnavailable: { type: Boolean, default: false },
@@ -140,6 +142,7 @@ function formatUsd(n) {
 </script>
 
 <style scoped>
+.gcpc-dest-warning { margin: 6px 0 0; color: var(--red); font-weight: 600; font-size: 12px; }
 .gcpc-modal { width: 520px; max-width: 96vw; max-height: 90vh; display: flex; flex-direction: column; }
 .gcpc-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .gcpc-icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }

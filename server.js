@@ -179,6 +179,7 @@ const wssGcpLogs    = new WebSocket.Server({ noServer: true });
 const wssGcpSsh     = new WebSocket.Server({ noServer: true });
 const wssVercelLogs = new WebSocket.Server({ noServer: true });
 const { createConsoleSessions, mountConsoleRoutes, admitConsoleUpgrade } = require('./lib/consoleSessions');
+const readOnlyMode = require('./lib/readOnlyMode').createReadOnlyMode({ audit: auditLog });
 const consoleSessions = createConsoleSessions({
   audit: auditLog, getKubeConfig: () => currentKc,
 });
@@ -186,6 +187,7 @@ const consoleSessions = createConsoleSessions({
 server.on('upgrade', (request, socket, head) => {
   const pathname = admitConsoleUpgrade(consoleSessions, request, socket);
   if (!pathname) return;
+  if (!readOnlyMode.admitUpgrade(pathname, socket)) return;
   if (pathname === '/ws/logs') {
     wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request));
   } else if (pathname === '/ws/exec') {
@@ -210,6 +212,10 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 app.use(express.json({ limit: '10mb' }));
+
+// Global read-only mode (lib/readOnlyMode.js): refuses changes to clouds and clusters in the
+// backend, whatever the UI shows. After the body parser: a query is allowed only when it reads.
+app.use('/api', readOnlyMode.middleware);
 
 // What KUA spends on AWS: priced SDK calls go to a local ledger (lib/usage),
 // attributed to the profile and feature of the request that triggered them.
@@ -1033,6 +1039,13 @@ function metricHistoryRetentionDays() {
 }
 
 app.get('/api/system/cache-settings', (_req, res) => res.json(cacheSettingsResponse()));
+
+// Read-only mode: { enabled, forced }. KUA_READ_ONLY=1 forces it on (409 on change).
+app.get('/api/system/read-only', (_req, res) => res.json(readOnlyMode.state()));
+app.put('/api/system/read-only', (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be true or false' });
+  try { res.json(readOnlyMode.setEnabled(req.body.enabled)); } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
 
 app.put('/api/system/cache-settings', (req, res) => {
   const listSec = Number(req.body?.kubeListCacheSec);
