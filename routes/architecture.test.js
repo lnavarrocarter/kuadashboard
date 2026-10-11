@@ -368,7 +368,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     const reloaded = await subject.request(`/projects/${projectId}/graph`);
     assert.deepEqual(reloaded.body.document.view, {
       layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
-      showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
+      showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false, savedPaths: [],
       providerFilter: 'all', systemDomainFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       relationTypeFilter: 'all', relationStatusFilter: 'all',
     });
@@ -790,5 +790,33 @@ test('API checks the AWS resources of the map with the connection bound to their
   } finally {
     await subject.close();
     apmDatabase.close();
+  }
+});
+
+test('saved path filters need Pro or Team; isolating a path and removing saved ones never do', async () => {
+  const saved = { id: 'p1', name: 'Orders chain', rootId: 'node:a', direction: 'downstream', depth: 2 };
+  const previous = { plan: process.env.KUA_PLAN, packaged: process.env.KUA_PACKAGED };
+  delete process.env.KUA_PACKAGED;
+  const attempt = async plan => {
+    process.env.KUA_PLAN = plan;
+    const subject = await fixture();
+    try {
+      const created = await subject.request('/projects', { method: 'POST', body: { name: `paths-${plan}` } });
+      const projectId = created.body.id;
+      await subject.request(`/projects/${projectId}/graph`, { method: 'PUT', body: { expectedRevision: 0, document: { projectId } } });
+      return await subject.request(`/projects/${projectId}/operations`, { method: 'POST', body: { expectedRevision: 1, operation: { type: 'view.set', value: { savedPaths: [saved, { ...saved, depth: 9 }, { id: '', name: 'x', rootId: 'y' }] } } } });
+    } finally { await subject.close(); }
+  };
+  try {
+    const blocked = await attempt('free');
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.body.code, 'PLAN_REQUIRED');
+    assert.equal(blocked.body.feature, 'savedPathFilters');
+    const ok = await attempt('pro');
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.document.view.savedPaths, [saved], 'duplicated and empty entries are dropped');
+  } finally {
+    if (previous.plan === undefined) delete process.env.KUA_PLAN; else process.env.KUA_PLAN = previous.plan;
+    if (previous.packaged !== undefined) process.env.KUA_PACKAGED = previous.packaged;
   }
 });

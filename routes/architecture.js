@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { requireFeature } = require('../lib/plans');
 const { ArchitectureAwsDiscoveryService } = require('../lib/architecture/awsDiscoveryService');
 const { ArchitectureGraphService, discoveryIdentityKeys } = require('../lib/architecture/graphService');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
@@ -67,7 +68,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
   function handleError(res, error) {
     const status = error.statusCode || error.$metadata?.httpStatusCode ||
       (/UNIQUE constraint failed/.test(error.message) ? 409 : 500);
-    res.status(status).json({ error: error.message || 'Internal server error' });
+    res.status(status).json({ error: error.message || 'Internal server error', ...(error.code === 'PLAN_REQUIRED' ? { code: error.code, required: error.required, feature: error.feature } : {}) });
   }
 
   function log(action, resource, context, details) {
@@ -371,6 +372,11 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     const project = scopedProject(req, res);
     if (!project) return;
     try {
+      const savedPaths = req.body?.operation?.type === 'view.set' ? req.body.operation.value?.savedPaths : null;
+      // Saving path filters in the map is a paid feature; removing them is always allowed.
+      if (Array.isArray(savedPaths) && savedPaths.length > (database.getGraph(project.id)?.document?.view?.savedPaths?.length || 0)) {
+        try { requireFeature('savedPathFilters', 'Saving path filters on the canvas is part of the Pro and Team plans; isolating a path works on every plan'); } catch (error) { throw Object.assign(error, { feature: 'savedPathFilters' }); }
+      }
       let graph = service.applyOperation(project.id, req.body?.operation, {
         expectedRevision: req.body?.expectedRevision,
         automaticEdgeThreshold: project.automaticEdgeThreshold,

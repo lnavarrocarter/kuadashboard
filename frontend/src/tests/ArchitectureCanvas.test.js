@@ -58,6 +58,40 @@ describe('ArchitectureCanvas', () => {
     expect(wrapper.get('.ids').text().split(',').length).toBe(5)
   })
 
+  it('saves an isolated path in the map on a paid plan and applies it later', async () => {
+    const node = id => ({ id, name: id, resourceType: 'service', manual: true })
+    const pathGraph = { ...graph, document: { ...graph.document, nodes: [node('manual:node:api'), node('a'), node('x')], edges: [{ id: 'e1', sourceNodeId: 'manual:node:api', targetNodeId: 'a', status: 'confirmed' }], view: { savedPaths: [{ id: 'p1', name: 'Chain', rootId: 'manual:node:api', direction: 'downstream', depth: 0 }] } } }
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ plan: 'pro', features: { savedPathFilters: true }, limits: {} }), text: () => Promise.resolve('') }))
+    const { usePlan } = await import('../composables/usePlan')
+    await usePlan().reload()
+    const spy = { ...stubs, VueFlow: { ...stubs.VueFlow, props: ['nodes', 'edges'], setup(props) { return { props } }, template: `<div><button class="select-node" @click="$emit('node-click', { node: { id: 'manual:node:api' } })">Select</button><i class="ids">{{ props.nodes.filter(n => n.type !== 'resource-section').map(n => n.id).join(',') }}</i></div>` } }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: pathGraph }, global: { stubs: spy } })
+    await wrapper.get('[data-test="path-saved-select"]').setValue('p1')
+    expect(wrapper.get('.ids').text().split(',').sort()).toEqual(['a', 'manual:node:api'])
+    await wrapper.get('[data-test="path-delete"]').trigger('click')
+    expect(wrapper.emitted('operation').at(-1)[0]).toEqual({ type: 'view.set', value: { savedPaths: [] } })
+
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('[data-test="path-isolate"]').trigger('click')
+    await wrapper.get('[data-test="path-name"]').setValue('Mine')
+    await wrapper.get('[data-test="path-save"]').trigger('click')
+    const saved = wrapper.emitted('operation').at(-1)[0].value.savedPaths
+    expect(saved.map(path => path.name)).toEqual(['Chain', 'Mine'])
+    expect(saved[1]).toMatchObject({ rootId: 'manual:node:api', direction: 'both', depth: 0 })
+  })
+
+  it('does not offer to save a path on the Free plan', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ plan: 'free', features: { savedPathFilters: false }, limits: {} }), text: () => Promise.resolve('') }))
+    const { usePlan } = await import('../composables/usePlan')
+    await usePlan().reload()
+    const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('[data-test="path-isolate"]').trigger('click')
+    expect(wrapper.find('[data-test="path-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="plan-note"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="path-banner"]').exists()).toBe(true)
+  })
+
   it('shows the GitHub deploy that probably replaced a missing resource in the node inspector (#238)', async () => {
     const causes = { 'manual:node:api': { name: 'Orders API', goneSince: '2026-10-08T08:20:00.000Z', cause: { confidence: 'probable', minutesBefore: 15, event: { number: 7, name: 'Deploy', repository: 'acme/api', sha: 'a'.repeat(40), actor: 'ana', at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7', commit: { message: 'Release 3.9.2' } } } } }
     const wrapper = mount(ArchitectureCanvas, { props: { graph, causes }, global: { stubs } })

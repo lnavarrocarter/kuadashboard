@@ -70,6 +70,10 @@
             <option value="">{{ t('archCanvas.allNamespaces') }}</option>
             <option v-for="namespace in availableNamespaces" :key="namespace" :value="namespace">{{ namespace }}</option>
           </select>
+          <select v-if="savedPaths.length" class="ctrl-select" data-test="path-saved-select" :title="t('archCanvas.path.saved')" :value="pathIsolation?.savedId || ''" @change="applySavedPath($event.target.value)">
+            <option value="">{{ t('archCanvas.path.savedNone') }}</option>
+            <option v-for="path in savedPaths" :key="path.id" :value="path.id">{{ path.name }}</option>
+          </select>
           <select v-model="relationTypeFilter" class="ctrl-select" :title="t('archCanvas.filterRelationType')" @change="persistView">
             <option value="all">{{ t('archCanvas.allRelationTypes') }}</option>
             <option v-for="type in availableRelationTypes" :key="type" :value="type">{{ relationshipLabel(type) }}</option>
@@ -122,6 +126,14 @@
         </button>
         <span v-if="pathIsolation" class="trace-overlay-status" data-test="path-banner">
           <i data-lucide="route"></i> {{ t('archCanvas.path.active', { name: nodeName(pathIsolation.rootId), n: pathNodeIds.size }) }}
+          <template v-if="!pathIsolation.savedId">
+            <template v-if="canSavePaths">
+              <input v-model.trim="pathName" class="ctrl-input path-name" maxlength="80" data-test="path-name" :placeholder="t('archCanvas.path.namePlaceholder')" @keydown.enter="saveCurrentPath" />
+              <button class="btn sm" type="button" data-test="path-save" :disabled="!pathName || saving" @click="saveCurrentPath"><i data-lucide="save"></i> {{ t('archCanvas.path.save') }}</button>
+            </template>
+            <PlanNote v-else feature="savedPathFilters" :text="t('archCanvas.path.plan')" />
+          </template>
+          <button v-else class="btn sm" type="button" data-test="path-delete" :disabled="saving" @click="deleteSavedPath"><i data-lucide="trash-2"></i> {{ t('archCanvas.path.delete') }}</button>
           <button class="btn sm" type="button" data-test="path-clear" @click="clearPath">{{ t('archCanvas.clear') }}</button>
         </span>
         <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
@@ -337,6 +349,8 @@ import { toPng } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { useToast } from '../../composables/useToast'
 import { useI18n } from '../../composables/useI18n'
+import { usePlan } from '../../composables/usePlan'
+import PlanNote from '../PlanNote.vue'
 import { providerLaneLayout, providerResourceLayout, requestFlowLayout, resourceTypeLayout, SYSTEM_DOMAIN_ORDER, systemDomainForNode, systemDomainLayout } from '../../lib/architectureLayout'
 import { architectureResourcePresentation } from '../../lib/architectureResourcePresentation'
 import '@vue-flow/core/dist/style.css'
@@ -529,6 +543,35 @@ function isolatePath() {
   pathIsolation.value = { rootId: selectedNode.value.id, direction: pathDraft.direction, depth: pathDraft.depth }
 }
 function clearPath() { pathIsolation.value = null }
+
+// Saved path filters live in the map (view.savedPaths) and are a paid feature; isolating stays local.
+const { plan } = usePlan()
+const canSavePaths = computed(() => plan.value?.features?.savedPathFilters === true)
+const savedPaths = computed(() => props.graph?.document?.view?.savedPaths || [])
+const pathName = ref('')
+function applySavedPath(id) {
+  const saved = savedPaths.value.find(path => path.id === id)
+  pathIsolation.value = saved && (props.graph?.document?.nodes || []).some(node => node.id === saved.rootId)
+    ? { rootId: saved.rootId, direction: saved.direction, depth: saved.depth, savedId: saved.id }
+    : null
+}
+function emitSavedPaths(paths, reason) {
+  emit('operation', { type: 'view.set', value: { savedPaths: paths } }, reason)
+}
+function saveCurrentPath() {
+  if (!pathIsolation.value || !pathName.value || props.saving) return
+  const { rootId, direction, depth } = pathIsolation.value
+  const id = manualId('path')
+  emitSavedPaths([...savedPaths.value, { id, name: pathName.value, rootId, direction, depth }], t('archCanvas.path.savedOp', { name: pathName.value }))
+  pathIsolation.value = { ...pathIsolation.value, savedId: id }
+  pathName.value = ''
+}
+function deleteSavedPath() {
+  const id = pathIsolation.value?.savedId
+  if (!id || props.saving) return
+  emitSavedPaths(savedPaths.value.filter(path => path.id !== id), t('archCanvas.path.deletedOp'))
+  pathIsolation.value = null
+}
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
@@ -1288,6 +1331,7 @@ onMounted(refreshIcons)
 .node-cause-badge > svg { width: 11px; height: 11px; }
 .component-path { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
 .component-path strong { display: flex; align-items: center; gap: 6px; }
+.path-name { width: 150px; }
 .component-path-options { display: flex; gap: 6px; }
 .component-path-options .ctrl-select { flex: 1; min-width: 0; }
 .component-cause { display: grid; gap: 3px; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 13px; }
