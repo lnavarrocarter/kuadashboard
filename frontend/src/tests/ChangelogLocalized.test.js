@@ -17,8 +17,7 @@ describe('bilingual changelog', () => {
     expect(localized({ en: 'Hello', es: 'Hola' }, 'es')).toBe('Hola')
     expect(localized({ en: 'Hello' }, 'es')).toBe('Hello')
     expect(localized('Texto antiguo', 'en')).toBe('Texto antiguo')
-    expect(CHANGELOG[0].version).toBe('Unreleased')
-    expect(CHANGELOG[1].version).toBe(CHANGELOG_VERSION)
+    expect(CHANGELOG[0].version).toBe(CHANGELOG_VERSION)
     expect(CHANGELOG.every(release => release.items.every(item => item.text.en && item.text.es))).toBe(true)
   })
 
@@ -33,7 +32,7 @@ describe('bilingual changelog', () => {
     const wrapper = mount(HelpModal, { props: { show: true }, global: { stubs: { BaseModal: BaseModalStub } } })
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
     const releases = wrapper.findAll('.release-block')
-    expect(releases[0].text()).toContain('Unreleased')
+    expect(releases[0].text()).toContain('2.0.0-rc.1')
     const currentRelease = releases[1]
     expect(currentRelease.text()).toContain('September 2026')
     expect(currentRelease.text()).toContain('AWS Overview: active account')
