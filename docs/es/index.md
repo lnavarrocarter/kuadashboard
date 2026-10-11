@@ -67,18 +67,6 @@ KUA reúne tus **clústeres de Kubernetes**, tus cuentas de **AWS** y **GCP** y 
 - **GCP:** Cloud Run, GKE, Cloud SQL, Cloud Storage.
 - **Local y privado:** las credenciales quedan cifradas en tu equipo; la app es open source.
 
-## Planes: gratis para empezar, Pro y Team cuando necesitas más
-
-- **Free (USD 0):** todas las funciones locales, hasta 3 KUA Applications, caché de logs de 256 MB y refresco manual.
-- **Pro (USD 9 al mes o USD 90 al año):** Advisor, agentes de IA por MCP, tareas programadas, KUA Applications ilimitadas, caché de logs de 2 GB y refresco automático cada 15 minutos o más.
-- **Team (USD 29 al mes o USD 290 al año):** todo lo de Pro, refresco cada 1 minuto, caché de logs de 20 GB y hasta 10 miembros.
-
-Los límites de Free aplican desde 2026-11-10.
-
-[Comparar planes](/es/pricing) · [Descargar KUA](/es/download)
-
-[Descargar KUA](/es/download) · [Primeros pasos](/es/guide/getting-started) · [Todas las funcionalidades](/es/features/)
-
 <script setup>
 import { withBase } from 'vitepress'
 </script>
@@ -125,6 +113,18 @@ import { withBase } from 'vitepress'
 </div>
 
 Cada versión se compila en GitHub Actions e incluye un archivo `SHA256SUMS.txt`. [Ver todas las versiones y checksums](/es/download).
+
+## Planes: gratis para empezar, Pro y Team cuando necesitas más
+
+- **Free (USD 0):** todas las funciones locales, hasta 3 KUA Applications, caché de logs de 256 MB y refresco manual.
+- **Pro (USD 9 al mes o USD 90 al año):** Advisor, agentes de IA por MCP, tareas programadas, KUA Applications ilimitadas, caché de logs de 2 GB y refresco automático cada 15 minutos o más.
+- **Team (USD 29 al mes o USD 290 al año):** todo lo de Pro, refresco cada 1 minuto, caché de logs de 20 GB y hasta 10 miembros.
+
+Los límites de Free aplican desde 2026-11-10.
+
+[Comparar planes](/es/pricing) · [Descargar KUA](/es/download)
+
+[Descargar KUA](/es/download) · [Primeros pasos](/es/guide/getting-started) · [Todas las funcionalidades](/es/features/)
 
 ## ¿Te gusta KUA? Dale una estrella
 
