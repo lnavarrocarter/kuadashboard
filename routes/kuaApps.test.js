@@ -481,9 +481,9 @@ test('GitHub CI/CD plugin (#238): sync is an option of the application and uses 
     const base = `/applications/${application.id}/github`;
     assert.deepEqual((await subject.request('/github/connection')).body, { available: true, authenticated: true, login: 'octocat', readOnly: true });
     assert.deepEqual((await subject.request('/github/repositories')).body, { repositories: ['acme/api'] });
-    assert.deepEqual((await subject.request(base)).body, { enabled: false, repositories: [] });
+    assert.deepEqual((await subject.request(base)).body, { enabled: false, repositories: [], discovered: [] });
     assert.equal((await subject.request(base, { method: 'PUT', body: { repositories: ['not a repo'] } })).status, 400);
-    assert.deepEqual((await subject.request(base, { method: 'PUT', body: { enabled: true, repositories: ['https://github.com/acme/api'] } })).body, { enabled: true, repositories: ['acme/api'] });
+    assert.deepEqual((await subject.request(base, { method: 'PUT', body: { enabled: true, repositories: ['https://github.com/acme/api'] } })).body, { enabled: true, repositories: ['acme/api'], discovered: [] });
     const activity = await subject.request(`${base}/activity`);
     assert.equal(activity.status, 200);
     assert.equal(activity.body.events[0].number, 5);

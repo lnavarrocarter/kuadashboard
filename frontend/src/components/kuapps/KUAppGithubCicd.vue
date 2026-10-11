@@ -18,8 +18,18 @@
       </div>
 
       <div v-if="enabled" class="kuapp-github-section">
-        <div class="kuapp-github-subhead"><strong>{{ t('kuapps.github.reposLabel') }}</strong><span class="kuapp-github-chip">{{ selected.length }}</span></div>
-        <p v-if="!selected.length" class="kuapp-github-pending">{{ t('kuapps.github.noneSelected') }}</p>
+        <div class="kuapp-github-subhead"><strong>{{ t('kuapps.github.reposLabel') }}</strong><span class="kuapp-github-chip">{{ selected.length + discovered.length }}</span></div>
+        <p v-if="!selected.length && !discovered.length" class="kuapp-github-pending">{{ t('kuapps.github.noneSelected') }}</p>
+        <div v-if="discovered.length" class="kuapp-github-group" data-test="github-discovered">
+          <span class="kuapp-github-owner">{{ t('kuapps.github.discovered') }}</span>
+          <ul class="kuapp-github-list">
+            <li v-for="item in discovered" :key="item.repository" class="on" :data-test="`github-discovered-${item.repository}`">
+              <span class="kuapp-github-repo">{{ item.repository }}</span>
+              <span class="kuapp-github-chip">{{ t(`kuapps.github.source.${item.source}`) }}</span>
+            </li>
+          </ul>
+          <small class="kuapp-github-pending">{{ t('kuapps.github.discoveredHint') }}</small>
+        </div>
         <div v-for="group in selectedGroups" :key="group.owner" class="kuapp-github-group" data-test="github-selected">
           <span v-if="selectedGroups.length > 1" class="kuapp-github-owner">{{ group.owner }}</span>
           <ul class="kuapp-github-list">
@@ -60,7 +70,7 @@
         </div>
       </div>
 
-      <div v-if="enabled && selected.length && activity" class="kuapp-github-section">
+      <div v-if="enabled && (selected.length || discovered.length) && activity" class="kuapp-github-section">
         <div class="kuapp-github-subhead"><strong>{{ t('kuapps.github.recent') }}</strong></div>
         <p v-for="failure in activity.errors" :key="failure.repository" class="kuapp-github-error">{{ t('kuapps.github.repoError', failure) }}</p>
         <p v-if="activity.metrics" class="kuapp-github-metrics" data-test="github-metrics">{{ metricsText }}</p>
@@ -97,6 +107,7 @@ const { t } = useI18n()
 const connection = ref(null)
 const enabled = ref(false)
 const selected = ref([])
+const discovered = ref([])
 const owners = ref([])
 const owner = ref('')
 const ownerRepos = ref([])
@@ -138,8 +149,9 @@ async function load(refresh = false) {
     const current = await api('GET', base())
     enabled.value = current.enabled
     selected.value = current.repositories
+    discovered.value = current.discovered || []
     if (connection.value.authenticated) {
-      activity.value = enabled.value && selected.value.length ? await api('GET', `${base()}/activity${refresh ? '?refresh=true' : ''}`) : null
+      activity.value = enabled.value && (selected.value.length || discovered.value.length) ? await api('GET', `${base()}/activity${refresh ? '?refresh=true' : ''}`) : null
     }
   } catch (err) {
     error.value = err.message
@@ -156,7 +168,8 @@ async function save() {
     const result = await api('PUT', base(), { enabled: enabled.value, repositories: selected.value })
     enabled.value = result.enabled
     selected.value = result.repositories
-    activity.value = enabled.value && selected.value.length ? await api('GET', `${base()}/activity`) : null
+    discovered.value = result.discovered || []
+    activity.value = enabled.value && (selected.value.length || discovered.value.length) ? await api('GET', `${base()}/activity`) : null
     emit('changed')
   } catch (err) {
     error.value = err.message
@@ -258,6 +271,7 @@ watch(() => props.applicationId, () => { browsing.value = false; ownerRepos.valu
 .kuapp-github-list li.on .kuapp-github-check { border-color: var(--accent); background: var(--accent); color: #fff; }
 .kuapp-github-check svg { width: 11px; height: 11px; }
 .kuapp-github-repo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kuapp-github-list li > .kuapp-github-chip { margin-right: 8px; }
 .kuapp-github-remove { border: 0; background: none; color: var(--text-dim); padding: 6px 8px; cursor: pointer; }
 .kuapp-github-remove:hover { color: var(--red); }
 .kuapp-github-search { position: relative; display: grid; gap: 4px; }

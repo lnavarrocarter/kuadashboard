@@ -73,4 +73,18 @@ describe('KUApp GitHub sync option', () => {
     expect(wrapper.get('[data-test="github-unavailable"]').text()).toContain('gh auth login')
     expect(wrapper.find('[data-test="github-enabled"]').exists()).toBe(false)
   })
+
+  it('shows the repositories declared by the workloads and keeps them apart from the picked ones (#238)', async () => {
+    respond(url => {
+      if (url.includes('/github/connection')) return { body: { available: true, authenticated: true, login: 'octocat' } }
+      if (url.endsWith('/github/activity')) return { body: { errors: [], metrics: null, events: [] } }
+      return { body: { enabled: true, repositories: ['acme/web'], discovered: [{ repository: 'acme/api', source: 'label', resources: 2 }] } }
+    })
+    const wrapper = mount(KUAppGithubCicd, { props: { applicationId: 'app-1' } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="github-discovered-acme/api"]').text()).toContain('acme/api')
+    expect(wrapper.get('[data-test="github-discovered-acme/api"]').text()).toContain('label')
+    expect(wrapper.find('[data-test="github-remove-acme/api"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="github-remove-acme/web"]').exists()).toBe(true)
+  })
 })
