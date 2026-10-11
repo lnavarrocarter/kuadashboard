@@ -6,21 +6,21 @@ description: Dashboard open source para gestionar Kubernetes, AWS, GCP, Vercel, 
 
 hero:
   name: KUA
-  text: El dashboard de escritorio para Kubernetes y multi-cloud
-  tagline: "Know Unified Administration: tus clústeres de Kubernetes, AWS, GCP y Vercel en una sola app open source para Windows, macOS y Linux."
+  text: Kubernetes y varias nubes en una sola app
+  tagline: "Sin saltar entre consolas y terminales. Tus clústeres de Kubernetes, AWS, GCP y Vercel en una app de escritorio gratuita y open source para Windows, macOS y Linux."
+  image:
+    src: /screenshots/dashboard-main.png
+    alt: Dashboard de KUA con la vista general de un clúster de Kubernetes
   actions:
     - theme: brand
+      text: Descargar
+      link: /es/download
+    - theme: alt
       text: Empezar
       link: /es/guide/getting-started
     - theme: alt
-      text: Descargar App
-      link: /es/download
-    - theme: alt
-      text: GitHub
+      text: ⭐ Dar una estrella en GitHub
       link: https://github.com/lnavarrocarter/kuadashboard
-    - theme: alt
-      text: 💖 Patrocinar
-      link: /es/sponsor
 
 features:
   - icon: ☁️
@@ -79,6 +79,62 @@ Los límites de Free aplican desde 2026-11-10.
 
 [Descargar KUA](/es/download) · [Primeros pasos](/es/guide/getting-started) · [Todas las funcionalidades](/es/features/)
 
+<script setup>
+import { withBase } from 'vitepress'
+</script>
+
+## Míralo en acción
+
+<div class="home-shots">
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-pods.png')" alt="Pods de un clúster de Kubernetes con estado, reinicios y antigüedad" loading="lazy" />
+    <figcaption><strong>Pods, logs y shell.</strong> Inspecciona workloads, lee logs en vivo y abre una shell en un pod.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-deployments.png')" alt="Lista de deployments con réplicas e imágenes" loading="lazy" />
+    <figcaption><strong>Deployments.</strong> Escala, reinicia y edita workloads sin escribir comandos <code>kubectl</code>.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-services.png')" alt="Lista de services con tipo, puertos e IPs del clúster" loading="lazy" />
+    <figcaption><strong>Services y port forwarding.</strong> Abre un túnel a un Service o Pod con un clic.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-nodes.png')" alt="Vista de nodos con capacidad y condiciones" loading="lazy" />
+    <figcaption><strong>Nodos y métricas.</strong> Revisa capacidad, condiciones y uso en tus clústeres.</figcaption>
+  </figure>
+</div>
+
+## Descarga KUA para tu sistema
+
+<div class="home-download">
+  <a class="home-os" :href="withBase('/es/download')">
+    <span class="home-os-icon" aria-hidden="true">🪟</span>
+    <strong>Windows</strong>
+    <span>Windows 10 o superior · x64</span>
+  </a>
+  <a class="home-os" :href="withBase('/es/download')">
+    <span class="home-os-icon" aria-hidden="true">🍎</span>
+    <strong>macOS</strong>
+    <span>macOS 12 o superior · Intel y Apple Silicon</span>
+  </a>
+  <a class="home-os" :href="withBase('/es/download')">
+    <span class="home-os-icon" aria-hidden="true">🐧</span>
+    <strong>Linux</strong>
+    <span>Ubuntu 20.04+ / Debian 11+ · x64 · AppImage y .deb</span>
+  </a>
+</div>
+
+Cada versión se compila en GitHub Actions e incluye un archivo `SHA256SUMS.txt`. [Ver todas las versiones y checksums](/es/download).
+
+## ¿Te gusta KUA? Dale una estrella
+
+KUA es gratuito y se construye en abierto. Una estrella en GitHub es la forma más simple de ayudar a que otros ingenieros lo encuentren, y [patrocinar el proyecto](/es/sponsor) lo mantiene avanzando.
+
+<div class="home-social">
+  <a href="https://github.com/lnavarrocarter/kuadashboard"><img src="https://img.shields.io/github/stars/lnavarrocarter/kuadashboard?style=social" alt="Estrellas en GitHub" loading="lazy" /></a>
+  <a href="https://github.com/lnavarrocarter/kuadashboard/releases"><img src="https://img.shields.io/github/v/release/lnavarrocarter/kuadashboard" alt="Última versión en GitHub" loading="lazy" /></a>
+  <a href="https://github.com/lnavarrocarter/kuadashboard"><img src="https://img.shields.io/github/license/lnavarrocarter/kuadashboard" alt="Licencia MIT" loading="lazy" /></a>
+</div>
 ## Preguntas frecuentes
 
 <div class="home-faq">
