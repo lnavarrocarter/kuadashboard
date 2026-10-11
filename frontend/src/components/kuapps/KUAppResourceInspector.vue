@@ -67,7 +67,8 @@
 
 <script setup>
 import { resourceDestinations } from '../../lib/resourceDestinations'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { createIcons, icons } from 'lucide'
 import { useI18n } from '../../composables/useI18n'
 import KUAppResourceSignals from './KUAppResourceSignals.vue'
 
@@ -112,6 +113,10 @@ function onTabKey(event) {
 }
 
 watch(() => props.initialTab, value => { if (TABS.includes(value)) tab.value = value })
+// Lucide replaces <i data-lucide> once: a new resource or tab renders new placeholders to fill.
+const refreshIcons = () => nextTick(() => createIcons({ icons }))
+onMounted(refreshIcons)
+watch(() => [props.resource?.id, tab.value, destinations.value.length, state.value], refreshIcons)
 </script>
 
 <style scoped>

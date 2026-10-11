@@ -1174,6 +1174,11 @@ const filteredRegistryResources = computed(() => {
     (!resourceFilter.state || signalStateOf(resource) === resourceFilter.state))
 })
 
+// Lucide fills <i data-lucide> placeholders once: a tab, a filtered list or a selected resource
+// renders new ones (row marks, open buttons, inspector), so they are filled again.
+watch(() => [workspaceView.value, registryLoading.value, selectedResourceId.value, filteredRegistryResources.value.map(resource => resource.id).join('|')],
+  () => nextTick(() => createIcons({ icons })))
+
 // The AWS view opens with the profile bound to the resource's account in this application, not
 // with whatever profile is selected elsewhere in KUA (#239).
 function awsProfileFor(resource) {
