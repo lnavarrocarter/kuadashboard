@@ -475,10 +475,19 @@ test('GitHub CI/CD plugin (#238): sync is an option of the application and uses 
     workflowRuns: async () => ({ workflow_runs: [{ id: 1, run_number: 5, name: 'Deploy', status: 'completed', conclusion: 'success', head_sha: 'c'.repeat(40), head_branch: 'main', triggering_actor: { login: 'ana' }, updated_at: new Date().toISOString(), html_url: 'https://github.com/acme/api/actions/runs/1' }] }),
     deployments: async () => [],
   };
-  const subject = await fixture({ githubCicd: createGithubCicd({ client }) });
+  const github = createGithubCicd({ client });
+  const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
+  const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
+  const plugins = createPluginRegistry({ plugins: [githubCicdPlugin(github)] });
+  const subject = await fixture({ githubCicd: github, plugins });
   try {
     const application = subject.apmDatabase.createApplication({ name: 'Desarrollo' });
     const base = `/applications/${application.id}/github`;
+    const off = await subject.request('/github/connection');
+    assert.equal(off.status, 404);
+    assert.equal(off.body.code, 'PLUGIN_DISABLED', 'a plugin that is off mounts no routes');
+    assert.equal((await subject.request(base)).status, 404);
+    await plugins.setActive('github.cicd', true);
     assert.deepEqual((await subject.request('/github/connection')).body, { available: true, authenticated: true, login: 'octocat', readOnly: true });
     assert.deepEqual((await subject.request('/github/repositories')).body, { repositories: ['acme/api'] });
     assert.deepEqual((await subject.request(base)).body, { enabled: false, repositories: [], discovered: [] });

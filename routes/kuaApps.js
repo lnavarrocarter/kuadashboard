@@ -20,8 +20,10 @@ const { createChangePlanService } = require('../lib/kua/changePlans');
 const { createAgentAccess } = require('../lib/kua/agentAccess');
 const { loadApplicationSignals } = require('../lib/kua/relationshipSignals');
 const { getAccount } = require('../lib/account/account');
+const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
+const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -33,7 +35,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
   const applicationRegistry = new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database });
   const github = githubCicd || createGithubCicd({ apmDatabase });
-  const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database, adapters: [github.adapter] });
+  // First-party plugins (#193): GitHub CI/CD answers only while it is turned on.
+  const pluginRegistry = plugins || createPluginRegistry({ plugins: [githubCicdPlugin(github)] });
+  const githubOn = () => pluginRegistry.isActive('github.cicd');
+  const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database, dynamicAdapters: pluginRegistry.adapters });
   const changePlans = createChangePlanService({
     apmDatabase, architectureDatabase: database, applications, registry: applicationRegistry, access: agentAccess,
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'mcp', details }),
@@ -199,11 +204,12 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     const application = applicationOr404(req.params.applicationId);
     const result = await observer.gone(application);
     // #238: the deploy that probably made each resource disappear, when GitHub CI/CD is connected.
-    return { ...result, resources: await github.explainMissing(application.id, result.resources) };
+    return { ...result, resources: githubOn() ? await github.explainMissing(application.id, result.resources) : result.resources };
   }));
 
   // Plugin GitHub CI/CD (#238), read-only, through the GitHub CLI logged in on this computer: KUA
   // stores no token. Syncing with GitHub is an option of each application (Settings → Sync).
+  router.use(['/github', '/applications/:applicationId/github'], pluginRegistry.guard('github.cicd'));
   router.get('/github/connection', (req, res) => sendAsync(res, 200, () => github.connection({ refresh: req.query.refresh === 'true' })));
   router.get('/github/owners', (_req, res) => sendAsync(res, 200, async () => ({ owners: await github.owners() })));
   router.get('/github/repositories', (req, res) => sendAsync(res, 200, async () => ({
