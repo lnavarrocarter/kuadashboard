@@ -5990,6 +5990,8 @@ export default {
   'kuapps.missing.causeDetail': "{commit}{author} · {when}",
   'kuapps.github.explain': "Reads the Actions runs and deployments of the repositories you pick, using the GitHub CLI already logged in on this computer, to explain what changed and when. No token is stored.",
   'kuapps.github.enable': "Sync this application with GitHub",
+  'kuapps.github.enableHint': "Turns on the explanation of what changed and when in Review. Nothing is read while it is off.",
+  'kuapps.github.recent': "Recent activity",
   'kuapps.github.reposLabel': "Repositories of this application",
   'kuapps.github.manualPlaceholder': "owner/name",
   'kuapps.github.readOnly': "Read-only: nothing is written to GitHub and no workflow runs.",

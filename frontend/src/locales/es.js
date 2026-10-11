@@ -5989,6 +5989,8 @@ export default {
   'kuapps.missing.causeDetail': "{commit}{author} · {when}",
   'kuapps.github.explain': "Lee las ejecuciones de Actions y los deployments de los repositorios que elijas, con el GitHub CLI que ya tienes autenticado en este computador, para explicar qué cambió y cuándo. No se guarda ningún token.",
   'kuapps.github.enable': "Sincronizar esta aplicación con GitHub",
+  'kuapps.github.enableHint': "Activa la explicación de qué cambió y cuándo en Revisión. Mientras esté apagado no se lee nada.",
+  'kuapps.github.recent': "Actividad reciente",
   'kuapps.github.reposLabel': "Repositorios de esta aplicación",
   'kuapps.github.manualPlaceholder': "owner/nombre",
   'kuapps.github.readOnly': "Solo lectura: no se escribe en GitHub ni se ejecuta ningún workflow.",
