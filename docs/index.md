@@ -6,21 +6,21 @@ description: Open source Kubernetes and multi-cloud dashboard for managing AWS, 
 
 hero:
   name: KUA
-  text: The Kubernetes & multi-cloud desktop dashboard
-  tagline: "Know Unified Administration: your Kubernetes clusters, AWS, GCP and Vercel in one open source app for Windows, macOS and Linux."
+  text: Kubernetes and multiple clouds in one app
+  tagline: "No more jumping between consoles and terminals. Your Kubernetes clusters, AWS, GCP and Vercel in one free, open source desktop app for Windows, macOS and Linux."
+  image:
+    src: /screenshots/dashboard-main.png
+    alt: KUA dashboard showing a Kubernetes cluster overview
   actions:
     - theme: brand
-      text: Get Started
-      link: /guide/getting-started
-    - theme: alt
-      text: Download App
+      text: Download
       link: /download
     - theme: alt
-      text: GitHub
-      link: https://github.com/lnavarrocarter/kuadashboard
+      text: Get started
+      link: /guide/getting-started
     - theme: alt
-      text: 💖 Sponsor
-      link: /sponsor
+      text: ⭐ Star on GitHub
+      link: https://github.com/lnavarrocarter/kuadashboard
 
 features:
   - icon: ☁️
@@ -68,6 +68,73 @@ KUA puts your **Kubernetes clusters**, **AWS** and **GCP** accounts and **Vercel
 - **Local and private:** credentials stay encrypted on your computer; the app is open source.
 
 [Download KUA](/download) · [Getting started](/guide/getting-started) · [All features](/features/)
+
+<script setup>
+import { withBase } from 'vitepress'
+</script>
+
+## See it in action
+
+<div class="home-shots">
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-pods.png')" alt="Pods of a Kubernetes cluster with status, restarts and age" loading="lazy" />
+    <figcaption><strong>Pods, logs and shell.</strong> Inspect workloads, read live logs and open a shell in a pod.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-deployments.png')" alt="Deployments list with replicas and images" loading="lazy" />
+    <figcaption><strong>Deployments.</strong> Scale, restart and edit workloads without writing <code>kubectl</code> commands.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-services.png')" alt="Services list with type, ports and cluster IPs" loading="lazy" />
+    <figcaption><strong>Services and port forwarding.</strong> Open a tunnel to a Service or Pod in one click.</figcaption>
+  </figure>
+  <figure>
+    <img :src="withBase('/screenshots/dashboard-nodes.png')" alt="Nodes view with capacity and conditions" loading="lazy" />
+    <figcaption><strong>Nodes and metrics.</strong> Check capacity, conditions and usage across your clusters.</figcaption>
+  </figure>
+</div>
+
+## Download KUA for your system
+
+<div class="home-download">
+  <a class="home-os" :href="withBase('/download')">
+    <span class="home-os-icon" aria-hidden="true">🪟</span>
+    <strong>Windows</strong>
+    <span>Windows 10 or later · x64</span>
+  </a>
+  <a class="home-os" :href="withBase('/download')">
+    <span class="home-os-icon" aria-hidden="true">🍎</span>
+    <strong>macOS</strong>
+    <span>macOS 12 or later · Intel and Apple Silicon</span>
+  </a>
+  <a class="home-os" :href="withBase('/download')">
+    <span class="home-os-icon" aria-hidden="true">🐧</span>
+    <strong>Linux</strong>
+    <span>Ubuntu 20.04+ / Debian 11+ · x64 · AppImage and .deb</span>
+  </a>
+</div>
+
+Every release is built on GitHub Actions and ships with a `SHA256SUMS.txt` file. [See all releases and checksums](/download).
+
+## Plans: free to start, Pro and Team when you need more
+
+- **Free (USD 0):** every local feature, up to 3 KUA Applications, a 256 MB log cache and manual refresh.
+- **Pro (USD 9 per month or USD 90 per year):** Advisor, AI agents through MCP, scheduled tasks, unlimited KUA Applications, a 2 GB log cache and automatic refresh every 15 minutes or more.
+- **Team (USD 29 per month or USD 290 per year):** everything in Pro, refresh every 1 minute, a 20 GB log cache and up to 10 members.
+
+The Free limits apply from 2026-11-10.
+
+[Compare plans](/pricing) · [Download KUA](/download)
+
+## Like KUA? Give it a star
+
+KUA is free and built in the open. A star on GitHub is the easiest way to help other engineers find it, and [sponsoring the project](/sponsor) keeps it moving.
+
+<div class="home-social">
+  <a href="https://github.com/lnavarrocarter/kuadashboard"><img src="https://img.shields.io/github/stars/lnavarrocarter/kuadashboard?style=social" alt="GitHub stars" loading="lazy" /></a>
+  <a href="https://github.com/lnavarrocarter/kuadashboard/releases"><img src="https://img.shields.io/github/v/release/lnavarrocarter/kuadashboard" alt="Latest GitHub release" loading="lazy" /></a>
+  <a href="https://github.com/lnavarrocarter/kuadashboard/"><img src="https://img.shields.io/github/license/lnavarrocarter/kuadashboard" alt="MIT license" loading="lazy" /></a>
+</div>
 
 ## Frequently asked questions
 

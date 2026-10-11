@@ -80,6 +80,7 @@ function homepageSchema(url, language, faq = []) {
 const enNav = [
   { text: 'Product', link: '/' },
   { text: 'Features', link: '/features/' },
+  { text: 'Pricing', link: '/pricing' },
   { text: 'Download', link: '/download' },
   { text: 'Guide', link: '/guide/getting-started' },
   { text: 'Changelog', link: '/changelog' },
@@ -90,6 +91,7 @@ const enNav = [
 const esNav = [
   { text: 'Producto', link: '/es/' },
   { text: 'Funcionalidades', link: '/es/features/' },
+  { text: 'Precios', link: '/es/pricing' },
   { text: 'Descargar', link: '/es/download' },
   { text: 'Guía', link: '/es/guide/getting-started' },
   { text: 'Changelog', link: '/es/changelog' },
@@ -100,12 +102,14 @@ const esNav = [
 const enProduct = { text: 'Product', items: [
   { text: 'Overview', link: '/' },
   { text: 'Features', link: '/features/' },
+  { text: 'Pricing', link: '/pricing' },
   { text: 'Download', link: '/download' },
 ]}
 
 const esProduct = { text: 'Producto', items: [
   { text: 'Resumen', link: '/es/' },
   { text: 'Funcionalidades', link: '/es/features/' },
+  { text: 'Precios', link: '/es/pricing' },
   { text: 'Descargar', link: '/es/download' },
 ]}
 
@@ -188,6 +192,7 @@ const enSidebar = {
   '/guide/': [enProduct, enGuide, enReference],
   '/features/': [enProduct, enFeatures, enReference],
   '/download': [enProduct, enGuide, enReference],
+  '/pricing': [enProduct, enGuide, enReference],
   '/architecture/': [enProduct, enGuide, enArchitecture],
 }
 
@@ -195,6 +200,7 @@ const esSidebar = {
   '/es/guide/': [esProduct, esGuide, esReference],
   '/es/features/': [esProduct, esFeatures, esReference],
   '/es/download': [esProduct, esGuide, esReference],
+  '/es/pricing': [esProduct, esGuide, esReference],
   '/es/architecture/': [esProduct, esGuide, esArchitecture],
 }
 
