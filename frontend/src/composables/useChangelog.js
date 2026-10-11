@@ -11,12 +11,12 @@ export function localized(value, lang = 'en') {
   return value[lang] || value.en || ''
 }
 
-export const CHANGELOG_VERSION = '1.17.0'
+export const CHANGELOG_VERSION = '2.0.0-rc.1'
 
 export const CHANGELOG = [
   {
-    version: 'Unreleased',
-    date: { en: 'In development', es: 'En desarrollo' },
+    version: '2.0.0-rc.1',
+    date: { en: 'October 2026', es: 'Octubre 2026' },
     items: [
       { type: 'better', text: { en: 'Free plan limits apply from 2026-11-10 — until then Free keeps agents through MCP, scheduled background work and unlimited KUA Applications, with a notice in the app; from that date Free is limited to 3 KUA Applications and those two features need Pro or Team. Help & Options → Account lists what changes and when', es: 'Los límites del plan Free aplican desde el 2026-11-10 — hasta entonces Free conserva agentes por MCP, trabajo programado en segundo plano y KUA Applications sin tope, con un aviso en la app; desde esa fecha Free se limita a 3 KUA Applications y esas dos funciones requieren Pro o Team. Ayuda y opciones → Cuenta lista qué cambia y cuándo' } },
       { type: 'new', text: { en: 'KUA account and plans — sign in with Google and subscribe to Pro or Team from Help & Options → Account; the plan is cached for offline use, signing in is optional and Free keeps every local feature that reads and changes clusters and clouds; the Advisor, automatic log refresh, larger log caches and agents are part of Pro and Team', es: 'Cuenta KUA y planes — inicia sesión con Google y suscríbete a Pro o Team desde Ayuda y opciones → Cuenta; el plan queda en caché para usar sin conexión, iniciar sesión es opcional y Free conserva todo lo local que lee y cambia clústeres y nubes; el Advisor, el refresco automático de logs, cachés de logs mayores y los agentes son parte de Pro y Team' } },
