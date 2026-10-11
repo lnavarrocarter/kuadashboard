@@ -75,106 +75,138 @@ function homepageSchema(url, language, faq = []) {
   })
 }
 
+// Order: understand, compare, download, learn. Legal, architecture and sponsor
+// live in the footer; their URLs do not change.
 const enNav = [
-  { text: 'Home', link: '/' },
-  { text: 'Guide', link: '/guide/getting-started' },
+  { text: 'Product', link: '/' },
   { text: 'Features', link: '/features/' },
-  { text: 'Changelog', link: '/changelog' },
-  { text: 'Legal', items: [
-    { text: 'Terms of Service', link: '/terms' },
-    { text: 'Privacy Policy', link: '/privacy_policy' },
-    { text: 'EULA', link: '/EULA' },
-  ]},
   { text: 'Download', link: '/download' },
+  { text: 'Guide', link: '/guide/getting-started' },
+  { text: 'Changelog', link: '/changelog' },
+  { text: 'GitHub ★', link: 'https://github.com/lnavarrocarter/kuadashboard' },
   { text: 'My account', link: 'https://app.kuadashboard.navarrocarter.com/' },
-  { text: '💖 Sponsor', link: '/sponsor' },
-  { text: 'Architecture', link: '/architecture/' },
-  { text: 'GitHub', link: 'https://github.com/lnavarrocarter/kuadashboard' },
 ]
 
 const esNav = [
-  { text: 'Inicio', link: '/es/' },
-  { text: 'Guía', link: '/es/guide/getting-started' },
+  { text: 'Producto', link: '/es/' },
   { text: 'Funcionalidades', link: '/es/features/' },
+  { text: 'Descargar', link: '/es/download' },
+  { text: 'Guía', link: '/es/guide/getting-started' },
   { text: 'Changelog', link: '/es/changelog' },
-  { text: 'Legal', items: [
-    { text: 'Términos de servicio', link: '/es/terms' },
-    { text: 'Política de privacidad', link: '/es/privacy_policy' },
-    { text: 'EULA', link: '/EULA' },
-  ]},
-  { text: 'Descarga', link: '/es/download' },
+  { text: 'GitHub ★', link: 'https://github.com/lnavarrocarter/kuadashboard' },
   { text: 'Mi cuenta', link: 'https://app.kuadashboard.navarrocarter.com/' },
-  { text: '💖 Patrocinar', link: '/es/sponsor' },
-  { text: 'Arquitectura', link: '/es/architecture/' },
-  { text: 'GitHub', link: 'https://github.com/lnavarrocarter/kuadashboard' },
 ]
 
+const enProduct = { text: 'Product', items: [
+  { text: 'Overview', link: '/' },
+  { text: 'Features', link: '/features/' },
+  { text: 'Download', link: '/download' },
+]}
+
+const esProduct = { text: 'Producto', items: [
+  { text: 'Resumen', link: '/es/' },
+  { text: 'Funcionalidades', link: '/es/features/' },
+  { text: 'Descargar', link: '/es/download' },
+]}
+
+const enReference = { text: 'Technical reference', items: [
+  { text: 'Architecture', link: '/architecture/' },
+]}
+
+const esReference = { text: 'Referencia técnica', items: [
+  { text: 'Arquitectura', link: '/es/architecture/' },
+]}
+
+const enGuide = { text: 'Guide', items: [
+  { text: 'Getting Started', link: '/guide/getting-started' },
+  { text: 'Installation', link: '/guide/installation' },
+  { text: 'Credential setup', link: '/guide/credentials' },
+  { text: 'Configuration', link: '/guide/configuration' },
+  { text: 'Electron Desktop App', link: '/guide/electron' },
+  { text: 'Code Signing & Trust', link: '/guide/code-signing' },
+  { text: 'Certification ZoZE/001347/US', link: '/guide/certificate-order-zoze-001347-us' },
+]}
+
+const esGuide = { text: 'Guía', items: [
+  { text: 'Primeros Pasos', link: '/es/guide/getting-started' },
+  { text: 'Instalación', link: '/es/guide/installation' },
+  { text: 'Configurar credenciales', link: '/es/guide/credentials' },
+  { text: 'Configuración', link: '/es/guide/configuration' },
+  { text: 'App Electron', link: '/es/guide/electron' },
+  { text: 'Firma y Confianza', link: '/es/guide/code-signing' },
+  { text: 'Certificacion ZoZE/001347/US', link: '/es/guide/certificate-order-zoze-001347-us' },
+]}
+
+const enFeatures = { text: 'Features', items: [
+  { text: 'Overview', link: '/features/' },
+  { text: 'Kubernetes', link: '/features/kubernetes' },
+  { text: 'AWS Integration', link: '/features/aws' },
+  { text: 'GCP Integration', link: '/features/gcp' },
+  { text: 'Vercel Integration', link: '/features/vercel' },
+  { text: 'Port Forwarding', link: '/features/port-forwarding' },
+  { text: 'Terminal & Shell', link: '/features/terminal' },
+  { text: 'Advisor', link: '/features/advisor' },
+  { text: 'AI Agents', link: '/features/ai-agents' },
+]}
+
+const esFeatures = { text: 'Funcionalidades', items: [
+  { text: 'Resumen', link: '/es/features/' },
+  { text: 'Kubernetes', link: '/es/features/kubernetes' },
+  { text: 'Integración AWS', link: '/es/features/aws' },
+  { text: 'Integración GCP', link: '/es/features/gcp' },
+  { text: 'Integración Vercel', link: '/es/features/vercel' },
+  { text: 'Port Forwarding', link: '/es/features/port-forwarding' },
+  { text: 'Terminal & Shell', link: '/es/features/terminal' },
+  { text: 'Advisor', link: '/es/features/advisor' },
+  { text: 'Agentes IA', link: '/es/features/ai-agents' },
+]}
+
+const enArchitecture = { text: 'Architecture', items: [
+  { text: 'Overview', link: '/architecture/' },
+  { text: 'Control Plane Documentation Boundary', link: '/architecture/control-plane-boundary' },
+  { text: 'KUA Application Contract', link: '/architecture/kuapps-application-contract' },
+  { text: 'Workspace Phase 3', link: '/architecture/workspace-phase-3' },
+  { text: 'Workspace Phase 4', link: '/architecture/workspace-phase-4' },
+  { text: 'Backend API', link: '/architecture/backend' },
+  { text: 'Frontend (Vue 3)', link: '/architecture/frontend' },
+  { text: 'Electron', link: '/architecture/electron' },
+]}
+
+const esArchitecture = { text: 'Arquitectura', items: [
+  { text: 'Resumen', link: '/es/architecture/' },
+  { text: 'Límite documental del Control Plane', link: '/es/architecture/control-plane-boundary' },
+  { text: 'Contrato de KUA Application', link: '/es/architecture/kuapps-application-contract' },
+  { text: 'Workspace Fase 3', link: '/es/architecture/workspace-phase-3' },
+  { text: 'Workspace Fase 4', link: '/es/architecture/workspace-phase-4' },
+  { text: 'Backend API', link: '/es/architecture/backend' },
+  { text: 'Frontend (Vue 3)', link: '/es/architecture/frontend' },
+  { text: 'Electron', link: '/es/architecture/electron' },
+]}
+
+// Product → Guide → Technical reference, with the current section expanded.
 const enSidebar = {
-  '/guide/': [{ text: 'Guide', items: [
-    { text: 'Getting Started', link: '/guide/getting-started' },
-    { text: 'Installation', link: '/guide/installation' },
-    { text: 'Code Signing & Trust', link: '/guide/code-signing' },
-    { text: 'Electron Desktop App', link: '/guide/electron' },
-    { text: 'Configuration', link: '/guide/configuration' },
-    { text: 'Credential setup', link: '/guide/credentials' },
-    { text: 'Certification ZoZE/001347/US', link: '/guide/certificate-order-zoze-001347-us' },
-  ]}],
-  '/features/': [{ text: 'Features', items: [
-    { text: 'Overview', link: '/features/' },
-    { text: 'Kubernetes', link: '/features/kubernetes' },
-    { text: 'AWS Integration', link: '/features/aws' },
-    { text: 'GCP Integration', link: '/features/gcp' },
-    { text: 'Vercel Integration', link: '/features/vercel' },
-    { text: 'Port Forwarding', link: '/features/port-forwarding' },
-    { text: 'Terminal & Shell', link: '/features/terminal' },
-    { text: 'Advisor', link: '/features/advisor' },
-    { text: 'AI Agents', link: '/features/ai-agents' },
-  ]}],
-  '/architecture/': [{ text: 'Architecture', items: [
-    { text: 'Overview', link: '/architecture/' },
-    { text: 'Control Plane Documentation Boundary', link: '/architecture/control-plane-boundary' },
-    { text: 'KUA Application Contract', link: '/architecture/kuapps-application-contract' },
-    { text: 'Workspace Phase 3', link: '/architecture/workspace-phase-3' },
-    { text: 'Workspace Phase 4', link: '/architecture/workspace-phase-4' },
-    { text: 'Backend API', link: '/architecture/backend' },
-    { text: 'Frontend (Vue 3)', link: '/architecture/frontend' },
-    { text: 'Electron', link: '/architecture/electron' },
-  ]}],
+  '/guide/': [enProduct, enGuide, enReference],
+  '/features/': [enProduct, enFeatures, enReference],
+  '/download': [enProduct, enGuide, enReference],
+  '/architecture/': [enProduct, enGuide, enArchitecture],
 }
 
 const esSidebar = {
-  '/es/guide/': [{ text: 'Guía', items: [
-    { text: 'Primeros Pasos', link: '/es/guide/getting-started' },
-    { text: 'Instalación', link: '/es/guide/installation' },
-    { text: 'Firma y Confianza', link: '/es/guide/code-signing' },
-    { text: 'App Electron', link: '/es/guide/electron' },
-    { text: 'Configuración', link: '/es/guide/configuration' },
-    { text: 'Configurar credenciales', link: '/es/guide/credentials' },
-    { text: 'Certificacion ZoZE/001347/US', link: '/es/guide/certificate-order-zoze-001347-us' },
-  ]}],
-  '/es/features/': [{ text: 'Funcionalidades', items: [
-    { text: 'Resumen', link: '/es/features/' },
-    { text: 'Kubernetes', link: '/es/features/kubernetes' },
-    { text: 'Integración AWS', link: '/es/features/aws' },
-    { text: 'Integración GCP', link: '/es/features/gcp' },
-    { text: 'Integración Vercel', link: '/es/features/vercel' },
-    { text: 'Port Forwarding', link: '/es/features/port-forwarding' },
-    { text: 'Terminal & Shell', link: '/es/features/terminal' },
-    { text: 'Advisor', link: '/es/features/advisor' },
-    { text: 'Agentes IA', link: '/es/features/ai-agents' },
-  ]}],
-  '/es/architecture/': [{ text: 'Arquitectura', items: [
-    { text: 'Resumen', link: '/es/architecture/' },
-    { text: 'Límite documental del Control Plane', link: '/es/architecture/control-plane-boundary' },
-    { text: 'Contrato de KUA Application', link: '/es/architecture/kuapps-application-contract' },
-    { text: 'Workspace Fase 3', link: '/es/architecture/workspace-phase-3' },
-    { text: 'Workspace Fase 4', link: '/es/architecture/workspace-phase-4' },
-    { text: 'Backend API', link: '/es/architecture/backend' },
-    { text: 'Frontend (Vue 3)', link: '/es/architecture/frontend' },
-    { text: 'Electron', link: '/es/architecture/electron' },
-  ]}],
+  '/es/guide/': [esProduct, esGuide, esReference],
+  '/es/features/': [esProduct, esFeatures, esReference],
+  '/es/download': [esProduct, esGuide, esReference],
+  '/es/architecture/': [esProduct, esGuide, esArchitecture],
 }
 
+const enFooter = {
+  message: `Released under the MIT License. <a href="${base}terms">Terms</a> · <a href="${base}privacy_policy">Privacy</a> · <a href="${base}EULA">EULA</a> · <a href="${base}architecture/">Architecture</a> · <a href="${base}sponsor">Sponsor</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
+  copyright: 'Copyright © 2024-present KuaDashboard',
+}
+
+const esFooter = {
+  message: `Publicado bajo la licencia MIT. <a href="${base}es/terms">Términos</a> · <a href="${base}es/privacy_policy">Privacidad</a> · <a href="${base}es/EULA">EULA</a> · <a href="${base}es/architecture/">Arquitectura</a> · <a href="${base}es/sponsor">Patrocinar</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
+  copyright: 'Copyright © 2024-present KuaDashboard',
+}
 export default defineConfig({
   title: 'KUA — Kubernetes & Multi-Cloud Dashboard',
   titleTemplate: ':title | KUA',
@@ -265,10 +297,7 @@ export default defineConfig({
       { icon: { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>' }, link: 'https://github.com/sponsors/lnavarrocarter' },
     ],
 
-    footer: {
-      message: 'Released under the MIT License. <a href="/terms">Terms</a> · <a href="/privacy_policy">Privacy</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>',
-      copyright: 'Copyright © 2024-present KuaDashboard',
-    },
+    footer: enFooter,
 
     search: {
       provider: 'local',
