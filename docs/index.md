@@ -69,6 +69,16 @@ KUA puts your **Kubernetes clusters**, **AWS** and **GCP** accounts and **Vercel
 
 [Download KUA](/download) · [Getting started](/guide/getting-started) · [All features](/features/)
 
+## Plans: free to start, Pro and Team when you need more
+
+- **Free (USD 0):** every local feature, up to 3 KUA Applications, a 256 MB log cache and manual refresh.
+- **Pro (USD 9 per month or USD 90 per year):** Advisor, AI agents through MCP, scheduled tasks, unlimited KUA Applications, a 2 GB log cache and automatic refresh every 15 minutes or more.
+- **Team (USD 29 per month or USD 290 per year):** everything in Pro, refresh every 1 minute, a 20 GB log cache and up to 10 members.
+
+The Free limits apply from 2026-11-10.
+
+[Compare plans](/pricing) · [Download KUA](/download)
+
 ## Frequently asked questions
 
 <div class="home-faq">

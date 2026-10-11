@@ -92,7 +92,7 @@ fs.writeFileSync(path.join(publicDir, 'llms.txt'), [
   ...section('Features', page => page.startsWith('features/')),
   ...section('Manual', page => page.startsWith('manual/')),
   ...section('Legal', page => /^(terms|privacy_policy|EULA)\.md$/.test(page)),
-  ...section('Optional', page => /^(changelog|download|sponsor|ROADMAP|KUA_Concept)\.md$/.test(page)),
+  ...section('Optional', page => /^(changelog|download|pricing|sponsor|ROADMAP|KUA_Concept)\.md$/.test(page)),
 ].join('\n'))
 
 console.log(`[seo] Generated sitemap (${pages.length} pages), robots.txt and llms.txt for ${siteUrl}`)
