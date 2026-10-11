@@ -1017,6 +1017,9 @@ export default {
   // ── Audit Log ─────────────────────────────────────────────────────────
   'gps.planNote': 'Scheduled polling is part of the Pro and Team plans. "Run now" works on every plan.',
   'kuapps.schedulePlanNote': 'On the Free plan the 30-minute schedule does not run: collect with "Collect now". Scheduled collection is part of Pro and Team.',
+  'planChange.message': 'From {date} the Free plan includes up to {limit} KUA Applications, and AI agents (MCP) and scheduled background work move to Pro and Team. The applications you have keep working; managing resources and consoles stay free.',
+  'planChange.terms': 'Read the terms',
+  'planChange.dismiss': 'Got it',
   'blocked.readOnlyTitle': 'Blocked by read-only mode',
   'blocked.readOnlyBody': 'KUA did not send this change to {area} because read-only mode is on.',
   'blocked.readOnlyThen': 'Turn read-only mode off to allow changes, then try the action again. Each change still asks for its own confirmation.',

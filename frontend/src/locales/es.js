@@ -1016,6 +1016,9 @@ export default {
   // ── Audit Log ────────────────────────────────────────────────────────
   'gps.planNote': 'El sondeo programado es parte de los planes Pro y Team. "Ejecutar ahora" funciona en todos los planes.',
   'kuapps.schedulePlanNote': 'En el plan Free la programación cada 30 minutos no se ejecuta: recolecta con "Recolectar ahora". La recolección programada es parte de Pro y Team.',
+  'planChange.message': 'Desde el {date} el plan Free incluye hasta {limit} KUA Applications, y los agentes de IA (MCP) y las tareas programadas en segundo plano pasan a Pro y Team. Las aplicaciones que tienes siguen funcionando; gestionar recursos y las consolas siguen siendo gratis.',
+  'planChange.terms': 'Leer los términos',
+  'planChange.dismiss': 'Entendido',
   'blocked.readOnlyTitle': 'Bloqueado por el modo solo lectura',
   'blocked.readOnlyBody': 'KUA no envió este cambio a {area} porque el modo solo lectura está activo.',
   'blocked.readOnlyThen': 'Desactiva el modo solo lectura para permitir cambios y vuelve a intentar la acción. Cada cambio seguirá pidiendo su propia confirmación.',
