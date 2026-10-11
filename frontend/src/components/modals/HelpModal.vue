@@ -242,6 +242,18 @@
               </label>
             </div>
 
+            <div class="opts-row">
+              <div class="opts-label">
+                <i data-lucide="star"></i>
+                <span>{{ t('help.starNoticeLabel') }}</span>
+                <span class="opts-desc">{{ t('help.starNoticeDesc') }}</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.starNotice" data-test="opts-star-notice" />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
             <!-- Posture alerts to Slack or Teams channels (Team); mounted with the Options tab -->
 
             <div class="opts-row">

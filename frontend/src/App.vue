@@ -517,6 +517,7 @@
     <WelcomeModal />
     <UpdateNotice />
     <PlanChangeNotice />
+    <StarNotice />
     <ToastContainer />
     <AwsSessionAlert />
   </div>
@@ -572,6 +573,7 @@ import DonationModal    from './components/modals/DonationModal.vue'
 import WelcomeModal     from './components/modals/WelcomeModal.vue'
 import UpdateNotice     from './components/UpdateNotice.vue'
 import PlanChangeNotice from './components/PlanChangeNotice.vue'
+import StarNotice from './components/StarNotice.vue'
 import ToastContainer   from './components/ToastContainer.vue'
 import AwsSessionAlert  from './components/AwsSessionAlert.vue'
 import AlertsBell       from './components/advisor/AlertsBell.vue'
