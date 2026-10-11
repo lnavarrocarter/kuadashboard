@@ -222,6 +222,9 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     const activity = await github.activity(application.id, { refresh: req.query.refresh === 'true' });
     return { ...activity, events: activity.events.slice(0, 30), metrics: await github.metrics(application.id) };
   }));
+  router.get('/applications/:applicationId/github/causes', (req, res) => sendAsync(res, 200, async () => ({
+    causes: await github.causes(applicationOr404(req.params.applicationId).id),
+  })));
   router.post('/applications/:applicationId/observer/replace', (req, res) => sendAsync(res, 200, async () => {
     const application = applicationOr404(req.params.applicationId);
     const result = await observer.replace(application, req.body?.resourceId, req.body?.successor, revisionOf(req));

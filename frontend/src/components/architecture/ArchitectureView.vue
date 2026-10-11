@@ -285,6 +285,7 @@
               <ArchitectureCanvas
                 :graph="store.graph"
                 :drift="driftByNode"
+                :causes="causeByNode"
                 :saving="store.saving"
                 :observability-enabled="Boolean(store.linkedApplication)"
                 :metrics="metricsByNode"
@@ -1078,6 +1079,29 @@ function handleArchitectureTabKeydown(event) {
 const pickerKubeContext = ref('')
 // What changed in the cluster for each drawn Kubernetes resource (#239), marked on the canvas.
 const driftByNode = computed(() => Object.fromEntries((store.kubernetesDrift?.changes || []).map(change => [change.nodeId, change])))
+
+// The deploy that probably made each missing resource disappear (#238), when the application syncs
+// with GitHub; the canvas shows it on the resource's node.
+const githubCauses = ref([])
+async function loadGithubCauses() {
+  const applicationId = activeApplication.value?.id
+  if (!applicationId) { githubCauses.value = []; return }
+  try {
+    const result = await api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}/github/causes`)
+    githubCauses.value = Array.isArray(result?.causes) ? result.causes : []
+  } catch { githubCauses.value = [] }
+}
+watch(() => [activeApplication.value?.id, store.graph?.revision], loadGithubCauses, { immediate: true })
+const causeByNode = computed(() => {
+  const same = (a, b) => !a || !b || String(a).toLowerCase() === String(b).toLowerCase()
+  const result = {}
+  for (const node of store.graph?.document?.nodes || []) {
+    const found = githubCauses.value.find(item => item.name && String(item.name).toLowerCase() === String(node.name || '').toLowerCase()
+      && same(item.namespace, node.namespace) && same(item.kubeContext, node.kubeContext))
+    if (found) result[node.id] = found
+  }
+  return result
+})
 
 // The shared Architecture store holds this view's profile and project (#239): another view of the
 // same application (the Map with its owner's profile) may have loaded its own in between.

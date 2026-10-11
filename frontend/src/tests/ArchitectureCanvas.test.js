@@ -38,6 +38,17 @@ describe('ArchitectureCanvas', () => {
     vi.stubGlobal('crypto', { randomUUID: () => 'generated-id' })
   })
 
+  it('shows the GitHub deploy that probably replaced a missing resource in the node inspector (#238)', async () => {
+    const causes = { 'manual:node:api': { name: 'Orders API', goneSince: '2026-10-08T08:20:00.000Z', cause: { confidence: 'probable', minutesBefore: 15, event: { number: 7, name: 'Deploy', repository: 'acme/api', sha: 'a'.repeat(40), actor: 'ana', at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7', commit: { message: 'Release 3.9.2' } } } } }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph, causes }, global: { stubs } })
+    expect(wrapper.find('[data-test="canvas-cause"]').exists()).toBe(false)
+    await wrapper.get('.select-node').trigger('click')
+    const cause = wrapper.get('[data-test="canvas-cause"]')
+    expect(cause.text()).toContain('Probably deploy #7 · Deploy · acme/api')
+    expect(cause.text()).toContain('aaaaaaa Release 3.9.2 · @ana')
+    expect(cause.get('a').attributes('href')).toBe('https://github.com/acme/api/actions/runs/7')
+  })
+
   it('emits a canonical manual node operation', async () => {
     const wrapper = mount(ArchitectureCanvas, { props: { graph }, global: { stubs } })
     await wrapper.get('input[placeholder="Component name"]').setValue('Orders worker')

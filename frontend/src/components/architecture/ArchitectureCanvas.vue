@@ -158,6 +158,7 @@
               </strong>
               <small>{{ typeLabel(data.resourceType) }}</small>
             </span>
+            <span v-if="data.cause" class="node-cause-badge" :title="causeTitle(data.cause)" data-test="node-cause"><i data-lucide="git-commit-horizontal"></i>#{{ data.cause.cause.event.number }}</span>
             <span v-if="data.drift" :class="['node-drift-badge', data.drift]" :data-test="`node-drift-${data.drift}`">{{ t(`archDrift.badge.${data.drift}`) }}</span>
             <span
               v-if="data.health"
@@ -215,6 +216,12 @@
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
+        <section v-if="selectedCause" class="component-cause" data-test="canvas-cause">
+          <span class="inspector-section-title">{{ t('archCanvas.cause') }}</span>
+          <a v-if="selectedCause.cause.event.url" :href="selectedCause.cause.event.url" target="_blank" rel="noopener noreferrer">{{ causeTitle(selectedCause) }}</a>
+          <strong v-else>{{ causeTitle(selectedCause) }}</strong>
+          <small>{{ causeDetail(selectedCause.cause.event) }}</small>
+        </section>
         <section v-if="selectedNode.kind || selectedNode.stackName || selectedNode.arn" class="component-metadata">
           <span v-if="selectedNode.kind"><small>{{ t('archCanvas.cfnType') }}</small><strong>{{ selectedNode.kind }}</strong></span>
           <span v-if="selectedNode.stackName"><small>Stack</small><strong>{{ selectedNode.stackName }}</strong></span>
@@ -334,6 +341,8 @@ const props = defineProps({
   securityLoading: { type: Boolean, default: false },
   // nodeId → { change: 'recreated' | 'replaced' | 'gone', successors } from the cluster check (#239)
   drift: { type: Object, default: () => ({}) },
+  // nodeId → { cause: { event, confidence }, goneSince } from the GitHub CI/CD plugin (#238)
+  causes: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['operation', 'inspect-workflow', 'node-action', 'request-metrics', 'request-trace', 'request-events', 'request-rollouts', 'request-security', 'resource-selected'])
 
@@ -707,6 +716,7 @@ function syncGraph(hydrateView = true) {
         rollout: nodeRolloutOverlay(node),
         security: nodeSecurityOverlay(node),
         drift: props.drift?.[node.id]?.change || '',
+        cause: props.causes?.[node.id] || null,
       },
     }
   })
@@ -1049,6 +1059,16 @@ function sectionResourceLabel(provider, resourceType) {
   return typeLabel(resourceType)
 }
 
+const selectedCause = computed(() => (selectedNode.value ? props.causes?.[selectedNode.value.id] || null : null))
+const causeTitle = item => t(item.cause.confidence === 'probable' ? 'kuapps.missing.cause' : 'kuapps.missing.causePossible', {
+  number: item.cause.event.number, name: item.cause.event.name, repository: item.cause.event.repository,
+})
+const causeDetail = event => t('kuapps.missing.causeDetail', {
+  commit: [event.sha ? event.sha.slice(0, 7) : '', event.commit?.message].filter(Boolean).join(' '),
+  author: event.actor ? ` · @${event.actor}` : '',
+  when: event.at ? new Date(event.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '',
+})
+
 function relationshipStatus(status) {
   return ['automatic', 'suggested', 'manual', 'stale'].includes(status) ? t(`archCanvas.status.${status}`) : status
 }
@@ -1163,7 +1183,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift], () => syncGraph(false), { deep: true })
+watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift, () => props.causes], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1213,6 +1233,12 @@ onMounted(refreshIcons)
 .architecture-node--drift { outline: 2px dashed var(--yellow); outline-offset: 2px; }
 .architecture-node--gone { opacity: .6; outline-color: var(--red); }
 .node-drift-badge { position: absolute; top: -10px; left: 8px; padding: 0 6px; border-radius: 8px; background: var(--yellow); color: #111; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.node-cause-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-size: 12px; font-weight: 700; }
+.node-cause-badge > svg { width: 11px; height: 11px; }
+.component-cause { display: grid; gap: 3px; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 13px; }
+.component-cause a { color: var(--text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.component-cause a:hover { color: var(--accent); text-decoration: underline; }
+.component-cause small { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
 .node-drift-badge.gone { background: var(--red); color: #fff; }
 .node-health-badge { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-panel); }
 .node-health-badge--healthy { background: #3fb950; }

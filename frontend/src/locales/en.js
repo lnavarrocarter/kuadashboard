@@ -4924,6 +4924,7 @@ export default {
   'archCanvas.noMetricData': 'No metric data',
   'archCanvas.emptyTitle': 'Add the first component',
   'archCanvas.emptyHint': 'Build the application manually, then connect dependencies directly on the canvas.',
+  'archCanvas.cause': 'Probable cause',
   'archCanvas.component': 'Component',
   'archCanvas.closeInspector': 'Close inspector',
   'archCanvas.name': 'Name',

@@ -4923,6 +4923,7 @@ export default {
   'archCanvas.noMetricData': 'Sin datos de métricas',
   'archCanvas.emptyTitle': 'Agrega el primer componente',
   'archCanvas.emptyHint': 'Arma la aplicación a mano y luego conecta las dependencias directamente en el lienzo.',
+  'archCanvas.cause': 'Causa probable',
   'archCanvas.component': 'Componente',
   'archCanvas.closeInspector': 'Cerrar inspector',
   'archCanvas.name': 'Nombre',

@@ -488,6 +488,8 @@ test('GitHub CI/CD plugin (#238): sync is an option of the application and uses 
     assert.equal(activity.status, 200);
     assert.equal(activity.body.events[0].number, 5);
     assert.equal(activity.body.metrics.deploys, 1);
+    assert.deepEqual((await subject.request(`${base}/causes`)).body, { causes: [] });
+    assert.equal((await subject.request('/applications/missing/github/causes')).status, 404);
     assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
     assert.equal((await subject.request('/applications/missing/github', { method: 'PUT', body: { enabled: true } })).status, 404);
   } finally { await subject.close(); }
