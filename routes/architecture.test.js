@@ -368,7 +368,7 @@ test('API previews AWS resources and imports only the confirmed selection', asyn
     const reloaded = await subject.request(`/projects/${projectId}/graph`);
     assert.deepEqual(reloaded.body.document.view, {
       layoutMode: 'resource-type', layoutDirection: 'vertical', showEdgeLabels: true,
-      showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false,
+      showHealthOverlay: false, showMetricsOverlay: false, showCollectionOverlay: false, showTraceOverlay: false, showEventsOverlay: false, showRolloutsOverlay: false, showSecurityOverlay: false,
       providerFilter: 'all', systemDomainFilter: 'all', kubeContextFilter: '', namespaceFilter: '',
       relationTypeFilter: 'all', relationStatusFilter: 'all',
     });
