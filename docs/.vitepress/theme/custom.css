@@ -4,3 +4,20 @@
 .home-faq details { border: 1px solid var(--vp-c-divider); border-radius: 8px; padding: 12px 16px; background: var(--vp-c-bg-soft); }
 .home-faq summary { cursor: pointer; font-weight: 600; }
 .home-faq p { margin: 8px 0 0; }
+
+/* Home: hero screenshot, screenshots, download by OS, star call and badges. */
+.VPHome .VPHero .image-src { max-width: 100%; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); }
+.VPHome .VPHero .image-container { transform: none; }
+.home-shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 20px; margin-top: 16px; }
+.home-shots figure { margin: 0; border: 1px solid var(--vp-c-divider); border-radius: 8px; overflow: hidden; background: var(--vp-c-bg-soft); }
+.home-shots img { display: block; width: 100%; height: auto; }
+.home-shots figcaption { padding: 12px 16px; font-size: 14px; color: var(--vp-c-text-2); }
+.home-download { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; margin-top: 16px; }
+.home-os { display: flex; flex-direction: column; gap: 4px; padding: 20px; border: 1px solid var(--vp-c-divider); border-radius: 8px; background: var(--vp-c-bg-soft); text-decoration: none; color: var(--vp-c-text-1); transition: border-color 0.2s; }
+.home-os:hover, .home-os:focus-visible { border-color: var(--vp-c-brand-1); }
+.home-os-icon { font-size: 28px; }
+.home-os span:last-child { font-size: 14px; color: var(--vp-c-text-2); }
+.home-social { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.home-social img { display: block; height: 20px; }
+.dark .home-shots figure { background: var(--vp-c-bg-alt); }
+@media (max-width: 640px) { .VPHome .vp-doc { margin-top: 32px; } }
