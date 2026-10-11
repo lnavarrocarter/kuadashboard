@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -465,4 +465,31 @@ test('API registry: a cluster-scoped object of an EKS context has no namespace (
   } finally {
     await subject.close();
   }
+});
+
+test('GitHub CI/CD plugin (#238): connect, associate repositories and read activity without exposing the token', async () => {
+  const { createGithubCicd } = require('../lib/kua/githubCicd');
+  const client = {
+    user: async () => ({ login: 'octocat' }),
+    workflowRuns: async () => ({ workflow_runs: [{ id: 1, run_number: 5, name: 'Deploy', status: 'completed', conclusion: 'success', head_sha: 'c'.repeat(40), head_branch: 'main', triggering_actor: { login: 'ana' }, updated_at: new Date().toISOString(), html_url: 'https://github.com/acme/api/actions/runs/1' }] }),
+    deployments: async () => [],
+  };
+  const subject = await fixture({ githubCicd: createGithubCicd({ client }) });
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Desarrollo' });
+    const base = `/applications/${application.id}/github`;
+    assert.equal((await subject.request('/github/connection')).body.connected, false);
+    assert.equal((await subject.request('/github/connection', { method: 'PUT', body: { token: '' } })).status, 400);
+    const connected = await subject.request('/github/connection', { method: 'PUT', body: { token: 'ghp_secret' } });
+    assert.deepEqual(connected.body, { connected: true, login: 'octocat', readOnly: true });
+    assert.equal((await subject.request(`${base}/repositories`, { method: 'PUT', body: { repositories: ['not a repo'] } })).status, 400);
+    assert.deepEqual((await subject.request(`${base}/repositories`, { method: 'PUT', body: { repositories: ['https://github.com/acme/api'] } })).body, { repositories: ['acme/api'] });
+    const activity = await subject.request(`${base}/activity`);
+    assert.equal(activity.status, 200);
+    assert.equal(activity.body.events[0].number, 5);
+    assert.equal(activity.body.metrics.deploys, 1);
+    assert.ok(!JSON.stringify(activity.body).includes('ghp_secret'));
+    assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
+    assert.equal((await subject.request('/github/connection', { method: 'DELETE' })).body.connected, false);
+  } finally { await subject.close(); }
 });

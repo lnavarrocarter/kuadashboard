@@ -397,6 +397,11 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   auditLog,
   syncEngine,
   teamEngine,
+  // Plugin GitHub CI/CD (#238): read-only; the token lives in this computer's credential store.
+  githubCicd: (() => {
+    const { createGithubCicd, createCredentialStoreTokens } = require('./lib/kua/githubCicd');
+    return createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), tokens: createCredentialStoreTokens(), apmDatabase });
+  })(),
   // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
   agentAccess: require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() }),
 }));

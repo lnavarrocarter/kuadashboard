@@ -54,4 +54,15 @@ describe('KUApp missing resources', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="missing-resources"]').exists()).toBe(false)
   })
+
+  it('names the deploy that probably made a resource disappear (#238)', async () => {
+    const cause = { confidence: 'probable', source: 'github.cicd', minutesBefore: 15, event: { number: 7, name: 'Deploy', repository: 'acme/api', sha: 'a'.repeat(40), actor: 'ana', commit: { message: 'Release 3.9.2' }, at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7' } }
+    respond(() => ({ body: { resources: [{ ...GONE, cause }] } }))
+    const wrapper = mount(KUAppMissingResources, { props: { applicationId: 'app-1' } })
+    await flushPromises()
+    const text = wrapper.get('[data-test="missing-cause-attencion-3.9.1"]').text()
+    expect(text).toContain('Probably deploy #7 · Deploy · acme/api')
+    expect(text).toContain('aaaaaaa Release 3.9.2 · @ana')
+    expect(wrapper.get('[data-test="missing-cause-attencion-3.9.1"] a').attributes('href')).toBe('https://github.com/acme/api/actions/runs/7')
+  })
 })

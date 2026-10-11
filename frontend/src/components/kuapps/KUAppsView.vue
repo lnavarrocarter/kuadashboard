@@ -336,7 +336,8 @@
                 <button class="btn sm" @click="selectWorkspaceTab('settings')">{{ t('kuapps.review.bindProfile') }}</button>
               </div>
             </div>
-            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
+            <KUAppMissingResources ref="missingResources" :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
+            <KUAppGithubCicd :application-id="selectedApplicationId" @changed="missingResources?.reload?.()" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -533,6 +534,7 @@ import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
 import KUAppMissingResources from './KUAppMissingResources.vue'
+import KUAppGithubCicd from './KUAppGithubCicd.vue'
 import KUAppResourceInspector from './KUAppResourceInspector.vue'
 import KUAppPossibleDuplicates from './KUAppPossibleDuplicates.vue'
 import { api } from '../../composables/useApi'
@@ -561,6 +563,7 @@ const emit = defineEmits([
 const { t } = useI18n()
 const { toast } = useToast()
 const architectureRef = ref(null)
+const missingResources = ref(null)
 const observabilityRef = ref(null)
 const summaryRef = ref(null)
 const resourceSignalsRef = ref(null)

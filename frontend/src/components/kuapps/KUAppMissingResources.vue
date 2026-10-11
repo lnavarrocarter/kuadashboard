@@ -12,6 +12,11 @@
           <button class="btn sm" :disabled="busy" :data-test="`missing-ignore-${item.name}`" @click="ignore(item)">{{ t('kuapps.missing.ignore') }}</button>
         </span>
       </header>
+      <p v-if="item.cause" class="kmr-cause" :data-test="`missing-cause-${item.name}`">
+        <a v-if="item.cause.event.url" :href="item.cause.event.url" target="_blank" rel="noopener noreferrer">{{ causeTitle(item.cause) }}</a>
+        <strong v-else>{{ causeTitle(item.cause) }}</strong>
+        <small>{{ causeDetail(item.cause.event) }}</small>
+      </p>
       <p v-if="item.error" class="kmr-warn">{{ t('kuapps.missing.clusterUnreadable', { error: item.error }) }}</p>
       <p v-else-if="item.reason === 'unsupported'" class="kmr-hint">{{ t('kuapps.missing.noSuccessorKind') }}</p>
       <p v-else-if="!item.successors.length" class="kmr-hint">{{ t('kuapps.missing.noSuccessor') }}</p>
@@ -51,6 +56,15 @@ const busy = ref(false)
 const error = ref('')
 const base = () => `/api/kua-apps/applications/${encodeURIComponent(props.applicationId)}`
 const when = iso => (iso ? new Date(iso).toLocaleString(settings.lang === 'es' ? 'es' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '')
+
+const causeTitle = cause => t(cause.confidence === 'probable' ? 'kuapps.missing.cause' : 'kuapps.missing.causePossible', {
+  number: cause.event.number, name: cause.event.name, repository: cause.event.repository,
+})
+const causeDetail = event => t('kuapps.missing.causeDetail', {
+  commit: [event.sha ? event.sha.slice(0, 7) : '', event.commit?.message].filter(Boolean).join(' '),
+  author: event.actor ? ` · @${event.actor}` : '',
+  when: when(event.at),
+})
 
 async function load() {
   loading.value = true
@@ -97,6 +111,7 @@ defineExpose({ reload: load })
 .kmr-item header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .kmr-item header > span:first-child { display: flex; flex-direction: column; min-width: 0; }
 .kmr-item small { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
+.kmr-cause { margin: 0; font-size: 12px; display: flex; flex-direction: column; }
 .kmr-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .kmr-successors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .kmr-successors li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
