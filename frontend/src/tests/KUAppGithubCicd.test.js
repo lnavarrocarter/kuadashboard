@@ -21,7 +21,9 @@ describe('KUApp GitHub sync option', () => {
     respond((url, options) => {
       const method = options.method || 'GET'
       if (url.includes('/github/connection')) return { body: { available: true, authenticated: true, login: 'octocat' } }
-      if (url.endsWith('/api/kua-apps/github/repositories')) return { body: { repositories: ['acme/api', 'acme/web'] } }
+      if (url.endsWith('/github/owners')) return { body: { owners: ['octocat', 'acme'] } }
+      if (url.includes('/github/repositories?q=')) return { body: { repositories: ['acme/api', 'acme/apollo'] } }
+      if (url.includes('/github/repositories?owner=acme')) return { body: { repositories: ['acme/api', 'acme/web'] } }
       if (url.endsWith('/github/activity')) return { body: { errors: [], metrics: { days: 30, deploys: 2, perWeek: 0.5, leadTimeHours: 3 }, events: [{ id: 'e1', repository: 'acme/api', number: 7, name: 'Deploy', conclusion: 'success', actor: 'ana', at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7' }] } }
       if (url.endsWith('/github') && method === 'PUT') { state = JSON.parse(options.body); return { body: state } }
       if (url.endsWith('/github')) return { body: state }
@@ -35,9 +37,29 @@ describe('KUApp GitHub sync option', () => {
 
     await wrapper.get('[data-test="github-enabled"]').setValue(true)
     await flushPromises()
-    await wrapper.get('[data-test="github-repo-acme/api"]').setValue(true)
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/github/repositories'))).toBe(false)
+    expect(wrapper.find('[data-test="github-browser"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="github-manual"]').setValue('ac')
+    expect(wrapper.find('[data-test="github-suggestions"]').exists()).toBe(false)
+    await wrapper.get('[data-test="github-manual"]').setValue('acm')
+    await new Promise(resolve => setTimeout(resolve, 320))
+    await flushPromises()
+    await wrapper.get('[data-test="github-suggest-acme/api"]').trigger('click')
     await flushPromises()
     expect(state).toEqual({ enabled: true, repositories: ['acme/api'] })
+    expect(wrapper.get('[data-test="github-selected"]').text()).toContain('acme/api')
+
+    await wrapper.get('[data-test="github-browse"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="github-owner"]').setValue('acme')
+    await flushPromises()
+    await wrapper.get('[data-test="github-repo-acme/web"]').trigger('click')
+    await flushPromises()
+    expect(state.repositories).toEqual(['acme/api', 'acme/web'])
+    await wrapper.get('[data-test="github-remove-acme/web"]').trigger('click')
+    await flushPromises()
+    expect(state.repositories).toEqual(['acme/api'])
     expect(wrapper.get('[data-test="github-metrics"]').text()).toContain('2 deploys (0.5/week) · lead time 3 h')
     expect(wrapper.text()).toContain('acme/api #7 · Deploy')
   })

@@ -205,7 +205,10 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   // Plugin GitHub CI/CD (#238), read-only, through the GitHub CLI logged in on this computer: KUA
   // stores no token. Syncing with GitHub is an option of each application (Settings → Sync).
   router.get('/github/connection', (req, res) => sendAsync(res, 200, () => github.connection({ refresh: req.query.refresh === 'true' })));
-  router.get('/github/repositories', (_req, res) => sendAsync(res, 200, async () => ({ repositories: await github.availableRepositories() })));
+  router.get('/github/owners', (_req, res) => sendAsync(res, 200, async () => ({ owners: await github.owners() })));
+  router.get('/github/repositories', (req, res) => sendAsync(res, 200, async () => ({
+    repositories: await github.availableRepositories({ owner: req.query.owner, query: req.query.q }),
+  })));
   router.get('/applications/:applicationId/github', (req, res) => send(res, 200, () =>
     github.settings(applicationOr404(req.params.applicationId).id)));
   router.put('/applications/:applicationId/github', (req, res) => send(res, 200, () => {
