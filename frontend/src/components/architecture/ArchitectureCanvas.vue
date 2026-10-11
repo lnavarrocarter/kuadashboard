@@ -120,6 +120,10 @@
         <button class="btn sm" :disabled="!flowNodes.length" :title="t('archCanvas.exportMermaidHint')" @click="exportMermaid">
           <i data-lucide="file-code"></i> {{ t('archCanvas.exportMermaid') }}
         </button>
+        <span v-if="pathIsolation" class="trace-overlay-status" data-test="path-banner">
+          <i data-lucide="route"></i> {{ t('archCanvas.path.active', { name: nodeName(pathIsolation.rootId), n: pathNodeIds.size }) }}
+          <button class="btn sm" type="button" data-test="path-clear" @click="clearPath">{{ t('archCanvas.clear') }}</button>
+        </span>
         <span v-if="showTraceOverlay && trace" class="trace-overlay-status">
           <i data-lucide="route"></i> {{ trace.executionName || t('archCanvas.latestTrace') }} · {{ t('archCanvas.traceNodes', { n: trace.nodeIds.length }) }}
           <button class="btn sm" type="button" @click="clearTraceOverlay">{{ t('archCanvas.clear') }}</button>
@@ -216,6 +220,23 @@
           </select>
         </label>
         <small class="inspector-id">{{ selectedNode.id }}</small>
+        <section class="component-path" data-test="canvas-path">
+          <strong><i data-lucide="route"></i> {{ t('archCanvas.path.title') }}</strong>
+          <div class="component-path-options">
+            <select v-model="pathDraft.direction" class="ctrl-select" data-test="path-direction" :aria-label="t('archCanvas.path.direction')">
+              <option value="both">{{ t('archCanvas.path.both') }}</option>
+              <option value="downstream">{{ t('archCanvas.path.downstream') }}</option>
+              <option value="upstream">{{ t('archCanvas.path.upstream') }}</option>
+            </select>
+            <select v-model.number="pathDraft.depth" class="ctrl-select" data-test="path-depth" :aria-label="t('archCanvas.path.depth')">
+              <option :value="1">{{ t('archCanvas.path.hops', { n: 1 }) }}</option>
+              <option :value="2">{{ t('archCanvas.path.hops', { n: 2 }) }}</option>
+              <option :value="3">{{ t('archCanvas.path.hops', { n: 3 }) }}</option>
+              <option :value="0">{{ t('archCanvas.path.all') }}</option>
+            </select>
+          </div>
+          <button class="btn sm" data-test="path-isolate" @click="isolatePath">{{ t('archCanvas.path.isolate') }}</button>
+        </section>
         <section v-if="selectedCause" class="component-cause" data-test="canvas-cause">
           <span class="inspector-section-title">{{ t('archCanvas.cause') }}</span>
           <a v-if="selectedCause.cause.event.url" :href="selectedCause.cause.event.url" target="_blank" rel="noopener noreferrer">{{ causeTitle(selectedCause) }}</a>
@@ -480,6 +501,34 @@ const nodeActions = computed(() => {
   }
   return actions
 })
+// Custom filter: keeps only a resource and the chain of relations that leads to or from it.
+const pathDraft = reactive({ direction: 'both', depth: 0 })
+const pathIsolation = ref(null)
+const pathNodeIds = computed(() => {
+  const isolation = pathIsolation.value
+  const ids = new Set()
+  if (!isolation) return ids
+  const edges = (props.graph?.document?.edges || []).filter(edge => edge.status !== 'rejected')
+  ids.add(isolation.rootId)
+  for (const direction of isolation.direction === 'both' ? ['downstream', 'upstream'] : [isolation.direction]) {
+    let frontier = [isolation.rootId]
+    const seen = new Set(frontier)
+    for (let hop = 0; frontier.length && (!isolation.depth || hop < isolation.depth); hop += 1) {
+      const next = []
+      for (const edge of edges) {
+        const [from, to] = direction === 'downstream' ? [edge.sourceNodeId, edge.targetNodeId] : [edge.targetNodeId, edge.sourceNodeId]
+        if (frontier.includes(from) && !seen.has(to)) { seen.add(to); next.push(to); ids.add(to) }
+      }
+      frontier = next
+    }
+  }
+  return ids
+})
+function isolatePath() {
+  if (!selectedNode.value) return
+  pathIsolation.value = { rootId: selectedNode.value.id, direction: pathDraft.direction, depth: pathDraft.depth }
+}
+function clearPath() { pathIsolation.value = null }
 const focusedNodeIds = computed(() => selectedNode.value
   ? new Set([selectedNode.value.id, ...selectedNodeReferences.value.map(reference => reference.node.id)])
   : null)
@@ -504,6 +553,7 @@ const activeFilterCount = computed(() => [
   Boolean(namespaceFilter.value),
   relationTypeFilter.value !== 'all',
   relationStatusFilter.value !== 'all',
+  Boolean(pathIsolation.value),
 ].filter(Boolean).length)
 const activeLayerCount = computed(() => [
   showEdgeLabels.value, showHealthOverlay.value, showMetricsOverlay.value, showCollectionOverlay.value,
@@ -513,6 +563,7 @@ const filteredGraphDocument = computed(() => {
   const document = props.graph?.document || { nodes: [], edges: [] }
   const query = nodeSearch.value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
   const nodes = (document.nodes || []).filter(node => !node.hidden &&
+    (!pathIsolation.value || pathNodeIds.value.has(node.id)) &&
     (providerFilter.value === 'all' || node.provider === providerFilter.value) &&
     (systemDomainFilter.value === 'all' || systemDomainForNode(node) === systemDomainFilter.value) &&
     (!kubeContextFilter.value || node.kubeContext === kubeContextFilter.value) &&
@@ -1183,7 +1234,7 @@ watch(layoutMode, mode => {
   if (!['resource-type', 'provider-lanes', 'provider-resource', 'system-domains'].includes(mode)) resourceSections.value = []
   syncGraph(false)
 })
-watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift, () => props.causes], () => syncGraph(false), { deep: true })
+watch([nodeSearch, providerFilter, systemDomainFilter, kubeContextFilter, namespaceFilter, relationTypeFilter, relationStatusFilter, showHealthOverlay, showMetricsOverlay, showCollectionOverlay, showTraceOverlay, showEventsOverlay, showRolloutsOverlay, showSecurityOverlay, pathIsolation, () => props.metrics, () => props.metricsLoading, () => props.collection, () => props.collectionLoading, () => props.trace, () => props.events, () => props.eventsLoading, () => props.rollouts, () => props.rolloutsLoading, () => props.security, () => props.securityLoading, () => props.drift, () => props.causes], () => syncGraph(false), { deep: true })
 onMounted(refreshIcons)
 </script>
 
@@ -1235,6 +1286,10 @@ onMounted(refreshIcons)
 .node-drift-badge { position: absolute; top: -10px; left: 8px; padding: 0 6px; border-radius: 8px; background: var(--yellow); color: #111; font-size: 12px; line-height: 16px; white-space: nowrap; }
 .node-cause-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-size: 12px; font-weight: 700; }
 .node-cause-badge > svg { width: 11px; height: 11px; }
+.component-path { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.component-path strong { display: flex; align-items: center; gap: 6px; }
+.component-path-options { display: flex; gap: 6px; }
+.component-path-options .ctrl-select { flex: 1; min-width: 0; }
 .component-cause { display: grid; gap: 3px; padding: 7px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 13px; }
 .component-cause a { color: var(--text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .component-cause a:hover { color: var(--accent); text-decoration: underline; }

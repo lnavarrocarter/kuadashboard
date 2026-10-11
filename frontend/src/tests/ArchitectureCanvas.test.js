@@ -38,6 +38,26 @@ describe('ArchitectureCanvas', () => {
     vi.stubGlobal('crypto', { randomUUID: () => 'generated-id' })
   })
 
+  it('isolates the path of a resource and leaves only those resources on the canvas', async () => {
+    const node = (id, name) => ({ id, name, resourceType: 'service', manual: true })
+    const edge = (id, s, t) => ({ id, sourceNodeId: s, targetNodeId: t, relationType: 'depends_on', status: 'confirmed' })
+    const pathGraph = { ...graph, document: { ...graph.document, nodes: [node('manual:node:api', 'API'), node('a', 'A'), node('b', 'B'), node('x', 'Other'), node('up', 'Up')], edges: [edge('e1', 'manual:node:api', 'a'), edge('e2', 'a', 'b'), edge('e3', 'up', 'manual:node:api'), edge('e4', 'x', 'up')] } }
+    let shown = []
+    const spy = { ...stubs, VueFlow: { ...stubs.VueFlow, props: ['nodes', 'edges'], setup(props) { return { props } }, template: `<div><button class="select-node" @click="$emit('node-click', { node: { id: 'manual:node:api' } })">Select</button><i class="ids">{{ props.nodes.filter(n => n.type !== 'resource-section').map(n => n.id).join(',') }}</i></div>` } }
+    const wrapper = mount(ArchitectureCanvas, { props: { graph: pathGraph }, global: { stubs: spy } })
+    await wrapper.get('.select-node').trigger('click')
+    await wrapper.get('[data-test="path-direction"]').setValue('downstream')
+    await wrapper.get('[data-test="path-depth"]').setValue('1')
+    await wrapper.get('[data-test="path-isolate"]').trigger('click')
+    shown = wrapper.get('.ids').text().split(',').sort()
+    expect(shown).toEqual(['a', 'manual:node:api'])
+    await wrapper.get('[data-test="path-depth"]').setValue('0')
+    await wrapper.get('[data-test="path-isolate"]').trigger('click')
+    expect(wrapper.get('.ids').text().split(',').sort()).toEqual(['a', 'b', 'manual:node:api'])
+    await wrapper.get('[data-test="path-clear"]').trigger('click')
+    expect(wrapper.get('.ids').text().split(',').length).toBe(5)
+  })
+
   it('shows the GitHub deploy that probably replaced a missing resource in the node inspector (#238)', async () => {
     const causes = { 'manual:node:api': { name: 'Orders API', goneSince: '2026-10-08T08:20:00.000Z', cause: { confidence: 'probable', minutesBefore: 15, event: { number: 7, name: 'Deploy', repository: 'acme/api', sha: 'a'.repeat(40), actor: 'ana', at: '2026-10-08T08:05:00.000Z', url: 'https://github.com/acme/api/actions/runs/7', commit: { message: 'Release 3.9.2' } } } } }
     const wrapper = mount(ArchitectureCanvas, { props: { graph, causes }, global: { stubs } })
