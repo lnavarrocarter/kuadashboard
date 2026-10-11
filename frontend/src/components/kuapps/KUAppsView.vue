@@ -378,6 +378,7 @@
               :application-id="selectedApplicationId"
               :initial-hours="signalsEntry.hours"
               :initial-filter="signalsEntry.filter"
+              :inventory-total="applicationRegistry.resources.length"
               @issue-action="onIssueAction"
               @select-resource="registryId => { if (registryId) selectedResourceId = registryId }"
               @open-kubernetes-logs="$emit('open-kubernetes-logs', $event)"

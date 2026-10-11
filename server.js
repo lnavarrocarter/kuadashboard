@@ -215,6 +215,10 @@ app.use(express.json({ limit: '10mb' }));
 
 // Global read-only mode (lib/readOnlyMode.js): refuses changes to clouds and clusters in the
 // backend, whatever the UI shows. After the body parser: a query is allowed only when it reads.
+// Who each audit entry comes from (UI or agent) and the outcome of every change
+// to clouds and clusters (lib/auditContext.js, lib/auditOutcome.js).
+app.use('/api', require('./lib/auditContext').auditContextMiddleware);
+app.use('/api', require('./lib/auditOutcome').createAuditOutcomeMiddleware({ audit: auditLog }));
 app.use('/api', readOnlyMode.middleware);
 // AI agents (MCP, X-KUA-Actor: mcp) need a plan with agents (lib/agentPlanGuard.js).
 app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard());

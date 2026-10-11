@@ -100,6 +100,10 @@
               <td>{{ t('account.featureAgents') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.agents) }}</td>
             </tr>
+            <tr data-test="account-plan-audit-forwarding">
+              <td>{{ t('account.featureAuditForwarding') }}</td>
+              <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ yes(plan.plans[name].features.auditForwarding) }}</td>
+            </tr>
             <tr data-test="account-plan-scheduled">
               <td>{{ t('account.featureScheduled') }}</td>
               <td v-for="name in PLAN_ORDER" :key="name" :class="{ current: plan.plan === name }">{{ plan.plans[name].features.scheduledTasks ? '✓' : t('account.manual') }}</td>

@@ -96,4 +96,20 @@ describe('KUApp signals', () => {
     expect(url).toBe('/api/observability/generic/applications/app-1/collect-now')
     expect(options.headers['X-Profile-Id']).toBe('local')
   })
+
+  it('says what the filter hides and how the followed total relates to the inventory', async () => {
+    respond(url => (url.endsWith('/observability/resources') ? { body: OBSERVABILITY } : { body: [] }))
+    const wrapper = mount(KUAppSignals, {
+      props: { applicationId: 'app-1', inventoryTotal: 7 },
+      global: { stubs: { CloudMetricChart: true, ApmApplicationLogs: true } },
+    })
+    await flushPromises()
+    const count = wrapper.get('[data-test="observability-count"]')
+    expect(count.text()).toContain('2 shown of 3 resources Observability follows')
+    expect(wrapper.get('[data-test="observability-hidden"]').text()).toContain('1 hidden by the filter "With metrics or logs".')
+    expect(wrapper.get('[data-test="observability-inventory"]').text()).toContain('Observability follows 3 of the 7 resources inventoried')
+    await wrapper.get('[data-test="observability-show-all"]').trigger('click')
+    expect(count.text()).toContain('3 shown of 3')
+    expect(wrapper.find('[data-test="observability-hidden"]').exists()).toBe(false)
+  })
 })
