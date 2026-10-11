@@ -157,6 +157,7 @@ jobs:
             dist-electron/*.deb
             dist-electron/*.zip
             dist-electron/latest*.yml
+            dist-electron/rc*.yml
           if-no-files-found: error
 
   release:
@@ -202,7 +203,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd artifacts
-          find . -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "latest*.yml" \) -print0 \
+          find . -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "latest*.yml" -o -name "rc*.yml" \) -print0 \
             | sort -z \
             | xargs -0 sha256sum > SHA256SUMS.txt
 
@@ -222,6 +223,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: KuaDashboard ${{ steps.version.outputs.tag }}
           draft: ${{ github.event.inputs.draft || 'false' }}
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
           generate_release_notes: true
           files: |
             artifacts/win/*.exe
@@ -232,6 +234,9 @@ jobs:
             artifacts/linux/*.AppImage
             artifacts/linux/*.deb
             artifacts/linux/latest-linux.yml
+            artifacts/win/rc.yml
+            artifacts/mac/rc-mac.yml
+            artifacts/linux/rc-linux.yml
             artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
