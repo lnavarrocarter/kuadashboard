@@ -85,6 +85,10 @@ function createApmRouter({
     auditLog?.log({ category: 'apm', action, resource, context, details });
   }
 
+  function syncCollectionTasks() {
+    scheduler.syncApplicationTasks?.();
+  }
+
   function architectureLinkStatus(application) {
     const projectIds = application.architectureProjectIds?.length
       ? application.architectureProjectIds
@@ -219,6 +223,7 @@ function createApmRouter({
     try {
       checkApplicationLimit(database.listApplications().length);
       const application = database.createApplication({ ...req.body, provider, profileId: profile });
+      syncCollectionTasks();
       log('Application created', application.name, profile, { region: application.region });
       res.status(201).json(application);
     } catch (error) { handleError(res, error); }
@@ -395,6 +400,7 @@ function createApmRouter({
       const updated = localPollingOnly
         ? database.setApplicationPollingEnabled(application.id, changes.pollingEnabled)
         : database.updateApplication(application.id, changes);
+      syncCollectionTasks();
       log('Application updated', updated.name, updated.profileId, {
         pollingEnabled: updated.pollingEnabled,
       });
@@ -406,6 +412,7 @@ function createApmRouter({
     const application = scopedApplication(req, res);
     if (!application) return;
     database.deleteApplication(application.id);
+    syncCollectionTasks();
     log('Application deleted', application.name, application.profileId);
     res.status(204).end();
   });

@@ -26,6 +26,7 @@ const { fork }    = require('child_process');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const { createDesktopLifecycle } = require('./desktopLifecycle');
+const { summarizeTaskProgress } = require('./taskbarProgress');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ let backendProcess = null;
 let backendReady  = false;
 let desktopLifecycle = null;
 let appTray = null;
+let taskProgressTimer = null;
+let taskProgressPollInFlight = false;
 
 // ─── Backend (Express) ────────────────────────────────────────────────────────
 
@@ -216,6 +219,65 @@ function setupTray() {
   } catch (err) {
     console.warn('[electron] System tray unavailable; launch KuaDashboard again to restore its window:', err.message);
   }
+}
+
+function applyTaskProgress(tasks) {
+  const summary = summarizeTaskProgress(tasks);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (summary.mode === 'determinate') mainWindow.setProgressBar(summary.progress);
+    else if (summary.mode === 'indeterminate') mainWindow.setProgressBar(2, { mode: 'indeterminate' });
+    else mainWindow.setProgressBar(-1);
+  }
+  appTray?.setToolTip(summary.tooltip);
+}
+
+function pollTaskProgress() {
+  if (taskProgressPollInFlight) return;
+  taskProgressPollInFlight = true;
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    taskProgressPollInFlight = false;
+  };
+  const request = require('http').get({
+    hostname: '127.0.0.1',
+    port: BACKEND_PORT,
+    path: '/api/system/tasks',
+    timeout: 1500,
+  }, response => {
+    let body = '';
+    response.setEncoding('utf8');
+    response.on('data', chunk => { body += chunk; });
+    response.on('end', () => {
+      try {
+        const snapshot = response.statusCode === 200 ? JSON.parse(body) : null;
+        applyTaskProgress(Array.isArray(snapshot?.tasks) ? snapshot.tasks : []);
+      } catch {
+        applyTaskProgress([]);
+      }
+      finish();
+    });
+  });
+  request.on('timeout', () => request.destroy());
+  request.on('error', () => {
+    applyTaskProgress([]);
+    finish();
+  });
+}
+
+function startTaskProgressPolling() {
+  pollTaskProgress();
+  if (!taskProgressTimer) {
+    taskProgressTimer = setInterval(pollTaskProgress, 2000);
+    taskProgressTimer.unref?.();
+  }
+}
+
+function stopTaskProgressPolling() {
+  if (!taskProgressTimer) return;
+  clearInterval(taskProgressTimer);
+  taskProgressTimer = null;
 }
 
 // ─── Browser Window ───────────────────────────────────────────────────────────
@@ -522,6 +584,7 @@ if (!hasSingleInstanceLock) {
     closeToTray: preferences.closeToTray !== false,
     persistCloseToTray: saveCloseToTray,
     destroyTray: () => {
+      stopTaskProgressPolling();
       appTray?.destroy();
       appTray = null;
     },
@@ -540,6 +603,7 @@ if (!hasSingleInstanceLock) {
 
   createWindow();
   setupTray();
+  startTaskProgressPolling();
 
   // Check for updates after window is ready (production only)
   if (!IS_DEV) setupAutoUpdater();

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Corregido
+
+- **Avance de la recolección APM programada (#262):** el panel de tareas en segundo plano lista las recolecciones habilitadas por aplicación antes de su primera ejecución y conserva visible la próxima. La barra de tareas y el tooltip de la bandeja ahora muestran el avance activo; no se añaden llamadas a servicios cloud.
+
 ### Lo más destacado de la 2.0
 
 **Kubernetes.** Los clústeres se leen con honestidad y se explican solos. El detalle de un pod empieza por su salud (fallando, no listo, listo) y el consumo sin muestras lo dice en vez de mostrar 0. Un recorrido de diagnóstico enlaza el pod con sus logs actuales y anteriores, ReplicaSet, Deployment, nodo y Services, y un Service explica por qué no tiene backends. Las escrituras (restart, cordon, drain, borrado, escalado, YAML) confirman antes entorno, clúster, contexto y namespace. La URL guarda la vista, las tablas dicen "N de M" con sus filtros, y las ventanas estrechas y el teclado son ciudadanos de primera. Los logs de workloads traen su propia inteligencia.
