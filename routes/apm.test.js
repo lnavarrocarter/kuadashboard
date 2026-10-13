@@ -27,7 +27,9 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
   });
   const architectureDatabase = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
+  let taskSyncs = 0;
   const scheduler = {
+    syncApplicationTasks() { taskSyncs += 1; },
     async collectApplication(applicationId) {
       return {
         skipped: false,
@@ -124,6 +126,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     architectureRequest,
     architectureCatalogRequest,
     request,
+    get taskSyncs() { return taskSyncs; },
     async close() {
       await new Promise(resolve => server.close(resolve));
       database.close();
@@ -589,6 +592,7 @@ test('generic Observability route updates local polling for a providerless appli
     assert.equal(updated.body.pollingEnabled, true);
     assert.equal(updated.body.revision, application.revision);
     assert.equal(subject.database.getApplication(application.id).pollingEnabled, true);
+    assert.equal(subject.taskSyncs, 1);
   } finally {
     await subject.close();
   }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Scheduled APM collection progress (#262):** the background task panel lists enabled application collections before their first run and keeps their next run visible. The desktop taskbar and tray tooltip now report active collection progress; no additional cloud calls are introduced.
+
 
 **Kubernetes.** Clusters read honestly and explain themselves. Pod details lead with health (failing, not ready, ready) and usage without samples says so instead of showing 0. A diagnosis path links a pod to its current and previous logs, ReplicaSet, Deployment, Node and Services, and a Service says why it has no backends. Writes (restart, cordon, drain, delete, scale, YAML) confirm the environment, cluster, context and namespace first. The URL keeps the view, tables say "N of M" with their filters, and narrow windows and the keyboard are first-class. Workload logs come with their own intelligence.
 
