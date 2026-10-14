@@ -33,8 +33,9 @@ Todas leen, excepto `apply_application_change`, que aplica un cambio de KUApps q
 | Herramienta | Qué devuelve |
 | --- | --- |
 | `list_profiles` | Perfiles de AWS, GCP y Vercel (id, nombre, proveedor). Cuando KUA no tiene perfiles de AWS o GCP, lista además los perfiles de la CLI de AWS (`~/.aws/config`) y las configuraciones de gcloud de este equipo como `local:<nombre>`. Nunca devuelve credenciales |
+| `check_profile` | Comprobación de acceso de solo lectura para AWS, GCP, Vercel o un contexto Kubernetes. Informa conexión, permisos de lectura probados y un siguiente paso seguro; no devuelve credenciales ni errores crudos del proveedor |
 | `aws_advisor` (Pro) | Hallazgos del Advisor de AWS para un perfil (caché de 15 min; `refresh` vuelve a analizar con APIs gratuitas) |
-| `gcp_advisor` (Pro) | Hallazgos del Advisor de GCP a partir del último overview guardado |
+| `gcp_advisor` (Pro) | Hallazgos del Advisor de GCP del overview guardado; usa `refresh: true` para forzar un inventario y análisis nuevos. Indica si el snapshot es reciente, está en caché o vencido |
 | `vercel_advisor` (Pro) | Hallazgos del Advisor de Vercel para la cuenta o el team de un perfil (caché de 15 min; `refresh` vuelve a analizar con lecturas gratuitas de la API de Vercel). Nunca lee los valores de las variables |
 | `kubernetes_advisor` (Pro) | Hallazgos del Advisor de Kubernetes para el contexto actual (`namespace` opcional) |
 | `list_log_groups` | Log groups de CloudWatch en la caché de KUA para un perfil |
@@ -42,6 +43,9 @@ Todas leen, excepto `apply_application_change`, que aplica un cambio de KUApps q
 | `search_logs` | Errores recurrentes de los log groups en caché buscados por significado, en cualquier idioma (requiere el ML local activado en KUA); `provider: "kubernetes"` busca en los workloads de Kubernetes en caché |
 | `list_kube_log_workloads` | Workloads de Kubernetes cuyos logs de pods guarda KUA para el contexto actual |
 | `kube_log_intelligence` | Brief de un workload de Kubernetes en caché: tasas de error, anomalías, errores parecidos, recomendaciones, consultas |
+| `list_kubernetes_contexts` | Contextos locales de Kubernetes (nombres de contexto y cluster; sin direcciones del API server ni credenciales) |
+| `kubernetes_architecture` | Inventario en vivo y de solo lectura de workloads, Pods, Services, Ingresses, PVC/PV y Nodes, con salud y relaciones. Filtra por contexto, namespace, tipo y límite; omite valores de Secrets y mensajes de eventos |
+| `cloud_resource_inventory` | Inventario en vivo de solo lectura para AWS, GCP o Vercel mediante un perfil seleccionado. Busca por texto, filtra por tipo y usa `nextCursor` para paginar el mismo snapshot de cinco minutos sin repetir el escaneo. AWS admite región y stacks de CloudFormation, verifica la cuenta con STS y acepta `scan_limit` (500 por defecto, hasta 5.000); la estimación indica el tope y si la fuente quedó truncada. Las consultas regionales AWS omiten la expansión lenta de políticas IAM (los previews de mapas conservan el análisis). No modifica recursos ni descarga código Lambda |
 | `list_applications` | Aplicaciones de KUApps |
 | `product_advisor` (Pro) | Hallazgos de producto de una aplicación de KUApps |
 | `get_application` | Una KUA Application como la muestra KUApps: identidad, revisión, scopes con si este computador tiene un perfil verificado para cada uno (nunca el perfil), vistas de arquitectura, recursos contados por estado de señales, relaciones por estado y advertencias |

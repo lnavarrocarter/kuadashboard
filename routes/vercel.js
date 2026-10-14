@@ -715,7 +715,7 @@ router.get('/advisor', async (req, res) => {
   if (!profileId) return;
   try {
     const { scan, profileKey, teamId, fresh } = await scanVercelAccount(profileId, { refresh: req.query.refresh === '1' });
-    res.json({ ...finalizeVercelAdvisor({ report: scan.report, profileKey, teamId, fresh }), ...(fresh ? {} : { fromCache: true }) });
+    res.json({ ...finalizeVercelAdvisor({ report: scan.report, profileKey, teamId, fresh }), fromCache: !fresh });
   } catch (err) { handleErr(res, err); }
 });
 

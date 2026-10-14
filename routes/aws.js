@@ -586,7 +586,7 @@ router.get('/overview/advisor', async (req, res) => {
     }
     const report = await buildAwsAdvisor(cfg);
     advisorCache.set(key, { at: Date.now(), report });
-    res.json(finalizeAdvisor(report, posture));
+    res.json({ ...finalizeAdvisor(report, posture), fromCache: false });
   } catch (err) { handleErr(res, err); }
 });
 

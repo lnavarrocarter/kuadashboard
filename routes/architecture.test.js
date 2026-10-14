@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader } = {}) {
+async function fixture({ discoveryService, deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -15,6 +15,7 @@ async function fixture({ deploymentReader, inventoryReader, relationshipReader, 
   app.use('/api/architecture', createArchitectureRouter({
     database,
     ...(apmDatabase ? { apmDatabase } : {}),
+    ...(discoveryService ? { discoveryService } : {}),
     ...(awsDriftReader ? { awsDriftReader } : {}),
     auditLog: { log(event) { auditEvents.push(event); } },
     deploymentReader,
@@ -519,6 +520,78 @@ test('API previews Kubernetes topology only for the selected project profile', a
     assert.equal(preview.body.profileId, 'local:dev');
     assert.equal(preview.body.sources[0].profileId, 'local:dev');
     assert.deepEqual(calls, [{ provider: 'generic', contexts: ['eks-dev'], namespaces: ['orders'] }]);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('MCP Kubernetes inventory lists contexts and previews architecture without a project profile', async () => {
+  const calls = [];
+  const subject = await fixture({
+    kubernetesAdapter: {
+      listContexts: () => [{ id: 'eks-dev', name: 'orders-eks', cluster: 'cluster-1', server: 'https://internal-api' }],
+      async checkContext(context) { calls.push({ checkContext: context }); return { context, status: 'connected' }; },
+      async preview(input) {
+        calls.push(input);
+        return { nodes: [{ id: 'deployment-1', resourceType: 'deployment' }], relationships: [], failures: [] };
+      },
+    },
+  });
+  try {
+    const contexts = await subject.request('/kubernetes/contexts', { profile: '' });
+    assert.equal(contexts.status, 200);
+    assert.deepEqual(contexts.body.contexts, [{ id: 'eks-dev', name: 'orders-eks', cluster: 'cluster-1' }]);
+
+    const check = await subject.request('/kubernetes/check', { profile: '', method: 'POST', body: { context: 'eks-dev' } });
+    assert.equal(check.status, 200);
+    assert.deepEqual(check.body, { context: 'eks-dev', status: 'connected' });
+
+    const preview = await subject.request('/kubernetes/architecture/preview', {
+      profile: '', method: 'POST', body: { context: 'orders-eks', namespace: 'orders' },
+    });
+    assert.equal(preview.status, 200);
+    assert.deepEqual(calls, [
+      { checkContext: 'eks-dev' },
+      { provider: 'generic', contexts: ['eks-dev'], namespaces: ['orders'] },
+    ]);
+
+    const missingCheck = await subject.request('/kubernetes/check', { profile: '', method: 'POST', body: {} });
+    assert.equal(missingCheck.status, 400);
+    assert.equal(missingCheck.body.code, 'KUBERNETES_CONTEXT_REQUIRED');
+
+    const missing = await subject.request('/kubernetes/architecture/preview', {
+      profile: '', method: 'POST', body: { context: 'unknown' },
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.code, 'KUBERNETES_CONTEXT_NOT_FOUND');
+  } finally {
+    await subject.close();
+  }
+});
+
+test('cloud architecture previews are read-only and do not require a project map', async () => {
+  const calls = [];
+  const subject = await fixture({
+    discoveryService: { async preview(input) { calls.push(['aws', input]); return { nodes: [], scope: { provider: 'aws' } }; } },
+    gcpDiscoveryService: { async preview(input) { calls.push(['gcp', input]); return { nodes: [], scope: { provider: 'gcp' } }; } },
+    vercelDiscoveryService: { async preview(input) { calls.push(['vercel', input]); return { nodes: [], scope: { provider: 'vercel' } }; } },
+  });
+  try {
+    const aws = await subject.request('/clouds/aws/architecture/preview', {
+      method: 'POST', body: { region: 'eu-west-1', accountId: '123456789012' },
+    });
+    const gcp = await subject.request('/clouds/gcp/architecture/preview', { method: 'POST' });
+    const vercel = await subject.request('/clouds/vercel/architecture/preview', { method: 'POST' });
+    const unsupported = await subject.request('/clouds/azure/architecture/preview', { method: 'POST' });
+    assert.equal(aws.status, 200);
+    assert.equal(gcp.status, 200);
+    assert.equal(vercel.status, 200);
+    assert.equal(unsupported.status, 400);
+    assert.deepEqual(calls, [
+      ['aws', { profileId: 'local:dev', region: 'eu-west-1', accountId: '123456789012', stackNames: undefined, includeIamRoleReferences: false }],
+      ['gcp', { profileId: 'local:dev' }],
+      ['vercel', { profileId: 'local:dev' }],
+    ]);
   } finally {
     await subject.close();
   }

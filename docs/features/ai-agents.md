@@ -33,8 +33,9 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 | Tool | What it returns |
 | --- | --- |
 | `list_profiles` | AWS, GCP and Vercel profiles (id, name, provider). When KUA has no AWS or GCP profile, it also lists the AWS CLI profiles (`~/.aws/config`) and gcloud configurations of this computer as `local:<name>`. Credentials are never returned |
+| `check_profile` | Read-only access check for AWS, GCP, Vercel or a Kubernetes context. Reports connection, tested read permissions and a safe next step without returning credentials or raw provider errors |
 | `aws_advisor` (Pro) | AWS Advisor findings for a profile (cached 15 min, `refresh` scans again with free APIs) |
-| `gcp_advisor` (Pro) | GCP Advisor findings from the last stored overview |
+| `gcp_advisor` (Pro) | GCP Advisor findings from the stored overview; pass `refresh: true` to force a new inventory and scan. Reports whether the snapshot is fresh, cached or stale |
 | `vercel_advisor` (Pro) | Vercel Advisor findings for a profile's account or team (cached 15 min, `refresh` scans again with free Vercel API reads). Env var values are never read |
 | `kubernetes_advisor` (Pro) | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
@@ -42,6 +43,9 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 | `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA); `provider: "kubernetes"` searches cached Kubernetes workloads |
 | `list_kube_log_workloads` | Kubernetes workloads whose pod logs KUA caches for the current context |
 | `kube_log_intelligence` | Brief of a cached Kubernetes workload: error rates, anomalies, similar errors, recommendations, queries |
+| `list_kubernetes_contexts` | Local Kubernetes contexts (context and cluster names; no API-server addresses or credentials) |
+| `kubernetes_architecture` | Read-only live inventory of workloads, Pods, Services, Ingresses, PVCs/PVs and Nodes, with health and relationships. Filter by context, namespace, resource type and limit; Secret values and event messages are omitted |
+| `cloud_resource_inventory` | Read-only live inventory for AWS, GCP or Vercel using a selected profile. Search by text, filter by resource type, and use `nextCursor` to page through the same five-minute snapshot without rescanning. AWS supports region and CloudFormation stack filters, verifies the account through STS, and accepts `scan_limit` (500 by default, up to 5,000); the estimate reports the cap and source truncation. AWS regional queries skip slow IAM role-policy expansion (architecture-map previews retain it). Never changes resources or downloads Lambda code |
 | `list_applications` | KUApps applications |
 | `product_advisor` (Pro) | Product findings of a KUApps application |
 | `get_application` | One KUA Application as KUApps shows it: identity, revision, scopes with whether this computer has a verified profile for each (never the profile itself), architecture views, resources counted by signal state and relationships by status, and warnings |

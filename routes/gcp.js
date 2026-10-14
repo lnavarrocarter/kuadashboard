@@ -565,7 +565,11 @@ async function gcpOverview(req, res) {
     const history = cloudHistory();
     if (!force) {
       const cached = history?.readLatest(snapshotKey);
-      if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId }));
+      if (cached) return res.json(withAdvisorGate({
+        ...cached.payload,
+        fromCache: true,
+        snapshotAt: new Date(cached.capturedAt).toISOString(),
+      }, { profileId, projectId }));
     }
 
     // Every page is read (capped); a capped list is reported as partial.
@@ -648,9 +652,12 @@ async function gcpOverview(req, res) {
       costs.unavailableServices = services
         .filter(service => service.status === 'unavailable')
         .map(service => service.label);
+    const generatedAt = new Date().toISOString();
     const payload = {
       provider: 'gcp',
-      generatedAt: new Date().toISOString(),
+      generatedAt,
+      fromCache: false,
+      snapshotAt: generatedAt,
         identity: { projectId, region: region || null, account: authCtx.account || null },
       projectId,
       region: region || null,
@@ -670,7 +677,12 @@ async function gcpOverview(req, res) {
   } catch (err) {
     const history = cloudHistory();
     const cached = history?.readLatest({ provider: 'gcp', profileId, region, resourceKey: 'overview', kind: 'gcp-overview', allowExpired: true });
-    if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId: authCtx?.projectId }));
+    if (cached) return res.json(withAdvisorGate({
+      ...cached.payload,
+      fromCache: true,
+      stale: true,
+      snapshotAt: new Date(cached.capturedAt).toISOString(),
+    }, { profileId, projectId: authCtx?.projectId }));
     handleErr(res, err);
   }
 }
