@@ -221,7 +221,9 @@ app.use('/api', require('./lib/auditContext').auditContextMiddleware);
 app.use('/api', require('./lib/auditOutcome').createAuditOutcomeMiddleware({ audit: auditLog }));
 app.use('/api', readOnlyMode.middleware);
 // AI agents (MCP, X-KUA-Actor: mcp) need a plan with agents (lib/agentPlanGuard.js).
-app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard());
+// Agents can also be turned off on this computer (tray panel or Help & Options → AI agents).
+const agentAccess = require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() });
+app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard({ agentAccess }));
 
 // What KUA spends on AWS: priced SDK calls go to a local ledger (lib/usage),
 // attributed to the profile and feature of the request that triggered them.
@@ -408,7 +410,7 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   githubCicd,
   plugins: pluginRegistry,
   // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
-  agentAccess: require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() }),
+  agentAccess,
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
 syncEngine.start({ task: applicationSyncTask });

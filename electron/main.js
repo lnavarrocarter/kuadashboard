@@ -20,13 +20,14 @@
  *     All Node/Electron access goes through preload.js contextBridge.
  */
 
-const { app, BrowserWindow, ipcMain, shell, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, Tray, nativeImage, nativeTheme, screen } = require('electron');
 const path        = require('path');
 const { fork }    = require('child_process');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const { createDesktopLifecycle } = require('./desktopLifecycle');
 const { summarizeTaskProgress } = require('./taskbarProgress');
+const { buildTrayStatus, parseTrayAction, panelPosition } = require('./trayStatus');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,13 @@ let desktopLifecycle = null;
 let appTray = null;
 let taskProgressTimer = null;
 let taskProgressPollInFlight = false;
+let trayPanel = null;
+let trayPanelClosedAt = 0;
+let trayPanelLang = null;
+let backendStarting = false;
+let restartingBackend = false;
+// App update in the background (electron-updater), shown in the tray panel.
+let updateState = { status: 'idle' };
 
 // ─── Backend (Express) ────────────────────────────────────────────────────────
 
@@ -103,6 +111,15 @@ function backendAnswers() {
 }
 
 async function startBackend() {
+  backendStarting = true;
+  try {
+    return await forkBackend();
+  } finally {
+    backendStarting = false;
+  }
+}
+
+async function forkBackend() {
   // `npm run electron:dev` already runs the backend under nodemon: a second
   // fork on the same port dies with EADDRINUSE and the window waits the 15 s timeout.
   if (IS_DEV && await backendAnswers()) {
@@ -151,7 +168,7 @@ async function startBackend() {
     backendProcess.on('exit', (code, signal) => {
       console.log(`[electron] Backend exited — code: ${code}, signal: ${signal}`);
       backendReady = false;
-      if (!backendReady && mainWindow) {
+      if (!restartingBackend && mainWindow) {
         mainWindow.webContents.send('server:error', 'Backend process exited unexpectedly.');
       }
     });
@@ -168,6 +185,56 @@ function stopBackend() {
     backendProcess.kill('SIGTERM');
     backendProcess = null;
   }
+}
+
+/** Restarts the backend this app runs (tray panel), waiting for the old one to free the port. */
+async function restartBackend() {
+  if (restartingBackend) return;
+  restartingBackend = true;
+  try {
+    const previous = backendProcess;
+    if (previous && previous.exitCode === null && previous.signalCode === null) {
+      const exited = new Promise(resolve => previous.once('exit', resolve));
+      stopBackend();
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
+    }
+    backendProcess = null;
+    backendReady = false;
+    await startBackend();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+  } catch (err) {
+    console.error('[electron] Backend restart failed:', err.message);
+  } finally {
+    restartingBackend = false;
+  }
+}
+
+/** One request to the local backend: { status, body } or null when it does not answer. */
+function backendRequest(method, requestPath, payload, { timeout = 1500 } = {}) {
+  return new Promise(resolve => {
+    const data = payload === undefined ? null : JSON.stringify(payload);
+    const request = require('http').request({
+      hostname: '127.0.0.1',
+      port: BACKEND_PORT,
+      path: requestPath,
+      method,
+      timeout,
+      headers: { Accept: 'application/json', ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}) },
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        let parsed = null;
+        try { parsed = body ? JSON.parse(body) : null; } catch { /* not JSON */ }
+        resolve({ status: response.statusCode, body: parsed });
+      });
+    });
+    request.on('timeout', () => request.destroy());
+    request.on('error', () => resolve(null));
+    if (data) request.write(data);
+    request.end();
+  });
 }
 
 function readDesktopPreferences() {
@@ -189,6 +256,22 @@ function saveCloseToTray(enabled) {
   fs.writeFileSync(filePath, JSON.stringify({ ...preferences, closeToTray: enabled }, null, 2));
 }
 
+function trayMenu() {
+  return Menu.buildFromTemplate([
+    { label: 'Show status…', click: () => openTrayPanel() },
+    { label: 'Show KuaDashboard', click: () => desktopLifecycle.showWindow() },
+    { type: 'separator' },
+    {
+      label: 'Close window to tray',
+      type: 'checkbox',
+      checked: desktopLifecycle.closeToTray,
+      click: item => desktopLifecycle.setCloseToTray(item.checked),
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => desktopLifecycle.quit() },
+  ]);
+}
+
 function setupTray() {
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
   const iconPath = path.join(__dirname, '..', 'assets', iconFile);
@@ -199,27 +282,173 @@ function setupTray() {
     if (process.platform === 'darwin') image.setTemplateImage(true);
     appTray = new Tray(image);
     appTray.setToolTip('KuaDashboard');
-    const updateMenu = () => appTray?.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Show KuaDashboard', click: () => desktopLifecycle.showWindow() },
-      { type: 'separator' },
-      {
-        label: 'Close window to tray',
-        type: 'checkbox',
-        checked: desktopLifecycle.closeToTray,
-        click: item => {
-          desktopLifecycle.setCloseToTray(item.checked);
-          updateMenu();
-        },
-      },
-      { type: 'separator' },
-      { label: 'Quit', click: () => desktopLifecycle.quit() },
-    ]));
-    updateMenu();
-    appTray.on('click', () => desktopLifecycle.showWindow());
+    // Click opens the status panel and right-click the menu. Linux trays only show
+    // a context menu, so there the panel is its first item.
+    if (process.platform === 'linux') {
+      appTray.setContextMenu(trayMenu());
+    } else {
+      appTray.on('right-click', () => appTray?.popUpContextMenu(trayMenu()));
+    }
+    appTray.on('click', () => toggleTrayPanel());
   } catch (err) {
     console.warn('[electron] System tray unavailable; launch KuaDashboard again to restore its window:', err.message);
   }
 }
+
+// ─── Tray panel ───────────────────────────────────────────────────────────────
+// Status of KUA, the background tasks running and up next, AI agent access (MCP)
+// and the app update (electron/trayPanel.html, electron/trayStatus.js).
+
+const TRAY_PANEL_SIZE = { width: 360, height: 500 };
+
+function trayPanelOpen() {
+  return !!trayPanel && !trayPanel.isDestroyed();
+}
+
+/** The language chosen in KUA (settings of the main window), else the OS one. */
+async function readTrayPanelLang() {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const lang = await mainWindow.webContents.executeJavaScript(
+        "(() => { try { return JSON.parse(localStorage.getItem('kua:settings') || '{}').lang || '' } catch { return '' } })()", true);
+      if (lang === 'es' || lang === 'en') return lang;
+    }
+  } catch { /* window still loading */ }
+  return app.getLocale().toLowerCase().startsWith('es') ? 'es' : 'en';
+}
+
+async function collectTrayStatus() {
+  const [health, plan, tasks, access] = await Promise.all([
+    backendRequest('GET', '/api/health'),
+    backendRequest('GET', '/api/system/plan'),
+    backendRequest('GET', '/api/system/tasks'),
+    backendRequest('GET', '/api/kua-apps/agent-access'),
+  ]);
+  const ok = response => (response?.status === 200 ? response.body : null);
+  const taskList = Array.isArray(ok(tasks)?.tasks) ? ok(tasks).tasks : [];
+  applyTaskProgress(taskList);
+  return {
+    ...buildTrayStatus({
+      backend: { ready: backendReady, starting: backendStarting || restartingBackend, managed: !IS_DEV || !!backendProcess },
+      health: ok(health),
+      plan: ok(plan),
+      tasks: taskList,
+      access: ok(access),
+      update: updateState,
+      port: BACKEND_PORT,
+      appVersion: app.getVersion(),
+    }),
+    lang: trayPanelLang || 'en',
+  };
+}
+
+async function pushTrayStatus() {
+  if (!trayPanelOpen()) return null;
+  const status = await collectTrayStatus();
+  if (trayPanelOpen()) trayPanel.webContents.send('tray:status', status);
+  return status;
+}
+
+async function openTrayPanel() {
+  if (trayPanelOpen()) {
+    trayPanel.show();
+    trayPanel.focus();
+    return;
+  }
+  trayPanelLang = await readTrayPanelLang();
+  if (trayPanelOpen()) return;
+  trayPanel = new BrowserWindow({
+    ...TRAY_PANEL_SIZE,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: 'KuaDashboard',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f2125' : '#ffffff',
+    webPreferences: {
+      preload: path.join(__dirname, 'trayPreload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  const trayBounds = appTray?.getBounds?.() || null;
+  const cursor = screen.getCursorScreenPoint();
+  const display = trayBounds && trayBounds.width > 0 ? screen.getDisplayMatching(trayBounds) : screen.getDisplayNearestPoint(cursor);
+  const { x, y } = panelPosition({ ...TRAY_PANEL_SIZE, trayBounds, cursor, workArea: display.workArea });
+  trayPanel.setPosition(x, y, false);
+  trayPanel.loadFile(path.join(__dirname, 'trayPanel.html'));
+  trayPanel.once('ready-to-show', () => {
+    if (!trayPanelOpen()) return;
+    trayPanel.show();
+    trayPanel.focus();
+  });
+  // Closes like a menu: when it loses focus, or with Escape.
+  trayPanel.on('blur', () => { if (trayPanelOpen()) trayPanel.close(); });
+  trayPanel.on('closed', () => {
+    trayPanel = null;
+    trayPanelClosedAt = Date.now();
+  });
+}
+
+function closeTrayPanel() {
+  if (trayPanelOpen()) trayPanel.close();
+}
+
+function toggleTrayPanel() {
+  if (trayPanelOpen()) return closeTrayPanel();
+  // A click on the icon while the panel is open first blurs (closes) it: that click only closes.
+  if (Date.now() - trayPanelClosedAt < 300) return;
+  openTrayPanel();
+}
+
+async function runTrayAction(action) {
+  switch (action.type) {
+    case 'open':
+      closeTrayPanel();
+      desktopLifecycle.showWindow();
+      return null;
+    case 'quit':
+      desktopLifecycle.quit();
+      return null;
+    case 'mcp':
+      await backendRequest('PUT', '/api/kua-apps/agent-access', { enabled: action.enabled });
+      break;
+    case 'task':
+      await backendRequest('POST', `/api/system/tasks/${encodeURIComponent(action.id)}/${action.action}`);
+      break;
+    case 'restart-backend':
+      if (!IS_DEV || backendProcess) await restartBackend();
+      break;
+    case 'check-updates':
+      checkForUpdates();
+      break;
+    case 'install-update':
+      installUpdate();
+      return null;
+    default:
+      break;
+  }
+  return collectTrayStatus();
+}
+
+// Only the tray panel may ask: its actions are validated by parseTrayAction.
+ipcMain.handle('tray:get-status', event => {
+  if (!trayPanelOpen() || event.sender !== trayPanel.webContents) return null;
+  return collectTrayStatus();
+});
+
+ipcMain.handle('tray:action', async (event, input) => {
+  if (!trayPanelOpen() || event.sender !== trayPanel.webContents) return null;
+  const action = parseTrayAction(input);
+  if (!action) return null;
+  return runTrayAction(action);
+});
 
 function applyTaskProgress(tasks) {
   const summary = summarizeTaskProgress(tasks);
@@ -233,6 +462,12 @@ function applyTaskProgress(tasks) {
 
 function pollTaskProgress() {
   if (taskProgressPollInFlight) return;
+  // While the panel is open its refresh also updates the taskbar and the tooltip.
+  if (trayPanelOpen()) {
+    taskProgressPollInFlight = true;
+    pushTrayStatus().catch(() => {}).finally(() => { taskProgressPollInFlight = false; });
+    return;
+  }
   taskProgressPollInFlight = true;
   let settled = false;
   const finish = () => {
@@ -446,10 +681,7 @@ function buildMenu() {
           label: 'Check for Updates…',
           click: () => {
             if (!IS_DEV) {
-              const { autoUpdater } = require('electron-updater');
-              autoUpdater.checkForUpdates().catch(err => {
-                console.warn('[updater] Manual check failed:', err.message);
-              });
+              checkForUpdates();
             } else {
               const { dialog } = require('electron');
               dialog.showMessageBox(mainWindow, {
@@ -483,13 +715,19 @@ ipcMain.handle('dialog:openFile', async (event, opts = {}) => {
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.on('app:check-updates', () => {
-  if (!IS_DEV) {
-    const { autoUpdater } = require('electron-updater');
-    autoUpdater.checkForUpdates().catch(err => {
-      console.warn('[updater] IPC check failed:', err.message);
-    });
+function checkForUpdates() {
+  if (IS_DEV) {
+    updateState = { status: 'error', error: 'Auto-updates are disabled in development mode' };
+    return;
   }
+  const { autoUpdater } = require('electron-updater');
+  autoUpdater.checkForUpdates().catch(err => {
+    console.warn('[updater] Check failed:', err.message);
+  });
+}
+
+ipcMain.on('app:check-updates', () => {
+  if (!IS_DEV) checkForUpdates();
 });
 
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
@@ -499,8 +737,21 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on('checking-for-update', () => {
+    if (updateState.status !== 'downloaded') updateState = { status: 'checking' };
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    updateState = { status: 'none' };
+  });
+
+  autoUpdater.on('download-progress', progress => {
+    updateState = { ...updateState, status: 'downloading', percent: Math.round(progress.percent || 0) };
+  });
+
   autoUpdater.on('update-available', info => {
     console.log('[updater] Update available:', info.version);
+    updateState = { status: 'available', version: info.version };
     if (mainWindow) {
       mainWindow.webContents.send('update:available', {
         version: info.version,
@@ -512,6 +763,7 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', info => {
     console.log('[updater] Update downloaded:', info.version);
     updateDownloaded = true;
+    updateState = { status: 'downloaded', version: info.version };
     if (mainWindow) {
       mainWindow.webContents.send('update:downloaded', {
         version: info.version,
@@ -521,6 +773,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', err => {
     console.error('[updater] Error:', err.message);
+    updateState = { ...updateState, status: 'error', error: String(err.message || err).slice(0, 160) };
     if (mainWindow) {
       mainWindow.webContents.send('update:error', err.message);
     }
@@ -534,7 +787,9 @@ function setupAutoUpdater() {
 
 let updateDownloaded = false;
 
-ipcMain.on('app:install-update', () => {
+ipcMain.on('app:install-update', () => installUpdate());
+
+function installUpdate() {
   console.log('[updater] install-update requested, downloaded:', updateDownloaded);
   if (!updateDownloaded) {
     console.warn('[updater] update not yet downloaded, cannot install');
@@ -558,7 +813,7 @@ ipcMain.on('app:install-update', () => {
       if (mainWindow) mainWindow.webContents.send('update:error', err.message);
     }
   }
-});
+}
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
@@ -585,6 +840,7 @@ if (!hasSingleInstanceLock) {
     persistCloseToTray: saveCloseToTray,
     destroyTray: () => {
       stopTaskProgressPolling();
+      closeTrayPanel();
       appTray?.destroy();
       appTray = null;
     },

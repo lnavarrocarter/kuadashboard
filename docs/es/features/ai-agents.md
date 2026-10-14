@@ -57,6 +57,10 @@ Todas leen, excepto `apply_application_change`, que aplica un cambio de KUApps q
 
 Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto, o `json` para los datos crudos) y `lang` (`en` o `es`). `profile` acepta el id o el nombre de un perfil de KUA, o el nombre de un perfil de la CLI de AWS o de una configuración de gcloud de este equipo (por ejemplo `prod`), así el agente puede trabajar antes de agregar el perfil a KUA. Se puede omitir cuando hay un solo perfil de ese proveedor.
 
+### Apagar los agentes
+
+**Acceso de agentes de IA (MCP)** enciende o apaga los agentes en este equipo, desde el icono de KUA en la bandeja o **Conectar un agente IA**. Está encendido por defecto. Apagado, KUA rechaza toda petición del servidor MCP (`AGENTS_DISABLED`, salvo el descubrimiento por `/api/health`) y el agente te dice dónde volver a encenderlo. El interruptor se guarda en este equipo y un agente no puede cambiarlo. El panel de la bandeja también muestra cuándo llegó la última petición de un agente.
+
 ### Cambiar KUApps desde un agente
 
 Un agente puede cambiar una KUA Application en dos pasos, y solo mientras lo permitas: **Conectar un agente IA → Permitir que agentes cambien KUApps** (apagado por defecto, guardado en este computador). Apagado, los agentes igual pueden leer y previsualizar.

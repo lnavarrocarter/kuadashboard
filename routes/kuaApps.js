@@ -287,11 +287,27 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   // applying needs the user's switch below and a plan previewed against the current revision.
   const actorOf = req => (/^[a-z0-9:._-]{1,60}$/i.test(req.get('X-KUA-Actor') || '') ? req.get('X-KUA-Actor') : 'agent');
   router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
-  router.put('/agent-access', (req, res) => send(res, 200, () => {
-    const result = agentAccess.set(req.body?.writes === true);
-    auditLog?.log({ category: 'kua', action: result.writes ? 'Agents allowed to change KUApps' : 'Agents no longer allowed to change KUApps', resource: 'KUApps', context: 'kuapps' });
-    return result;
-  }));
+  // { enabled } turns agents on or off on this computer; { writes } lets them apply KUApps changes.
+  // Only the fields sent change. An agent never changes its own access.
+  router.put('/agent-access', (req, res) => {
+    if (String(req.get('X-KUA-Actor') || '').toLowerCase() === 'mcp') {
+      return res.status(403).json({ error: 'Only the user changes agent access, from KUA', code: 'AGENT_ACCESS_USER_ONLY' });
+    }
+    return send(res, 200, () => {
+      const changes = {};
+      if (typeof req.body?.enabled === 'boolean') changes.enabled = req.body.enabled;
+      if (typeof req.body?.writes === 'boolean' || !('enabled' in changes)) changes.writes = req.body?.writes === true;
+      const before = agentAccess.get();
+      const result = agentAccess.set(changes);
+      if ('enabled' in changes && result.enabled !== before.enabled) {
+        auditLog?.log({ category: 'kua', action: result.enabled ? 'AI agent access (MCP) turned on' : 'AI agent access (MCP) turned off', resource: 'MCP', context: 'kuapps' });
+      }
+      if ('writes' in changes) {
+        auditLog?.log({ category: 'kua', action: result.writes ? 'Agents allowed to change KUApps' : 'Agents no longer allowed to change KUApps', resource: 'KUApps', context: 'kuapps' });
+      }
+      return result;
+    });
+  });
   router.post('/changes/preview', (req, res) => send(res, 201, () => changePlans.preview({
     applicationId: req.body?.applicationId, operation: req.body?.operation, input: req.body?.input, actor: actorOf(req),
   })));

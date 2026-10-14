@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KuaDashboard</title>
+  <style>
+    :root {
+      --bg: #ffffff; --bg-soft: #f4f5f7; --text: #1d2026; --dim: #6a7280; --border: #e1e4e8;
+      --accent: #2f6fed; --ok: #1f9d55; --warn: #c27c0e; --err: #d64545; --track: #e6e8ec;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1f2125; --bg-soft: #282b30; --text: #e7e9ec; --dim: #9aa1ab; --border: #34383e;
+        --accent: #5b8ef5; --ok: #3cc47c; --warn: #e3a53b; --err: #f06c6c; --track: #3a3e45;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg); color: var(--text); font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; user-select: none;
+    }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+    header h1 { font-size: 13px; margin: 0; font-weight: 600; flex: 1; min-width: 0; }
+    header h1 small { color: var(--dim); font-weight: 400; margin-left: 4px; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--bg-soft); font-size: 11px; white-space: nowrap; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+    .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); }
+    .badge { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+    main { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 0 8px; }
+    section { padding: 8px 14px; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin: 0 0 6px; display: flex; justify-content: space-between; }
+    ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    li { display: flex; flex-direction: column; gap: 3px; }
+    .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .meta { color: var(--dim); font-size: 11px; white-space: nowrap; }
+    .detail { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+    .bar.indeterminate > span { width: 35%; animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+    .empty { color: var(--dim); font-size: 11px; }
+    button {
+      font: inherit; color: var(--text); background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px;
+      padding: 3px 9px; cursor: pointer;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); }
+    button:disabled { opacity: .55; cursor: default; }
+    button.link { background: none; border: none; padding: 0 2px; color: var(--accent); font-size: 11px; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+    .switch input { appearance: none; width: 30px; height: 17px; border-radius: 999px; background: var(--track); position: relative; flex: none; margin: 1px 0 0; cursor: pointer; transition: background .2s; }
+    .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left .2s; }
+    .switch input:checked { background: var(--ok); }
+    .switch input:checked::after { left: 15px; }
+    .switch input:disabled { opacity: .55; }
+    .switch span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .note { color: var(--warn); font-size: 11px; margin-top: 4px; }
+    .wrap { color: var(--dim); font-size: 11px; white-space: normal; flex: 1; min-width: 0; }
+    .update { display: flex; align-items: center; gap: 8px; }
+    footer { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
+    footer .spacer { flex: 1; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>KuaDashboard<small id="version"></small></h1>
+    <span class="badge" id="plan" hidden></span>
+    <span class="pill"><span class="dot" id="state-dot"></span><span id="state"></span></span>
+  </header>
+  <main>
+    <section id="stopped" hidden>
+      <div class="row"><span class="wrap" id="stopped-text"></span><button id="restart" hidden></button></div>
+    </section>
+    <section>
+      <h2><span data-t="running"></span><span id="running-count"></span></h2>
+      <ul id="running"></ul>
+    </section>
+    <section>
+      <h2><span data-t="upcoming"></span></h2>
+      <ul id="upcoming"></ul>
+      <ul id="attention" style="margin-top:6px"></ul>
+    </section>
+    <section id="mcp-section" hidden>
+      <h2><span data-t="mcp"></span></h2>
+      <label class="switch">
+        <input type="checkbox" id="mcp">
+        <span><strong data-t="mcpSwitch"></strong><small class="wrap" id="mcp-detail"></small></span>
+      </label>
+      <div class="note" id="mcp-note" hidden></div>
+    </section>
+    <section id="update-section" hidden>
+      <h2><span data-t="update"></span></h2>
+      <div class="update"><span class="name" id="update-text"></span><button id="update-action" hidden></button></div>
+      <div class="bar" id="update-bar" hidden style="margin-top:6px"><span></span></div>
+    </section>
+  </main>
+  <footer>
+    <button class="primary" id="open" data-t="open"></button>
+    <span class="spacer"></span>
+    <button id="quit" data-t="quit"></button>
+  </footer>
+  <script src="trayPanel.js"></script>
+</body>
+</html>

@@ -5,6 +5,13 @@
 ### Fixed
 
 - **Scheduled APM collection progress (#262):** the background task panel lists enabled application collections before their first run and keeps their next run visible. The desktop taskbar and tray tooltip now report active collection progress; no additional cloud calls are introduced.
+- **Up next follows the real schedule (#278):** application collections show when the 30-minute interval fires next instead of "30 minutes after the last change", and they leave Up next while scheduled collection is paused.
+
+### Added
+
+- **Tray status panel (#278):** clicking the tray icon opens a panel with the state of KUA (version, plan, backend answering or not, with **Restart backend**), the background tasks running now with their progress, the next ones scheduled, paused or failed tasks with pause, resume and cancel, and the app update downloading in the background (**Restart to update** when it is ready). Right-click keeps the menu; on Linux the panel is its first item. It reads only the local API: no cloud calls.
+- **AI agent access (MCP) switch (#278):** turn agents on or off on this computer from the tray panel or **Connect an AI agent**. Off, KUA refuses every request from the MCP server with `AGENTS_DISABLED` and the agent tells the user where to turn it back on. On by default; an agent cannot change its own access.
+- **Read-only inventory tools for agents:** the MCP server adds `check_profile` (connection and read permissions of an AWS, GCP or Vercel profile or a Kubernetes context, without credentials or raw provider errors), `list_kubernetes_contexts`, `kubernetes_architecture` (workloads, Pods, Services, Ingresses, PVCs/PVs and Nodes with their relationships; no Secret values) and `cloud_resource_inventory` (AWS, GCP or Vercel resources filtered by text and type, paged over one five-minute snapshot). `gcp_advisor` accepts `refresh` and says whether its data is fresh, cached or stale. They use only list/describe control-plane reads, at no cost, and never change resources.
 
 
 **Kubernetes.** Clusters read honestly and explain themselves. Pod details lead with health (failing, not ready, ready) and usage without samples says so instead of showing 0. A diagnosis path links a pod to its current and previous logs, ReplicaSet, Deployment, Node and Services, and a Service says why it has no backends. Writes (restart, cordon, drain, delete, scale, YAML) confirm the environment, cluster, context and namespace first. The URL keeps the view, tables say "N of M" with their filters, and narrow windows and the keyboard are first-class. Workload logs come with their own intelligence.

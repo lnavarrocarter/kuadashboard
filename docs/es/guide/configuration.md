@@ -43,7 +43,9 @@ Usa el llavero del sistema operativo (Windows Credential Store, macOS Keychain, 
 
 ## Comportamiento de Escritorio en Segundo Plano
 
-Al cerrar la ventana de KuaDashboard, se oculta en la bandeja del sistema por defecto y el backend sigue ejecutándose. Usa **Mostrar KuaDashboard** para recuperarla o **Salir** para detener el backend ordenadamente. La opción **Cerrar ventana en la bandeja** del menú se guarda localmente. Si el escritorio Linux no ofrece una bandeja compatible, vuelve a iniciar KuaDashboard para recuperar la instancia existente; usa **Salir** en el menú de la app para cerrar.
+Al cerrar la ventana de KuaDashboard, se oculta en la bandeja del sistema por defecto y el backend sigue ejecutándose. Usa **Mostrar KuaDashboard** para recuperarla o **Salir** para detener el backend ordenadamente. La opción **Cerrar ventana en la bandeja** del menú se guarda localmente.
+
+Al hacer clic en el icono de la bandeja se abre el panel de estado: si el backend de KUA responde (con **Reiniciar backend** cuando no), las tareas en segundo plano en ejecución y próximas (puedes pausarlas, reanudarlas o cancelarlas ahí), el interruptor **Acceso de agentes de IA (MCP)** y la actualización de la app que se descarga en segundo plano. El clic derecho abre el menú. Si el escritorio Linux no ofrece una bandeja compatible, vuelve a iniciar KuaDashboard para recuperar la instancia existente; usa **Salir** en el menú de la app para cerrar.
 
 ## Proxy de Desarrollo Vite
 

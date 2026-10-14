@@ -5,6 +5,13 @@
 ### Corregido
 
 - **Avance de la recolección APM programada (#262):** el panel de tareas en segundo plano lista las recolecciones habilitadas por aplicación antes de su primera ejecución y conserva visible la próxima. La barra de tareas y el tooltip de la bandeja ahora muestran el avance activo; no se añaden llamadas a servicios cloud.
+- **Próximas sigue el horario real (#278):** las recolecciones por aplicación muestran cuándo dispara el siguiente intervalo de 30 minutos en vez de "30 minutos después del último cambio", y salen de Próximas mientras la recolección programada está en pausa.
+
+### Añadido
+
+- **Panel de estado en la bandeja (#278):** al hacer clic en el icono de la bandeja se abre un panel con el estado de KUA (versión, plan, si el backend responde, con **Reiniciar backend**), las tareas en segundo plano en ejecución con su avance, las próximas programadas, las pausadas o con error con pausar, reanudar y cancelar, y la actualización de la app que se descarga en segundo plano (**Reiniciar y actualizar** cuando está lista). El clic derecho mantiene el menú; en Linux el panel es su primer elemento. Solo lee la API local: sin llamadas a la nube.
+- **Interruptor de acceso de agentes de IA (MCP) (#278):** enciende o apaga los agentes en este equipo desde el panel de la bandeja o **Conectar un agente IA**. Apagado, KUA rechaza toda petición del servidor MCP con `AGENTS_DISABLED` y el agente le dice al usuario dónde volver a encenderlo. Encendido por defecto; un agente no puede cambiar su propio acceso.
+- **Herramientas de inventario de solo lectura para agentes:** el servidor MCP añade `check_profile` (conexión y permisos de lectura de un perfil AWS, GCP o Vercel o un contexto Kubernetes, sin credenciales ni errores crudos del proveedor), `list_kubernetes_contexts`, `kubernetes_architecture` (workloads, Pods, Services, Ingresses, PVCs/PVs y nodos con sus relaciones; sin valores de Secrets) y `cloud_resource_inventory` (recursos de AWS, GCP o Vercel filtrados por texto y tipo, paginados sobre una misma foto de cinco minutos). `gcp_advisor` acepta `refresh` e indica si sus datos son recientes, de caché o desactualizados. Solo usan lecturas list/describe del plano de control, sin costo, y nunca cambian recursos.
 
 ### Lo más destacado de la 2.0
 

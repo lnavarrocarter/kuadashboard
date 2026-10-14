@@ -57,6 +57,10 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a KUA profile id or name, or the name of an AWS CLI profile or gcloud configuration of this computer (for example `prod`), so the agent can work before the profile is added to KUA. It can be omitted when there is only one profile of that provider.
 
+### Turning agents off
+
+**AI agent access (MCP)** turns agents on or off on this computer, from the KUA tray icon or **Connect an AI agent**. It is on by default. Off, KUA refuses every request from the MCP server (`AGENTS_DISABLED`, except discovery through `/api/health`) and the agent tells you where to turn it back on. The switch is stored on this computer, and an agent cannot change it. The tray panel also shows when the last agent request arrived.
+
 ### Changing KUApps from an agent
 
 An agent can change a KUA Application in two steps, and only while you allow it: **Connect an AI agent → Allow agents to change KUApps** (off by default, stored on this computer). With it off, agents can still read and preview.

@@ -43,7 +43,9 @@ Uses the OS keychain (Windows Credential Store, macOS Keychain, Linux Secret Ser
 
 ## Desktop Background Behavior
 
-Closing the KuaDashboard window hides it to the system tray by default; the backend keeps running. Use **Show KuaDashboard** to restore it or **Quit** to stop the backend cleanly. The tray menu's **Close window to tray** option is saved locally. If the Linux desktop does not provide a compatible tray, launch KuaDashboard again to restore the existing instance; use **Quit** from the app menu to exit.
+Closing the KuaDashboard window hides it to the system tray by default; the backend keeps running. Use **Show KuaDashboard** to restore it or **Quit** to stop the backend cleanly. The tray menu's **Close window to tray** option is saved locally.
+
+Clicking the tray icon opens the status panel: whether the KUA backend answers (with **Restart backend** when it does not), the background tasks running now and up next (pause, resume or cancel them there), the **AI agent access (MCP)** switch and the app update downloading in the background. Right-click opens the menu. If the Linux desktop does not provide a compatible tray, launch KuaDashboard again to restore the existing instance; use **Quit** from the app menu to exit.
 
 ## Vite Development Proxy
 
