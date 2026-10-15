@@ -23,7 +23,7 @@ const { getAccount } = require('../lib/account/account');
 const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
 const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -286,6 +286,20 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   // The actor names the client for the audit log (e.g. "mcp"); it is never trusted for permissions:
   // applying needs the user's switch below and a plan previewed against the current revision.
   const actorOf = req => (/^[a-z0-9:._-]{1,60}$/i.test(req.get('X-KUA-Actor') || '') ? req.get('X-KUA-Actor') : 'agent');
+  // ── Resource catalog (#281): what an account holds, to attach it to an application ──
+  // Only List/Describe calls, which AWS does not charge for.
+  const catalogOf = () => awsCatalog || (awsCatalog = require('../lib/kua/resourceCatalog/aws').createAwsResourceCatalog());
+  router.get('/catalog/aws/types', (_req, res) => send(res, 200, () => ({ types: catalogOf().types() })));
+  router.get('/catalog/aws', (req, res) => sendAsync(res, 200, () => catalogOf().list({
+    profileId: req.query.profile || req.get('X-Profile-Id'),
+    region: req.query.region,
+    types: req.query.types ? String(req.query.types).split(',').map(type => type.trim()).filter(Boolean) : undefined,
+    search: req.query.search,
+    arn: req.query.arn,
+    limit: req.query.limit,
+    cursor: req.query.cursor,
+  })));
+
   router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
   // { enabled } turns agents on or off on this computer; { writes } lets them apply KUApps changes.
   // Only the fields sent change. An agent never changes its own access.

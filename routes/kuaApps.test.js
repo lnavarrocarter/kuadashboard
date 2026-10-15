@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache, githubCicd, plugins } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -501,5 +501,27 @@ test('GitHub CI/CD plugin (#238): sync is an option of the application and uses 
     assert.equal((await subject.request('/applications/missing/github/causes')).status, 404);
     assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
     assert.equal((await subject.request('/applications/missing/github', { method: 'PUT', body: { enabled: true } })).status, 404);
+  } finally { await subject.close(); }
+});
+
+test('the AWS resource catalog answers by type, search and ARN, and reports its errors (#281)', async () => {
+  const asked = [];
+  const awsCatalog = {
+    types: () => [{ type: 's3', label: 'S3 buckets', global: true }],
+    async list(query) {
+      asked.push(query);
+      if (query.arn === 'arn:aws:kms:x') throw Object.assign(new Error('unsupported'), { statusCode: 400, code: 'UNSUPPORTED_ARN' });
+      return { account: '111111111111', items: [{ type: 's3', name: 'invoices' }], total: 1, nextCursor: null };
+    },
+  };
+  const subject = await fixture({ awsCatalog });
+  try {
+    assert.deepEqual((await subject.request('/catalog/aws/types')).body.types.map(type => type.type), ['s3']);
+    const listed = await subject.request('/catalog/aws?region=us-east-2&types=s3,%20dynamodb&search=inv&limit=10', { profile: 'local:dev' });
+    assert.equal(listed.status, 200);
+    assert.equal(listed.body.items[0].name, 'invoices');
+    assert.deepEqual(asked[0], { profileId: 'local:dev', region: 'us-east-2', types: ['s3', 'dynamodb'], search: 'inv', arn: undefined, limit: '10', cursor: undefined });
+    const refused = await subject.request('/catalog/aws?arn=arn:aws:kms:x');
+    assert.deepEqual([refused.status, refused.body.code], [400, 'UNSUPPORTED_ARN']);
   } finally { await subject.close(); }
 });
