@@ -73,12 +73,28 @@ Las herramientas MCP de KUA leen lo que KUA conoce en este equipo: perfiles, inv
 3. `list_application_resources` filtra por proveedor o estado. Un recurso `no_data`, `stale`, `partial` o con error no está sano.
 4. `get_architecture_graph` lee una vista guardada: evidencia histórica, no una lectura en vivo. Para el estado actual combínala con los inventarios en vivo.
 
+## Buscar y recomendar recursos para una aplicación
+
+- `search_resources` lista lo que tiene una cuenta AWS, un proyecto GCP o un contexto Kubernetes: por tipo (`types`, por ejemplo `["s3"]` para "todos los buckets"), por texto (`search`), o un recurso por ARN (`arn`, AWS) o nombre completo (`name`, GCP). Cada item trae `attach`: la entrada exacta para `resources.attach`. No construyas ARN a mano si el catálogo los entrega.
+- Kubernetes: pasa `context` (y `namespace` si aplica). Cada PV trae `backingVolume` (volumen EBS o disco GCP) y cada nodo su `instanceId`.
+- `failures` dice qué tipos no se pudieron leer (`access_denied`, `api_disabled`, `credentials`): repórtalos, no los ocultes.
+- `recommend_application_resources` sugiere qué más pertenece a una aplicación, con `evidence` y `confidence`. Presenta la evidencia ("la Step Function `orders` llama al job de Glue `nightly-etl`"). Una sugerencia con `note: "released"` es un volumen anterior liberado: es para revisar (posible costo huérfano), no para asociar a ciegas. Las de confianza 0,6 (variables de entorno de Lambda) son probables, no seguras.
+- Para asociar sugerencias usa su `resource` en `resources.attach`; para dejar de verlas, `recommendations.dismiss` con su `identityKey`. Ambas pasan por vista previa y aprobación.
+
+## Gestionar el APM de una aplicación
+
+Mismo protocolo de vista previa y aprobación, con estas operaciones:
+- `scopes.add` / `scopes.remove`: la cuenta, proyecto o team por donde KUA lee los recursos. Quitar un scope avisa cuántos recursos dejan de recolectarse.
+- `resource.update`: activar o desactivar un recurso, nombre, servicio o grupo de logs.
+- `thresholds.update`: umbrales de error, duración, load balancer, pods y reinicios.
+- `collection.update` (`pollingEnabled`) y `collection.run`: **generan costo en AWS**. Su vista previa trae `effects.cost` (métricas y USD por ejecución y por mes). Antes de pedir aprobación di el costo estimado con sus cifras. Si aparece `scheduled_collection_needs_plan`, la recolección programada necesita Pro o Team. `collection.run` solo inicia la recolección: lee el resultado después con `list_application_resources`.
+
 ## Cambiar una aplicación KUApps
 
 Siempre en este orden, sin saltos:
 
 1. Revisa el estado actual con `get_application` y, si hace falta, `list_application_resources` o `get_architecture_graph`.
-2. `preview_application_change` con la operación (`application.create`, `application.update`, `resources.attach`, `resources.detach`, `view.link`, `view.unlink`) y datos concretos. Para adjuntar recursos, tómalos de un inventario en vivo: así llevan ARN o id reales.
+2. `preview_application_change` con la operación (`application.create`, `application.update`, `resources.attach`, `resources.detach`, `view.link`, `view.unlink`, `scopes.add`, `scopes.remove`, `resource.update`, `thresholds.update`, `collection.update`, `collection.run`, `recommendations.dismiss`) y datos concretos. Para adjuntar recursos, tómalos de un inventario en vivo: así llevan ARN o id reales.
 3. Muestra la vista previa: destino, elementos afectados, efectos y limitaciones. En una aplicación sin proveedor, `effects.scopes.add` lista los scopes que se crearán (cuenta y región, proyecto, team); menciónalos. `resources.detach` quita la asociación en KUApps y no borra el recurso; `view.unlink` quita el vínculo y no borra la vista.
 4. Solo tras un sí explícito: `apply_application_change` con ese `planId` y `confirm: true`. Si falla, no cambies parámetros ni generes otra vista previa para esquivarlo.
 5. Si la respuesta se perdió, consulta `get_application_change` con el mismo `planId`. Nunca repitas el cambio.
@@ -104,4 +120,4 @@ No llames a los Advisors con `refresh` ni a `apply_application_change` como part
 
 ## Herramientas
 
-Acceso: `list_profiles`, `check_profile`, `list_kubernetes_contexts`. Inventario: `kubernetes_architecture`, `cloud_resource_inventory`. Advisors: `aws_advisor`, `gcp_advisor`, `vercel_advisor`, `kubernetes_advisor`, `product_advisor`. Logs: `list_log_groups`, `log_intelligence`, `search_logs`, `list_kube_log_workloads`, `kube_log_intelligence`. KUApps: `list_applications`, `get_application`, `list_application_resources`, `get_architecture_graph`, `preview_application_change`, `apply_application_change`, `get_application_change`.
+Acceso: `list_profiles`, `check_profile`, `list_kubernetes_contexts`. Inventario: `kubernetes_architecture`, `cloud_resource_inventory`. Catálogo y sugerencias: `search_resources`, `recommend_application_resources`. Advisors: `aws_advisor`, `gcp_advisor`, `vercel_advisor`, `kubernetes_advisor`, `product_advisor`. Logs: `list_log_groups`, `log_intelligence`, `search_logs`, `list_kube_log_workloads`, `kube_log_intelligence`. KUApps: `list_applications`, `get_application`, `list_application_resources`, `get_architecture_graph`, `preview_application_change`, `apply_application_change`, `get_application_change`.

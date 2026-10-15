@@ -50,6 +50,8 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 | `product_advisor` (Pro) | Product findings of a KUApps application |
 | `get_application` | One KUA Application as KUApps shows it: identity, revision, scopes with whether this computer has a verified profile for each (never the profile itself), architecture views, resources counted by signal state and relationships by status, and warnings |
 | `list_application_resources` | Its resources: portable identity, provider scope, sources, signal state (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) with the time of the latest data, and relationships. Filters `state` and `provider`; at most 500 (default 100), with `truncated` |
+| `search_resources` | What an AWS account, GCP project or Kubernetes context holds, to attach it: by type, text, ARN (AWS) or full resource name (GCP). AWS: EC2, EBS, S3, DynamoDB, SQS, SNS, SES, Glue, Step Functions, load balancers and target groups, Route 53, CloudFront, RDS, API Gateway, EKS, ECS, EventBridge, Lambda. GCP: VMs, disks, GKE, Cloud SQL, buckets, Pub/Sub, Cloud Run, Functions, Firestore, Memorystore, Workflows, Scheduler, Tasks, BigQuery. Kubernetes: workloads, CronJobs, Jobs, Services, Ingresses, PVCs, PVs (with their EBS volume or disk) and Nodes (with their instance). Each item has the exact `attach` input. List/Describe only, no cost |
+| `recommend_application_resources` | What else belongs to an application, with evidence and confidence: Step Functions definitions, Lambda environment, load balancer target groups, EC2 volumes, and for Kubernetes the EKS cluster, node instances and workload → PVC → PV → volume. Released volumes are flagged to review. Nothing is attached |
 | `preview_application_change` | What a change to a KUA Application would do, as a plan to approve |
 | `apply_application_change` | Applies an approved plan (needs Allow agents to change KUApps) |
 | `get_application_change` | The outcome of a plan, for a lost response |
@@ -75,6 +77,14 @@ An agent can change a KUA Application in two steps, and only while you allow it:
 | `resources.attach` | `resources[]` with `provider`, `type`, `key`, `name` and their scope: an ARN, or `scopeId` and `location`; `kubeContext` for Kubernetes. A name alone is refused | turn on collection |
 | `resources.detach` | `resourceIds[]` (from `list_application_resources`) | delete the resource in the cloud |
 | `view.link` / `view.unlink` | `projectId` | delete the view |
+| `scopes.add` / `scopes.remove` | `provider`, `scopeId`, `location` (or `scopeKey` to remove); removing warns how many resources lose collection | |
+| `resource.update` | `resourceId`, `enabled`, `name`, `service`, `logGroup`; enabling shows its collection cost | |
+| `thresholds.update` | `thresholds` (error rate, duration, load balancer 5xx and latency, ready pods, restarts, recurring signatures) | |
+| `collection.update` | `pollingEnabled`: on schedules collection every 30 minutes; the preview shows the calls and estimated USD per run and per month | collect before you approve |
+| `collection.run` | none: collects once now; the preview shows the cost of one run | |
+| `recommendations.dismiss` | `identityKeys[]` from `recommend_application_resources` | |
+
+Collection costs are estimated at list prices: CloudWatch `GetMetricData` USD 0.01 per 1,000 metrics, and for Lambda logs `FilterLogEvents` (no request charge; data transfer out USD 0.09 per GB after 100 GB free per month). Kubernetes collection has no cloud charge.
 
 - **Stale previews are refused.** If the application changed after the preview, apply answers `409 REVISION_CONFLICT` with the current revision and writes nothing: preview again.
 - **One plan, one write.** The plan is what is applied; the agent cannot change it in between. Applying the same `planId` again returns the recorded outcome. If a response is lost, `get_application_change` tells whether it was applied.

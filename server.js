@@ -411,6 +411,8 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   plugins: pluginRegistry,
   // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
   agentAccess,
+  // Agents can turn collection on and run it, after a previewed cost (#285).
+  apmScheduler,
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
 syncEngine.start({ task: applicationSyncTask });

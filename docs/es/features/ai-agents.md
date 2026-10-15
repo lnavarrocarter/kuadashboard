@@ -50,6 +50,8 @@ Todas leen, excepto `apply_application_change`, que aplica un cambio de KUApps q
 | `product_advisor` (Pro) | Hallazgos de producto de una aplicación de KUApps |
 | `get_application` | Una KUA Application como la muestra KUApps: identidad, revisión, scopes con si este computador tiene un perfil verificado para cada uno (nunca el perfil), vistas de arquitectura, recursos contados por estado de señales, relaciones por estado y advertencias |
 | `list_application_resources` | Sus recursos: identidad portable, scope del provider, fuentes, estado de señales (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) con la hora de los últimos datos, y relaciones. Filtros `state` y `provider`; como máximo 500 (100 por defecto), con `truncated` |
+| `search_resources` | Lo que tiene una cuenta AWS, un proyecto GCP o un contexto Kubernetes, para asociarlo: por tipo, texto, ARN (AWS) o nombre completo (GCP). AWS: EC2, EBS, S3, DynamoDB, SQS, SNS, SES, Glue, Step Functions, load balancers y target groups, Route 53, CloudFront, RDS, API Gateway, EKS, ECS, EventBridge, Lambda. GCP: VMs, discos, GKE, Cloud SQL, buckets, Pub/Sub, Cloud Run, Functions, Firestore, Memorystore, Workflows, Scheduler, Tasks, BigQuery. Kubernetes: workloads, CronJobs, Jobs, Services, Ingresses, PVCs, PVs (con su volumen EBS o disco) y nodos (con su instancia). Cada item trae la entrada exacta `attach`. Solo List/Describe, sin costo |
+| `recommend_application_resources` | Qué más pertenece a una aplicación, con evidencia y confianza: definiciones de Step Functions, entorno de Lambdas, target groups de load balancers, volúmenes de EC2 y, en Kubernetes, el clúster EKS, las instancias de los nodos y workload → PVC → PV → volumen. Los volúmenes liberados se marcan para revisar. No asocia nada |
 | `preview_application_change` | Qué haría un cambio en una KUA Application, como un plan por aprobar |
 | `apply_application_change` | Aplica un plan aprobado (requiere Permitir que agentes cambien KUApps) |
 | `get_application_change` | El resultado de un plan, si se perdió la respuesta |
@@ -75,6 +77,14 @@ Un agente puede cambiar una KUA Application en dos pasos, y solo mientras lo per
 | `resources.attach` | `resources[]` con `provider`, `type`, `key`, `name` y su scope: un ARN, o `scopeId` y `location`; `kubeContext` en Kubernetes. Solo un nombre se rechaza | activar la recolección |
 | `resources.detach` | `resourceIds[]` (de `list_application_resources`) | borrar el recurso en la nube |
 | `view.link` / `view.unlink` | `projectId` | borrar la vista |
+| `scopes.add` / `scopes.remove` | `provider`, `scopeId`, `location` (o `scopeKey` para quitar); quitar avisa cuántos recursos dejan de recolectarse | |
+| `resource.update` | `resourceId`, `enabled`, `name`, `service`, `logGroup`; activar muestra su costo de recolección | |
+| `thresholds.update` | `thresholds` (tasa de error, duración, 5xx y latencia de load balancer, pods listos, reinicios, firmas recurrentes) | |
+| `collection.update` | `pollingEnabled`: encendido programa la recolección cada 30 minutos; la vista previa muestra las llamadas y los USD estimados por ejecución y por mes | recolectar antes de que apruebes |
+| `collection.run` | nada: recolecta una vez ahora; la vista previa muestra el costo de una ejecución | |
+| `recommendations.dismiss` | `identityKeys[]` de `recommend_application_resources` | |
+
+Los costos de recolección se estiman a precio de lista: CloudWatch `GetMetricData` USD 0,01 por cada 1.000 métricas y, para logs de Lambda, `FilterLogEvents` (sin cargo por petición; transferencia de datos USD 0,09 por GB después de 100 GB gratis al mes). La recolección de Kubernetes no tiene costo cloud.
 
 - **Las vistas previas desactualizadas se rechazan.** Si la aplicación cambió después de la vista previa, aplicar responde `409 REVISION_CONFLICT` con la revisión actual y no escribe nada: vuelve a previsualizar.
 - **Un plan, una escritura.** Se aplica el plan tal cual; el agente no puede cambiarlo entre medio. Aplicar el mismo `planId` otra vez devuelve el resultado registrado. Si se pierde una respuesta, `get_application_change` dice si se aplicó.

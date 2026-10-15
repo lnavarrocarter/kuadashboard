@@ -23,7 +23,7 @@ const { getAccount } = require('../lib/account/account');
 const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
 const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, recommender = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, recommender = null, apmScheduler = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -41,6 +41,14 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database, dynamicAdapters: pluginRegistry.adapters });
   const changePlans = createChangePlanService({
     apmDatabase, architectureDatabase: database, applications, registry: applicationRegistry, access: agentAccess,
+    // Collection changes from agents (#285): the APM scheduler runs and schedules them.
+    collection: apmScheduler ? {
+      run: applicationId => apmScheduler.collectApplication(applicationId, { trigger: 'manual' })
+        .catch(error => console.warn('[kuapps] agent-started collection failed:', error.message)),
+      sync: () => apmScheduler.syncApplicationTasks?.(),
+      allowScheduled: () => apmScheduler.allowScheduled(),
+      intervalMinutes: () => apmScheduler.health().intervalMinutes,
+    } : null,
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'mcp', details }),
   });
 
