@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache, githubCicd, plugins } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog, gcpCatalog, kubernetesCatalog, recommender } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}), ...(gcpCatalog ? { gcpCatalog } : {}), ...(kubernetesCatalog ? { kubernetesCatalog } : {}), ...(recommender ? { recommender } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -393,7 +393,7 @@ test('observability resources: per-resource access from scope bindings, capabili
     subject.apmDatabase.setScopeBinding(application.id, bound.key, { profileId: 'local:prod', status: 'verified' });
     const arn = name => `arn:aws:lambda:us-east-1:111111111111:function:${name}`;
     for (const name of ['zeta', 'Alpha']) subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: arn(name), arn: arn(name), name });
-    subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'sqs', key: 'arn:aws:sqs:us-east-1:111111111111:jobs', arn: 'arn:aws:sqs:us-east-1:111111111111:jobs', name: 'jobs' });
+    subject.apmDatabase.attachResource(application.id, /* a type KUA collects nothing for (SQS has signals since #286) */ { provider: 'aws', type: 'autoscaling', key: 'arn:aws:autoscaling:us-east-1:111111111111:autoScalingGroup:1:autoScalingGroupName/jobs', arn: 'arn:aws:autoscaling:us-east-1:111111111111:autoScalingGroup:1:autoScalingGroupName/jobs', name: 'jobs' });
     subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: 'arn:aws:lambda:eu-west-1:222222222222:function:other', arn: 'arn:aws:lambda:eu-west-1:222222222222:function:other', name: 'other' });
 
     const { status, body } = await subject.request(`/applications/${application.id}/observability/resources`);
@@ -501,5 +501,73 @@ test('GitHub CI/CD plugin (#238): sync is an option of the application and uses 
     assert.equal((await subject.request('/applications/missing/github/causes')).status, 404);
     assert.equal((await subject.request('/applications/missing/github/activity')).status, 404);
     assert.equal((await subject.request('/applications/missing/github', { method: 'PUT', body: { enabled: true } })).status, 404);
+  } finally { await subject.close(); }
+});
+
+test('the AWS resource catalog answers by type, search and ARN, and reports its errors (#281)', async () => {
+  const asked = [];
+  const awsCatalog = {
+    types: () => [{ type: 's3', label: 'S3 buckets', global: true }],
+    async list(query) {
+      asked.push(query);
+      if (query.arn === 'arn:aws:kms:x') throw Object.assign(new Error('unsupported'), { statusCode: 400, code: 'UNSUPPORTED_ARN' });
+      return { account: '111111111111', items: [{ type: 's3', name: 'invoices' }], total: 1, nextCursor: null };
+    },
+  };
+  const subject = await fixture({ awsCatalog });
+  try {
+    assert.deepEqual((await subject.request('/catalog/aws/types')).body.types.map(type => type.type), ['s3']);
+    const listed = await subject.request('/catalog/aws?region=us-east-2&types=s3,%20dynamodb&search=inv&limit=10', { profile: 'local:dev' });
+    assert.equal(listed.status, 200);
+    assert.equal(listed.body.items[0].name, 'invoices');
+    assert.deepEqual(asked[0], { profileId: 'local:dev', region: 'us-east-2', types: ['s3', 'dynamodb'], search: 'inv', arn: undefined, limit: '10', cursor: undefined });
+    const refused = await subject.request('/catalog/aws?arn=arn:aws:kms:x');
+    assert.deepEqual([refused.status, refused.body.code], [400, 'UNSUPPORTED_ARN']);
+  } finally { await subject.close(); }
+});
+
+test('the GCP and Kubernetes catalogs answer with their own filters (#282)', async () => {
+  const asked = [];
+  const fake = name => ({ types: () => [{ type: name }], async list(query) { asked.push([name, query]); return { items: [], total: 0 }; } });
+  const subject = await fixture({ gcpCatalog: fake('gcp'), kubernetesCatalog: fake('kubernetes') });
+  try {
+    assert.equal((await subject.request('/catalog/gcp?types=gcp-sql,gcp-disk&name=projects/p/instances/db', { profile: 'local:ncaicloud' })).status, 200);
+    assert.equal((await subject.request('/catalog/kubernetes?context=dev&namespace=web&types=pv&search=data')).status, 200);
+    assert.deepEqual(asked[0], ['gcp', { profileId: 'local:ncaicloud', types: ['gcp-sql', 'gcp-disk'], search: undefined, name: 'projects/p/instances/db', limit: undefined, cursor: undefined }]);
+    assert.deepEqual(asked[1], ['kubernetes', { context: 'dev', namespace: 'web', types: ['pv'], search: 'data', limit: undefined, cursor: undefined }]);
+    assert.deepEqual((await subject.request('/catalog/kubernetes/types')).body.types, [{ type: 'kubernetes' }]);
+  } finally { await subject.close(); }
+});
+
+test('recommendations are read and dismissed per application (#283)', async () => {
+  const calls = [];
+  const recommender = {
+    async recommend(id) { calls.push(['recommend', id]); return { applicationId: id, suggestions: [{ identityKey: 'k1' }], failures: [] }; },
+    dismiss(id, key) { calls.push(['dismiss', id, key]); if (!key) throw Object.assign(new Error('identityKey is required'), { statusCode: 400, code: 'INVALID' }); return { dismissed: true }; },
+  };
+  const subject = await fixture({ recommender });
+  try {
+    assert.equal((await subject.request('/applications/app-1/recommendations')).body.suggestions[0].identityKey, 'k1');
+    assert.deepEqual((await subject.request('/applications/app-1/recommendations/dismiss', { method: 'POST', body: { identityKey: 'k1' } })).body, { dismissed: true });
+    assert.equal((await subject.request('/applications/app-1/recommendations/dismiss', { method: 'POST', body: {} })).status, 400);
+    assert.deepEqual(calls.slice(0, 2), [['recommend', 'app-1'], ['dismiss', 'app-1', 'k1']]);
+  } finally { await subject.close(); }
+});
+
+test('the UI attaches several catalog resources at once, with their scopes and the same identity rules (#284)', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Orders' });
+    const table = { provider: 'aws', type: 'dynamodb', key: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders', arn: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders', name: 'orders', scopeId: '111111111111', location: 'us-east-1' };
+    const bucket = { provider: 'gcp', type: 'gcp-bucket', key: 'projects/_/buckets/invoices', name: 'invoices', scopeId: 'analytics', location: 'us-central1' };
+    const attached = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [table, bucket] } });
+    assert.equal(attached.status, 200);
+    assert.deepEqual(attached.body.items.map(item => item.outcome), ['attached', 'attached']);
+    assert.deepEqual(attached.body.scopesAdded.map(scope => scope.provider).sort(), ['aws', 'gcp']);
+    const again = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [table] } });
+    assert.deepEqual(again.body.items.map(item => item.outcome), ['already_member']);
+    const nameOnly = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [{ provider: 'aws', type: 'sqs', key: 'q', name: 'q' }] } });
+    assert.equal(nameOnly.status, 400);
+    assert.equal((await subject.request('/applications/missing/resources/attach', { method: 'POST', body: { resources: [table] } })).status, 404);
   } finally { await subject.close(); }
 });

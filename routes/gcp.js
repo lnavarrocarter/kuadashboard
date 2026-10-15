@@ -106,8 +106,18 @@ function sendList(res, page, items) {
   });
 }
 
+/**
+ * Google refused the token of a local gcloud config (expired early, revoked, or the account
+ * logged in again outside KUA): drop it so the next request asks gcloud for a fresh one.
+ */
+function forgetRejectedGcpToken(profileId, err) {
+  if (!String(profileId || '').startsWith('local:')) return;
+  if (classifyGcpError(err).kind === 'auth') gcloudCli.invalidateToken(String(profileId).slice(6));
+}
+
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
+  forgetRejectedGcpToken(res.req?.headers?.['x-profile-id'], err);
   // gRPC ALREADY_EXISTS (6) / REST "already exists" → 409 so the UI can say so clearly
   const alreadyExists = err.code === 6 || /already exists/i.test(err.message || '');
   if (alreadyExists) return res.status(409).json({ error: err.message });
@@ -565,7 +575,11 @@ async function gcpOverview(req, res) {
     const history = cloudHistory();
     if (!force) {
       const cached = history?.readLatest(snapshotKey);
-      if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId }));
+      if (cached) return res.json(withAdvisorGate({
+        ...cached.payload,
+        fromCache: true,
+        snapshotAt: new Date(cached.capturedAt).toISOString(),
+      }, { profileId, projectId }));
     }
 
     // Every page is read (capped); a capped list is reported as partial.
@@ -648,9 +662,12 @@ async function gcpOverview(req, res) {
       costs.unavailableServices = services
         .filter(service => service.status === 'unavailable')
         .map(service => service.label);
+    const generatedAt = new Date().toISOString();
     const payload = {
       provider: 'gcp',
-      generatedAt: new Date().toISOString(),
+      generatedAt,
+      fromCache: false,
+      snapshotAt: generatedAt,
         identity: { projectId, region: region || null, account: authCtx.account || null },
       projectId,
       region: region || null,
@@ -670,7 +687,12 @@ async function gcpOverview(req, res) {
   } catch (err) {
     const history = cloudHistory();
     const cached = history?.readLatest({ provider: 'gcp', profileId, region, resourceKey: 'overview', kind: 'gcp-overview', allowExpired: true });
-    if (cached) return res.json(withAdvisorGate(cached.payload, { profileId, projectId: authCtx?.projectId }));
+    if (cached) return res.json(withAdvisorGate({
+      ...cached.payload,
+      fromCache: true,
+      stale: true,
+      snapshotAt: new Date(cached.capturedAt).toISOString(),
+    }, { profileId, projectId: authCtx?.projectId }));
     handleErr(res, err);
   }
 }
@@ -3181,6 +3203,7 @@ router.get('/kms/keyrings/:location/:keyring/keys', async (req, res) => {
 
 module.exports = router;
 module.exports.resolveGcpAuth = resolveGcpAuth;
+module.exports.forgetRejectedGcpToken = forgetRejectedGcpToken;
 module.exports.gcpFetch = gcpFetch;
 module.exports.STATE_SOURCES = STATE_SOURCES;
 module.exports.recordObservedStates = recordObservedStates;

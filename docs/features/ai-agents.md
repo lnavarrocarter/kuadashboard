@@ -33,8 +33,9 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 | Tool | What it returns |
 | --- | --- |
 | `list_profiles` | AWS, GCP and Vercel profiles (id, name, provider). When KUA has no AWS or GCP profile, it also lists the AWS CLI profiles (`~/.aws/config`) and gcloud configurations of this computer as `local:<name>`. Credentials are never returned |
+| `check_profile` | Read-only access check for AWS, GCP, Vercel or a Kubernetes context. Reports connection, tested read permissions and a safe next step without returning credentials or raw provider errors |
 | `aws_advisor` (Pro) | AWS Advisor findings for a profile (cached 15 min, `refresh` scans again with free APIs) |
-| `gcp_advisor` (Pro) | GCP Advisor findings from the last stored overview |
+| `gcp_advisor` (Pro) | GCP Advisor findings from the stored overview; pass `refresh: true` to force a new inventory and scan. Reports whether the snapshot is fresh, cached or stale |
 | `vercel_advisor` (Pro) | Vercel Advisor findings for a profile's account or team (cached 15 min, `refresh` scans again with free Vercel API reads). Env var values are never read |
 | `kubernetes_advisor` (Pro) | Kubernetes Advisor findings for the current context (optional `namespace`) |
 | `list_log_groups` | CloudWatch log groups cached by KUA for a profile |
@@ -42,16 +43,25 @@ All tools read, except `apply_application_change`, which applies a KUApps change
 | `search_logs` | Recurring errors of the cached log groups found by meaning, in any language (needs Local ML enabled in KUA); `provider: "kubernetes"` searches cached Kubernetes workloads |
 | `list_kube_log_workloads` | Kubernetes workloads whose pod logs KUA caches for the current context |
 | `kube_log_intelligence` | Brief of a cached Kubernetes workload: error rates, anomalies, similar errors, recommendations, queries |
+| `list_kubernetes_contexts` | Local Kubernetes contexts (context and cluster names; no API-server addresses or credentials) |
+| `kubernetes_architecture` | Read-only live inventory of workloads, Pods, Services, Ingresses, PVCs/PVs and Nodes, with health and relationships. Filter by context, namespace, resource type and limit; Secret values and event messages are omitted |
+| `cloud_resource_inventory` | Read-only live inventory for AWS, GCP or Vercel using a selected profile. Search by text, filter by resource type, and use `nextCursor` to page through the same five-minute snapshot without rescanning. AWS supports region and CloudFormation stack filters, verifies the account through STS, and accepts `scan_limit` (500 by default, up to 5,000); the estimate reports the cap and source truncation. AWS regional queries skip slow IAM role-policy expansion (architecture-map previews retain it). Never changes resources or downloads Lambda code |
 | `list_applications` | KUApps applications |
 | `product_advisor` (Pro) | Product findings of a KUApps application |
 | `get_application` | One KUA Application as KUApps shows it: identity, revision, scopes with whether this computer has a verified profile for each (never the profile itself), architecture views, resources counted by signal state and relationships by status, and warnings |
 | `list_application_resources` | Its resources: portable identity, provider scope, sources, signal state (`current`, `stale`, `partial`, `no_data`, `disabled`, `error`, `no_connection`, `unsupported`) with the time of the latest data, and relationships. Filters `state` and `provider`; at most 500 (default 100), with `truncated` |
+| `search_resources` | What an AWS account, GCP project or Kubernetes context holds, to attach it: by type, text, ARN (AWS) or full resource name (GCP). AWS: EC2, EBS, S3, DynamoDB, SQS, SNS, SES, Glue, Step Functions, load balancers and target groups, Route 53, CloudFront, RDS, API Gateway, EKS, ECS, EventBridge, Lambda. GCP: VMs, disks, GKE, Cloud SQL, buckets, Pub/Sub, Cloud Run, Functions, Firestore, Memorystore, Workflows, Scheduler, Tasks, BigQuery. Kubernetes: workloads, CronJobs, Jobs, Services, Ingresses, PVCs, PVs (with their EBS volume or disk) and Nodes (with their instance). Each item has the exact `attach` input. List/Describe only, no cost |
+| `recommend_application_resources` | What else belongs to an application, with evidence and confidence: Step Functions definitions, Lambda environment, load balancer target groups, EC2 volumes, and for Kubernetes the EKS cluster, node instances and workload → PVC → PV → volume. Released volumes are flagged to review. Nothing is attached |
 | `preview_application_change` | What a change to a KUA Application would do, as a plan to approve |
 | `apply_application_change` | Applies an approved plan (needs Allow agents to change KUApps) |
 | `get_application_change` | The outcome of a plan, for a lost response |
 | `get_architecture_graph` | One architecture view of the application (default the first): nodes, hidden nodes, relationships with status, confidence, human decision and evidence kinds. It is the stored view at its revision, not a live read |
 
 Advisor and log tools accept `format` (`markdown` by default, or `json` for the raw data) and `lang` (`en` or `es`). `profile` takes a KUA profile id or name, or the name of an AWS CLI profile or gcloud configuration of this computer (for example `prod`), so the agent can work before the profile is added to KUA. It can be omitted when there is only one profile of that provider.
+
+### Turning agents off
+
+**AI agent access (MCP)** turns agents on or off on this computer, from the KUA tray icon or **Connect an AI agent**. It is on by default. Off, KUA refuses every request from the MCP server (`AGENTS_DISABLED`, except discovery through `/api/health`) and the agent tells you where to turn it back on. The switch is stored on this computer, and an agent cannot change it. The tray panel also shows when the last agent request arrived.
 
 ### Changing KUApps from an agent
 
@@ -67,6 +77,14 @@ An agent can change a KUA Application in two steps, and only while you allow it:
 | `resources.attach` | `resources[]` with `provider`, `type`, `key`, `name` and their scope: an ARN, or `scopeId` and `location`; `kubeContext` for Kubernetes. A name alone is refused | turn on collection |
 | `resources.detach` | `resourceIds[]` (from `list_application_resources`) | delete the resource in the cloud |
 | `view.link` / `view.unlink` | `projectId` | delete the view |
+| `scopes.add` / `scopes.remove` | `provider`, `scopeId`, `location` (or `scopeKey` to remove); removing warns how many resources lose collection | |
+| `resource.update` | `resourceId`, `enabled`, `name`, `service`, `logGroup`; enabling shows its collection cost | |
+| `thresholds.update` | `thresholds` (error rate, duration, load balancer 5xx and latency, ready pods, restarts, recurring signatures) | |
+| `collection.update` | `pollingEnabled`: on schedules collection every 30 minutes; the preview shows the calls and estimated USD per run and per month | collect before you approve |
+| `collection.run` | none: collects once now; the preview shows the cost of one run | |
+| `recommendations.dismiss` | `identityKeys[]` from `recommend_application_resources` | |
+
+Collection costs are estimated at list prices: CloudWatch `GetMetricData` USD 0.01 per 1,000 metrics, and for Lambda logs `FilterLogEvents` (no request charge; data transfer out USD 0.09 per GB after 100 GB free per month). GCP signals use the Cloud Monitoring read API: USD 0.50 per million time series returned after the first million free per billing account each month (one series per metric per run). Glue job runs and Kubernetes collection have no cloud charge.
 
 - **Stale previews are refused.** If the application changed after the preview, apply answers `409 REVISION_CONFLICT` with the current revision and writes nothing: preview again.
 - **One plan, one write.** The plan is what is applied; the agent cannot change it in between. Applying the same `planId` again returns the recorded outcome. If a response is lost, `get_application_change` tells whether it was applied.

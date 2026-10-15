@@ -543,6 +543,9 @@
       </div>
 
       <!-- ══ DynamoDB ══════════════════════════════════════════════════════ -->
+      <div v-show="activeTab === 'ebs'" class="tab-panel">
+        <AwsEbsTab :search="search.ebs" />
+      </div>
       <div v-show="activeTab === 'sqs'" class="tab-panel">
         <AwsSqsTab :search="search.sqs" :activity-loading="sqsActivityLoading" @request-access="activityAccess = $event" />
       </div>
@@ -3868,6 +3871,7 @@ import { useSortable }  from '../../composables/useSortable'
 import { settings as appSettings } from '../../composables/useSettings'
 import { createRefreshGate } from '../../composables/refreshGate'
 import AwsSqsTab from './messaging/AwsSqsTab.vue'
+import AwsEbsTab from './AwsEbsTab.vue'
 import AwsLoadBalancersTab from './networking/AwsLoadBalancersTab.vue'
 import AwsSnsTab from './messaging/AwsSnsTab.vue'
 import AwsSesTab from './messaging/AwsSesTab.vue'
@@ -3941,6 +3945,7 @@ const TABS = [
   { id: 'lambda',       label: 'Lambda'         },
   { id: 'apigw',        label: 'API Gateway'    },
   { id: 's3',           label: 'S3'             },
+  { id: 'ebs',          label: 'EBS'            },
   { id: 'ecr',          label: 'ECR'            },
   { id: 'vpc',          label: 'VPC'            },
   { id: 'eventbridge',  label: 'EventBridge'    },
@@ -4303,6 +4308,7 @@ const tabFilteredMap = {
   cognito: filteredCognito, secrets: filteredSecrets,
   cwdashboards: filteredCwDashboards,
   sqs: computed(() => filterRows(awsStore.sqsQueues, search.sqs)),
+  ebs: computed(() => filterRows(awsStore.ebsVolumes?.volumes || [], search.ebs)),
   sns: computed(() => filterRows(awsStore.snsTopics, search.sns)),
   ses: computed(() => filterRows(awsStore.sesData?.identities || [], search.ses)),
 }
@@ -4326,6 +4332,7 @@ function tabCount(id) {
     secrets: awsStore.secrets,
     cwdashboards: awsStore.cwDashboards,
     sqs: awsStore.sqsQueues, sns: awsStore.snsTopics, ses: awsStore.sesData?.identities,
+    ebs: awsStore.ebsVolumes?.volumes,
   }
   return map[id]?.length ?? 0
 }
@@ -4335,6 +4342,7 @@ const fetchMap = {
   overview:     async (o = {}) => { await nextTick(); return overviewRef.value?.load({ force: o.force }) },
   apm:          () => apmViewRef.value?.refreshLocal(),
   ec2:          () => awsStore.fetchEc2Instances(),
+  ebs:          () => awsStore.fetchEbsVolumes(),
   ecs:          () => awsStore.fetchEcsServices(),
   eks:          () => awsStore.fetchEksClusters(),
   // Activity (billed CloudWatch metrics) is cached; auto-refresh reuses it, manual refresh forces it.

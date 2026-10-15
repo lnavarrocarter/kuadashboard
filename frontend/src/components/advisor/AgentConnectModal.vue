@@ -28,9 +28,14 @@
           </button>
         </div>
         <p v-if="outcome" :class="['acm-outcome', outcome.ok ? 'ok' : 'warn']" data-test="agent-connect-outcome">{{ outcome.text }}</p>
+        <!-- Agents on this computer: off refuses every MCP request (lib/agentPlanGuard.js). -->
+        <label class="acm-writes" data-test="agent-enabled">
+          <input type="checkbox" :checked="agentEnabled" :disabled="writesBusy" @change="setAgentAccess({ enabled: $event.target.checked })" />
+          <span><strong>{{ t('agentConnect.enabled') }}</strong><small>{{ t(agentEnabled ? 'agentConnect.enabledOn' : 'agentConnect.enabledOff') }}</small></span>
+        </label>
         <!-- KUApps changes from agents (#155): off until the user allows them on this computer. -->
         <label class="acm-writes" data-test="agent-writes">
-          <input type="checkbox" :checked="agentWrites" :disabled="writesBusy" @change="setAgentWrites($event.target.checked)" />
+          <input type="checkbox" :checked="agentWrites" :disabled="writesBusy || !agentEnabled" @change="setAgentAccess({ writes: $event.target.checked })" />
           <span><strong>{{ t('agentConnect.writes') }}</strong><small>{{ t(agentWrites ? 'agentConnect.writesOn' : 'agentConnect.writesOff') }}</small></span>
         </label>
         <ul class="acm-notes">
@@ -80,14 +85,20 @@ const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id 
 const installable = computed(() => active.value === 'claude' || active.value === 'codex')
 // 'install' | 'verify' while one runs; outcome: { ok, text } of the last one.
 const busy = ref('')
+const agentEnabled = ref(true)
 const agentWrites = ref(false)
 const writesBusy = ref(false)
 
-async function setAgentWrites(writes) {
+function applyAccess(access) {
+  agentEnabled.value = access?.enabled !== false
+  agentWrites.value = access?.writes === true
+}
+
+// Only the switch that changed is sent: { enabled } or { writes }.
+async function setAgentAccess(changes) {
   writesBusy.value = true
   try {
-    const result = await apiFetch('/api/kua-apps/agent-access', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) })
-    agentWrites.value = result.writes === true
+    applyAccess(await apiFetch('/api/kua-apps/agent-access', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) }))
   } catch (err) {
     toast(err.message, 'error')
   } finally { writesBusy.value = false }
@@ -124,7 +135,12 @@ async function verify() {
 }
 
 async function load() {
-  if (launch.value || loading.value) return
+  // The switches can change from the tray panel while this modal is closed.
+  if (launch.value) {
+    apiFetch('/api/kua-apps/agent-access').then(applyAccess).catch(() => {})
+    return
+  }
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -133,7 +149,7 @@ async function load() {
       apiFetch('/api/kua-apps/agent-access').catch(() => ({ writes: false })),
     ])
     launch.value = nextLaunch
-    agentWrites.value = access?.writes === true
+    applyAccess(access)
   } catch (err) {
     error.value = err.message
   } finally {

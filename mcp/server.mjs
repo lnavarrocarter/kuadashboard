@@ -76,7 +76,7 @@ lines.on('line', line => {
 })
 lines.on('close', async () => {
   await Promise.allSettled([...pending])
-  process.exit(0)
+  process.exitCode = 0
 })
 
 // Diagnostics for the client's log; initialize carries the same note for the agent.

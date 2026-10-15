@@ -209,6 +209,10 @@ describe('KUApps navigation', () => {
     await flushPromises()
     expect(wrapper.find('.kuapps-add-panel').exists()).toBe(true)
     expect(wrapper.find('.kuapps-overview-content').exists()).toBe(true)
+    // Recommended and Search come first (#284); the map discovery is the third tab.
+    expect(wrapper.find('[data-test="kuapps-finder"]').exists()).toBe(true)
+    await wrapper.get('[data-test="kuapps-find-tab-map"]').trigger('click')
+    await flushPromises()
     expect(wrapper.find('.kuapps-add-providers').exists()).toBe(false)
 
     // The connection decides the provider and the context: no second click on Kubernetes (#239).
@@ -464,6 +468,8 @@ describe('KUApps navigation', () => {
     await details.trigger('toggle')
     expect(map().props('workspaceSection')).toBe('resources')
     await wrapper.get('[data-test="kuapps-resources-add"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="kuapps-find-tab-map"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('.kuapps-registry-workspace').exists()).toBe(true)
     const picker = wrapper.findAllComponents({ name: 'ArchitectureView' }).find(view => view.props('resourcePickerOnly'))

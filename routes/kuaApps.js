@@ -23,7 +23,7 @@ const { getAccount } = require('../lib/account/account');
 const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
 const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, recommender = null, apmScheduler = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -41,6 +41,14 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   const extensions = extensionRegistry || createKuaExtensionRegistry({ apmDatabase, architectureDatabase: database, dynamicAdapters: pluginRegistry.adapters });
   const changePlans = createChangePlanService({
     apmDatabase, architectureDatabase: database, applications, registry: applicationRegistry, access: agentAccess,
+    // Collection changes from agents (#285): the APM scheduler runs and schedules them.
+    collection: apmScheduler ? {
+      run: applicationId => apmScheduler.collectApplication(applicationId, { trigger: 'manual' })
+        .catch(error => console.warn('[kuapps] agent-started collection failed:', error.message)),
+      sync: () => apmScheduler.syncApplicationTasks?.(),
+      allowScheduled: () => apmScheduler.allowScheduled(),
+      intervalMinutes: () => apmScheduler.health().intervalMinutes,
+    } : null,
     audit: (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'mcp', details }),
   });
 
@@ -286,12 +294,82 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   // The actor names the client for the audit log (e.g. "mcp"); it is never trusted for permissions:
   // applying needs the user's switch below and a plan previewed against the current revision.
   const actorOf = req => (/^[a-z0-9:._-]{1,60}$/i.test(req.get('X-KUA-Actor') || '') ? req.get('X-KUA-Actor') : 'agent');
-  router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
-  router.put('/agent-access', (req, res) => send(res, 200, () => {
-    const result = agentAccess.set(req.body?.writes === true);
-    auditLog?.log({ category: 'kua', action: result.writes ? 'Agents allowed to change KUApps' : 'Agents no longer allowed to change KUApps', resource: 'KUApps', context: 'kuapps' });
+  // ── Resource catalog (#281): what an account holds, to attach it to an application ──
+  // Only List/Describe calls, which AWS does not charge for.
+  const catalogOf = () => awsCatalog || (awsCatalog = require('../lib/kua/resourceCatalog/aws').createAwsResourceCatalog());
+  router.get('/catalog/aws/types', (_req, res) => send(res, 200, () => ({ types: catalogOf().types() })));
+  router.get('/catalog/aws', (req, res) => sendAsync(res, 200, () => catalogOf().list({
+    profileId: req.query.profile || req.get('X-Profile-Id'),
+    region: req.query.region,
+    types: req.query.types ? String(req.query.types).split(',').map(type => type.trim()).filter(Boolean) : undefined,
+    search: req.query.search,
+    arn: req.query.arn,
+    limit: req.query.limit,
+    cursor: req.query.cursor,
+  })));
+  // GCP (#282): full resource names, project and location; only List/Get calls.
+  const gcpCatalogOf = () => gcpCatalog || (gcpCatalog = require('../lib/kua/resourceCatalog/gcp').createGcpResourceCatalog());
+  const typesOf = req => (req.query.types ? String(req.query.types).split(',').map(type => type.trim()).filter(Boolean) : undefined);
+  router.get('/catalog/gcp/types', (_req, res) => send(res, 200, () => ({ types: gcpCatalogOf().types() })));
+  router.get('/catalog/gcp', (req, res) => sendAsync(res, 200, () => gcpCatalogOf().list({
+    profileId: req.query.profile || req.get('X-Profile-Id'),
+    types: typesOf(req), search: req.query.search, name: req.query.name, limit: req.query.limit, cursor: req.query.cursor,
+  })));
+  // Kubernetes (#282): workloads, CronJobs, Jobs, volumes and nodes of one context.
+  const kubernetesCatalogOf = () => kubernetesCatalog || (kubernetesCatalog = require('../lib/kua/resourceCatalog/kubernetes').createKubernetesResourceCatalog());
+  router.get('/catalog/kubernetes/types', (_req, res) => send(res, 200, () => ({ types: kubernetesCatalogOf().types() })));
+  router.get('/catalog/kubernetes', (req, res) => sendAsync(res, 200, () => kubernetesCatalogOf().list({
+    context: req.query.context, namespace: req.query.namespace,
+    types: typesOf(req), search: req.query.search, limit: req.query.limit, cursor: req.query.cursor,
+  })));
+
+  // ── Recommendations (#283): what else belongs to an application, with evidence; never applied here ──
+  const recommenderOf = () => recommender || (recommender = require('../lib/kua/resourceRecommendations')
+    .createResourceRecommender({ apmDatabase, kubernetesCatalog: kubernetesCatalogOf() }));
+  router.get('/applications/:applicationId/recommendations', (req, res) => sendAsync(res, 200, () => recommenderOf().recommend(req.params.applicationId)));
+  router.post('/applications/:applicationId/recommendations/dismiss', (req, res) => send(res, 200, () => {
+    const result = recommenderOf().dismiss(req.params.applicationId, req.body?.identityKey);
+    auditLog?.log({ category: 'kua', action: 'Recommendation dismissed', resource: req.params.applicationId, context: 'kuapps', details: { identityKey: req.body?.identityKey } });
     return result;
   }));
+
+  // ── Attach several resources at once (#284): from the catalog or a recommendation, in the UI ──
+  // Same identity rules as an agent's resources.attach; the scopes the resources need are added.
+  router.post('/applications/:applicationId/resources/attach', (req, res) => send(res, 200, () => {
+    const application = apmDatabase.getApplication(req.params.applicationId);
+    if (!application) throw Object.assign(new Error('Application not found'), { statusCode: 404, code: 'NOT_FOUND' });
+    const raw = Array.isArray(req.body?.resources) ? req.body.resources : [];
+    if (!raw.length || raw.length > 100) throw Object.assign(new Error('resources must have 1 to 100 items'), { statusCode: 400, code: 'INVALID' });
+    const { resourceInput } = require('../lib/kua/changePlans');
+    const inputs = raw.map((resource, index) => resourceInput(resource, index));
+    const { results, scopesAdded = [] } = applicationRegistry.attachResources(application, inputs, { expectedRevision: req.body?.expectedRevision, clearDetachments: true });
+    const items = results.map(result => ({ name: result.input.name, outcome: result.error ? 'failed' : result.created ? 'attached' : 'already_member', ...(result.error ? { error: result.error } : {}) }));
+    auditLog?.log({ category: 'kua', action: 'Resources attached', resource: application.name, context: 'kuapps', details: { applicationId: application.id, attached: items.filter(item => item.outcome === 'attached').length, scopesAdded: scopesAdded.length } });
+    return { items, scopesAdded: scopesAdded.map(({ provider, scopeId, location }) => ({ provider, scopeId, location })), revision: apmDatabase.getApplication(application.id).revision };
+  }));
+
+  router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
+  // { enabled } turns agents on or off on this computer; { writes } lets them apply KUApps changes.
+  // Only the fields sent change. An agent never changes its own access.
+  router.put('/agent-access', (req, res) => {
+    if (String(req.get('X-KUA-Actor') || '').toLowerCase() === 'mcp') {
+      return res.status(403).json({ error: 'Only the user changes agent access, from KUA', code: 'AGENT_ACCESS_USER_ONLY' });
+    }
+    return send(res, 200, () => {
+      const changes = {};
+      if (typeof req.body?.enabled === 'boolean') changes.enabled = req.body.enabled;
+      if (typeof req.body?.writes === 'boolean' || !('enabled' in changes)) changes.writes = req.body?.writes === true;
+      const before = agentAccess.get();
+      const result = agentAccess.set(changes);
+      if ('enabled' in changes && result.enabled !== before.enabled) {
+        auditLog?.log({ category: 'kua', action: result.enabled ? 'AI agent access (MCP) turned on' : 'AI agent access (MCP) turned off', resource: 'MCP', context: 'kuapps' });
+      }
+      if ('writes' in changes) {
+        auditLog?.log({ category: 'kua', action: result.writes ? 'Agents allowed to change KUApps' : 'Agents no longer allowed to change KUApps', resource: 'KUApps', context: 'kuapps' });
+      }
+      return result;
+    });
+  });
   router.post('/changes/preview', (req, res) => send(res, 201, () => changePlans.preview({
     applicationId: req.body?.applicationId, operation: req.body?.operation, input: req.body?.input, actor: actorOf(req),
   })));

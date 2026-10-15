@@ -586,7 +586,7 @@ router.get('/overview/advisor', async (req, res) => {
     }
     const report = await buildAwsAdvisor(cfg);
     advisorCache.set(key, { at: Date.now(), report });
-    res.json(finalizeAdvisor(report, posture));
+    res.json({ ...finalizeAdvisor(report, posture), fromCache: false });
   } catch (err) { handleErr(res, err); }
 });
 
@@ -1066,6 +1066,20 @@ router.get('/ec2', async (req, res) => {
       }
     }
     res.json(instances);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ─── GET /ebs ─────────────────────────────────────────────────────────────────
+// EBS volumes of the profile's region (lib/awsEbs.js): attachment, the Kubernetes claim that created
+// them and their list-price monthly cost. DescribeVolumes only, at no cost.
+
+router.get('/ebs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EC2Client, DescribeVolumesCommand } = require('@aws-sdk/client-ec2');
+    res.json(await require('../lib/awsEbs').listVolumes(new EC2Client(cfg), { DescribeVolumesCommand }));
   } catch (err) { handleErr(res, err); }
 });
 

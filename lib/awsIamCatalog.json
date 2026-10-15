@@ -47,6 +47,9 @@
   "GET /ec2": [
     "ec2:DescribeInstances"
   ],
+  "GET /ebs": [
+    "ec2:DescribeVolumes"
+  ],
   "GET /ec2/:id/details": [
     "cloudwatch:GetMetricStatistics",
     "ec2:DescribeInstanceStatus",

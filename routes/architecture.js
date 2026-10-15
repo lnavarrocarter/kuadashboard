@@ -488,6 +488,66 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     } catch (error) { handleError(res, error); }
   });
 
+  // Read-only inventory for the local MCP; unlike project discovery, this does not require a map/profile.
+  router.get('/kubernetes/contexts', (_req, res) => {
+    try {
+      const contexts = kubernetesAdapter.listContexts({ provider: 'generic' }).map(({ id, name, cluster }) => ({ id, name, cluster }));
+      res.json({ contexts });
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/kubernetes/check', async (req, res) => {
+    const context = String(req.body?.context || '').trim();
+    if (!context) return res.status(400).json({ code: 'KUBERNETES_CONTEXT_REQUIRED', error: 'context is required' });
+    try {
+      return res.json(await kubernetesAdapter.checkContext(context));
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/kubernetes/architecture/preview', async (req, res) => {
+    try {
+      const requestedContext = String(req.body?.context || '').trim();
+      const namespace = String(req.body?.namespace || '').trim();
+      let contexts;
+      if (requestedContext) {
+        const match = kubernetesAdapter.listContexts({ provider: 'generic' }).find(context => context.id === requestedContext || context.name === requestedContext);
+        if (!match) return res.status(404).json({ code: 'KUBERNETES_CONTEXT_NOT_FOUND', error: `Kubernetes context not found: ${requestedContext}` });
+        contexts = [match.id];
+      }
+      const preview = await kubernetesAdapter.preview({
+        provider: 'generic',
+        ...(contexts ? { contexts } : {}),
+        ...(namespace ? { namespaces: [namespace] } : {}),
+      });
+      res.json(preview);
+    } catch (error) { handleError(res, error); }
+  });
+
+  router.post('/clouds/:provider/architecture/preview', async (req, res) => {
+    const profile = profileId(req, res);
+    if (!profile) return;
+    const provider = req.params.provider;
+    try {
+      if (provider === 'aws') {
+        return res.json(await discovery.preview({
+          profileId: profile,
+          region: req.body?.region || 'us-east-1',
+          accountId: req.body?.accountId,
+          stackNames: req.body?.stackNames,
+          includeIamRoleReferences: req.body?.includeIamRoleReferences === true,
+          ...(req.body?.maxResources !== undefined ? { maxResources: req.body.maxResources } : {}),
+        }));
+      }
+      const cloudDiscovery = { gcp: gcpDiscovery, vercel: vercelDiscovery }[provider];
+      if (!cloudDiscovery) return res.status(400).json({ code: 'UNSUPPORTED_CLOUD_PROVIDER', error: 'Supported providers: aws, gcp, vercel' });
+      return res.json(await cloudDiscovery.preview({ profileId: profile }));
+    } catch (error) {
+      // A token gcloud handed out and Google refused is not reused (routes/gcp.js).
+      if (provider === 'gcp') require('./gcp').forgetRejectedGcpToken?.(profile, error);
+      handleError(res, error);
+    }
+  });
+
   router.get('/projects/:projectId/discovery/kubernetes/contexts', (req, res) => {
     const project = scopedProject(req, res);
     if (!project) return;
@@ -668,9 +728,21 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       const project = scopedProject(req, res);
       if (!project) return;
       try {
-        res.json(await cloudDiscovery.preview({ profileId: project.profileId, projectId: project.id }));
+        // GCP can be limited to Infrastructure Manager deployments and labels, like AWS stacks.
+        const filters = provider === 'gcp' ? { deployments: req.body?.deployments, labels: req.body?.labels } : {};
+        res.json(await cloudDiscovery.preview({ profileId: project.profileId, projectId: project.id, filters }));
       } catch (error) { handleError(res, error); }
     });
+
+    if (provider === 'gcp') {
+      router.get('/projects/:projectId/discovery/gcp/groups', async (req, res) => {
+        const project = scopedProject(req, res);
+        if (!project) return;
+        try {
+          res.json(await cloudDiscovery.groups({ profileId: project.profileId }));
+        } catch (error) { handleError(res, error); }
+      });
+    }
 
     router.post(`/projects/:projectId/discovery/${provider}/import`, async (req, res) => {
       const project = scopedProject(req, res);

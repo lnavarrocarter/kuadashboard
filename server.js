@@ -142,6 +142,12 @@ const apmScheduler = new ApmScheduler({
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
+  // Glue job runs (#286), free GetJobRuns.
+  collectors: [
+    new (require('./lib/apm/awsGlueCollector').AwsGlueCollector)({ database: apmDatabase }),
+    // Cloud Run, Cloud SQL and VMs from Cloud Monitoring (#286).
+    new (require('./lib/apm/gcpMonitoringCollector').GcpMonitoringCollector)({ database: apmDatabase }),
+  ],
   taskRegistry: backgroundTaskRegistry,
 });
 const apmTask = backgroundTaskRegistry.register({
@@ -221,7 +227,9 @@ app.use('/api', require('./lib/auditContext').auditContextMiddleware);
 app.use('/api', require('./lib/auditOutcome').createAuditOutcomeMiddleware({ audit: auditLog }));
 app.use('/api', readOnlyMode.middleware);
 // AI agents (MCP, X-KUA-Actor: mcp) need a plan with agents (lib/agentPlanGuard.js).
-app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard());
+// Agents can also be turned off on this computer (tray panel, or Connect AI agents (MCP) in an Advisor panel).
+const agentAccess = require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() });
+app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard({ agentAccess }));
 
 // What KUA spends on AWS: priced SDK calls go to a local ledger (lib/usage),
 // attributed to the profile and feature of the request that triggered them.
@@ -240,7 +248,7 @@ for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsS
 
 const CLOUD_LIST_PATHS = {
   aws: new Set([
-    '/regions', '/eks', '/ecs', '/ec2', '/lambda', '/apigateway', '/s3', '/ecr',
+    '/regions', '/eks', '/ecs', '/ec2', '/ebs', '/lambda', '/apigateway', '/s3', '/ecr',
     '/vpc', '/eventbridge', '/stepfunctions', '/glue/jobs', '/glue/databases',
     '/athena/workgroups', '/rds', '/dynamodb', '/cloudfront', '/route53/zones',
     '/cognito/userpools', '/secrets', '/datapipeline', '/bedrock', '/lex',
@@ -408,7 +416,9 @@ app.use('/api/kua-apps', createKuaAppsRouter({
   githubCicd,
   plugins: pluginRegistry,
   // Whether AI agents may apply KUApps changes (#155): off until the user allows it.
-  agentAccess: require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() }),
+  agentAccess,
+  // Agents can turn collection on and run it, after a previewed cost (#285).
+  apmScheduler,
 }));
 // Sync passes every 2 minutes; the cloud is only asked when something changed.
 syncEngine.start({ task: applicationSyncTask });

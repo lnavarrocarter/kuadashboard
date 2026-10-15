@@ -39,6 +39,8 @@ export const useAwsStore = defineStore('aws', () => {
   const eksClusters      = ref([])
   const ecsServices      = ref([])
   const ec2Instances     = ref([])
+  // EBS volumes of the region: { volumes, summary, truncated } (GET /ebs, DescribeVolumes, free).
+  const ebsVolumes       = ref({ volumes: [], summary: null, truncated: false })
   const lambdas          = ref([])
   const apiGateways      = ref([])
   const s3Buckets        = ref([])
@@ -137,6 +139,7 @@ export const useAwsStore = defineStore('aws', () => {
     eksClusters.value      = []
     ecsServices.value      = []
     ec2Instances.value     = []
+    ebsVolumes.value       = { volumes: [], summary: null, truncated: false }
     lambdas.value          = []
     apiGateways.value      = []
     s3Buckets.value        = []
@@ -286,6 +289,13 @@ export const useAwsStore = defineStore('aws', () => {
         method: 'POST', headers: headers(),
       })
     } catch (e) { setError(e); return null }
+  }
+
+  async function fetchEbsVolumes() {
+    loading.value = true; error.value = null
+    try {
+      ebsVolumes.value = await apiFetch('/api/cloud/aws/ebs', { headers: headers() })
+    } catch (e) { setError(e) } finally { loading.value = false }
   }
 
   async function fetchEc2Instances() {
@@ -1390,7 +1400,7 @@ export const useAwsStore = defineStore('aws', () => {
   }
 
   return {
-    activeProfileId, accountContext, fetchAccountContext, overview, overviewInsights, overviewAdvisor, s3Advisor, regions, eksClusters, ecsServices, ec2Instances,
+    activeProfileId, accountContext, fetchAccountContext, overview, overviewInsights, overviewAdvisor, s3Advisor, regions, eksClusters, ecsServices, ec2Instances, ebsVolumes,
     lambdas, apiGateways, s3Buckets, ecrRepos, vpcs, eventBridgeRules, stepFunctions,
     glueJobs, glueDatabases, rdsClusters, docdbClusters, dynamoTables, athenaWorkgroups,
     cloudfrontDists, route53Zones, cognitoUserPools, secrets, dataPipelines, cwDashboards, lambdaActivity, stepFnActivity,
@@ -1404,7 +1414,7 @@ export const useAwsStore = defineStore('aws', () => {
     fetchOverview, fetchOverviewInsights, fetchOverviewAdvisor, fetchS3AdvisorCache, scanS3Advisor, fetchCwDashboards, fetchCwDashboard, fetchRegions, fetchLambdaActivity, fetchStepFnActivity,
     fetchCwWidgetMetrics, fetchCwWidgetAlarms, estimateCwWidgetLogs, startCwWidgetLogs, fetchCwLogsQuery, fetchEksClusters, fetchEksDetails,
     fetchEcsServices, startEcsService, stopEcsService,
-    fetchEc2Instances, startEc2Instance, stopEc2Instance,
+    fetchEc2Instances, startEc2Instance, stopEc2Instance, fetchEbsVolumes,
     fetchLambdas, invokeLambda,
     fetchApiGateways,
     fetchLogs,
