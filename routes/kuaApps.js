@@ -23,7 +23,7 @@ const { getAccount } = require('../lib/account/account');
 const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
 const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, recommender = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -314,6 +314,16 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     context: req.query.context, namespace: req.query.namespace,
     types: typesOf(req), search: req.query.search, limit: req.query.limit, cursor: req.query.cursor,
   })));
+
+  // ── Recommendations (#283): what else belongs to an application, with evidence; never applied here ──
+  const recommenderOf = () => recommender || (recommender = require('../lib/kua/resourceRecommendations')
+    .createResourceRecommender({ apmDatabase, kubernetesCatalog: kubernetesCatalogOf() }));
+  router.get('/applications/:applicationId/recommendations', (req, res) => sendAsync(res, 200, () => recommenderOf().recommend(req.params.applicationId)));
+  router.post('/applications/:applicationId/recommendations/dismiss', (req, res) => send(res, 200, () => {
+    const result = recommenderOf().dismiss(req.params.applicationId, req.body?.identityKey);
+    auditLog?.log({ category: 'kua', action: 'Recommendation dismissed', resource: req.params.applicationId, context: 'kuapps', details: { identityKey: req.body?.identityKey } });
+    return result;
+  }));
 
   router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
   // { enabled } turns agents on or off on this computer; { writes } lets them apply KUApps changes.

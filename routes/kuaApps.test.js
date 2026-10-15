@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog, gcpCatalog, kubernetesCatalog } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog, gcpCatalog, kubernetesCatalog, recommender } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}), ...(gcpCatalog ? { gcpCatalog } : {}), ...(kubernetesCatalog ? { kubernetesCatalog } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}), ...(gcpCatalog ? { gcpCatalog } : {}), ...(kubernetesCatalog ? { kubernetesCatalog } : {}), ...(recommender ? { recommender } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -536,5 +536,20 @@ test('the GCP and Kubernetes catalogs answer with their own filters (#282)', asy
     assert.deepEqual(asked[0], ['gcp', { profileId: 'local:ncaicloud', types: ['gcp-sql', 'gcp-disk'], search: undefined, name: 'projects/p/instances/db', limit: undefined, cursor: undefined }]);
     assert.deepEqual(asked[1], ['kubernetes', { context: 'dev', namespace: 'web', types: ['pv'], search: 'data', limit: undefined, cursor: undefined }]);
     assert.deepEqual((await subject.request('/catalog/kubernetes/types')).body.types, [{ type: 'kubernetes' }]);
+  } finally { await subject.close(); }
+});
+
+test('recommendations are read and dismissed per application (#283)', async () => {
+  const calls = [];
+  const recommender = {
+    async recommend(id) { calls.push(['recommend', id]); return { applicationId: id, suggestions: [{ identityKey: 'k1' }], failures: [] }; },
+    dismiss(id, key) { calls.push(['dismiss', id, key]); if (!key) throw Object.assign(new Error('identityKey is required'), { statusCode: 400, code: 'INVALID' }); return { dismissed: true }; },
+  };
+  const subject = await fixture({ recommender });
+  try {
+    assert.equal((await subject.request('/applications/app-1/recommendations')).body.suggestions[0].identityKey, 'k1');
+    assert.deepEqual((await subject.request('/applications/app-1/recommendations/dismiss', { method: 'POST', body: { identityKey: 'k1' } })).body, { dismissed: true });
+    assert.equal((await subject.request('/applications/app-1/recommendations/dismiss', { method: 'POST', body: {} })).status, 400);
+    assert.deepEqual(calls.slice(0, 2), [['recommend', 'app-1'], ['dismiss', 'app-1', 'k1']]);
   } finally { await subject.close(); }
 });
