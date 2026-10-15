@@ -84,7 +84,7 @@ Un agente puede cambiar una KUA Application en dos pasos, y solo mientras lo per
 | `collection.run` | nada: recolecta una vez ahora; la vista previa muestra el costo de una ejecución | |
 | `recommendations.dismiss` | `identityKeys[]` de `recommend_application_resources` | |
 
-Los costos de recolección se estiman a precio de lista: CloudWatch `GetMetricData` USD 0,01 por cada 1.000 métricas y, para logs de Lambda, `FilterLogEvents` (sin cargo por petición; transferencia de datos USD 0,09 por GB después de 100 GB gratis al mes). La recolección de Kubernetes no tiene costo cloud.
+Los costos de recolección se estiman a precio de lista: CloudWatch `GetMetricData` USD 0,01 por cada 1.000 métricas y, para logs de Lambda, `FilterLogEvents` (sin cargo por petición; transferencia de datos USD 0,09 por GB después de 100 GB gratis al mes). Las señales de GCP usan la API de lectura de Cloud Monitoring: USD 0,50 por millón de series temporales devueltas después del primer millón gratis por cuenta de facturación al mes (una serie por métrica y ejecución). Las ejecuciones de Glue y la recolección de Kubernetes no tienen costo cloud.
 
 - **Las vistas previas desactualizadas se rechazan.** Si la aplicación cambió después de la vista previa, aplicar responde `409 REVISION_CONFLICT` con la revisión actual y no escribe nada: vuelve a previsualizar.
 - **Un plan, una escritura.** Se aplica el plan tal cual; el agente no puede cambiarlo entre medio. Aplicar el mismo `planId` otra vez devuelve el resultado registrado. Si se pierde una respuesta, `get_application_change` dice si se aplicó.

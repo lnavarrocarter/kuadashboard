@@ -87,7 +87,7 @@ Mismo protocolo de vista previa y aprobación, con estas operaciones:
 - `scopes.add` / `scopes.remove`: la cuenta, proyecto o team por donde KUA lee los recursos. Quitar un scope avisa cuántos recursos dejan de recolectarse.
 - `resource.update`: activar o desactivar un recurso, nombre, servicio o grupo de logs.
 - `thresholds.update`: umbrales de error, duración, load balancer, pods y reinicios.
-- `collection.update` (`pollingEnabled`) y `collection.run`: **generan costo en AWS**. Su vista previa trae `effects.cost` (métricas y USD por ejecución y por mes). Antes de pedir aprobación di el costo estimado con sus cifras. Si aparece `scheduled_collection_needs_plan`, la recolección programada necesita Pro o Team. `collection.run` solo inicia la recolección: lee el resultado después con `list_application_resources`.
+- `collection.update` (`pollingEnabled`) y `collection.run`: **generan costo** (CloudWatch en AWS, Cloud Monitoring en GCP: `effects.cost.perMonth.gcpSeries` y `gcpUsdBeyondFree`, con el primer millón de series al mes gratis por cuenta de facturación). Su vista previa trae `effects.cost` (métricas y USD por ejecución y por mes). Antes de pedir aprobación di el costo estimado con sus cifras. Si aparece `scheduled_collection_needs_plan`, la recolección programada necesita Pro o Team. `collection.run` solo inicia la recolección: lee el resultado después con `list_application_resources`.
 
 ## Cambiar una aplicación KUApps
 

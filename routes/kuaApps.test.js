@@ -393,7 +393,7 @@ test('observability resources: per-resource access from scope bindings, capabili
     subject.apmDatabase.setScopeBinding(application.id, bound.key, { profileId: 'local:prod', status: 'verified' });
     const arn = name => `arn:aws:lambda:us-east-1:111111111111:function:${name}`;
     for (const name of ['zeta', 'Alpha']) subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: arn(name), arn: arn(name), name });
-    subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'sqs', key: 'arn:aws:sqs:us-east-1:111111111111:jobs', arn: 'arn:aws:sqs:us-east-1:111111111111:jobs', name: 'jobs' });
+    subject.apmDatabase.attachResource(application.id, /* a type KUA collects nothing for (SQS has signals since #286) */ { provider: 'aws', type: 'autoscaling', key: 'arn:aws:autoscaling:us-east-1:111111111111:autoScalingGroup:1:autoScalingGroupName/jobs', arn: 'arn:aws:autoscaling:us-east-1:111111111111:autoScalingGroup:1:autoScalingGroupName/jobs', name: 'jobs' });
     subject.apmDatabase.attachResource(application.id, { provider: 'aws', type: 'lambda', key: 'arn:aws:lambda:eu-west-1:222222222222:function:other', arn: 'arn:aws:lambda:eu-west-1:222222222222:function:other', name: 'other' });
 
     const { status, body } = await subject.request(`/applications/${application.id}/observability/resources`);

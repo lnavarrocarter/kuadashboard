@@ -142,6 +142,12 @@ const apmScheduler = new ApmScheduler({
   awsCollector: new AwsLambdaCollector({ database: apmDatabase }),
   kubeCollector: new KubeCollector({ database: apmDatabase }),
   awsMetricCollector: new AwsMetricCollector({ database: apmDatabase }),
+  // Glue job runs (#286), free GetJobRuns.
+  collectors: [
+    new (require('./lib/apm/awsGlueCollector').AwsGlueCollector)({ database: apmDatabase }),
+    // Cloud Run, Cloud SQL and VMs from Cloud Monitoring (#286).
+    new (require('./lib/apm/gcpMonitoringCollector').GcpMonitoringCollector)({ database: apmDatabase }),
+  ],
   taskRegistry: backgroundTaskRegistry,
 });
 const apmTask = backgroundTaskRegistry.register({
