@@ -26,7 +26,7 @@ What actually happened.
 
 ## Environment
 
-- **KuaDashboard version**: (e.g. v1.3.0)
+- **KuaDashboard version**: (e.g. v2.0.0)
 - **OS**: (e.g. Windows 11, macOS 14, Ubuntu 24.04)
 - **Mode**: (Electron app / Browser / Docker)
 - **Cloud provider involved**: (Kubernetes / AWS / GCP / None)

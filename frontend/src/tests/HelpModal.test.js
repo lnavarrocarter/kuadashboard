@@ -23,7 +23,7 @@ describe('HelpModal release history', () => {
 
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
     const releases = wrapper.findAll('.release-block')
-    expect(releases[0].text()).toContain('2.0.0-rc.1')
+    expect(releases[0].text()).toContain('2.0.0')
     expect(releases[0].text()).toContain('Free plan limits apply from 2026-11-10')
     const firstRelease = releases[1]
 

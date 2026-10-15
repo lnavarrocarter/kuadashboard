@@ -84,12 +84,12 @@ Built packages are placed in `dist-electron/`:
 ```
 dist-electron/
 ├── win-unpacked/              # Unpacked Windows app
-├── KuaDashboard-Setup-1.0.0.exe  # Windows installer
+├── KuaDashboard-Setup-<version>.exe  # Windows installer
 ├── mac/                       # Unpacked macOS app
-├── KuaDashboard-1.0.0.dmg    # macOS disk image
+├── KuaDashboard-<version>.dmg    # macOS disk image
 ├── linux-unpacked/            # Unpacked Linux app
-├── KuaDashboard-1.0.0.AppImage # Linux AppImage
-└── kuadashboard_1.0.0_amd64.deb # Debian/Ubuntu package
+├── KuaDashboard-<version>.AppImage # Linux AppImage
+└── kuadashboard_<version>_amd64.deb # Debian/Ubuntu package
 ```
 
 ## Custom Icons
