@@ -9,12 +9,12 @@ const { ApmDatabase } = require('../lib/apm/database');
 const { ApplicationRegistryService } = require('../lib/kua/applicationRegistryService');
 const { createKuaAppsRouter } = require('./kuaApps');
 
-async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog } = {}) {
+async function fixture({ account, verifier, logCache, githubCicd, plugins, awsCatalog, gcpCatalog, kubernetesCatalog } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
-  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}) }));
+  app.use('/api/kua-apps', createKuaAppsRouter({ database, apmDatabase, ...(account ? { account: () => account } : {}), ...(verifier ? { verifier } : {}), ...(logCache ? { logCache: () => logCache } : {}), ...(githubCicd ? { githubCicd } : {}), ...(plugins ? { plugins } : {}), ...(awsCatalog ? { awsCatalog } : {}), ...(gcpCatalog ? { gcpCatalog } : {}), ...(kubernetesCatalog ? { kubernetesCatalog } : {}) }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
@@ -523,5 +523,18 @@ test('the AWS resource catalog answers by type, search and ARN, and reports its 
     assert.deepEqual(asked[0], { profileId: 'local:dev', region: 'us-east-2', types: ['s3', 'dynamodb'], search: 'inv', arn: undefined, limit: '10', cursor: undefined });
     const refused = await subject.request('/catalog/aws?arn=arn:aws:kms:x');
     assert.deepEqual([refused.status, refused.body.code], [400, 'UNSUPPORTED_ARN']);
+  } finally { await subject.close(); }
+});
+
+test('the GCP and Kubernetes catalogs answer with their own filters (#282)', async () => {
+  const asked = [];
+  const fake = name => ({ types: () => [{ type: name }], async list(query) { asked.push([name, query]); return { items: [], total: 0 }; } });
+  const subject = await fixture({ gcpCatalog: fake('gcp'), kubernetesCatalog: fake('kubernetes') });
+  try {
+    assert.equal((await subject.request('/catalog/gcp?types=gcp-sql,gcp-disk&name=projects/p/instances/db', { profile: 'local:ncaicloud' })).status, 200);
+    assert.equal((await subject.request('/catalog/kubernetes?context=dev&namespace=web&types=pv&search=data')).status, 200);
+    assert.deepEqual(asked[0], ['gcp', { profileId: 'local:ncaicloud', types: ['gcp-sql', 'gcp-disk'], search: undefined, name: 'projects/p/instances/db', limit: undefined, cursor: undefined }]);
+    assert.deepEqual(asked[1], ['kubernetes', { context: 'dev', namespace: 'web', types: ['pv'], search: 'data', limit: undefined, cursor: undefined }]);
+    assert.deepEqual((await subject.request('/catalog/kubernetes/types')).body.types, [{ type: 'kubernetes' }]);
   } finally { await subject.close(); }
 });

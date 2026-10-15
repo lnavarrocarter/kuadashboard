@@ -23,7 +23,7 @@ const { getAccount } = require('../lib/account/account');
 const { createPluginRegistry } = require('../lib/plugins/pluginRegistry');
 const { githubCicdPlugin } = require('../lib/plugins/builtinPlugins');
 
-function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
+function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAccount, syncEngine = null, teamEngine = null, verifier, extensionRegistry, githubCicd, plugins, kubeLister, agentAccess = createAgentAccess({ dataDir: null }), awsCatalog = null, gcpCatalog = null, kubernetesCatalog = null, logCache = () => require('../lib/awsLogCache').getLogCache() } = {}) {
   if (!database || !apmDatabase) throw new Error('database and apmDatabase are required');
   const router = express.Router();
   const io = createKuaAppIo({ database, apmDatabase });
@@ -298,6 +298,21 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     arn: req.query.arn,
     limit: req.query.limit,
     cursor: req.query.cursor,
+  })));
+  // GCP (#282): full resource names, project and location; only List/Get calls.
+  const gcpCatalogOf = () => gcpCatalog || (gcpCatalog = require('../lib/kua/resourceCatalog/gcp').createGcpResourceCatalog());
+  const typesOf = req => (req.query.types ? String(req.query.types).split(',').map(type => type.trim()).filter(Boolean) : undefined);
+  router.get('/catalog/gcp/types', (_req, res) => send(res, 200, () => ({ types: gcpCatalogOf().types() })));
+  router.get('/catalog/gcp', (req, res) => sendAsync(res, 200, () => gcpCatalogOf().list({
+    profileId: req.query.profile || req.get('X-Profile-Id'),
+    types: typesOf(req), search: req.query.search, name: req.query.name, limit: req.query.limit, cursor: req.query.cursor,
+  })));
+  // Kubernetes (#282): workloads, CronJobs, Jobs, volumes and nodes of one context.
+  const kubernetesCatalogOf = () => kubernetesCatalog || (kubernetesCatalog = require('../lib/kua/resourceCatalog/kubernetes').createKubernetesResourceCatalog());
+  router.get('/catalog/kubernetes/types', (_req, res) => send(res, 200, () => ({ types: kubernetesCatalogOf().types() })));
+  router.get('/catalog/kubernetes', (req, res) => sendAsync(res, 200, () => kubernetesCatalogOf().list({
+    context: req.query.context, namespace: req.query.namespace,
+    types: typesOf(req), search: req.query.search, limit: req.query.limit, cursor: req.query.cursor,
   })));
 
   router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
