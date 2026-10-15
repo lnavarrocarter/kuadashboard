@@ -6,6 +6,7 @@
 
 - **Scheduled APM collection progress (#262):** the background task panel lists enabled application collections before their first run and keeps their next run visible. The desktop taskbar and tray tooltip now report active collection progress; no additional cloud calls are introduced.
 - **Up next follows the real schedule (#278):** application collections show when the 30-minute interval fires next instead of "30 minutes after the last change", and they leave Up next while scheduled collection is paused.
+- **GCP local profiles recover from a rejected token:** a `local:` profile (a gcloud configuration) kept using a cached access token for 30 minutes even when Google already refused it, so GCP reads failed with 401 until KUA restarted. KUA now keeps the token only until shortly before the expiry gcloud reports, and drops it as soon as Google refuses it, so the next read asks gcloud again.
 
 ### Added
 

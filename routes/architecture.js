@@ -541,7 +541,11 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       const cloudDiscovery = { gcp: gcpDiscovery, vercel: vercelDiscovery }[provider];
       if (!cloudDiscovery) return res.status(400).json({ code: 'UNSUPPORTED_CLOUD_PROVIDER', error: 'Supported providers: aws, gcp, vercel' });
       return res.json(await cloudDiscovery.preview({ profileId: profile }));
-    } catch (error) { handleError(res, error); }
+    } catch (error) {
+      // A token gcloud handed out and Google refused is not reused (routes/gcp.js).
+      if (provider === 'gcp') require('./gcp').forgetRejectedGcpToken?.(profile, error);
+      handleError(res, error);
+    }
   });
 
   router.get('/projects/:projectId/discovery/kubernetes/contexts', (req, res) => {

@@ -106,8 +106,18 @@ function sendList(res, page, items) {
   });
 }
 
+/**
+ * Google refused the token of a local gcloud config (expired early, revoked, or the account
+ * logged in again outside KUA): drop it so the next request asks gcloud for a fresh one.
+ */
+function forgetRejectedGcpToken(profileId, err) {
+  if (!String(profileId || '').startsWith('local:')) return;
+  if (classifyGcpError(err).kind === 'auth') gcloudCli.invalidateToken(String(profileId).slice(6));
+}
+
 function handleErr(res, err) {
   console.error('[gcp]', err.message);
+  forgetRejectedGcpToken(res.req?.headers?.['x-profile-id'], err);
   // gRPC ALREADY_EXISTS (6) / REST "already exists" → 409 so the UI can say so clearly
   const alreadyExists = err.code === 6 || /already exists/i.test(err.message || '');
   if (alreadyExists) return res.status(409).json({ error: err.message });
@@ -3193,6 +3203,7 @@ router.get('/kms/keyrings/:location/:keyring/keys', async (req, res) => {
 
 module.exports = router;
 module.exports.resolveGcpAuth = resolveGcpAuth;
+module.exports.forgetRejectedGcpToken = forgetRejectedGcpToken;
 module.exports.gcpFetch = gcpFetch;
 module.exports.STATE_SOURCES = STATE_SOURCES;
 module.exports.recordObservedStates = recordObservedStates;

@@ -24,6 +24,7 @@ Las herramientas MCP de KUA leen lo que KUA conoce en este equipo: perfiles, inv
 | `AGENTS_DISABLED` | El usuario apagó el acceso de agentes en este equipo | Dile que lo encienda desde el icono de KUA en la bandeja, o con el botón "Conectar agentes IA (MCP)" de un panel del Advisor. No reintentes antes |
 | `PLAN_REQUIRED` | La función necesita el plan Pro o Team | Explícalo y detente; no busques rodeos |
 | `AGENT_WRITES_DISABLED` | Aplicar cambios a KUApps está apagado | Pide activar "Permitir que agentes cambien KUApps"; la vista previa sigue siendo válida 15 minutos |
+| `AUTHENTICATION_FAILED` en `check_profile` | Las credenciales del perfil no sirven | En un perfil `local:` de GCP: `gcloud auth login` (y el mismo `check_profile` otra vez, que ya pide un token nuevo); en AWS, renovar la sesión del perfil (por ejemplo `aws sso login`); en Vercel, reconectar la cuenta en KUA |
 | `status: "selection_required"` | Hay varios contextos o perfiles posibles | Pregunta cuál, o usa el que el usuario ya nombró, con su id exacto |
 | `timed out after …` | El proveedor tardó demasiado | Reduce `scan_limit`, filtra o acota el contexto; no repitas igual |
 | `failures` con `ETIMEDOUT` u otro código | Un contexto o servicio no respondió, el resto sí | Informa qué parte falta; no describas el resultado como completo |

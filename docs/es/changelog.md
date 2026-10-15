@@ -6,6 +6,7 @@
 
 - **Avance de la recolección APM programada (#262):** el panel de tareas en segundo plano lista las recolecciones habilitadas por aplicación antes de su primera ejecución y conserva visible la próxima. La barra de tareas y el tooltip de la bandeja ahora muestran el avance activo; no se añaden llamadas a servicios cloud.
 - **Próximas sigue el horario real (#278):** las recolecciones por aplicación muestran cuándo dispara el siguiente intervalo de 30 minutos en vez de "30 minutos después del último cambio", y salen de Próximas mientras la recolección programada está en pausa.
+- **Los perfiles GCP locales se recuperan de un token rechazado:** un perfil `local:` (una configuración de gcloud) seguía usando un token de acceso en caché durante 30 minutos aunque Google ya lo rechazara, así que las lecturas de GCP fallaban con 401 hasta reiniciar KUA. Ahora KUA guarda el token solo hasta poco antes del vencimiento que informa gcloud y lo descarta en cuanto Google lo rechaza, de modo que la siguiente lectura le pide uno nuevo a gcloud.
 
 ### Añadido
 
