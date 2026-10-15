@@ -1069,6 +1069,20 @@ router.get('/ec2', async (req, res) => {
   } catch (err) { handleErr(res, err); }
 });
 
+// ─── GET /ebs ─────────────────────────────────────────────────────────────────
+// EBS volumes of the profile's region (lib/awsEbs.js): attachment, the Kubernetes claim that created
+// them and their list-price monthly cost. DescribeVolumes only, at no cost.
+
+router.get('/ebs', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    const { EC2Client, DescribeVolumesCommand } = require('@aws-sdk/client-ec2');
+    res.json(await require('../lib/awsEbs').listVolumes(new EC2Client(cfg), { DescribeVolumesCommand }));
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /ec2/:id/details ─────────────────────────────────────────────────────
 // Returns full instance details: detalles, networking, storage, security + CW metrics
 

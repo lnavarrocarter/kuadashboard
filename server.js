@@ -242,7 +242,7 @@ for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsS
 
 const CLOUD_LIST_PATHS = {
   aws: new Set([
-    '/regions', '/eks', '/ecs', '/ec2', '/lambda', '/apigateway', '/s3', '/ecr',
+    '/regions', '/eks', '/ecs', '/ec2', '/ebs', '/lambda', '/apigateway', '/s3', '/ecr',
     '/vpc', '/eventbridge', '/stepfunctions', '/glue/jobs', '/glue/databases',
     '/athena/workgroups', '/rds', '/dynamodb', '/cloudfront', '/route53/zones',
     '/cognito/userpools', '/secrets', '/datapipeline', '/bedrock', '/lex',
