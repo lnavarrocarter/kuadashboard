@@ -8,6 +8,8 @@
 - **Up next follows the real schedule (#278):** application collections show when the 30-minute interval fires next instead of "30 minutes after the last change", and they leave Up next while scheduled collection is paused.
 - **GCP local profiles recover from a rejected token:** a `local:` profile (a gcloud configuration) kept using a cached access token for 30 minutes even when Google already refused it, so GCP reads failed with 401 until KUA restarted. KUA now keeps the token only until shortly before the expiry gcloud reports, and drops it as soon as Google refuses it, so the next read asks gcloud again.
 
+- **Attached resources can be collected (#280):** attaching a resource to a KUA Application without a provider now adds the scope it lives in (AWS account and region, GCP project, Vercel team), shown in the preview, so its collection no longer fails with `scope_unbound`. Kubernetes PersistentVolumes get their own type, ConfigMaps, Secrets and volumes no longer claim metrics KUA does not collect, and the AWS regional inventory shares its cap between services, so many Lambda functions no longer hide SNS topics, EventBridge rules or load balancers; the estimate names the services that had more than the cap kept.
+
 ### Added
 
 - **Tray status panel (#278):** clicking the tray icon opens a panel with the state of KUA (version, plan, backend answering or not, with **Restart backend**), the background tasks running now with their progress, the next ones scheduled, paused or failed tasks with pause, resume and cancel, and the app update downloading in the background (**Restart to update** when it is ready). Right-click keeps the menu; on Linux the panel is its first item. It reads only the local API: no cloud calls.

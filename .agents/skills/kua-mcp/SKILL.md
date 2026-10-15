@@ -48,6 +48,7 @@ Las herramientas MCP de KUA leen lo que KUA conoce en este equipo: perfiles, inv
 
 - `cloud_resource_inventory` con `provider` y `profile`. Filtra con `search` (texto en nombre, ARN, id, tipo, región o stack) y `resource_types`; en AWS también `region` y `stack_names`.
 - AWS descubre hasta `scan_limit` recursos (500 por defecto, máximo 5000). Si `truncated` es `true`, la foto está incompleta: dilo y, si hace falta, sube `scan_limit` o filtra. Por encima de 500 la lectura es más lenta.
+- `estimate.truncatedSources` nombra los servicios de AWS que tenían más recursos de los que cupieron: si el usuario necesita uno de ellos, sube `scan_limit` o filtra por ese tipo.
 - Paginación: `limit` es el tamaño de página (100 por defecto). Sigue con `cursor: nextCursor`. Cada cursor sirve **una vez** y caduca a los 5 minutos; cada página trae uno nuevo y todas salen de la misma foto (`generatedAt`). Si caduca, empieza otra búsqueda.
 - `relationships` son sugerencias con `confidence` y `evidence` (por ejemplo una variable de entorno que nombra una cola): preséntalas como probables, no como hechos.
 - No descarga código de Lambda ni expande las políticas de roles IAM (el mapa de arquitectura de KUA sí lo hace).
@@ -78,7 +79,7 @@ Siempre en este orden, sin saltos:
 
 1. Revisa el estado actual con `get_application` y, si hace falta, `list_application_resources` o `get_architecture_graph`.
 2. `preview_application_change` con la operación (`application.create`, `application.update`, `resources.attach`, `resources.detach`, `view.link`, `view.unlink`) y datos concretos. Para adjuntar recursos, tómalos de un inventario en vivo: así llevan ARN o id reales.
-3. Muestra la vista previa: destino, elementos afectados, efectos y limitaciones. `resources.detach` quita la asociación en KUApps y no borra el recurso; `view.unlink` quita el vínculo y no borra la vista.
+3. Muestra la vista previa: destino, elementos afectados, efectos y limitaciones. En una aplicación sin proveedor, `effects.scopes.add` lista los scopes que se crearán (cuenta y región, proyecto, team); menciónalos. `resources.detach` quita la asociación en KUApps y no borra el recurso; `view.unlink` quita el vínculo y no borra la vista.
 4. Solo tras un sí explícito: `apply_application_change` con ese `planId` y `confirm: true`. Si falla, no cambies parámetros ni generes otra vista previa para esquivarlo.
 5. Si la respuesta se perdió, consulta `get_application_change` con el mismo `planId`. Nunca repitas el cambio.
 
