@@ -34,6 +34,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   const DRIFT_TTL_MS = 5 * 60 * 1000
   const kubernetesPreview = ref(null)
   const gcpPreview = ref(null)
+  // Infrastructure Manager deployments and labels of the GCP project, like AWS stacks.
+  const gcpGroups = ref(null)
   const vercelPreview = ref(null)
   const discovering = ref(false)
   const discoveryPhase = ref(null)
@@ -766,7 +768,25 @@ export const useArchitectureStore = defineStore('architecture', () => {
     }
   }
 
-  async function previewCloudResources(provider) {
+  async function loadGcpGroups() {
+    if (!selectedProjectId.value) return null
+    discovering.value = true
+    discoveryPhase.value = 'gcp-groups'
+    error.value = null
+    try {
+      gcpGroups.value = await apiFetch(`/api/architecture/projects/${selectedProjectId.value}/discovery/gcp/groups`, { headers: headers() })
+      return gcpGroups.value
+    } catch (requestError) {
+      error.value = requestError.message
+      return null
+    } finally {
+      discovering.value = false
+      discoveryPhase.value = null
+    }
+  }
+
+  // filters (GCP): { deployments: [...], labels: ['key=value'] }, like AWS stackNames.
+  async function previewCloudResources(provider, filters = {}) {
     if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
     discovering.value = true
     discoveryPhase.value = `${provider}-resources`
@@ -775,7 +795,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     try {
       target.value = await apiFetch(
         `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/preview`,
-        { method: 'POST', headers: headers(true), body: JSON.stringify({}) },
+        { method: 'POST', headers: headers(true), body: JSON.stringify(provider === 'gcp' ? filters : {}) },
       )
       return target.value
     } catch (requestError) {
@@ -987,6 +1007,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     kubernetesContexts,
     kubernetesPreview,
     gcpPreview,
+    gcpGroups,
     vercelPreview,
     error,
     graph,
@@ -1034,6 +1055,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     previewKubernetesRollouts,
     previewKubernetesSecurity,
     previewCloudResources,
+    loadGcpGroups,
     importCloudResources,
     previewAwsSync,
     refreshSelectedProjectData,

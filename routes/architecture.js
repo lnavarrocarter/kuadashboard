@@ -728,9 +728,21 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
       const project = scopedProject(req, res);
       if (!project) return;
       try {
-        res.json(await cloudDiscovery.preview({ profileId: project.profileId, projectId: project.id }));
+        // GCP can be limited to Infrastructure Manager deployments and labels, like AWS stacks.
+        const filters = provider === 'gcp' ? { deployments: req.body?.deployments, labels: req.body?.labels } : {};
+        res.json(await cloudDiscovery.preview({ profileId: project.profileId, projectId: project.id, filters }));
       } catch (error) { handleError(res, error); }
     });
+
+    if (provider === 'gcp') {
+      router.get('/projects/:projectId/discovery/gcp/groups', async (req, res) => {
+        const project = scopedProject(req, res);
+        if (!project) return;
+        try {
+          res.json(await cloudDiscovery.groups({ profileId: project.profileId }));
+        } catch (error) { handleError(res, error); }
+      });
+    }
 
     router.post(`/projects/:projectId/discovery/${provider}/import`, async (req, res) => {
       const project = scopedProject(req, res);

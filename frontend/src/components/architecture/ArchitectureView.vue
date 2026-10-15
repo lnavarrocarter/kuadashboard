@@ -74,7 +74,7 @@
       <ArchitectureDiscoveryPanel v-if="resourceProvider === 'aws'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureKubernetesDiscoveryPanel v-if="resourceProvider === 'kubernetes'" :preferred-context="pickerKubeContext" :ensure-ready="ensurePickerReady" repairable @close="closePicker" @imported="pickerImported" @repair-connection="emit('repair-connection')" />
       <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />
-      <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'gcp'" provider="gcp" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureGcpDiscoveryPanel v-if="resourceProvider === 'gcp'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="closePicker" @imported="pickerImported" />
     </div>
 
@@ -240,9 +240,8 @@
               @close="resourceProvider = ''"
               @imported="resourceProvider = ''"
             />
-            <ArchitectureCloudDiscoveryPanel
+            <ArchitectureGcpDiscoveryPanel
               v-if="resourceProvider === 'gcp'"
-              provider="gcp"
               @close="resourceProvider = ''"
               @imported="resourceProvider = ''"
             />
@@ -410,6 +409,8 @@ import ArchitectureDiscoveryPanel from './ArchitectureDiscoveryPanel.vue'
 import ArchitectureKubernetesDiscoveryPanel from './ArchitectureKubernetesDiscoveryPanel.vue'
 import ArchitectureKubernetesDrift from './ArchitectureKubernetesDrift.vue'
 import ArchitectureCloudDiscoveryPanel from './ArchitectureCloudDiscoveryPanel.vue'
+// GCP has its own wizard: Infrastructure Manager deployments and labels, like AWS stacks.
+import ArchitectureGcpDiscoveryPanel from './ArchitectureGcpDiscoveryPanel.vue'
 import ArchitectureManualResourcePanel from './ArchitectureManualResourcePanel.vue'
 import ArchitectureResources from './ArchitectureResources.vue'
 import ArchitectureRoutes from './ArchitectureRoutes.vue'
