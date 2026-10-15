@@ -84,10 +84,10 @@ Los paquetes compilados se ubican en `dist-electron/`:
 ```
 dist-electron/
 ├── win-unpacked/                     # App Windows sin empaquetar
-├── KuaDashboard-Setup-1.0.0.exe     # Instalador Windows
+├── KuaDashboard-Setup-<version>.exe     # Instalador Windows
 ├── mac/                              # App macOS sin empaquetar
-├── KuaDashboard-1.0.0.dmg          # Imagen de disco macOS
+├── KuaDashboard-<version>.dmg          # Imagen de disco macOS
 ├── linux-unpacked/                   # App Linux sin empaquetar
-├── KuaDashboard-1.0.0.AppImage     # AppImage Linux
-└── kuadashboard_1.0.0_amd64.deb    # Paquete Debian/Ubuntu
+├── KuaDashboard-<version>.AppImage     # AppImage Linux
+└── kuadashboard_<version>_amd64.deb    # Paquete Debian/Ubuntu
 ```

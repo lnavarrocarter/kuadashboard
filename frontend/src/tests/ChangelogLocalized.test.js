@@ -32,7 +32,7 @@ describe('bilingual changelog', () => {
     const wrapper = mount(HelpModal, { props: { show: true }, global: { stubs: { BaseModal: BaseModalStub } } })
     await wrapper.findAll('.help-nav-item')[1].trigger('click')
     const releases = wrapper.findAll('.release-block')
-    expect(releases[0].text()).toContain('2.0.0-rc.1')
+    expect(releases[0].text()).toContain('2.0.0')
     const currentRelease = releases[1]
     expect(currentRelease.text()).toContain('September 2026')
     expect(currentRelease.text()).toContain('AWS Overview: active account')

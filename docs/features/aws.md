@@ -7,7 +7,7 @@ description: Manage AWS services including EC2, EKS, ECS, Lambda, S3, DynamoDB, 
 
 KuaDashboard provides a comprehensive AWS management panel accessible from the sidebar under **Cloud > AWS**. It gives you a single unified view over **22 AWS services** without ever leaving the dashboard.
 
-> **v1.7.0 highlights:** EC2 SSH/RDP sessions now stay alive as restoreable tabs; Kubernetes logs, YAML and metrics improvements are available from the unified operations surface.
+> **Since v1.7.0:** EC2 SSH/RDP sessions now stay alive as restoreable tabs; Kubernetes logs, YAML and metrics improvements are available from the unified operations surface.
 
 ![KuaDashboard — dashboard overview](/screenshots/dashboard-main.png)
 

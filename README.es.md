@@ -27,7 +27,7 @@ Para desarrolladores y equipos DevOps/SRE que administran Kubernetes, AWS, GCP o
 
 Necesitas acceso a un entorno propio: este recorrido no proporciona una demo pública ni recursos cloud. Las consultas pueden generar cargos del proveedor. Si no aparecen recursos, verifica contexto, namespace, región y permisos antes de cambiar credenciales.
 
-Versión actual: **v1.17.0**. Construido con **Node.js + Express** y **Vue 3 + Vite + Pinia**; disponible como aplicación web o escritorio con Electron para **Windows**, **macOS** y **Linux**.
+Versión actual: **v2.0.0**. Construido con **Node.js + Express** y **Vue 3 + Vite + Pinia**; disponible como aplicación web o escritorio con Electron para **Windows**, **macOS** y **Linux**.
 
 Consulta el [changelog](docs/changelog.md) para las entregas y el [roadmap](docs/ROADMAP.md) para el backlog y la dirección futura. Las funciones listadas abajo describen el producto disponible; las ideas del roadmap no implican que ya estén implementadas.
 
@@ -196,7 +196,7 @@ cd .. && npm test
 
 ## Changelog
 
-La versión actual es **v1.17.0**. Entre las entregas recientes están Cloud Insights y costos de AWS, dashboards de CloudWatch, servicios SQS/SNS/SES, sesiones de consola unificadas, KUApps y análisis inteligente de logs. El [changelog completo](docs/changelog.md) contiene el detalle por versión.
+La versión actual es **v2.0.0**. Entre las entregas recientes están Cloud Insights y costos de AWS, dashboards de CloudWatch, servicios SQS/SNS/SES, sesiones de consola unificadas, KUApps y análisis inteligente de logs. El [changelog completo](docs/changelog.md) contiene el detalle por versión.
 
 ## Roadmap
 

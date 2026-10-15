@@ -25,7 +25,7 @@ Any alternative solutions or features you've considered.
 
 ## Context
 
-- **KuaDashboard version**: (e.g. v1.3.0)
+- **KuaDashboard version**: (e.g. v2.0.0)
 - **Affected area**: (Kubernetes / AWS / GCP / Terminal / UI / Docs / Other)
 - **Priority for you**: (Nice to have / Important / Blocking)
 
