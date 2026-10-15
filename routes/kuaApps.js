@@ -333,6 +333,21 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     return result;
   }));
 
+  // ── Attach several resources at once (#284): from the catalog or a recommendation, in the UI ──
+  // Same identity rules as an agent's resources.attach; the scopes the resources need are added.
+  router.post('/applications/:applicationId/resources/attach', (req, res) => send(res, 200, () => {
+    const application = apmDatabase.getApplication(req.params.applicationId);
+    if (!application) throw Object.assign(new Error('Application not found'), { statusCode: 404, code: 'NOT_FOUND' });
+    const raw = Array.isArray(req.body?.resources) ? req.body.resources : [];
+    if (!raw.length || raw.length > 100) throw Object.assign(new Error('resources must have 1 to 100 items'), { statusCode: 400, code: 'INVALID' });
+    const { resourceInput } = require('../lib/kua/changePlans');
+    const inputs = raw.map((resource, index) => resourceInput(resource, index));
+    const { results, scopesAdded = [] } = applicationRegistry.attachResources(application, inputs, { expectedRevision: req.body?.expectedRevision, clearDetachments: true });
+    const items = results.map(result => ({ name: result.input.name, outcome: result.error ? 'failed' : result.created ? 'attached' : 'already_member', ...(result.error ? { error: result.error } : {}) }));
+    auditLog?.log({ category: 'kua', action: 'Resources attached', resource: application.name, context: 'kuapps', details: { applicationId: application.id, attached: items.filter(item => item.outcome === 'attached').length, scopesAdded: scopesAdded.length } });
+    return { items, scopesAdded: scopesAdded.map(({ provider, scopeId, location }) => ({ provider, scopeId, location })), revision: apmDatabase.getApplication(application.id).revision };
+  }));
+
   router.get('/agent-access', (_req, res) => send(res, 200, () => agentAccess.get()));
   // { enabled } turns agents on or off on this computer; { writes } lets them apply KUApps changes.
   // Only the fields sent change. An agent never changes its own access.

@@ -198,7 +198,7 @@
                     workspace-mode
                     settings-only
                     workspace-section="canvas"
-                    @request-resource-picker="openUnifiedResourcePicker"
+                    @request-resource-picker="openPickerFromMap"
                   />
                   <p v-else class="kuapps-review-note">{{ t('kuapps.sync.unavailable') }}</p>
                 </section>
@@ -317,7 +317,7 @@
                 hide-application-list
                 workspace-mode
                 workspace-section="resources"
-                @request-resource-picker="openUnifiedResourcePicker"
+                @request-resource-picker="openPickerFromMap"
                 @open-aws-resource="openAwsResource"
                 @open-kubernetes-detail="$emit('open-kubernetes-detail', $event)"
                 @open-kubernetes-pods="$emit('open-kubernetes-pods', $event)"
@@ -429,7 +429,7 @@
                 :hide-application-list="true"
                 workspace-mode
                 :workspace-section="mapMode"
-                @request-resource-picker="openUnifiedResourcePicker"
+                @request-resource-picker="openPickerFromMap"
                 @open-observability="openObservability"
                 @application-context="forwardApplicationContext"
                 @resource-selected="handleCanvasResourceSelected"
@@ -472,6 +472,18 @@
             <div><span class="kuapps-kicker">{{ selectedApplication.name }}</span><h3>{{ t('archView.addResources') }}</h3></div>
             <button class="btn btn-icon" :title="t('action.close')" @click="closeAddResources"><i data-lucide="x"></i></button>
           </header>
+          <!-- Recommended and catalog search (#284); the map is the third tab, as before. -->
+          <KUAppResourceFinder
+            :key="`finder:${selectedApplicationId}`"
+            :application-id="selectedApplicationId"
+            :profile-id="pickerProfileId"
+            :profile-provider="activeResourceScope?.provider || selectedApplication.provider || ''"
+            :kube-context="activeResourceScope?.provider === 'kubernetes' ? activeResourceScope.scopeId : ''"
+            :initial-mode="addResourcesMode"
+            @mode="addResourcesMode = $event"
+            @attached="handleFinderAttached"
+          />
+          <template v-if="addResourcesMode === 'map'">
           <ol class="kuapps-add-steps">
             <li :class="{ active: !addResourcesProvider, done: !!addResourcesProvider }">{{ t('kuapps.add.stepAccount') }}</li>
             <li :class="{ active: !!addResourcesProvider }">{{ t('kuapps.add.stepDiscover') }}</li>
@@ -510,6 +522,7 @@
               @repair-connection="repairAddResourcesConnection"
             />
           </div>
+          </template>
         </aside>
       </main>
     </div>
@@ -518,6 +531,7 @@
 
 <script setup>
 import { awsRegion } from '../../lib/awsResourceLinks'
+import KUAppResourceFinder from './KUAppResourceFinder.vue'
 import { resourceDestinations } from '../../lib/resourceDestinations'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
@@ -1122,6 +1136,9 @@ async function openResourcePicker() {
 // One Add resources panel for the header, Resources and the Map (#151). It does not change tab.
 const addResourcesOpen = ref(false)
 const addResourcesProvider = ref('')
+// recommended | search | map (KUAppResourceFinder); the map keeps the discovery flow it always had.
+const addResourcesMode = ref('recommended')
+watch(addResourcesMode, mode => { if (mode === 'map' && addResourcesOpen.value) nextTick(openConnectionProvider) })
 const pickerRef = ref(null)
 const canAddResources = computed(() => !!selectedApplication.value?.profileId || verifiedResourceScopes.value.length > 0)
 const addResourcesProviders = computed(() => {
@@ -1208,10 +1225,16 @@ function providerName(provider) {
   return { aws: 'AWS', gcp: 'GCP', kubernetes: 'Kubernetes', vercel: 'Vercel', generic: 'Generic' }[provider] || provider || ''
 }
 
-async function openUnifiedResourcePicker() {
+// From the Map the panel opens on the map discovery; elsewhere on the recommendations (#284).
+function openPickerFromMap() {
+  return openUnifiedResourcePicker({ mode: 'map' })
+}
+
+async function openUnifiedResourcePicker({ mode = 'recommended' } = {}) {
   if (!canAddResources.value) return
   addResourcesOpen.value = true
   addResourcesProvider.value = ''
+  addResourcesMode.value = typeof mode === 'string' ? mode : 'recommended'
   await openConnectionProvider()
   nextTick(() => createIcons({ icons }))
 }
@@ -1242,6 +1265,13 @@ function repairAddResourcesConnection() {
 function closeAddResources() {
   addResourcesOpen.value = false
   addResourcesProvider.value = ''
+}
+
+// Attached from the finder: the panel stays open to keep adding.
+async function handleFinderAttached() {
+  await loadApplicationRegistry()
+  await loadSelectedApplicationDetail()
+  await architectureRef.value?.refreshWorkspace?.()
 }
 
 async function handleResourcesImported() {

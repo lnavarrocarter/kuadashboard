@@ -553,3 +553,21 @@ test('recommendations are read and dismissed per application (#283)', async () =
     assert.deepEqual(calls.slice(0, 2), [['recommend', 'app-1'], ['dismiss', 'app-1', 'k1']]);
   } finally { await subject.close(); }
 });
+
+test('the UI attaches several catalog resources at once, with their scopes and the same identity rules (#284)', async () => {
+  const subject = await fixture();
+  try {
+    const application = subject.apmDatabase.createApplication({ name: 'Orders' });
+    const table = { provider: 'aws', type: 'dynamodb', key: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders', arn: 'arn:aws:dynamodb:us-east-1:111111111111:table/orders', name: 'orders', scopeId: '111111111111', location: 'us-east-1' };
+    const bucket = { provider: 'gcp', type: 'gcp-bucket', key: 'projects/_/buckets/invoices', name: 'invoices', scopeId: 'analytics', location: 'us-central1' };
+    const attached = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [table, bucket] } });
+    assert.equal(attached.status, 200);
+    assert.deepEqual(attached.body.items.map(item => item.outcome), ['attached', 'attached']);
+    assert.deepEqual(attached.body.scopesAdded.map(scope => scope.provider).sort(), ['aws', 'gcp']);
+    const again = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [table] } });
+    assert.deepEqual(again.body.items.map(item => item.outcome), ['already_member']);
+    const nameOnly = await subject.request(`/applications/${application.id}/resources/attach`, { method: 'POST', body: { resources: [{ provider: 'aws', type: 'sqs', key: 'q', name: 'q' }] } });
+    assert.equal(nameOnly.status, 400);
+    assert.equal((await subject.request('/applications/missing/resources/attach', { method: 'POST', body: { resources: [table] } })).status, 404);
+  } finally { await subject.close(); }
+});
