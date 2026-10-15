@@ -221,7 +221,7 @@ app.use('/api', require('./lib/auditContext').auditContextMiddleware);
 app.use('/api', require('./lib/auditOutcome').createAuditOutcomeMiddleware({ audit: auditLog }));
 app.use('/api', readOnlyMode.middleware);
 // AI agents (MCP, X-KUA-Actor: mcp) need a plan with agents (lib/agentPlanGuard.js).
-// Agents can also be turned off on this computer (tray panel or Help & Options → AI agents).
+// Agents can also be turned off on this computer (tray panel, or Connect AI agents (MCP) in an Advisor panel).
 const agentAccess = require('./lib/kua/agentAccess').createAgentAccess({ dataDir: require('./lib/account/account').resolveDataDir() });
 app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard({ agentAccess }));
 
