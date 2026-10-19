@@ -17,6 +17,9 @@ stubModule('../lib/gcloudCli', {
   CONFIG_LIST_ARGS: [],
   createGcloudCli: () => ({
     listConfigs: async () => [{ name: 'test', project: 'p', account: 'a@example.com', isActive: true }],
+    listProjects: async () => Array.from({ length: 125 }, (_, index) => ({
+      id: `project-${index + 1}`, name: `Project ${index + 1}`, state: 'ACTIVE', createTime: null,
+    })),
     getAccessToken: async () => 'token',
   }),
 });
@@ -42,6 +45,14 @@ async function get(path) {
 }
 
 const json = (status, body) => ({ ok: status < 400, status, headers: { get: () => null }, text: async () => JSON.stringify(body) });
+
+test('the local gcloud projects endpoint returns every project from the CLI', async () => {
+  const res = await get('/api/cloud/gcp/projects');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 125);
+  assert.equal(res.body[0].id, 'project-1');
+  assert.equal(res.body[124].id, 'project-125');
+});
 
 test('a region that fails makes the Artifact Registry list partial and names it', async t => {
   const realFetch = global.fetch;

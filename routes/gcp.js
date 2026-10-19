@@ -295,13 +295,22 @@ router.post('/gcloud-configs', async (req, res) => {
   if (!name || !/^[a-zA-Z0-9_\-]+$/.test(name)) {
     return res.status(400).json({ error: 'name is required (alphanumeric, - and _ only)' });
   }
+  if (project) {
+    try {
+      await gcloudCli.describeProject(project, account);
+    } catch (err) {
+      return handleErr(res, err);
+    }
+  }
 
   try {
     // Create config (ignore error if already exists)
     await gcloudExec(`config configurations create ${name}`).catch(() => {});
-    // Activate it to set properties on it
-    if (project) await gcloudExec(`config set project ${project} --configuration=${name}`);
+    // Set the account and project only after the access check succeeds.
     if (account) await gcloudExec(`config set account ${account} --configuration=${name}`);
+    if (project) {
+      await gcloudExec(`config set project ${project} --configuration=${name}`);
+    }
     if (region)  await gcloudExec(`config set compute/region ${region} --configuration=${name}`);
     gcloudCli.invalidate();
 
@@ -319,6 +328,10 @@ router.get('/projects', async (req, res) => {
   const profileId = requireProfileId(req, res);
   if (!profileId) return;
   try {
+    if (profileId.startsWith('local:')) {
+      const projects = await gcloudCli.listProjects(profileId.slice(6));
+      return res.json(projects);
+    }
     const { auth } = await resolveGcpAuth(profileId);
     const { ProjectsClient } = require('@google-cloud/resource-manager').v3;
     const client   = new ProjectsClient({ auth });
