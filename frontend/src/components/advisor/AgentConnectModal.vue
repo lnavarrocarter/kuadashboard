@@ -78,6 +78,7 @@ const CLIENTS = [
   { id: 'cursor', build: jsonConfig },
   { id: 'windsurf', build: jsonConfig },
   { id: 'gemini', build: jsonConfig },
+  { id: 'kiro', build: jsonConfig },
   { id: 'json', build: jsonConfig },
   { id: 'toml', build: codexToml },
 ]
@@ -93,7 +94,7 @@ const active = ref('claude')
 const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id === active.value).build(launch.value) : ''))
 // Claude Code and Codex have a CLI that KUA can run for the user; Claude Desktop gets kua.mcpb
 // opened (POST /api/system/mcp/install, #306).
-const FILE_CLIENTS = ['cursor', 'windsurf', 'gemini']
+const FILE_CLIENTS = ['cursor', 'windsurf', 'gemini', 'kiro']
 const installable = computed(() => ['claude', 'claudeDesktop', 'codex', ...FILE_CLIENTS].includes(active.value))
 // For file agents: { file, present, added } from GET /api/system/mcp/clients.
 const fileClients = ref({})

@@ -207,7 +207,7 @@ router.post('/mcp/install', async (req, res) => {
   // JSON only: another site cannot send it to this loopback API without a CORS preflight, which KUA never allows.
   if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
   try {
-    // Gemini CLI, Cursor, Windsurf: KUA's entry in their MCP file, the rest of it kept (#307).
+    // Gemini CLI, Cursor, Windsurf, Kiro: KUA's entry in their MCP file, the rest of it kept (#307, #213).
     const { FILE_CLIENTS, installInConfig } = require('../lib/mcp/clientConfig');
     if (Object.hasOwn(FILE_CLIENTS, req.body?.client)) return res.json(installInConfig({ client: req.body.client, launch: mcpLaunchHere() }));
     // Claude Desktop: open kua.mcpb, the extension that ships with KUA, and Claude Desktop installs it (#306).
@@ -226,7 +226,7 @@ router.post('/mcp/install', async (req, res) => {
   }
 });
 
-// GET /mcp/clients: for Gemini CLI, Cursor and Windsurf, their file and whether KUA is in it (#307).
+// GET /mcp/clients: for Gemini CLI, Cursor, Windsurf and Kiro, their file and whether KUA is in it (#307).
 router.get('/mcp/clients', (_req, res) => {
   res.json({ clients: require('../lib/mcp/clientConfig').configStatus() });
 });
