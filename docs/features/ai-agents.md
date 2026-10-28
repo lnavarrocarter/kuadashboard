@@ -169,7 +169,7 @@ args = ["/path/to/kuadashboard/mcp/server.mjs"]
 
 The [KUA extension for VS Code](./vscode) registers KUA's MCP server for the editor's chat, with nothing to configure. Without the extension, add the `kua` entry to `.vscode/mcp.json` with the command below.
 
-### Cursor, Windsurf and Gemini CLI
+### Cursor, Windsurf, Gemini CLI and Kiro
 
 **Connect an AI agent** has a tab for each. **Install** adds a `kua` entry to the agent's MCP file and keeps everything else in it: other servers, and for Gemini CLI the rest of its settings.
 
@@ -178,8 +178,11 @@ The [KUA extension for VS Code](./vscode) registers KUA's MCP server for the edi
 | Cursor | `~/.cursor/mcp.json` |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
 | Gemini CLI | `~/.gemini/settings.json` |
+| Kiro (IDE and `kiro-cli`) | `~/.kiro/settings/mcp.json` (`$KIRO_HOME/settings/mcp.json` when `KIRO_HOME` is set) |
 
 The tab says whether KUA is already in the file, and **Remove** takes out only KUA's entry. A file that is not valid JSON (for example with comments) is never rewritten: KUA says so and you fix it first. Restart the agent after installing.
+
+Kiro's IDE and `kiro-cli` read the same user file, so one install covers both; in `kiro-cli`, `/mcp` shows the server. A `.kiro/settings/mcp.json` in a workspace adds to it (and wins for a server with the same name), so leave `kua` out of it.
 
 ### Other clients
 

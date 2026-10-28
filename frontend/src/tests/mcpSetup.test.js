@@ -118,7 +118,7 @@ describe('AgentConnectModal', () => {
     const file = '/home/ana/.cursor/mcp.json'
     apiFetch.mockImplementation(async (path, options = {}) => {
       if (path === '/api/system/mcp') return REPO
-      if (path === '/api/system/mcp/clients') return { clients: [{ client: 'cursor', file, present: true, added }, { client: 'windsurf', file: '/w', present: false, added: false }, { client: 'gemini', file: '/g', present: false, added: false }] }
+      if (path === '/api/system/mcp/clients') return { clients: [{ client: 'cursor', file, present: true, added }, { client: 'windsurf', file: '/w', present: false, added: false }, { client: 'gemini', file: '/g', present: false, added: false }, { client: 'kiro', file: '/home/ana/.kiro/settings/mcp.json', present: true, added: false }] }
       if (path === '/api/system/mcp/install') { added = true; return { client: 'cursor', name: 'kua', mode: 'config', file } }
       if (path === '/api/system/mcp/uninstall') { added = false; return { client: 'cursor', name: 'kua', removed: true, file } }
       return {}
@@ -133,6 +133,10 @@ describe('AgentConnectModal', () => {
     await click('[data-test="agent-connect-uninstall"]')
     expect(outcome()).toBe('Removed from Cursor. Its other servers were kept.')
     expect(document.querySelector('[data-test="agent-connect-uninstall"]')).toBeNull()
+    // Kiro (#213): one user file for the IDE and kiro-cli.
+    await click('[data-test="agent-connect-kiro"]')
+    expect(document.querySelector('[data-test="agent-connect-file"]').textContent).toContain('/home/ana/.kiro/settings/mcp.json')
+    expect(document.querySelector('[data-test="agent-connect-install"]').textContent).toContain('Kiro')
     wrapper.unmount()
   })
 
