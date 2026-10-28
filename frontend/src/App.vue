@@ -11,16 +11,16 @@
           <span>KUA</span><span class="app-logo-sub">Know Unified Administration</span>
         </span>
         <div class="provider-tabs">
-          <button :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" title="Kubernetes" aria-label="Kubernetes" @click="setProvider('kubernetes')">
+          <button v-if="isProviderOn('kubernetes')" :class="['provider-tab', { active: activeProvider === 'kubernetes' }]" title="Kubernetes" aria-label="Kubernetes" @click="setProvider('kubernetes')">
             <i data-lucide="box"></i> Kubernetes
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'aws' }]" title="AWS" aria-label="AWS" @click="setProvider('aws')">
+          <button v-if="isProviderOn('aws')" :class="['provider-tab', { active: activeProvider === 'aws' }]" title="AWS" aria-label="AWS" @click="setProvider('aws')">
             <i data-lucide="cloud"></i> AWS
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'gcp' }]" title="GCP" aria-label="GCP" @click="setProvider('gcp')">
+          <button v-if="isProviderOn('gcp')" :class="['provider-tab', { active: activeProvider === 'gcp' }]" title="GCP" aria-label="GCP" @click="setProvider('gcp')">
             <i data-lucide="cloud-cog"></i> GCP
           </button>
-          <button :class="['provider-tab', { active: activeProvider === 'vercel' }]" title="Vercel" aria-label="Vercel" @click="setProvider('vercel')">
+          <button v-if="isProviderOn('vercel')" :class="['provider-tab', { active: activeProvider === 'vercel' }]" title="Vercel" aria-label="Vercel" @click="setProvider('vercel')">
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
@@ -538,6 +538,8 @@ import { useEnvStore }         from './stores/useEnvStore'
 import { useTerminalStreams }   from './composables/useTerminalStreams'
 import { useToast }            from './composables/useToast'
 import { useViewUrl }          from './composables/useViewUrl'
+import { providerIds } from './lib/providers'
+import { useProviders } from './composables/useProviders'
 import { api }                 from './composables/useApi'
 import { settings, applySettings } from './composables/useSettings'
 import { syncServerCacheSettings } from './composables/serverCacheSettings'
@@ -631,6 +633,8 @@ function whenMounted(viewRef, timeoutMs = 15000) {
 }
 
 const { t } = useI18n()
+// The top bar shows only the providers that are on (a provider of a plugin turned off is hidden).
+const { isProviderOn } = useProviders()
 const updateStore = useUpdateStore()
 const store     = useKubeStore()
 const pfStore   = usePortForwardStore()
@@ -1097,7 +1101,7 @@ async function openApplicationFromUrl() {
 
 const kuappsObservabilityProvider = computed(() => {
   const provider = activeApplicationContext.value?.provider || observabilityProvider.value
-  return ['aws', 'gcp', 'vercel', 'generic'].includes(provider) ? provider : 'generic'
+  return providerIds('observability').includes(provider) ? provider : 'generic'
 })
 const kuappsObservabilityProfileId = computed(() => {
   const application = activeApplicationContext.value

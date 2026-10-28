@@ -236,6 +236,7 @@ import { useTerminalStreams } from '../composables/useTerminalStreams'
 import { useKubeStore } from '../stores/useKubeStore'
 import ConfirmModal from './ConfirmModal.vue'
 import { providerMeta, middleTruncate, connectionProvider, connectionTarget } from '../composables/consoleConnections'
+import { providerIds } from '../lib/providers'
 
 const { t } = useI18n()
 const store = useTerminalStore()
@@ -256,7 +257,7 @@ const renameText = ref('')
 // Name given to the tab that the pending SSM confirmation will open (saved connections).
 let pendingSsmName = null
 
-const PROVIDER_ORDER = ['local', 'kubernetes', 'aws', 'gcp', 'vercel']
+const PROVIDER_ORDER = ['local', ...providerIds('view')]
 const PROVIDER_ICONS = { aws: 'cloud', gcp: 'cloud', vercel: 'triangle' }
 
 const kubernetesLogsCapability = computed(() => store.capabilityRegistry.find(c => c.id === 'kubernetes-logs'))

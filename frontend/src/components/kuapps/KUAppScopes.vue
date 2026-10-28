@@ -63,6 +63,7 @@ import { createIcons, icons } from 'lucide'
 import { api } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
 import { useEnvStore } from '../../stores/useEnvStore'
+import { providerIds } from '../../lib/providers'
 
 // Portable scopes of a KUA Application and the local profile bound to each (#149).
 // Bindings stay on this computer; the server verifies them with free reads only.
@@ -71,7 +72,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed'])
 
-const PROVIDERS = ['aws', 'gcp', 'kubernetes', 'vercel']
+const PROVIDERS = providerIds('scopes')
 const { t } = useI18n()
 const envStore = useEnvStore()
 const view = ref(null)

@@ -19,6 +19,7 @@ const { listServicesWithBackends } = require('./lib/kubeServices');
 const { readPodRelations, readServiceBackends } = require('./lib/kubeRelations');
 const { requireExpectedContext } = require('./lib/kubeContextGuard');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
+const { activeProviders, providerAlternation, providerIds } = require('./lib/providers');
 const { buildOverview, lastRestartAt, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
@@ -107,11 +108,12 @@ setImmediate(() => {
     console.error('[kuapps] Contract migration failed:', err.message);
   }
 });
-const cloudResponseCaches = {
-  aws: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-  gcp: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-  vercel: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-};
+// One response cache per provider served under /api/cloud/<id>/ (lib/providers.js).
+const cloudResponseCaches = Object.fromEntries(providerIds('cloudApi')
+  .map(provider => [provider, new KubeResponseCache({ freshMs: 30000, staleMs: 300000 })]));
+const CLOUD_PROVIDER_PATTERN = providerAlternation('cloudApi');
+const CLOUD_LIST_PATH = new RegExp(`^/api/cloud/(${CLOUD_PROVIDER_PATTERN})(/.*)$`);
+const CLOUD_PROVIDER_PATH = new RegExp(`^/api/cloud/(${CLOUD_PROVIDER_PATTERN})(?:/|$)`);
 
 // ─── Cloud integration routes ─────────────────────────────────────────────────
 const envManagerRoutes  = require('./routes/envManager');
@@ -267,7 +269,7 @@ const cloudRevalidations = new Set();
 
 function cloudListRequest(req) {
   const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
-  const match = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(\/.*)$/);
+  const match = pathname.match(CLOUD_LIST_PATH);
   if (!match) return null;
   const [, provider, relativePath] = match;
   const isVercelList = provider === 'vercel' && (
@@ -308,7 +310,7 @@ function revalidateCloudList(originalUrl, cacheRequest) {
 
 app.use('/api/cloud', (req, res, next) => {
   const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
-  const provider = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(?:\/|$)/)?.[1];
+  const provider = pathname.match(CLOUD_PROVIDER_PATH)?.[1];
   if (req.method !== 'GET') {
     if (provider) {
       res.on('finish', () => {
@@ -405,7 +407,7 @@ const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegis
   dataDir: require('./lib/account/account').resolveDataDir(),
   plugins: [require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd)],
 });
-app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog }));
+app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog, providers: () => activeProviders(pluginRegistry) }));
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
   apmDatabase,
