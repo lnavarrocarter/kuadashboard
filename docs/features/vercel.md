@@ -7,6 +7,10 @@ description: Manage Vercel projects, deployments, domains, environment variables
 
 KuaDashboard provides a full Vercel management panel accessible from the **Vercel** provider tab. Manage your projects, deployments, domains, environment variables, and serverless functions without leaving the dashboard.
 
+## Turn on the Vercel plugin
+
+Vercel is a first-party plugin. It is on where a Vercel profile already existed; otherwise open **Plugins/Connections** (plug icon in the toolbar) and turn **Vercel** on, and the **Vercel** tab appears in the top bar. While it is off, KUA does not read Vercel at all (no tab, routes, scheduled Advisor scans, log refresh or discovery), and KUA Applications with Vercel resources keep opening. Turning it off never deletes profiles.
+
 ## Authentication
 
 Vercel credentials can be configured in two ways:

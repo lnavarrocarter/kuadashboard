@@ -27,6 +27,7 @@
               <option value="gcp">Google Cloud (GCP)</option>
               <option value="aws">Amazon Web Services (AWS)</option>
               <option value="vercel">Vercel</option>
+              <option value="proxmox">Proxmox VE</option>
               <option value="generic">{{ t('profm.generic') }}</option>
             </select>
           </label>
@@ -181,6 +182,49 @@
                   </select>
                 </label>
               </div>
+            </template>
+
+            <!-- Proxmox VE fields (#195) -->
+            <template v-else-if="form.provider === 'proxmox'">
+              <div class="gcloud-info-box" data-test="proxmox-token-hint">{{ t('proxmox.tokenHint') }}</div>
+              <label class="field-label">
+                PROXMOX_URL
+                <input v-model="form.keys.PROXMOX_URL" class="ctrl-input" placeholder="https://pve.example.lan:8006" data-test="proxmox-url" />
+              </label>
+              <label class="field-label">
+                PROXMOX_TOKEN_ID
+                <input v-model="form.keys.PROXMOX_TOKEN_ID" class="ctrl-input" placeholder="kua@pve!readonly" data-test="proxmox-token-id" />
+              </label>
+              <label class="field-label">
+                PROXMOX_TOKEN_SECRET
+                <input v-model="form.keys.PROXMOX_TOKEN_SECRET" class="ctrl-input" type="password" placeholder="••••••••-••••-••••-••••-••••••••••••" data-test="proxmox-token-secret" />
+              </label>
+              <div class="auth-mode-tabs">
+                <button type="button" :class="['auth-mode-tab', { active: proxmoxTlsMode === 'pinned' }]" @click="proxmoxTlsMode = 'pinned'">{{ t('proxmox.tls.fingerprint') }}</button>
+                <button type="button" :class="['auth-mode-tab', { active: proxmoxTlsMode === 'ca' }]" @click="proxmoxTlsMode = 'ca'">{{ t('proxmox.tls.ca') }}</button>
+                <button type="button" :class="['auth-mode-tab', { active: proxmoxTlsMode === 'system' }]" @click="proxmoxTlsMode = 'system'">{{ t('proxmox.tls.system') }}</button>
+              </div>
+              <template v-if="proxmoxTlsMode === 'pinned'">
+                <button class="btn sm" type="button" :disabled="!form.keys.PROXMOX_URL.trim() || proxmoxCertificateLoading" data-test="proxmox-read-certificate" @click="readProxmoxCertificate">
+                  {{ proxmoxCertificateLoading ? t('common.loading') : t('proxmox.tls.read') }}
+                </button>
+                <div v-if="proxmoxCertificate" class="gcloud-info-box" data-test="proxmox-certificate">
+                  <div>{{ t('proxmox.tls.presented', { subject: proxmoxCertificate.subject || '—', issuer: proxmoxCertificate.issuer || '—' }) }}</div>
+                  <code style="word-break:break-all">{{ proxmoxCertificate.fingerprint }}</code>
+                  <div class="text-dim">{{ t('proxmox.tls.compare') }}</div>
+                  <button class="btn sm primary" type="button" data-test="proxmox-pin" @click="pinProxmoxCertificate">{{ t('proxmox.tls.pin') }}</button>
+                </div>
+                <span v-if="proxmoxCertificateError" class="profile-validation-error">{{ proxmoxCertificateError }}</span>
+                <label class="field-label">
+                  PROXMOX_TLS_FINGERPRINT
+                  <input v-model="form.keys.PROXMOX_TLS_FINGERPRINT" class="ctrl-input" placeholder="AB:CD:…" data-test="proxmox-fingerprint" />
+                </label>
+              </template>
+              <label v-else-if="proxmoxTlsMode === 'ca'" class="field-label">
+                PROXMOX_CA_PEM
+                <textarea v-model="form.keys.PROXMOX_CA_PEM" class="ctrl-input code-input" rows="5" placeholder="-----BEGIN CERTIFICATE-----" />
+              </label>
+              <span v-else class="text-dim" style="font-size:12px">{{ t('proxmox.tls.systemHint') }}</span>
             </template>
 
             <!-- Vercel fields -->
@@ -406,6 +450,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../../composables/useI18n.js'
+import { api } from '../../composables/useApi'
 import { useAwsSso } from '../../composables/useAwsSso.js'
 import { settings } from '../../composables/useSettings.js'
 
@@ -640,6 +685,29 @@ function submitGcloud() {
 }
 
 // ── Regular profile form ───────────────────────────────────────────────────────
+// Proxmox VE (#195): URL, API token and how the server certificate is verified.
+const PROXMOX_KEYS = () => ({ PROXMOX_URL: '', PROXMOX_TOKEN_ID: '', PROXMOX_TOKEN_SECRET: '', PROXMOX_TLS_FINGERPRINT: '', PROXMOX_CA_PEM: '' })
+const proxmoxTlsMode = ref('pinned')
+const proxmoxCertificate = ref(null)
+const proxmoxCertificateError = ref('')
+const proxmoxCertificateLoading = ref(false)
+
+/** Reads the certificate the server presents (no credential is sent), to compare and pin it. */
+async function readProxmoxCertificate() {
+  proxmoxCertificate.value = null
+  proxmoxCertificateError.value = ''
+  proxmoxCertificateLoading.value = true
+  try {
+    proxmoxCertificate.value = await api('GET', `/api/cloud/proxmox/fingerprint?url=${encodeURIComponent(form.value.keys.PROXMOX_URL.trim())}`)
+  } catch (e) {
+    proxmoxCertificateError.value = e.message
+  } finally {
+    proxmoxCertificateLoading.value = false
+  }
+}
+function pinProxmoxCertificate() {
+  if (proxmoxCertificate.value?.fingerprint) form.value.keys.PROXMOX_TLS_FINGERPRINT = proxmoxCertificate.value.fingerprint
+}
 const defaultForm = () => ({
   name:     '',
   category: '',
@@ -653,6 +721,7 @@ const defaultForm = () => ({
     AWS_DEFAULT_REGION: '',
     VERCEL_API_TOKEN: '',
     VERCEL_TEAM_ID: '',
+    ...PROXMOX_KEYS(),
   },
   genericPairs: [{ key: '', value: '', tags: [], newTag: '' }],
 })
@@ -672,6 +741,9 @@ watch(() => props.show, (v) => {
   gcloudConfigs.value       = []
   gcloudAccounts.value      = []
   awsAuthMode.value         = 'manual'
+  proxmoxTlsMode.value      = 'pinned'
+  proxmoxCertificate.value  = null
+  proxmoxCertificateError.value = ''
   resetSsoState()
 
   if (props.profile) {
@@ -688,6 +760,7 @@ watch(() => props.show, (v) => {
         AWS_DEFAULT_REGION: '',
         VERCEL_API_TOKEN: '',
         VERCEL_TEAM_ID: '',
+        ...PROXMOX_KEYS(),
       },
       genericPairs: props.profile.keyNames?.map(k => ({
         key: k, value: '', tags: props.profile.meta?.[k]?.tags?.slice() || [], newTag: '',
@@ -705,6 +778,13 @@ const canSave = computed(() => {
     return false
   if (form.value.provider === 'vercel' && !isEdit.value && !form.value.keys.VERCEL_API_TOKEN.trim())
     return false
+  if (form.value.provider === 'proxmox' && !isEdit.value) {
+    const keys = form.value.keys
+    if (!keys.PROXMOX_URL.trim() || !keys.PROXMOX_TOKEN_ID.trim() || !keys.PROXMOX_TOKEN_SECRET.trim()) return false
+    // A self-signed Proxmox needs its certificate pinned or its CA; never an unverified connection.
+    if (proxmoxTlsMode.value === 'pinned' && !keys.PROXMOX_TLS_FINGERPRINT.trim()) return false
+    if (proxmoxTlsMode.value === 'ca' && !keys.PROXMOX_CA_PEM.trim()) return false
+  }
   return true
 })
 
@@ -747,6 +827,10 @@ function submit() {
   } else if (provider === 'vercel') {
     if (keys.VERCEL_API_TOKEN)          finalKeys.VERCEL_API_TOKEN = keys.VERCEL_API_TOKEN
     if (keys.VERCEL_TEAM_ID)            finalKeys.VERCEL_TEAM_ID = keys.VERCEL_TEAM_ID
+  } else if (provider === 'proxmox') {
+    for (const key of ['PROXMOX_URL', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET']) if (keys[key].trim()) finalKeys[key] = keys[key].trim()
+    if (proxmoxTlsMode.value === 'pinned' && keys.PROXMOX_TLS_FINGERPRINT.trim()) finalKeys.PROXMOX_TLS_FINGERPRINT = keys.PROXMOX_TLS_FINGERPRINT.trim()
+    if (proxmoxTlsMode.value === 'ca' && keys.PROXMOX_CA_PEM.trim()) finalKeys.PROXMOX_CA_PEM = keys.PROXMOX_CA_PEM.trim()
   } else {
     for (const pair of genericPairs) {
       if (pair.key.trim()) {

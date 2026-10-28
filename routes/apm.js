@@ -35,6 +35,8 @@ function createApmRouter({
   logCache = () => require('../lib/awsLogCache').getLogCache(),
   syncProviderLogs = null,
   checkApplicationLimit = count => require('../lib/plans').checkKuaAppLimit(count),
+  // Whether a provider is on (#194): the logs of a provider whose plugin is off are not read.
+  providerActive = () => true,
 }) {
   if (!database || !scheduler) throw new Error('database and scheduler are required');
   const router = express.Router();
@@ -753,6 +755,8 @@ function createApmRouter({
     const scope = logScopeForResource(database, application, resource);
     if (!scope) throw Object.assign(new Error('No verified profile and region reaches this resource'), { statusCode: 409 });
     const groups = logGroupsForResource(resource).filter(group => ['gcp', 'vercel'].includes(parseProviderLogGroup(group)?.provider));
+    const off = groups.map(group => parseProviderLogGroup(group).provider).find(item => !providerActive(item));
+    if (off) throw Object.assign(new Error(`The ${off} plugin is turned off. Turn it on in Plugins/Connections.`), { statusCode: 404, code: 'PLUGIN_DISABLED' });
     if (!groups.length) throw Object.assign(new Error('This resource has no supported GCP or Vercel log source'), { statusCode: 400 });
     return { resource, scope, groups };
   }

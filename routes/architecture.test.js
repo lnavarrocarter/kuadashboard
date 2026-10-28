@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ discoveryService, deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader } = {}) {
+async function fixture({ discoveryService, deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader, providerActive } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -28,6 +28,7 @@ async function fixture({ discoveryService, deploymentReader, inventoryReader, re
     kubernetesAdapter,
     gcpDiscoveryService,
     vercelDiscoveryService,
+    ...(providerActive ? { providerActive } : {}),
   }));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -891,5 +892,23 @@ test('saved path filters need Pro or Team; isolating a path and removing saved o
   } finally {
     if (previous.plan === undefined) delete process.env.KUA_PLAN; else process.env.KUA_PLAN = previous.plan;
     if (previous.packaged !== undefined) process.env.KUA_PACKAGED = previous.packaged;
+  }
+});
+
+test('the discovery of a provider whose plugin is off answers PLUGIN_DISABLED and reads nothing', async () => {
+  const calls = [];
+  const subject = await fixture({
+    vercelDiscoveryService: { async preview(input) { calls.push(input); return { nodes: [], scope: { provider: 'vercel' } }; } },
+    providerActive: id => id !== 'vercel',
+  });
+  try {
+    const preview = await subject.request('/clouds/vercel/architecture/preview', { method: 'POST' });
+    assert.equal(preview.status, 404);
+    assert.equal(preview.body.code, 'PLUGIN_DISABLED');
+    const project = await subject.request('/projects/any/discovery/vercel/preview', { method: 'POST' });
+    assert.equal(project.body.code, 'PLUGIN_DISABLED');
+    assert.deepEqual(calls, []);
+  } finally {
+    await subject.close();
   }
 });

@@ -40,6 +40,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
+import { refreshProviders } from '../composables/useProviders'
 
 // Plugins/Connections (#193): what each first-party plugin reads and costs, and whether it is on.
 const { t } = useI18n()
@@ -57,7 +58,8 @@ async function load() {
 async function toggle(plugin, active) {
   busy.value = plugin.manifest.id
   error.value = ''
-  try { await api('PUT', `/api/plugins/${encodeURIComponent(plugin.manifest.id)}`, { active }); await load() } catch (e) { error.value = e.message; await load() } finally { busy.value = '' }
+  // The top bar follows at once: a provider of a plugin turned off leaves it.
+  try { await api('PUT', `/api/plugins/${encodeURIComponent(plugin.manifest.id)}`, { active }); await Promise.all([load(), refreshProviders()]) } catch (e) { error.value = e.message; await load() } finally { busy.value = '' }
 }
 
 onMounted(load)

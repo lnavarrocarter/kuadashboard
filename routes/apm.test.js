@@ -17,7 +17,7 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { PostureStore } = require('../lib/advisor/posture');
 const { buildReport, check } = require('../lib/advisor/core');
 
-async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs, providerActive } = {}) {
   // In-memory log cache: tests never touch the user's data directory.
   const logCache = createLogCache({ dataDir: ':memory:' });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
@@ -60,6 +60,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     architectureDatabase,
     scheduler,
     provider: 'generic',
+    ...(providerActive ? { providerActive } : {}),
     logCache: () => logCache,
     syncProviderLogs,
   }));
@@ -1388,6 +1389,29 @@ test('GCP and Vercel log cache is estimated locally and opted into per verified 
       profile: 'gcp-profile', method: 'DELETE',
     });
     assert.equal(removed.body.removed, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('the log cache of a provider whose plugin is off answers PLUGIN_DISABLED and syncs nothing', async () => {
+  const syncs = [];
+  const subject = await fixture({ syncProviderLogs: async target => { syncs.push(target); return { status: 'ok', inserted: 0 }; }, providerActive: id => id !== 'vercel' });
+  try {
+    const application = subject.database.createApplication({ name: 'Vercel app' });
+    const vercelScope = normalizeScope({ provider: 'vercel', scopeId: 'team-1', location: 'global' });
+    subject.database.addApplicationScope(application.id, vercelScope);
+    subject.database.setScopeBinding(application.id, vercelScope.key, { profileId: 'vercel-profile', status: 'verified' });
+    const vercelProject = subject.database.addResource(application.id, {
+      provider: 'vercel', type: 'vercel-project', key: 'prj_123', scopeId: 'team-1', location: 'global', name: 'web',
+    });
+    const enabled = await subject.genericRequest(`/applications/${application.id}/log-cache`, {
+      profile: 'vercel-profile', method: 'POST', body: { resourceId: vercelProject.id },
+    });
+    assert.equal(enabled.status, 404);
+    assert.equal(enabled.body.code, 'PLUGIN_DISABLED');
+    assert.deepEqual(syncs, []);
+    assert.equal((await subject.genericRequest('/applications')).status, 200, 'the application itself still opens');
   } finally {
     await subject.close();
   }
