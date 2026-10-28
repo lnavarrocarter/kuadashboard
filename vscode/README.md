@@ -8,6 +8,7 @@ See your local [KUA (Know Unified Administration)](https://lnavarrocarter.github
 - **KUA: Open dashboard** opens the desktop app (or the browser for a KUA run from the repository).
 - **KUA: Verify MCP connection** starts the server like the chat does and says what it reached.
 - **KUA: Add MCP server to this workspace** writes the `kua` entry to `.vscode/mcp.json`, keeping the other servers, for editors that read that file but not the extension API.
+- **KUA: Add KUA steering to this workspace for Kiro** writes `.kiro/steering/kua.md`, KUA's rules for Kiro's agent; a file you edited is only replaced if you confirm.
 
 ## Requirements
 

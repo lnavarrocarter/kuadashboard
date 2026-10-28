@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !dist/texts.json
+!dist/kua-steering.md
 !resources/**
 !package.json
 !package.nls*.json
