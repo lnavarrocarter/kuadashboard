@@ -23,11 +23,15 @@
           <button v-if="installable" class="btn sm primary" :disabled="!!busy" data-test="agent-connect-install" @click="install">
             {{ busy === 'install' ? t('agentConnect.installing') : t('agentConnect.install', { client: t(`agentConnect.client.${active}`) }) }}
           </button>
+          <button v-if="fileClient?.added" class="btn sm" :disabled="!!busy" data-test="agent-connect-uninstall" @click="uninstall">
+            {{ t('agentConnect.remove', { client: t(`agentConnect.client.${active}`) }) }}
+          </button>
           <a v-if="active === 'claudeDesktop'" class="btn sm" href="/api/system/mcp/mcpb" download="kua.mcpb" data-test="agent-connect-mcpb">{{ t('agentConnect.downloadMcpb') }}</a>
           <button class="btn sm" :disabled="!!busy" data-test="agent-connect-verify" @click="verify">
             {{ busy === 'verify' ? t('agentConnect.verifying') : t('agentConnect.verify') }}
           </button>
         </div>
+        <p v-if="fileClient" class="acm-dim" data-test="agent-connect-file">{{ t(fileClient.added ? 'agentConnect.fileAdded' : 'agentConnect.fileNotAdded', { file: fileClient.file }) }}</p>
         <p v-if="outcome" :class="['acm-outcome', outcome.ok ? 'ok' : 'warn']" data-test="agent-connect-outcome">{{ outcome.text }}</p>
         <!-- Agents on this computer: off refuses every MCP request (lib/agentPlanGuard.js). -->
         <label class="acm-writes" data-test="agent-enabled">
@@ -70,6 +74,11 @@ const CLIENTS = [
   { id: 'claude', build: claudeCommand },
   { id: 'claudeDesktop', build: jsonConfig },
   { id: 'codex', build: codexCommand },
+  // Agents configured by a JSON file in the home folder (#307): KUA writes only its own entry.
+  { id: 'cursor', build: jsonConfig },
+  { id: 'windsurf', build: jsonConfig },
+  { id: 'gemini', build: jsonConfig },
+  { id: 'kiro', build: jsonConfig },
   { id: 'json', build: jsonConfig },
   { id: 'toml', build: codexToml },
 ]
@@ -85,7 +94,28 @@ const active = ref('claude')
 const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id === active.value).build(launch.value) : ''))
 // Claude Code and Codex have a CLI that KUA can run for the user; Claude Desktop gets kua.mcpb
 // opened (POST /api/system/mcp/install, #306).
-const installable = computed(() => ['claude', 'claudeDesktop', 'codex'].includes(active.value))
+const FILE_CLIENTS = ['cursor', 'windsurf', 'gemini', 'kiro']
+const installable = computed(() => ['claude', 'claudeDesktop', 'codex', ...FILE_CLIENTS].includes(active.value))
+// For file agents: { file, present, added } from GET /api/system/mcp/clients.
+const fileClients = ref({})
+const fileClient = computed(() => (FILE_CLIENTS.includes(active.value) ? fileClients.value[active.value] || null : null))
+async function loadFileClients() {
+  try {
+    const { clients = [] } = await apiFetch('/api/system/mcp/clients')
+    fileClients.value = Object.fromEntries(clients.map(item => [item.client, item]))
+  } catch { fileClients.value = {} }
+}
+
+async function uninstall() {
+  const client = t(`agentConnect.client.${active.value}`)
+  busy.value = 'uninstall'
+  try {
+    const result = await post('/api/system/mcp/uninstall', { client: active.value })
+    outcome.value = { ok: true, text: t(result?.removed ? 'agentConnect.removed' : 'agentConnect.notAdded', { client }) }
+  } catch (err) {
+    outcome.value = { ok: false, text: t('agentConnect.installFailed', { error: err.message }) }
+  } finally { busy.value = ''; loadFileClients() }
+}
 // 'install' | 'verify' while one runs; outcome: { ok, text } of the last one.
 const busy = ref('')
 const agentEnabled = ref(true)
@@ -119,12 +149,12 @@ async function install() {
   try {
     const result = await post('/api/system/mcp/install', { client: active.value })
     // Claude Code gets the KUA plugin (server and skill) from this computer when its CLI can (#305).
-    const done = { plugin: 'agentConnect.installedPlugin', mcpb: 'agentConnect.installedDesktop' }[result?.mode] || 'agentConnect.installed'
-    outcome.value = { ok: true, text: t(done, { client }) }
+    const done = { plugin: 'agentConnect.installedPlugin', mcpb: 'agentConnect.installedDesktop', config: 'agentConnect.installedConfig' }[result?.mode] || 'agentConnect.installed'
+    outcome.value = { ok: true, text: t(done, { client, file: result?.file || '' }) }
   } catch (err) {
     const code = err.details?.code
     outcome.value = { ok: false, text: code === 'CLI_NOT_FOUND' ? t('agentConnect.installMissing', { client }) : code === 'MCPB_MISSING' ? t('agentConnect.mcpbMissing') : t('agentConnect.installFailed', { error: err.message }) }
-  } finally { busy.value = '' }
+  } finally { busy.value = ''; if (FILE_CLIENTS.includes(active.value)) loadFileClients() }
 }
 
 async function verify() {
@@ -156,6 +186,7 @@ async function load() {
     ])
     launch.value = nextLaunch
     applyAccess(access)
+    loadFileClients()
   } catch (err) {
     error.value = err.message
   } finally {
