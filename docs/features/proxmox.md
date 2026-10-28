@@ -43,3 +43,9 @@ The secret is kept in the credential store like other profiles, and it never app
 - **VMs and containers**, **Nodes**, **Storage**, **Backup jobs** and **Recent tasks** tables.
 
 A section the token cannot read says so ("not available") instead of showing zero, and the rest is still shown. The inventory is cached for 30 seconds; **Refresh** reads it again.
+
+## Architecture and KUApps
+
+With a Proxmox profile active, **Add resources → Proxmox VE** in an Architecture project previews the nodes, VMs, containers and storage of the cluster and adds the ones you pick, each VM and container running on its node. One inventory read on your network, no cloud cost; templates are left out.
+
+Resources added to the map of a KUA Application, or attached in KUApps, belong to the scope `proxmox:<cluster>` (the node name on a single-node install), which KUApps binds to a Proxmox profile and verifies by reading the cluster's name. They are part of the application's topology; KUA does not collect metrics for them yet, so they show **No KUA metrics** instead of "no data".

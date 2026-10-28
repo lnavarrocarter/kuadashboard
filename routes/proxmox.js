@@ -79,4 +79,4 @@ function createProxmoxRouter({
   return router;
 }
 
-module.exports = { createProxmoxRouter, resolveProxmoxProfile };
+module.exports = { STATUS_BY_KIND, createProxmoxRouter, resolveProxmoxProfile };
