@@ -5,6 +5,11 @@ description: Inventario de solo lectura de clústeres y nodos de Proxmox VE en K
 
 # Proxmox VE
 
+::: info Próxima versión
+Proxmox VE llega con la próxima versión de KUA después de la 2.0.0. Mientras tanto, ejecuta KUA desde el repositorio (`main`) para probarlo.
+:::
+
+
 KUA lee un clúster de Proxmox VE o un nodo único y lo muestra en la pestaña **Proxmox**: quorum, nodos, VMs QEMU y contenedores LXC, storage, jobs de backup y tareas recientes. Solo lee: nada cambia en Proxmox, y las lecturas van a la API de Proxmox de tu red, sin costo de nube.
 
 ## Activar el plugin

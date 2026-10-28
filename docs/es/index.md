@@ -29,6 +29,15 @@ features:
   - icon: ☸️
     title: Gestión de Kubernetes
     details: Cobertura amplia de recursos con tablas multi-seleccion, eliminacion masiva, ConfigMaps/Secrets/envs editables, import kubeconfig, metricas, eventos y operaciones con un clic.
+  - icon: 🧭
+    title: Advisor
+    details: "Revisiones deterministas de buenas prácticas para Kubernetes, AWS, GCP y Vercel (seguridad, infraestructura, arquitectura, desarrollo), con los recursos afectados y lo que cuesta cada escaneo."
+  - icon: 🧩
+    title: KUA Applications
+    details: "Un espacio de trabajo por aplicación entre clústeres y nubes: recursos con el estado de sus señales, un mapa con rutas, log intelligence y un Advisor de producto."
+  - icon: 🤖
+    title: Agentes de IA (MCP)
+    details: "Un servidor MCP local permite que Claude Code, Codex CLI y otros agentes lean KUA (hallazgos del Advisor, errores recurrentes en logs, aplicaciones) y cambien KUApps solo después de que apruebes."
   - icon: 📺
     title: Logs en Vivo & Shell
     details: Logs en tiempo real para pods y workloads, búsqueda/filtros por fecha, descarga, exec en pods, shell local y sesiones EC2 SSH/RDP persistentes.
@@ -47,13 +56,15 @@ features:
 
 faq:
   - q: "¿Qué es KUA?"
-    a: "KUA (KuaDashboard) es un dashboard de escritorio gratuito y open source para Kubernetes, AWS, GCP y Vercel. Muestra clústeres, pods, deployments, logs, shells, port forwards, releases de Helm, logs de CloudWatch y costos de la nube en una sola app para Windows, macOS y Linux."
+    a: "KUA (KuaDashboard) es un dashboard de escritorio gratuito y open source para Kubernetes, AWS, GCP y Vercel. Muestra clústeres, pods, deployments, logs, shells, port forwards, releases de Helm, logs de CloudWatch y costos de la nube en una sola app para Windows, macOS y Linux, con un Advisor, KUA Applications que agrupan los recursos de cada aplicación y un servidor MCP para agentes de IA."
   - q: "¿KUA es una alternativa a Lens o k9s?"
     a: "Sí. Como Lens o k9s, KUA administra clústeres de Kubernetes desde tu kubeconfig: workloads, logs, exec en pods, port forwarding, eventos, métricas y Helm. Además administra recursos de AWS, GCP y Vercel en la misma ventana."
   - q: "¿KUA funciona con EKS, GKE y AKS?"
     a: "Sí. KUA funciona con cualquier clúster de tu kubeconfig, incluidos Amazon EKS, Google GKE, Azure AKS, k3s, kind y minikube, y puede importar kubeconfigs de EKS y GKE desde tus perfiles cloud."
   - q: "¿KUA es gratis?"
     a: "Sí. KUA es open source con licencia MIT y todas las funciones locales son gratuitas. Los planes Pro y Team, opcionales, agregan respaldos en la nube, sincronización entre equipos, el Advisor y trabajo en equipo."
+  - q: "¿Los agentes de IA pueden usar KUA?"
+    a: "Sí. KUA trae un servidor MCP local: Claude Code, Codex CLI y otros clientes MCP leen tus perfiles, los hallazgos del Advisor, log intelligence y las KUA Applications a través del KUA que corre en tu equipo, y Conectar un agente de IA lo instala. Los cambios a KUA Applications se previsualizan y se aplican solo después de que los apruebas, y los agentes se pueden apagar desde la bandeja."
   - q: "¿Mis credenciales salen de mi equipo?"
     a: "No. Los kubeconfigs, credenciales cloud, perfiles y logs se quedan en tu equipo, cifrados con el llavero del sistema operativo. KUA habla directamente con tus clústeres y las APIs de la nube."
 ---
@@ -65,7 +76,11 @@ KUA reúne tus **clústeres de Kubernetes**, tus cuentas de **AWS** y **GCP** y 
 - **Kubernetes:** kubeconfig multi-clúster, workloads, ConfigMaps y Secrets, logs, exec, port forwarding, eventos, métricas, Helm.
 - **AWS:** EC2, ECS, EKS, Lambda, S3, DynamoDB, RDS, Secrets Manager, CloudWatch Logs y Logs Insights, con permisos IAM mínimos.
 - **GCP:** Cloud Run, GKE, Cloud SQL, Cloud Storage.
+- **Advisor y KUA Applications:** hallazgos de buenas prácticas por proveedor y un espacio de trabajo por aplicación con sus recursos, mapa y señales.
+- **Agentes de IA:** un servidor MCP local para Claude Code, Codex CLI y otros agentes, con cambios solo después de tu aprobación.
 - **Local y privado:** las credenciales quedan cifradas en tu equipo; la app es open source.
+
+**En la próxima versión:** Plugins/Conexiones (Vercel y Proxmox VE como plugins), una extensión de KUA para VS Code, un plugin para Claude Code, una extensión para Claude Desktop e instalación con un clic en Cursor, Windsurf, Gemini CLI y Kiro. Mira [Unreleased en el changelog](/es/changelog#unreleased).
 
 <script setup>
 import { withBase } from 'vitepress'

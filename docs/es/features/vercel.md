@@ -9,7 +9,7 @@ KuaDashboard proporciona un panel completo de gestión de Vercel accesible desde
 
 ## Activar el plugin de Vercel
 
-Vercel es un plugin first-party. Queda activo donde ya existía un perfil de Vercel; si no, abre **Plugins/Conexiones** (icono de enchufe en la barra de herramientas) y activa **Vercel**, y la pestaña **Vercel** aparece en la barra superior. Mientras está desactivado, KUA no consulta Vercel (sin pestaña, rutas, análisis programados del Advisor, refresco de logs ni descubrimiento), y las KUA Applications con recursos de Vercel siguen abriendo. Desactivarlo nunca borra perfiles.
+Vercel es un plugin first-party. Queda activo donde ya existía un perfil de Vercel; si no, abre **Plugins/Conexiones** (icono de enchufe en la barra de herramientas) y activa **Vercel**, y la pestaña **Vercel** aparece en la barra superior. Mientras está desactivado, KUA no consulta Vercel (sin pestaña, rutas, análisis programados del Advisor, refresco de logs ni descubrimiento), y las KUA Applications con recursos de Vercel siguen abriendo. Desactivarlo nunca borra perfiles. Plugins/Conexiones llega con la próxima versión después de la 2.0.0; en la 2.0.0 Vercel siempre está activo.
 
 ## Autenticación
 

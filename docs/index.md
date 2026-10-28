@@ -29,6 +29,15 @@ features:
   - icon: ☸️
     title: Kubernetes Management
     details: Broad resource coverage with multi-select tables, bulk delete, editable ConfigMaps/Secrets/envs, kubeconfig import, metrics, events and one-click operations.
+  - icon: 🧭
+    title: Advisor
+    details: "Deterministic good-practice checks for Kubernetes, AWS, GCP and Vercel (security, infrastructure, architecture, development), with the affected resources and what each scan costs."
+  - icon: 🧩
+    title: KUA Applications
+    details: "One workspace per application across clusters and clouds — resources with their signal state, a map with routes, log intelligence and a product Advisor."
+  - icon: 🤖
+    title: AI agents (MCP)
+    details: "A local MCP server lets Claude Code, Codex CLI and other agents read KUA — Advisor findings, recurring log errors, applications — and change KUApps only after you approve."
   - icon: 📺
     title: Live Logs & Shell
     details: Real-time logs for pods and workloads, search/date filters, downloads, interactive pod exec, local shell and persistent EC2 SSH/RDP sessions.
@@ -47,13 +56,15 @@ features:
 
 faq:
   - q: "What is KUA?"
-    a: "KUA (KuaDashboard) is a free, open source desktop dashboard for Kubernetes, AWS, GCP and Vercel. It shows clusters, pods, deployments, logs, shells, port forwards, Helm releases, CloudWatch logs and cloud costs in one app for Windows, macOS and Linux."
+    a: "KUA (KuaDashboard) is a free, open source desktop dashboard for Kubernetes, AWS, GCP and Vercel. It shows clusters, pods, deployments, logs, shells, port forwards, Helm releases, CloudWatch logs and cloud costs in one app for Windows, macOS and Linux, with an Advisor, KUA Applications that group the resources of each application, and an MCP server for AI agents."
   - q: "Is KUA an alternative to Lens or k9s?"
     a: "Yes. Like Lens or k9s, KUA manages Kubernetes clusters from your kubeconfig: workloads, logs, pod exec, port forwarding, events, metrics and Helm. It also manages AWS, GCP and Vercel resources in the same window, which those tools do not."
   - q: "Does KUA work with EKS, GKE and AKS?"
     a: "Yes. KUA works with any cluster in your kubeconfig, including Amazon EKS, Google GKE, Azure AKS, k3s, kind and minikube, and it can import kubeconfigs for EKS and GKE from your cloud profiles."
   - q: "Is KUA free?"
     a: "Yes. KUA is open source under the MIT license and every local feature is free. Optional Pro and Team plans add cloud backups, sync between computers, the Advisor and team sharing."
+  - q: "Can AI agents use KUA?"
+    a: "Yes. KUA ships a local MCP server: Claude Code, Codex CLI and other MCP clients read your profiles, Advisor findings, log intelligence and KUA Applications through the KUA running on your computer, and Connect an AI agent installs it. Changes to KUA Applications are previewed and applied only after you approve them, and agents can be turned off from the tray."
   - q: "Do my credentials leave my computer?"
     a: "No. Kubeconfigs, cloud credentials, profiles and logs stay on your computer, encrypted with the operating system keychain. KUA talks to your clusters and cloud APIs directly."
 ---
@@ -65,7 +76,11 @@ KUA puts your **Kubernetes clusters**, **AWS** and **GCP** accounts and **Vercel
 - **Kubernetes:** multi-cluster kubeconfig, workloads, ConfigMaps and Secrets, logs, exec, port forwarding, events, metrics, Helm.
 - **AWS:** EC2, ECS, EKS, Lambda, S3, DynamoDB, RDS, Secrets Manager, CloudWatch Logs and Logs Insights, IAM-aware least privilege.
 - **GCP:** Cloud Run, GKE, Cloud SQL, Cloud Storage.
+- **Advisor and KUA Applications:** good-practice findings per provider, and one workspace per application with its resources, map and signals.
+- **AI agents:** a local MCP server for Claude Code, Codex CLI and other agents, with changes only after your approval.
 - **Local and private:** credentials stay encrypted on your computer; the app is open source.
+
+**Coming in the next release:** Plugins/Connections (Vercel and Proxmox VE as plugins), a KUA extension for VS Code, a Claude Code plugin, a Claude Desktop extension and one-click setup for Cursor, Windsurf, Gemini CLI and Kiro. See [Unreleased in the changelog](/changelog#unreleased).
 
 [Download KUA](/download) · [Getting started](/guide/getting-started) · [All features](/features/)
 

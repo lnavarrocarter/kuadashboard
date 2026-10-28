@@ -5,6 +5,11 @@ description: La extensión de KUA para VS Code muestra el KUA local en la barra 
 
 # KUA para VS Code
 
+::: info Próxima versión
+La extensión de KUA para VS Code llega con la próxima versión de KUA después de la 2.0.0, que adjunta su `.vsix` a la release. Mientras tanto, constrúyela desde el repositorio con `npm ci && npm run package` en `vscode/`.
+:::
+
+
 La extensión de KUA trae tu KUA local a VS Code:
 
 - **Barra de estado**: si KUA corre en este computador, su versión y plan, y si los agentes de IA están permitidos. Haz clic para ver los comandos.

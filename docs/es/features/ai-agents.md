@@ -92,6 +92,10 @@ Los costos de recolección se estiman a precio de lista: CloudWatch `GetMetricDa
 - **Auditado.** Cada aplicación de un plan queda en el registro de auditoría con el cliente (`mcp`), la aplicación, la operación, el plan y las revisiones antes y después, sin datos de los recursos ni perfiles.
 - No hay herramientas para borrar aplicaciones ni infraestructura.
 
+::: info Próxima versión
+En KUA 2.0.0, **Conectar un agente de IA** instala el servidor MCP en Claude Code (`claude mcp add`) y Codex CLI, y muestra el JSON y el TOML para otros clientes. El plugin de Claude Code, la extensión de Claude Desktop (`kua.mcpb`) y las pestañas de Cursor, Windsurf, Gemini CLI y Kiro descritas abajo llegan con la próxima versión.
+:::
+
 ### Configuración desde la app
 
 Haz clic en el ícono de **enchufe** junto a "Copiar para agente IA" (en cualquier Advisor o en las recomendaciones de logs) para abrir **Conectar agentes IA**:
