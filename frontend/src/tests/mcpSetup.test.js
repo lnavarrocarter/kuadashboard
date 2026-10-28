@@ -113,13 +113,36 @@ describe('AgentConnectModal', () => {
     wrapper.unmount()
   })
 
+  it('adds KUA to the file of Cursor, Windsurf or Gemini CLI, and removes only its entry (#307)', async () => {
+    let added = false
+    const file = '/home/ana/.cursor/mcp.json'
+    apiFetch.mockImplementation(async (path, options = {}) => {
+      if (path === '/api/system/mcp') return REPO
+      if (path === '/api/system/mcp/clients') return { clients: [{ client: 'cursor', file, present: true, added }, { client: 'windsurf', file: '/w', present: false, added: false }, { client: 'gemini', file: '/g', present: false, added: false }] }
+      if (path === '/api/system/mcp/install') { added = true; return { client: 'cursor', name: 'kua', mode: 'config', file } }
+      if (path === '/api/system/mcp/uninstall') { added = false; return { client: 'cursor', name: 'kua', removed: true, file } }
+      return {}
+    })
+    const wrapper = await open()
+    await click('[data-test="agent-connect-cursor"]')
+    expect(document.querySelector('[data-test="agent-connect-file"]').textContent).toContain(file)
+    expect(document.querySelector('[data-test="agent-connect-uninstall"]')).toBeNull()
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toBe(`Added to Cursor in ${file}. Restart Cursor to load it.`)
+    expect(document.querySelector('[data-test="agent-connect-file"]').textContent).toBe(`KUA is in ${file}.`)
+    await click('[data-test="agent-connect-uninstall"]')
+    expect(outcome()).toBe('Removed from Cursor. Its other servers were kept.')
+    expect(document.querySelector('[data-test="agent-connect-uninstall"]')).toBeNull()
+    wrapper.unmount()
+  })
+
   it('verifies the connection and names what fails', async () => {
     const answers = [
       { ok: true, tools: 11, profiles: 3, kua: { url: 'http://localhost:7192', version: '1.17.0', reachable: true }, thisKua: 'http://localhost:7192' },
       { ok: true, tools: 11, profiles: 0, kua: { url: 'http://localhost:7190', version: '1.16.0', reachable: true }, thisKua: 'http://localhost:7192' },
       { ok: false, error: 'KUA is not reachable at http://localhost:7190 (ECONNREFUSED).', thisKua: 'http://localhost:7192' },
     ]
-    apiFetch.mockImplementation(async path => (path === '/api/system/mcp' ? REPO : path === '/api/kua-apps/agent-access' ? { writes: false } : answers.shift()))
+    apiFetch.mockImplementation(async path => (path === '/api/system/mcp' ? REPO : path === '/api/kua-apps/agent-access' ? { writes: false } : path === '/api/system/mcp/clients' ? { clients: [] } : answers.shift()))
     const wrapper = await open()
     await click('[data-test="agent-connect-verify"]')
     expect(outcome()).toBe('It works: 11 tools, reading KUA 1.17.0 · http://localhost:7192 (3 cloud profiles).')

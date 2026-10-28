@@ -169,9 +169,21 @@ args = ["/path/to/kuadashboard/mcp/server.mjs"]
 
 The [KUA extension for VS Code](./vscode) registers KUA's MCP server for the editor's chat, with nothing to configure. Without the extension, add the `kua` entry to `.vscode/mcp.json` with the command below.
 
+### Cursor, Windsurf and Gemini CLI
+
+**Connect an AI agent** has a tab for each. **Install** adds a `kua` entry to the agent's MCP file and keeps everything else in it: other servers, and for Gemini CLI the rest of its settings.
+
+| Agent | File |
+|---|---|
+| Cursor | `~/.cursor/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+
+The tab says whether KUA is already in the file, and **Remove** takes out only KUA's entry. A file that is not valid JSON (for example with comments) is never rewritten: KUA says so and you fix it first. Restart the agent after installing.
+
 ### Other clients
 
-Any client that runs local stdio MCP servers (Cursor, VS Code, Windsurf…) uses the same command: `node /path/to/kuadashboard/mcp/server.mjs`.
+Any client that runs local stdio MCP servers uses the same command: `node /path/to/kuadashboard/mcp/server.mjs`.
 
 ChatGPT (web and desktop) only connects to remote MCP servers over HTTPS, which would mean exposing KUA to the internet. Use the copied brief there instead.
 
