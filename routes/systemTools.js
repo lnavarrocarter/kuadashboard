@@ -207,6 +207,9 @@ router.post('/mcp/install', async (req, res) => {
   // JSON only: another site cannot send it to this loopback API without a CORS preflight, which KUA never allows.
   if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
   try {
+    // Gemini CLI, Cursor, Windsurf, Kiro: KUA's entry in their MCP file, the rest of it kept (#307, #213).
+    const { FILE_CLIENTS, installInConfig } = require('../lib/mcp/clientConfig');
+    if (Object.hasOwn(FILE_CLIENTS, req.body?.client)) return res.json(installInConfig({ client: req.body.client, launch: mcpLaunchHere() }));
     // Claude Desktop: open kua.mcpb, the extension that ships with KUA, and Claude Desktop installs it (#306).
     if (req.body?.client === 'claudeDesktop') return res.json(await require('../lib/mcp/claudeDesktop').openMcpb({ rootDir: require('path').join(__dirname, '..') }));
     // Claude Code: the KUA plugin from a local marketplace copied next to KUA's data (#305).
@@ -219,7 +222,22 @@ router.post('/mcp/install', async (req, res) => {
     }
     res.json(await require('../lib/mcp/clientSetup').installMcp({ client: req.body?.client, launch: mcpLaunchHere(), pluginDir }));
   } catch (err) {
-    res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' || err.code === 'MCPB_MISSING' ? 404 : 500).json({ error: err.message, code: err.code });
+    res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' || err.code === 'MCPB_MISSING' ? 404 : err.code === 'INVALID_CONFIG' ? 409 : 500).json({ error: err.message, code: err.code });
+  }
+});
+
+// GET /mcp/clients: for Gemini CLI, Cursor, Windsurf and Kiro, their file and whether KUA is in it (#307).
+router.get('/mcp/clients', (_req, res) => {
+  res.json({ clients: require('../lib/mcp/clientConfig').configStatus() });
+});
+
+// POST /mcp/uninstall { client }: removes only KUA's entry from that agent's file (#307).
+router.post('/mcp/uninstall', (req, res) => {
+  if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
+  try {
+    res.json(require('../lib/mcp/clientConfig').uninstallFromConfig({ client: req.body?.client }));
+  } catch (err) {
+    res.status(err.code === 'UNKNOWN_CLIENT' ? 400 : err.code === 'INVALID_CONFIG' ? 409 : 500).json({ error: err.message, code: err.code });
   }
 });
 
