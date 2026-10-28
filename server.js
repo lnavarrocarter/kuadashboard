@@ -74,6 +74,7 @@ const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegis
   plugins: [
     require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd),
     require('./lib/plugins/builtinPlugins').vercelPlugin({ listProfiles: () => require('./lib/credentialStore').getStore().listProfiles() }),
+    require('./lib/plugins/builtinPlugins').proxmoxPlugin({ listProfiles: () => require('./lib/credentialStore').getStore().listProfiles() }),
   ],
 });
 // Whether a provider is on: always for the base clouds, else its plugin (lib/providers.js).
@@ -441,6 +442,8 @@ syncEngine.start({ task: applicationSyncTask });
 // The team's shared space: publishing this computer's applications and updating imported ones.
 teamEngine.start(undefined, { task: teamSyncTask });
 app.use('/api/cloud/vercel',  providerGuard('vercel'), vercelRoutes);
+// Proxmox VE (#195): read-only, local network, behind its plugin.
+app.use('/api/cloud/proxmox', providerGuard('proxmox'), require('./routes/proxmox').createProxmoxRouter());
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
   k8s,
