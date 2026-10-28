@@ -147,6 +147,10 @@ Or, to share it with a project, add it to `.mcp.json` at the project root:
 
 Check it with `/mcp` inside Claude Code.
 
+### Claude Desktop
+
+**Install in Claude Desktop** in **Connect an AI agent** opens `kua.mcpb`, the Claude Desktop extension that ships with KUA, and Claude Desktop shows its install dialog (it then appears under **Settings → Extensions**). **Download kua.mcpb** saves the same file to install it by hand, for example from KUA in a browser. The extension starts the MCP server of the KUA installed on this computer, like the Claude Code plugin, so it always matches your KUA version; its optional **KUA address** setting forces one KUA (leave it empty to find the running one). Without the extension, add the JSON shown in that tab to `claude_desktop_config.json` (**Settings → Developer → Edit Config**).
+
 ### Codex CLI
 
 ```bash

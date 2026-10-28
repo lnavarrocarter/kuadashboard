@@ -23,6 +23,7 @@
           <button v-if="installable" class="btn sm primary" :disabled="!!busy" data-test="agent-connect-install" @click="install">
             {{ busy === 'install' ? t('agentConnect.installing') : t('agentConnect.install', { client: t(`agentConnect.client.${active}`) }) }}
           </button>
+          <a v-if="active === 'claudeDesktop'" class="btn sm" href="/api/system/mcp/mcpb" download="kua.mcpb" data-test="agent-connect-mcpb">{{ t('agentConnect.downloadMcpb') }}</a>
           <button class="btn sm" :disabled="!!busy" data-test="agent-connect-verify" @click="verify">
             {{ busy === 'verify' ? t('agentConnect.verifying') : t('agentConnect.verify') }}
           </button>
@@ -67,6 +68,7 @@ defineEmits(['close'])
 
 const CLIENTS = [
   { id: 'claude', build: claudeCommand },
+  { id: 'claudeDesktop', build: jsonConfig },
   { id: 'codex', build: codexCommand },
   { id: 'json', build: jsonConfig },
   { id: 'toml', build: codexToml },
@@ -81,8 +83,9 @@ const error = ref('')
 const active = ref('claude')
 
 const snippet = computed(() => (launch.value ? CLIENTS.find(client => client.id === active.value).build(launch.value) : ''))
-// Claude Code and Codex have a CLI that KUA can run for the user (POST /api/system/mcp/install).
-const installable = computed(() => active.value === 'claude' || active.value === 'codex')
+// Claude Code and Codex have a CLI that KUA can run for the user; Claude Desktop gets kua.mcpb
+// opened (POST /api/system/mcp/install, #306).
+const installable = computed(() => ['claude', 'claudeDesktop', 'codex'].includes(active.value))
 // 'install' | 'verify' while one runs; outcome: { ok, text } of the last one.
 const busy = ref('')
 const agentEnabled = ref(true)
@@ -116,9 +119,11 @@ async function install() {
   try {
     const result = await post('/api/system/mcp/install', { client: active.value })
     // Claude Code gets the KUA plugin (server and skill) from this computer when its CLI can (#305).
-    outcome.value = { ok: true, text: t(result?.mode === 'plugin' ? 'agentConnect.installedPlugin' : 'agentConnect.installed', { client }) }
+    const done = { plugin: 'agentConnect.installedPlugin', mcpb: 'agentConnect.installedDesktop' }[result?.mode] || 'agentConnect.installed'
+    outcome.value = { ok: true, text: t(done, { client }) }
   } catch (err) {
-    outcome.value = { ok: false, text: err.details?.code === 'CLI_NOT_FOUND' ? t('agentConnect.installMissing', { client }) : t('agentConnect.installFailed', { error: err.message }) }
+    const code = err.details?.code
+    outcome.value = { ok: false, text: code === 'CLI_NOT_FOUND' ? t('agentConnect.installMissing', { client }) : code === 'MCPB_MISSING' ? t('agentConnect.mcpbMissing') : t('agentConnect.installFailed', { error: err.message }) }
   } finally { busy.value = '' }
 }
 

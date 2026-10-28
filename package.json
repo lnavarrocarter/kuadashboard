@@ -20,17 +20,18 @@
     "dev:full": "concurrently -n backend,frontend -c cyan,yellow \"cross-env PORT=7192 nodemon server.js\" \"cross-env VITE_BACKEND_PORT=7192 npm run dev --prefix frontend\"",
     "build:frontend": "cross-env ELECTRON_BUILD=1 npm run build --prefix frontend",
     "electron:dev": "concurrently -n backend,frontend,electron -c cyan,yellow,green \"cross-env PORT=7192 nodemon server.js\" \"cross-env VITE_BACKEND_PORT=7192 npm run dev --prefix frontend\" \"wait-on http://localhost:7192 && cross-env PORT=7192 electron .\"",
-    "electron:pack": "npm run build:frontend && electron-builder --dir",
-    "electron:build": "npm run build:frontend && electron-builder",
-    "electron:build:win": "npm run build:frontend && electron-builder --win",
+    "electron:pack": "npm run build:frontend && npm run build:mcpb && electron-builder --dir",
+    "electron:build": "npm run build:frontend && npm run build:mcpb && electron-builder",
+    "electron:build:win": "npm run build:frontend && npm run build:mcpb && electron-builder --win",
     "electron:build:mac": "node scripts/build-mac.js",
-    "electron:build:linux": "npm run build:frontend && electron-builder --linux",
-    "electron:build:all": "npm run build:frontend && electron-builder --win --mac --linux",
+    "electron:build:linux": "npm run build:frontend && npm run build:mcpb && electron-builder --linux",
+    "electron:build:all": "npm run build:frontend && npm run build:mcpb && electron-builder --win --mac --linux",
     "icons:generate": "node scripts/generate-icons.js",
     "aws:iam-catalog": "node scripts/generate-aws-iam-catalog.js",
     "docs:dev": "npm run dev --prefix docs",
     "docs:build": "npm run build --prefix docs",
-    "docs:preview": "npm run preview --prefix docs"
+    "docs:preview": "npm run preview --prefix docs",
+    "build:mcpb": "npm ci --prefix mcpb && npm run build --prefix mcpb"
   },
   "dependencies": {
     "@aws-sdk/client-api-gateway": "^3.1032.0",
@@ -119,7 +120,8 @@
       "node_modules/sharp/**",
       "node_modules/@img/**",
       "plugins/kua/**",
-      ".claude-plugin/**"
+      ".claude-plugin/**",
+      "mcpb/dist/kua.mcpb"
     ],
     "npmRebuild": true,
     "afterPack": "electron/afterPack.js",
@@ -141,7 +143,8 @@
       "!node_modules/onnxruntime-web/**",
       "!node_modules/@img/sharp-wasm32/**",
       "plugins/kua/**",
-      ".claude-plugin/**"
+      ".claude-plugin/**",
+      "mcpb/dist/kua.mcpb"
     ],
     "directories": {
       "buildResources": "assets",

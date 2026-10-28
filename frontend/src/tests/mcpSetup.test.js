@@ -99,8 +99,17 @@ describe('AgentConnectModal', () => {
     await click('[data-test="agent-connect-install"]')
     expect(outcome()).toBe('Codex CLI is not installed or not in PATH here: run the command above in the terminal where you use it.')
 
+    // Claude Desktop: kua.mcpb is opened, and can be downloaded (#306).
+    apiFetch.mockImplementationOnce(async () => ({ client: 'claudeDesktop', name: 'kua', mode: 'mcpb' }))
+    await click('[data-test="agent-connect-claudeDesktop"]')
+    expect(document.querySelector('[data-test="agent-connect-mcpb"]').getAttribute('href')).toBe('/api/system/mcp/mcpb')
+    expect(document.querySelector('[data-test="agent-connect-snippet"]').textContent).toContain('"mcpServers"')
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toMatch(/^kua\.mcpb was opened/)
+
     await click('[data-test="agent-connect-json"]')
     expect(document.querySelector('[data-test="agent-connect-install"]')).toBeNull()
+    expect(document.querySelector('[data-test="agent-connect-mcpb"]')).toBeNull()
     wrapper.unmount()
   })
 
