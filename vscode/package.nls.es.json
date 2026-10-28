@@ -3,6 +3,7 @@
   "command.openDashboard": "Abrir dashboard",
   "command.verifyMcp": "Verificar conexión MCP",
   "command.addMcpToWorkspace": "Agregar el servidor MCP a este workspace (.vscode/mcp.json)",
+  "command.addSteering": "Agregar el steering de KUA a este workspace para Kiro (.kiro/steering/kua.md)",
   "command.refresh": "Actualizar estado",
   "command.showMenu": "Mostrar menú",
   "config.url": "Dónde corre KUA, por ejemplo `http://localhost:7190`. Vacío: se encuentra solo el KUA en ejecución, en cualquier puerto.",

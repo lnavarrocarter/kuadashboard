@@ -68,6 +68,10 @@ Las herramientas del Advisor y de logs aceptan `format` (`markdown` por defecto,
 
 **Acceso de agentes de IA (MCP)** enciende o apaga los agentes en este equipo, desde el icono de KUA en la bandeja o **Conectar un agente IA**. Está encendido por defecto. Apagado, KUA rechaza toda petición del servidor MCP (`AGENTS_DISABLED`, salvo el descubrimiento por `/api/health`) y el agente te dice dónde volver a encenderlo. El interruptor se guarda en este equipo y un agente no puede cambiarlo. El panel de la bandeja también muestra cuándo llegó la última petición de un agente.
 
+### Plugins desactivados
+
+Las herramientas de un proveedor cuyo plugin está desactivado en **Plugins/Conexiones** (hoy Vercel) no se ofrecen a los agentes: `vercel_advisor` sale de la lista de herramientas y `vercel` sale de las opciones de proveedor de `list_profiles` y `cloud_resource_inventory`. Llamarlas de todos modos responde `PLUGIN_DISABLED` con dónde activar el plugin. Si KUA no puede decir qué plugins están activos, se ofrece la lista completa, como antes.
+
 ### Cambiar KUApps desde un agente
 
 Un agente puede cambiar una KUA Application en dos pasos, y solo mientras lo permitas: **Conectar un agente IA → Permitir que agentes cambien KUApps** (apagado por defecto, guardado en este computador). Apagado, los agentes igual pueden leer y previsualizar.

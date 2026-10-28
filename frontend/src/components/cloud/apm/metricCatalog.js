@@ -247,6 +247,11 @@ export const RESOURCE_METRIC_CATALOG = Object.freeze({
   'gcp-cloud-run': TOPOLOGY_ONLY,
   'gcp-function': TOPOLOGY_ONLY,
   'vercel-project': TOPOLOGY_ONLY,
+  // Proxmox VE (#195): in the topology, no metrics collected yet.
+  'proxmox-node': TOPOLOGY_ONLY,
+  'proxmox-qemu': TOPOLOGY_ONLY,
+  'proxmox-lxc': TOPOLOGY_ONLY,
+  'proxmox-storage': TOPOLOGY_ONLY,
 })
 
 // Which catalog applies to each Kubernetes kind. Anything absent is topology-only, which is the

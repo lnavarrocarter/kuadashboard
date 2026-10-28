@@ -52,6 +52,11 @@
         "category": "KUA"
       },
       {
+        "command": "kua.addSteering",
+        "title": "%command.addSteering%",
+        "category": "KUA"
+      },
+      {
         "command": "kua.refresh",
         "title": "%command.refresh%",
         "category": "KUA"

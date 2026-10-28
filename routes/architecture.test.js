@@ -7,7 +7,7 @@ const express = require('express');
 const { ArchitectureDatabase } = require('../lib/architecture/database');
 const { createArchitectureRouter } = require('./architecture');
 
-async function fixture({ discoveryService, deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, apmDatabase, awsDriftReader, providerActive } = {}) {
+async function fixture({ discoveryService, deploymentReader, inventoryReader, relationshipReader, kubernetesAdapter, gcpDiscoveryService, vercelDiscoveryService, proxmoxDiscoveryService, apmDatabase, awsDriftReader, providerActive } = {}) {
   const database = new ArchitectureDatabase({ filePath: ':memory:' });
   const auditEvents = [];
   const app = express();
@@ -28,6 +28,7 @@ async function fixture({ discoveryService, deploymentReader, inventoryReader, re
     kubernetesAdapter,
     gcpDiscoveryService,
     vercelDiscoveryService,
+    proxmoxDiscoveryService,
     ...(providerActive ? { providerActive } : {}),
   }));
   const server = http.createServer(app);
@@ -908,6 +909,27 @@ test('the discovery of a provider whose plugin is off answers PLUGIN_DISABLED an
     const project = await subject.request('/projects/any/discovery/vercel/preview', { method: 'POST' });
     assert.equal(project.body.code, 'PLUGIN_DISABLED');
     assert.deepEqual(calls, []);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('Proxmox VE discovery is read while its plugin is on, and answers PLUGIN_DISABLED while it is off (#195)', async () => {
+  const calls = [];
+  let on = true;
+  const subject = await fixture({
+    proxmoxDiscoveryService: { async preview(input) { calls.push(input); return { nodes: [], sources: [], scope: { provider: 'proxmox', scopeId: 'homelab' } }; } },
+    providerActive: id => id !== 'proxmox' || on,
+  });
+  try {
+    const read = await subject.request('/clouds/proxmox/architecture/preview', { method: 'POST' });
+    assert.equal(read.status, 200);
+    assert.deepEqual(calls, [{ profileId: 'local:dev' }]);
+    on = false;
+    const off = await subject.request('/clouds/proxmox/architecture/preview', { method: 'POST' });
+    assert.equal(off.body.code, 'PLUGIN_DISABLED');
+    assert.equal((await subject.request('/projects/any/discovery/proxmox/import', { method: 'POST' })).body.code, 'PLUGIN_DISABLED');
+    assert.equal(calls.length, 1);
   } finally {
     await subject.close();
   }

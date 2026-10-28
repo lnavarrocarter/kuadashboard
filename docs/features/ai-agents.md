@@ -68,6 +68,10 @@ Advisor and log tools accept `format` (`markdown` by default, or `json` for the 
 
 **AI agent access (MCP)** turns agents on or off on this computer, from the KUA tray icon or **Connect an AI agent**. It is on by default. Off, KUA refuses every request from the MCP server (`AGENTS_DISABLED`, except discovery through `/api/health`) and the agent tells you where to turn it back on. The switch is stored on this computer, and an agent cannot change it. The tray panel also shows when the last agent request arrived.
 
+### Plugins that are off
+
+The tools of a provider whose plugin is off in **Plugins/Connections** (Vercel today) are not offered to agents: `vercel_advisor` leaves the tool list and `vercel` leaves the provider choices of `list_profiles` and `cloud_resource_inventory`. Calling them anyway answers `PLUGIN_DISABLED` with where to turn the plugin on. If KUA cannot say which plugins are on, the whole list is offered, as before.
+
 ### Changing KUApps from an agent
 
 An agent can change a KUA Application in two steps, and only while you allow it: **Connect an AI agent → Allow agents to change KUApps** (off by default, stored on this computer). With it off, agents can still read and preview.

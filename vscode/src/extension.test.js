@@ -3,6 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 // A stand-in for the `vscode` module: records what the extension registers and shows.
 function fakeVscode({ withMcpApi = true, withChat = true } = {}) {
@@ -120,6 +123,32 @@ test('commands: open KUA, and add the server to the workspace mcp.json', async (
   assert.equal(record.files.get('/work/.vscode/mcp.json'), '{ broken', 'an invalid file is not overwritten');
   assert.equal(record.messages.at(-1)[0], 'error');
   for (const subscription of ctx.subscriptions) subscription.dispose?.();
+});
+
+test('Kiro steering is added to the workspace, and an edited file is only replaced when the user says so (#214)', async () => {
+  const { vscode, record } = fakeVscode({ withMcpApi: false });
+  const extension = loadExtension(vscode, () => ({ reachable: false, url: 'http://localhost:7190', launch: null }));
+  const ctx = context();
+  ctx.extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-ext-'));
+  fs.mkdirSync(path.join(ctx.extensionPath, 'dist'));
+  fs.writeFileSync(path.join(ctx.extensionPath, 'dist', 'kua-steering.md'), 'KUA steering');
+  extension.activate(ctx);
+  const file = '/work/.kiro/steering/kua.md';
+  await vscode.commands.executeCommand('kua.addSteering');
+  assert.equal(record.files.get(file), 'KUA steering');
+  await vscode.commands.executeCommand('kua.addSteering');
+  assert.equal(record.messages.at(-1)[1], 'KUA steering is already in .kiro/steering/kua.md.');
+
+  record.files.set(file, 'my own rules');
+  let answer;
+  vscode.window.showWarningMessage = async (message, _options, ...choices) => { record.messages.push(['warn', message]); return answer === 'replace' ? choices[0] : undefined; };
+  await vscode.commands.executeCommand('kua.addSteering');
+  assert.equal(record.files.get(file), 'my own rules', 'kept when the user cancels');
+  answer = 'replace';
+  await vscode.commands.executeCommand('kua.addSteering');
+  assert.equal(record.files.get(file), 'KUA steering');
+  for (const subscription of ctx.subscriptions) subscription.dispose?.();
+  fs.rmSync(ctx.extensionPath, { recursive: true, force: true });
 });
 
 test('the Applications view is registered, and an issue goes to the chat or, without one, to the clipboard', async () => {

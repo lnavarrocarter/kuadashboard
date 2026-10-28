@@ -18,6 +18,23 @@ La extensión de KUA trae tu KUA local a VS Code:
 - **KUA: Abrir dashboard** abre la app de escritorio (`kua://open`), o el navegador para un KUA ejecutado desde el repositorio. El ajuste `kua.openIn` elige `app` o `browser`.
 - **KUA: Verificar conexión MCP** inicia el servidor como lo hace el chat e informa las herramientas y perfiles que alcanzó, o el error.
 - **KUA: Agregar el servidor MCP a este workspace** escribe la entrada `kua` en `.vscode/mcp.json`, conservando los demás servidores y comentarios, para editores que leen ese archivo pero no la API de extensiones. Un archivo inválido no se sobrescribe.
+- **KUA: Agregar el steering de KUA a este workspace para Kiro** escribe `.kiro/steering/kua.md` (ver [Kiro](#kiro)).
+
+## Kiro
+
+Kiro está construido sobre VS Code, así que la misma extensión se instala en Kiro desde el `.vsix` (u Open VSX). Kiro obtiene las herramientas de KUA desde su propio archivo MCP: usa **Instalar** en **Conectar un agente de IA → Kiro** de KUA, que sirve para el IDE de Kiro y para `kiro-cli`.
+
+**KUA: Agregar el steering de KUA a este workspace para Kiro** agrega un [archivo de steering](https://kiro.dev/docs/steering/) que el agente de Kiro siempre lee: cómo trabajar con KUA, las mismas reglas que la skill `kua` del plugin de Claude Code. Partir del Advisor y de log intelligence, verificar el estado actual antes de cambiar infraestructura, mostrar el costo y preguntar antes de operaciones con costo o destructivas, cambiar KUA Applications solo con una vista previa que el usuario aprueba, y nunca copiar credenciales ni logs crudos al repositorio. Un `kua.md` que editaste solo se reemplaza si lo confirmas. Haz commit de él para que el Kiro de todo el equipo lo tenga.
+
+Lo que Kiro lee a través de KUA queda en este computador: el inventario de KUA, los hallazgos del Advisor, log intelligence sobre logs en caché y las KUA Applications, por el servidor MCP local. Las credenciales cloud quedan en KUA.
+
+Prompts para probar en Kiro:
+
+- "Usa el Advisor de KUA para el perfil AWS de este proyecto y corrige los hallazgos que el Terraform de `infra/` pueda corregir. Muéstrame el diff."
+- "¿Qué error recurrente creció más en los logs de `orders-api` esta semana? Encuentra de dónde viene en este repositorio."
+- "¿Qué necesita atención en la KUA Application de este repositorio y qué puedo corregir desde el código?"
+
+KUA todavía no se empaqueta como Power de Kiro: un Power lleva un comando MCP fijo, y el de KUA depende de dónde está instalado KUA en cada computador, lo que la propia instalación de KUA ya escribe.
 
 ## Instalar
 
