@@ -1,3 +1,7 @@
+---
+description: "Política IAM de mínimo privilegio por servicio para usar KUA con AWS en solo lectura: EC2, ECS, EKS, Lambda, S3, CloudWatch y más."
+---
+
 # AWS IAM - permisos minimos por servicio
 
 Este documento consolida los permisos IAM minimos para las integraciones AWS usadas por KuaDashboard.

@@ -1,3 +1,7 @@
+---
+description: "End user license agreement of the KUA desktop app."
+---
+
 # End User License Agreement (EULA)
 
 Last updated: 2026-05-28

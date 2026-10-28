@@ -1,3 +1,7 @@
+---
+description: "Acuerdo de licencia de usuario final de la app de escritorio de KUA."
+---
+
 # Acuerdo de licencia de usuario final (EULA)
 
 Este acuerdo rige el uso del software KuaDashboard y su documentación: aceptación, concesión de licencia, restricciones, propiedad, garantías y limitación de responsabilidad.

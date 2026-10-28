@@ -1,3 +1,7 @@
+---
+description: "Configura credenciales en KUA: perfiles de AWS, SSO y credenciales temporales, configuraciones de gcloud y service accounts, tokens de Vercel y kubeconfigs, cifrados en tu computador."
+---
+
 # Configurar credenciales
 
 KuaDashboard guarda perfiles cloud con nombre en su almacén cifrado de credenciales. Abre **Env Manager**, crea un perfil, selecciona el proveedor y completa los campos indicados. Nunca guardes credenciales en el repositorio.

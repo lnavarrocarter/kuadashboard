@@ -1,3 +1,8 @@
+---
+title: "AI Agents and MCP Server for Kubernetes, AWS and GCP"
+description: "Connect Claude Code, Codex CLI, Claude Desktop, Cursor and other AI agents to KUA through its local MCP server: Advisor findings, log intelligence and KUA Applications, with changes only after you approve."
+---
+
 # AI Agents
 
 KUA already finds problems with deterministic checks: the **Advisor** in every overview and the **log intelligence** of cached CloudWatch log groups. These two features hand those findings to a coding agent (Claude Code, Codex, ChatGPT, Cursor…) so it can fix them in your code and infrastructure.
