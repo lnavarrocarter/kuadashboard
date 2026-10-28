@@ -5,6 +5,7 @@
     { "id": "aws", "label": "AWS", "plugin": null, "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
     { "id": "gcp", "label": "GCP", "plugin": null, "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
     { "id": "vercel", "label": "Vercel", "plugin": "vercel", "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
+    { "id": "proxmox", "label": "Proxmox", "plugin": "proxmox", "view": true, "cloudApi": true, "advisor": false, "observability": false, "scopes": false },
     { "id": "generic", "label": "Generic", "plugin": null, "view": false, "cloudApi": false, "advisor": false, "observability": true, "scopes": false }
   ]
 }

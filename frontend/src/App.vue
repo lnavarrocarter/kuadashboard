@@ -24,6 +24,9 @@
             <svg width="14" height="14" viewBox="0 0 76 65" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-right:4px"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Vercel
           </button>
+          <button v-if="isProviderOn('proxmox')" :class="['provider-tab', { active: activeProvider === 'proxmox' }]" title="Proxmox" aria-label="Proxmox" data-test="provider-tab-proxmox" @click="setProvider('proxmox')">
+            <i data-lucide="server"></i> Proxmox
+          </button>
           <button :class="['provider-tab', { active: activeProvider === 'kuapps' }]" title="KUApps" aria-label="KUApps" @click="setProvider('kuapps')">
             <i data-lucide="boxes"></i> KUApps
           </button>
@@ -77,6 +80,14 @@
           <span v-if="cloudProfileId" :class="['kube-env-badge', `env-${cloudEnvironment || 'unknown'}`]" :title="cloudProfileTitle" data-test="cloud-env-badge">{{ t(`kubeAction.env.${cloudEnvironment || 'unknown'}`) }}</span>
           <VercelProjectSelector />
         </template>
+        <template v-else-if="activeProvider === 'proxmox'">
+          <select class="ctrl-select" v-model="proxmoxProfileId" data-test="proxmox-profile-select">
+            <option value="">{{ t('proxmox.noProfileOption') }}</option>
+            <optgroup v-if="envStore.proxmoxProfiles.length" :label="t('nav.storedProfiles')">
+              <option v-for="p in envStore.proxmoxProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </optgroup>
+          </select>
+        </template>
         <template v-else-if="activeProvider === 'kuapps' && activeApplicationContext">
           <span class="header-application-context">
             <i data-lucide="boxes"></i>
@@ -107,6 +118,10 @@
         <template v-else-if="activeProvider === 'vercel'">
           <button class="btn btn-icon" :title="t('nav.addVercel')" @click="openAddConnection('vercel')"><i data-lucide="plus-circle"></i></button>
           <button class="btn btn-icon" :title="t('nav.deleteVercel')" :disabled="!vercelProfileId" @click="deleteConnectionConfirm('vercel')"><i data-lucide="trash-2"></i></button>
+        </template>
+        <template v-else-if="activeProvider === 'proxmox'">
+          <button class="btn btn-icon" :title="t('proxmox.addProfile')" @click="openAddConnection('proxmox')"><i data-lucide="plus-circle"></i></button>
+          <button class="btn btn-icon" :title="t('proxmox.deleteProfile')" :disabled="!proxmoxProfileId" @click="deleteConnectionConfirm('proxmox')"><i data-lucide="trash-2"></i></button>
         </template>
         <ReadOnlyToggle />
         <button class="btn btn-icon" :class="{ primary: cloudView === 'envs' }" :title="t('nav.envManager')" @click="toggleEnvManager"><i data-lucide="key-round"></i></button>
@@ -257,6 +272,16 @@
             <button type="button" v-for="r in AWS_SIDEBAR.management" :key="r.id"
                :class="['sidebar-item', { active: awsTab === r.id }]"
                @click="closeGlobalView(); awsTab = r.id" :aria-current="(awsTab === r.id) ? 'page' : undefined">{{ r.labelKey ? t(r.labelKey) : r.label }}</button>
+          </div>
+        </nav>
+
+        <!-- Proxmox sidebar (#195) -->
+        <nav class="sidebar" v-if="activeProvider === 'proxmox'">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Proxmox VE</div>
+            <button type="button" v-for="r in PROXMOX_SIDEBAR" :key="r.id"
+               :class="['sidebar-item', { active: proxmoxTab === r.id }]"
+               @click="closeGlobalView(); proxmoxTab = r.id" :aria-current="(proxmoxTab === r.id) ? 'page' : undefined">{{ t(r.labelKey) }}</button>
           </div>
         </nav>
 
@@ -417,6 +442,7 @@
             @navigate-tab="tab => { gcpTab = tab }" :saved-filters="gcpFiltersByTab" :saved-resources="gcpResourceByTab" :saved-filters-seq="gcpFiltersSeq"
             @filters-change="(tab, filters) => { gcpFiltersByTab[tab] = filters }" @resource-change="(tab, key) => { gcpResourceByTab[tab] = key }" @manage-connections="openEnvManager" />
           <VercelView  ref="vercelViewRef" v-else-if="activeProvider === 'vercel'" :active-service="vercelTab" :application-id="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.id : ''" :environment="activeApplicationContext?.provider === 'vercel' ? activeApplicationContext.environment : ''" @open-architecture="openApplicationArchitecture" />
+          <ProxmoxView v-else-if="activeProvider === 'proxmox'" :profile-id="proxmoxProfileId" :active-service="proxmoxTab" @add-connection="openAddConnection('proxmox')" />
           <KUAppsView
             v-else-if="activeProvider === 'kuapps'"
             ref="kuappsViewRef"
@@ -613,6 +639,7 @@ const EnvManagerView       = lazyView(() => import('./components/cloud/EnvManage
 const AwsView              = lazyView(() => import('./components/cloud/AwsView.vue'))
 const GcpView              = lazyView(() => import('./components/cloud/GcpView.vue'))
 const VercelView           = lazyView(() => import('./components/cloud/VercelView.vue'))
+const ProxmoxView          = lazyView(() => import('./components/cloud/ProxmoxView.vue'))
 const ApmObservabilityView = lazyView(() => import('./components/cloud/apm/ApmObservabilityView.vue'))
 const ArchitectureView     = lazyView(() => import('./components/architecture/ArchitectureView.vue'))
 const KUAppsView           = lazyView(() => import('./components/kuapps/KUAppsView.vue'))
@@ -679,6 +706,15 @@ const VERCEL_SIDEBAR = {
   advanced:    [{ id: 'edge-config', label: 'Edge Config' }, { id: 'webhooks', label: 'Webhooks' }],
   account:     [{ id: 'activity',    label: 'Activity', labelKey: 'sidebar.activity' }],
 }
+
+const PROXMOX_SIDEBAR = [
+  { id: 'overview', labelKey: 'sidebar.overview' },
+  { id: 'guests', labelKey: 'proxmox.section.guests' },
+  { id: 'nodes', labelKey: 'proxmox.section.nodes' },
+  { id: 'storage', labelKey: 'proxmox.section.storage' },
+  { id: 'backups', labelKey: 'proxmox.section.backups' },
+  { id: 'tasks', labelKey: 'proxmox.section.tasks' },
+]
 
 const GCP_SIDEBAR = {
   compute:    [{ id: 'overview', label: 'Overview', labelKey: 'sidebar.overview' }, { id: 'cloudrun', label: 'Cloud Run' }, { id: 'gke', label: 'GKE' }, { id: 'vms', label: 'Compute VMs', labelKey: 'sidebar.computeVms' }],
@@ -836,6 +872,8 @@ const gcpLocalConfigs  = ref([])
 const awsProfileId     = ref(LS.get('awsProfile',    ''))
 const gcpProfileId     = ref(LS.get('gcpProfile',    ''))
 const vercelProfileId  = ref(LS.get('vercelProfile', ''))
+const proxmoxProfileId = ref(LS.get('proxmoxProfile', ''))
+const proxmoxTab       = ref('overview')
 const observabilityProvider = ref(LS.get('observabilityProvider', 'generic'))
 const observabilityFocus = ref(null)
 const observabilitySelections = reactive({
@@ -877,6 +915,7 @@ watch(kuappsView,       v  => LS.set('kuappsView',     v))
 watch(awsProfileId,     v  => LS.set('awsProfile',     v))
 watch(gcpProfileId,     v  => LS.set('gcpProfile',     v))
 watch(vercelProfileId,  v  => LS.set('vercelProfile',  v))
+watch(proxmoxProfileId, v  => LS.set('proxmoxProfile', v))
 watch(observabilityProvider, v => LS.set('observabilityProvider', v))
 watch(() => observabilitySelections.aws, v => LS.set('observabilityAwsView', v))
 watch(() => observabilitySelections.gcp, v => LS.set('observabilityGcpView', v))
@@ -891,6 +930,11 @@ watch(() => envStore.profiles, (profiles) => {
   if (!exists(awsProfileId.value))    { awsProfileId.value    = ''; awsStore.setActiveProfile(null) }
   if (!exists(gcpProfileId.value))    { gcpProfileId.value    = ''; gcpStore.setActiveProfile(null) }
   if (!exists(vercelProfileId.value)) { vercelProfileId.value = ''; vercelStore.setActiveProfile(null) }
+  if (!exists(proxmoxProfileId.value)) proxmoxProfileId.value = ''
+  if (!proxmoxProfileId.value) {
+    const proxmox = profiles.filter(p => p.provider === 'proxmox')
+    if (proxmox.length === 1) proxmoxProfileId.value = proxmox[0].id
+  }
   if (!awsProfileId.value) {
     const aws = profiles.filter(p => p.provider === 'aws')
     if (aws.length === 1) { awsProfileId.value = aws[0].id; awsStore.setActiveProfile(aws[0].id) }
@@ -957,6 +1001,12 @@ function setLinkedAwsFilters(service, filters) {
 // selected resource per tab, kept here so leaving GCP and coming back keeps them.
 const GCP_TABS = new Set(['apm', 'overview', ...Object.values(GCP_SIDEBAR).flat().map(item => item.id)])
 const VERCEL_TABS = new Set(['apm', 'overview', ...Object.values(VERCEL_SIDEBAR).flat().map(item => item.id)])
+const PROXMOX_TABS = new Set(PROXMOX_SIDEBAR.map(item => item.id))
+// Proxmox (#195): its tab and profile from a link or the history. The profile id stays local.
+function applyProxmoxLink(linked) {
+  if (PROXMOX_TABS.has(linked.service)) proxmoxTab.value = linked.service
+  if (linked.profile) proxmoxProfileId.value = linked.profile
+}
 const gcpFiltersByTab = reactive({})
 const gcpResourceByTab = reactive({})
 const gcpFiltersSeq = ref(0)
@@ -969,12 +1019,13 @@ function serviceState() {
   if (activeProvider.value === 'aws') return { service: awsTab.value, profile: awsProfileId.value, filters: { ...(awsFiltersByTab[awsTab.value] || {}) } }
   if (activeProvider.value === 'gcp') return { service: gcpTab.value, profile: gcpProfileId.value, filters: { ...(gcpFiltersByTab[gcpTab.value] || {}) }, resource: gcpResourceByTab[gcpTab.value] || '' }
   if (activeProvider.value === 'vercel') return { service: vercelTab.value, profile: vercelProfileId.value, project: vercelStore.selectedProject?.id || '', filters: {} }
+  if (activeProvider.value === 'proxmox') return { service: proxmoxTab.value, profile: proxmoxProfileId.value, filters: {} }
   return { service: '', profile: '', filters: {} }
 }
 const viewUrl = useViewUrl({
   state: () => ({ view: activeProvider.value, ...serviceState() }),
-  navigation: [activeProvider, awsTab, gcpTab, vercelTab],
-  context: [awsProfileId, gcpProfileId, vercelProfileId, () => vercelStore.selectedProject?.id || '', activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {}),
+  navigation: [activeProvider, awsTab, gcpTab, vercelTab, proxmoxTab],
+  context: [awsProfileId, gcpProfileId, vercelProfileId, proxmoxProfileId, () => vercelStore.selectedProject?.id || '', activeApplicationContext, () => JSON.stringify(awsFiltersByTab[awsTab.value] || {}),
     () => JSON.stringify(gcpFiltersByTab[gcpTab.value] || {}), () => gcpResourceByTab[gcpTab.value] || ''],
   onPop: applyViewFromHistory,
 })
@@ -995,6 +1046,7 @@ function applyLinkedView(linked) {
   if (linked.view === 'gcp' && linked.profile && linked.profile !== gcpProfileId.value) linkedGcpProfile = linked.profile
   if (linked.view === 'vercel' && VERCEL_TABS.has(linked.service)) vercelTab.value = linked.service
   if (linked.view === 'vercel' && linked.profile) linkedVercel = { profile: linked.profile, project: linked.project }
+  if (linked.view === 'proxmox') applyProxmoxLink(linked)
 }
 // Vercel profile and project named by a link, applied once the profiles are known.
 let linkedVercel = null
@@ -1038,6 +1090,7 @@ async function applyViewFromHistory(linked) {
   await setProvider(linked.view)
   if (linked.view === 'gcp') return applyGcpFromHistory(linked)
   if (linked.view === 'vercel') return applyVercelFromHistory(linked)
+  if (linked.view === 'proxmox') return applyProxmoxLink(linked)
   if (linked.view !== 'aws') return
   if (AWS_TABS.has(linked.service)) {
     awsTab.value = linked.service
@@ -1292,6 +1345,7 @@ async function setProvider(p) {
   if (p === 'aws')    { if (!awsLocalProfiles.value.length) loadAwsLocalProfiles() }
   if (p === 'gcp')    { if (!gcpLocalConfigs.value.length) loadGcpLocalConfigs() }
   if (p === 'vercel') { envStore.fetchProfiles() }
+  if (p === 'proxmox') { envStore.fetchProfiles() }
   if (p === 'architecture' && !awsLocalProfiles.value.length) loadAwsLocalProfiles()
   if (p === 'observability') selectObservabilityProvider(observabilityProvider.value)
   nextTick(() => createIcons({ icons }))
@@ -1365,6 +1419,7 @@ async function handleConnectionSave(payload) {
     if (provider === 'aws')    { awsProfileId.value    = created.id; awsStore.setActiveProfile(created.id) }
     if (provider === 'gcp')    { gcpProfileId.value    = created.id; gcpStore.setActiveProfile(created.id) }
     if (provider === 'vercel') { vercelProfileId.value = created.id; vercelStore.setActiveProfile(created.id) }
+    if (provider === 'proxmox') proxmoxProfileId.value = created.id
     toast(`Connection "${name}" added`, 'success')
     nextTick(() => createIcons({ icons }))
   }
@@ -1372,6 +1427,7 @@ async function handleConnectionSave(payload) {
 function deleteConnectionConfirm(provider) {
   const id = provider === 'aws' ? awsProfileId.value
            : provider === 'vercel' ? vercelProfileId.value
+           : provider === 'proxmox' ? proxmoxProfileId.value
            : gcpProfileId.value
   if (!id || id.startsWith('local:')) return
   const profile = envStore.profiles.find(p => p.id === id)
