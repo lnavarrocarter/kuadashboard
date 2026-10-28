@@ -5,7 +5,7 @@ description: Explore KUA features for Kubernetes management, AWS, GCP, Vercel, P
 
 # Features Overview
 
-KuaDashboard provides a unified interface for managing Kubernetes clusters and cloud resources.
+KuaDashboard provides a unified interface for managing Kubernetes clusters and cloud resources. Looking for something specific? See KUA as a [Kubernetes dashboard](/kubernetes-dashboard), a [multi-cloud dashboard](/multi-cloud-dashboard), an [AWS dashboard](/aws-dashboard), a [Google Cloud console alternative](/google-cloud-console-alternative), a [Vercel dashboard](/vercel-dashboard) or a [Lens alternative](/lens-alternative).
 
 ![KuaDashboard — Nodes overview](/screenshots/dashboard-nodes.png)
 

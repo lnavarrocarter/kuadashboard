@@ -1,3 +1,8 @@
+---
+title: "Changelog"
+description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, correcciones y notas de actualización para Kubernetes, AWS, GCP, Vercel, KUApps, el Advisor y agentes de IA."
+---
+
 # Changelog
 
 ## Unreleased

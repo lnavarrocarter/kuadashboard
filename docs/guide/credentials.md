@@ -1,3 +1,7 @@
+---
+description: "Set up credentials in KUA: AWS profiles, SSO and temporary credentials, gcloud configurations and service accounts, Vercel tokens and kubeconfigs, encrypted on your computer."
+---
+
 # Credential setup
 
 KuaDashboard stores named cloud profiles in its encrypted credential store. Open **Env Manager**, create a profile, select the provider, and enter the fields described below. Never commit credentials to the repository.

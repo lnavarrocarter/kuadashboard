@@ -5,7 +5,7 @@ description: Conoce las funcionalidades de KUA para gestionar Kubernetes, AWS, G
 
 # Resumen de Funcionalidades
 
-KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kubernetes y recursos cloud.
+KuaDashboard proporciona una interfaz unificada para gestionar clústeres de Kubernetes y recursos cloud. ¿Buscas algo en particular? Mira KUA como [dashboard de Kubernetes](/es/kubernetes-dashboard), [dashboard multi-cloud](/es/multi-cloud-dashboard), [dashboard de AWS](/es/aws-dashboard), [alternativa a la consola de Google Cloud](/es/google-cloud-console-alternative), [dashboard de Vercel](/es/vercel-dashboard) o [alternativa a Lens](/es/lens-alternative).
 
 ![KuaDashboard — Vista de Nodes](/screenshots/dashboard-nodes.png)
 

@@ -1,3 +1,7 @@
+---
+description: "Cómo se construye la app de escritorio de KUA con Electron para Windows, macOS y Linux: modo desarrollo, builds y empaquetado."
+---
+
 # App de Escritorio Electron
 
 KuaDashboard se distribuye como aplicación de escritorio nativa para **Windows**, **macOS** y **Linux** usando Electron.

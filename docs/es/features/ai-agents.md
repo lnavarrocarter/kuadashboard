@@ -1,3 +1,8 @@
+---
+title: "Agentes de IA y servidor MCP para Kubernetes, AWS y GCP"
+description: "Conecta Claude Code, Codex CLI, Claude Desktop, Cursor y otros agentes de IA a KUA con su servidor MCP local: hallazgos del Advisor, log intelligence y KUA Applications, con cambios solo después de que apruebas."
+---
+
 # Agentes IA
 
 KUA ya encuentra problemas con chequeos deterministas: el **Advisor** de cada overview y la **inteligencia de logs** de los log groups de CloudWatch en caché. Estas dos funcionalidades le entregan esos hallazgos a un agente de código (Claude Code, Codex, ChatGPT, Cursor…) para que los corrija en tu código e infraestructura.

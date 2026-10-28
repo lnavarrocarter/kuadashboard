@@ -1,3 +1,7 @@
+---
+description: "Patrocina KUA, el dashboard de escritorio de Kubernetes y multi-cloud gratuito y open source, en GitHub Sponsors."
+---
+
 # Patrocinar KuaDashboard
 
 **KUA — Know Unified Administration** es gratuito y open source. Fue construido para eliminar la fragmentación operativa de gestionar múltiples clouds y clusters Kubernetes desde consolas separadas.

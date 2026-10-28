@@ -6,7 +6,9 @@ import { isNoindex, SUMMARY } from './seo.mjs'
 
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 const docsDir = path.resolve(configDir, '..')
-const siteUrl = (process.env.SITE_URL || 'https://lnavarrocarter.github.io/kuadashboard').replace(/\/+$/, '')
+// Canonical URLs, hreflang, Open Graph and structured data always name the primary domain, also
+// in the GitHub Pages copy (served under /kuadashboard/): one canonical site, not two competing.
+const siteUrl = (process.env.SITE_URL || 'https://kuadashboard.navarrocarter.com').replace(/\/+$/, '')
 const base = process.env.VITEPRESS_BASE || (process.env.SITE_URL ? '/' : '/kuadashboard/')
 
 function pageRoute(page) {
@@ -31,48 +33,82 @@ function hasPage(page) {
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.resolve(docsDir, '..', 'package.json'), 'utf8')).version
 
-// Structured data of the home pages: the site, the app and its FAQ (the same
-// questions the page shows, from its frontmatter).
-function homepageSchema(url, language, faq = []) {
-  const author = { '@type': 'Person', name: 'Luis Ignacio Navarro Carter', url: 'https://github.com/lnavarrocarter' }
-  return JSON.stringify({
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'WebSite',
-        name: 'KUA — Know Unified Administration',
-        alternateName: ['KuaDashboard', 'KUA Dashboard'],
-        url,
-        inLanguage: language,
-        publisher: author,
-      },
-      {
-        '@type': 'SoftwareApplication',
-        name: 'KUA',
-        alternateName: 'KuaDashboard',
-        applicationCategory: 'DeveloperApplication',
-        applicationSubCategory: 'Kubernetes and cloud management',
-        operatingSystem: 'Windows, macOS, Linux',
-        softwareVersion: APP_VERSION,
-        description: SUMMARY[language] || SUMMARY.en,
-        url,
-        image: absoluteUrl('/og-image.png'),
-        screenshot: absoluteUrl('/screenshots/dashboard-main.png'),
-        downloadUrl: 'https://github.com/lnavarrocarter/kuadashboard/releases',
-        installUrl: absoluteUrl(language === 'es' ? '/es/download.html' : '/download.html'),
-        license: 'https://opensource.org/licenses/MIT',
-        isAccessibleForFree: true,
-        author,
-        sameAs: ['https://github.com/lnavarrocarter/kuadashboard'],
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-      },
-      ...(faq.length ? [{
-        '@type': 'FAQPage',
-        inLanguage: language,
-        mainEntity: faq.map(item => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
-      }] : []),
-    ],
-  })
+const SECTION_NAMES = {
+  en: { features: 'Features', guide: 'Guide', manual: 'Manual', architecture: 'Architecture' },
+  es: { features: 'Funcionalidades', guide: 'Guía', manual: 'Manual', architecture: 'Arquitectura' },
+}
+
+// Home → section → page, for the breadcrumb of search results.
+function breadcrumbSchema(page, title, language) {
+  const prefix = language === 'es' ? 'es/' : ''
+  const relative = page.slice(prefix.length)
+  const items = [{ name: 'KUA', url: absoluteUrl(pageRoute(`${prefix}index.md`)) }]
+  const section = relative.includes('/') ? relative.split('/')[0] : null
+  if (section && SECTION_NAMES[language][section] && relative !== `${section}/index.md` && hasPage(`${prefix}${section}/index.md`)) {
+    items.push({ name: SECTION_NAMES[language][section], url: absoluteUrl(pageRoute(`${prefix}${section}/index.md`)) })
+  }
+  items.push({ name: String(title || '').replace(/ \| KUA$/, ''), url: absoluteUrl(pageRoute(page)) })
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, name: item.name, item: item.url })),
+  }
+}
+
+const faqSchema = (faq, language) => ({
+  '@type': 'FAQPage',
+  inLanguage: language,
+  mainEntity: faq.map(item => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+})
+
+// Structured data of a page: the site and the app on the home pages and on the landing pages
+// (frontmatter `schema: app`), the FAQ of any page that has one (the same questions the page
+// shows), and a breadcrumb everywhere but the home.
+function pageSchema({ page, url, title, language, frontmatter = {} }) {
+  const home = page === 'index.md' || page === 'es/index.md'
+  const faq = Array.isArray(frontmatter.faq) ? frontmatter.faq : []
+  const graph = [
+    ...(home ? [websiteSchema(url, language)] : []),
+    ...(home || frontmatter.schema === 'app' ? [appSchema(url, language, home ? null : frontmatter.description)] : []),
+    ...(faq.length ? [faqSchema(faq, language)] : []),
+    ...(home ? [] : [breadcrumbSchema(page, title, language)]),
+  ]
+  return JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })
+}
+
+const AUTHOR = { '@type': 'Person', name: 'Luis Ignacio Navarro Carter', url: 'https://github.com/lnavarrocarter' }
+
+function websiteSchema(url, language) {
+  return {
+    '@type': 'WebSite',
+    name: 'KUA — Know Unified Administration',
+    alternateName: ['KuaDashboard', 'KUA Dashboard'],
+    url,
+    inLanguage: language,
+    publisher: AUTHOR,
+  }
+}
+
+function appSchema(url, language, description) {
+  return {
+    '@type': 'SoftwareApplication',
+    name: 'KUA',
+    alternateName: 'KuaDashboard',
+    applicationCategory: 'DeveloperApplication',
+    applicationSubCategory: 'Kubernetes and cloud management',
+    operatingSystem: 'Windows, macOS, Linux',
+    softwareVersion: APP_VERSION,
+    description: description || SUMMARY[language] || SUMMARY.en,
+    url,
+    image: absoluteUrl('/og-image.png'),
+    screenshot: absoluteUrl('/screenshots/dashboard-main.png'),
+    downloadUrl: 'https://github.com/lnavarrocarter/kuadashboard/releases',
+    installUrl: absoluteUrl(language === 'es' ? '/es/download.html' : '/download.html'),
+    license: 'https://opensource.org/licenses/MIT',
+    isAccessibleForFree: true,
+    author: AUTHOR,
+    sameAs: ['https://github.com/lnavarrocarter/kuadashboard'],
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  }
 }
 
 // Order: understand, compare, download, learn. Legal, architecture and sponsor
@@ -111,6 +147,27 @@ const esProduct = { text: 'Producto', items: [
   { text: 'Funcionalidades', link: '/es/features/' },
   { text: 'Precios', link: '/es/pricing' },
   { text: 'Descargar', link: '/es/download' },
+]}
+
+// Landing pages for what people search for (#322).
+const USE_CASES = ['kubernetes-dashboard', 'multi-cloud-dashboard', 'aws-dashboard', 'google-cloud-console-alternative', 'vercel-dashboard', 'lens-alternative']
+
+const enUseCases = { text: 'Use cases', items: [
+  { text: 'Kubernetes dashboard', link: '/kubernetes-dashboard' },
+  { text: 'Multi-cloud dashboard', link: '/multi-cloud-dashboard' },
+  { text: 'AWS dashboard', link: '/aws-dashboard' },
+  { text: 'Google Cloud console alternative', link: '/google-cloud-console-alternative' },
+  { text: 'Vercel dashboard', link: '/vercel-dashboard' },
+  { text: 'Lens and k9s alternative', link: '/lens-alternative' },
+]}
+
+const esUseCases = { text: 'Casos de uso', items: [
+  { text: 'Dashboard de Kubernetes', link: '/es/kubernetes-dashboard' },
+  { text: 'Dashboard multi-cloud', link: '/es/multi-cloud-dashboard' },
+  { text: 'Dashboard de AWS', link: '/es/aws-dashboard' },
+  { text: 'Alternativa a la consola de Google Cloud', link: '/es/google-cloud-console-alternative' },
+  { text: 'Dashboard de Vercel', link: '/es/vercel-dashboard' },
+  { text: 'Alternativa a Lens y k9s', link: '/es/lens-alternative' },
 ]}
 
 const enReference = { text: 'Technical reference', items: [
@@ -194,27 +251,29 @@ const esArchitecture = { text: 'Arquitectura', items: [
 // Product → Guide → Technical reference, with the current section expanded.
 const enSidebar = {
   '/guide/': [enProduct, enGuide, enReference],
-  '/features/': [enProduct, enFeatures, enReference],
+  '/features/': [enProduct, enFeatures, enUseCases, enReference],
   '/download': [enProduct, enGuide, enReference],
   '/pricing': [enProduct, enGuide, enReference],
+  ...Object.fromEntries(USE_CASES.map(page => [`/${page}`, [enProduct, enUseCases, enFeatures]])),
   '/architecture/': [enProduct, enGuide, enArchitecture],
 }
 
 const esSidebar = {
   '/es/guide/': [esProduct, esGuide, esReference],
-  '/es/features/': [esProduct, esFeatures, esReference],
+  '/es/features/': [esProduct, esFeatures, esUseCases, esReference],
   '/es/download': [esProduct, esGuide, esReference],
   '/es/pricing': [esProduct, esGuide, esReference],
+  ...Object.fromEntries(USE_CASES.map(page => [`/es/${page}`, [esProduct, esUseCases, esFeatures]])),
   '/es/architecture/': [esProduct, esGuide, esArchitecture],
 }
 
 const enFooter = {
-  message: `Released under the MIT License. <a href="${base}terms">Terms</a> · <a href="${base}privacy_policy">Privacy</a> · <a href="${base}EULA">EULA</a> · <a href="${base}architecture/">Architecture</a> · <a href="${base}sponsor">Sponsor</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
+  message: `Released under the MIT License. <a href="${base}terms">Terms</a> · <a href="${base}privacy_policy">Privacy</a> · <a href="${base}EULA">EULA</a> · <a href="${base}architecture/">Architecture</a> · <a href="${base}sponsor">Sponsor</a><br><a href="${base}kubernetes-dashboard">Kubernetes dashboard</a> · <a href="${base}multi-cloud-dashboard">Multi-cloud dashboard</a> · <a href="${base}aws-dashboard">AWS dashboard</a> · <a href="${base}google-cloud-console-alternative">Google Cloud console alternative</a> · <a href="${base}vercel-dashboard">Vercel dashboard</a> · <a href="${base}lens-alternative">Lens alternative</a><br> <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
   copyright: 'Copyright © 2024-present KuaDashboard',
 }
 
 const esFooter = {
-  message: `Publicado bajo la licencia MIT. <a href="${base}es/terms">Términos</a> · <a href="${base}es/privacy_policy">Privacidad</a> · <a href="${base}es/EULA">EULA</a> · <a href="${base}es/architecture/">Arquitectura</a> · <a href="${base}es/sponsor">Patrocinar</a> · <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
+  message: `Publicado bajo la licencia MIT. <a href="${base}es/terms">Términos</a> · <a href="${base}es/privacy_policy">Privacidad</a> · <a href="${base}es/EULA">EULA</a> · <a href="${base}es/architecture/">Arquitectura</a> · <a href="${base}es/sponsor">Patrocinar</a><br><a href="${base}es/kubernetes-dashboard">Dashboard de Kubernetes</a> · <a href="${base}es/multi-cloud-dashboard">Dashboard multi-cloud</a> · <a href="${base}es/aws-dashboard">Dashboard de AWS</a> · <a href="${base}es/google-cloud-console-alternative">Alternativa a la consola de Google Cloud</a> · <a href="${base}es/vercel-dashboard">Dashboard de Vercel</a> · <a href="${base}es/lens-alternative">Alternativa a Lens</a><br> <a href="mailto:support@kuadashboard.navarrocarter.com">support@kuadashboard.navarrocarter.com</a>`,
   copyright: 'Copyright © 2024-present KuaDashboard',
 }
 export default defineConfig({
@@ -267,13 +326,11 @@ export default defineConfig({
       )
     }
 
-    if (page === 'index.md' || page === 'es/index.md') {
-      entries.push([
-        'script',
-        { type: 'application/ld+json' },
-        homepageSchema(canonical, page.startsWith('es/') ? 'es' : 'en', pageData?.frontmatter?.faq || []),
-      ])
-    }
+    entries.push([
+      'script',
+      { type: 'application/ld+json' },
+      pageSchema({ page, url: canonical, title, language: page.startsWith('es/') ? 'es' : 'en', frontmatter: pageData?.frontmatter }),
+    ])
 
     return entries
   },

@@ -1,3 +1,7 @@
+---
+description: "Instala KUA en Windows, macOS o Linux, o ejecútalo desde el código con Node.js 20: requisitos del sistema y configuración."
+---
+
 # Instalación
 
 ## Requisitos del Sistema

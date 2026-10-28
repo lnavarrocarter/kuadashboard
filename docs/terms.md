@@ -1,3 +1,7 @@
+---
+description: "Terms of service of KUA (KuaDashboard) and its optional KUA account."
+---
+
 # Terms of Service and Subscriptions
 
 Last updated: 2026-10-10. The plan changes in sections 2 and 3 apply from 2026-11-10.

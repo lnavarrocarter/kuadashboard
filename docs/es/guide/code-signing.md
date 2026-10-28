@@ -1,3 +1,7 @@
+---
+description: "Cómo se firman y notarizan los builds de escritorio de KUA para Windows y macOS."
+---
+
 # Firma de Codigo y Notarizacion
 
 Esta guia explica como preparar releases de escritorio confiables para Windows y macOS.

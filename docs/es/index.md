@@ -139,6 +139,8 @@ Los límites de Free aplican desde 2026-11-10.
 
 [Comparar planes](/es/pricing) · [Descargar KUA](/es/download)
 
+Usa KUA como [dashboard de Kubernetes](/es/kubernetes-dashboard), [dashboard multi-cloud](/es/multi-cloud-dashboard), [dashboard de AWS](/es/aws-dashboard), [alternativa de escritorio a la consola de Google Cloud](/es/google-cloud-console-alternative), [dashboard de Vercel](/es/vercel-dashboard) o [alternativa a Lens y k9s](/es/lens-alternative).
+
 [Descargar KUA](/es/download) · [Primeros pasos](/es/guide/getting-started) · [Todas las funcionalidades](/es/features/)
 
 ## ¿Te gusta KUA? Dale una estrella

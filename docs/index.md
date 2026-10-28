@@ -82,6 +82,8 @@ KUA puts your **Kubernetes clusters**, **AWS** and **GCP** accounts and **Vercel
 
 **Coming in the next release:** Plugins/Connections (Vercel and Proxmox VE as plugins), a KUA extension for VS Code, a Claude Code plugin, a Claude Desktop extension and one-click setup for Cursor, Windsurf, Gemini CLI and Kiro. See [Unreleased in the changelog](/changelog#unreleased).
 
+Use KUA as a [Kubernetes dashboard](/kubernetes-dashboard), a [multi-cloud dashboard](/multi-cloud-dashboard), an [AWS dashboard](/aws-dashboard), a [desktop alternative to the Google Cloud console](/google-cloud-console-alternative), a [Vercel dashboard](/vercel-dashboard) or a [Lens and k9s alternative](/lens-alternative).
+
 [Download KUA](/download) · [Getting started](/guide/getting-started) · [All features](/features/)
 
 <script setup>
