@@ -5,14 +5,18 @@ const assert = require('node:assert/strict');
 const Module = require('node:module');
 
 // A stand-in for the `vscode` module: records what the extension registers and shows.
-function fakeVscode({ withMcpApi = true } = {}) {
-  const record = { commands: new Map(), providers: [], messages: [], opened: [], files: new Map(), items: [] };
+function fakeVscode({ withMcpApi = true, withChat = true } = {}) {
+  const record = { commands: new Map(), providers: [], messages: [], opened: [], files: new Map(), items: [], views: [], clipboard: null, chat: [] };
   class EventEmitter { constructor() { this.listeners = []; this.event = listener => this.listeners.push(listener); } fire() { this.listeners.forEach(listener => listener()); } dispose() {} }
   const uri = path => ({ path, toString: () => path });
   const vscode = {
     l10n: { t: (text, ...args) => text.replace(/\{(\d+)\}/g, (_, index) => String(args[index])) },
     EventEmitter,
     ThemeColor: class { constructor(id) { this.id = id; } },
+    ThemeIcon: class { constructor(id) { this.id = id; } },
+    TreeItem: class { constructor(label, collapsibleState) { this.label = label; this.collapsibleState = collapsibleState; } },
+    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+    ConfigurationTarget: { Workspace: 2 },
     StatusBarAlignment: { Left: 1 },
     ProgressLocation: { Notification: 15 },
     McpStdioServerDefinition: class { constructor(label, command, args, env, version) { Object.assign(this, { label, command, args, env, version }); } },
@@ -20,6 +24,7 @@ function fakeVscode({ withMcpApi = true } = {}) {
     window: {
       state: { focused: true },
       createStatusBarItem: () => { const item = { show() {}, dispose() {} }; record.items.push(item); return item; },
+      createTreeView: (id, options) => { record.views.push({ id, provider: options.treeDataProvider }); return { dispose() {} }; },
       onDidChangeWindowState: () => ({ dispose() {} }),
       showInformationMessage: message => record.messages.push(['info', message]),
       showWarningMessage: message => record.messages.push(['warn', message]),
@@ -30,6 +35,7 @@ function fakeVscode({ withMcpApi = true } = {}) {
     workspace: {
       getConfiguration: () => ({ get: key => ({ url: '', openIn: 'auto' })[key] }),
       onDidChangeConfiguration: () => ({ dispose() {} }),
+      onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
       workspaceFolders: [{ uri: uri('/work') }],
       fs: {
         readFile: async target => { if (!record.files.has(target.path)) throw new Error('ENOENT'); return Buffer.from(record.files.get(target.path)); },
@@ -37,8 +43,14 @@ function fakeVscode({ withMcpApi = true } = {}) {
         createDirectory: async () => {},
       },
     },
-    commands: { registerCommand: (id, run) => { record.commands.set(id, run); return { dispose() {} }; }, executeCommand: (id, ...args) => record.commands.get(id)(...args) },
-    env: { openExternal: async target => { record.opened.push(target.path); return true; } },
+    commands: {
+      registerCommand: (id, run) => { record.commands.set(id, run); return { dispose() {} }; },
+      executeCommand: async (id, ...args) => {
+        if (id === 'workbench.action.chat.open') { if (!withChat) throw new Error('command not found'); record.chat.push(args[0].query); return undefined; }
+        return record.commands.get(id)(...args);
+      },
+    },
+    env: { language: 'en', clipboard: { writeText: async text => { record.clipboard = text; } }, openExternal: async target => { record.opened.push(target.path); return true; } },
     lm: withMcpApi ? { registerMcpServerDefinitionProvider: (id, provider) => { record.providers.push({ id, provider }); return { dispose() {} }; } } : undefined,
   };
   return { vscode, record };
@@ -62,7 +74,7 @@ const LAUNCH = { command: '/opt/KuaDashboard/kuadashboard', args: ['/opt/KuaDash
 
 function context() {
   const state = new Map();
-  return { subscriptions: [], globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } } };
+  return { extensionPath: require('node:path').join(__dirname, '..'), subscriptions: [], globalState: { get: key => state.get(key), update: async (key, value) => { state.set(key, value); } } };
 }
 
 test('activation registers the KUA MCP server for the chat, and keeps it while KUA is closed', async () => {
@@ -108,4 +120,22 @@ test('commands: open KUA, and add the server to the workspace mcp.json', async (
   assert.equal(record.files.get('/work/.vscode/mcp.json'), '{ broken', 'an invalid file is not overwritten');
   assert.equal(record.messages.at(-1)[0], 'error');
   for (const subscription of ctx.subscriptions) subscription.dispose?.();
+});
+
+test('the Applications view is registered, and an issue goes to the chat or, without one, to the clipboard', async () => {
+  const issue = { id: 'gone:r2', kind: 'gone', severity: 'warning', resourceName: 'api-3.9.1', resourceType: 'kubernetes', since: '2026-10-27T12:00:00Z' };
+  for (const withChat of [true, false]) {
+    const { vscode, record } = fakeVscode({ withChat });
+    const extension = loadExtension(vscode, () => ({ reachable: false, url: 'http://localhost:7190', launch: null }));
+    const ctx = context();
+    extension.activate(ctx);
+    assert.equal(record.views[0].id, 'kua.applications');
+    await vscode.commands.executeCommand('kua.sendToChat', { kind: 'issue', application: { id: 'a', name: 'orders' }, issue });
+    const brief = withChat ? record.chat[0] : record.clipboard;
+    assert.match(brief, /api-3\.9\.1/);
+    assert.match(brief, /orders/);
+    await vscode.commands.executeCommand('kua.openInKua', { link: { view: 'kuapps', app: 'a', tab: 'review' } });
+    assert.deepEqual(record.opened, ['kua://open?view=kuapps&app=a&tab=review']);
+    for (const subscription of ctx.subscriptions) subscription.dispose?.();
+  }
 });

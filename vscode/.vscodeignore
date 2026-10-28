@@ -1,5 +1,7 @@
 **
 !dist/extension.js
+!dist/texts.json
+!resources/**
 !package.json
 !package.nls*.json
 !l10n/**

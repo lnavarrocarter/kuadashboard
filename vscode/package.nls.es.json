@@ -6,5 +6,12 @@
   "command.refresh": "Actualizar estado",
   "command.showMenu": "Mostrar menú",
   "config.url": "Dónde corre KUA, por ejemplo `http://localhost:7190`. Vacío: se encuentra solo el KUA en ejecución, en cualquier puerto.",
-  "config.openIn": "Dónde abre KUA **KUA: Abrir dashboard**: `auto` (la app de escritorio, o el navegador para un KUA ejecutado desde el repositorio), `app` o `browser`."
+  "config.openIn": "Dónde abre KUA **KUA: Abrir dashboard**: `auto` (la app de escritorio, o el navegador para un KUA ejecutado desde el repositorio), `app` o `browser`.",
+  "command.applicationsRefresh": "Actualizar aplicaciones",
+  "command.linkWorkspace": "Asociar este workspace a una KUA Application",
+  "command.openInKua": "Abrir en KUA",
+  "command.sendToChat": "Enviar al chat",
+  "command.copyBrief": "Copiar brief",
+  "view.applications": "Aplicaciones",
+  "config.application": "La KUA Application de este workspace (id o nombre). Vacío: aquella cuyo repositorio de GitHub coincide con el de este workspace, si hay una sola."
 }
