@@ -16,9 +16,11 @@ const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 const { checkKubernetesMap, publicDrift, refreshOperation } = require('../lib/architecture/kubernetesDrift');
 const { checkAwsMap } = require('../lib/architecture/awsDrift');
 
-function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache() }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache(), providerActive = () => true }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
+  // A provider of a plugin that is off (#194) is not read: its discovery answers PLUGIN_DISABLED.
+  const pluginDisabled = (res, provider) => res.status(404).json({ code: 'PLUGIN_DISABLED', error: `The ${provider} plugin is turned off. Turn it on in Plugins/Connections.` });
   // Advisor acceptances and history live in the APM database (migration 18). The server passes
   // its shared store, so alert hooks (webhooks) also hear the product Advisor.
   let posture = sharedPosture;
@@ -539,6 +541,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
         }));
       }
       const cloudDiscovery = { gcp: gcpDiscovery, vercel: vercelDiscovery }[provider];
+      if (cloudDiscovery && !providerActive(provider)) return pluginDisabled(res, provider);
       if (!cloudDiscovery) return res.status(400).json({ code: 'UNSUPPORTED_CLOUD_PROVIDER', error: 'Supported providers: aws, gcp, vercel' });
       return res.json(await cloudDiscovery.preview({ profileId: profile }));
     } catch (error) {
@@ -725,6 +728,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
 
   for (const [provider, cloudDiscovery] of [['gcp', gcpDiscovery], ['vercel', vercelDiscovery]]) {
     router.post(`/projects/:projectId/discovery/${provider}/preview`, async (req, res) => {
+      if (!providerActive(provider)) return pluginDisabled(res, provider);
       const project = scopedProject(req, res);
       if (!project) return;
       try {
@@ -745,6 +749,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     }
 
     router.post(`/projects/:projectId/discovery/${provider}/import`, async (req, res) => {
+      if (!providerActive(provider)) return pluginDisabled(res, provider);
       const project = scopedProject(req, res);
       if (!project) return;
       try {

@@ -37,3 +37,16 @@ describe('providers catalog (#193)', () => {
     expect(isProviderOn('vercel')).toBe(true)
   })
 })
+
+describe('isProviderOn outside the catalog', () => {
+  beforeEach(() => { api.mockReset(); vi.resetModules() })
+
+  it('keeps views that are not providers on', async () => {
+    api.mockResolvedValue({ providers: [{ id: 'aws', active: true }] })
+    const { useProviders } = await import('../composables/useProviders')
+    const { isProviderOn, refreshProviders } = useProviders()
+    await refreshProviders()
+    expect(isProviderOn('kuapps')).toBe(true)
+    expect(isProviderOn('vercel')).toBe(false)
+  })
+})

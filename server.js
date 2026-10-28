@@ -67,6 +67,22 @@ const app    = express();
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();
+// First-party plugins (#193): what this computer has turned on. GitHub CI/CD and Vercel (#194).
+const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
+const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
+  dataDir: require('./lib/account/account').resolveDataDir(),
+  plugins: [
+    require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd),
+    require('./lib/plugins/builtinPlugins').vercelPlugin({ listProfiles: () => require('./lib/credentialStore').getStore().listProfiles() }),
+  ],
+});
+// Whether a provider is on: always for the base clouds, else its plugin (lib/providers.js).
+const providerActive = id => activeProviders(pluginRegistry).find(provider => provider.id === id)?.active !== false;
+// The routes of a provider that is off answer PLUGIN_DISABLED, read on every request.
+const providerGuard = id => (req, res, next) => {
+  const provider = activeProviders(pluginRegistry).find(item => item.id === id);
+  return provider?.plugin ? pluginRegistry.guard(provider.plugin)(req, res, next) : next();
+};
 const apmCleanupInterval = setInterval(() => {
   try {
     const removed = apmDatabase.cleanup();
@@ -159,7 +175,7 @@ apmTask.setControls(createPeriodicTaskControls(apmScheduler, apmTask));
 apmScheduler.start({ task: apmTask });
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
 const logAutoRefreshModule = require('./lib/logAutoRefresh');
-const logAutoRefresh = logAutoRefreshModule.getAutoRefresh();
+const logAutoRefresh = logAutoRefreshModule.getAutoRefresh({ providerActive });
 const logRefreshTask = backgroundTaskRegistry.register({
   id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', provider: 'mixed', intervalMs: logAutoRefreshModule.TICK_MS,
 });
@@ -213,6 +229,8 @@ server.on('upgrade', (request, socket, head) => {
   } else if (pathname === '/ws/gcp-logs') {
     wssGcpLogs.handleUpgrade(request, socket, head, ws => wssGcpLogs.emit('connection', ws, request));
   } else if (pathname === '/ws/vercel-logs') {
+    // Vercel logs are part of its plugin (#194): refused while it is off.
+    if (!providerActive('vercel')) { socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
     wssVercelLogs.handleUpgrade(request, socket, head, ws => wssVercelLogs.emit('connection', ws, request));
   } else {
     socket.destroy();
@@ -348,13 +366,14 @@ app.use('/api/cloud', (req, res, next) => {
 app.use('/api/cloud/envs',    envManagerRoutes);
 app.use('/api/cloud/gcp',     gcpRoutes);
 app.use('/api/cloud/aws',     awsRoutes);
-for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
-  app.use(`/api/observability/${provider}`, createApmRouter({
+for (const provider of providerIds('observability')) {
+  app.use(`/api/observability/${provider}`, providerGuard(provider), createApmRouter({
     database: apmDatabase,
     architectureDatabase,
     scheduler: apmScheduler,
     auditLog,
     provider,
+    providerActive,
   }));
 }
 function reserveArchitectureAwsRequest(input) {
@@ -378,6 +397,7 @@ app.use('/api/architecture', createArchitectureRouter({
   }),
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  providerActive,
 }));
 // The team's shared space (Team plan): lib/sync/teamEngine.js.
 const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
@@ -401,12 +421,6 @@ const applicationSyncTask = backgroundTaskRegistry.register({
   id: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
 });
 applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask));
-// First-party plugins (#193): what this computer has turned on. GitHub CI/CD is the first one.
-const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
-const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
-  dataDir: require('./lib/account/account').resolveDataDir(),
-  plugins: [require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd)],
-});
 app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog, providers: () => activeProviders(pluginRegistry) }));
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
@@ -426,7 +440,7 @@ app.use('/api/kua-apps', createKuaAppsRouter({
 syncEngine.start({ task: applicationSyncTask });
 // The team's shared space: publishing this computer's applications and updating imported ones.
 teamEngine.start(undefined, { task: teamSyncTask });
-app.use('/api/cloud/vercel',  vercelRoutes);
+app.use('/api/cloud/vercel',  providerGuard('vercel'), vercelRoutes);
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
   k8s,
@@ -446,6 +460,7 @@ const advisorScheduler = (() => {
     request: loopbackRequest(process.env.PORT || 7190),
     application: id => apmDatabase.getApplication(id),
     currentContext: () => currentContext,
+    providerActive,
   });
 })();
 const advisorTask = backgroundTaskRegistry.register({

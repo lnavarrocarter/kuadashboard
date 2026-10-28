@@ -1296,6 +1296,8 @@ async function setProvider(p) {
   if (p === 'observability') selectObservabilityProvider(observabilityProvider.value)
   nextTick(() => createIcons({ icons }))
 }
+// A provider whose plugin is turned off while it is shown (#194): back to Kubernetes, the base view.
+watch(() => !isProviderOn(activeProvider.value), off => { if (off) setProvider('kubernetes') })
 
 function selectObservabilityProvider(provider) {
   if (!availableObservabilityProviders.value.some(item => item.id === provider)) return

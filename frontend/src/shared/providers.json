@@ -4,7 +4,7 @@
     { "id": "kubernetes", "label": "Kubernetes", "plugin": null, "view": true, "cloudApi": false, "advisor": true, "observability": false, "scopes": true },
     { "id": "aws", "label": "AWS", "plugin": null, "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
     { "id": "gcp", "label": "GCP", "plugin": null, "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
-    { "id": "vercel", "label": "Vercel", "plugin": null, "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
+    { "id": "vercel", "label": "Vercel", "plugin": "vercel", "view": true, "cloudApi": true, "advisor": true, "observability": true, "scopes": true },
     { "id": "generic", "label": "Generic", "plugin": null, "view": false, "cloudApi": false, "advisor": false, "observability": true, "scopes": false }
   ]
 }

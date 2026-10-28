@@ -22,7 +22,8 @@ export function useProviders() {
   return {
     PROVIDERS,
     providerIds,
-    isProviderOn: id => activeIds.value === null || activeIds.value.has(id),
+    // Only catalog providers can be off; any other view (kuapps…) is always on.
+    isProviderOn: id => activeIds.value === null || !PROVIDERS.some(provider => provider.id === id) || activeIds.value.has(id),
     refreshProviders,
   }
 }
