@@ -1,0 +1,20 @@
+{
+  "Looking for KUA…": "Buscando KUA…",
+  "KUA is not running. Open KuaDashboard to use it from the editor.": "KUA no está en ejecución. Abre KuaDashboard para usarlo desde el editor.",
+  "KUA {0} at {1}": "KUA {0} en {1}",
+  "Plan: {0}": "Plan: {0}",
+  "AI agents are turned off in KUA: turn them on from the tray panel or Connect an AI agent.": "Los agentes de IA están desactivados en KUA: actívalos desde el panel de la bandeja o en Conectar un agente de IA.",
+  "Agents can read and propose KUApps changes.": "Los agentes pueden leer y proponer cambios en KUApps.",
+  "Agents can read; KUApps changes are off.": "Los agentes pueden leer; los cambios en KUApps están desactivados.",
+  "KuaDashboard is not installed on this computer, or it could not be opened.": "KuaDashboard no está instalado en este computador, o no se pudo abrir.",
+  "Open KuaDashboard once so the editor learns how to start its MCP server.": "Abre KuaDashboard una vez para que el editor sepa cómo iniciar su servidor MCP.",
+  "Verifying the KUA MCP server…": "Verificando el servidor MCP de KUA…",
+  "KUA MCP server answered: {0} tools, {1} profiles.": "El servidor MCP de KUA respondió: {0} herramientas, {1} perfiles.",
+  "The KUA MCP server did not answer: {0}": "El servidor MCP de KUA no respondió: {0}",
+  "Open a folder first.": "Abre una carpeta primero.",
+  "KUA was added to .vscode/mcp.json.": "KUA se agregó a .vscode/mcp.json.",
+  "Open KUA": "Abrir KUA",
+  "Verify MCP connection": "Verificar conexión MCP",
+  "Add MCP server to this workspace": "Agregar el servidor MCP a este workspace",
+  "Refresh": "Actualizar"
+}

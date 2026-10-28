@@ -42,6 +42,23 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      # VS Code extension (#302): tests and a .vsix that packages cleanly.
+      - name: Install VS Code extension dependencies
+        working-directory: vscode
+        run: npm ci
+
+      - name: Test and package the VS Code extension
+        working-directory: vscode
+        run: |
+          npm test
+          npm run package
+
+      - name: Upload the VS Code extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: kua-vscode
+          path: vscode/dist/kuadashboard.vsix
+
   docs:
     needs: tests
     runs-on: ubuntu-latest
