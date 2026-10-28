@@ -25,5 +25,9 @@
   "KUA Application of this workspace": "KUA Application de este workspace",
   "Brief copied.": "Brief copiado.",
   "This editor has no chat: the brief was copied to paste in your agent.": "Este editor no tiene chat: el brief se copió para pegarlo en tu agente.",
-  "The Advisor of KUA Applications is part of the Pro plan.": "El Advisor de KUA Applications es parte del plan Pro."
+  "The Advisor of KUA Applications is part of the Pro plan.": "El Advisor de KUA Applications es parte del plan Pro.",
+  "KUA steering is already in .kiro/steering/kua.md.": "El steering de KUA ya está en .kiro/steering/kua.md.",
+  "Replace": "Reemplazar",
+  ".kiro/steering/kua.md already exists and is different. Replace it with KUA's steering?": ".kiro/steering/kua.md ya existe y es distinto. ¿Reemplazarlo por el steering de KUA?",
+  "KUA steering was added to .kiro/steering/kua.md.": "El steering de KUA se agregó a .kiro/steering/kua.md."
 }

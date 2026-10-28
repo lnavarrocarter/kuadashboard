@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add KUA steering to this workspace for Kiro: writes `.kiro/steering/kua.md` from KUA's `kua` skill, asking before replacing an edited file.
 - Applications view: KUA Applications, what needs attention, resources with their signal state and the product Advisor, with Open in KUA, Send to chat and Copy brief; the workspace's application comes first (`kua.application`, or its GitHub repository).
 
 ## 2.0.0

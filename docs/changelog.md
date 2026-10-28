@@ -12,6 +12,7 @@
 
 ### Added
 
+- **KUA steering for Kiro (#214):** the KUA extension, which also installs in Kiro, adds **KUA: Add KUA steering to this workspace for Kiro**: it writes `.kiro/steering/kua.md`, always included, with the same rules as the `kua` skill of the Claude Code plugin (it is built from it), and only replaces a file you edited if you confirm. The docs add prompts to try and what Kiro reads through KUA.
 - **Agents only see the tools of plugins that are on (#300):** with Vercel off in Plugins/Connections, `vercel_advisor` leaves the MCP tool list and `vercel` leaves the provider choices of `list_profiles` and `cloud_resource_inventory`; calling them anyway answers `PLUGIN_DISABLED` with where to turn the plugin on, instead of a bare 404. If KUA cannot say which plugins are on, the full list is offered as before.
 - **Install KUA in Kiro (#213):** Connect an AI agent has a Kiro tab: **Install** adds KUA to `~/.kiro/settings/mcp.json` (or under `KIRO_HOME`), the user file both the Kiro IDE and `kiro-cli` read, keeping its other servers, and **Remove** takes out only KUA's entry.
 - **Install KUA in Cursor, Windsurf and Gemini CLI (#307):** Connect an AI agent has a tab for each; Install adds KUA's entry to the agent's MCP file (`~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.gemini/settings.json`) and keeps everything else in it, the tab says whether KUA is already there, and Remove takes out only KUA's entry. A file that is not valid JSON is never rewritten. Only local files change; no network.

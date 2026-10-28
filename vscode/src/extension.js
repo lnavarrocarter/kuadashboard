@@ -5,18 +5,21 @@
  * registered for the editor's chat, and commands to open KUA, verify the MCP connection and add
  * the server to a workspace `.vscode/mcp.json`. The KUA view of the side bar (#303) shows the
  * KUA Applications, what needs attention and their Advisor, and sends a brief to the chat.
+ * In Kiro, it also adds KUA's steering file to a workspace (#214).
  *
  * extensionKind "ui": it runs on the computer where KUA runs, also with Remote SSH, WSL or
  * Dev Containers. It only talks to the local KUA.
  */
 
 const fs = require('node:fs');
+const path = require('node:path');
 const vscode = require('vscode');
 const runtime = require('../../lib/mcp/runtime');
 const { verifyMcp } = require('../../lib/mcp/clientSetup');
 const { createKuaStatus } = require('./kuaStatus');
 const { createMcpProvider, editorLaunch } = require('./mcpProvider');
 const { withKuaServer } = require('./mcpJson');
+const { STEERING_FILE, STEERING_PATH, steeringChange } = require('./steering');
 const { dashboardTarget, launchKey, statusBar } = require('./presentation');
 const { advisorProfile, briefFor, githubRepository, issueBrief, originUrl } = require('./applications');
 const { createApplicationsData, createApplicationsView } = require('./applicationsView');
@@ -212,6 +215,26 @@ function activate(context) {
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, '.vscode'));
     await vscode.workspace.fs.writeFile(uri, Buffer.from(next, 'utf8'));
     vscode.window.showInformationMessage(t('KUA was added to .vscode/mcp.json.'));
+  });
+
+  // Kiro's steering (#214): never replaces a file without asking, since the user may have edited it.
+  command('kua.addSteering', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) { vscode.window.showWarningMessage(t('Open a folder first.')); return; }
+    const next = fs.readFileSync(path.join(context.extensionPath, 'dist', STEERING_FILE), 'utf8');
+    const uri = vscode.Uri.joinPath(folder.uri, ...STEERING_PATH);
+    let current = null;
+    try { current = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8'); } catch { /* new file */ }
+    const change = steeringChange(current, next);
+    if (change === 'same') { vscode.window.showInformationMessage(t('KUA steering is already in .kiro/steering/kua.md.')); return; }
+    if (change === 'different') {
+      const replace = t('Replace');
+      const picked = await vscode.window.showWarningMessage(t('.kiro/steering/kua.md already exists and is different. Replace it with KUA\'s steering?'), { modal: true }, replace);
+      if (picked !== replace) return;
+    }
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, ...STEERING_PATH.slice(0, -1)));
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(next, 'utf8'));
+    vscode.window.showInformationMessage(t('KUA steering was added to .kiro/steering/kua.md.'));
   });
 
   command('kua.showMenu', async () => {
