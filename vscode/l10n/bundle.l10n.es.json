@@ -16,5 +16,14 @@
   "Open KUA": "Abrir KUA",
   "Verify MCP connection": "Verificar conexión MCP",
   "Add MCP server to this workspace": "Agregar el servidor MCP a este workspace",
-  "Refresh": "Actualizar"
+  "Refresh": "Actualizar",
+  "KUA is not running. Open KuaDashboard to see your applications.": "KUA no está en ejecución. Abre KuaDashboard para ver tus aplicaciones.",
+  "KUA did not answer. Try Refresh.": "KUA no respondió. Prueba Actualizar.",
+  "No KUA Applications yet. Create one in KUApps.": "Aún no hay KUA Applications. Crea una en KUApps.",
+  "Verify a scope of this application in KUApps to see its Advisor.": "Verifica un scope de esta aplicación en KUApps para ver su Advisor.",
+  "None (find it by the repository)": "Ninguna (buscarla por el repositorio)",
+  "KUA Application of this workspace": "KUA Application de este workspace",
+  "Brief copied.": "Brief copiado.",
+  "This editor has no chat: the brief was copied to paste in your agent.": "Este editor no tiene chat: el brief se copió para pegarlo en tu agente.",
+  "The Advisor of KUA Applications is part of the Pro plan.": "El Advisor de KUA Applications es parte del plan Pro."
 }

@@ -3,7 +3,8 @@
  * vscode/src/extension.js
  * KUA in VS Code (#302): a status bar item with the state of the local KUA, its MCP server
  * registered for the editor's chat, and commands to open KUA, verify the MCP connection and add
- * the server to a workspace `.vscode/mcp.json`.
+ * the server to a workspace `.vscode/mcp.json`. The KUA view of the side bar (#303) shows the
+ * KUA Applications, what needs attention and their Advisor, and sends a brief to the chat.
  *
  * extensionKind "ui": it runs on the computer where KUA runs, also with Remote SSH, WSL or
  * Dev Containers. It only talks to the local KUA.
@@ -17,8 +18,12 @@ const { createKuaStatus } = require('./kuaStatus');
 const { createMcpProvider, editorLaunch } = require('./mcpProvider');
 const { withKuaServer } = require('./mcpJson');
 const { dashboardTarget, launchKey, statusBar } = require('./presentation');
+const { advisorProfile, briefFor, githubRepository, issueBrief, originUrl } = require('./applications');
+const { createApplicationsData, createApplicationsView } = require('./applicationsView');
+const { loadTexts, textsFile, translator } = require('./texts');
 
 const REFRESH_MS = 15000;
+const GET_TIMEOUT_MS = 5000;
 const LAST_LAUNCH = 'kua.lastLaunch';
 
 function activate(context) {
@@ -29,6 +34,8 @@ function activate(context) {
   const changed = new vscode.EventEmitter();
   let status = null;
   let lastKey = null;
+  let lastReachable = null;
+  let applications = null;
 
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   item.name = 'KUA';
@@ -58,6 +65,7 @@ function activate(context) {
       render();
       const key = launchKey(status);
       if (key !== lastKey) { lastKey = key; changed.fire(); }
+      if (status.reachable !== lastReachable) { lastReachable = status.reachable; applications?.refresh(); }
       return status;
     })().finally(() => { refreshing = null; });
     return refreshing;
@@ -67,7 +75,7 @@ function activate(context) {
   refresh();
   const timer = setInterval(() => { if (vscode.window.state.focused) refresh(); }, REFRESH_MS);
   context.subscriptions.push({ dispose: () => clearInterval(timer) }, item, changed);
-  context.subscriptions.push(vscode.window.onDidChangeWindowState(state => { if (state.focused) refresh(); }));
+  context.subscriptions.push(vscode.window.onDidChangeWindowState(state => { if (state.focused) { refresh(); applications?.refresh(); } }));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration('kua')) refresh(); }));
 
   // A KUA that starts or stops writes ~/.kuadashboard/run/: notice it at once, not on the next tick.
@@ -82,6 +90,85 @@ function activate(context) {
   }
 
   const command = (id, run) => context.subscriptions.push(vscode.commands.registerCommand(id, run));
+
+  // ── KUA Applications view (#303) ──────────────────────────────────────────
+  const kuaText = translator(loadTexts(textsFile(context.extensionPath)), vscode.env.language);
+  async function get(path, headers = {}) {
+    if (!status?.reachable) return null;
+    try {
+      const response = await fetch(new URL(path, status.url), { headers, signal: AbortSignal.timeout(GET_TIMEOUT_MS) });
+      return response.ok ? await response.json() : null;
+    } catch { return null; }
+  }
+  // The GitHub repository of the workspace, from .git/config, to find its application.
+  let repository = null;
+  async function readRepository() {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) { repository = null; return; }
+    try {
+      const text = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, '.git', 'config'))).toString('utf8');
+      repository = githubRepository(originUrl(text));
+    } catch { repository = null; }
+  }
+  applications = createApplicationsView({
+    vscode,
+    data: createApplicationsData({ get }),
+    t: kuaText,
+    l10n: t,
+    reachable: () => status?.reachable === true,
+    workspace: () => ({ configured: String(config().get('application') || '').trim(), repository }),
+  });
+  context.subscriptions.push(applications, vscode.window.createTreeView('kua.applications', { treeDataProvider: applications, showCollapseAll: true }));
+  readRepository().then(() => applications.refresh());
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => readRepository().then(() => applications.refresh())));
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration('kua.application')) applications.refresh(); }));
+
+  command('kua.applications.refresh', () => applications.refresh());
+
+  command('kua.linkWorkspace', async () => {
+    const list = await get('/api/kua-apps/applications');
+    if (!Array.isArray(list) || !list.length) { vscode.window.showWarningMessage(t('No KUA Applications yet. Create one in KUApps.')); return; }
+    const picked = await vscode.window.showQuickPick(
+      [{ label: t('None (find it by the repository)'), id: '' }, ...list.map(app => ({ label: app.name, description: app.environment || '', id: app.id }))],
+      { placeHolder: t('KUA Application of this workspace') },
+    );
+    if (!picked) return;
+    await config().update('application', picked.id || undefined, vscode.ConfigurationTarget.Workspace);
+    applications.refresh();
+  });
+
+  command('kua.openInKua', node => vscode.commands.executeCommand('kua.openDashboard', node?.link || { view: 'kuapps' }));
+
+  // The brief of a node: KUA's Advisor brief (application, Advisor, finding) or the issue's.
+  // { brief } or { reason } saying why there is none.
+  async function briefOf(node) {
+    if (!node?.application) return { reason: t('KUA did not answer. Try Refresh.') };
+    if (node.kind === 'issue') return { brief: issueBrief(kuaText, node.application, node.issue) };
+    if (!advisorProfile(node.application)) return { reason: t('Verify a scope of this application in KUApps to see its Advisor.') };
+    const report = await applications.advisorReport(node.application);
+    if (!report) return { reason: t('KUA did not answer. Try Refresh.') };
+    if (report.locked) return { reason: t('The Advisor of KUA Applications is part of the Pro plan.') };
+    return { brief: briefFor(kuaText, node.application, report, { findings: node.kind === 'finding' ? [node.finding] : null }) };
+  }
+
+  command('kua.copyBrief', async node => {
+    const { brief, reason } = await briefOf(node);
+    if (!brief) { vscode.window.showWarningMessage(reason); return; }
+    await vscode.env.clipboard.writeText(brief);
+    vscode.window.showInformationMessage(t('Brief copied.'));
+  });
+
+  command('kua.sendToChat', async node => {
+    const { brief, reason } = await briefOf(node);
+    if (!brief) { vscode.window.showWarningMessage(reason); return; }
+    try {
+      await vscode.commands.executeCommand('workbench.action.chat.open', { query: brief });
+    } catch {
+      // No chat in this editor: the brief goes to the clipboard to paste in any agent.
+      await vscode.env.clipboard.writeText(brief);
+      vscode.window.showInformationMessage(t('This editor has no chat: the brief was copied to paste in your agent.'));
+    }
+  });
 
   command('kua.refresh', async () => { await refresh(); });
 
