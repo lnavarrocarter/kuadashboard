@@ -149,6 +149,10 @@ command = "node"
 args = ["/path/to/kuadashboard/mcp/server.mjs"]
 ```
 
+### VS Code
+
+The [KUA extension for VS Code](./vscode) registers KUA's MCP server for the editor's chat, with nothing to configure. Without the extension, add the `kua` entry to `.vscode/mcp.json` with the command below.
+
 ### Other clients
 
 Any client that runs local stdio MCP servers (Cursor, VS Code, Windsurf…) uses the same command: `node /path/to/kuadashboard/mcp/server.mjs`.

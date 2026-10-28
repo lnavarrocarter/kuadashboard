@@ -1,0 +1,104 @@
+{
+  "name": "kuadashboard",
+  "displayName": "KUA — Know Unified Administration",
+  "description": "%description%",
+  "version": "2.0.0",
+  "publisher": "kuadashboard",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lnavarrocarter/kuadashboard"
+  },
+  "homepage": "https://lnavarrocarter.github.io/kuadashboard/features/vscode",
+  "engines": {
+    "vscode": "^1.101.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "kubernetes",
+    "aws",
+    "gcp",
+    "mcp",
+    "observability"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "kua.openDashboard",
+        "title": "%command.openDashboard%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.verifyMcp",
+        "title": "%command.verifyMcp%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.addMcpToWorkspace",
+        "title": "%command.addMcpToWorkspace%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.refresh",
+        "title": "%command.refresh%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.showMenu",
+        "title": "%command.showMenu%",
+        "category": "KUA"
+      }
+    ],
+    "configuration": {
+      "title": "KUA",
+      "properties": {
+        "kua.url": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.url%"
+        },
+        "kua.openIn": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "app",
+            "browser"
+          ],
+          "default": "auto",
+          "markdownDescription": "%config.openIn%"
+        }
+      }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "kua.mcp",
+        "label": "KUA"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "test": "node --test \"src/**/*.test.js\"",
+    "package": "npm run build && vsce package --no-dependencies --out dist/kuadashboard.vsix"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2"
+  }
+}

@@ -151,6 +151,7 @@ const enFeatures = { text: 'Features', items: [
   { text: 'Terminal & Shell', link: '/features/terminal' },
   { text: 'Advisor', link: '/features/advisor' },
   { text: 'AI Agents', link: '/features/ai-agents' },
+  { text: 'VS Code', link: '/features/vscode' },
 ]}
 
 const esFeatures = { text: 'Funcionalidades', items: [
@@ -163,6 +164,7 @@ const esFeatures = { text: 'Funcionalidades', items: [
   { text: 'Terminal & Shell', link: '/es/features/terminal' },
   { text: 'Advisor', link: '/es/features/advisor' },
   { text: 'Agentes IA', link: '/es/features/ai-agents' },
+  { text: 'VS Code', link: '/es/features/vscode' },
 ]}
 
 const enArchitecture = { text: 'Architecture', items: [

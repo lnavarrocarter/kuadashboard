@@ -1,0 +1,10 @@
+{
+  "description": "See your local KUA from the editor and give the editor's AI chat KUA's tools (MCP): inventory, Advisor, logs and KUA Applications of Kubernetes, AWS, GCP and Vercel.",
+  "command.openDashboard": "Open dashboard",
+  "command.verifyMcp": "Verify MCP connection",
+  "command.addMcpToWorkspace": "Add MCP server to this workspace (.vscode/mcp.json)",
+  "command.refresh": "Refresh status",
+  "command.showMenu": "Show menu",
+  "config.url": "Where KUA runs, for example `http://localhost:7190`. Empty: the running KUA is found by itself, whatever its port.",
+  "config.openIn": "Where **KUA: Open dashboard** opens KUA: `auto` (the desktop app, or the browser for a KUA run from the repository), `app` or `browser`."
+}
