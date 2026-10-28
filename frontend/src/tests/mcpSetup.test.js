@@ -89,13 +89,27 @@ describe('AgentConnectModal', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/system/mcp/install', expect.objectContaining({ method: 'POST', body: JSON.stringify({ client: 'claude' }) }))
     expect(outcome()).toBe('Added to Claude Code. Start a new agent session to load it.')
 
+    // With a Claude Code that installs plugins, the KUA plugin was added (#305).
+    apiFetch.mockImplementationOnce(async () => ({ client: 'claude', name: 'kua', mode: 'plugin' }))
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toMatch(/^The KUA plugin was added to Claude Code from this computer/)
+
     await click('[data-test="agent-connect-codex"]')
     expect(outcome()).toBeUndefined()
     await click('[data-test="agent-connect-install"]')
     expect(outcome()).toBe('Codex CLI is not installed or not in PATH here: run the command above in the terminal where you use it.')
 
+    // Claude Desktop: kua.mcpb is opened, and can be downloaded (#306).
+    apiFetch.mockImplementationOnce(async () => ({ client: 'claudeDesktop', name: 'kua', mode: 'mcpb' }))
+    await click('[data-test="agent-connect-claudeDesktop"]')
+    expect(document.querySelector('[data-test="agent-connect-mcpb"]').getAttribute('href')).toBe('/api/system/mcp/mcpb')
+    expect(document.querySelector('[data-test="agent-connect-snippet"]').textContent).toContain('"mcpServers"')
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toMatch(/^kua\.mcpb was opened/)
+
     await click('[data-test="agent-connect-json"]')
     expect(document.querySelector('[data-test="agent-connect-install"]')).toBeNull()
+    expect(document.querySelector('[data-test="agent-connect-mcpb"]')).toBeNull()
     wrapper.unmount()
   })
 

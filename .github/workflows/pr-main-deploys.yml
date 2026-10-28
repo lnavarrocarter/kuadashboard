@@ -53,6 +53,16 @@ jobs:
           npm test
           npm run package
 
+      # Claude Desktop extension (#306): kua.mcpb validates and packs.
+      - name: Build the Claude Desktop extension
+        run: npm run build:mcpb
+
+      - name: Upload the Claude Desktop extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: kua-mcpb
+          path: mcpb/dist/kua.mcpb
+
       - name: Upload the VS Code extension
         uses: actions/upload-artifact@v4
         with:
@@ -135,6 +145,18 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+      # The Claude Code plugin is installed from the app's own files (#305): it must ship unpacked.
+      - name: Check the Claude Code plugin is in the package
+        shell: bash
+        run: |
+          unpacked=$(ls -d dist-electron/linux-unpacked/resources/app.asar.unpacked)
+          test -f "$unpacked/.claude-plugin/marketplace.json"
+          test -f "$unpacked/plugins/kua/.claude-plugin/plugin.json"
+          test -f "$unpacked/plugins/kua/server/launcher.mjs"
+          test -f "$unpacked/plugins/kua/skills/kua/SKILL.md"
+          # The Claude Desktop extension (#306).
+          test -f "$unpacked/mcpb/dist/kua.mcpb"
 
       - name: Post-implementation health check
         shell: bash

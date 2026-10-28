@@ -1,0 +1,14 @@
+{
+  "name": "kuadashboard",
+  "description": "KUA (Know Unified Administration) for Claude Code: your local KUA's tools and how to work with them.",
+  "owner": {
+    "name": "KuaDashboard"
+  },
+  "plugins": [
+    {
+      "name": "kua",
+      "source": "./plugins/kua",
+      "description": "Read your Kubernetes, AWS, GCP and Vercel resources, Advisor findings, logs and KUA Applications through the KUA running on this computer, and propose KUApps changes that you approve in KUA."
+    }
+  ]
+}

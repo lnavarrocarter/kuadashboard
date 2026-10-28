@@ -120,6 +120,18 @@ Set `KUA_URL` only to point the server at a specific KUA (for example when two a
 
 ### Claude Code
 
+The simplest way is the KUA plugin: **Install in Claude Code** in **Connect an AI agent** installs it from this computer, without downloading anything (KUA keeps a local marketplace with the plugin of its own version in `~/.kuadashboard/claude-plugin`; a Claude Code without plugins gets the MCP server alone). The plugin adds KUA's MCP server and a `kua` skill that tells Claude how to work with KUA: start from the Advisor and log intelligence, check the current state before changing anything, show the cost and ask before billed or destructive operations, and never copy secrets or raw logs into the repository.
+
+From Claude Code itself, the same plugin installs from GitHub:
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+On Claude Code before 2.1.275, add the marketplace first with `/plugin marketplace add lnavarrocarter/kuadashboard`, then `/plugin install kua@kuadashboard`. The plugin needs Node.js on PATH. It starts the MCP server of the KUA installed on this computer: every KUA records how to start it in `~/.kuadashboard/run/mcp-launch.json` (the installed app wins over a KUA run from the repository), so the server always matches your KUA version. If KUA has never run here, the server answers with no tools and tells Claude to install and open KUA. Check it with `/mcp`: the server is `plugin:kua:kua`.
+
+Without the plugin, add the server by hand:
+
 ```bash
 claude mcp add kua --scope user -- node /path/to/kuadashboard/mcp/server.mjs
 ```
@@ -138,6 +150,10 @@ Or, to share it with a project, add it to `.mcp.json` at the project root:
 ```
 
 Check it with `/mcp` inside Claude Code.
+
+### Claude Desktop
+
+**Install in Claude Desktop** in **Connect an AI agent** opens `kua.mcpb`, the Claude Desktop extension that ships with KUA, and Claude Desktop shows its install dialog (it then appears under **Settings → Extensions**). **Download kua.mcpb** saves the same file to install it by hand, for example from KUA in a browser. The extension starts the MCP server of the KUA installed on this computer, like the Claude Code plugin, so it always matches your KUA version; its optional **KUA address** setting forces one KUA (leave it empty to find the running one). Without the extension, add the JSON shown in that tab to `claude_desktop_config.json` (**Settings → Developer → Edit Config**).
 
 ### Codex CLI
 
