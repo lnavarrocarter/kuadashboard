@@ -147,6 +147,10 @@ O, para compartirlo con un proyecto, agrégalo a `.mcp.json` en la raíz del pro
 
 Compruébalo con `/mcp` dentro de Claude Code.
 
+### Claude Desktop
+
+**Instalar en Claude Desktop** en **Conectar un agente de IA** abre `kua.mcpb`, la extensión de Claude Desktop que viene con KUA, y Claude Desktop muestra su diálogo de instalación (luego aparece en **Configuración → Extensiones**). **Descargar kua.mcpb** guarda el mismo archivo para instalarlo a mano, por ejemplo desde KUA en un navegador. La extensión inicia el servidor MCP del KUA instalado en este computador, como el plugin de Claude Code, así que siempre coincide con tu versión de KUA; su ajuste opcional **Dirección de KUA** fuerza un KUA (déjalo vacío para encontrar el que está en ejecución). Sin la extensión, agrega el JSON que muestra esa pestaña a `claude_desktop_config.json` (**Configuración → Desarrollador → Editar configuración**).
+
 ### Codex CLI
 
 ```bash

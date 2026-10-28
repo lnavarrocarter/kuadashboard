@@ -207,6 +207,8 @@ router.post('/mcp/install', async (req, res) => {
   // JSON only: another site cannot send it to this loopback API without a CORS preflight, which KUA never allows.
   if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
   try {
+    // Claude Desktop: open kua.mcpb, the extension that ships with KUA, and Claude Desktop installs it (#306).
+    if (req.body?.client === 'claudeDesktop') return res.json(await require('../lib/mcp/claudeDesktop').openMcpb({ rootDir: require('path').join(__dirname, '..') }));
     // Claude Code: the KUA plugin from a local marketplace copied next to KUA's data (#305).
     let pluginDir = null;
     if (req.body?.client === 'claude') {
@@ -217,8 +219,15 @@ router.post('/mcp/install', async (req, res) => {
     }
     res.json(await require('../lib/mcp/clientSetup').installMcp({ client: req.body?.client, launch: mcpLaunchHere(), pluginDir }));
   } catch (err) {
-    res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' ? 404 : 500).json({ error: err.message, code: err.code });
+    res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' || err.code === 'MCPB_MISSING' ? 404 : 500).json({ error: err.message, code: err.code });
   }
+});
+
+// GET /mcp/mcpb: kua.mcpb to save and open by hand (web mode, or another computer's Claude Desktop).
+router.get('/mcp/mcpb', (_req, res) => {
+  const file = require('../lib/mcp/claudeDesktop').mcpbPath(require('path').join(__dirname, '..'));
+  if (!require('fs').existsSync(file)) return res.status(404).json({ error: 'This KUA does not include the Claude Desktop extension. Build it with npm run build:mcpb.', code: 'MCPB_MISSING' });
+  res.download(file, 'kua.mcpb');
 });
 
 // ─── GET /usage ───────────────────────────────────────────────────────────────

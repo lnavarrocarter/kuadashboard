@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * plugins/kua/server/launcher.mjs
- * Starts the MCP server of the KUA installed on this computer, for the Claude Code plugin (#305).
+ * Starts the MCP server of the KUA installed on this computer, for the Claude Code plugin (#305)
+ * and the Claude Desktop extension (mcpb/, #306), which ships this same file.
  *
  * The plugin is installed as a copy of its own folder, so it cannot know where KUA lives. Every
  * KUA that starts writes how to launch its MCP server to ~/.kuadashboard/run/mcp-launch.json
@@ -35,6 +36,17 @@ export function readLaunch({ dir = runDir(), exists = existsSync, read = file =>
   if (!record?.command || !Array.isArray(record.args)) return null
   if (isAbsolute(record.command) && !exists(record.command)) return null
   return record
+}
+
+/**
+ * The environment for KUA's server. An optional KUA_URL left empty, or passed as an unfilled
+ * placeholder such as "${user_config.kua_url}" (Claude Desktop extension, #306), is dropped so
+ * the server finds the running KUA by itself.
+ */
+export function serverEnv(base, extra = {}) {
+  const env = { ...base, ...extra }
+  if (!env.KUA_URL || /\$\{/.test(env.KUA_URL)) delete env.KUA_URL
+  return env
 }
 
 /** The answer to one JSON-RPC message when there is no KUA to start (null for notifications). */
@@ -75,7 +87,7 @@ function main() {
   if (!launch) return serveWithoutKua()
   const child = spawn(launch.command, launch.args, {
     stdio: 'inherit',
-    env: { ...process.env, ...(launch.env || {}) },
+    env: serverEnv(process.env, launch.env || {}),
     windowsHide: true,
   })
   child.on('error', error => {
