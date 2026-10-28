@@ -3535,6 +3535,13 @@ server.listen(PORT, HOST, () => {
       version: require('./package.json').version,
       packaged: path.basename(__dirname) === 'app.asar',
     });
+    // ~/.kuadashboard/run/mcp-launch.json: how the Claude Code plugin starts this KUA's MCP server (#305).
+    const { mcpLaunch } = require('./lib/mcp/launch');
+    require('./lib/mcp/runtime').recordLaunch({
+      launch: mcpLaunch({ execPath: process.execPath, electron: process.versions.electron, rootDir: __dirname }),
+      version: require('./package.json').version,
+      packaged: path.basename(__dirname) === 'app.asar',
+    });
   } catch (err) { console.warn('[mcp] could not record this instance:', err.message); }
   // Starts after listening: scheduled runs call this KUA on the loopback address.
   advisorScheduler.start({ task: advisorTask });

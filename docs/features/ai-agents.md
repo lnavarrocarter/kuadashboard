@@ -116,6 +116,16 @@ Set `KUA_URL` only to point the server at a specific KUA (for example when two a
 
 ### Claude Code
 
+The simplest way is the KUA plugin. It adds KUA's MCP server and a `kua` skill that tells Claude how to work with KUA: start from the Advisor and log intelligence, check the current state before changing anything, show the cost and ask before billed or destructive operations, and never copy secrets or raw logs into the repository.
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+On Claude Code before 2.1.275, add the marketplace first with `/plugin marketplace add lnavarrocarter/kuadashboard`, then `/plugin install kua@kuadashboard`. The plugin needs Node.js on PATH. It starts the MCP server of the KUA installed on this computer: every KUA records how to start it in `~/.kuadashboard/run/mcp-launch.json` (the installed app wins over a KUA run from the repository), so the server always matches your KUA version. If KUA has never run here, the server answers with no tools and tells Claude to install and open KUA. Check it with `/mcp`: the server is `plugin:kua:kua`.
+
+Without the plugin, add the server by hand:
+
 ```bash
 claude mcp add kua --scope user -- node /path/to/kuadashboard/mcp/server.mjs
 ```
