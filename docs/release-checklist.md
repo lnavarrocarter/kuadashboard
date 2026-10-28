@@ -28,6 +28,7 @@ Version fields. Keep them identical; the rc uses the same fields with the suffix
 | `frontend/src/composables/useChangelog.js` | `CHANGELOG_VERSION = '2.0.0'`; rename the first entry `version: 'Unreleased'` to `'2.0.0'` and its `date` to `{ en: 'Month YYYY', es: 'Mes YYYY' }`. The WelcomeModal and StarNotice compare against this constant; `welcomeVariant` shows the 2.0 welcome only when the stored version is below 2 |
 | `frontend/src/tests/ChangelogLocalized.test.js` | Expects `CHANGELOG[0]` to be `Unreleased` and `CHANGELOG[1]` to be `CHANGELOG_VERSION`: change to `CHANGELOG[0].version === CHANGELOG_VERSION` and drop the `Unreleased` assertion. Also review `HelpModal.test.js` (expects `1.17.0` in the first release) |
 | `README.es.md` | Two lines: "Versión actual: **v1.17.0**" (line ~30) and "La versión actual es **v1.17.0**" (line ~199) |
+| `plugins/kua/.claude-plugin/plugin.json` and `vscode/package.json` | `"version"` of the Claude Code plugin (#305) and the VS Code extension (#302). Users of the plugin stay on a version until it changes, so bump it with every release |
 | `README.md` | No version number today; if a "Current version" line is added, bump it too |
 | `docs/ROADMAP.md` | `> **Versión actual:** v1.17.0` |
 | `docs/.vitepress/config.mjs` | Nothing to edit: `softwareVersion` is read from `package.json` |

@@ -117,7 +117,9 @@
       "node_modules/onnxruntime-node/**",
       "node_modules/onnxruntime-common/**",
       "node_modules/sharp/**",
-      "node_modules/@img/**"
+      "node_modules/@img/**",
+      "plugins/kua/**",
+      ".claude-plugin/**"
     ],
     "npmRebuild": true,
     "afterPack": "electron/afterPack.js",
@@ -137,7 +139,9 @@
       "assets/icon.png",
       "!node_modules/.cache",
       "!node_modules/onnxruntime-web/**",
-      "!node_modules/@img/sharp-wasm32/**"
+      "!node_modules/@img/sharp-wasm32/**",
+      "plugins/kua/**",
+      ".claude-plugin/**"
     ],
     "directories": {
       "buildResources": "assets",

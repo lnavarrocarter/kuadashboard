@@ -116,6 +116,18 @@ Define `KUA_URL` solo para apuntar el servidor a un KUA concreto (por ejemplo, c
 
 ### Claude Code
 
+La forma más simple es el plugin de KUA: **Instalar en Claude Code** en **Conectar un agente de IA** lo instala desde este computador, sin descargar nada (KUA mantiene un marketplace local con el plugin de su propia versión en `~/.kuadashboard/claude-plugin`; un Claude Code sin plugins recibe solo el servidor MCP). El plugin agrega el servidor MCP de KUA y una skill `kua` que le dice a Claude cómo trabajar con KUA: empezar por el Advisor y la inteligencia de logs, verificar el estado actual antes de cambiar nada, mostrar el costo y preguntar antes de operaciones con cargo o destructivas, y nunca copiar secretos ni logs crudos al repositorio.
+
+Desde el propio Claude Code, el mismo plugin se instala desde GitHub:
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+En Claude Code anterior a 2.1.275, agrega primero el marketplace con `/plugin marketplace add lnavarrocarter/kuadashboard` y luego `/plugin install kua@kuadashboard`. El plugin necesita Node.js en el PATH. Inicia el servidor MCP del KUA instalado en este computador: cada KUA registra cómo iniciarlo en `~/.kuadashboard/run/mcp-launch.json` (la app instalada gana sobre un KUA ejecutado desde el repositorio), así el servidor siempre coincide con tu versión de KUA. Si KUA nunca se ejecutó aquí, el servidor responde sin herramientas y le dice a Claude que instale y abra KUA. Verifícalo con `/mcp`: el servidor es `plugin:kua:kua`.
+
+Sin el plugin, agrega el servidor a mano:
+
 ```bash
 claude mcp add kua --scope user -- node /ruta/a/kuadashboard/mcp/server.mjs
 ```
