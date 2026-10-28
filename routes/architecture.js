@@ -9,6 +9,7 @@ const { ApplicationRegistryService, canonicalFromApm, canonicalFromNode } = requ
 const { ArchitectureCloudDiscoveryService } = require('../lib/architecture/cloudDiscoveryService');
 const { createGcpDiscoveryReader } = require('../lib/architecture/gcpDiscoveryReader');
 const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDiscoveryReader');
+const { createProxmoxDiscoveryReader } = require('../lib/architecture/proxmoxDiscoveryReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct, summarizeTechnicalFindings, crossRecommendations } = require('../lib/advisor/product');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
@@ -16,7 +17,7 @@ const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 const { checkKubernetesMap, publicDrift, refreshOperation } = require('../lib/architecture/kubernetesDrift');
 const { checkAwsMap } = require('../lib/architecture/awsDrift');
 
-function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache(), providerActive = () => true }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, proxmoxDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache(), providerActive = () => true }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   // A provider of a plugin that is off (#194) is not read: its discovery answers PLUGIN_DISABLED.
@@ -40,6 +41,10 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
   });
   const vercelDiscovery = vercelDiscoveryService || new ArchitectureCloudDiscoveryService({
     provider: 'vercel', reader: createVercelDiscoveryReader(), graphService: service,
+  });
+  // Proxmox VE (#195): nodes, VMs, containers and storage of a cluster, read on the local network.
+  const proxmoxDiscovery = proxmoxDiscoveryService || new ArchitectureCloudDiscoveryService({
+    provider: 'proxmox', reader: createProxmoxDiscoveryReader(), graphService: service,
   });
   const registry = apmDatabase ? new ApplicationRegistryService({ database: apmDatabase, architectureDatabase: database }) : null;
 
@@ -540,9 +545,9 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
           ...(req.body?.maxResources !== undefined ? { maxResources: req.body.maxResources } : {}),
         }));
       }
-      const cloudDiscovery = { gcp: gcpDiscovery, vercel: vercelDiscovery }[provider];
+      const cloudDiscovery = { gcp: gcpDiscovery, vercel: vercelDiscovery, proxmox: proxmoxDiscovery }[provider];
       if (cloudDiscovery && !providerActive(provider)) return pluginDisabled(res, provider);
-      if (!cloudDiscovery) return res.status(400).json({ code: 'UNSUPPORTED_CLOUD_PROVIDER', error: 'Supported providers: aws, gcp, vercel' });
+      if (!cloudDiscovery) return res.status(400).json({ code: 'UNSUPPORTED_CLOUD_PROVIDER', error: 'Supported providers: aws, gcp, vercel, proxmox' });
       return res.json(await cloudDiscovery.preview({ profileId: profile }));
     } catch (error) {
       // A token gcloud handed out and Google refused is not reused (routes/gcp.js).
@@ -726,7 +731,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     } catch (error) { handleError(res, error); }
   });
 
-  for (const [provider, cloudDiscovery] of [['gcp', gcpDiscovery], ['vercel', vercelDiscovery]]) {
+  for (const [provider, cloudDiscovery] of [['gcp', gcpDiscovery], ['vercel', vercelDiscovery], ['proxmox', proxmoxDiscovery]]) {
     router.post(`/projects/:projectId/discovery/${provider}/preview`, async (req, res) => {
       if (!providerActive(provider)) return pluginDisabled(res, provider);
       const project = scopedProject(req, res);

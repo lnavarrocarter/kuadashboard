@@ -19,6 +19,10 @@ const RESOURCE_ICONS = Object.freeze({
   'gcp-cloud-run': 'cloud-cog',
   'gcp-function': 'function-square',
   'vercel-project': 'triangle',
+  'proxmox-node': 'server',
+  'proxmox-qemu': 'monitor',
+  'proxmox-lxc': 'box',
+  'proxmox-storage': 'hard-drive',
 })
 
 const RESOURCE_LABELS = Object.freeze({
@@ -42,6 +46,10 @@ const RESOURCE_LABELS = Object.freeze({
   'gcp-cloud-run': 'Google Cloud Run',
   'gcp-function': 'Google Cloud Functions',
   'vercel-project': 'Vercel Project',
+  'proxmox-node': 'Proxmox VE node',
+  'proxmox-qemu': 'Proxmox VE VM',
+  'proxmox-lxc': 'Proxmox VE container',
+  'proxmox-storage': 'Proxmox VE storage',
 })
 
 // apm_resources stores every Kubernetes object under the single generic type "kubernetes" (Deployment,

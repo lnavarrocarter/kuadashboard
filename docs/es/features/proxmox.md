@@ -48,3 +48,9 @@ El secreto se guarda en el almacén de credenciales como los demás perfiles y n
 - Tablas de **VMs y contenedores**, **Nodos**, **Storage**, **Jobs de backup** y **Tareas recientes**.
 
 Una sección que el token no puede leer lo dice ("no disponible") en vez de mostrar cero, y el resto se sigue mostrando. El inventario se guarda 30 segundos; **Actualizar** lo vuelve a leer.
+
+## Architecture y KUApps
+
+Con un perfil de Proxmox activo, **Agregar recursos → Proxmox VE** en un proyecto de Architecture muestra una vista previa de los nodos, VMs, contenedores y storage del clúster y agrega los que elijas, cada VM y contenedor corriendo en su nodo. Una sola lectura del inventario en tu red, sin costo cloud; las plantillas quedan fuera.
+
+Los recursos agregados al mapa de una KUA Application, o asociados en KUApps, pertenecen al scope `proxmox:<clúster>` (el nombre del nodo si es uno solo), que KUApps vincula a un perfil de Proxmox y verifica leyendo el nombre del clúster. Forman parte de la topología de la aplicación; KUA todavía no recolecta métricas de ellos, así que se muestran como **Sin métricas de KUA** en lugar de "sin datos".
