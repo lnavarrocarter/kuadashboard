@@ -274,6 +274,7 @@ import { settings } from '../../composables/useSettings'
 import { usePlan } from '../../composables/usePlan'
 import { advisorBrief } from '../../shared/agentBrief.mjs'
 import AgentBriefActions from './AgentBriefActions.vue'
+import { providerIds } from '../../lib/providers'
 // chart.js loads with the history, not with the overview that shows this panel.
 const CloudMetricChart = defineAsyncComponent(() => import('../cloud/CloudMetricChart.vue'))
 
@@ -391,7 +392,7 @@ const scheduleBusy = ref(false)
 const scheduleError = ref('')
 const scopeKind = computed(() => {
   const kind = String(props.report?.posture?.historyScope || '').split(':')[0]
-  return ['aws', 'gcp', 'vercel', 'kubernetes', 'product'].includes(kind) ? kind : ''
+  return [...providerIds('advisor'), 'product'].includes(kind) ? kind : ''
 })
 // What a scheduled run reads, tied to the selected frequency (GCP re-evaluation
 // R06). GCP: ~25 inventory lists plus one call per location for the regional

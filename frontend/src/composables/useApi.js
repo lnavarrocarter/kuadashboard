@@ -1,9 +1,11 @@
 import { noteReadOnlyRefusal } from './useReadOnly'
 import { showBlockedNotice } from './useBlockedNotice'
 import { useI18n } from './useI18n'
+import { PROVIDERS } from '../lib/providers'
 
 const { t } = useI18n()
-const READ_ONLY_AREAS = { aws: 'AWS', gcp: 'GCP', vercel: 'Vercel', helm: 'Helm', kubernetes: 'Kubernetes' }
+// Areas read-only mode guards: every provider of the catalog, plus Helm.
+const READ_ONLY_AREAS = { ...Object.fromEntries(PROVIDERS.map(provider => [provider.id, provider.label])), helm: 'Helm' }
 
 // Error with the server message; `status` and the JSON body (`details`) are
 // kept so callers can react to structured errors (e.g. AWS access requests).
