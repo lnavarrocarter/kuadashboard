@@ -4611,6 +4611,7 @@ export default {
   'agentConnect.install': 'Install in {client}',
   'agentConnect.installing': 'Installing…',
   'agentConnect.installed': 'Added to {client}. Start a new agent session to load it.',
+  'agentConnect.installedPlugin': 'The KUA plugin was added to {client} from this computer: its MCP server and a skill on how to work with KUA. Start a new session to load it; /mcp lists it as plugin:kua:kua.',
   'agentConnect.installMissing': '{client} is not installed or not in PATH here: run the command above in the terminal where you use it.',
   'agentConnect.installFailed': 'Could not add it: {error}',
   'agentConnect.verify': 'Verify connection',

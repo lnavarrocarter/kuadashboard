@@ -114,8 +114,9 @@ async function install() {
   const client = t(`agentConnect.client.${active.value}`)
   busy.value = 'install'
   try {
-    await post('/api/system/mcp/install', { client: active.value })
-    outcome.value = { ok: true, text: t('agentConnect.installed', { client }) }
+    const result = await post('/api/system/mcp/install', { client: active.value })
+    // Claude Code gets the KUA plugin (server and skill) from this computer when its CLI can (#305).
+    outcome.value = { ok: true, text: t(result?.mode === 'plugin' ? 'agentConnect.installedPlugin' : 'agentConnect.installed', { client }) }
   } catch (err) {
     outcome.value = { ok: false, text: err.details?.code === 'CLI_NOT_FOUND' ? t('agentConnect.installMissing', { client }) : t('agentConnect.installFailed', { error: err.message }) }
   } finally { busy.value = '' }

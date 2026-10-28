@@ -3542,6 +3542,9 @@ server.listen(PORT, HOST, () => {
       version: require('./package.json').version,
       packaged: path.basename(__dirname) === 'app.asar',
     });
+    // A Claude Code plugin installed from this computer follows this KUA's version (#305).
+    const { claudePluginDir, pluginSourceDir, syncClaudePlugin } = require('./lib/mcp/claudePlugin');
+    if (fs.existsSync(claudePluginDir())) syncClaudePlugin({ sourceDir: pluginSourceDir(__dirname) });
   } catch (err) { console.warn('[mcp] could not record this instance:', err.message); }
   // Starts after listening: scheduled runs call this KUA on the loopback address.
   advisorScheduler.start({ task: advisorTask });

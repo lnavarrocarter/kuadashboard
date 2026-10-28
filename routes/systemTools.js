@@ -207,7 +207,15 @@ router.post('/mcp/install', async (req, res) => {
   // JSON only: another site cannot send it to this loopback API without a CORS preflight, which KUA never allows.
   if (!req.is('application/json')) return res.status(415).json({ error: 'Send the client as JSON.' });
   try {
-    res.json(await require('../lib/mcp/clientSetup').installMcp({ client: req.body?.client, launch: mcpLaunchHere() }));
+    // Claude Code: the KUA plugin from a local marketplace copied next to KUA's data (#305).
+    let pluginDir = null;
+    if (req.body?.client === 'claude') {
+      try {
+        const { pluginSourceDir, syncClaudePlugin } = require('../lib/mcp/claudePlugin');
+        pluginDir = syncClaudePlugin({ sourceDir: pluginSourceDir(require('path').join(__dirname, '..')) });
+      } catch (err) { console.warn('[mcp] Claude Code plugin unavailable, installing the MCP server only:', err.message); }
+    }
+    res.json(await require('../lib/mcp/clientSetup').installMcp({ client: req.body?.client, launch: mcpLaunchHere(), pluginDir }));
   } catch (err) {
     res.status(err.code === 'UNKNOWN_CLIENT' || err.code === 'UNSAFE_ARGUMENT' ? 400 : err.code === 'CLI_NOT_FOUND' ? 404 : 500).json({ error: err.message, code: err.code });
   }

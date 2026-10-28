@@ -116,7 +116,9 @@ Define `KUA_URL` solo para apuntar el servidor a un KUA concreto (por ejemplo, c
 
 ### Claude Code
 
-La forma más simple es el plugin de KUA. Agrega el servidor MCP de KUA y una skill `kua` que le dice a Claude cómo trabajar con KUA: empezar por el Advisor y la inteligencia de logs, verificar el estado actual antes de cambiar nada, mostrar el costo y preguntar antes de operaciones con cargo o destructivas, y nunca copiar secretos ni logs crudos al repositorio.
+La forma más simple es el plugin de KUA: **Instalar en Claude Code** en **Conectar un agente de IA** lo instala desde este computador, sin descargar nada (KUA mantiene un marketplace local con el plugin de su propia versión en `~/.kuadashboard/claude-plugin`; un Claude Code sin plugins recibe solo el servidor MCP). El plugin agrega el servidor MCP de KUA y una skill `kua` que le dice a Claude cómo trabajar con KUA: empezar por el Advisor y la inteligencia de logs, verificar el estado actual antes de cambiar nada, mostrar el costo y preguntar antes de operaciones con cargo o destructivas, y nunca copiar secretos ni logs crudos al repositorio.
+
+Desde el propio Claude Code, el mismo plugin se instala desde GitHub:
 
 ```text
 /plugin install kua --marketplace lnavarrocarter/kuadashboard

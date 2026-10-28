@@ -89,6 +89,11 @@ describe('AgentConnectModal', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/system/mcp/install', expect.objectContaining({ method: 'POST', body: JSON.stringify({ client: 'claude' }) }))
     expect(outcome()).toBe('Added to Claude Code. Start a new agent session to load it.')
 
+    // With a Claude Code that installs plugins, the KUA plugin was added (#305).
+    apiFetch.mockImplementationOnce(async () => ({ client: 'claude', name: 'kua', mode: 'plugin' }))
+    await click('[data-test="agent-connect-install"]')
+    expect(outcome()).toMatch(/^The KUA plugin was added to Claude Code from this computer/)
+
     await click('[data-test="agent-connect-codex"]')
     expect(outcome()).toBeUndefined()
     await click('[data-test="agent-connect-install"]')

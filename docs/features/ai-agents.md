@@ -116,7 +116,9 @@ Set `KUA_URL` only to point the server at a specific KUA (for example when two a
 
 ### Claude Code
 
-The simplest way is the KUA plugin. It adds KUA's MCP server and a `kua` skill that tells Claude how to work with KUA: start from the Advisor and log intelligence, check the current state before changing anything, show the cost and ask before billed or destructive operations, and never copy secrets or raw logs into the repository.
+The simplest way is the KUA plugin: **Install in Claude Code** in **Connect an AI agent** installs it from this computer, without downloading anything (KUA keeps a local marketplace with the plugin of its own version in `~/.kuadashboard/claude-plugin`; a Claude Code without plugins gets the MCP server alone). The plugin adds KUA's MCP server and a `kua` skill that tells Claude how to work with KUA: start from the Advisor and log intelligence, check the current state before changing anything, show the cost and ask before billed or destructive operations, and never copy secrets or raw logs into the repository.
+
+From Claude Code itself, the same plugin installs from GitHub:
 
 ```text
 /plugin install kua --marketplace lnavarrocarter/kuadashboard
