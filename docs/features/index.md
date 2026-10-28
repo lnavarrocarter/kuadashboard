@@ -1,6 +1,6 @@
 ---
 title: Kubernetes & Multi-Cloud Dashboard Features
-description: Explore KUA features for Kubernetes management, AWS, GCP, Vercel, logs, Helm, port forwarding and encrypted credential profiles.
+description: Explore KUA features for Kubernetes management, AWS, GCP, Vercel, Proxmox VE, logs, Helm, port forwarding, the Advisor, KUA Applications, AI agents (MCP) and encrypted credential profiles.
 ---
 
 # Features Overview
@@ -45,6 +45,13 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - **API Gateway** — REST & HTTP APIs, integrations
 - **EventBridge** — Rules, targets, event buses
 - **Step Functions** — State machines, visual diagram
+- **CloudFormation** — Stacks, resources and events (read-only)
+- **CloudWatch** — Logs with a local cache, Logs Insights queries and dashboards
+- **Networking & storage** — VPC, Load Balancers, CloudFront, Route 53, EBS volumes, DynamoDB, ECR
+- **Messaging & data** — SQS, SNS, SES, Glue, Athena, DocumentDB
+- **Costs** — Cost Explorer per profile, with what each read costs
+
+See [AWS Integration](./aws.md) for every service.
 
 ### GCP
 - **Compute** — Cloud Run (start/stop), Cloud Run Jobs (run + executions), GKE, Compute Engine VMs (start/stop)
@@ -70,9 +77,32 @@ KuaDashboard provides a unified interface for managing Kubernetes clusters and c
 - **Functions** — Inspect serverless and edge functions in any deployment
 - **OAuth** — One-click browser authorization (Electron app only)
 
+See [Vercel Integration](./vercel.md).
+
+### Proxmox VE <Badge type="tip" text="next release" />
+- **Inventory** — Cluster and quorum, nodes, QEMU VMs and LXC containers, storage, backup jobs and recent tasks, read-only with an API token and a pinned TLS certificate
+- **Architecture and KUApps** — Nodes, guests and storage as resources of an application
+
+See [Proxmox VE](./proxmox.md).
+
 ## Observability
 
 - **[Local Application APM](./observability.md)** — Confirmed Lambda and Kubernetes membership, 30-minute UTC aggregates, local thresholds, manual dependencies, and cost guardrails without cloud provisioning.
+- **Log intelligence** — Recurring error signatures across CloudWatch, Kubernetes, GCP and Vercel logs, from the local cache.
+
+## Advisor and KUA Applications
+
+- **[Advisor](./advisor.md)** — Deterministic good-practice checks for Kubernetes, AWS, GCP and Vercel, grouped as security, infrastructure, architecture and development, with the affected resources and the cost of each scan.
+- **KUA Applications (KUApps)** — One workspace per application across clusters and clouds: Overview, Resources with their signal state, Map (Canvas and Routes), Signals, Review and a product Advisor.
+
+## AI agents and editors
+
+- **[AI agents (MCP)](./ai-agents.md)** — A local MCP server for Claude Code, Codex CLI and other agents: profiles, Advisor findings, log intelligence and KUA Applications, with changes to KUApps only after you approve. **Connect an AI agent** installs it.
+- **[VS Code](./vscode.md)** <Badge type="tip" text="next release" /> — KUA's status, MCP tools for the editor's chat and your KUA Applications in the editor.
+
+## Plugins <Badge type="tip" text="next release" />
+
+**Plugins/Connections** lists the first-party plugins (GitHub CI/CD, Vercel, Proxmox VE) with what each one reads and costs, and turns them on or off for this computer.
 
 ## Tools
 

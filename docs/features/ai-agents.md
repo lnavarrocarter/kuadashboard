@@ -96,6 +96,10 @@ Collection costs are estimated at list prices: CloudWatch `GetMetricData` USD 0.
 - **Audited.** Each apply is in the audit log with the client (`mcp`), application, operation, plan and revisions before and after, without resource payloads or profiles.
 - There is no tool to delete applications or infrastructure.
 
+::: info Next release
+In KUA 2.0.0, **Connect an AI agent** installs the MCP server in Claude Code (`claude mcp add`) and Codex CLI, and shows the JSON and TOML for other clients. The Claude Code plugin, the Claude Desktop extension (`kua.mcpb`) and the Cursor, Windsurf, Gemini CLI and Kiro tabs described below come with the next release.
+:::
+
 ### Setup from the app
 
 Click the **plug** icon next to "Copy for AI agent" (in any Advisor or in the log recommendations) to open **Connect AI agents**:

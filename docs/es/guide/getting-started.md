@@ -11,7 +11,7 @@ description: Instala y configura KUA, el dashboard open source para operar Kuber
 
 ## Requisitos Previos
 
-- **Node.js** >= 16 (recomendado: 20+)
+- **Node.js** 20 o superior
 - **kubectl** configurado con un kubeconfig válido (`~/.kube/config`)
 - Para funciones cloud: AWS CLI o GCP `gcloud` CLI configurados
 

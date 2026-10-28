@@ -5,6 +5,11 @@ description: Read-only inventory of Proxmox VE clusters and single nodes in KUA,
 
 # Proxmox VE
 
+::: info Next release
+Proxmox VE comes with the next KUA release after 2.0.0. Until then, run KUA from the repository (`main`) to try it.
+:::
+
+
 KUA reads a Proxmox VE cluster or a single node and shows it in the **Proxmox** tab: quorum, nodes, QEMU VMs and LXC containers, storage, backup jobs and recent tasks. It only reads: nothing changes in Proxmox, and the reads go to the Proxmox API on your network, with no cloud cost.
 
 ## Turn on the plugin
