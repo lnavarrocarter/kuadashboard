@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useApi } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
 import { taskRun } from '../lib/taskTrace'
+import { isAborted, taskCoordinatorFor } from '../lib/taskCoordinator'
 
 const { t } = useI18n()
 
@@ -13,6 +14,9 @@ const RANGE_MS = {
   '30d': 30 * 24 * 60 * 60 * 1000,
   '90d': 90 * 24 * 60 * 60 * 1000,
 }
+
+// What an application load is made of; writes invalidate only the parts they change (#326).
+const APPLICATION_PARTS = ['overview', 'topology', 'forecast', 'registry']
 
 export const useApmStore = defineStore('apm', () => {
   const { apiFetch } = useApi()
@@ -76,6 +80,33 @@ export const useApmStore = defineStore('apm', () => {
     return apiFetch(`/api/observability/${activeProvider.value}${path}`, options)
   }
 
+  // Reads and writes of an application go through its shared task coordinator (#326): one
+  // request per key at a time, writes in order, one reload per burst of writes, and reads
+  // aborted when the application or profile changes. The store reloads the parts it owns
+  // for the selected application only.
+  let subscription = { applicationId: null, unsubscribe: () => {} }
+  function tasksFor(applicationId) {
+    const tasks = taskCoordinatorFor(applicationId)
+    if (applicationId === selectedApplicationId.value && subscription.applicationId !== applicationId) {
+      subscription.unsubscribe()
+      subscription = { applicationId, unsubscribe: tasks.subscribe(parts => reloadParts(applicationId, parts)) }
+    }
+    return tasks
+  }
+
+  async function reloadParts(applicationId, parts) {
+    if (applicationId !== selectedApplicationId.value) return
+    const own = APPLICATION_PARTS.filter(part => parts.has(part) && part !== 'registry')
+    await Promise.all([
+      own.length ? loadSelectedApplication(own) : null,
+      parts.has('registry') ? loadRegistrySyncStatus(applicationId) : null,
+    ])
+  }
+
+  function cancelApplicationTasks(applicationId = selectedApplicationId.value) {
+    if (applicationId) taskCoordinatorFor(applicationId).cancel()
+  }
+
   function resetApplicationData() {
     overview.value = null
     topology.value = { application: null, resources: [], edges: [] }
@@ -96,6 +127,7 @@ export const useApmStore = defineStore('apm', () => {
 
   function setActiveProfile(profileId, provider = 'aws') {
     if (activeProfileId.value === (profileId || null) && activeProvider.value === provider) return
+    cancelApplicationTasks()
     activeProvider.value = provider
     activeProfileId.value = profileId || null
     applications.value = []
@@ -135,43 +167,60 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function loadSelectedApplication() {
+  /**
+   * Loads the selected application, or only the given parts of it. The registry diagnostics are
+   * started without waiting: they never delay the overview.
+   */
+  async function loadSelectedApplication(parts = APPLICATION_PARTS) {
     const applicationId = selectedApplicationId.value
     if (!applicationId) {
       resetApplicationData()
       return null
     }
+    const tasks = tasksFor(applicationId)
+    const current = () => selectedApplicationId.value === applicationId
     loading.value = true
     error.value = null
     const { from, to } = rangeBounds.value
-    const task = taskRun('app.load')
+    const get = (key, path, apply) => tasks.read(key, ({ signal, task }) => request(path, { headers: headers(false, task), signal }))
+      .then(value => { if (current()) apply(value); return value })
+    const loaders = {
+      // The range is part of the key: a read for another range is not shared.
+      overview: () => get(`app.overview:${range.value}`, `/applications/${applicationId}/overview?from=${from}&to=${to}`, value => { overview.value = value }),
+      topology: () => get('app.topology', `/applications/${applicationId}/topology`, value => {
+        topology.value = mergeCloudSuggestions(value, cloudSuggestionsByApplication.value[applicationId])
+      }),
+      forecast: () => get('app.forecast', `/applications/${applicationId}/forecast`, value => { forecast.value = value }),
+    }
+    if (parts.includes('registry')) loadRegistrySyncStatus(applicationId)
+    const loaded = parts.filter(part => loaders[part])
     try {
-      const [nextOverview, nextTopology, nextForecast] = await Promise.all([
-        request(`/applications/${applicationId}/overview?from=${from}&to=${to}`, { headers: headers(false, task) }),
-        request(`/applications/${applicationId}/topology`, { headers: headers(false, task) }),
-        request(`/applications/${applicationId}/forecast`, { headers: headers(false, task) }),
-      ])
-      overview.value = nextOverview
-      topology.value = mergeCloudSuggestions(nextTopology, cloudSuggestionsByApplication.value[applicationId])
-      forecast.value = nextForecast
-      loadRegistrySyncStatus(applicationId)
-      const contexts = [...new Set((nextTopology.resources || [])
-        .filter(resource => resource.type === 'kubernetes' && resource.kubeContext)
-        .map(resource => resource.kubeContext))].sort()
-      const previewScopeKey = `${applicationId}:${contexts.join('|')}`
-      if (contexts.length && kubernetesPreviewScopeKey.value !== previewScopeKey) {
-        await previewKubernetesDiscovery({ contexts })
+      const results = await Promise.allSettled(loaded.map(part => loaders[part]()))
+      if (!current()) return null
+      const failure = results.find(result => result.status === 'rejected' && !isAborted(result.reason))
+      if (failure) {
+        error.value = failure.reason?.message || String(failure.reason)
+        return null
       }
-      return nextOverview
-    } catch (requestError) {
-      error.value = requestError.message
-      return null
+      const nextTopology = results[loaded.indexOf('topology')]?.value
+      if (nextTopology) {
+        const contexts = [...new Set((nextTopology.resources || [])
+          .filter(resource => resource.type === 'kubernetes' && resource.kubeContext)
+          .map(resource => resource.kubeContext))].sort()
+        const previewScopeKey = `${applicationId}:${contexts.join('|')}`
+        if (contexts.length && kubernetesPreviewScopeKey.value !== previewScopeKey) {
+          await previewKubernetesDiscovery({ contexts })
+        }
+      }
+      return overview.value
     } finally {
-      loading.value = false
+      if (current()) loading.value = false
     }
   }
 
   async function selectApplication(applicationId) {
+    // Whatever the previous application was still loading is no longer wanted.
+    if (selectedApplicationId.value && selectedApplicationId.value !== applicationId) cancelApplicationTasks()
     selectedApplicationId.value = applicationId || null
     series.value = {}
     logHistory.value = null
@@ -335,12 +384,14 @@ export const useApmStore = defineStore('apm', () => {
   }
 
   async function reconcileSharedRegistry() {
-    if (!selectedApplicationId.value) return null
+    const applicationId = selectedApplicationId.value
+    if (!applicationId) return null
     reconcilingRegistry.value = true
     try {
-      registry.value = await request(`/applications/${selectedApplicationId.value}/registry/reconcile`, {
-        method: 'POST', headers: headers(false, taskRun('registry.reconcile')),
-      })
+      // The response is the registry itself; KUApps views reload theirs.
+      registry.value = await tasksFor(applicationId).write('registry.reconcile', ({ task }) => request(`/applications/${applicationId}/registry/reconcile`, {
+        method: 'POST', headers: headers(false, task),
+      }), { invalidates: ['kuapps.registry'] })
       syncStatus.value = registry.value?.syncStatus || syncStatus.value
       return registry.value
     } catch (requestError) {
@@ -355,15 +406,19 @@ export const useApmStore = defineStore('apm', () => {
   // Non-blocking: diagnostics should never delay the main application overview.
   async function loadRegistrySyncStatus(applicationId = selectedApplicationId.value) {
     if (!applicationId) return null
+    const current = () => selectedApplicationId.value === applicationId
     registryLoading.value = true
     try {
-      registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers(false, taskRun('app.registry')) })
+      const next = await tasksFor(applicationId).read('app.registry', ({ signal, task }) =>
+        request(`/applications/${applicationId}/registry`, { headers: headers(false, task), signal }))
+      if (!current()) return null
+      registry.value = next
       syncStatus.value = registry.value?.syncStatus || null
       return syncStatus.value
     } catch (_) {
       return null
     } finally {
-      registryLoading.value = false
+      if (current()) registryLoading.value = false
     }
   }
 
@@ -371,14 +426,13 @@ export const useApmStore = defineStore('apm', () => {
     if (!selectedApplicationId.value || !relationshipId) return null
     reviewingRelationshipId.value = relationshipId
     error.value = null
+    const applicationId = selectedApplicationId.value
     try {
-      const result = await request(`/applications/${selectedApplicationId.value}/registry/relationships/${relationshipId}/review`, {
+      return await tasksFor(applicationId).write('relationship.review', ({ task }) => request(`/applications/${applicationId}/registry/relationships/${relationshipId}/review`, {
         method: 'POST',
-        headers: headers(true, taskRun('review.relationship')),
+        headers: headers(true, task),
         body: JSON.stringify({ decision }),
-      })
-      await loadRegistrySyncStatus(selectedApplicationId.value)
-      return result
+      }), { invalidates: ['registry', 'kuapps.registry'] })
     } catch (requestError) {
       error.value = requestError.message
       return null
@@ -391,13 +445,18 @@ export const useApmStore = defineStore('apm', () => {
     if (!selectedApplicationId.value) return null
     previewingKubernetes.value = true
     try {
-      kubernetesPreview.value = await request(`/applications/${selectedApplicationId.value}/discovery/kubernetes/preview`, {
-        method: 'POST', headers: headers(true, taskRun('k8s.preview')), body: JSON.stringify({ contexts, namespaces }),
-      })
+      const applicationId = selectedApplicationId.value
+      const scope = [...contexts].sort().join(',')
+      const next = await tasksFor(applicationId).read(`k8s.preview:${scope}`.slice(0, 80), ({ signal, task }) =>
+        request(`/applications/${applicationId}/discovery/kubernetes/preview`, {
+          method: 'POST', headers: headers(true, task), body: JSON.stringify({ contexts, namespaces }), signal,
+        }))
+      if (applicationId !== selectedApplicationId.value) return null
+      kubernetesPreview.value = next
       kubernetesPreviewScopeKey.value = `${selectedApplicationId.value}:${[...contexts].sort().join('|')}`
       return kubernetesPreview.value
     } catch (requestError) {
-      error.value = requestError.message
+      if (!isAborted(requestError)) error.value = requestError.message
       return null
     } finally {
       previewingKubernetes.value = false
@@ -428,12 +487,14 @@ export const useApmStore = defineStore('apm', () => {
     }
   }
 
-  async function addResource(applicationId, resource) {
-    return request(`/applications/${applicationId}/resources`, {
+  // reload: the application view shows the new resource. Setup flows that add many resources
+  // and then select the application leave it off, so they do not reload once per resource.
+  async function addResource(applicationId, resource, { reload = false } = {}) {
+    return tasksFor(applicationId).write('resource.add', ({ task }) => request(`/applications/${applicationId}/resources`, {
       method: 'POST',
-      headers: headers(true, taskRun('resource.add')),
+      headers: headers(true, task),
       body: JSON.stringify(resource),
-    })
+    }), { invalidates: reload ? [...APPLICATION_PARTS, 'kuapps.registry'] : [] })
   }
 
   async function confirmDependency(applicationId, dependency) {
@@ -446,10 +507,11 @@ export const useApmStore = defineStore('apm', () => {
       dependency,
     ])).values()]
     if (!uniqueDependencies.length) return
-    // One request and one registry reconciliation for the whole set (#327).
-    const result = await request(`/applications/${applicationId}/edges/batch`, {
+    // One request and one registry reconciliation for the whole set (#327); the write settles
+    // after the topology and registry reload it causes (#326).
+    const result = await tasksFor(applicationId).write('review.confirm-dependencies', ({ task }) => request(`/applications/${applicationId}/edges/batch`, {
       method: 'POST',
-      headers: headers(true, taskRun('review.confirm-dependencies')),
+      headers: headers(true, task),
       body: JSON.stringify({
         edges: uniqueDependencies.map(dependency => ({
           sourceResourceId: dependency.sourceResourceId,
@@ -457,8 +519,7 @@ export const useApmStore = defineStore('apm', () => {
           relationType: dependency.relationType,
         })),
       }),
-    })
-    await loadSelectedApplication()
+    }), { invalidates: ['topology', 'registry', 'kuapps.registry'] })
     // After the reload, which clears the previous error.
     if (result?.invalid) error.value = t('apm.dependenciesNotConfirmed', { n: result.invalid })
   }
@@ -468,11 +529,15 @@ export const useApmStore = defineStore('apm', () => {
     analyzingTopology.value = true
     error.value = null
     try {
-      topology.value = await request(`/applications/${applicationId}/topology/analyze-cloud`, {
-        method: 'POST',
-        headers: headers(true, taskRun('topology.analyze-cloud')),
-        body: JSON.stringify({ refresh }),
-      })
+      const next = await tasksFor(applicationId).read(`topology.analyze-cloud${refresh ? ':refresh' : ''}`, ({ signal, task }) =>
+        request(`/applications/${applicationId}/topology/analyze-cloud`, {
+          method: 'POST',
+          headers: headers(true, task),
+          body: JSON.stringify({ refresh }),
+          signal,
+        }), { kind: 'cloud-read' })
+      if (applicationId !== selectedApplicationId.value) return null
+      topology.value = next
       cloudSuggestionsByApplication.value = {
         ...cloudSuggestionsByApplication.value,
         [applicationId]: topology.value.analysis?.cloudScan?.suggestions || [],

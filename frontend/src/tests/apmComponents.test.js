@@ -184,7 +184,9 @@ describe('APM collection controls', () => {
         resources: [{ id: 'deployment-a', type: 'kubernetes', kind: 'Deployment', name: 'api', namespace: 'orders', kubeContext: 'orders-eks', enabled: true, associationSource: 'manual' }], edges: [],
       })
       if (url.endsWith('/forecast')) return response({ lambdaCount: 0, monthlyRequestsMaximum: 0 })
+      if (url.includes('/log-series?')) return response({ points: [], coverage: { lastSyncAt: null, limitedToDays: 7, uncachedResources: [], unavailableScopeResources: [] } })
       if (url.includes('/series?')) return response([])
+      if (url.endsWith('/discovery/kubernetes/preview')) return response({ nodes: [], relationships: [], health: [], failures: [], capabilities: [] })
       throw new Error(`Unexpected URL: ${url}`)
     })
     const wrapper = mount(ApmObservabilityView, {
@@ -197,6 +199,7 @@ describe('APM collection controls', () => {
     expect(wrapper.get('.kpi-grid').text()).not.toContain('Observed invocations')
 
     await wrapper.findAll('.apm-view-tabs button').find(button => button.text().includes('Resources')).trigger('click')
+    await flushPromises()
     await wrapper.get('.architecture-resources tbody button').trigger('click')
     expect(wrapper.emitted('open-kubernetes-logs')[0][0]).toMatchObject({ name: 'api', kubeContext: 'orders-eks', kind: 'Deployment' })
     wrapper.unmount()
@@ -933,6 +936,16 @@ describe('explicit cloud topology analysis (#328)', () => {
     const urls = global.fetch.mock.calls.map(([url]) => url)
     expect(urls.some(url => url.endsWith('/edges/batch'))).toBe(true)
     expect(urls.some(url => url.endsWith('/analyze-cloud'))).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('the Review section loads the application once and no chart series (#326)', async () => {
+    global.fetch = reviewFetch()
+    const wrapper = await mountReview()
+    const urls = global.fetch.mock.calls.map(([url]) => url.split('?')[0])
+    expect(urls.filter(url => url.endsWith('/app-a/topology'))).toHaveLength(1)
+    expect(urls.filter(url => url.endsWith('/app-a/overview'))).toHaveLength(1)
+    expect(urls.some(url => url.endsWith('/series') || url.endsWith('/log-series'))).toBe(false)
     wrapper.unmount()
   })
 

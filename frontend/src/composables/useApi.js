@@ -22,9 +22,11 @@ export async function responseError(res, ct) {
   return Object.assign(new Error(message || `HTTP ${res.status}`), { status: res.status, details: body })
 }
 
-// Thin wrapper around fetch — throws Error with server message on failure
-export async function api(method, path, body) {
-  const opts = { method, headers: {} }
+// Thin wrapper around fetch — throws Error with server message on failure.
+// options.headers and options.signal (abortable reads of the task coordinator, #326) are optional.
+export async function api(method, path, body, { headers, signal } = {}) {
+  const opts = { method, headers: { ...headers } }
+  if (signal) opts.signal = signal
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json'
     opts.body = JSON.stringify(body)
@@ -48,10 +50,10 @@ export function useApi() {
   const stableResponses = new Map()
 
   async function apiFetch(path, options = {}) {
-    const { method = 'GET', headers = {}, body, background = false, stabilize = false } = options
+    const { method = 'GET', headers = {}, body, background = false, stabilize = false, signal } = options
     const requestHeaders = { ...headers }
     if (background) requestHeaders['X-KUA-Background'] = '1'
-    const res = await fetch(path, { method, headers: requestHeaders, body })
+    const res = await fetch(path, { method, headers: requestHeaders, body, ...(signal ? { signal } : {}) })
     const ct  = res.headers.get('content-type') || ''
     if (!res.ok) throw await responseError(res, ct)
     const result = ct.includes('json') ? await res.json() : await res.text()

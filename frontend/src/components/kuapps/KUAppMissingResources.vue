@@ -47,9 +47,10 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../../composables/useApi'
+import { isAborted, taskCoordinatorFor } from '../../lib/taskCoordinator'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import { settings } from '../../composables/useSettings'
@@ -80,25 +81,29 @@ const causeDetail = event => t('kuapps.missing.causeDetail', {
 })
 
 async function load() {
+  const applicationId = props.applicationId
   loading.value = true
   error.value = ''
   try {
-    items.value = (await api('GET', `${base()}/observer`)).resources || []
+    const result = await taskCoordinatorFor(applicationId).read('kuapps.missing', ({ signal, task }) =>
+      api('GET', `${base()}/observer`, undefined, { signal, headers: { 'X-KUA-Task': task } }))
+    if (applicationId === props.applicationId) items.value = result.resources || []
   } catch (err) {
-    error.value = err.message
+    if (!isAborted(err)) error.value = err.message
   } finally {
     loading.value = false
     nextTick(() => createIcons({ icons }))
   }
 }
 
-async function run(action, message) {
+// Writes go through the application's task coordinator (#326): replacing or detaching changes the
+// application's resources, so every view of them reloads once; ignoring only changes this list.
+async function run(key, action, message, invalidates) {
   busy.value = true
   try {
-    await action()
+    await taskCoordinatorFor(props.applicationId).write(key, ({ task }) => action({ 'X-KUA-Task': task }), { invalidates })
     toast(message, 'success')
     emit('changed')
-    await load()
   } catch (err) {
     toast(err.message, 'error')
   } finally {
@@ -106,15 +111,24 @@ async function run(action, message) {
   }
 }
 
+const RESOURCES_CHANGED = ['kuapps.missing', 'kuapps.registry', 'overview', 'topology', 'forecast', 'registry']
 const replace = (item, successor) => run(
-  () => api('POST', `${base()}/observer/replace`, { resourceId: item.resourceId, successor: successor.name, ...(props.revision != null ? { expectedRevision: props.revision } : {}) }),
+  'resource.replace',
+  headers => api('POST', `${base()}/observer/replace`, { resourceId: item.resourceId, successor: successor.name, ...(props.revision != null ? { expectedRevision: props.revision } : {}) }, { headers }),
   t('kuapps.missing.replaced', { from: item.name, to: successor.name }),
+  RESOURCES_CHANGED,
 )
-const ignore = item => run(() => api('POST', `${base()}/observer/ignore`, { resourceId: item.resourceId }), t('kuapps.missing.ignored', { name: item.name }))
+const ignore = item => run('resource.ignore-missing', headers => api('POST', `${base()}/observer/ignore`, { resourceId: item.resourceId }, { headers }), t('kuapps.missing.ignored', { name: item.name }), ['kuapps.missing'])
 // Detaching uses the same route as Resources: the resource leaves the application, nothing is deleted.
-const detach = item => run(() => api('DELETE', `${base()}/registry/resources/${encodeURIComponent(item.registryId)}`), t('kuapps.missing.detached', { name: item.name }))
+const detach = item => run('resource.detach', headers => api('DELETE', `${base()}/registry/resources/${encodeURIComponent(item.registryId)}`, undefined, { headers }), t('kuapps.missing.detached', { name: item.name }), RESOURCES_CHANGED)
 
-watch(() => props.applicationId, load, { immediate: true })
+let subscription = () => {}
+watch(() => props.applicationId, applicationId => {
+  subscription()
+  subscription = taskCoordinatorFor(applicationId).subscribe(parts => (parts.has('kuapps.missing') ? load() : null))
+  load()
+}, { immediate: true })
+onBeforeUnmount(() => subscription())
 defineExpose({ reload: load })
 </script>
 

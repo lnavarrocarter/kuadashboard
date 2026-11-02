@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useApmStore } from '../stores/useApmStore'
+import { taskCoordinatorFor } from '../lib/taskCoordinator'
 
 function response(body, status = 200) {
   return Promise.resolve({
@@ -367,7 +368,7 @@ describe('task journal header (#325)', () => {
     return typeof headers?.get === 'function' ? headers.get('X-KUA-Task') : headers?.['X-KUA-Task']
   }
 
-  it('confirming several dependencies is one batch request, then one application load', async () => {
+  it('confirming several dependencies is one batch request, then reloads only the topology and registry (#326)', async () => {
     global.fetch = vi.fn(url => response(url.includes('/edges/batch') ? { results: [], created: 2, exists: 0, invalid: 0 } : url.includes('/topology') ? { resources: [], edges: [] } : {}))
     store.setActiveProfile('local:dev')
     store.selectedApplicationId = 'app-a'
@@ -382,10 +383,9 @@ describe('task journal header (#325)', () => {
     expect(JSON.parse(edgeCalls[0][1].body).edges).toHaveLength(2)
     expect(taskOf(edgeCalls[0])).toMatch(/^review\.confirm-dependencies;[a-z0-9-]+$/)
 
-    const loadTasks = global.fetch.mock.calls.filter(call => /\/(overview|topology|forecast)/.test(call[0])).map(taskOf)
-    expect(loadTasks).toHaveLength(3)
-    expect(new Set(loadTasks).size).toBe(1)
-    expect(loadTasks[0]).toMatch(/^app\.load;/)
+    const reloads = global.fetch.mock.calls.filter(call => /\/(overview|topology|forecast|registry)/.test(call[0]))
+    expect(reloads.map(call => call[0].split('/app-a/')[1]).sort()).toEqual(['registry', 'topology'])
+    expect(reloads.map(taskOf).map(task => task.split(';')[0]).sort()).toEqual(['app.registry', 'app.topology'])
     expect(store.error).toBeNull()
   })
 
@@ -409,5 +409,44 @@ describe('task journal header (#325)', () => {
     expect(first).toMatch(/^app\.registry;/)
     expect(second).toMatch(/^app\.registry;/)
     expect(second).not.toBe(first)
+  })
+})
+
+describe('task coordinator in the Observability store (#326)', () => {
+  it('choosing another application aborts the previous load and ignores its late answer', async () => {
+    const pending = []
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/app-a/')) {
+        return new Promise((resolve, reject) => {
+          pending.push(() => resolve({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ resources: [{ id: 'from-a' }], edges: [] }) }))
+          options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+        })
+      }
+      return response(url.endsWith('/topology') ? { resources: [{ id: 'from-b' }], edges: [] } : {})
+    })
+    store.setActiveProfile('local:dev')
+    const first = store.selectApplication('app-a')
+    await Promise.resolve()
+    await store.selectApplication('app-b')
+    pending.forEach(resolve => resolve())
+    await first
+    expect(store.topology.resources.map(resource => resource.id)).toEqual(['from-b'])
+    expect(store.error).toBeNull()
+    const aborted = global.fetch.mock.calls.filter(([url, options]) => url.includes('/app-a/') && options.signal?.aborted)
+    expect(aborted.length).toBeGreaterThan(0)
+  })
+
+  it('a dependency confirmation tells KUApps views to reload their registry, once', async () => {
+    global.fetch = vi.fn(url => response(url.includes('/edges/batch') ? { results: [], created: 2, exists: 0, invalid: 0 } : url.endsWith('/topology') ? { resources: [], edges: [] } : {}))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+    const kuappsReloads = []
+    taskCoordinatorFor('app-a').subscribe(parts => { if (parts.has('kuapps.registry')) kuappsReloads.push([...parts]) })
+    await Promise.all([
+      store.confirmDependencies('app-a', [{ sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' }]),
+      store.confirmDependencies('app-a', [{ sourceResourceId: 'r2', targetResourceId: 'r3', relationType: 'invokes' }]),
+    ])
+    expect(kuappsReloads).toHaveLength(1)
+    expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/topology'))).toHaveLength(1)
   })
 })
