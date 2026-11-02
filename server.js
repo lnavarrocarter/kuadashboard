@@ -256,11 +256,15 @@ app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard({ agentAcce
 // attributed to the profile and feature of the request that triggered them.
 const { installAwsMeter, usageContextMiddleware } = require('./lib/usage/awsMeter');
 const { getUsageLedger } = require('./lib/usage/ledger');
-installAwsMeter({ ledger: getUsageLedger() });
+// What each KUApps request costs (#325): AWS calls, reconciliations and timings per UI task.
+const { createTaskJournal, countTaskWork } = require('./lib/kua/taskJournal');
+const kuappsTaskJournal = createTaskJournal();
+installAwsMeter({ ledger: getUsageLedger(), onCall: () => countTaskWork('awsCalls') });
 try { getUsageLedger().prune(); } catch (err) { console.warn('[usage] prune:', err.message); }
 app.use('/api', usageContextMiddleware);
 // Log text leaves the server sanitized, with the count of hidden secrets (#239).
 app.use('/api', require('./lib/logRedaction').logRedactionMiddleware);
+app.use(['/api/observability', '/api/kua-apps'], kuappsTaskJournal.middleware);
 mountConsoleRoutes(app, consoleSessions);
 
 for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssGcpSsh, wssVercelLogs]) {
@@ -454,6 +458,7 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 }));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
+app.use('/api/system/tasks/kuapps/journal', require('./routes/kuappsTaskJournal').createKuappsTaskJournalRouter({ journal: kuappsTaskJournal }));
 app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry }));
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
