@@ -571,3 +571,26 @@ test('the UI attaches several catalog resources at once, with their scopes and t
     assert.equal((await subject.request('/applications/missing/resources/attach', { method: 'POST', body: { resources: [table] } })).status, 404);
   } finally { await subject.close(); }
 });
+
+test('syncing now and refreshing the team space are audited (#329)', async () => {
+  const database = new ArchitectureDatabase({ filePath: ':memory:' });
+  const apmDatabase = new ApmDatabase({ filePath: ':memory:' });
+  const audited = [];
+  const app = express();
+  app.use(express.json());
+  app.use('/api/kua-apps', createKuaAppsRouter({
+    database, apmDatabase,
+    auditLog: { log: entry => audited.push(entry) },
+    syncEngine: { syncNow: async () => ({ pushed: 1 }) },
+    teamEngine: { pass: async () => ({ imported: 0 }) },
+  }));
+  const server = app.listen(0);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}/api/kua-apps`;
+    assert.equal((await fetch(`${base}/sync/now`, { method: 'POST' })).status, 200);
+    assert.equal((await fetch(`${base}/team/refresh`, { method: 'POST' })).status, 200);
+    assert.deepEqual(audited.map(entry => entry.action), ['KUA Applications synced now', 'Team space refreshed']);
+  } finally {
+    server.close();
+  }
+});

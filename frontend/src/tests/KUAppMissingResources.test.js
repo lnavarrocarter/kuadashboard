@@ -84,7 +84,7 @@ describe('KUApp missing resources', () => {
     await flushPromises()
     expect(invalidations).toEqual([['forecast', 'kuapps.missing', 'kuapps.registry', 'overview', 'registry', 'topology']])
     const replace = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/observer/replace'))
-    expect(replace[1].headers['X-KUA-Task']).toMatch(/^resource\.replace;/)
+    expect(replace[1].headers['X-KUA-Task']).toMatch(/^resource\.replace-with-successor;/)
 
     const ignore = wrapper.findAll('button').find(button => button.text().includes('Ignore'))
     await ignore.trigger('click')

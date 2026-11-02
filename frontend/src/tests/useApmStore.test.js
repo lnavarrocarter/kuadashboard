@@ -381,7 +381,7 @@ describe('task journal header (#325)', () => {
     expect(edgeCalls).toHaveLength(1)
     expect(edgeCalls[0][0]).toContain('/applications/app-a/edges/batch')
     expect(JSON.parse(edgeCalls[0][1].body).edges).toHaveLength(2)
-    expect(taskOf(edgeCalls[0])).toMatch(/^review\.confirm-dependencies;[a-z0-9-]+$/)
+    expect(taskOf(edgeCalls[0])).toMatch(/^edge\.confirm-batch;[a-z0-9-]+$/)
 
     const reloads = global.fetch.mock.calls.filter(call => /\/(overview|topology|forecast|registry)/.test(call[0]))
     expect(reloads.map(call => call[0].split('/app-a/')[1]).sort()).toEqual(['registry', 'topology'])
@@ -448,5 +448,28 @@ describe('task coordinator in the Observability store (#326)', () => {
     ])
     expect(kuappsReloads).toHaveLength(1)
     expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/topology'))).toHaveLength(1)
+  })
+})
+
+describe('revision of the dependencies on screen (#329)', () => {
+  it('sends the revision it shows, and a conflict writes nothing, reloads and says why', async () => {
+    let batchBody
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.endsWith('/edges/batch')) {
+        batchBody = JSON.parse(options.body)
+        return response({ error: 'The application changed since it was read', code: 'REVISION_CONFLICT', revision: 8 }, 409)
+      }
+      if (url.endsWith('/topology')) return response({ application: { id: 'app-a', revision: 8 }, resources: [], edges: [] })
+      return response({})
+    })
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+    store.topology = { application: { id: 'app-a', revision: 7 }, resources: [], edges: [] }
+
+    await store.confirmDependencies('app-a', [{ sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' }])
+
+    expect(batchBody.expectedRevision).toBe(7)
+    expect(store.topology.application.revision).toBe(8)
+    expect(store.error).toContain('changed in the meantime')
   })
 })

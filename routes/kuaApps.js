@@ -550,8 +550,15 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     try { res.json(await engine().status(profile)); } catch (error) { handleError(res, error); }
   });
 
+  // Sync can overwrite local or account copies: these routes are always audited (#329).
+  const auditSync = (action, resource, details) => auditLog?.log({ category: 'kua', action, resource, context: 'kuapps', details });
+
   router.post('/sync/now', async (_req, res) => {
-    try { res.json(await engine().syncNow()); } catch (error) { handleError(res, error); }
+    try {
+      const result = await engine().syncNow();
+      auditSync('KUA Applications synced now', 'sync');
+      res.json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   router.post('/:applicationId/sync', async (req, res) => {
@@ -564,7 +571,12 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   router.delete('/:applicationId/sync', async (req, res) => {
     const application = exportableApplication(req, res);
     if (!application) return;
-    try { res.json(await engine().disable(application, { everywhere: req.query.everywhere === '1', profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
+    try {
+      const everywhere = req.query.everywhere === '1';
+      const result = await engine().disable(application, { everywhere, profileId: req.get('X-Profile-Id') });
+      auditSync('KUA Application sync stopped', application.name, { applicationId: application.id, everywhere });
+      res.json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   // { choice: "mine" | "theirs" }: the version not chosen is kept as a snapshot.
@@ -573,7 +585,11 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
     if (!application) return;
     const choice = String(req.body?.choice || '');
     if (!['mine', 'theirs'].includes(choice)) return res.status(400).json({ error: 'choice must be mine or theirs' });
-    try { res.json(await engine().resolve(application, choice, { profileId: req.get('X-Profile-Id') })); } catch (error) { handleError(res, error); }
+    try {
+      const result = await engine().resolve(application, choice, { profileId: req.get('X-Profile-Id') });
+      auditSync('KUA Application sync conflict resolved', application.name, { applicationId: application.id, choice });
+      res.json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   // An application synced from another computer, added to this profile.
@@ -598,7 +614,11 @@ function createKuaAppsRouter({ database, apmDatabase, auditLog, account = getAcc
   });
 
   router.post('/team/refresh', async (_req, res) => {
-    try { res.json(await teamWork().pass({ force: true })); } catch (error) { handleError(res, error); }
+    try {
+      const result = await teamWork().pass({ force: true });
+      auditSync('Team space refreshed', 'team');
+      res.json(result);
+    } catch (error) { handleError(res, error); }
   });
 
   router.post('/team/items/:itemId/import', async (req, res) => {
