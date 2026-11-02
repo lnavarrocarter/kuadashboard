@@ -827,7 +827,8 @@ function kpiDetail(item) {
 }
 
 async function loadCharts() {
-  if (!store.selectedApplicationId) return
+  // The KUApps Review section shows no charts: loading their series there is wasted work (#326).
+  if (!store.selectedApplicationId || props.section === 'review') return
   const resourceId = focusedResource.value?.id || ''
   await Promise.all([...chartDefinitions.value.map(chart => store.loadSeries(chart.metric, {
     resourceId,
@@ -1072,9 +1073,9 @@ async function analyzeCloudTopology() {
 
 async function addCloudResource(reference) {
   if (!store.selectedApplicationId || !reference?.candidate) return
-  const resource = await store.addResource(store.selectedApplicationId, { provider: 'aws', ...reference.candidate })
-  // The topology shows the cloud analysis as out of date; it runs again only on request (#328).
-  if (resource) await store.loadSelectedApplication()
+  // The write reloads the application; the topology then shows the cloud analysis as out of
+  // date, and it runs again only on request (#328).
+  await store.addResource(store.selectedApplicationId, { provider: 'aws', ...reference.candidate }, { reload: true })
   renderIcons()
 }
 
@@ -1113,8 +1114,12 @@ async function applyResourceFocus() {
 watch(() => props.profileId, async profileId => {
   store.setActiveProfile(profileId, props.provider)
   if (profileId) {
+    // Selected before the first load, which keeps it when it exists: the application loads once,
+    // not once for the list and again when it is chosen (#326).
+    if (props.applicationId) store.selectedApplicationId = props.applicationId
     await refreshLocal()
-    if (props.applicationId && store.applications.some(application => application.id === props.applicationId)) {
+    if (props.applicationId && store.selectedApplicationId !== props.applicationId
+      && store.applications.some(application => application.id === props.applicationId)) {
       await chooseApplication(props.applicationId)
     }
   }

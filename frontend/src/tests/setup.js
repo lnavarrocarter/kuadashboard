@@ -1,5 +1,10 @@
 // Global test setup for jsdom environment
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
+import { resetTaskCoordinators } from '../lib/taskCoordinator'
+
+// Task coordinators are shared per application id (#326): each test starts without the
+// subscriptions and in-flight reads of the previous one.
+beforeEach(() => resetTaskCoordinators())
 
 // jsdom does not implement element scrolling.
 HTMLElement.prototype.scrollTo = vi.fn()

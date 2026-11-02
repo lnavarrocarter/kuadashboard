@@ -338,7 +338,7 @@
                 <button class="btn sm" @click="selectWorkspaceTab('settings')">{{ t('kuapps.review.bindProfile') }}</button>
               </div>
             </div>
-            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" @changed="loadApplicationRegistry()" />
+            <KUAppMissingResources :application-id="selectedApplicationId" :revision="selectedApplicationDetail?.revision ?? null" />
             <ApmObservabilityView
               v-if="canOpenApplicationObservability"
               :key="`review:${selectedApplicationId}:${apmProvider}:${apmProfileId}`"
@@ -549,6 +549,7 @@ import KUAppExplanation from './KUAppExplanation.vue'
 import KUAppImportPreview from './KUAppImportPreview.vue'
 import KUAppSignals from './KUAppSignals.vue'
 import KUAppMissingResources from './KUAppMissingResources.vue'
+import { isAborted, taskCoordinatorFor } from '../../lib/taskCoordinator'
 import KUAppGithubCicd from './KUAppGithubCicd.vue'
 import KUAppResourceInspector from './KUAppResourceInspector.vue'
 import KUAppPossibleDuplicates from './KUAppPossibleDuplicates.vue'
@@ -752,6 +753,14 @@ function syncSettingsDraft(source = selectedApplication.value) {
   })
 }
 watch(() => settingsDraft.pollingEnabled, () => { collectionCostAcknowledged.value = false })
+let registrySubscription = () => {}
+watch(() => selectedApplicationId.value, applicationId => {
+  registrySubscription()
+  registrySubscription = applicationId
+    ? taskCoordinatorFor(applicationId).subscribe(parts => (parts.has('kuapps.registry') ? loadApplicationRegistry(applicationId) : null))
+    : () => {}
+}, { immediate: true })
+onBeforeUnmount(() => registrySubscription())
 watch(() => selectedApplicationId.value, () => {
   activeResourceScopeKey.value = ''
   deleteConfirmation.value = ''
@@ -942,13 +951,16 @@ async function loadSelectedApplicationDetail(applicationId = selectedApplication
   if (requestId === detailRequest) await loadApplicationRegistry(applicationId)
 }
 
+// Through the application's task coordinator (#326): one request at a time, and reloaded when a
+// write anywhere in KUApps or Observability invalidates 'kuapps.registry'.
 async function loadApplicationRegistry(applicationId = selectedApplicationId.value) {
   if (!applicationId) { applicationRegistry.value = { resources: [], relationships: [] }; return }
   const requestId = ++registryRequest
   registryLoading.value = true
   registryError.value = ''
   try {
-    const result = await api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}/registry`)
+    const result = await taskCoordinatorFor(applicationId).read('kuapps.registry', ({ signal, task }) =>
+      api('GET', `/api/kua-apps/applications/${encodeURIComponent(applicationId)}/registry`, undefined, { signal, headers: { 'X-KUA-Task': task } }))
     if (requestId !== registryRequest || applicationId !== selectedApplicationId.value) return
     applicationRegistry.value = {
       resources: Array.isArray(result?.resources) ? result.resources : [],
@@ -956,7 +968,7 @@ async function loadApplicationRegistry(applicationId = selectedApplicationId.val
     }
     if (!applicationRegistry.value.resources.some(resource => resource.id === selectedResourceId.value)) selectedResourceId.value = ''
   } catch (error) {
-    if (requestId !== registryRequest || applicationId !== selectedApplicationId.value) return
+    if (requestId !== registryRequest || applicationId !== selectedApplicationId.value || isAborted(error)) return
     applicationRegistry.value = { resources: [], relationships: [] }
     registryError.value = error.message
   } finally {

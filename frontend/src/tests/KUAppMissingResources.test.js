@@ -5,6 +5,7 @@ vi.mock('lucide', () => ({ createIcons: vi.fn(), icons: {} }))
 
 import KUAppMissingResources from '../components/kuapps/KUAppMissingResources.vue'
 import { settings } from '../composables/useSettings'
+import { taskCoordinatorFor } from '../lib/taskCoordinator'
 
 const GONE = {
   resourceId: 'r-old', registryId: 'kua-resource:old', name: 'attencion-3.9.1', type: 'kubernetes', kind: 'Deployment', namespace: 'backend360',
@@ -64,5 +65,32 @@ describe('KUApp missing resources', () => {
     expect(text).toContain('Probably deploy #7 · Deploy · acme/api')
     expect(text).toContain('aaaaaaa Release 3.9.2 · @ana')
     expect(wrapper.get('[data-test="missing-cause-attencion-3.9.1"] a').attributes('href')).toBe('https://github.com/acme/api/actions/runs/7')
+  })
+
+  it('replacing reloads every view of the application once; ignoring reloads only this list (#326)', async () => {
+    let items = [GONE, { ...GONE, resourceId: 'r-two', registryId: 'kua-resource:two', name: 'two-3.9.1' }]
+    respond((url, options) => {
+      if (url.endsWith('/observer') && (options.method || 'GET') === 'GET') return { body: { resources: items } }
+      if (url.endsWith('/observer/replace')) { items = items.filter(item => item.resourceId !== 'r-old'); return { body: {} } }
+      if (url.endsWith('/observer/ignore')) { items = items.filter(item => item.resourceId !== 'r-two'); return { body: {} } }
+      return { body: {} }
+    })
+    const invalidations = []
+    taskCoordinatorFor('app-1').subscribe(parts => { invalidations.push([...parts].sort()) })
+    const wrapper = mount(KUAppMissingResources, { props: { applicationId: 'app-1', revision: 7 } })
+    await flushPromises()
+
+    await wrapper.get('[data-test="missing-replace-attencion-3.9.1-attencion-3.9.2"]').trigger('click')
+    await flushPromises()
+    expect(invalidations).toEqual([['forecast', 'kuapps.missing', 'kuapps.registry', 'overview', 'registry', 'topology']])
+    const replace = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/observer/replace'))
+    expect(replace[1].headers['X-KUA-Task']).toMatch(/^resource\.replace;/)
+
+    const ignore = wrapper.findAll('button').find(button => button.text().includes('Ignore'))
+    await ignore.trigger('click')
+    await flushPromises()
+    expect(invalidations.at(-1)).toEqual(['kuapps.missing'])
+    expect(global.fetch.mock.calls.filter(([url, options]) => String(url).endsWith('/observer') && (options?.method || 'GET') === 'GET')).toHaveLength(3)
+    wrapper.unmount()
   })
 })
