@@ -1013,6 +1013,8 @@ export default {
   'apm.confirmDependency':               'Confirmar',
   'apm.analyzeCloudTopology':            'Analizar definiciones AWS',
   'apm.analyzingCloudTopology':          'Analizando ASL...',
+  'apm.cloudScanAnalyzedAt':             'Analizado a las {time}',
+  'apm.cloudScanStale':                  'Los recursos cambiaron desde este análisis. Vuelve a analizar para ver sus sugerencias cloud.',
   'apm.cloudScanSummary':                '{requests} definición(es) consultada(s) · {unresolved} referencia(s) fuera del APM',
   'apm.referencedResources':             'Recursos referenciados fuera del APM',
   'apm.aslStatesCount':                  '{count} estado(s) ASL',

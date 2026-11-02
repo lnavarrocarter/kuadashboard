@@ -45,6 +45,11 @@
         <p v-else>{{ t('apm.analysisHealthy') }}</p>
         <p v-if="topology.analysis.cloudScan" class="cloud-scan-summary">
           {{ t('apm.cloudScanSummary', { requests: topology.analysis.cloudScan.requests, unresolved: topology.analysis.cloudScan.unresolvedReferences.length }) }}
+          <span v-if="topology.analysis.cloudScan.analyzedAt" data-test="cloud-scan-analyzed-at"> · {{ t('apm.cloudScanAnalyzedAt', { time: analyzedAtLabel(topology.analysis.cloudScan.analyzedAt) }) }}</span>
+        </p>
+        <!-- Resources changed since the last cloud analysis; it only runs again on request (#328). -->
+        <p v-if="topology.analysis.cloudScan?.state === 'stale'" class="cloud-scan-stale" data-test="cloud-scan-stale">
+          <i data-lucide="history"></i> {{ t('apm.cloudScanStale') }}
         </p>
       </div>
     </section>
@@ -198,6 +203,11 @@ const props = defineProps({
 })
 
 defineEmits(['select', 'confirm-dependency', 'confirm-all-dependencies', 'analyze-cloud', 'add-cloud-resource', 'open-lambda-logs', 'open-kubernetes-logs', 'explain'])
+
+function analyzedAtLabel(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 const { t } = useI18n()
 // The names of a finding's resources (up to 12) and its next step, when one is written.
 function findingNames(finding) {
@@ -302,6 +312,8 @@ onMounted(renderIcons)
 .analysis-heading svg { width: 14px; height: 14px; color: #58a6ff; }
 .analysis-heading button { text-transform: none; }
 .cloud-scan-summary { color: #58a6ff !important; }
+.analysis-copy .cloud-scan-stale { display: flex; align-items: center; gap: 4px; color: #d29922; }
+.cloud-scan-stale svg { width: 12px; height: 12px; flex: none; }
 .analysis-copy p, .analysis-disclaimer { margin: 0; color: var(--text-dim); font-size: 10px; }
 .resource-coverage { min-width: 0; padding-top: 5px; border-top: 1px solid var(--border); }
 .resource-coverage summary { cursor: pointer; line-height: 1.4; }

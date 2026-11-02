@@ -463,13 +463,15 @@ export const useApmStore = defineStore('apm', () => {
     if (result?.invalid) error.value = t('apm.dependenciesNotConfirmed', { n: result.invalid })
   }
 
-  async function analyzeCloudTopology(applicationId) {
+  // refresh: query AWS even when the backend has a recent analysis of the same resources (#328).
+  async function analyzeCloudTopology(applicationId, { refresh = false } = {}) {
     analyzingTopology.value = true
     error.value = null
     try {
       topology.value = await request(`/applications/${applicationId}/topology/analyze-cloud`, {
         method: 'POST',
-        headers: headers(false, taskRun('topology.analyze-cloud')),
+        headers: headers(true, taskRun('topology.analyze-cloud')),
+        body: JSON.stringify({ refresh }),
       })
       cloudSuggestionsByApplication.value = {
         ...cloudSuggestionsByApplication.value,
@@ -487,8 +489,11 @@ export const useApmStore = defineStore('apm', () => {
   function mergeCloudSuggestions(nextTopology, cloudSuggestions = []) {
     if (!cloudSuggestions.length) return nextTopology
     const resourceIds = new Set((nextTopology.resources || []).map(resource => resource.id))
+    // A confirmed pair is settled, whatever its relation type (same rule as the backend, #328).
+    const confirmedPairs = new Set((nextTopology.edges || []).map(edge => `${edge.sourceResourceId}:${edge.targetResourceId}`))
     const visibleCloudSuggestions = cloudSuggestions.filter(suggestion =>
-      resourceIds.has(suggestion.sourceResourceId) && resourceIds.has(suggestion.targetResourceId))
+      resourceIds.has(suggestion.sourceResourceId) && resourceIds.has(suggestion.targetResourceId)
+      && !confirmedPairs.has(`${suggestion.sourceResourceId}:${suggestion.targetResourceId}`))
     if (!visibleCloudSuggestions.length) return nextTopology
     const localSuggestions = nextTopology.analysis?.suggestions || []
     const suggestions = [...new Map([...localSuggestions, ...visibleCloudSuggestions].map(suggestion => [
