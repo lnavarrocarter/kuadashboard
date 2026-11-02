@@ -38,7 +38,8 @@ function taskView(task) {
  * @param update   app update state kept by main.js
  */
 function buildTrayStatus({ backend = {}, health = null, plan = null, tasks = [], access = null, update = null, port, appVersion = null, now = Date.now() } = {}) {
-  const list = (Array.isArray(tasks) ? tasks : []).filter(task => task && task.id).map(taskView);
+  // The KUApps task coordinator (#330) belongs to the open window: its reloads stay in the in-app panel.
+  const list = (Array.isArray(tasks) ? tasks : []).filter(task => task && task.id && task.type !== 'coordinator').map(taskView);
   const running = list.filter(task => ACTIVE_STATES.has(task.state));
   const upcoming = list
     .filter(task => task.state === 'scheduled' && task.nextRunAt && Number.isFinite(Date.parse(task.nextRunAt)))

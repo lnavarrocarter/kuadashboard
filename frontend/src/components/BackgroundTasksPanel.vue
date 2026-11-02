@@ -82,6 +82,55 @@
                     <small>{{ Math.round(task.progress * 100) }}%</small>
                   </div>
                   <div v-if="task.errorCode" class="task-error-code"><i data-lucide="circle-alert"></i><span>{{ t('tasks.errorCode') }}: <code>{{ task.errorCode }}</code></span></div>
+                  <!-- The KUApps task coordinator (#330): what it runs now, and its runs on demand. -->
+                  <div v-if="task.type === 'coordinator'" class="task-coordinator" :data-test="`coordinator-${task.id}`">
+                    <p v-if="task.summary" class="task-detail">{{ t('tasks.coordinator.summary', { reading: task.summary.reading || 0, queued: (task.summary.queuedWrites || 0) + (task.summary.writing || 0) }) }}</p>
+                    <button class="btn sm" :aria-expanded="openCoordinator === task.id" :data-test="`coordinator-toggle-${task.id}`" @click="toggleCoordinator(task)">
+                      <i :data-lucide="openCoordinator === task.id ? 'chevron-up' : 'chevron-down'"></i>
+                      {{ t(openCoordinator === task.id ? 'tasks.coordinator.hideRuns' : 'tasks.coordinator.showRuns') }}
+                    </button>
+                    <div v-if="openCoordinator === task.id" class="coordinator-detail" data-test="coordinator-detail">
+                      <p v-if="coordinatorError" class="tasks-inline-error" role="alert">{{ coordinatorError }}</p>
+                      <template v-else-if="coordinatorDetail">
+                        <div class="tasks-metric-grid coordinator-metrics" data-test="coordinator-metrics">
+                          <div><span>{{ t('tasks.coordinator.executed') }}</span><strong>{{ coordinatorDetail.metrics.executed }} / {{ coordinatorDetail.metrics.requested }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.deduplicated') }}</span><strong>{{ coordinatorDetail.metrics.deduplicated }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.coalescedWrites') }}</span><strong>{{ coordinatorDetail.metrics.coalescedWrites }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.cancelled') }}</span><strong>{{ coordinatorDetail.metrics.cancelled }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.maxQueue') }}</span><strong>{{ coordinatorDetail.metrics.maxQueueDepth }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.reconcilesPerWrite') }}</span><strong>{{ coordinatorDetail.metrics.reconcilesPerWrite ?? '—' }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.awsCalls') }}</span><strong>{{ coordinatorDetail.metrics.awsCalls }}</strong></div>
+                          <div><span>{{ t('tasks.coordinator.untracked') }}</span><strong>{{ coordinatorDetail.metrics.untracked ?? '—' }}</strong></div>
+                        </div>
+                        <p class="task-description">{{ t('tasks.coordinator.window', { minutes: coordinatorDetail.windowMinutes }) }}</p>
+                        <ul v-if="coordinatorDetail.metrics.byKey.length" class="coordinator-keys">
+                          <li v-for="row in coordinatorDetail.metrics.byKey" :key="row.key"><code>{{ row.key }}</code><span>{{ t('tasks.coordinator.percentiles', { runs: row.runs, p50: row.p50Ms, p95: row.p95Ms }) }}</span></li>
+                        </ul>
+                        <ol class="coordinator-runs" data-test="coordinator-runs">
+                          <li v-for="run in coordinatorDetail.runs" :key="run.runId" :class="{ flagged: run.flags.length }" :data-test="`coordinator-run-${run.outcome}`">
+                            <div class="coordinator-run-head">
+                              <code>{{ run.key }}</code>
+                              <span :class="['task-state-chip', `outcome-${run.outcome}`]">{{ t(`tasks.coordinator.outcome.${run.outcome}`) }}</span>
+                              <span class="task-provider">{{ t(`tasks.coordinator.kind.${run.kind}`) }}</span>
+                              <span v-if="run.trigger === 'invalidation'" class="task-provider">{{ t('tasks.coordinator.byInvalidation') }}</span>
+                            </div>
+                            <div class="task-meta">
+                              <span v-if="run.durationMs != null">{{ run.durationMs }} ms</span>
+                              <span>{{ t('tasks.coordinator.work', { requests: run.requests, reconciles: run.reconciles, aws: run.awsCalls }) }}</span>
+                              <span v-if="run.stores?.length">{{ t('tasks.coordinator.writes', { stores: run.stores.join(', ') }) }}</span>
+                              <span v-if="run.invalidates.length">{{ t('tasks.coordinator.reloads', { parts: run.invalidates.join(', ') }) }}</span>
+                              <span v-for="mark in run.flags" :key="mark" class="coordinator-flag">{{ t(`tasks.coordinator.flag.${mark}`) }}</span>
+                            </div>
+                          </li>
+                        </ol>
+                        <p v-if="!coordinatorDetail.runs.length" class="task-description">{{ t('tasks.coordinator.noRuns') }}</p>
+                        <button class="btn sm" data-test="coordinator-copy" @click="copyDiagnostics">
+                          <i data-lucide="copy"></i> {{ t(copied ? 'tasks.coordinator.copied' : 'tasks.coordinator.copy') }}
+                        </button>
+                      </template>
+                      <p v-else class="task-description">{{ t('tasks.loading') }}</p>
+                    </div>
+                  </div>
                 </div>
               </article>
               </TransitionGroup>
@@ -100,6 +149,7 @@ import { createIcons, icons } from 'lucide'
 import { useApi } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
 import { settings } from '../composables/useSettings'
+import { existingTaskCoordinator } from '../lib/taskCoordinator'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -113,6 +163,11 @@ const usage = ref(null)
 const loading = ref(false)
 const error = ref('')
 const busyAction = ref('')
+const openCoordinator = ref('')
+const coordinatorDetail = ref(null)
+const coordinatorError = ref('')
+const copied = ref(false)
+const COORDINATOR_PREFIX = 'kuapps.coordinator.'
 const clock = ref(Date.now())
 const ACTIVE_STATES = ['running', 'pause_requested', 'cancellation_requested']
 const ACTION_ICONS = { pause: 'pause', resume: 'play', cancel: 'x' }
@@ -164,6 +219,7 @@ let usageLoadedAt = 0
 let usageRequest = null
 
 function taskName(task) {
+  if (task.type === 'coordinator') return t('tasks.task.coordinator', { id: task.id.slice(COORDINATOR_PREFIX.length, COORDINATOR_PREFIX.length + 8) })
   if (task.type === 'collection') return t('tasks.task.applicationCollection', { name: task.name })
   if (task.type === 'scan') return t('tasks.task.scan', { id: task.id.split('.').at(-1) })
   const key = NAME_KEYS[task.id]
@@ -171,6 +227,7 @@ function taskName(task) {
 }
 
 function taskDescription(task) {
+  if (task.type === 'coordinator') return 'tasks.description.coordinator'
   if (task.type === 'collection') return 'tasks.description.applicationCollection'
   return DESCRIPTION_KEYS[task.id] || ''
 }
@@ -245,6 +302,10 @@ async function load() {
       if (disposed) return
       snapshot.value = data
       error.value = ''
+      if (openCoordinator.value) {
+        if (data.tasks.some(task => task.id === openCoordinator.value)) loadCoordinator(openCoordinator.value)
+        else openCoordinator.value = ''
+      }
     } catch (cause) {
       if (!disposed) error.value = safeErrorMessage(cause?.message)
     } finally {
@@ -274,10 +335,42 @@ async function loadUsage() {
   return usageRequest
 }
 
+async function loadCoordinator(id) {
+  try {
+    const data = await apiFetch(`/api/system/tasks/kuapps/coordinators/${encodeURIComponent(id.slice(COORDINATOR_PREFIX.length))}`)
+    if (disposed || openCoordinator.value !== id) return
+    if (!data || !Array.isArray(data.runs) || !data.metrics) throw new Error(t('tasks.invalidResponse'))
+    coordinatorDetail.value = data
+    coordinatorError.value = ''
+  } catch (cause) {
+    if (!disposed && openCoordinator.value === id) coordinatorError.value = safeErrorMessage(cause?.message)
+  }
+}
+
+function toggleCoordinator(task) {
+  coordinatorDetail.value = null
+  coordinatorError.value = ''
+  copied.value = false
+  openCoordinator.value = openCoordinator.value === task.id ? '' : task.id
+  if (openCoordinator.value) loadCoordinator(task.id)
+}
+
+// Ids, task keys, timings and counters only: safe to attach to an issue.
+async function copyDiagnostics() {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(coordinatorDetail.value, null, 2))
+    copied.value = true
+  } catch {
+    coordinatorError.value = t('tasks.coordinator.copyFailed')
+  }
+}
+
 async function control(task, action) {
   const key = `${task.id}:${action}`
   busyAction.value = key
   error.value = ''
+  // The coordinator runs in this window: its reads stop now; the server only reflects the state.
+  if (task.type === 'coordinator' && action === 'cancel') existingTaskCoordinator(task.id.slice(COORDINATOR_PREFIX.length))?.cancel()
   try {
     await apiFetch(`/api/system/tasks/${encodeURIComponent(task.id)}/${encodeURIComponent(action)}`, { method: 'POST' })
     await load()
@@ -294,6 +387,7 @@ function refreshOnRestore() {
 
 function drawIcons() { nextTick(() => createIcons({ icons })) }
 watch(snapshot, drawIcons, { deep: true })
+watch([openCoordinator, coordinatorDetail, copied], drawIcons)
 watch(() => props.show, visible => {
   if (!mounted) return
   if (visible) start()
@@ -391,6 +485,19 @@ onUnmounted(() => {
 .task-progress span { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
 .task-progress small { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .task-error-code { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: var(--red); font-size: 11px; overflow-wrap: anywhere; }
+.task-coordinator { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.coordinator-detail { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-row); border: 1px solid var(--border); }
+.coordinator-keys, .coordinator-runs { width: 100%; display: flex; flex-direction: column; gap: 6px; list-style: none; font-size: 11px; }
+.coordinator-keys li { display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); }
+.coordinator-runs { max-height: 320px; overflow: auto; }
+.coordinator-runs li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.coordinator-runs li.flagged { padding-left: 6px; border-left: 3px solid var(--yellow); }
+.coordinator-run-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.coordinator-run-head code, .coordinator-keys code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.coordinator-flag { color: var(--yellow); }
+.outcome-completed { color: var(--green); }
+.outcome-failed { color: var(--red); }
+.outcome-running, .outcome-queued { color: var(--accent); }
 .task-error-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tasks-spinner { animation: tasks-spin 1s linear infinite; }
 @keyframes tasks-spin { to { transform: rotate(360deg); } }

@@ -73,3 +73,11 @@ test('opens above a bottom taskbar and below a top menu bar, inside the work are
     { x: 1554, y: 524 },
   );
 });
+
+test('the KUApps task coordinator stays in the in-app panel, not the tray (#330)', () => {
+  const status = buildTrayStatus({ tasks: [
+    { id: 'kuapps.coordinator.app-1', name: 'KUApps task coordinator', type: 'coordinator', state: 'running', availableActions: ['cancel'] },
+    { id: 'apm.collection', name: 'Observability collection', type: 'scheduler', state: 'running', availableActions: [] },
+  ] });
+  assert.deepEqual(status.tasks.running.map(task => task.id), ['apm.collection']);
+});
