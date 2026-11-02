@@ -1471,3 +1471,73 @@ test('the log cache of a provider whose plugin is off answers PLUGIN_DISABLED an
     await subject.close();
   }
 });
+
+test('API confirms many dependencies in one batch with one registry reconciliation (#327)', async () => {
+  const subject = await fixture();
+  const reconcile = ApplicationRegistryService.prototype.reconcile;
+  let reconciles = 0;
+  ApplicationRegistryService.prototype.reconcile = function countedReconcile(...args) {
+    reconciles += 1;
+    return reconcile.apply(this, args);
+  };
+  try {
+    const application = await subject.request('/applications', { method: 'POST', body: { name: 'checkout', region: 'us-east-1' } });
+    const applicationId = application.body.id;
+    const ids = [];
+    for (const name of ['api', 'worker', 'queue']) {
+      const resource = await subject.request(`/applications/${applicationId}/resources`, {
+        method: 'POST', body: { type: 'lambda', key: `arn:aws:lambda:us-east-1:123:function:${name}`, arn: `arn:aws:lambda:us-east-1:123:function:${name}`, name, associationSource: 'manual' },
+      });
+      ids.push(resource.body.id);
+    }
+    await subject.request(`/applications/${applicationId}/edges`, {
+      method: 'POST', body: { sourceResourceId: ids[0], targetResourceId: ids[1], relationType: 'invokes' },
+    });
+    reconciles = 0;
+
+    const batch = await subject.request(`/applications/${applicationId}/edges/batch`, {
+      method: 'POST',
+      body: {
+        edges: [
+          { sourceResourceId: ids[0], targetResourceId: ids[1], relationType: 'invokes' },
+          { sourceResourceId: ids[1], targetResourceId: ids[2], relationType: 'invokes' },
+          { sourceResourceId: ids[0], targetResourceId: ids[2] },
+          { sourceResourceId: ids[1], targetResourceId: ids[2], relationType: 'invokes' },
+          { sourceResourceId: ids[0], targetResourceId: 'missing', relationType: 'invokes' },
+          { sourceResourceId: ids[2], targetResourceId: ids[2], relationType: 'invokes' },
+          { sourceResourceId: ids[2], targetResourceId: ids[0], relationType: 'DROP TABLE' },
+        ],
+      },
+    });
+    assert.equal(batch.status, 200);
+    assert.deepEqual(batch.body.results.map(result => result.status), ['exists', 'created', 'created', 'exists', 'invalid', 'invalid', 'invalid']);
+    assert.deepEqual(batch.body.results.slice(4).map(result => result.reason), ['resource_not_in_application', 'same_resource', 'relation_type']);
+    assert.equal(batch.body.results[2].relationType, 'depends_on');
+    assert.deepEqual([batch.body.created, batch.body.exists, batch.body.invalid], [2, 2, 3]);
+    assert.equal(reconciles, 1, 'one reconciliation for the whole batch');
+    assert.equal(subject.database.listEdges(applicationId).length, 3);
+    assert.equal(subject.auditEvents.filter(event => event.action === 'Dependencies confirmed').length, 1);
+
+    reconciles = 0;
+    const nothingNew = await subject.request(`/applications/${applicationId}/edges/batch`, {
+      method: 'POST', body: { edges: [{ sourceResourceId: ids[0], targetResourceId: ids[1], relationType: 'invokes' }] },
+    });
+    assert.equal(nothingNew.body.created, 0);
+    assert.equal(reconciles, 0, 'nothing written, nothing reconciled');
+
+    const stale = await subject.request(`/applications/${applicationId}/edges/batch`, {
+      method: 'POST', body: { expectedRevision: 9999, edges: [{ sourceResourceId: ids[2], targetResourceId: ids[0], relationType: 'invokes' }] },
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'REVISION_CONFLICT');
+    assert.equal(subject.database.listEdges(applicationId).length, 3, 'a stale batch writes nothing');
+
+    for (const body of [{}, { edges: [] }, { edges: Array.from({ length: 201 }, () => ({})) }]) {
+      const rejected = await subject.request(`/applications/${applicationId}/edges/batch`, { method: 'POST', body });
+      assert.equal(rejected.status, 400);
+    }
+  } finally {
+    ApplicationRegistryService.prototype.reconcile = reconcile;
+    await subject.close();
+  }
+});
