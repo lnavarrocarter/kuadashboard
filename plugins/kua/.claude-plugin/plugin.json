@@ -1,0 +1,19 @@
+{
+  "name": "kua",
+  "version": "2.0.0",
+  "description": "Read your Kubernetes, AWS, GCP and Vercel resources, Advisor findings, logs and KUA Applications through the KUA running on this computer, and propose KUApps changes that you approve in KUA.",
+  "author": {
+    "name": "KuaDashboard"
+  },
+  "homepage": "https://lnavarrocarter.github.io/kuadashboard/features/ai-agents",
+  "repository": "https://github.com/lnavarrocarter/kuadashboard",
+  "license": "MIT",
+  "keywords": [
+    "kubernetes",
+    "aws",
+    "gcp",
+    "vercel",
+    "observability",
+    "mcp"
+  ]
+}

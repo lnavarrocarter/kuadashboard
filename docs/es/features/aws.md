@@ -7,8 +7,6 @@ description: Gestiona EC2, EKS, ECS, Lambda, S3, DynamoDB, CloudFront y más ser
 
 KuaDashboard proporciona un panel completo de gestión de AWS accesible desde la barra lateral en **Cloud > AWS**. Ofrece una vista unificada de **22 servicios de AWS** sin salir del dashboard.
 
-> **Desde v1.7.0:** las sesiones EC2 SSH/RDP permanecen vivas como tabs restaurables; las mejoras de logs, YAML y métricas de Kubernetes quedan disponibles desde la superficie unificada de operación.
-
 ![KuaDashboard — vista general](/screenshots/dashboard-main.png)
 
 ## Autenticación

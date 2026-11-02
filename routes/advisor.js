@@ -23,8 +23,10 @@
 
 const express = require('express');
 const { getPlan, planError } = require('../lib/plans');
+const { providerAlternation } = require('../lib/providers');
 
-const SCOPE_RE = /^(aws|gcp|vercel|kubernetes|product):.+/;
+// Provider scopes, plus the product view of KUApps.
+const SCOPE_RE = new RegExp(`^(${providerAlternation('advisor')}|product):.+`);
 
 function validScope(value) {
   const scope = String(value || '');

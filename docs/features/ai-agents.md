@@ -1,3 +1,8 @@
+---
+title: "AI Agents and MCP Server for Kubernetes, AWS and GCP"
+description: "Connect Claude Code, Codex CLI, Claude Desktop, Cursor and other AI agents to KUA through its local MCP server: Advisor findings, log intelligence and KUA Applications, with changes only after you approve."
+---
+
 # AI Agents
 
 KUA already finds problems with deterministic checks: the **Advisor** in every overview and the **log intelligence** of cached CloudWatch log groups. These two features hand those findings to a coding agent (Claude Code, Codex, ChatGPT, Cursor…) so it can fix them in your code and infrastructure.
@@ -63,6 +68,10 @@ Advisor and log tools accept `format` (`markdown` by default, or `json` for the 
 
 **AI agent access (MCP)** turns agents on or off on this computer, from the KUA tray icon or **Connect an AI agent**. It is on by default. Off, KUA refuses every request from the MCP server (`AGENTS_DISABLED`, except discovery through `/api/health`) and the agent tells you where to turn it back on. The switch is stored on this computer, and an agent cannot change it. The tray panel also shows when the last agent request arrived.
 
+### Plugins that are off
+
+The tools of a provider whose plugin is off in **Plugins/Connections** (Vercel today) are not offered to agents: `vercel_advisor` leaves the tool list and `vercel` leaves the provider choices of `list_profiles` and `cloud_resource_inventory`. Calling them anyway answers `PLUGIN_DISABLED` with where to turn the plugin on. If KUA cannot say which plugins are on, the whole list is offered, as before.
+
 ### Changing KUApps from an agent
 
 An agent can change a KUA Application in two steps, and only while you allow it: **Connect an AI agent → Allow agents to change KUApps** (off by default, stored on this computer). With it off, agents can still read and preview.
@@ -92,6 +101,10 @@ Collection costs are estimated at list prices: CloudWatch `GetMetricData` USD 0.
 - **Audited.** Each apply is in the audit log with the client (`mcp`), application, operation, plan and revisions before and after, without resource payloads or profiles.
 - There is no tool to delete applications or infrastructure.
 
+::: info Next release
+In KUA 2.0.0, **Connect an AI agent** installs the MCP server in Claude Code (`claude mcp add`) and Codex CLI, and shows the JSON and TOML for other clients. The Claude Code plugin, the Claude Desktop extension (`kua.mcpb`) and the Cursor, Windsurf, Gemini CLI and Kiro tabs described below come with the next release.
+:::
+
 ### Setup from the app
 
 Click the **plug** icon next to "Copy for AI agent" (in any Advisor or in the log recommendations) to open **Connect AI agents**:
@@ -116,6 +129,18 @@ Set `KUA_URL` only to point the server at a specific KUA (for example when two a
 
 ### Claude Code
 
+The simplest way is the KUA plugin: **Install in Claude Code** in **Connect an AI agent** installs it from this computer, without downloading anything (KUA keeps a local marketplace with the plugin of its own version in `~/.kuadashboard/claude-plugin`; a Claude Code without plugins gets the MCP server alone). The plugin adds KUA's MCP server and a `kua` skill that tells Claude how to work with KUA: start from the Advisor and log intelligence, check the current state before changing anything, show the cost and ask before billed or destructive operations, and never copy secrets or raw logs into the repository.
+
+From Claude Code itself, the same plugin installs from GitHub:
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+On Claude Code before 2.1.275, add the marketplace first with `/plugin marketplace add lnavarrocarter/kuadashboard`, then `/plugin install kua@kuadashboard`. The plugin needs Node.js on PATH. It starts the MCP server of the KUA installed on this computer: every KUA records how to start it in `~/.kuadashboard/run/mcp-launch.json` (the installed app wins over a KUA run from the repository), so the server always matches your KUA version. If KUA has never run here, the server answers with no tools and tells Claude to install and open KUA. Check it with `/mcp`: the server is `plugin:kua:kua`.
+
+Without the plugin, add the server by hand:
+
 ```bash
 claude mcp add kua --scope user -- node /path/to/kuadashboard/mcp/server.mjs
 ```
@@ -135,6 +160,10 @@ Or, to share it with a project, add it to `.mcp.json` at the project root:
 
 Check it with `/mcp` inside Claude Code.
 
+### Claude Desktop
+
+**Install in Claude Desktop** in **Connect an AI agent** opens `kua.mcpb`, the Claude Desktop extension that ships with KUA, and Claude Desktop shows its install dialog (it then appears under **Settings → Extensions**). **Download kua.mcpb** saves the same file to install it by hand, for example from KUA in a browser. The extension starts the MCP server of the KUA installed on this computer, like the Claude Code plugin, so it always matches your KUA version; its optional **KUA address** setting forces one KUA (leave it empty to find the running one). Without the extension, add the JSON shown in that tab to `claude_desktop_config.json` (**Settings → Developer → Edit Config**).
+
 ### Codex CLI
 
 ```bash
@@ -149,9 +178,28 @@ command = "node"
 args = ["/path/to/kuadashboard/mcp/server.mjs"]
 ```
 
+### VS Code
+
+The [KUA extension for VS Code](./vscode) registers KUA's MCP server for the editor's chat, with nothing to configure. Without the extension, add the `kua` entry to `.vscode/mcp.json` with the command below.
+
+### Cursor, Windsurf, Gemini CLI and Kiro
+
+**Connect an AI agent** has a tab for each. **Install** adds a `kua` entry to the agent's MCP file and keeps everything else in it: other servers, and for Gemini CLI the rest of its settings.
+
+| Agent | File |
+|---|---|
+| Cursor | `~/.cursor/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Kiro (IDE and `kiro-cli`) | `~/.kiro/settings/mcp.json` (`$KIRO_HOME/settings/mcp.json` when `KIRO_HOME` is set) |
+
+The tab says whether KUA is already in the file, and **Remove** takes out only KUA's entry. A file that is not valid JSON (for example with comments) is never rewritten: KUA says so and you fix it first. Restart the agent after installing.
+
+Kiro's IDE and `kiro-cli` read the same user file, so one install covers both; in `kiro-cli`, `/mcp` shows the server. A `.kiro/settings/mcp.json` in a workspace adds to it (and wins for a server with the same name), so leave `kua` out of it.
+
 ### Other clients
 
-Any client that runs local stdio MCP servers (Cursor, VS Code, Windsurf…) uses the same command: `node /path/to/kuadashboard/mcp/server.mjs`.
+Any client that runs local stdio MCP servers uses the same command: `node /path/to/kuadashboard/mcp/server.mjs`.
 
 ChatGPT (web and desktop) only connects to remote MCP servers over HTTPS, which would mean exposing KUA to the internet. Use the copied brief there instead.
 

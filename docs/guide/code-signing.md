@@ -1,3 +1,7 @@
+---
+description: "How KUA desktop builds are signed and notarized for Windows and macOS."
+---
+
 # Code Signing and Notarization
 
 This guide explains how to prepare trusted desktop releases for Windows and macOS.

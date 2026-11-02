@@ -3,6 +3,9 @@ productName: KuaDashboard
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**
+  - plugins/kua/**
+  - .claude-plugin/**
+  - mcpb/dist/kua.mcpb
 npmRebuild: true
 buildDependenciesFromSource: false
 afterSign: electron/notarize.js
@@ -14,6 +17,9 @@ files:
   - lib/**
   - config/**
   - public/**
+  - plugins/kua/**
+  - .claude-plugin/**
+  - mcpb/dist/kua.mcpb
   - assets/icon.ico
   - assets/icon.png
   - "!node_modules/.cache"

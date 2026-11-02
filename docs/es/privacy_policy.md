@@ -1,3 +1,7 @@
+---
+description: "Política de privacidad de KUA: qué queda en tu computador, qué guarda la cuenta de KUA opcional, por cuánto tiempo y tus derechos."
+---
+
 # Política de privacidad
 
 Última actualización: 2026-10-07

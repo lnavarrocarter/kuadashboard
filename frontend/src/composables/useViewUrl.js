@@ -1,4 +1,5 @@
 import { nextTick, watch } from 'vue'
+import { providerIds } from '../lib/providers'
 
 // Keeps the URL in step with the main view, so a copied URL opens an equivalent
 // view and Back returns to the previous one. Params owned here:
@@ -12,7 +13,7 @@ import { nextTick, watch } from 'vue'
 // KUApps owns ?app= and ?tab=. They are removed while another provider is
 // shown (a stale ?app= reopened KUApps on load) and put back when KUApps returns.
 
-export const VIEWS = ['kubernetes', 'aws', 'gcp', 'vercel', 'kuapps']
+export const VIEWS = [...providerIds('view'), 'kuapps']
 const KUAPPS_PARAMS = ['app', 'tab']
 // Owned by lib/kubeUrl.js while Kubernetes is shown; dropped on the other views.
 const KUBE_PARAMS = ['context', 'ns', 'resource', 'name']
@@ -38,7 +39,7 @@ export function readViewUrl(search = '') {
 }
 
 // Providers whose service and profile live in the URL; AWS and GCP also keep their filters.
-const SERVICE_VIEWS = new Set(['aws', 'gcp', 'vercel'])
+const SERVICE_VIEWS = new Set(providerIds('cloudApi'))
 const FILTER_VIEWS = new Set(['aws', 'gcp'])
 
 /**

@@ -1,3 +1,7 @@
+---
+description: "Manual de usuario de KUA para Vercel: proyectos, deployments, logs y dominios paso a paso."
+---
+
 # ▲ Vercel
 
 > Las capturas de esta página se retiraron porque mostraban infraestructura real. Volverán generadas desde el Demo Mode, con datos sintéticos.

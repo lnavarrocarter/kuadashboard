@@ -28,6 +28,7 @@ const fs = require('fs');
 const { createDesktopLifecycle } = require('./desktopLifecycle');
 const { summarizeTaskProgress } = require('./taskbarProgress');
 const { buildTrayStatus, parseTrayAction, panelPosition } = require('./trayStatus');
+const { openLinkTarget } = require('./openLink');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -885,6 +886,14 @@ function handleDeepLink(url) {
     const parsed = new URL(url.replace(`${KUA_PROTOCOL}://`, 'https://'));
     const host   = parsed.hostname; // 'vercel'
     const path   = parsed.pathname; // '/callback'
+
+    // kua://open?view=… (VS Code extension, #302): show KUA, on that view when one is given.
+    const open = openLinkTarget(url, BACKEND_URL);
+    if (open) {
+      desktopLifecycle?.showWindow();
+      if (open.hasView && mainWindow) mainWindow.loadURL(open.url);
+      return;
+    }
 
     if (host === 'vercel' && path === '/callback') {
       const code            = parsed.searchParams.get('code');

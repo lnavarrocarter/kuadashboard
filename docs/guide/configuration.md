@@ -1,3 +1,7 @@
+---
+description: "Configure KUA: server and custom port, kubeconfig, credential store, desktop background behavior and the Vite development proxy."
+---
+
 # Configuration
 
 ## Server Configuration

@@ -558,6 +558,7 @@ import { showBlockedNotice } from '../../composables/useBlockedNotice'
 import PlanNote from '../PlanNote.vue'
 import CloudBackupsModal from '../architecture/CloudBackupsModal.vue'
 import TeamSpaceModal from '../architecture/TeamSpaceModal.vue'
+import { providerIds } from '../../lib/providers'
 
 const props = defineProps({
   activeView: { type: String, default: 'architecture' },
@@ -768,14 +769,14 @@ watch(verifiedResourceScopes, scopes => {
 const apmProvider = computed(() => {
   if (selectedApplication.value && !selectedApplication.value.profileId) return 'generic'
   const provider = selectedApplication.value?.provider || props.observabilityProvider
-  return ['aws', 'gcp', 'vercel', 'generic'].includes(provider) ? provider : 'generic'
+  return providerIds('observability').includes(provider) ? provider : 'generic'
 })
 const apmProfileId = computed(() => {
   if (selectedApplication.value && !selectedApplication.value.profileId) return 'local'
   return selectedApplication.value?.profileId || props.observabilityProfileId || (apmProvider.value === 'generic' ? 'local' : '')
 })
 const canOpenApplicationObservability = computed(() => !!selectedApplication.value
-  && ['aws', 'gcp', 'vercel', 'generic'].includes(apmProvider.value))
+  && providerIds('observability').includes(apmProvider.value))
 // Providerless applications use local scope bindings. APM collection must route by resource scope (#166).
 const providerLess = computed(() => !!selectedApplication.value && !selectedApplication.value.profileId)
 const creating = ref(false)

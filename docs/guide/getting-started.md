@@ -11,7 +11,7 @@ description: Install and configure KUA, an open source Kubernetes and multi-clou
 
 ## Prerequisites
 
-- **Node.js** >= 16 (recommended: 20+)
+- **Node.js** 20 or later
 - **kubectl** configured with a valid kubeconfig (`~/.kube/config`)
 - For cloud features: AWS CLI or GCP `gcloud` CLI configured
 
@@ -64,35 +64,3 @@ See the [Electron guide](/guide/electron) for cross-platform build details.
 - [Installation](/guide/installation) — Detailed setup and system requirements
 - [Features](/features/) — Explore all capabilities
 - [Architecture](/architecture/) — Understand the project structure
-
-
-## Modo Desarrollo
-
-Para hot-reload durante el desarrollo:
-
-```bash
-# Backend + Frontend dev servers (concurrente)
-npm run dev:full
-```
-
-Esto inicia:
-- **Backend** en `http://localhost:7190` (con nodemon auto-reload)
-- **Frontend** Vite dev server en `http://localhost:7191` (con HMR)
-
-## App de Escritorio (Electron)
-
-```bash
-# Modo desarrollo con Electron
-npm run electron:dev
-
-# Build para tu plataforma actual
-npm run electron:build
-```
-
-Ver la [Guía Electron](/guide/electron) para detalles de builds multiplataforma.
-
-## Siguientes Pasos
-
-- [Instalación](/guide/installation) — Setup detallado y requisitos del sistema
-- [Funcionalidades](/features/) — Explorar todas las capacidades
-- [Arquitectura](/architecture/) — Entender la estructura del proyecto

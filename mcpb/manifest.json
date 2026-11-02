@@ -1,0 +1,47 @@
+{
+  "manifest_version": "0.3",
+  "name": "kua",
+  "display_name": "KUA — Know Unified Administration",
+  "version": "0.0.0",
+  "description": "Your local KUA's tools in Claude Desktop: Kubernetes, AWS, GCP and Vercel inventory, Advisor findings, logs and KUA Applications.",
+  "long_description": "Reads what the KUA running on this computer knows and computes: inventory, deterministic Advisor findings, log intelligence over cached logs and KUA Applications with the signal state of each resource. Changes to KUA Applications are previewed and approved in KUA. It starts the MCP server of the KUA installed here, so it always matches your KUA version; if KUA has never run on this computer, it says how to install and open it. Nothing leaves this computer.",
+  "author": {
+    "name": "KuaDashboard",
+    "url": "https://github.com/lnavarrocarter/kuadashboard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lnavarrocarter/kuadashboard"
+  },
+  "homepage": "https://lnavarrocarter.github.io/kuadashboard/features/ai-agents",
+  "documentation": "https://lnavarrocarter.github.io/kuadashboard/features/ai-agents",
+  "support": "https://github.com/lnavarrocarter/kuadashboard/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": {
+        "KUA_URL": "${user_config.kua_url}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "keywords": ["kubernetes", "aws", "gcp", "vercel", "observability", "devops"],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  },
+  "user_config": {
+    "kua_url": {
+      "type": "string",
+      "title": "KUA address (optional)",
+      "description": "Leave empty: the running KUA is found by itself, whatever its port. Set it (for example http://localhost:7192) to use a specific one.",
+      "required": false,
+      "default": ""
+    }
+  }
+}

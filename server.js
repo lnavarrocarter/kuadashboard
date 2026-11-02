@@ -19,6 +19,7 @@ const { listServicesWithBackends } = require('./lib/kubeServices');
 const { readPodRelations, readServiceBackends } = require('./lib/kubeRelations');
 const { requireExpectedContext } = require('./lib/kubeContextGuard');
 const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCache');
+const { activeProviders, providerAlternation, providerIds } = require('./lib/providers');
 const { buildOverview, lastRestartAt, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
@@ -66,6 +67,23 @@ const app    = express();
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();
+// First-party plugins (#193): what this computer has turned on. GitHub CI/CD and Vercel (#194).
+const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
+const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
+  dataDir: require('./lib/account/account').resolveDataDir(),
+  plugins: [
+    require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd),
+    require('./lib/plugins/builtinPlugins').vercelPlugin({ listProfiles: () => require('./lib/credentialStore').getStore().listProfiles() }),
+    require('./lib/plugins/builtinPlugins').proxmoxPlugin({ listProfiles: () => require('./lib/credentialStore').getStore().listProfiles() }),
+  ],
+});
+// Whether a provider is on: always for the base clouds, else its plugin (lib/providers.js).
+const providerActive = id => activeProviders(pluginRegistry).find(provider => provider.id === id)?.active !== false;
+// The routes of a provider that is off answer PLUGIN_DISABLED, read on every request.
+const providerGuard = id => (req, res, next) => {
+  const provider = activeProviders(pluginRegistry).find(item => item.id === id);
+  return provider?.plugin ? pluginRegistry.guard(provider.plugin)(req, res, next) : next();
+};
 const apmCleanupInterval = setInterval(() => {
   try {
     const removed = apmDatabase.cleanup();
@@ -107,11 +125,12 @@ setImmediate(() => {
     console.error('[kuapps] Contract migration failed:', err.message);
   }
 });
-const cloudResponseCaches = {
-  aws: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-  gcp: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-  vercel: new KubeResponseCache({ freshMs: 30000, staleMs: 300000 }),
-};
+// One response cache per provider served under /api/cloud/<id>/ (lib/providers.js).
+const cloudResponseCaches = Object.fromEntries(providerIds('cloudApi')
+  .map(provider => [provider, new KubeResponseCache({ freshMs: 30000, staleMs: 300000 })]));
+const CLOUD_PROVIDER_PATTERN = providerAlternation('cloudApi');
+const CLOUD_LIST_PATH = new RegExp(`^/api/cloud/(${CLOUD_PROVIDER_PATTERN})(/.*)$`);
+const CLOUD_PROVIDER_PATH = new RegExp(`^/api/cloud/(${CLOUD_PROVIDER_PATTERN})(?:/|$)`);
 
 // ─── Cloud integration routes ─────────────────────────────────────────────────
 const envManagerRoutes  = require('./routes/envManager');
@@ -157,7 +176,7 @@ apmTask.setControls(createPeriodicTaskControls(apmScheduler, apmTask));
 apmScheduler.start({ task: apmTask });
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
 const logAutoRefreshModule = require('./lib/logAutoRefresh');
-const logAutoRefresh = logAutoRefreshModule.getAutoRefresh();
+const logAutoRefresh = logAutoRefreshModule.getAutoRefresh({ providerActive });
 const logRefreshTask = backgroundTaskRegistry.register({
   id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', provider: 'mixed', intervalMs: logAutoRefreshModule.TICK_MS,
 });
@@ -211,6 +230,8 @@ server.on('upgrade', (request, socket, head) => {
   } else if (pathname === '/ws/gcp-logs') {
     wssGcpLogs.handleUpgrade(request, socket, head, ws => wssGcpLogs.emit('connection', ws, request));
   } else if (pathname === '/ws/vercel-logs') {
+    // Vercel logs are part of its plugin (#194): refused while it is off.
+    if (!providerActive('vercel')) { socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
     wssVercelLogs.handleUpgrade(request, socket, head, ws => wssVercelLogs.emit('connection', ws, request));
   } else {
     socket.destroy();
@@ -235,11 +256,15 @@ app.use('/api', require('./lib/agentPlanGuard').createAgentPlanGuard({ agentAcce
 // attributed to the profile and feature of the request that triggered them.
 const { installAwsMeter, usageContextMiddleware } = require('./lib/usage/awsMeter');
 const { getUsageLedger } = require('./lib/usage/ledger');
-installAwsMeter({ ledger: getUsageLedger() });
+// What each KUApps request costs (#325): AWS calls, reconciliations and timings per UI task.
+const { createTaskJournal, countTaskWork } = require('./lib/kua/taskJournal');
+const kuappsTaskJournal = createTaskJournal();
+installAwsMeter({ ledger: getUsageLedger(), onCall: () => countTaskWork('awsCalls') });
 try { getUsageLedger().prune(); } catch (err) { console.warn('[usage] prune:', err.message); }
 app.use('/api', usageContextMiddleware);
 // Log text leaves the server sanitized, with the count of hidden secrets (#239).
 app.use('/api', require('./lib/logRedaction').logRedactionMiddleware);
+app.use(['/api/observability', '/api/kua-apps'], kuappsTaskJournal.middleware);
 mountConsoleRoutes(app, consoleSessions);
 
 for (const transport of [wss, wssExec, wssShell, wssEc2Shell, wssEc2Rdp, wssAwsSsm, wssGcpLogs, wssGcpSsh, wssVercelLogs]) {
@@ -267,7 +292,7 @@ const cloudRevalidations = new Set();
 
 function cloudListRequest(req) {
   const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
-  const match = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(\/.*)$/);
+  const match = pathname.match(CLOUD_LIST_PATH);
   if (!match) return null;
   const [, provider, relativePath] = match;
   const isVercelList = provider === 'vercel' && (
@@ -308,7 +333,7 @@ function revalidateCloudList(originalUrl, cacheRequest) {
 
 app.use('/api/cloud', (req, res, next) => {
   const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
-  const provider = pathname.match(/^\/api\/cloud\/(aws|gcp|vercel)(?:\/|$)/)?.[1];
+  const provider = pathname.match(CLOUD_PROVIDER_PATH)?.[1];
   if (req.method !== 'GET') {
     if (provider) {
       res.on('finish', () => {
@@ -346,13 +371,14 @@ app.use('/api/cloud', (req, res, next) => {
 app.use('/api/cloud/envs',    envManagerRoutes);
 app.use('/api/cloud/gcp',     gcpRoutes);
 app.use('/api/cloud/aws',     awsRoutes);
-for (const provider of ['generic', 'aws', 'gcp', 'vercel']) {
-  app.use(`/api/observability/${provider}`, createApmRouter({
+for (const provider of providerIds('observability')) {
+  app.use(`/api/observability/${provider}`, providerGuard(provider), createApmRouter({
     database: apmDatabase,
     architectureDatabase,
     scheduler: apmScheduler,
     auditLog,
     provider,
+    providerActive,
   }));
 }
 function reserveArchitectureAwsRequest(input) {
@@ -376,6 +402,9 @@ app.use('/api/architecture', createArchitectureRouter({
   }),
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  // DORA in the product Advisor (#96): releases and commits of the applications that sync with GitHub.
+  githubCicd,
+  providerActive,
 }));
 // The team's shared space (Team plan): lib/sync/teamEngine.js.
 const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
@@ -399,13 +428,7 @@ const applicationSyncTask = backgroundTaskRegistry.register({
   id: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
 });
 applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask));
-// First-party plugins (#193): what this computer has turned on. GitHub CI/CD is the first one.
-const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
-const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
-  dataDir: require('./lib/account/account').resolveDataDir(),
-  plugins: [require('./lib/plugins/builtinPlugins').githubCicdPlugin(githubCicd)],
-});
-app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog }));
+app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog, providers: () => activeProviders(pluginRegistry) }));
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
   apmDatabase,
@@ -424,7 +447,9 @@ app.use('/api/kua-apps', createKuaAppsRouter({
 syncEngine.start({ task: applicationSyncTask });
 // The team's shared space: publishing this computer's applications and updating imported ones.
 teamEngine.start(undefined, { task: teamSyncTask });
-app.use('/api/cloud/vercel',  vercelRoutes);
+app.use('/api/cloud/vercel',  providerGuard('vercel'), vercelRoutes);
+// Proxmox VE (#195): read-only, local network, behind its plugin.
+app.use('/api/cloud/proxmox', providerGuard('proxmox'), require('./routes/proxmox').createProxmoxRouter());
 // Kubernetes workload logs on the shared log cache (lib/kubeLogs).
 app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter({
   k8s,
@@ -433,6 +458,7 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 }));
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
+app.use('/api/system/tasks/kuapps/journal', require('./routes/kuappsTaskJournal').createKuappsTaskJournalRouter({ journal: kuappsTaskJournal }));
 app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry }));
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
@@ -444,6 +470,7 @@ const advisorScheduler = (() => {
     request: loopbackRequest(process.env.PORT || 7190),
     application: id => apmDatabase.getApplication(id),
     currentContext: () => currentContext,
+    providerActive,
   });
 })();
 const advisorTask = backgroundTaskRegistry.register({
@@ -3515,6 +3542,16 @@ server.listen(PORT, HOST, () => {
       version: require('./package.json').version,
       packaged: path.basename(__dirname) === 'app.asar',
     });
+    // ~/.kuadashboard/run/mcp-launch.json: how the Claude Code plugin starts this KUA's MCP server (#305).
+    const { mcpLaunch } = require('./lib/mcp/launch');
+    require('./lib/mcp/runtime').recordLaunch({
+      launch: mcpLaunch({ execPath: process.execPath, electron: process.versions.electron, rootDir: __dirname }),
+      version: require('./package.json').version,
+      packaged: path.basename(__dirname) === 'app.asar',
+    });
+    // A Claude Code plugin installed from this computer follows this KUA's version (#305).
+    const { claudePluginDir, pluginSourceDir, syncClaudePlugin } = require('./lib/mcp/claudePlugin');
+    if (fs.existsSync(claudePluginDir())) syncClaudePlugin({ sourceDir: pluginSourceDir(__dirname) });
   } catch (err) { console.warn('[mcp] could not record this instance:', err.message); }
   // Starts after listening: scheduled runs call this KUA on the loopback address.
   advisorScheduler.start({ task: advisorTask });

@@ -1,3 +1,7 @@
+---
+description: "Manual de usuario de KUA para Google Cloud: perfiles, servicios y operaciones paso a paso."
+---
+
 # 🌐 GCP
 
 > Las capturas de esta página se retiraron porque mostraban infraestructura real. Volverán generadas desde el Demo Mode, con datos sintéticos.

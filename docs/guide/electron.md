@@ -1,3 +1,7 @@
+---
+description: "How the KUA desktop app is built with Electron for Windows, macOS and Linux: development mode, builds, icons, security model and auto-updates."
+---
+
 # Electron Desktop App
 
 KuaDashboard ships as a native desktop application for **Windows**, **macOS**, and **Linux** powered by Electron.

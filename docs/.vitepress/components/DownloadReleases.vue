@@ -20,8 +20,9 @@ onMounted(async () => {
   }
 })
 
-const latest   = computed(() => releases.value[0] ?? null)
-const previous = computed(() => releases.value.slice(1))
+// The latest stable release is the download; a release candidate never takes its place.
+const latest   = computed(() => releases.value.find(r => !r.prerelease) ?? releases.value[0] ?? null)
+const previous = computed(() => releases.value.filter(r => r !== latest.value))
 
 function fileIcon(name) {
   if (name.endsWith('.exe'))      return '🪟'

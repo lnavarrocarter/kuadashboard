@@ -62,6 +62,16 @@ Check `http://localhost:7190/api/health` and open `http://localhost:7190`, then 
 
 If startup fails with a kubeconfig `ENOENT` error, check that `KUBECONFIG` points to an existing file or unset it to use the default configuration. See the [validation and baseline record (Spanish)](docs/growth-baseline.md) for the tested environment and limitations.
 
+## Use KUA from Claude Code
+
+Install the KUA plugin, which gives Claude KUA's tools and a skill on how to use them (needs KUA open on this computer and Node.js on PATH):
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+VS Code, Codex and other agents: see [AI agents](https://lnavarrocarter.github.io/kuadashboard/features/ai-agents).
+
 ## Documentation
 
 - [Documentation in English](docs/index.md)

@@ -1,0 +1,12 @@
+**
+!dist/extension.js
+!dist/texts.json
+!dist/kua-steering.md
+!resources/**
+!package.json
+!package.nls*.json
+!l10n/**
+!media/icon.png
+!README.md
+!CHANGELOG.md
+!LICENSE.md

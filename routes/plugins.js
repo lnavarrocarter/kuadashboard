@@ -3,19 +3,26 @@
  * routes/plugins.js
  * /api/plugins: first-party plugins and whether each is on for this computer (#193).
  *
- *   GET /        { plugins: [{ manifest, active, status }] }
- *   PUT /:id     { active: boolean } → the plugin
+ *   GET /           { plugins: [{ manifest, active, status }] }
+ *   GET /providers  { providers: [{ id, label, plugin, view, cloudApi, advisor, observability, scopes, active }] }
+ *   PUT /:id        { active: boolean } → the plugin
  */
 
 const express = require('express');
+const { activeProviders } = require('../lib/providers');
 
-function createPluginsRouter({ registry, auditLog } = {}) {
+function createPluginsRouter({ registry, auditLog, providers = () => activeProviders(registry) } = {}) {
   if (!registry) throw new Error('registry is required');
   const router = express.Router();
   const fail = (res, error) => res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
 
   router.get('/', async (_req, res) => {
     try { res.json({ plugins: await registry.list() }); } catch (error) { fail(res, error); }
+  });
+
+  // The providers of the catalog and whether each is on, so the top bar shows only those (#193).
+  router.get('/providers', (_req, res) => {
+    try { res.json({ providers: providers() }); } catch (error) { fail(res, error); }
   });
 
   router.put('/:id', async (req, res) => {

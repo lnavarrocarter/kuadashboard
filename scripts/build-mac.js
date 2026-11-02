@@ -61,6 +61,8 @@ function mergeManifests(x64Manifest, arm64Manifest) {
 
 function build() {
   run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:frontend']);
+  // The Claude Desktop extension ships inside the app (#306).
+  run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:mcpb']);
 
   run('npx', ['electron-builder', '--mac', '--x64', '--publish', 'never']);
   verifyBundle(path.join(DIST, 'mac', 'KuaDashboard.app'), 'x86_64');

@@ -1,12 +1,12 @@
 <template>
   <section class="cloud-discovery-panel">
     <header>
-      <span><i :data-lucide="provider === 'gcp' ? 'cloud-cog' : 'triangle'"></i><strong>Add {{ providerLabel }} resources</strong><small>Preview the live inventory, confirm resources, then import them atomically.</small></span>
+      <span><i :data-lucide="PROVIDER_ICON[provider] || 'cloud-cog'"></i><strong>Add {{ providerLabel }} resources</strong><small>Preview the live inventory, confirm resources, then import them atomically.</small></span>
       <button class="btn sm btn-icon" :title="`Close ${providerLabel} discovery`" @click="$emit('close')"><i data-lucide="x"></i></button>
     </header>
     <div v-if="store.discovering" class="cloud-discovery-progress" role="status" aria-live="polite"><i data-lucide="loader-2"></i><span>Reading {{ providerLabel }} inventory…</span></div>
     <template v-if="!preview">
-      <div class="cloud-discovery-empty"><span>Architecture will read {{ provider === 'gcp' ? 'Cloud Run services and Cloud Functions' : 'projects and their latest deployments' }} for the active profile.</span><button class="btn sm primary" :disabled="store.discovering" @click="loadPreview"><i data-lucide="scan-search"></i> Preview inventory</button></div>
+      <div class="cloud-discovery-empty"><span>Architecture will read {{ READS[provider] }} for the active profile.</span><button class="btn sm primary" :disabled="store.discovering" @click="loadPreview"><i data-lucide="scan-search"></i> Preview inventory</button></div>
     </template>
     <template v-else>
       <div class="cloud-discovery-summary"><span><strong>{{ preview.nodes.length }}</strong> resources</span><span v-if="provider === 'vercel'"><strong>{{ deploymentCount }}</strong> deployments</span><span v-if="preview.failures.length" class="warning"><strong>{{ preview.failures.length }}</strong> partial reads</span><button class="btn sm" :disabled="store.discovering" @click="loadPreview"><i data-lucide="refresh-cw"></i> Refresh</button></div>
@@ -33,14 +33,17 @@ const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
 const { t } = useI18n()
 const selectedNodeIds = ref([])
-const preview = computed(() => props.provider === 'gcp' ? store.gcpPreview : store.vercelPreview)
-const providerLabel = computed(() => props.provider === 'gcp' ? 'GCP' : 'Vercel')
+const PROVIDER_ICON = { gcp: 'cloud-cog', vercel: 'triangle', proxmox: 'server' }
+const READS = { gcp: 'Cloud Run services and Cloud Functions', vercel: 'projects and their latest deployments', proxmox: 'nodes, VMs, containers and storage of the cluster, on your network' }
+const PROXMOX_TYPES = { 'proxmox-node': ['server', 'Node'], 'proxmox-qemu': ['monitor', 'VM'], 'proxmox-lxc': ['box', 'Container'], 'proxmox-storage': ['hard-drive', 'Storage'] }
+const preview = computed(() => ({ gcp: store.gcpPreview, vercel: store.vercelPreview, proxmox: store.proxmoxPreview })[props.provider])
+const providerLabel = computed(() => ({ gcp: 'GCP', vercel: 'Vercel', proxmox: 'Proxmox VE' })[props.provider] || props.provider)
 const sortedNodes = computed(() => (preview.value?.nodes || []).slice().sort((left, right) => left.name.localeCompare(right.name)))
 const deploymentCount = computed(() => (preview.value?.nodes || []).reduce((sum, node) => sum + (node.deployments?.length || 0), 0))
 async function loadPreview() { selectedNodeIds.value = []; const result = await store.previewCloudResources(props.provider); if (result) selectedNodeIds.value = result.nodes.filter(node => !node.alreadyInGraph).map(node => node.id); refreshIcons() }
 async function importResources() { const graph = await store.importCloudResources({ provider: props.provider, selectedNodeIds: selectedNodeIds.value }); if (graph) { selectedNodeIds.value = []; emit('imported', graph); refreshIcons() } }
-function resourceIcon(type) { return type === 'gcp-function' ? 'square-function' : type === 'vercel-project' ? 'triangle' : 'cloud-cog' }
-function resourceDetail(node) { if (node.resourceType === 'vercel-project') return [node.framework, node.region, node.deployments?.length ? `${node.deployments.length} deployments` : 'no deployments'].filter(Boolean).join(' · '); return [node.resourceType === 'gcp-cloud-run' ? 'Cloud Run' : 'Cloud Function', node.region, node.runtime].filter(Boolean).join(' · ') }
+function resourceIcon(type) { return PROXMOX_TYPES[type]?.[0] || (type === 'gcp-function' ? 'square-function' : type === 'vercel-project' ? 'triangle' : 'cloud-cog') }
+function resourceDetail(node) { if (PROXMOX_TYPES[node.resourceType]) return [PROXMOX_TYPES[node.resourceType][1], node.vmid ? `#${node.vmid}` : '', node.resourceType === 'proxmox-node' ? node.version : node.node, node.usedPercent != null ? `${node.usedPercent}% used` : ''].filter(Boolean).join(' · '); if (node.resourceType === 'vercel-project') return [node.framework, node.region, node.deployments?.length ? `${node.deployments.length} deployments` : 'no deployments'].filter(Boolean).join(' · '); return [node.resourceType === 'gcp-cloud-run' ? 'Cloud Run' : 'Cloud Function', node.region, node.runtime].filter(Boolean).join(' · ') }
 function resourceState(node) { return node.latestDeployment?.state || node.state || node.status || 'discovered' }
 function refreshIcons() { nextTick(() => createIcons({ icons })) }
 watch(preview, value => { if (!value) selectedNodeIds.value = []; refreshIcons() })

@@ -1,3 +1,8 @@
+---
+title: "Terminal, shell en pods y sesiones SSH/RDP de EC2"
+description: "Abre una shell en un pod de Kubernetes, una terminal local y sesiones SSH y RDP de EC2 persistentes desde KUA, en pestañas que siguen vivas aunque estén ocultas."
+---
+
 # Terminal & Shell
 
 KuaDashboard incluye un potente panel de terminal integrado que te da acceso interactivo completo a shells de pods, streams de logs, sesiones SSH/RDP/SSM a instancias EC2, logs de Cloud Run (GCP) y de despliegues de Vercel, y una shell local del sistema — todo desde la misma ventana.

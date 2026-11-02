@@ -1,3 +1,7 @@
+---
+description: "Configura KUA: servidor y puerto, kubeconfig, almacén de credenciales, comportamiento en segundo plano y el proxy de desarrollo de Vite."
+---
+
 # Configuración
 
 ## Configuración del Servidor

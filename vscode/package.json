@@ -1,0 +1,216 @@
+{
+  "name": "kuadashboard",
+  "displayName": "KUA — Know Unified Administration",
+  "description": "%description%",
+  "version": "2.0.0",
+  "publisher": "kuadashboard",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lnavarrocarter/kuadashboard"
+  },
+  "homepage": "https://lnavarrocarter.github.io/kuadashboard/features/vscode",
+  "engines": {
+    "vscode": "^1.101.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "kubernetes",
+    "aws",
+    "gcp",
+    "mcp",
+    "observability"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "kua.openDashboard",
+        "title": "%command.openDashboard%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.verifyMcp",
+        "title": "%command.verifyMcp%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.addMcpToWorkspace",
+        "title": "%command.addMcpToWorkspace%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.addSteering",
+        "title": "%command.addSteering%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.refresh",
+        "title": "%command.refresh%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.showMenu",
+        "title": "%command.showMenu%",
+        "category": "KUA"
+      },
+      {
+        "command": "kua.applications.refresh",
+        "title": "%command.applicationsRefresh%",
+        "category": "KUA",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kua.linkWorkspace",
+        "title": "%command.linkWorkspace%",
+        "category": "KUA",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "kua.openInKua",
+        "title": "%command.openInKua%",
+        "category": "KUA",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "kua.sendToChat",
+        "title": "%command.sendToChat%",
+        "category": "KUA",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "kua.copyBrief",
+        "title": "%command.copyBrief%",
+        "category": "KUA"
+      }
+    ],
+    "configuration": {
+      "title": "KUA",
+      "properties": {
+        "kua.url": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.url%"
+        },
+        "kua.openIn": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "app",
+            "browser"
+          ],
+          "default": "auto",
+          "markdownDescription": "%config.openIn%"
+        },
+        "kua.application": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "%config.application%"
+        }
+      }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "kua.mcp",
+        "label": "KUA"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kua",
+          "title": "KUA",
+          "icon": "resources/kua.svg"
+        }
+      ]
+    },
+    "views": {
+      "kua": [
+        {
+          "id": "kua.applications",
+          "name": "%view.applications%"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "kua.applications.refresh",
+          "when": "view == kua.applications",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kua.linkWorkspace",
+          "when": "view == kua.applications",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kua.openInKua",
+          "when": "view == kua.applications && viewItem =~ /^kua\\.(application|issue|resource|finding)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "kua.sendToChat",
+          "when": "view == kua.applications && viewItem =~ /^kua\\.(application|advisor|finding|issue)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "kua.openInKua",
+          "when": "view == kua.applications && viewItem =~ /^kua\\.(application|issue|resource|finding)$/",
+          "group": "1_kua@1"
+        },
+        {
+          "command": "kua.sendToChat",
+          "when": "view == kua.applications && viewItem =~ /^kua\\.(application|advisor|finding|issue)$/",
+          "group": "1_kua@2"
+        },
+        {
+          "command": "kua.copyBrief",
+          "when": "view == kua.applications && viewItem =~ /^kua\\.(application|advisor|finding|issue)$/",
+          "group": "1_kua@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "kua.openInKua",
+          "when": "false"
+        },
+        {
+          "command": "kua.sendToChat",
+          "when": "false"
+        },
+        {
+          "command": "kua.copyBrief",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "test": "node --test \"src/**/*.test.js\"",
+    "package": "npm run build && vsce package --no-dependencies --out dist/kuadashboard.vsix"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2"
+  }
+}

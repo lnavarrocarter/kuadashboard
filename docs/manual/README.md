@@ -1,3 +1,7 @@
+---
+description: "Manual de usuario de KuaDashboard: Kubernetes, AWS, GCP y Vercel paso a paso."
+---
+
 # 📖 Manual de Usuario — KuaDashboard
 
 > **KUA (Know Unified Administration)** — panel de control universal para administrar infraestructura cloud-native desde un solo lugar: Kubernetes, AWS, GCP y Vercel.

@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useApi } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
+import { taskRun } from '../lib/taskTrace'
 
 const { t } = useI18n()
 
@@ -61,11 +62,13 @@ export const useApmStore = defineStore('apm', () => {
     return { from: to - (RANGE_MS[range.value] || RANGE_MS['24h']), to }
   })
 
-  function headers(json = false) {
+  // task: X-KUA-Task value from taskRun(), so the backend task journal attributes the request (#325).
+  function headers(json = false, task = null) {
     if (!activeProfileId.value) throw new Error(t('store.noCloudProfile'))
     return {
       'X-Profile-Id': activeProfileId.value,
       ...(json ? { 'Content-Type': 'application/json' } : {}),
+      ...(task ? { 'X-KUA-Task': task } : {}),
     }
   }
 
@@ -108,7 +111,7 @@ export const useApmStore = defineStore('apm', () => {
     error.value = null
     try {
       const previous = preserveSelection ? selectedApplicationId.value : null
-      applications.value = await request('/applications', { headers: headers() })
+      applications.value = await request('/applications', { headers: headers(false, taskRun('apps.list')) })
       selectedApplicationId.value = applications.value.some(item => item.id === previous)
         ? previous
         : applications.value[0]?.id || null
@@ -124,7 +127,7 @@ export const useApmStore = defineStore('apm', () => {
   async function loadUsage() {
     if (!activeProfileId.value) return null
     try {
-      usage.value = await request('/usage', { headers: headers() })
+      usage.value = await request('/usage', { headers: headers(false, taskRun('usage')) })
       return usage.value
     } catch (requestError) {
       error.value = requestError.message
@@ -141,11 +144,12 @@ export const useApmStore = defineStore('apm', () => {
     loading.value = true
     error.value = null
     const { from, to } = rangeBounds.value
+    const task = taskRun('app.load')
     try {
       const [nextOverview, nextTopology, nextForecast] = await Promise.all([
-        request(`/applications/${applicationId}/overview?from=${from}&to=${to}`, { headers: headers() }),
-        request(`/applications/${applicationId}/topology`, { headers: headers() }),
-        request(`/applications/${applicationId}/forecast`, { headers: headers() }),
+        request(`/applications/${applicationId}/overview?from=${from}&to=${to}`, { headers: headers(false, task) }),
+        request(`/applications/${applicationId}/topology`, { headers: headers(false, task) }),
+        request(`/applications/${applicationId}/forecast`, { headers: headers(false, task) }),
       ])
       overview.value = nextOverview
       topology.value = mergeCloudSuggestions(nextTopology, cloudSuggestionsByApplication.value[applicationId])
@@ -335,7 +339,7 @@ export const useApmStore = defineStore('apm', () => {
     reconcilingRegistry.value = true
     try {
       registry.value = await request(`/applications/${selectedApplicationId.value}/registry/reconcile`, {
-        method: 'POST', headers: headers(),
+        method: 'POST', headers: headers(false, taskRun('registry.reconcile')),
       })
       syncStatus.value = registry.value?.syncStatus || syncStatus.value
       return registry.value
@@ -353,7 +357,7 @@ export const useApmStore = defineStore('apm', () => {
     if (!applicationId) return null
     registryLoading.value = true
     try {
-      registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers() })
+      registry.value = await request(`/applications/${applicationId}/registry`, { headers: headers(false, taskRun('app.registry')) })
       syncStatus.value = registry.value?.syncStatus || null
       return syncStatus.value
     } catch (_) {
@@ -370,7 +374,7 @@ export const useApmStore = defineStore('apm', () => {
     try {
       const result = await request(`/applications/${selectedApplicationId.value}/registry/relationships/${relationshipId}/review`, {
         method: 'POST',
-        headers: { ...headers(), 'Content-Type': 'application/json' },
+        headers: headers(true, taskRun('review.relationship')),
         body: JSON.stringify({ decision }),
       })
       await loadRegistrySyncStatus(selectedApplicationId.value)
@@ -388,7 +392,7 @@ export const useApmStore = defineStore('apm', () => {
     previewingKubernetes.value = true
     try {
       kubernetesPreview.value = await request(`/applications/${selectedApplicationId.value}/discovery/kubernetes/preview`, {
-        method: 'POST', headers: headers(true), body: JSON.stringify({ contexts, namespaces }),
+        method: 'POST', headers: headers(true, taskRun('k8s.preview')), body: JSON.stringify({ contexts, namespaces }),
       })
       kubernetesPreviewScopeKey.value = `${selectedApplicationId.value}:${[...contexts].sort().join('|')}`
       return kubernetesPreview.value
@@ -427,7 +431,7 @@ export const useApmStore = defineStore('apm', () => {
   async function addResource(applicationId, resource) {
     return request(`/applications/${applicationId}/resources`, {
       method: 'POST',
-      headers: headers(true),
+      headers: headers(true, taskRun('resource.add')),
       body: JSON.stringify(resource),
     })
   }
@@ -442,9 +446,10 @@ export const useApmStore = defineStore('apm', () => {
       dependency,
     ])).values()]
     if (!uniqueDependencies.length) return
+    const task = taskRun('review.confirm-dependencies')
     await Promise.all(uniqueDependencies.map(dependency => request(`/applications/${applicationId}/edges`, {
       method: 'POST',
-      headers: headers(true),
+      headers: headers(true, task),
       body: JSON.stringify({
         sourceResourceId: dependency.sourceResourceId,
         targetResourceId: dependency.targetResourceId,
@@ -460,7 +465,7 @@ export const useApmStore = defineStore('apm', () => {
     try {
       topology.value = await request(`/applications/${applicationId}/topology/analyze-cloud`, {
         method: 'POST',
-        headers: headers(),
+        headers: headers(false, taskRun('topology.analyze-cloud')),
       })
       cloudSuggestionsByApplication.value = {
         ...cloudSuggestionsByApplication.value,

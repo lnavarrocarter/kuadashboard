@@ -17,7 +17,7 @@
       </select>
       <input v-if="draft.provider === 'other'" v-model.trim="draft.customProvider" :placeholder="t('kuapps.scopes.providerId')" :aria-label="t('kuapps.scopes.providerId')" />
       <input v-model.trim="draft.scopeId" :placeholder="scopeIdPlaceholder" :aria-label="t('kuapps.scopes.scopeId')" />
-      <input v-if="draft.provider !== 'kubernetes'" v-model.trim="draft.location" :placeholder="t('kuapps.scopes.location')" :aria-label="t('kuapps.scopes.location')" />
+      <input v-if="!['kubernetes', 'proxmox'].includes(draft.provider)" v-model.trim="draft.location" :placeholder="t('kuapps.scopes.location')" :aria-label="t('kuapps.scopes.location')" />
       <input v-model.trim="draft.label" :placeholder="t('kuapps.scopes.label')" :aria-label="t('kuapps.scopes.label')" />
       <button class="btn sm primary" type="submit" :disabled="busy">{{ t('kuapps.scopes.save') }}</button>
       <button class="btn sm" type="button" @click="adding = false">{{ t('kuapps.scopes.cancel') }}</button>
@@ -63,6 +63,7 @@ import { createIcons, icons } from 'lucide'
 import { api } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
 import { useEnvStore } from '../../stores/useEnvStore'
+import { providerIds } from '../../lib/providers'
 
 // Portable scopes of a KUA Application and the local profile bound to each (#149).
 // Bindings stay on this computer; the server verifies them with free reads only.
@@ -71,7 +72,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed'])
 
-const PROVIDERS = ['aws', 'gcp', 'kubernetes', 'vercel']
+const PROVIDERS = providerIds('scopes')
 const { t } = useI18n()
 const envStore = useEnvStore()
 const view = ref(null)

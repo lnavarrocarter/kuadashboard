@@ -1,3 +1,7 @@
+---
+description: "Manual de usuario de KUA para Kubernetes: clústeres, workloads, logs, shell y port forwarding paso a paso."
+---
+
 # ☸️ Kubernetes
 
 > Las capturas de esta página se retiraron porque mostraban infraestructura real. Volverán generadas desde el Demo Mode, con datos sintéticos.

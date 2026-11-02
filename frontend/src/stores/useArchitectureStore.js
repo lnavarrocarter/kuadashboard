@@ -37,6 +37,9 @@ export const useArchitectureStore = defineStore('architecture', () => {
   // Infrastructure Manager deployments and labels of the GCP project, like AWS stacks.
   const gcpGroups = ref(null)
   const vercelPreview = ref(null)
+  const proxmoxPreview = ref(null)
+  // The previews of the providers discovered through the generic cloud discovery routes.
+  const CLOUD_PREVIEWS = { gcp: gcpPreview, vercel: vercelPreview, proxmox: proxmoxPreview }
   const discovering = ref(false)
   const discoveryPhase = ref(null)
   const loading = ref(false)
@@ -112,6 +115,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     kubernetesPreview.value = null
     gcpPreview.value = null
     vercelPreview.value = null
+    proxmoxPreview.value = null
     discoveryPhase.value = null
   }
 
@@ -210,6 +214,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     kubernetesPreview.value = null
     gcpPreview.value = null
     vercelPreview.value = null
+    proxmoxPreview.value = null
     if (!selectedProjectId.value) return null
     if (manageLoading) loading.value = true
     error.value = null
@@ -787,11 +792,11 @@ export const useArchitectureStore = defineStore('architecture', () => {
 
   // filters (GCP): { deployments: [...], labels: ['key=value'] }, like AWS stackNames.
   async function previewCloudResources(provider, filters = {}) {
-    if (!selectedProjectId.value || !['gcp', 'vercel'].includes(provider)) return null
+    if (!selectedProjectId.value || !CLOUD_PREVIEWS[provider]) return null
     discovering.value = true
     discoveryPhase.value = `${provider}-resources`
     error.value = null
-    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    const target = CLOUD_PREVIEWS[provider]
     try {
       target.value = await apiFetch(
         `/api/architecture/projects/${selectedProjectId.value}/discovery/${provider}/preview`,
@@ -808,8 +813,8 @@ export const useArchitectureStore = defineStore('architecture', () => {
   }
 
   async function importCloudResources({ provider, selectedNodeIds }) {
-    if (!selectedProjectId.value || !graph.value || !['gcp', 'vercel'].includes(provider)) return null
-    const target = provider === 'gcp' ? gcpPreview : vercelPreview
+    if (!selectedProjectId.value || !graph.value || !CLOUD_PREVIEWS[provider]) return null
+    const target = CLOUD_PREVIEWS[provider]
     if (!target.value || !(selectedNodeIds || []).length) return null
     saving.value = true
     error.value = null
@@ -1009,6 +1014,7 @@ export const useArchitectureStore = defineStore('architecture', () => {
     gcpPreview,
     gcpGroups,
     vercelPreview,
+    proxmoxPreview,
     error,
     graph,
     importAwsResources,

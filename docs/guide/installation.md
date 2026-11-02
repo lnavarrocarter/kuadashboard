@@ -1,10 +1,14 @@
+---
+description: "Install KUA on Windows, macOS or Linux, or run it from source with Node.js 20: system requirements, cloud provider setup and environment variables."
+---
+
 # Installation
 
 ## System Requirements
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| Node.js   | 16.x    | 20.x+       |
+| Node.js   | 20.x    | 20.x+       |
 | OS        | Windows 10, macOS 12, Ubuntu 20.04 | Latest |
 | RAM       | 512 MB  | 1 GB+       |
 | kubectl   | 1.24+   | Latest      |

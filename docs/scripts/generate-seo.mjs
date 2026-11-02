@@ -7,7 +7,8 @@ import { isNoindex, SUMMARY } from '../.vitepress/seo.mjs'
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const docsDir = path.resolve(scriptDir, '..')
 const publicDir = path.join(docsDir, 'public')
-const siteUrl = (process.env.SITE_URL || 'https://lnavarrocarter.github.io/kuadashboard').replace(/\/+$/, '')
+// The primary domain, also in the GitHub Pages copy: one canonical site (see .vitepress/config.mjs).
+const siteUrl = (process.env.SITE_URL || 'https://kuadashboard.navarrocarter.com').replace(/\/+$/, '')
 
 function collectMarkdown(directory, relative = '') {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -78,7 +79,9 @@ fs.writeFileSync(path.join(publicDir, 'robots.txt'), [
 // llms.txt: what the site is about, for AI search engines and assistants (llmstxt.org).
 const titleOf = page => {
   const text = fs.readFileSync(path.join(docsDir, page), 'utf8')
-  return text.match(/^title:\s*(.+)$/m)?.[1]?.trim() || text.match(/^#\s+(.+)$/m)?.[1]?.trim() || page
+  // A YAML title may be quoted: "Title" or 'Title'.
+  const title = text.match(/^title:\s*(.+)$/m)?.[1]?.trim().replace(/^(["'])(.*)\1$/, '$2')
+  return title || text.match(/^#\s+(.+)$/m)?.[1]?.trim() || page
 }
 const section = (name, filter) => [`## ${name}`, '', ...pages.filter(filter).map(page => `- [${titleOf(page)}](${siteUrl}${pageRoute(page)})`), '']
 fs.writeFileSync(path.join(publicDir, 'llms.txt'), [
@@ -88,6 +91,7 @@ fs.writeFileSync(path.join(publicDir, 'llms.txt'), [
   '',
   `Source code: https://github.com/lnavarrocarter/kuadashboard · Download: ${siteUrl}/download.html · Account: https://app.kuadashboard.navarrocarter.com`,
   '',
+  ...section('Use cases', page => /^(kubernetes-dashboard|multi-cloud-dashboard|aws-dashboard|google-cloud-console-alternative|vercel-dashboard|lens-alternative)\.md$/.test(page)),
   ...section('Guide', page => page.startsWith('guide/')),
   ...section('Features', page => page.startsWith('features/')),
   ...section('Manual', page => page.startsWith('manual/')),

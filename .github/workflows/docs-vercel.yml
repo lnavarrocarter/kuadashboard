@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      # The site shows the app version (JSON-LD softwareVersion) from the root package.json.
+      - 'package.json'
       - '.github/workflows/docs-vercel.yml'
   workflow_dispatch:
 

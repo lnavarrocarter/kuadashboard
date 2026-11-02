@@ -123,6 +123,16 @@ El backend Express expone las API locales y conexiones WebSocket; el frontend Vu
 
 ---
 
+## Usar KUA desde Claude Code
+
+Instala el plugin de KUA, que le da a Claude las herramientas de KUA y una skill de cómo usarlas (requiere KUA abierto en este computador y Node.js en el PATH):
+
+```text
+/plugin install kua --marketplace lnavarrocarter/kuadashboard
+```
+
+VS Code, Codex y otros agentes: ver [Agentes IA](https://lnavarrocarter.github.io/kuadashboard/es/features/ai-agents).
+
 ## Instalación
 
 ### Prerrequisitos

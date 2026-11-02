@@ -1,3 +1,8 @@
+---
+title: "Local Application Observability (APM) for Lambda and Kubernetes"
+description: "Local APM in KUA: confirmed Lambda and Kubernetes membership, 30-minute aggregates, thresholds, dependencies and cost guardrails, without provisioning anything in the cloud."
+---
+
 # Local Application Observability
 
 KuaDashboard includes a provider-scoped local APM view under **Observability > AWS/GCP/Vercel > Applications**. It groups explicitly confirmed cloud resources and Kubernetes workloads into applications without installing an agent or creating cloud resources.

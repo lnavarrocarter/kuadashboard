@@ -1,3 +1,7 @@
+---
+description: "Privacy policy of KUA: what stays on your computer, what the optional KUA account stores, how long, and your rights."
+---
+
 # Privacy Policy
 
 Last updated: 2026-10-07

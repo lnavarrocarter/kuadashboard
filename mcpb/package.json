@@ -1,0 +1,12 @@
+{
+  "name": "kua-mcpb",
+  "private": true,
+  "description": "Builds kua.mcpb, the Claude Desktop extension of KUA (#306).",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"*.test.mjs\""
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  }
+}

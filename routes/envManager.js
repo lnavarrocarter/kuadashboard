@@ -21,6 +21,7 @@
 const express = require('express');
 const { getStore } = require('../lib/credentialStore');
 const auditLog     = require('../lib/auditLog');
+const { providerIds } = require('../lib/providers');
 
 const router = express.Router();
 
@@ -33,7 +34,8 @@ function handleErr(res, err) {
 
 /** Validate that `provider` is one of the accepted values */
 function validateProvider(provider) {
-  return ['gcp', 'aws', 'vercel', 'generic'].includes(provider);
+  // Providers with stored credentials (lib/providers.js), plus free-form generic profiles.
+  return [...providerIds('cloudApi'), 'generic'].includes(provider);
 }
 
 /**
@@ -80,7 +82,7 @@ router.post('/profiles', async (req, res) => {
     if (!name || typeof name !== 'string' || !name.trim())
       return res.status(400).json({ error: '`name` is required' });
     if (!validateProvider(provider))
-      return res.status(400).json({ error: '`provider` must be gcp | aws | vercel | generic' });
+      return res.status(400).json({ error: `\`provider\` must be ${[...providerIds('cloudApi'), 'generic'].join(' | ')}` });
 
     // Sanitize key names: only allow alphanumeric + underscores
     const sanitizedKeys = {};

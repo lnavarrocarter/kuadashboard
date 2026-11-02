@@ -17,7 +17,7 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { PostureStore } = require('../lib/advisor/posture');
 const { buildReport, check } = require('../lib/advisor/core');
 
-async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs, providerActive, githubCicd } = {}) {
   // In-memory log cache: tests never touch the user's data directory.
   const logCache = createLogCache({ dataDir: ':memory:' });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
@@ -60,6 +60,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     architectureDatabase,
     scheduler,
     provider: 'generic',
+    ...(providerActive ? { providerActive } : {}),
     logCache: () => logCache,
     syncProviderLogs,
   }));
@@ -68,6 +69,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     apmDatabase: database,
     auditLog: { log(event) { auditEvents.push(event); } },
     kubernetesAdapter,
+    ...(githubCicd ? { githubCicd } : {}),
     logCache: () => logCache,
   }));
   const server = http.createServer(app);
@@ -1308,6 +1310,60 @@ test('product advisor reads cached AWS and Kubernetes logs from each resource sc
   }
 });
 
+// DORA (#96): frequency, lead time and change failure rate from the GitHub CI/CD reader (#238).
+test('the product advisor computes DORA metrics when the application syncs with GitHub', async () => {
+  const previousPlan = process.env.KUA_PLAN;
+  process.env.KUA_PLAN = 'pro';
+  let subject;
+  try {
+    const { createGithubCicd } = require('../lib/kua/githubCicd');
+    const deployAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const commitAt = new Date(deployAt.getTime() - 2 * 60 * 60 * 1000);
+    const run = (id, conclusion, at) => ({
+      id, run_number: id, name: 'Deploy production', status: 'completed', conclusion,
+      head_sha: `sha-${id}`, head_branch: 'main', updated_at: at.toISOString(),
+      head_commit: { message: 'feat: checkout', author: { name: 'Ana' }, timestamp: commitAt.toISOString() },
+      triggering_actor: { login: 'ana' },
+      html_url: `https://github.com/acme/api/actions/runs/${id}`,
+    });
+    const github = createGithubCicd({ client: {
+      async user() { return { login: 'ana' }; },
+      async workflowRuns() {
+        return { workflow_runs: [run(7, 'success', deployAt), run(6, 'failure', new Date(deployAt.getTime() - 3600000))] };
+      },
+      async deployments() { return []; },
+    } });
+    subject = await fixture({ githubCicd: github });
+    const created = await subject.request('/applications', {
+      method: 'POST',
+      body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
+    });
+
+    // Without the GitHub sync turned on, DORA stays unavailable.
+    const before = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(before.body.technical.dora.available, false);
+    assert.equal(before.body.technical.dora.reason, 'deployment_history_unavailable');
+
+    github.configure(created.body.id, { enabled: true, repositories: ['acme/api'] });
+    const advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(advisor.status, 200);
+    const dora = advisor.body.technical.dora;
+    assert.equal(dora.available, true);
+    assert.equal(dora.source, 'github.cicd');
+    assert.deepEqual(dora.repositories, ['acme/api']);
+    assert.equal(dora.deploys, 1);
+    assert.equal(dora.leadTimeHours, 2);
+    assert.equal(dora.leadTimeSamples, 1);
+    assert.equal(dora.changeRuns, 2);
+    assert.equal(dora.changeFailures, 1);
+    assert.equal(dora.changeFailureRatePercent, 50);
+  } finally {
+    await subject?.close();
+    if (previousPlan === undefined) delete process.env.KUA_PLAN;
+    else process.env.KUA_PLAN = previousPlan;
+  }
+});
+
 test('an application without provider is read through the generic routes by local or a verified scope profile', async () => {
   const { normalizeScope } = require('../lib/kua/applicationContract');
   const subject = await fixture();
@@ -1388,6 +1444,29 @@ test('GCP and Vercel log cache is estimated locally and opted into per verified 
       profile: 'gcp-profile', method: 'DELETE',
     });
     assert.equal(removed.body.removed, 1);
+  } finally {
+    await subject.close();
+  }
+});
+
+test('the log cache of a provider whose plugin is off answers PLUGIN_DISABLED and syncs nothing', async () => {
+  const syncs = [];
+  const subject = await fixture({ syncProviderLogs: async target => { syncs.push(target); return { status: 'ok', inserted: 0 }; }, providerActive: id => id !== 'vercel' });
+  try {
+    const application = subject.database.createApplication({ name: 'Vercel app' });
+    const vercelScope = normalizeScope({ provider: 'vercel', scopeId: 'team-1', location: 'global' });
+    subject.database.addApplicationScope(application.id, vercelScope);
+    subject.database.setScopeBinding(application.id, vercelScope.key, { profileId: 'vercel-profile', status: 'verified' });
+    const vercelProject = subject.database.addResource(application.id, {
+      provider: 'vercel', type: 'vercel-project', key: 'prj_123', scopeId: 'team-1', location: 'global', name: 'web',
+    });
+    const enabled = await subject.genericRequest(`/applications/${application.id}/log-cache`, {
+      profile: 'vercel-profile', method: 'POST', body: { resourceId: vercelProject.id },
+    });
+    assert.equal(enabled.status, 404);
+    assert.equal(enabled.body.code, 'PLUGIN_DISABLED');
+    assert.deepEqual(syncs, []);
+    assert.equal((await subject.genericRequest('/applications')).status, 200, 'the application itself still opens');
   } finally {
     await subject.close();
   }

@@ -32,6 +32,8 @@
             <button :class="{ active: resourceProvider === 'manual' }" @click="resourceProvider = 'manual'"><i data-lucide="square-plus"></i> {{ t('archView.manualResource') }}</button>
             <button :class="{ active: resourceProvider === 'gcp' }" @click="resourceProvider = 'gcp'"><i data-lucide="cloud-cog"></i> GCP</button>
             <button :class="{ active: resourceProvider === 'vercel' }" @click="resourceProvider = 'vercel'"><i data-lucide="triangle"></i> Vercel</button>
+            <!-- Proxmox VE (#195): only while its plugin is on in Plugins/Connections. -->
+            <button v-if="isProviderOn('proxmox')" :class="{ active: resourceProvider === 'proxmox' }" data-test="add-proxmox-resources" @click="resourceProvider = 'proxmox'"><i data-lucide="server"></i> Proxmox VE</button>
           </div>
         </div>
         <button class="btn sm primary" :disabled="!profileId" @click="creatingProject = true">
@@ -76,6 +78,7 @@
       <ArchitectureManualResourcePanel v-if="resourceProvider === 'manual'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureGcpDiscoveryPanel v-if="resourceProvider === 'gcp'" @close="closePicker" @imported="pickerImported" />
       <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'vercel'" provider="vercel" @close="closePicker" @imported="pickerImported" />
+      <ArchitectureCloudDiscoveryPanel v-if="resourceProvider === 'proxmox'" provider="proxmox" @close="closePicker" @imported="pickerImported" />
     </div>
 
     <div v-else-if="props.settingsOnly" class="architecture-settings-admin">
@@ -251,6 +254,12 @@
               @close="resourceProvider = ''"
               @imported="resourceProvider = ''"
             />
+            <ArchitectureCloudDiscoveryPanel
+              v-if="resourceProvider === 'proxmox'"
+              provider="proxmox"
+              @close="resourceProvider = ''"
+              @imported="resourceProvider = ''"
+            />
 
             <ArchitectureKubernetesDrift v-if="store.graph" />
             <ArchitectureGraphAdvisor
@@ -396,6 +405,7 @@ import { useAwsStore } from '../../stores/useAwsStore'
 import { useTerminalStore } from '../../stores/useTerminalStore'
 import { useToast } from '../../composables/useToast'
 import { useI18n } from '../../composables/useI18n'
+import { useProviders } from '../../composables/useProviders'
 import { suggestGraphRelationships } from '../../lib/logRelationshipEvidence'
 import StepFnDetail from '../StepFnDetail.vue'
 import BaseModal from '../BaseModal.vue'
@@ -436,6 +446,7 @@ const emit = defineEmits([
 ])
 const store = useArchitectureStore()
 const { apiFetch } = useApi()
+const { isProviderOn } = useProviders()
 const apmStore = useApmStore()
 const awsStore = useAwsStore()
 const terminalStore = useTerminalStore()
@@ -1127,7 +1138,7 @@ async function ensurePickerReady() {
 async function openResourcePicker(provider = 'aws', { kubeContext = '' } = {}) {
   pickerKubeContext.value = kubeContext
   if (!(await ensurePickerReady())) return
-  resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel', 'manual'].includes(provider) ? provider : 'aws'
+  resourceProvider.value = ['aws', 'kubernetes', 'gcp', 'vercel', 'proxmox', 'manual'].includes(provider) ? provider : 'aws'
   nextTick(() => createIcons({ icons }))
 }
 

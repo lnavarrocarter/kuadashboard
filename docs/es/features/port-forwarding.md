@@ -1,3 +1,8 @@
+---
+title: "Port forwarding de Kubernetes con reconexión automática"
+description: "Redirige puertos a Services y Pods de Kubernetes desde KUA: resolución del pod destino, sesiones persistentes, reconexión automática y un panel visual, sin kubectl port-forward."
+---
+
 # Port Forwarding
 
 KuaDashboard proporciona un gestor visual de port-forward construido sobre la API de port-forward de Kubernetes.
