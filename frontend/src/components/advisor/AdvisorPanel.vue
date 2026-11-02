@@ -98,7 +98,12 @@
             </li>
           </ul>
           <h4>{{ t('advisor.dora.title') }}</h4>
-          <p class="adv-dim">{{ t(`advisor.dora.${report.technical.dora?.reason || 'unavailable'}`) }}</p>
+          <ul v-if="report.technical.dora?.available" class="adv-insight-list" data-test="advisor-dora">
+            <li>{{ t('advisor.dora.deploys', { n: report.technical.dora.deploys, days: report.technical.dora.days, perWeek: report.technical.dora.perWeek }) }}</li>
+            <li>{{ report.technical.dora.leadTimeHours == null ? t('advisor.dora.leadTimeUnknown') : t('advisor.dora.leadTime', { hours: report.technical.dora.leadTimeHours, n: report.technical.dora.leadTimeSamples }) }}</li>
+            <li>{{ report.technical.dora.changeFailureRatePercent == null ? t('advisor.dora.changeFailureUnknown') : t('advisor.dora.changeFailure', { rate: report.technical.dora.changeFailureRatePercent, failures: report.technical.dora.changeFailures, runs: report.technical.dora.changeRuns }) }}</li>
+          </ul>
+          <p v-else class="adv-dim">{{ t(`advisor.dora.${report.technical.dora?.reason || 'unavailable'}`) }}</p>
           <ul v-if="report.recommendations?.length" class="adv-insight-list" data-test="advisor-cross-recommendations">
             <li v-for="recommendation in report.recommendations" :key="recommendation.id">
               {{ t(`advisor.recommendation.${recommendation.id}`, { resources: recommendation.resources?.join(', ') || '', sources: recommendation.sources?.join(', ') || '' }) }}
