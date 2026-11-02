@@ -329,3 +329,40 @@ describe('explicit writes', () => {
     expect(store.processTrace.dataIncluded).toBe(true)
   })
 })
+describe('task journal header (#325)', () => {
+  const taskOf = call => {
+    const headers = call[1]?.headers
+    return typeof headers?.get === 'function' ? headers.get('X-KUA-Task') : headers?.['X-KUA-Task']
+  }
+
+  it('confirming several dependencies sends one run for all their requests', async () => {
+    global.fetch = vi.fn(url => response(url.includes('/edges') ? { id: 'e' } : url.includes('/topology') ? { resources: [], edges: [] } : {}))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+    await store.confirmDependencies('app-a', [
+      { sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' },
+      { sourceResourceId: 'r2', targetResourceId: 'r3', relationType: 'invokes' },
+    ])
+    const edgeTasks = global.fetch.mock.calls.filter(call => call[0].includes('/edges')).map(taskOf)
+    expect(edgeTasks).toHaveLength(2)
+    expect(edgeTasks[0]).toMatch(/^review\.confirm-dependencies;[a-z0-9-]+$/)
+    expect(edgeTasks[1]).toBe(edgeTasks[0])
+
+    const loadTasks = global.fetch.mock.calls.filter(call => /\/(overview|topology|forecast)/.test(call[0])).map(taskOf)
+    expect(loadTasks).toHaveLength(3)
+    expect(new Set(loadTasks).size).toBe(1)
+    expect(loadTasks[0]).toMatch(/^app\.load;/)
+    expect(loadTasks[0]).not.toBe(edgeTasks[0])
+  })
+
+  it('each invocation of a task gets its own run', async () => {
+    global.fetch = vi.fn(() => response({}))
+    store.setActiveProfile('local:dev')
+    await store.loadRegistrySyncStatus('app-a')
+    await store.loadRegistrySyncStatus('app-a')
+    const [first, second] = global.fetch.mock.calls.map(taskOf)
+    expect(first).toMatch(/^app\.registry;/)
+    expect(second).toMatch(/^app\.registry;/)
+    expect(second).not.toBe(first)
+  })
+})
