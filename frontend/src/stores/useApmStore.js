@@ -446,17 +446,21 @@ export const useApmStore = defineStore('apm', () => {
       dependency,
     ])).values()]
     if (!uniqueDependencies.length) return
-    const task = taskRun('review.confirm-dependencies')
-    await Promise.all(uniqueDependencies.map(dependency => request(`/applications/${applicationId}/edges`, {
+    // One request and one registry reconciliation for the whole set (#327).
+    const result = await request(`/applications/${applicationId}/edges/batch`, {
       method: 'POST',
-      headers: headers(true, task),
+      headers: headers(true, taskRun('review.confirm-dependencies')),
       body: JSON.stringify({
-        sourceResourceId: dependency.sourceResourceId,
-        targetResourceId: dependency.targetResourceId,
-        relationType: dependency.relationType,
+        edges: uniqueDependencies.map(dependency => ({
+          sourceResourceId: dependency.sourceResourceId,
+          targetResourceId: dependency.targetResourceId,
+          relationType: dependency.relationType,
+        })),
       }),
-    })))
+    })
     await loadSelectedApplication()
+    // After the reload, which clears the previous error.
+    if (result?.invalid) error.value = t('apm.dependenciesNotConfirmed', { n: result.invalid })
   }
 
   async function analyzeCloudTopology(applicationId) {

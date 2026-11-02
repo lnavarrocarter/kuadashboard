@@ -20,6 +20,8 @@ const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
 const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
 
+const MAX_EDGE_BATCH = 200;
+
 function createApmRouter({
   database,
   architectureDatabase,
@@ -709,6 +711,29 @@ function createApmRouter({
       reconcileRegistry(database.getApplication(application.id));
       log('Dependency confirmed', edge.id, application.profileId);
       res.status(201).json(edge);
+    } catch (error) { handleError(res, error); }
+  });
+
+  // Confirms many dependencies at once with one registry reconciliation (#327), instead of
+  // one request and one full reconciliation per dependency.
+  router.post('/applications/:applicationId/edges/batch', (req, res) => {
+    const application = scopedApplication(req, res);
+    if (!application) return;
+    try {
+      const edges = req.body?.edges;
+      if (!Array.isArray(edges) || !edges.length || edges.length > MAX_EDGE_BATCH) {
+        throw Object.assign(new Error(`edges must be a list of 1 to ${MAX_EDGE_BATCH} dependencies`), { statusCode: 400 });
+      }
+      const { results, created } = database.addEdges(application.id, edges, { expectedRevision: req.body?.expectedRevision });
+      const registryResult = created ? reconcileRegistry(database.getApplication(application.id)) : null;
+      log('Dependencies confirmed', application.name, application.profileId, { created, requested: edges.length });
+      res.json({
+        results,
+        created,
+        exists: results.filter(result => result.status === 'exists').length,
+        invalid: results.filter(result => result.status === 'invalid').length,
+        syncStatus: registryResult?.syncStatus || null,
+      });
     } catch (error) { handleError(res, error); }
   });
 

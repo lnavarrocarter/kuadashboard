@@ -236,11 +236,11 @@ describe('explicit writes', () => {
     expect(store.topology.edges).toEqual([])
   })
 
-  it('confirms every distinct suggested dependency before one topology refresh', async () => {
+  it('confirms every distinct suggested dependency in one batch before one topology refresh', async () => {
     global.fetch = vi.fn((url, options = {}) => {
-      if (url.endsWith('/edges')) {
+      if (url.endsWith('/edges/batch')) {
         expect(options.method).toBe('POST')
-        return response({ id: 'edge' }, 201)
+        return response({ results: [], created: 2, exists: 0, invalid: 0 })
       }
       if (url.includes('/overview')) return response({ metrics: [], resources: [] })
       if (url.endsWith('/topology')) return response({ application: { id: 'app-a' }, resources: [], edges: [], analysis: {} })
@@ -257,7 +257,9 @@ describe('explicit writes', () => {
       { sourceResourceId: 'queue', targetResourceId: 'worker', relationType: 'consumed_by' },
     ])
 
-    expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/edges'))).toHaveLength(2)
+    const batches = global.fetch.mock.calls.filter(([url]) => url.endsWith('/edges/batch'))
+    expect(batches).toHaveLength(1)
+    expect(JSON.parse(batches[0][1].body).edges).toHaveLength(2)
     expect(global.fetch.mock.calls.filter(([url]) => url.endsWith('/topology'))).toHaveLength(1)
   })
 
@@ -335,24 +337,37 @@ describe('task journal header (#325)', () => {
     return typeof headers?.get === 'function' ? headers.get('X-KUA-Task') : headers?.['X-KUA-Task']
   }
 
-  it('confirming several dependencies sends one run for all their requests', async () => {
-    global.fetch = vi.fn(url => response(url.includes('/edges') ? { id: 'e' } : url.includes('/topology') ? { resources: [], edges: [] } : {}))
+  it('confirming several dependencies is one batch request, then one application load', async () => {
+    global.fetch = vi.fn(url => response(url.includes('/edges/batch') ? { results: [], created: 2, exists: 0, invalid: 0 } : url.includes('/topology') ? { resources: [], edges: [] } : {}))
     store.setActiveProfile('local:dev')
     store.selectedApplicationId = 'app-a'
     await store.confirmDependencies('app-a', [
       { sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' },
       { sourceResourceId: 'r2', targetResourceId: 'r3', relationType: 'invokes' },
+      { sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' },
     ])
-    const edgeTasks = global.fetch.mock.calls.filter(call => call[0].includes('/edges')).map(taskOf)
-    expect(edgeTasks).toHaveLength(2)
-    expect(edgeTasks[0]).toMatch(/^review\.confirm-dependencies;[a-z0-9-]+$/)
-    expect(edgeTasks[1]).toBe(edgeTasks[0])
+    const edgeCalls = global.fetch.mock.calls.filter(call => call[0].includes('/edges'))
+    expect(edgeCalls).toHaveLength(1)
+    expect(edgeCalls[0][0]).toContain('/applications/app-a/edges/batch')
+    expect(JSON.parse(edgeCalls[0][1].body).edges).toHaveLength(2)
+    expect(taskOf(edgeCalls[0])).toMatch(/^review\.confirm-dependencies;[a-z0-9-]+$/)
 
     const loadTasks = global.fetch.mock.calls.filter(call => /\/(overview|topology|forecast)/.test(call[0])).map(taskOf)
     expect(loadTasks).toHaveLength(3)
     expect(new Set(loadTasks).size).toBe(1)
     expect(loadTasks[0]).toMatch(/^app\.load;/)
-    expect(loadTasks[0]).not.toBe(edgeTasks[0])
+    expect(store.error).toBeNull()
+  })
+
+  it('dependencies the backend could not confirm are reported after the reload', async () => {
+    global.fetch = vi.fn(url => response(url.includes('/edges/batch') ? { results: [], created: 1, exists: 0, invalid: 1 } : url.includes('/topology') ? { resources: [], edges: [] } : {}))
+    store.setActiveProfile('local:dev')
+    store.selectedApplicationId = 'app-a'
+    await store.confirmDependencies('app-a', [
+      { sourceResourceId: 'r1', targetResourceId: 'r2', relationType: 'invokes' },
+      { sourceResourceId: 'r2', targetResourceId: 'gone', relationType: 'invokes' },
+    ])
+    expect(store.error).toContain('1')
   })
 
   it('each invocation of a task gets its own run', async () => {
