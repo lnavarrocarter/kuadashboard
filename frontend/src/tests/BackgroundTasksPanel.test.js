@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import BackgroundTasksPanel from '../components/BackgroundTasksPanel.vue'
 import { settings } from '../composables/useSettings'
+import { taskCoordinatorFor } from '../lib/taskCoordinator'
 
 const BASE = '/api/system/tasks'
 
@@ -204,6 +205,58 @@ describe('BackgroundTasksPanel', () => {
     expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Elapsed: 0 min 30 s')
     await vi.advanceTimersByTimeAsync(1000)
     expect(wrapper.get('[data-test="task-logs.scan.4"]').text()).toContain('Elapsed: 0 min 31 s')
+    wrapper.unmount()
+  })
+  it('shows the KUApps coordinator with its runs, copies diagnostics and cancels its reads here (#330)', async () => {
+    const coordinator = task({
+      id: 'kuapps.coordinator.app-12345678-xyz', name: 'KUApps task coordinator', type: 'coordinator', provider: 'kua', detail: null,
+      progress: null, summary: { reading: 1, queuedWrites: 1, writing: 1 }, supportedActions: ['cancel'], availableActions: ['cancel'],
+    })
+    const detail = {
+      applicationId: 'app-12345678-xyz', windowMinutes: 15,
+      runs: [
+        { runId: 'r2', key: 'app.topology', kind: 'read', trigger: 'invalidation', outcome: 'completed', durationMs: 900, requests: 1, reconciles: 0, awsCalls: 0, invalidates: [], flags: ['slow'] },
+        { runId: 'r1', key: 'edge.confirm-batch', kind: 'write', trigger: 'user', outcome: 'completed', durationMs: 80, requests: 1, reconciles: 1, awsCalls: 0, stores: ['apm-db'], revision: 'checked', invalidates: ['topology'], flags: [] },
+      ],
+      metrics: { requested: 4, executed: 2, deduplicated: 2, cancelled: 0, failed: 0, coalescedWrites: 3, maxQueueDepth: 2, reconcilesPerWrite: 1, awsCalls: 0, untracked: 0, byKey: [{ key: 'app.topology', runs: 6, p50Ms: 100, p95Ms: 200 }] },
+    }
+    const calls = stubFetch(async url => {
+      if (url === BASE) return jsonResponse(snapshot([coordinator]))
+      if (url === `${BASE}/kuapps/coordinators/app-12345678-xyz`) return jsonResponse(detail)
+      return jsonResponse({ task: coordinator, changed: true })
+    })
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const reads = taskCoordinatorFor('app-12345678-xyz')
+    const pending = reads.read('app.topology', ({ signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    })).catch(error => error.name)
+
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+    const row = wrapper.get('[data-test="task-kuapps.coordinator.app-12345678-xyz"]')
+    expect(row.text()).toContain('KUApps task coordinator · app-1234')
+    expect(row.text()).toContain('1 reads running · 2 changes queued')
+
+    await row.get('[data-test="coordinator-toggle-kuapps.coordinator.app-12345678-xyz"]').trigger('click')
+    await flushPromises()
+    const panel = wrapper.get('[data-test="coordinator-detail"]')
+    expect(panel.get('[data-test="coordinator-metrics"]').text()).toContain('2 / 4')
+    expect(panel.text()).toContain('After a change')
+    expect(panel.text()).toContain('Over 3 × its p95')
+    expect(panel.text()).toContain('Writes: apm-db')
+    expect(panel.text()).toContain('1 requests · 1 reconciliations · 0 AWS calls')
+    expect(panel.text()).toContain('6 runs · p50 100 ms · p95 200 ms')
+
+    await panel.get('[data-test="coordinator-copy"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(writeText.mock.calls[0][0]).runs).toHaveLength(2)
+    expect(panel.text()).toContain('Diagnostics copied')
+
+    await row.get('[data-test="task-action-kuapps.coordinator.app-12345678-xyz-cancel"]').trigger('click')
+    await flushPromises()
+    expect(await pending).toBe('AbortError')
+    expect(calls.filter(call => call.method === 'POST').map(call => call.url)).toEqual([`${BASE}/kuapps.coordinator.app-12345678-xyz/cancel`])
     wrapper.unmount()
   })
 })

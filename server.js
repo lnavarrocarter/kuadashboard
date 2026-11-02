@@ -459,6 +459,10 @@ app.use('/api/kube-logs', require('./lib/kubeLogs/routes').createKubeLogsRouter(
 app.use('/api/helm',          helmRoutes);
 app.use('/api/system',        systemToolsRoutes);
 app.use('/api/system/tasks/kuapps/journal', require('./routes/kuappsTaskJournal').createKuappsTaskJournalRouter({ journal: kuappsTaskJournal }));
+// The KUApps task coordinator of each open application, as one task of the manager (#330).
+const kuappsCoordinators = require('./lib/kua/coordinatorTasks').createCoordinatorTasks({ registry: backgroundTaskRegistry, journal: kuappsTaskJournal });
+kuappsCoordinators.start();
+app.use('/api/system/tasks/kuapps/coordinators', require('./routes/kuappsCoordinator').createKuappsCoordinatorRouter({ coordinators: kuappsCoordinators }));
 app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry }));
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());

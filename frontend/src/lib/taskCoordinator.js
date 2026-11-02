@@ -37,6 +37,8 @@ export function createTaskCoordinator({ scope = '', now = () => Date.now(), maxE
   let writing = false
   let idleWaiters = []
   let flushScheduled = false
+  // Reads asked while subscribers reload after writes were triggered by an invalidation.
+  let flushing = false
 
   function record(type, key, details = {}) {
     const event = { at: new Date(now()).toISOString(), scope, type, key, ...details }
@@ -68,7 +70,7 @@ export function createTaskCoordinator({ scope = '', now = () => Date.now(), maxE
     const controller = new AbortController()
     const entry = { controller, runId, promise: null }
     const startedAt = now()
-    record('queued', key, { kind, runId })
+    record('queued', key, { kind, runId, ...(flushing ? { trigger: 'invalidation' } : {}) })
     entry.promise = (async () => {
       try {
         await writesIdle(controller.signal)
@@ -161,7 +163,12 @@ export function createTaskCoordinator({ scope = '', now = () => Date.now(), maxE
     pendingWrites = 0
     if (parts.size) {
       if (merged > 1) record('coalesced', 'invalidation', { writes: merged, parts: [...parts] })
-      await Promise.allSettled([...subscribers].map(subscriber => Promise.resolve().then(() => subscriber(parts))))
+      flushing = true
+      const reloads = [...subscribers].map(subscriber => {
+        try { return subscriber(parts) } catch (error) { return Promise.reject(error) }
+      })
+      flushing = false
+      await Promise.allSettled(reloads)
     }
     waiters.forEach(settle => settle())
   }
@@ -205,6 +212,18 @@ export function createTaskCoordinator({ scope = '', now = () => Date.now(), maxE
 }
 
 const coordinators = new Map()
+const creationListeners = new Set()
+
+/** listener(applicationId, coordinator) for every coordinator created from now on (#330). */
+export function onTaskCoordinatorCreated(listener) {
+  creationListeners.add(listener)
+  return () => creationListeners.delete(listener)
+}
+
+/** The coordinator of an application if one exists; never creates it. */
+export function existingTaskCoordinator(applicationId) {
+  return coordinators.get(String(applicationId || '')) || null
+}
 
 /** The shared coordinator of an application: the Observability store and KUApps views use the same one. */
 export function taskCoordinatorFor(applicationId) {
@@ -215,6 +234,9 @@ export function taskCoordinatorFor(applicationId) {
     coordinators.delete(key)
   } else {
     coordinator = createTaskCoordinator({ scope: key })
+    for (const listener of creationListeners) {
+      try { listener(key, coordinator) } catch { /* reporting never breaks the coordinator */ }
+    }
   }
   coordinators.set(key, coordinator)
   // Evicts the least recently used coordinators nobody is subscribed to.

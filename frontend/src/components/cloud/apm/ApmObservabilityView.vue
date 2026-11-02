@@ -174,6 +174,8 @@
           <!-- Review in three parts (#239): what waits for a decision, what the structure analysis found,
                and the relationships already decided (folded). -->
           <template v-if="props.section === 'review'">
+            <!-- One status line from the task coordinator (#330), instead of a spinner per part. -->
+            <p v-if="activity" class="review-activity" role="status" data-test="review-activity"><span class="review-activity-dot" aria-hidden="true"></span> {{ t(activity) }}</p>
             <section class="review-part" data-test="review-decisions">
               <h3>{{ t('apm.review.decisions') }} <span class="review-count">{{ pendingDecisionCount }}</span></h3>
               <ApmTopologyGraph
@@ -607,6 +609,7 @@ import { createIcons, icons } from 'lucide'
 import BaseModal from '../../BaseModal.vue'
 import CloudMetricChart from '../CloudMetricChart.vue'
 import { useApmStore } from '../../../stores/useApmStore'
+import { useCoordinatorActivity } from '../../../composables/useCoordinatorActivity'
 import { formatNumber, useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
@@ -642,6 +645,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['open-lambda-logs', 'open-kubernetes-logs', 'open-architecture', 'application-context', 'explain-relationship'])
 const store = useApmStore()
+const { activity } = useCoordinatorActivity(() => (props.section === 'review' ? store.selectedApplicationId : null))
 const { t } = useI18n()
 const ranges = ['6h', '24h', '7d', '30d', '90d']
 const setupOpen = ref(false)
@@ -1164,6 +1168,10 @@ defineExpose({ refreshLocal, openSetup: () => { setupOpen.value = true }, reques
 .apm-toolbar-controls { display: flex; align-items: center; gap: 7px; }
 .apm-toolbar-controls select { width: 130px; }
 .review-part { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.review-activity { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--text-dim); font-size: 12px; }
+.review-activity-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: review-pulse 1.4s ease-in-out infinite; }
+@keyframes review-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .review-activity-dot { animation: none; } }
 .review-part h3 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
 .review-count { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff; }
 .review-none { margin: 0; font-size: 13px; color: var(--text-dim); }
