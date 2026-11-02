@@ -1048,8 +1048,8 @@ function selectResource(resource) {
 
 async function confirmDependency(dependency) {
   if (!store.selectedApplicationId) return
+  // The reload reuses the last cloud analysis without querying AWS (#328).
   await store.confirmDependency(store.selectedApplicationId, dependency)
-  if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
   renderIcons()
 }
 
@@ -1058,7 +1058,6 @@ async function confirmAllDependencies(dependencies) {
   confirmingSuggestions.value = true
   try {
     await store.confirmDependencies(store.selectedApplicationId, dependencies)
-    if (props.provider === 'aws') await store.analyzeCloudTopology(store.selectedApplicationId)
     renderIcons()
   } finally {
     confirmingSuggestions.value = false
@@ -1067,14 +1066,15 @@ async function confirmAllDependencies(dependencies) {
 
 async function analyzeCloudTopology() {
   if (!store.selectedApplicationId) return
-  await store.analyzeCloudTopology(store.selectedApplicationId)
+  await store.analyzeCloudTopology(store.selectedApplicationId, { refresh: true })
   renderIcons()
 }
 
 async function addCloudResource(reference) {
   if (!store.selectedApplicationId || !reference?.candidate) return
   const resource = await store.addResource(store.selectedApplicationId, { provider: 'aws', ...reference.candidate })
-  if (resource) await store.analyzeCloudTopology(store.selectedApplicationId)
+  // The topology shows the cloud analysis as out of date; it runs again only on request (#328).
+  if (resource) await store.loadSelectedApplication()
   renderIcons()
 }
 

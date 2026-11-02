@@ -11,6 +11,7 @@ const { logGroupsForResource } = require('../lib/logIntelligenceEvidence');
 const { createLogProviderSync, parseProviderLogGroup, estimateLogSyncRequests } = require('../lib/logProviderSync');
 const { checkRefreshMinutes } = require('../lib/plans');
 const { createAwsTopologyReader } = require('../lib/apm/awsTopologyReader');
+const { createCloudTopologyCache } = require('../lib/apm/cloudTopologyCache');
 const { createAwsProcessTracer } = require('../lib/apm/awsProcessTracer');
 const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceType } = require('../lib/kua/applicationRegistryService');
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
@@ -33,6 +34,7 @@ function createApmRouter({
   deploymentReader = createAwsDeploymentReader(),
   eksWorkloadReader = createEksWorkloadReader(),
   topologyReader = createAwsTopologyReader(),
+  cloudTopologyCache = createCloudTopologyCache(),
   processTracer = createAwsProcessTracer(),
   logCache = () => require('../lib/awsLogCache').getLogCache(),
   syncProviderLogs = null,
@@ -653,16 +655,27 @@ function createApmRouter({
     }
   }
 
+  function cloudTopologyScope(resources, edges) {
+    const cloudResourceIds = new Set(resources.filter(resource => AWS_TOPOLOGY_RESOURCE_TYPES.has(resource.type)).map(resource => resource.id));
+    return {
+      cloudResources: resources.filter(resource => cloudResourceIds.has(resource.id)),
+      cloudEdges: edges.filter(edge => cloudResourceIds.has(edge.sourceResourceId) && cloudResourceIds.has(edge.targetResourceId)),
+    };
+  }
+
   router.get('/applications/:applicationId/topology', async (req, res) => {
     const application = scopedApplication(req, res);
     if (!application) return;
     const resources = database.listResources(application.id);
     const edges = database.listEdges(application.id);
+    // The last cloud analysis, if any, without querying AWS (#328).
+    const { cloudResources, cloudEdges } = cloudTopologyScope(resources, edges);
+    const cloudEvidence = provider === 'aws' ? cloudTopologyCache.read(application, cloudResources, cloudEdges) || {} : {};
     res.json({
       application,
       resources,
       edges,
-      analysis: analyzeTopology(application, resources, edges, {}, await logEvidenceFor(application, resources, edges)),
+      analysis: analyzeTopology(application, resources, edges, cloudEvidence, await logEvidenceFor(application, resources, edges)),
     });
   });
 
@@ -673,11 +686,18 @@ function createApmRouter({
     try {
       const resources = database.listResources(application.id);
       const edges = database.listEdges(application.id);
-      const cloudResourceIds = new Set(resources.filter(resource => AWS_TOPOLOGY_RESOURCE_TYPES.has(resource.type)).map(resource => resource.id));
-      const cloudResources = resources.filter(resource => cloudResourceIds.has(resource.id));
-      const cloudEdges = edges.filter(edge => cloudResourceIds.has(edge.sourceResourceId) && cloudResourceIds.has(edge.targetResourceId));
-      const evidence = await topologyReader.analyze({ application, resources: cloudResources, edges: cloudEdges });
-      log('Cloud topology analyzed', application.name, application.profileId, { requests: evidence.requests });
+      const { cloudResources, cloudEdges } = cloudTopologyScope(resources, edges);
+      // A recent analysis of the same resources is reused unless the caller asks to refresh (#328).
+      let evidence = req.body?.refresh === true ? null : cloudTopologyCache.read(application, cloudResources, cloudEdges);
+      if (evidence?.state !== 'current') {
+        // Cached unfiltered, so confirming a dependency later never invalidates it.
+        const fresh = await topologyReader.analyze({ application, resources: cloudResources, edges: [] });
+        cloudTopologyCache.store(application, cloudResources, fresh);
+        evidence = { ...cloudTopologyCache.read(application, cloudResources, cloudEdges), cached: false };
+        log('Cloud topology analyzed', application.name, application.profileId, { requests: fresh.requests });
+      } else {
+        evidence = { ...evidence, cached: true };
+      }
       res.json({ application, resources, edges, analysis: analyzeTopology(application, resources, edges, evidence, await logEvidenceFor(application, resources, edges)) });
     } catch (error) { handleError(res, error); }
   });

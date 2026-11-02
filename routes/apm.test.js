@@ -1541,3 +1541,74 @@ test('API confirms many dependencies in one batch with one registry reconciliati
     await subject.close();
   }
 });
+
+test('the last cloud analysis is reused until resources change or a refresh is asked (#328)', async () => {
+  const calls = [];
+  const subject = await fixture({
+    topologyReader: {
+      async analyze(input) {
+        calls.push(input);
+        return {
+          requests: 1,
+          unresolvedReferences: [],
+          failedResources: [],
+          suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes', confidence: 1, confirmed: false, evidence: [] }],
+        };
+      },
+    },
+  });
+  try {
+    const application = await subject.request('/applications', { method: 'POST', body: { name: 'orders', region: 'us-east-1' } });
+    const applicationId = application.body.id;
+    for (const resource of [
+      { id: 'flow', type: 'stepfunctions', key: 'flow', name: 'orders-flow', arn: 'arn:flow', associationSource: 'manual' },
+      { id: 'worker', type: 'lambda', key: 'worker', name: 'orders-worker', arn: 'arn:worker', associationSource: 'manual' },
+    ]) {
+      await subject.request(`/applications/${applicationId}/resources`, { method: 'POST', body: resource });
+    }
+    const cloudSuggestions = body => body.analysis.suggestions.filter(item => item.sourceResourceId === 'flow' && item.targetResourceId === 'worker');
+
+    const before = await subject.request(`/applications/${applicationId}/topology`);
+    assert.equal(before.body.analysis.cloudScan, null, 'nothing analyzed yet');
+
+    const first = await subject.request(`/applications/${applicationId}/topology/analyze-cloud`, { method: 'POST' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].edges.length, 0, 'cached without filtering by confirmed edges');
+    assert.equal(first.body.analysis.cloudScan.cached, false);
+    assert.equal(first.body.analysis.cloudScan.state, 'current');
+    assert.ok(first.body.analysis.cloudScan.analyzedAt);
+
+    const reread = await subject.request(`/applications/${applicationId}/topology`);
+    assert.equal(cloudSuggestions(reread.body).length, 1, 'GET topology shows the cached suggestion');
+    assert.equal(calls.length, 1, 'without querying AWS');
+
+    const again = await subject.request(`/applications/${applicationId}/topology/analyze-cloud`, { method: 'POST', body: {} });
+    assert.equal(again.body.analysis.cloudScan.cached, true);
+    assert.equal(calls.length, 1);
+
+    await subject.request(`/applications/${applicationId}/edges/batch`, {
+      method: 'POST', body: { edges: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes' }] },
+    });
+    const confirmed = await subject.request(`/applications/${applicationId}/topology`);
+    assert.equal(cloudSuggestions(confirmed.body).length, 0, 'a confirmed suggestion is not suggested again');
+    assert.equal(confirmed.body.analysis.cloudScan.state, 'current', 'confirming does not invalidate the analysis');
+    assert.equal(calls.length, 1);
+
+    await subject.request(`/applications/${applicationId}/topology/analyze-cloud`, { method: 'POST', body: { refresh: true } });
+    assert.equal(calls.length, 2, 'refresh always queries AWS');
+
+    await subject.request(`/applications/${applicationId}/resources`, {
+      method: 'POST', body: { id: 'queue', type: 'sqs', key: 'queue', name: 'orders-queue', arn: 'arn:queue', associationSource: 'manual' },
+    });
+    const stale = await subject.request(`/applications/${applicationId}/topology`);
+    assert.equal(stale.body.analysis.cloudScan.state, 'stale');
+    assert.deepEqual(stale.body.analysis.cloudScan.suggestions, []);
+    assert.equal(calls.length, 2, 'adding a resource does not analyze by itself');
+
+    const reanalyzed = await subject.request(`/applications/${applicationId}/topology/analyze-cloud`, { method: 'POST' });
+    assert.equal(calls.length, 3, 'a stale analysis is not reused');
+    assert.equal(reanalyzed.body.analysis.cloudScan.state, 'current');
+  } finally {
+    await subject.close();
+  }
+});

@@ -888,3 +888,74 @@ describe('APM registry resources', () => {
     wrapper.unmount()
   })
 })
+
+describe('explicit cloud topology analysis (#328)', () => {
+  function reviewFetch() {
+    return vi.fn((url) => {
+      if (url.endsWith('/applications')) return response([{ id: 'app-a', name: 'orders', region: 'us-east-1' }])
+      if (url.endsWith('/usage')) return response({ total: 0, limit: 100000 })
+      if (url.includes('/overview')) return response({ metrics: [], health: { status: 'unknown', signals: [] }, latestRun: null })
+      if (url.endsWith('/topology') || url.endsWith('/analyze-cloud')) return response({
+        application: { id: 'app-a', name: 'orders' },
+        resources: [{ id: 'flow', provider: 'aws', type: 'stepfunctions', name: 'flow', enabled: true }, { id: 'worker', provider: 'aws', type: 'lambda', name: 'worker', enabled: true }],
+        edges: [],
+        analysis: { score: 50, coveragePercent: 0, counts: { suggestions: 1 }, findings: [{ code: 'dependency_suggestions', severity: 'info', resourceIds: [] }],
+          suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes', confidence: 1, evidence: [{ type: 'asl_reference', values: ['Invoke', 'worker'] }] }] },
+      })
+      if (url.endsWith('/edges/batch')) return response({ results: [], created: 1, exists: 0, invalid: 0 })
+      if (url.endsWith('/forecast')) return response({ lambdaCount: 1, monthlyRequestsMaximum: 0 })
+      if (url.includes('/registry')) return response({ resources: [], relationships: [] })
+      if (url.includes('/series?')) return response([])
+      return response({})
+    })
+  }
+
+  async function mountReview() {
+    const wrapper = mount(ApmObservabilityView, {
+      attachTo: document.body,
+      props: { profileId: 'local:dev', provider: 'aws', applicationId: 'app-a', hideApplicationList: true, section: 'review' },
+      global: { stubs: { teleport: true, CloudMetricChart: true, ApmSetupModal: true } },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('confirming a suggestion reloads the topology without a cloud analysis', async () => {
+    global.fetch = reviewFetch()
+    const wrapper = await mountReview()
+    global.fetch.mockClear()
+    await wrapper.find('[data-test="explain-suggestion"]').trigger('click')
+    await flushPromises()
+    expect(global.fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(0)
+    const confirm = wrapper.findAll('.suggestion-row button').find(button => button.text() === 'Confirm')
+    await confirm.trigger('click')
+    await flushPromises()
+    const urls = global.fetch.mock.calls.map(([url]) => url)
+    expect(urls.some(url => url.endsWith('/edges/batch'))).toBe(true)
+    expect(urls.some(url => url.endsWith('/analyze-cloud'))).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('the Analyze button asks the backend to query AWS again', async () => {
+    global.fetch = reviewFetch()
+    const wrapper = await mountReview()
+    await wrapper.find('.analysis-heading button').trigger('click')
+    await flushPromises()
+    const analyze = global.fetch.mock.calls.find(([url]) => url.endsWith('/analyze-cloud'))
+    expect(JSON.parse(analyze[1].body)).toEqual({ refresh: true })
+    wrapper.unmount()
+  })
+
+  it('the topology says when the cloud analysis ran and when resources changed since', () => {
+    const topology = state => ({
+      application: { id: 'app-a' }, resources: [], edges: [],
+      analysis: { score: 50, coveragePercent: 0, counts: { suggestions: 0 }, findings: [], suggestions: [],
+        cloudScan: { requests: 2, unresolvedReferences: [], failedResources: [], suggestions: [], analyzedAt: '2026-11-02T13:05:00Z', state } },
+    })
+    const current = mount(ApmTopologyGraph, { props: { topology: topology('current'), canAnalyzeCloud: true } })
+    expect(current.find('[data-test="cloud-scan-analyzed-at"]').text()).toContain('Analyzed at')
+    expect(current.find('[data-test="cloud-scan-stale"]').exists()).toBe(false)
+    const stale = mount(ApmTopologyGraph, { props: { topology: topology('stale'), canAnalyzeCloud: true } })
+    expect(stale.find('[data-test="cloud-scan-stale"]').text()).toContain('Resources changed since this analysis')
+  })
+})

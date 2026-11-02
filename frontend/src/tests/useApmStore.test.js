@@ -294,6 +294,36 @@ describe('explicit writes', () => {
     expect(store.topology.analysis.counts.suggestions).toBe(1)
   })
 
+  it('drops a remembered AWS suggestion once its pair is confirmed, without analyzing again (#328)', async () => {
+    let edges = []
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/topology/analyze-cloud')) return response({
+        application: { id: 'app-a' }, resources: [{ id: 'flow' }, { id: 'worker' }], edges: [],
+        analysis: { cloudScan: { suggestions: [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'invokes', confidence: 1 }] } },
+      })
+      if (url.endsWith('/edges/batch')) {
+        edges = JSON.parse(options.body).edges
+        return response({ results: [], created: 1, exists: 0, invalid: 0 })
+      }
+      if (url.includes('/overview')) return response({ metrics: [], resources: [] })
+      if (url.endsWith('/topology')) return response({
+        application: { id: 'app-a' }, resources: [{ id: 'flow' }, { id: 'worker' }], edges,
+        analysis: { suggestions: [], counts: { suggestions: 0 }, findings: [] },
+      })
+      if (url.includes('/forecast')) return response({ monthlyRequestsMaximum: 0 })
+      if (url.endsWith('/registry')) return response({ resources: [], relationships: [], syncStatus: null })
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    store.setActiveProfile('local:prod')
+    store.selectedApplicationId = 'app-a'
+
+    await store.analyzeCloudTopology('app-a')
+    await store.confirmDependencies('app-a', [{ sourceResourceId: 'flow', targetResourceId: 'worker', relationType: 'depends_on' }])
+
+    expect(store.topology.analysis.suggestions).toHaveLength(0)
+    expect(global.fetch.mock.calls.filter(([url]) => url.includes('/analyze-cloud'))).toHaveLength(1)
+  })
+
   it('classifies Step Function and execution ARNs before tracing', async () => {
     const bodies = []
     global.fetch = vi.fn((url, options = {}) => {
