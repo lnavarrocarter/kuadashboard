@@ -44,6 +44,7 @@
               >Service Account JSON</button>
               <button
                 :class="['auth-mode-tab', { active: gcpAuthMode === 'gcloud' }]"
+                data-test="gcloud-auth-mode"
                 @click="gcpAuthMode = 'gcloud'; loadGcloudConfigs(); loadGcloudAccounts()"
               >{{ t('profm.gcloudCli') }}</button>
             </div>
@@ -121,16 +122,17 @@
                 {{ t('profm.refreshList') }}
               </button>
 
-              <!-- New config section -->
-              <div class="field-label" style="margin-top:6px">{{ t('profm.newConfig') }}</div>
+              <!-- Add a project by ID without relying on the project list. -->
+              <div class="field-label" style="margin-top:6px">{{ t('profm.addProjectById') }}</div>
+              <div class="text-dim" style="font-size:12px">{{ t('profm.projectIdHint') }}</div>
               <div style="display:flex;gap:8px">
                 <label class="field-label" style="flex:1;margin:0">
                   {{ t('profm.configName') }}
-                  <input v-model="gcpNewConfigName" class="ctrl-input" :placeholder="t('profm.configNamePlaceholder')" />
+                  <input v-model="gcpNewConfigName" data-test="gcloud-config-name" class="ctrl-input" :placeholder="t('profm.configNamePlaceholder')" />
                 </label>
                 <label class="field-label" style="flex:1;margin:0">
-                  Project ID
-                  <input v-model="gcpNewConfigProject" class="ctrl-input" placeholder="my-gcp-project" />
+                  {{ t('profm.projectId') }}
+                  <input v-model="gcpNewConfigProject" data-test="gcloud-project-id" class="ctrl-input" placeholder="my-gcp-project" />
                 </label>
               </div>
 
@@ -152,10 +154,11 @@
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <button
                   class="btn primary"
+                  data-test="add-gcloud-project"
                   :disabled="!gcpNewConfigName.trim() || gcpCreatePending"
                   @click="createGcloudConfig"
                 >
-                  {{ gcpCreatePending ? t('profm.creating') : t('profm.createConfig') }}
+                  {{ gcpCreatePending ? t('profm.creating') : (gcpNewConfigProject.trim() ? t('profm.addProject') : t('profm.createConfig')) }}
                 </button>
                 <span class="text-dim" style="font-size:11px">{{ t('profm.or') }}</span>
                 <button
@@ -638,7 +641,9 @@ async function createGcloudConfig() {
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || t('profm.createConfigFailed'))
-    gcloudLoginMsg.value = t('profm.configCreated', { name })
+    gcloudLoginMsg.value = project
+      ? t('profm.projectAdded', { project, name })
+      : t('profm.configCreated', { name })
     await loadGcloudConfigs()
     gcpSelectedConfig.value = name
   } catch (e) {
