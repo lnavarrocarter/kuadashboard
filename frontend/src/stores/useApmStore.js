@@ -391,7 +391,7 @@ export const useApmStore = defineStore('apm', () => {
       // The response is the registry itself; KUApps views reload theirs.
       registry.value = await tasksFor(applicationId).write('registry.reconcile', ({ task }) => request(`/applications/${applicationId}/registry/reconcile`, {
         method: 'POST', headers: headers(false, task),
-      }), { invalidates: ['kuapps.registry'] })
+      }))
       syncStatus.value = registry.value?.syncStatus || syncStatus.value
       return registry.value
     } catch (requestError) {
@@ -432,7 +432,7 @@ export const useApmStore = defineStore('apm', () => {
         method: 'POST',
         headers: headers(true, task),
         body: JSON.stringify({ decision }),
-      }), { invalidates: ['registry', 'kuapps.registry'] })
+      }))
     } catch (requestError) {
       error.value = requestError.message
       return null
@@ -490,11 +490,11 @@ export const useApmStore = defineStore('apm', () => {
   // reload: the application view shows the new resource. Setup flows that add many resources
   // and then select the application leave it off, so they do not reload once per resource.
   async function addResource(applicationId, resource, { reload = false } = {}) {
-    return tasksFor(applicationId).write('resource.add', ({ task }) => request(`/applications/${applicationId}/resources`, {
+    return tasksFor(applicationId).write('resource.attach', ({ task }) => request(`/applications/${applicationId}/resources`, {
       method: 'POST',
       headers: headers(true, task),
       body: JSON.stringify(resource),
-    }), { invalidates: reload ? [...APPLICATION_PARTS, 'kuapps.registry'] : [] })
+    }), reload ? {} : { invalidates: [] })
   }
 
   async function confirmDependency(applicationId, dependency) {
@@ -507,19 +507,31 @@ export const useApmStore = defineStore('apm', () => {
       dependency,
     ])).values()]
     if (!uniqueDependencies.length) return
+    // The suggestions were computed on the revision on screen: if the application changed since,
+    // nothing is written and the view reloads (#329).
+    const shown = topology.value.application
+    const expectedRevision = shown?.id === applicationId && Number.isInteger(shown.revision) ? shown.revision : undefined
     // One request and one registry reconciliation for the whole set (#327); the write settles
-    // after the topology and registry reload it causes (#326).
-    const result = await tasksFor(applicationId).write('review.confirm-dependencies', ({ task }) => request(`/applications/${applicationId}/edges/batch`, {
-      method: 'POST',
-      headers: headers(true, task),
-      body: JSON.stringify({
-        edges: uniqueDependencies.map(dependency => ({
-          sourceResourceId: dependency.sourceResourceId,
-          targetResourceId: dependency.targetResourceId,
-          relationType: dependency.relationType,
-        })),
-      }),
-    }), { invalidates: ['topology', 'registry', 'kuapps.registry'] })
+    // after the reload of what the action catalog says it invalidates (#326).
+    let result
+    try {
+      result = await tasksFor(applicationId).write('edge.confirm-batch', ({ task }) => request(`/applications/${applicationId}/edges/batch`, {
+        method: 'POST',
+        headers: headers(true, task),
+        body: JSON.stringify({
+          edges: uniqueDependencies.map(dependency => ({
+            sourceResourceId: dependency.sourceResourceId,
+            targetResourceId: dependency.targetResourceId,
+            relationType: dependency.relationType,
+          })),
+          ...(expectedRevision === undefined ? {} : { expectedRevision }),
+        }),
+      }))
+    } catch (requestError) {
+      if (requestError.details?.code !== 'REVISION_CONFLICT') throw requestError
+      error.value = t('apm.revisionConflict')
+      return
+    }
     // After the reload, which clears the previous error.
     if (result?.invalid) error.value = t('apm.dependenciesNotConfirmed', { n: result.invalid })
   }

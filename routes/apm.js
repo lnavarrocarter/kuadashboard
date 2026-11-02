@@ -880,6 +880,7 @@ function createApmRouter({
         cache.disable({ ...scope, logGroup });
         return existed;
       }).length;
+      log('Log cache disabled', application.name, application.profileId, { resourceId: resource.id, removed });
       res.json({ resourceId: resource.id, removed });
     } catch (error) { handleError(res, error); }
   });

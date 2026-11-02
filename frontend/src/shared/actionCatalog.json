@@ -1,0 +1,1198 @@
+{
+  "version": 1,
+  "actions": {
+    "agent-access.set": {
+      "summary": "Allow or block AI agents (MCP) on this computer",
+      "routes": [
+        "PUT /api/kua-apps/agent-access"
+      ],
+      "kind": "write",
+      "stores": [
+        "local-settings"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "apm-application.create": {
+      "summary": "Create an Observability application",
+      "routes": [
+        "POST /api/observability/:provider/applications"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "apm-application.delete": {
+      "summary": "Delete an Observability application and its local data (nothing in the cloud)",
+      "routes": [
+        "DELETE /api/observability/:provider/applications/:applicationId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "registry",
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "apm-application.update": {
+      "summary": "Rename or change the environment, team or collection of an Observability application",
+      "routes": [
+        "PATCH /api/observability/:provider/applications/:applicationId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "moves",
+      "invalidates": [
+        "overview"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "application.create": {
+      "summary": "Create a KUA Application",
+      "routes": [
+        "POST /api/kua-apps/applications"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "application.delete": {
+      "summary": "Delete a KUA Application (nothing in the cloud)",
+      "routes": [
+        "DELETE /api/kua-apps/applications/:applicationId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "registry",
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "checked",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "application.update": {
+      "summary": "Rename or change the environment or team of a KUA Application",
+      "routes": [
+        "PATCH /api/kua-apps/applications/:applicationId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "bundle.import": {
+      "summary": "Import an application bundle as a new application",
+      "routes": [
+        "POST /api/kua-apps/import"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes",
+        "architecture-graph"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "bundle.import-preview": {
+      "summary": "Preview an application bundle before importing it",
+      "routes": [
+        "POST /api/kua-apps/import/preview"
+      ],
+      "kind": "read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "change-plan.apply": {
+      "summary": "Apply an approved change plan",
+      "routes": [
+        "POST /api/kua-apps/changes/:planId/apply"
+      ],
+      "kind": "write",
+      "stores": [
+        "change-plans",
+        "apm-db",
+        "scopes"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": true,
+      "cost": {
+        "api": "CloudWatch GetMetricData; CloudWatch Logs FilterLogEvents",
+        "note": "Only for operation collection.run (starts apmScheduler.collectApplication) and indirectly collection.update/resource.update enabling scheduled collection; other operations make no cloud calls."
+      },
+      "destructive": true,
+      "audit": true
+    },
+    "change-plan.preview": {
+      "summary": "Save a change plan to approve (nothing changes in the application)",
+      "routes": [
+        "POST /api/kua-apps/changes/preview"
+      ],
+      "kind": "write",
+      "stores": [
+        "change-plans"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "cloud-backup.create": {
+      "summary": "Back up an application to the KUA account",
+      "routes": [
+        "POST /api/kua-apps/:applicationId/cloud-backup"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "cloud-backup.restore": {
+      "summary": "Restore a backup from the KUA account as a new application",
+      "routes": [
+        "POST /api/kua-apps/cloud-backups/:backupId/restore"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes",
+        "architecture-graph"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "collection.run": {
+      "summary": "Collect metrics and logs once now",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/collect-now"
+      ],
+      "kind": "cloud-read",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "overview",
+        "forecast"
+      ],
+      "batchable": false,
+      "cost": {
+        "api": "CloudWatch GetMetricData; CloudWatch Logs FilterLogEvents",
+        "note": "scheduler.collectApplication(trigger manual): awsMetricCollector GetMetricData (USD 0.01 per 1,000 metrics) and awsCollector FilterLogEvents (data transfer per GB); GCP Monitoring timeSeries reads for GCP resources. Writes metric buckets, cursors and collection runs; subject to the local request budget (429 budget_exhausted)."
+      },
+      "destructive": false,
+      "audit": true
+    },
+    "deployment.preview": {
+      "summary": "Preview the resources of CloudFormation stacks before adding them",
+      "routes": [
+        "POST /api/observability/:provider/deployment-resources"
+      ],
+      "kind": "cloud-read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "edge.confirm": {
+      "summary": "Confirm one dependency",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/edges"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "none",
+      "invalidates": [
+        "topology",
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "edge.confirm-batch": {
+      "summary": "Confirm many dependencies with one registry reconciliation",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/edges/batch"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "checked",
+      "invalidates": [
+        "topology",
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "edge.remove": {
+      "summary": "Remove a confirmed dependency",
+      "routes": [
+        "DELETE /api/observability/:provider/applications/:applicationId/edges/:edgeId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "none",
+      "invalidates": [
+        "topology",
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "github-sync.configure": {
+      "summary": "Connect or change the GitHub repository of an application",
+      "routes": [
+        "PUT /api/kua-apps/applications/:applicationId/github"
+      ],
+      "kind": "write",
+      "stores": [
+        "local-settings"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "kubernetes-discovery.preview": {
+      "summary": "Preview the Kubernetes workloads and relationships of the application contexts",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/discovery/kubernetes/preview"
+      ],
+      "kind": "cloud-read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "log-cache.disable": {
+      "summary": "Stop caching the logs of a resource and drop them",
+      "routes": [
+        "DELETE /api/observability/:provider/applications/:applicationId/log-cache"
+      ],
+      "kind": "write",
+      "stores": [
+        "log-cache"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "overview"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "log-cache.enable": {
+      "summary": "Start caching the CloudWatch logs of a resource",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/log-cache"
+      ],
+      "kind": "cloud-read",
+      "stores": [
+        "log-cache"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "overview"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "log-cache.set-refresh": {
+      "summary": "Change how often cached logs refresh",
+      "routes": [
+        "PATCH /api/observability/:provider/applications/:applicationId/log-cache"
+      ],
+      "kind": "write",
+      "stores": [
+        "log-cache"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "missing-resource.ignore": {
+      "summary": "Stop reporting a resource that no longer exists",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/observer/ignore"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "process.trace": {
+      "summary": "Trace a request or execution through Step Functions",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/process-traces"
+      ],
+      "kind": "cloud-read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "recommendation.dismiss": {
+      "summary": "Dismiss resource recommendations",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/recommendations/dismiss"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "registry-resource.detach": {
+      "summary": "Detach a registry resource from the application",
+      "routes": [
+        "DELETE /api/kua-apps/applications/:applicationId/registry/resources/:resourceId"
+      ],
+      "kind": "write",
+      "stores": [
+        "registry",
+        "apm-db"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "registry.reconcile": {
+      "summary": "Rebuild the shared registry from resources and linked views",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/registry/reconcile"
+      ],
+      "kind": "write",
+      "stores": [
+        "registry"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "relationship.explain": {
+      "summary": "Explain why a relationship or suggestion exists (local only)",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/relationships/explain"
+      ],
+      "kind": "read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "relationship.review": {
+      "summary": "Accept or reject a relationship of a linked Architecture view",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/registry/relationships/:relationshipId/review"
+      ],
+      "kind": "write",
+      "stores": [
+        "architecture-graph"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "graph",
+      "invalidates": [
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "resource-candidate.discover": {
+      "summary": "Suggest which loaded resources belong to which application (local, nothing saved)",
+      "routes": [
+        "POST /api/observability/:provider/candidates"
+      ],
+      "kind": "read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "resource.attach": {
+      "summary": "Attach one resource",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/resources"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "resource.attach-batch": {
+      "summary": "Attach many resources",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/resources/attach"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "resource.detach": {
+      "summary": "Detach a resource (nothing is deleted in the cloud)",
+      "routes": [
+        "DELETE /api/observability/:provider/applications/:applicationId/resources/:resourceId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "resource.replace-with-successor": {
+      "summary": "Replace a resource that no longer exists with its successor",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/observer/replace"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "resource.update": {
+      "summary": "Enable, rename or change the service or log group of a resource",
+      "routes": [
+        "PATCH /api/observability/:provider/applications/:applicationId/resources/:resourceId"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "scope.add": {
+      "summary": "Add an account, project or cluster scope",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/scopes"
+      ],
+      "kind": "write",
+      "stores": [
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "checked-moves",
+      "invalidates": [
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "scope.bind": {
+      "summary": "Bind a local profile to a scope (moves the revision only when it completes the scope account or project)",
+      "routes": [
+        "PUT /api/kua-apps/applications/:applicationId/scopes/:scopeKey/binding"
+      ],
+      "kind": "write",
+      "stores": [
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "scope.remove": {
+      "summary": "Remove a scope; its resources stop being collected",
+      "routes": [
+        "DELETE /api/kua-apps/applications/:applicationId/scopes/:scopeKey"
+      ],
+      "kind": "write",
+      "stores": [
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "scope.unbind": {
+      "summary": "Unbind the local profile of a scope",
+      "routes": [
+        "DELETE /api/kua-apps/applications/:applicationId/scopes/:scopeKey/binding"
+      ],
+      "kind": "write",
+      "stores": [
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "scope.verify": {
+      "summary": "Verify the profile bound to a scope with free reads (moves the revision only when it completes the scope account or project)",
+      "routes": [
+        "POST /api/kua-apps/applications/:applicationId/scopes/:scopeKey/binding/verify"
+      ],
+      "kind": "cloud-read",
+      "stores": [
+        "scopes"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "stack.link": {
+      "summary": "Attach the resources of a CloudFormation stack",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/link-stack"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "checked-moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": true,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "sync.add-here": {
+      "summary": "Add an application synced from another computer",
+      "routes": [
+        "POST /api/kua-apps/sync/:syncId/add"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes",
+        "architecture-graph",
+        "local-settings"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "sync.disable": {
+      "summary": "Stop syncing an application (optionally on every computer)",
+      "routes": [
+        "DELETE /api/kua-apps/:applicationId/sync"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "local-settings",
+        "control-plane"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "sync.enable": {
+      "summary": "Start syncing an application through the KUA account",
+      "routes": [
+        "POST /api/kua-apps/:applicationId/sync"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane",
+        "local-settings"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "sync.resolve-conflict": {
+      "summary": "Keep this or the synced version of an application",
+      "routes": [
+        "POST /api/kua-apps/:applicationId/sync/resolve"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane",
+        "apm-db",
+        "architecture-graph",
+        "local-settings"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "sync.run": {
+      "summary": "Sync applications with the KUA account now",
+      "routes": [
+        "POST /api/kua-apps/sync/now"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane",
+        "apm-db",
+        "architecture-graph",
+        "local-settings"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "moves",
+      "invalidates": [
+        "overview",
+        "topology",
+        "forecast",
+        "registry",
+        "kuapps.registry",
+        "kuapps.missing"
+      ],
+      "batchable": true,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "team-backup.create": {
+      "summary": "Back up a shared team item",
+      "routes": [
+        "POST /api/kua-apps/team/items/:itemId/backups"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "team-backup.restore": {
+      "summary": "Restore a backup of a shared team item as a new application",
+      "routes": [
+        "POST /api/kua-apps/team/items/:itemId/backups/:backupId/restore"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes",
+        "architecture-graph"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "team-item.import": {
+      "summary": "Import an application shared with the team",
+      "routes": [
+        "POST /api/kua-apps/team/items/:itemId/import"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db",
+        "scopes",
+        "architecture-graph",
+        "local-settings"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "team-item.update": {
+      "summary": "Change a shared team item",
+      "routes": [
+        "PATCH /api/kua-apps/team/items/:itemId"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "team-member.set-permissions": {
+      "summary": "Change what a team member can do",
+      "routes": [
+        "PATCH /api/kua-apps/team/members/:userId"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": false
+    },
+    "team.sync": {
+      "summary": "Refresh the team space",
+      "routes": [
+        "POST /api/kua-apps/team/refresh"
+      ],
+      "kind": "external-write",
+      "stores": [
+        "control-plane",
+        "apm-db",
+        "architecture-graph",
+        "local-settings"
+      ],
+      "derives": [
+        "registry"
+      ],
+      "revision": "moves",
+      "invalidates": [],
+      "batchable": true,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    },
+    "thresholds.update": {
+      "summary": "Change the health thresholds",
+      "routes": [
+        "PATCH /api/observability/:provider/applications/:applicationId/thresholds"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [
+        "overview"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "topology.analyze-cloud": {
+      "summary": "Read Step Functions definitions to suggest dependencies",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/topology/analyze-cloud"
+      ],
+      "kind": "cloud-read",
+      "stores": [],
+      "derives": [],
+      "revision": "none",
+      "invalidates": [],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "view.create-from-application": {
+      "summary": "Create an Architecture view from the application and link it",
+      "routes": [
+        "POST /api/observability/:provider/applications/:applicationId/architecture-link/project"
+      ],
+      "kind": "write",
+      "stores": [
+        "architecture-graph",
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "moves",
+      "invalidates": [
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "view.link": {
+      "summary": "Link an Architecture view",
+      "routes": [
+        "PATCH /api/observability/:provider/applications/:applicationId/architecture-link"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "moves",
+      "invalidates": [
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": false,
+      "audit": true
+    },
+    "view.unlink": {
+      "summary": "Unlink an Architecture view (the view is kept)",
+      "routes": [
+        "DELETE /api/observability/:provider/applications/:applicationId/architecture-link"
+      ],
+      "kind": "write",
+      "stores": [
+        "apm-db"
+      ],
+      "derives": [
+        "registry",
+        "scopes"
+      ],
+      "revision": "moves",
+      "invalidates": [
+        "registry",
+        "kuapps.registry"
+      ],
+      "batchable": false,
+      "cost": null,
+      "destructive": true,
+      "audit": true
+    }
+  }
+}

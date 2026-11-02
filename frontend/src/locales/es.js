@@ -1009,6 +1009,7 @@ export default {
   'apm.evidenceScope':                   'mismo namespace: {values}',
   'apm.evidenceTypes':                   'tipos compatibles',
   'apm.evidenceAsl':                     'ASL: {state} referencia {resource}',
+  'apm.revisionConflict':                'La aplicación cambió mientras tanto. Se volvió a cargar; revisa las sugerencias otra vez.',
   'apm.dependenciesNotConfirmed':        '{n} dependencias no se pudieron confirmar: la aplicación cambió. Revisa las sugerencias otra vez.',
   'apm.confirmDependency':               'Confirmar',
   'apm.analyzeCloudTopology':            'Analizar definiciones AWS',

@@ -4,12 +4,14 @@
 //   They wait while a write of the same application runs, and cancel() aborts them; a response
 //   that arrives after that is dropped instead of overwriting newer state.
 // - Writes run one at a time in order, so they never race on the registry reconciliation.
-//   Each declares what it invalidates; when the queue is empty, subscribers receive the union of
+//   What each invalidates comes from the action catalog (#329) unless the caller says otherwise;
+//   when the queue is empty, subscribers receive the union of
 //   those parts once, so N writes cause one reload. A write's promise settles after that reload.
 // - Every step is recorded as an event (queued, started, deduplicated, coalesced, cancelled,
 //   stale, completed, failed): the source of its view in the background task manager (#330).
 // Requests carry the X-KUA-Task header so the backend task journal attributes them (#325).
 import { taskRun } from './taskTrace'
+import { invalidatesFor } from './actionCatalog'
 
 const MAX_EVENTS = 200
 const MAX_COORDINATORS = 20
@@ -97,7 +99,7 @@ export function createTaskCoordinator({ scope = '', now = () => Date.now(), maxE
     return entry.promise
   }
 
-  function write(key, run, { invalidates = [] } = {}) {
+  function write(key, run, { invalidates = invalidatesFor(key) } = {}) {
     const task = taskRun(key)
     const runId = task.split(';')[1]
     record('queued', key, { kind: 'write', runId, invalidates })

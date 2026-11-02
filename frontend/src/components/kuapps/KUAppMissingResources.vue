@@ -96,12 +96,13 @@ async function load() {
   }
 }
 
-// Writes go through the application's task coordinator (#326): replacing or detaching changes the
-// application's resources, so every view of them reloads once; ignoring only changes this list.
-async function run(key, action, message, invalidates) {
+// Writes go through the application's task coordinator (#326), and the action catalog (#329) says
+// what each makes stale: replacing or detaching reloads every view of the application once,
+// ignoring only this list.
+async function run(key, action, message) {
   busy.value = true
   try {
-    await taskCoordinatorFor(props.applicationId).write(key, ({ task }) => action({ 'X-KUA-Task': task }), { invalidates })
+    await taskCoordinatorFor(props.applicationId).write(key, ({ task }) => action({ 'X-KUA-Task': task }))
     toast(message, 'success')
     emit('changed')
   } catch (err) {
@@ -111,16 +112,14 @@ async function run(key, action, message, invalidates) {
   }
 }
 
-const RESOURCES_CHANGED = ['kuapps.missing', 'kuapps.registry', 'overview', 'topology', 'forecast', 'registry']
 const replace = (item, successor) => run(
-  'resource.replace',
+  'resource.replace-with-successor',
   headers => api('POST', `${base()}/observer/replace`, { resourceId: item.resourceId, successor: successor.name, ...(props.revision != null ? { expectedRevision: props.revision } : {}) }, { headers }),
   t('kuapps.missing.replaced', { from: item.name, to: successor.name }),
-  RESOURCES_CHANGED,
 )
-const ignore = item => run('resource.ignore-missing', headers => api('POST', `${base()}/observer/ignore`, { resourceId: item.resourceId }, { headers }), t('kuapps.missing.ignored', { name: item.name }), ['kuapps.missing'])
+const ignore = item => run('missing-resource.ignore', headers => api('POST', `${base()}/observer/ignore`, { resourceId: item.resourceId }, { headers }), t('kuapps.missing.ignored', { name: item.name }))
 // Detaching uses the same route as Resources: the resource leaves the application, nothing is deleted.
-const detach = item => run('resource.detach', headers => api('DELETE', `${base()}/registry/resources/${encodeURIComponent(item.registryId)}`, undefined, { headers }), t('kuapps.missing.detached', { name: item.name }), RESOURCES_CHANGED)
+const detach = item => run('registry-resource.detach', headers => api('DELETE', `${base()}/registry/resources/${encodeURIComponent(item.registryId)}`, undefined, { headers }), t('kuapps.missing.detached', { name: item.name }))
 
 let subscription = () => {}
 watch(() => props.applicationId, applicationId => {
