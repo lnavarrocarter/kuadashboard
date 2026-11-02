@@ -17,6 +17,7 @@ const { ApplicationRegistryService, resourceOwnProvider, isCorrelatableResourceT
 const { ApplicationScopeService } = require('../lib/kua/applicationScopes');
 const { profilesForApplication } = require('../lib/kua/scopeCredentials');
 const { applyGraphOperation } = require('../lib/architecture/graphService');
+const { createDirectChanges } = require('../lib/kua/changePlans');
 const { KubernetesAdapter } = require('../lib/kua/kubernetesAdapter');
 
 const AWS_TOPOLOGY_RESOURCE_TYPES = new Set(['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs']);
@@ -90,6 +91,13 @@ function createApmRouter({
   function log(action, resource, context, details) {
     auditLog?.log({ category: 'apm', action, resource, context, details });
   }
+
+  // Review writes are recorded as change plans, like agent changes (#329): revision, per-item
+  // outcome and one audit entry. The audit context says whether the UI or an agent sent them.
+  const directChanges = createDirectChanges({
+    apmDatabase: database,
+    audit: (action, resource, { profileId, ...details }) => log(action, resource, profileId, details),
+  });
 
   function syncCollectionTasks() {
     scheduler.syncApplicationTasks?.();
@@ -547,15 +555,24 @@ function createApmRouter({
         }
       }
       if (!project || !graph || !edge) throw Object.assign(new Error('Relationship not found in the linked Architecture projects'), { statusCode: 404 });
-      const document = applyGraphOperation(graph.document, {
-        type: 'edge.review', subjectId: edge.id, value: { decision },
+      const { result, change } = directChanges.record({
+        application,
+        operation: 'relationship.review',
+        input: { relationshipId: req.params.relationshipId, decision },
+        auditAction: `Relationship ${decision}ed`,
+        details: { profileId: application.profileId, relationshipId: req.params.relationshipId, edgeId: edge.id },
+        run: () => {
+          // The Architecture graph has its own revision: a graph changed meanwhile is a conflict.
+          const document = applyGraphOperation(graph.document, {
+            type: 'edge.review', subjectId: edge.id, value: { decision },
+          });
+          architectureDatabase.saveGraph(project.id, document, {
+            expectedRevision: graph.revision, type: 'edge.review', summary: `Relationship ${decision}ed from Observability`,
+          });
+          return reconcileRegistry(database.getApplication(application.id));
+        },
       });
-      architectureDatabase.saveGraph(project.id, document, {
-        expectedRevision: graph.revision, type: 'edge.review', summary: `Relationship ${decision}ed from Observability`,
-      });
-      const result = reconcileRegistry(database.getApplication(application.id));
-      log(`Relationship ${decision}ed`, edge.id, application.profileId);
-      res.json({ decision, relationshipId: req.params.relationshipId, syncStatus: result?.syncStatus || null });
+      res.json({ decision, relationshipId: req.params.relationshipId, syncStatus: result?.syncStatus || null, change });
     } catch (error) { handleError(res, error); }
   });
 
@@ -744,15 +761,31 @@ function createApmRouter({
       if (!Array.isArray(edges) || !edges.length || edges.length > MAX_EDGE_BATCH) {
         throw Object.assign(new Error(`edges must be a list of 1 to ${MAX_EDGE_BATCH} dependencies`), { statusCode: 400 });
       }
-      const { results, created } = database.addEdges(application.id, edges, { expectedRevision: req.body?.expectedRevision });
-      const registryResult = created ? reconcileRegistry(database.getApplication(application.id)) : null;
-      log('Dependencies confirmed', application.name, application.profileId, { created, requested: edges.length });
+      const { result: { results, created, registryResult }, change } = directChanges.record({
+        application,
+        operation: 'edge.confirm-batch',
+        input: { requested: edges.length, expectedRevision: req.body?.expectedRevision ?? null },
+        auditAction: 'Dependencies confirmed',
+        details: result => ({ profileId: application.profileId, created: result.created, requested: edges.length }),
+        run: () => {
+          const outcome = database.addEdges(application.id, edges, { expectedRevision: req.body?.expectedRevision });
+          return {
+            ...outcome,
+            registryResult: outcome.created ? reconcileRegistry(database.getApplication(application.id)) : null,
+            // Per-item outcome of the plan: an invalid dependency is a failed item (partial result).
+            items: outcome.results.map((item, index) => ({
+              index, outcome: item.status === 'invalid' ? 'failed' : item.status, ...(item.reason ? { reason: item.reason } : {}),
+            })),
+          };
+        },
+      });
       res.json({
         results,
         created,
         exists: results.filter(result => result.status === 'exists').length,
         invalid: results.filter(result => result.status === 'invalid').length,
         syncStatus: registryResult?.syncStatus || null,
+        change,
       });
     } catch (error) { handleError(res, error); }
   });

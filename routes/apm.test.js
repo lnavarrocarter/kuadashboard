@@ -809,6 +809,11 @@ test('API lets Observability accept a discovered relationship without opening Ar
     });
     assert.equal(reviewed.status, 200);
     assert.equal(reviewed.body.syncStatus.divergentRelationshipCount, 0);
+    // Recorded as a change plan like agent changes (#329): readable by get_application_change.
+    const reviewPlan = subject.database.getChangePlan(reviewed.body.change.planId);
+    assert.equal(reviewPlan.operation, 'relationship.review');
+    assert.equal(reviewPlan.status, 'applied');
+    assert.deepEqual(reviewPlan.input, { relationshipId: pending.id, decision: 'accept' });
 
     // Accepting from Observability must be the same decision the Architecture canvas records.
     const edge = subject.architectureDatabase.getGraph(project.id).document.edges[0];
@@ -1516,7 +1521,16 @@ test('API confirms many dependencies in one batch with one registry reconciliati
     assert.deepEqual([batch.body.created, batch.body.exists, batch.body.invalid], [2, 2, 3]);
     assert.equal(reconciles, 1, 'one reconciliation for the whole batch');
     assert.equal(subject.database.listEdges(applicationId).length, 3);
-    assert.equal(subject.auditEvents.filter(event => event.action === 'Dependencies confirmed').length, 1);
+    const confirmed = subject.auditEvents.filter(event => event.action === 'Dependencies confirmed');
+    assert.equal(confirmed.length, 1);
+    // One change plan with the per-item outcome: invalid dependencies make it partial (#329).
+    const plan = subject.database.getChangePlan(batch.body.change.planId);
+    assert.equal(plan.operation, 'edge.confirm-batch');
+    assert.equal(plan.status, 'partial');
+    assert.deepEqual(plan.result.items.map(item => item.outcome), ['exists', 'created', 'created', 'exists', 'failed', 'failed', 'failed']);
+    assert.equal(batch.body.change.status, 'partial');
+    assert.equal(confirmed[0].details.planId, plan.id);
+    assert.equal(confirmed[0].details.created, 2);
 
     reconciles = 0;
     const nothingNew = await subject.request(`/applications/${applicationId}/edges/batch`, {
@@ -1531,6 +1545,8 @@ test('API confirms many dependencies in one batch with one registry reconciliati
     assert.equal(stale.status, 409);
     assert.equal(stale.body.code, 'REVISION_CONFLICT');
     assert.equal(subject.database.listEdges(applicationId).length, 3, 'a stale batch writes nothing');
+    const conflicts = subject.database.db.prepare("SELECT status FROM kua_change_plans WHERE operation = 'edge.confirm-batch' AND status = 'conflict'").all();
+    assert.equal(conflicts.length, 1, 'the refused batch is recorded as a conflict');
 
     for (const body of [{}, { edges: [] }, { edges: Array.from({ length: 201 }, () => ({})) }]) {
       const rejected = await subject.request(`/applications/${applicationId}/edges/batch`, { method: 'POST', body });
