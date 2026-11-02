@@ -129,6 +129,35 @@ describe('AdvisorPanel', () => {
     expect(wrapper.find('.adv-score').classes()).toContain('warn')
   })
 
+  // DORA (#96): deploy frequency, lead time and change failure rate from the GitHub CI/CD reader.
+  it('renders DORA metrics when the application syncs with GitHub', () => {
+    const wrapper = mount(AdvisorPanel, {
+      props: {
+        lens: 'product',
+        report: report({
+          categories: ['product'],
+          summary: { product: bucket({ passed: 5, checks: 5 }) },
+          findings: [],
+          technical: {
+            analyzedAt: null,
+            findings: [],
+            dora: {
+              available: true, source: 'github.cicd', repositories: ['acme/api'], days: 30,
+              deploys: 6, perWeek: 1.4, leadTimeHours: 3.5, leadTimeSamples: 4,
+              changeRuns: 8, changeFailures: 2, changeFailureRatePercent: 25,
+            },
+          },
+          unavailable: [],
+        }),
+      },
+    })
+    const dora = wrapper.find('[data-test="advisor-dora"]')
+    expect(dora.exists()).toBe(true)
+    expect(dora.text()).toContain('6 deploy(s) in the last 30 days (1.4 per week).')
+    expect(dora.text()).toContain('Median lead time from commit to deploy: 3.5 h, over 4 deploy(s).')
+    expect(dora.text()).toContain('25% of deploy runs failed (2 of 8).')
+  })
+
   it('starts collapsed when asked, remembers the choice and emits refresh', async () => {
     const wrapper = mount(AdvisorPanel, { props: { report: report(), defaultCollapsed: true, refreshable: true, storageKey: 'advisor.test' } })
     expect(wrapper.find('.adv-list').exists()).toBe(false)

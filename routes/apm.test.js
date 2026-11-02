@@ -17,7 +17,7 @@ const { ApplicationRegistryService } = require('../lib/kua/applicationRegistrySe
 const { PostureStore } = require('../lib/advisor/posture');
 const { buildReport, check } = require('../lib/advisor/core');
 
-async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs, providerActive } = {}) {
+async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, processTracer, kubernetesAdapter, syncProviderLogs, providerActive, githubCicd } = {}) {
   // In-memory log cache: tests never touch the user's data directory.
   const logCache = createLogCache({ dataDir: ':memory:' });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-apm-api-'));
@@ -69,6 +69,7 @@ async function fixture({ deploymentReader, eksWorkloadReader, topologyReader, pr
     apmDatabase: database,
     auditLog: { log(event) { auditEvents.push(event); } },
     kubernetesAdapter,
+    ...(githubCicd ? { githubCicd } : {}),
     logCache: () => logCache,
   }));
   const server = http.createServer(app);
@@ -1302,6 +1303,60 @@ test('product advisor reads cached AWS and Kubernetes logs from each resource sc
     assert.deepEqual(advisor.body.technical.findings[0].resources.map(resource => resource.name), ['checkout-api']);
     assert.equal(advisor.body.technical.dora.available, false);
     assert.ok(advisor.body.recommendations.some(item => item.id === 'error_budget_and_technical_risk'));
+  } finally {
+    await subject?.close();
+    if (previousPlan === undefined) delete process.env.KUA_PLAN;
+    else process.env.KUA_PLAN = previousPlan;
+  }
+});
+
+// DORA (#96): frequency, lead time and change failure rate from the GitHub CI/CD reader (#238).
+test('the product advisor computes DORA metrics when the application syncs with GitHub', async () => {
+  const previousPlan = process.env.KUA_PLAN;
+  process.env.KUA_PLAN = 'pro';
+  let subject;
+  try {
+    const { createGithubCicd } = require('../lib/kua/githubCicd');
+    const deployAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const commitAt = new Date(deployAt.getTime() - 2 * 60 * 60 * 1000);
+    const run = (id, conclusion, at) => ({
+      id, run_number: id, name: 'Deploy production', status: 'completed', conclusion,
+      head_sha: `sha-${id}`, head_branch: 'main', updated_at: at.toISOString(),
+      head_commit: { message: 'feat: checkout', author: { name: 'Ana' }, timestamp: commitAt.toISOString() },
+      triggering_actor: { login: 'ana' },
+      html_url: `https://github.com/acme/api/actions/runs/${id}`,
+    });
+    const github = createGithubCicd({ client: {
+      async user() { return { login: 'ana' }; },
+      async workflowRuns() {
+        return { workflow_runs: [run(7, 'success', deployAt), run(6, 'failure', new Date(deployAt.getTime() - 3600000))] };
+      },
+      async deployments() { return []; },
+    } });
+    subject = await fixture({ githubCicd: github });
+    const created = await subject.request('/applications', {
+      method: 'POST',
+      body: { name: 'checkout', region: 'us-east-1', environment: 'production' },
+    });
+
+    // Without the GitHub sync turned on, DORA stays unavailable.
+    const before = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(before.body.technical.dora.available, false);
+    assert.equal(before.body.technical.dora.reason, 'deployment_history_unavailable');
+
+    github.configure(created.body.id, { enabled: true, repositories: ['acme/api'] });
+    const advisor = await subject.architectureRequest(`/applications/${created.body.id}/advisor`);
+    assert.equal(advisor.status, 200);
+    const dora = advisor.body.technical.dora;
+    assert.equal(dora.available, true);
+    assert.equal(dora.source, 'github.cicd');
+    assert.deepEqual(dora.repositories, ['acme/api']);
+    assert.equal(dora.deploys, 1);
+    assert.equal(dora.leadTimeHours, 2);
+    assert.equal(dora.leadTimeSamples, 1);
+    assert.equal(dora.changeRuns, 2);
+    assert.equal(dora.changeFailures, 1);
+    assert.equal(dora.changeFailureRatePercent, 50);
   } finally {
     await subject?.close();
     if (previousPlan === undefined) delete process.env.KUA_PLAN;

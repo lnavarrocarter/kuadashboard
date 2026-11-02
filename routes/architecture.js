@@ -12,12 +12,13 @@ const { createVercelDiscoveryReader } = require('../lib/architecture/vercelDisco
 const { createProxmoxDiscoveryReader } = require('../lib/architecture/proxmoxDiscoveryReader');
 const { evaluateThresholds } = require('../lib/apm/thresholds');
 const { adviseProduct, summarizeTechnicalFindings, crossRecommendations } = require('../lib/advisor/product');
+const { deliveryMetrics } = require('../lib/kua/githubCicd');
 const { PostureStore, finalizeAdvisor, scopeKeys } = require('../lib/advisor/posture');
 const { teamScopeOf } = require('../lib/advisor/teamAcceptances');
 const { checkKubernetesMap, publicDrift, refreshOperation } = require('../lib/architecture/kubernetesDrift');
 const { checkAwsMap } = require('../lib/architecture/awsDrift');
 
-function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, proxmoxDiscoveryService, logCache = () => require('../lib/awsLogCache').getLogCache(), providerActive = () => true }) {
+function createArchitectureRouter({ database, apmDatabase, postureStore: sharedPosture = null, auditLog, graphService, discoveryService, kubernetesAdapter = new KubernetesAdapter(), awsDriftReader = null, deploymentReader, inventoryReader, relationshipReader, gcpDiscoveryService, vercelDiscoveryService, proxmoxDiscoveryService, githubCicd = null, logCache = () => require('../lib/awsLogCache').getLogCache(), providerActive = () => true }) {
   if (!database) throw new Error('database is required');
   const router = express.Router();
   // A provider of a plugin that is off (#194) is not read: its discovery answers PLUGIN_DISABLED.
@@ -212,7 +213,21 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     } catch (_) { return { dependencies: [], resourceLogs: [], uncachedLogResources: [], unavailableLogScopeResources: [] }; }
   }
 
-  function advisorTechnicalAnalysis(application) {
+  // DORA (#96): deploy frequency, lead time and change failure rate from the GitHub CI/CD
+  // reader (#238), only when the application syncs with GitHub (opt-in, read-only, cached).
+  async function advisorDora(application) {
+    const unavailable = { available: false, reason: 'deployment_history_unavailable' };
+    if (!githubCicd) return unavailable;
+    try {
+      if (!githubCicd.settings(application.id).enabled) return unavailable;
+      const activity = await githubCicd.activity(application.id);
+      if (!activity.repositories.length) return unavailable;
+      if (!activity.events.length && activity.errors.length) return { available: false, reason: 'github_unreachable' };
+      return { available: true, source: 'github.cicd', repositories: activity.repositories, ...deliveryMetrics(activity.events) };
+    } catch { return { available: false, reason: 'github_unreachable' }; }
+  }
+
+  async function advisorTechnicalAnalysis(application) {
     const store = postureStore();
     const reports = [];
     const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
@@ -229,12 +244,13 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
     }
     return {
       ...summarizeTechnicalFindings(reports, apmDatabase.listRegistryResources(application.id)),
-      dora: { available: false, reason: 'deployment_history_unavailable' },
+      dora: await advisorDora(application),
     };
   }
 
   // Product lens of the Advisor for a KUApps application (any provider):
-  // objectives, ownership, release path and telemetry. No cloud calls.
+  // objectives, ownership, release path and telemetry. No cloud calls, except
+  // the opt-in GitHub CI/CD read for DORA (read-only, cached 5 minutes).
   router.get('/applications/:applicationId/advisor', async (req, res) => {
     try {
       const profile = profileId(req, res);
@@ -257,7 +273,7 @@ function createArchitectureRouter({ database, apmDatabase, postureStore: sharedP
         uncachedLogResources: logAnalysis.uncachedLogResources || [],
         unavailableLogScopeResources: logAnalysis.unavailableLogScopeResources || [],
       });
-      report.technical = advisorTechnicalAnalysis(application);
+      report.technical = await advisorTechnicalAnalysis(application);
       report.recommendations = crossRecommendations(report.errorBudget, report.technical);
       // Acceptances and history of the application (lib/advisor/posture.js), then the plan gate.
       res.json(finalizeAdvisor(report, { scopes: scopeKeys('product', { applicationId: application.id, label: application.name }), store: postureStore() }));

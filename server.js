@@ -398,6 +398,8 @@ app.use('/api/architecture', createArchitectureRouter({
   }),
   inventoryReader: createAwsRegionalInventoryReader({ beforeRequest: reserveArchitectureAwsRequest }),
   relationshipReader: createAwsTemplateRelationshipReader({ beforeRequest: reserveArchitectureAwsRequest }),
+  // DORA in the product Advisor (#96): releases and commits of the applications that sync with GitHub.
+  githubCicd,
   providerActive,
 }));
 // The team's shared space (Team plan): lib/sync/teamEngine.js.
