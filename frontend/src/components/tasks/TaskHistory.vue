@@ -33,6 +33,7 @@
             <span class="history-name">
               <strong>{{ nameOf(run) }}</strong>
               <small>{{ metaOf(run) }}</small>
+              <small v-if="run.cost" class="history-cost">{{ formatCost(run.cost) }}</small>
             </span>
             <span class="history-end">
               <span class="history-duration">{{ run.durationMs == null ? '—' : duration(run.durationMs) }}</span>
@@ -44,10 +45,18 @@
               <dt>{{ t('tasks.history.started') }}</dt><dd>{{ run.startedAt ? stamp(run.startedAt) : '—' }}</dd>
               <dt>{{ t('tasks.history.finished') }}</dt><dd>{{ stamp(run.finishedAt) }}</dd>
               <template v-if="run.errorCode"><dt>{{ t('tasks.errorCode') }}</dt><dd><code>{{ run.errorCode }}</code></dd></template>
+              <dt>{{ t('tasks.history.cost') }}</dt><dd data-test="history-cost">{{ run.cost ? formatCost(run.cost) : t('tasks.history.noPricedCalls') }}</dd>
             </dl>
-            <button class="btn sm" data-test="history-copy" @click="copy(run)">
-              <i data-lucide="copy"></i> {{ t(copiedId === run.id ? 'tasks.coordinator.copied' : 'tasks.coordinator.copy') }}
-            </button>
+            <div class="history-actions">
+              <button
+                v-if="retryable.includes(run.taskId)" class="btn sm primary" :disabled="busy === `${run.taskId}:run`"
+                data-test="history-retry" @click="emit('retry', run.taskId)">
+                <i data-lucide="rotate-ccw"></i> {{ t('tasks.history.retry') }}
+              </button>
+              <button class="btn sm" data-test="history-copy" @click="copy(run)">
+                <i data-lucide="copy"></i> {{ t(copiedId === run.id ? 'tasks.coordinator.copied' : 'tasks.coordinator.copy') }}
+              </button>
+            </div>
           </div>
         </li>
       </ol>
@@ -75,7 +84,13 @@ const props = defineProps({
   refreshKey: { type: [String, Number], default: '' },
   // duration(ms) → text, shared with the task list.
   formatDuration: { type: Function, required: true },
+  // cost by provider → text (#353).
+  formatCost: { type: Function, required: true },
+  // Task ids that can run again now, and the action in progress ("<taskId>:run").
+  retryable: { type: Array, default: () => [] },
+  busy: { type: String, default: '' },
 })
+const emit = defineEmits(['retry'])
 const { t } = useI18n()
 const { apiFetch } = useApi()
 const data = ref(null)
@@ -197,6 +212,8 @@ onUnmounted(() => { disposed = true; clearTimeout(searchTimer) })
 .outcome-failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
 .outcome-cancelled { color: var(--yellow); }
 .history-detail { padding: 0 12px 12px 66px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.history-cost { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .history-detail dl { margin: 0; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 10px; font-size: 11px; }
 .history-detail dt { color: var(--text-dim); }
 .history-detail dd { margin: 0; }

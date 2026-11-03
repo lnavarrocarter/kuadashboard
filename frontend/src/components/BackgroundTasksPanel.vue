@@ -50,7 +50,8 @@
         </div>
         <TaskHistory
           v-else-if="view === 'history'" :task-name="taskName" :provider-label="providerLabel"
-          :format-duration="formatDuration" :refresh-key="snapshot.generatedAt" />
+          :format-duration="formatDuration" :format-cost="formatRunCost" :refresh-key="snapshot.generatedAt"
+          :retryable="retryableIds" :busy="busyAction" @retry="retry" />
         <template v-else>
           <div v-if="error" class="tasks-inline-error" role="alert" data-test="tasks-refresh-error">{{ error }}</div>
           <div v-if="!snapshot.tasks.length" class="tasks-state" data-test="tasks-empty">{{ t('tasks.empty') }}</div>
@@ -71,7 +72,7 @@
                         v-for="action in task.availableActions || []" :key="action"
                         class="btn btn-icon sm" :class="{ danger: action === 'cancel' }"
                         :disabled="busyAction === `${task.id}:${action}`"
-                        :title="t(`tasks.action.${action}`)" :aria-label="t(`tasks.action.${action}`)"
+                        :title="actionLabel(section.key, action)" :aria-label="actionLabel(section.key, action)"
                         :data-test="`task-action-${task.id}-${action}`" @click="control(task, action)">
                         <i :data-lucide="ACTION_ICONS[action]"></i>
                       </button>
@@ -93,6 +94,7 @@
                     <span>{{ taskCost(task).label }}</span>
                     <small v-if="taskCost(task).potential">{{ taskCost(task).potential }}</small>
                   </div>
+                  <p v-if="lastRunCost(task)" class="task-run-cost" :data-test="`task-run-cost-${task.id}`">{{ lastRunCost(task) }}</p>
                   <div v-if="task.progress !== null && task.progress !== undefined && ACTIVE_STATES.includes(task.state)" class="task-progress">
                     <div role="progressbar" :aria-label="t('tasks.progress')" :aria-valuenow="Math.round(task.progress * 100)" aria-valuemin="0" aria-valuemax="100">
                       <span :style="{ width: `${Math.round(task.progress * 100)}%` }"></span>
@@ -148,7 +150,9 @@ const view = ref('now')
 const COORDINATOR_PREFIX = 'kuapps.coordinator.'
 const clock = ref(Date.now())
 const ACTIVE_STATES = ['running', 'pause_requested', 'cancellation_requested']
-const ACTION_ICONS = { pause: 'pause', resume: 'play', cancel: 'x' }
+const ACTION_ICONS = { pause: 'pause', resume: 'play', cancel: 'x', run: 'rotate-ccw' }
+// Providers whose reads KUA makes have no per-call charge (#353): said instead of a zero.
+const UNMETERED = new Set(['kubernetes', 'vercel', 'local', 'kua'])
 const NAME_KEYS = {
   'apm.collection': 'tasks.task.apm',
   'logs.refresh': 'tasks.task.logsRefresh',
@@ -228,6 +232,38 @@ function providerLabel(provider) {
 
 function taskProvider(task) {
   return task.provider || LEGACY_TASK_PROVIDERS[task.id] || null
+}
+
+// In Needs attention, running a task again is a retry.
+function actionLabel(sectionKey, action) {
+  return t(action === 'run' && sectionKey === 'attention' ? 'tasks.action.retry' : `tasks.action.${action}`)
+}
+
+/** { aws: { calls, usd, potentialUsd }, gcp: … } → "AWS $0.002 · Google Cloud $0.0000005 within the free tier". */
+function formatRunCost(cost) {
+  if (!cost) return ''
+  return Object.entries(cost).map(([provider, row]) => {
+    const label = PROVIDER_LABELS[provider] || provider
+    if (Number(row.usd) > 0) return `${label} ${formatUsd(row.usd)}`
+    if (Number(row.potentialUsd) > 0) return t('tasks.costFreeTierRun', { provider: label, usd: formatUsd(row.potentialUsd) })
+    return t('tasks.costNoChargeRun', { provider: label })
+  }).join(' · ')
+}
+
+// The cost of the task's last run, per cloud; a provider without metering says so.
+function lastRunCost(task) {
+  if (!task.history) return ''
+  if (task.history.lastCost) return t('tasks.lastRunCost', { cost: formatRunCost(task.history.lastCost) })
+  const provider = taskProvider(task)
+  return t(UNMETERED.has(provider) ? 'tasks.lastRunUnmetered' : 'tasks.lastRunNoPriced')
+}
+
+// Tasks the history can run again: still registered, and offering "run" now.
+const retryableIds = computed(() => (snapshot.value?.tasks || []).filter(task => (task.availableActions || []).includes('run')).map(task => task.id))
+
+function retry(taskId) {
+  const task = snapshot.value?.tasks.find(item => item.id === taskId)
+  if (task) control(task, 'run')
 }
 
 function formatUsd(value) {
@@ -476,6 +512,7 @@ onUnmounted(() => {
 .tasks-tab-count.bad { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
 .tasks-process-note { margin-top: 10px; color: var(--text-dim); font-size: 11px; line-height: 1.4; }
 .task-row.attention { padding: 12px; margin-top: 8px; border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--red) 6%, transparent); }
+.task-run-cost { margin-top: 4px; color: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
 .task-failures { margin-top: 6px; color: var(--red); font-size: 11px; }
 .task-next { color: var(--teal); }
 .task-spark { display: flex; align-items: flex-end; gap: 2px; width: 120px; height: 24px; margin-top: 8px; }

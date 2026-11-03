@@ -332,4 +332,50 @@ describe('BackgroundTasksPanel', () => {
     expect(history.findAll('[data-test^="history-run-"]')).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('runs a task now, says Retry in Needs attention and shows the last run cost per cloud (#353)', async () => {
+    const calls = stubFetch(async url => url === BASE ? jsonResponse(snapshot([
+      task({ id: 'team.sync', name: 'Team sync', type: 'scheduler', provider: 'kua', state: 'error', progress: null, errorCode: 'auth_expired', availableActions: ['resume', 'run'], history: { recent: [{ durationMs: 10, outcome: 'failed' }, { durationMs: 12, outcome: 'failed' }], typicalMs: null, failuresInLast5: 2, lastCost: null } }),
+      task({ id: 'apm.collection', type: 'scheduler', provider: 'mixed', state: 'scheduled', progress: null, availableActions: ['pause', 'run'], history: { recent: [], typicalMs: 1000, failuresInLast5: 0, lastCost: { aws: { calls: 3, usd: 0.0021, potentialUsd: 0 }, gcp: { calls: 2, usd: 0, potentialUsd: 0.000001 } } } }),
+    ])) : url.startsWith('/api/system/usage') ? jsonResponse({ enabled: true, byFeature: [] }) : jsonResponse({ task: task(), changed: true }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="task-action-team.sync-run"]').attributes('aria-label')).toBe('Retry')
+    expect(wrapper.get('[data-test="task-action-apm.collection-run"]').attributes('aria-label')).toBe('Run now')
+    expect(wrapper.get('[data-test="task-run-cost-apm.collection"]').text()).toBe('Last run: AWS $0.0021 · Google Cloud $0.000001 within the free tier')
+    expect(wrapper.get('[data-test="task-run-cost-team.sync"]').text()).toBe('Last run: no per-call charge for this provider')
+
+    await wrapper.get('[data-test="task-action-team.sync-run"]').trigger('click')
+    await flushPromises()
+    expect(calls.filter(call => call.method === 'POST').map(call => call.url)).toEqual([`${BASE}/team.sync/run`])
+    wrapper.unmount()
+  })
+
+  it('retries a run from the history while its task can run (#353)', async () => {
+    const runs = [
+      { id: 9, taskId: 'team.sync', name: 'Team sync', type: 'scheduler', provider: 'kua', startedAt: new Date(Date.now() - 2000).toISOString(), finishedAt: new Date().toISOString(), durationMs: 2000, outcome: 'failed', errorCode: 'auth_expired', cost: null },
+      { id: 8, taskId: 'logs.scan.1', name: 'Log scan', type: 'scan', provider: 'aws', startedAt: new Date(Date.now() - 9000).toISOString(), finishedAt: new Date(Date.now() - 4000).toISOString(), durationMs: 5000, outcome: 'completed', errorCode: null, cost: { aws: { calls: 4, usd: 0, potentialUsd: 0.00009 } } },
+    ]
+    const calls = stubFetch(async url => {
+      if (url === BASE) return jsonResponse(snapshot([task({ id: 'team.sync', name: 'Team sync', type: 'scheduler', provider: 'kua', state: 'error', progress: null, availableActions: ['run'] })]))
+      if (url.startsWith(`${BASE}/history`)) return jsonResponse({ runs, summary24h: { runs: 2, completed: 1, failed: 1, cancelled: 0 }, retentionDays: 7, maxRuns: 2000 })
+      if (url.startsWith('/api/system/usage')) return jsonResponse({ enabled: true, byFeature: [] })
+      return jsonResponse({ task: task(), changed: true })
+    })
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+    await wrapper.get('[data-test="tasks-tab-history"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="history-run-8"]').text()).toContain('AWS $0.00009 within the free tier')
+    await wrapper.get('[data-test="history-run-8"] button').trigger('click')
+    expect(wrapper.find('[data-test="history-retry"]').exists()).toBe(false)
+    await wrapper.get('[data-test="history-run-9"] button').trigger('click')
+    expect(wrapper.get('[data-test="history-cost"]').text()).toBe('No priced calls')
+    await wrapper.get('[data-test="history-retry"]').trigger('click')
+    await flushPromises()
+    expect(calls.filter(call => call.method === 'POST').map(call => call.url)).toEqual([`${BASE}/team.sync/run`])
+    wrapper.unmount()
+  })
 })
