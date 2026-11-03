@@ -241,7 +241,11 @@ describe('BackgroundTasksPanel', () => {
     await row.get('[data-test="coordinator-toggle-kuapps.coordinator.app-12345678-xyz"]').trigger('click')
     await flushPromises()
     const panel = wrapper.get('[data-test="coordinator-detail"]')
-    expect(panel.get('[data-test="coordinator-metrics"]').text()).toContain('2 / 4')
+    expect(panel.text()).toContain('Ran of the ones asked')
+    expect(panel.text()).toContain('of 4')
+    expect(panel.text()).toContain('2 ran')
+    expect(panel.text()).toContain('2 shared')
+    expect(panel.get('[data-test="coordinator-metrics"]').text()).toContain('Changes with a merged reload3')
     expect(panel.text()).toContain('After a change')
     expect(panel.text()).toContain('Over 3 × its p95')
     expect(panel.text()).toContain('Writes: apm-db')
@@ -257,6 +261,75 @@ describe('BackgroundTasksPanel', () => {
     await flushPromises()
     expect(await pending).toBe('AbortError')
     expect(calls.filter(call => call.method === 'POST').map(call => call.url)).toEqual([`${BASE}/kuapps.coordinator.app-12345678-xyz/cancel`])
+    wrapper.unmount()
+  })
+
+  it('puts failing tasks in Needs attention with bars of their last runs and the next run (#351)', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(new Date('2026-11-02T12:00:00.000Z'))
+    const recent = [100, 120, 900, 110, 105].map((durationMs, index) => ({ durationMs, outcome: index === 2 || index === 4 ? 'failed' : 'completed' }))
+    stubFetch(async url => url === BASE ? jsonResponse(snapshot([
+      task({ id: 'logs.refresh', name: 'Logs', type: 'scheduler', state: 'scheduled', progress: null, nextRunAt: '2026-11-02T12:12:00.000Z', availableActions: ['pause'], history: { recent, typicalMs: 110, failuresInLast5: 2 } }),
+      task({ id: 'apm.collection', type: 'scheduler', state: 'scheduled', progress: null, nextRunAt: '2026-11-02T12:03:00.000Z', availableActions: [], history: { recent: recent.map(run => ({ ...run, outcome: 'completed' })), typicalMs: 64000, failuresInLast5: 0 } }),
+    ])) : jsonResponse({ enabled: true, byFeature: [{ feature: 'observability', usd: 1.5 }, { feature: 'log-scans', usd: 0.34 }] }))
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+
+    const attention = wrapper.get('[data-test="tasks-section-attention"]')
+    expect(attention.find('[data-test="task-logs.refresh"]').exists()).toBe(true)
+    expect(attention.text()).toContain('Failed 2 of its last 5 runs')
+    expect(wrapper.get('[data-test="tasks-tab-history"]').text()).toContain('1 need attention')
+    const scheduled = wrapper.get('[data-test="tasks-section-scheduled"]')
+    expect(scheduled.text()).toContain('Next in 3 min')
+    expect(scheduled.text()).toContain('Typical: 1 min 4 s')
+    const bars = wrapper.findAll('[data-test="task-spark-logs.refresh"] span')
+    expect(bars).toHaveLength(5)
+    expect(bars.filter(bar => bar.classes('failed'))).toHaveLength(2)
+    expect(wrapper.get('[data-test="task-spark-logs.refresh"]').attributes('aria-label')).toBe('Duration of the last 5 runs, 2 failed')
+    expect(wrapper.get('[data-test="process-metrics"]').text()).toContain('$1.84')
+    wrapper.unmount()
+  })
+
+  it('shows the history grouped by day, filters it and opens a run (#351)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T12:00:00'))
+    const runs = [
+      { id: 3, taskId: 'team.sync', name: 'Team sync', type: 'scheduler', provider: 'kua', startedAt: '2026-11-02T09:29:58', finishedAt: '2026-11-02T09:30:00', durationMs: 2000, outcome: 'failed', errorCode: 'auth_expired' },
+      { id: 2, taskId: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', startedAt: '2026-11-02T08:00:00', finishedAt: '2026-11-02T08:00:03', durationMs: 3000, outcome: 'completed', errorCode: null },
+      { id: 1, taskId: 'logs.scan.2', name: 'Log scan', type: 'scan', provider: 'aws', startedAt: '2026-11-01T18:00:00', finishedAt: '2026-11-01T18:01:00', durationMs: 60000, outcome: 'cancelled', errorCode: null },
+    ]
+    const calls = stubFetch(async url => {
+      if (url === BASE) return jsonResponse(snapshot([]))
+      if (url.startsWith(`${BASE}/history`)) {
+        const outcome = new URL(url, 'http://kua').searchParams.get('outcome')
+        return jsonResponse({ runs: runs.filter(run => !outcome || run.outcome === outcome), summary24h: { runs: 3, completed: 1, failed: 1, cancelled: 1 }, retentionDays: 7, maxRuns: 2000 })
+      }
+      return jsonResponse({ enabled: true, byFeature: [] })
+    })
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const wrapper = mount(BackgroundTasksPanel, { props: { show: true, pollMs: 60000 } })
+    await flushPromises()
+    await wrapper.get('[data-test="tasks-tab-history"]').trigger('click')
+    await flushPromises()
+
+    const history = wrapper.get('[data-test="task-history"]')
+    expect(history.text()).toContain('Today')
+    expect(history.text()).toContain('2 runs · 1 failed')
+    expect(history.text()).toContain('Yesterday')
+    expect(history.text()).toContain('Application sync')
+    expect(history.text()).toContain('Kept 7 days or the last 2000 runs')
+
+    await history.get('[data-test="history-run-3"] button').trigger('click')
+    expect(history.get('[data-test="history-detail"]').text()).toContain('auth_expired')
+    await history.get('[data-test="history-copy"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(writeText.mock.calls[0][0]).errorCode).toBe('auth_expired')
+
+    await history.get('[data-test="history-filter-failed"]').trigger('click')
+    await flushPromises()
+    expect(calls.some(call => call.url === `${BASE}/history?outcome=failed`)).toBe(true)
+    expect(history.findAll('[data-test^="history-run-"]')).toHaveLength(1)
     wrapper.unmount()
   })
 })

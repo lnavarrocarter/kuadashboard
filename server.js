@@ -147,7 +147,9 @@ const helmRoutes        = require('./routes/helm');
 const systemToolsRoutes = require('./routes/systemTools');
 const { createBackgroundTaskRegistry, createPeriodicTaskControls } = require('./lib/backgroundTaskRegistry');
 const { createBackgroundTasksRouter } = require('./routes/backgroundTasks');
-const backgroundTaskRegistry = createBackgroundTaskRegistry();
+// Finished runs kept 7 days on this computer, for the task manager's history (#351).
+const taskHistory = require('./lib/taskHistory').getTaskHistory();
+const backgroundTaskRegistry = createBackgroundTaskRegistry({ history: taskHistory });
 require('./lib/logScanRunner').attachTaskRegistry(backgroundTaskRegistry);
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
@@ -463,7 +465,7 @@ app.use('/api/system/tasks/kuapps/journal', require('./routes/kuappsTaskJournal'
 const kuappsCoordinators = require('./lib/kua/coordinatorTasks').createCoordinatorTasks({ registry: backgroundTaskRegistry, journal: kuappsTaskJournal });
 kuappsCoordinators.start();
 app.use('/api/system/tasks/kuapps/coordinators', require('./routes/kuappsCoordinator').createKuappsCoordinatorRouter({ coordinators: kuappsCoordinators }));
-app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry }));
+app.use('/api/system/tasks', createBackgroundTasksRouter({ registry: backgroundTaskRegistry, history: taskHistory }));
 // KUA account: sign-in, plan and billing (lib/account; control plane in lnavarrocarter/kua-control-plane).
 app.use('/api/account', require('./routes/account').createAccountRouter());
 // Scheduled Advisor analysis: the same routes the overviews call, on this KUA (lib/advisor/scheduler.js).

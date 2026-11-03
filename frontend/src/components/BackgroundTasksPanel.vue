@@ -6,8 +6,7 @@
         <div class="tasks-title-row">
           <div>
             <h2>{{ t('tasks.title') }}</h2>
-            <p>{{ t('tasks.processNote') }}</p>
-            <p class="tasks-cost-note">{{ t('tasks.costNote') }}</p>
+            <p>{{ t(view === 'history' ? 'tasks.history.subtitle' : 'tasks.subtitle') }}</p>
           </div>
           <div class="tasks-header-actions">
             <button class="btn btn-icon" :disabled="loading" :title="t('tasks.refresh')" :aria-label="t('tasks.refresh')" data-test="tasks-refresh" @click="load()">
@@ -18,6 +17,15 @@
             </button>
           </div>
         </div>
+        <!-- Now and History (#351): what runs, and what ran. -->
+        <nav class="tasks-tabs" :aria-label="t('tasks.views')">
+          <button :class="{ active: view === 'now' }" :aria-current="view === 'now' ? 'page' : undefined" data-test="tasks-tab-now" @click="view = 'now'">
+            {{ t('tasks.tab.now') }}<span v-if="activeCount" class="tasks-tab-count">{{ activeCount }}</span>
+          </button>
+          <button :class="{ active: view === 'history' }" :aria-current="view === 'history' ? 'page' : undefined" data-test="tasks-tab-history" @click="view = 'history'">
+            {{ t('tasks.tab.history') }}<span v-if="attentionCount" class="tasks-tab-count bad">{{ t('tasks.tab.attention', { n: attentionCount }) }}</span>
+          </button>
+        </nav>
       </header>
 
       <div v-if="snapshot?.process" class="tasks-process" data-test="process-metrics">
@@ -26,8 +34,9 @@
           <div><span>{{ t('tasks.uptime') }}</span><strong>{{ formatDuration(snapshot.process.uptimeSeconds * 1000) }}</strong></div>
           <div><span>{{ t('tasks.cpu') }}</span><strong>{{ cpuTime }}</strong></div>
           <div><span>{{ t('tasks.memory') }} · RSS</span><strong>{{ formatMemory(snapshot.process.memoryBytes?.rss) }}</strong></div>
-          <div><span>{{ t('tasks.memory') }} · Heap</span><strong>{{ formatMemory(snapshot.process.memoryBytes?.heapUsed) }}</strong></div>
+          <div><span>{{ t('tasks.awsTotal') }}</span><strong>{{ awsTotal }}</strong></div>
         </div>
+        <p class="tasks-process-note">{{ t('tasks.processNote') }} {{ t('tasks.costNote') }}</p>
       </div>
 
       <main class="tasks-content" aria-live="polite">
@@ -39,6 +48,9 @@
           <span>{{ error || t('tasks.loadError') }}</span>
           <button class="btn sm" data-test="tasks-retry" @click="load()">{{ t('tasks.retry') }}</button>
         </div>
+        <TaskHistory
+          v-else-if="view === 'history'" :task-name="taskName" :provider-label="providerLabel"
+          :format-duration="formatDuration" :refresh-key="snapshot.generatedAt" />
         <template v-else>
           <div v-if="error" class="tasks-inline-error" role="alert" data-test="tasks-refresh-error">{{ error }}</div>
           <div v-if="!snapshot.tasks.length" class="tasks-state" data-test="tasks-empty">{{ t('tasks.empty') }}</div>
@@ -46,7 +58,7 @@
             <section v-if="section.items.length" class="tasks-section" :data-test="`tasks-section-${section.key}`">
               <h3>{{ t(section.title) }}<span>{{ section.items.length }}</span></h3>
               <TransitionGroup name="task-list" tag="div" class="task-list">
-              <article v-for="task in section.items" :key="task.id" class="task-row" :data-test="`task-${task.id}`">
+              <article v-for="task in section.items" :key="task.id" class="task-row" :class="{ attention: section.key === 'attention' }" :data-test="`task-${task.id}`">
                 <div class="task-main">
                   <div class="task-heading">
                     <div class="task-identity">
@@ -70,6 +82,12 @@
                   <div class="task-meta">
                     <span>{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.startedAt' : 'tasks.lastRun') }}: {{ formatTime(ACTIVE_STATES.includes(task.state) ? task.startedAt : (task.lastFinishedAt || task.lastRunAt)) }}</span>
                     <span v-if="task.startedAt && (ACTIVE_STATES.includes(task.state) || task.lastFinishedAt)">{{ t(ACTIVE_STATES.includes(task.state) ? 'tasks.elapsed' : 'tasks.duration') }}: {{ taskDuration(task) }}</span>
+                    <span v-if="task.history?.typicalMs != null">{{ t('tasks.typical', { duration: formatDuration(task.history.typicalMs) }) }}</span>
+                    <span v-if="nextRun(task)" class="task-next">{{ nextRun(task) }}</span>
+                  </div>
+                  <p v-if="task.history?.failuresInLast5 >= 2" class="task-failures" :data-test="`task-failures-${task.id}`">{{ t('tasks.failuresInLast5', { n: task.history.failuresInLast5 }) }}</p>
+                  <div v-if="task.history?.recent?.length > 1 && !ACTIVE_STATES.includes(task.state)" class="task-spark" :aria-label="sparkLabel(task)" role="img" :data-test="`task-spark-${task.id}`">
+                    <span v-for="(bar, index) in sparkOf(task)" :key="index" :class="{ failed: bar.failed }" :style="{ height: bar.height }"></span>
                   </div>
                   <div class="task-cost" :data-test="`task-cost-${task.id}`">
                     <span>{{ taskCost(task).label }}</span>
@@ -89,47 +107,7 @@
                       <i :data-lucide="openCoordinator === task.id ? 'chevron-up' : 'chevron-down'"></i>
                       {{ t(openCoordinator === task.id ? 'tasks.coordinator.hideRuns' : 'tasks.coordinator.showRuns') }}
                     </button>
-                    <div v-if="openCoordinator === task.id" class="coordinator-detail" data-test="coordinator-detail">
-                      <p v-if="coordinatorError" class="tasks-inline-error" role="alert">{{ coordinatorError }}</p>
-                      <template v-else-if="coordinatorDetail">
-                        <div class="tasks-metric-grid coordinator-metrics" data-test="coordinator-metrics">
-                          <div><span>{{ t('tasks.coordinator.executed') }}</span><strong>{{ coordinatorDetail.metrics.executed }} / {{ coordinatorDetail.metrics.requested }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.deduplicated') }}</span><strong>{{ coordinatorDetail.metrics.deduplicated }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.coalescedWrites') }}</span><strong>{{ coordinatorDetail.metrics.coalescedWrites }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.cancelled') }}</span><strong>{{ coordinatorDetail.metrics.cancelled }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.maxQueue') }}</span><strong>{{ coordinatorDetail.metrics.maxQueueDepth }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.reconcilesPerWrite') }}</span><strong>{{ coordinatorDetail.metrics.reconcilesPerWrite ?? '—' }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.awsCalls') }}</span><strong>{{ coordinatorDetail.metrics.awsCalls }}</strong></div>
-                          <div><span>{{ t('tasks.coordinator.untracked') }}</span><strong>{{ coordinatorDetail.metrics.untracked ?? '—' }}</strong></div>
-                        </div>
-                        <p class="task-description">{{ t('tasks.coordinator.window', { minutes: coordinatorDetail.windowMinutes }) }}</p>
-                        <ul v-if="coordinatorDetail.metrics.byKey.length" class="coordinator-keys">
-                          <li v-for="row in coordinatorDetail.metrics.byKey" :key="row.key"><code>{{ row.key }}</code><span>{{ t('tasks.coordinator.percentiles', { runs: row.runs, p50: row.p50Ms, p95: row.p95Ms }) }}</span></li>
-                        </ul>
-                        <ol class="coordinator-runs" data-test="coordinator-runs">
-                          <li v-for="run in coordinatorDetail.runs" :key="run.runId" :class="{ flagged: run.flags.length }" :data-test="`coordinator-run-${run.outcome}`">
-                            <div class="coordinator-run-head">
-                              <code>{{ run.key }}</code>
-                              <span :class="['task-state-chip', `outcome-${run.outcome}`]">{{ t(`tasks.coordinator.outcome.${run.outcome}`) }}</span>
-                              <span class="task-provider">{{ t(`tasks.coordinator.kind.${run.kind}`) }}</span>
-                              <span v-if="run.trigger === 'invalidation'" class="task-provider">{{ t('tasks.coordinator.byInvalidation') }}</span>
-                            </div>
-                            <div class="task-meta">
-                              <span v-if="run.durationMs != null">{{ run.durationMs }} ms</span>
-                              <span>{{ t('tasks.coordinator.work', { requests: run.requests, reconciles: run.reconciles, aws: run.awsCalls }) }}</span>
-                              <span v-if="run.stores?.length">{{ t('tasks.coordinator.writes', { stores: run.stores.join(', ') }) }}</span>
-                              <span v-if="run.invalidates.length">{{ t('tasks.coordinator.reloads', { parts: run.invalidates.join(', ') }) }}</span>
-                              <span v-for="mark in run.flags" :key="mark" class="coordinator-flag">{{ t(`tasks.coordinator.flag.${mark}`) }}</span>
-                            </div>
-                          </li>
-                        </ol>
-                        <p v-if="!coordinatorDetail.runs.length" class="task-description">{{ t('tasks.coordinator.noRuns') }}</p>
-                        <button class="btn sm" data-test="coordinator-copy" @click="copyDiagnostics">
-                          <i data-lucide="copy"></i> {{ t(copied ? 'tasks.coordinator.copied' : 'tasks.coordinator.copy') }}
-                        </button>
-                      </template>
-                      <p v-else class="task-description">{{ t('tasks.loading') }}</p>
-                    </div>
+                    <CoordinatorRuns v-if="openCoordinator === task.id" :task-id="task.id" :refresh-key="snapshot.generatedAt" />
                   </div>
                 </div>
               </article>
@@ -150,6 +128,8 @@ import { useApi } from '../composables/useApi'
 import { useI18n } from '../composables/useI18n'
 import { settings } from '../composables/useSettings'
 import { existingTaskCoordinator } from '../lib/taskCoordinator'
+import CoordinatorRuns from './tasks/CoordinatorRuns.vue'
+import TaskHistory from './tasks/TaskHistory.vue'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -164,9 +144,7 @@ const loading = ref(false)
 const error = ref('')
 const busyAction = ref('')
 const openCoordinator = ref('')
-const coordinatorDetail = ref(null)
-const coordinatorError = ref('')
-const copied = ref(false)
+const view = ref('now')
 const COORDINATOR_PREFIX = 'kuapps.coordinator.'
 const clock = ref(Date.now())
 const ACTIVE_STATES = ['running', 'pause_requested', 'cancellation_requested']
@@ -200,13 +178,25 @@ const COST_FEATURES = {
   'apm.collection': 'observability',
   'logs.refresh': 'log-refresh',
 }
+// Needs attention: in error, or failed at least twice in its last 5 runs (#351).
+const needsAttention = task => !ACTIVE_STATES.includes(task.state)
+  && (task.state === 'error' || (task.history?.failuresInLast5 || 0) >= 2)
 const sections = computed(() => {
   const tasks = snapshot.value?.tasks || []
+  const attention = tasks.filter(needsAttention)
   return [
     { key: 'active', title: 'tasks.active', items: tasks.filter(task => ACTIVE_STATES.includes(task.state)) },
-    { key: 'scheduled', title: 'tasks.scheduled', items: tasks.filter(task => ['scheduled', 'paused', 'idle'].includes(task.state)) },
-    { key: 'recent', title: 'tasks.recent', items: tasks.filter(task => ['completed', 'error', 'cancelled'].includes(task.state)).sort((a, b) => Date.parse(b.lastFinishedAt || b.lastRunAt || 0) - Date.parse(a.lastFinishedAt || a.lastRunAt || 0)).slice(0, 8) },
+    { key: 'attention', title: 'tasks.attention', items: attention },
+    { key: 'scheduled', title: 'tasks.scheduled', items: tasks.filter(task => ['scheduled', 'paused', 'idle'].includes(task.state) && !attention.includes(task)) },
+    { key: 'recent', title: 'tasks.recent', items: tasks.filter(task => ['completed', 'cancelled'].includes(task.state) && !attention.includes(task)).sort((a, b) => Date.parse(b.lastFinishedAt || b.lastRunAt || 0) - Date.parse(a.lastFinishedAt || a.lastRunAt || 0)).slice(0, 5) },
   ]
+})
+const activeCount = computed(() => (snapshot.value?.tasks || []).filter(task => ACTIVE_STATES.includes(task.state)).length)
+const attentionCount = computed(() => (snapshot.value?.tasks || []).filter(needsAttention).length)
+// AWS spend of the last 30 days across features (lib/usage), shown beside the process.
+const awsTotal = computed(() => {
+  if (!usage.value || usage.value.unavailable || usage.value.enabled === false) return '—'
+  return formatUsd((usage.value.byFeature || []).reduce((sum, row) => sum + (Number(row.usd) || 0), 0))
 })
 const cpuTime = computed(() => formatDuration(((snapshot.value?.process?.cpuMicros?.user || 0) + (snapshot.value?.process?.cpuMicros?.system || 0)) / 1000))
 let timer = null
@@ -261,6 +251,28 @@ function taskCost(task) {
   }
 }
 
+// Bars of the last runs' durations, relative to the longest; failed runs are marked.
+function sparkOf(task) {
+  const recent = task.history?.recent || []
+  const longest = Math.max(1, ...recent.map(run => run.durationMs || 0))
+  return recent.map(run => ({ failed: run.outcome === 'failed', height: `${Math.max(12, Math.round((run.durationMs || 0) / longest * 100))}%` }))
+}
+
+function sparkLabel(task) {
+  const recent = task.history?.recent || []
+  return t('tasks.sparkLabel', { n: recent.length, failed: recent.filter(run => run.outcome === 'failed').length })
+}
+
+function nextRun(task) {
+  if (!['scheduled'].includes(task.state) || !task.nextRunAt) return ''
+  const minutes = Math.round((Date.parse(task.nextRunAt) - clock.value) / 60000)
+  if (!Number.isFinite(minutes)) return ''
+  if (minutes <= 0) return t('tasks.nextSoon')
+  // Whole minutes: a schedule is not read to the second.
+  const duration = minutes >= 60 ? t('tasks.hoursMinutes', { hours: Math.floor(minutes / 60), minutes: minutes % 60 }) : `${minutes} min`
+  return t('tasks.nextIn', { duration })
+}
+
 function formatDuration(milliseconds) {
   const seconds = Math.floor(Math.max(0, Number(milliseconds) || 0) / 1000)
   const hours = Math.floor(seconds / 3600)
@@ -302,10 +314,7 @@ async function load() {
       if (disposed) return
       snapshot.value = data
       error.value = ''
-      if (openCoordinator.value) {
-        if (data.tasks.some(task => task.id === openCoordinator.value)) loadCoordinator(openCoordinator.value)
-        else openCoordinator.value = ''
-      }
+      if (openCoordinator.value && !data.tasks.some(task => task.id === openCoordinator.value)) openCoordinator.value = ''
     } catch (cause) {
       if (!disposed) error.value = safeErrorMessage(cause?.message)
     } finally {
@@ -335,34 +344,8 @@ async function loadUsage() {
   return usageRequest
 }
 
-async function loadCoordinator(id) {
-  try {
-    const data = await apiFetch(`/api/system/tasks/kuapps/coordinators/${encodeURIComponent(id.slice(COORDINATOR_PREFIX.length))}`)
-    if (disposed || openCoordinator.value !== id) return
-    if (!data || !Array.isArray(data.runs) || !data.metrics) throw new Error(t('tasks.invalidResponse'))
-    coordinatorDetail.value = data
-    coordinatorError.value = ''
-  } catch (cause) {
-    if (!disposed && openCoordinator.value === id) coordinatorError.value = safeErrorMessage(cause?.message)
-  }
-}
-
 function toggleCoordinator(task) {
-  coordinatorDetail.value = null
-  coordinatorError.value = ''
-  copied.value = false
   openCoordinator.value = openCoordinator.value === task.id ? '' : task.id
-  if (openCoordinator.value) loadCoordinator(task.id)
-}
-
-// Ids, task keys, timings and counters only: safe to attach to an issue.
-async function copyDiagnostics() {
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(coordinatorDetail.value, null, 2))
-    copied.value = true
-  } catch {
-    coordinatorError.value = t('tasks.coordinator.copyFailed')
-  }
 }
 
 async function control(task, action) {
@@ -387,7 +370,7 @@ function refreshOnRestore() {
 
 function drawIcons() { nextTick(() => createIcons({ icons })) }
 watch(snapshot, drawIcons, { deep: true })
-watch([openCoordinator, coordinatorDetail, copied], drawIcons)
+watch([openCoordinator, view], drawIcons)
 watch(() => props.show, visible => {
   if (!mounted) return
   if (visible) start()
@@ -486,18 +469,19 @@ onUnmounted(() => {
 .task-progress small { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .task-error-code { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: var(--red); font-size: 11px; overflow-wrap: anywhere; }
 .task-coordinator { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.coordinator-detail { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-row); border: 1px solid var(--border); }
-.coordinator-keys, .coordinator-runs { width: 100%; display: flex; flex-direction: column; gap: 6px; list-style: none; font-size: 11px; }
-.coordinator-keys li { display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); }
-.coordinator-runs { max-height: 320px; overflow: auto; }
-.coordinator-runs li { padding: 6px 0; border-bottom: 1px solid var(--border); }
-.coordinator-runs li.flagged { padding-left: 6px; border-left: 3px solid var(--yellow); }
-.coordinator-run-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.coordinator-run-head code, .coordinator-keys code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
-.coordinator-flag { color: var(--yellow); }
-.outcome-completed { color: var(--green); }
-.outcome-failed { color: var(--red); }
-.outcome-running, .outcome-queued { color: var(--accent); }
+.tasks-tabs { display: flex; gap: 4px; margin: 14px 0 -15px; border-bottom: 1px solid var(--border); }
+.tasks-tabs button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: var(--text-dim); font: inherit; font-weight: 500; cursor: pointer; }
+.tasks-tabs button.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.tasks-tab-count { padding: 1px 6px; border-radius: 999px; font-size: 10px; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tasks-tab-count.bad { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.tasks-process-note { margin-top: 10px; color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+.task-row.attention { padding: 12px; margin-top: 8px; border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--red) 6%, transparent); }
+.task-failures { margin-top: 6px; color: var(--red); font-size: 11px; }
+.task-next { color: var(--teal); }
+.task-spark { display: flex; align-items: flex-end; gap: 2px; width: 120px; height: 24px; margin-top: 8px; }
+.task-spark span { flex: 1; min-height: 3px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.task-spark span.failed { background: var(--red); }
+.task-coordinator { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .task-error-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tasks-spinner { animation: tasks-spin 1s linear infinite; }
 @keyframes tasks-spin { to { transform: rotate(360deg); } }
