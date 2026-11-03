@@ -28,6 +28,10 @@ Every route that changes something in KUApps or Observability is declared in one
 - Cost is declared here and in the UI before the call; free List/Describe reads are `cloud-read` with no cost.
 - After changing the catalog, run `node scripts/generate-action-catalog-docs.js` to update the table below (a test checks it).
 
+## UI changes recorded as plans
+
+Agents change a KUA Application in two steps: `preview_application_change` stores a plan and `apply_application_change` runs it after approval (`lib/kua/changePlans.js`). The Review tab records its writes in the same plans, without the preview step, when the catalog says they are local, free and not destructive: confirming dependencies (`edge.confirm-batch`) and accepting or rejecting a relationship (`relationship.review`). Each one stores the revision it ran against, the outcome of every item (`applied`, `partial` when some items failed, `failed`, or `conflict` when the revision moved and nothing was written) and one audit entry with the plan id and whether the UI or an agent sent it. `get_application_change` and `GET /api/kua-apps/changes/:planId` read these plans like agent plans. The list is `DIRECT_OPERATIONS`; KUA refuses to start if an action in it stops being local, free and not destructive.
+
 ## Actions
 
 <!-- action-catalog:start -->
