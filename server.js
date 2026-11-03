@@ -174,7 +174,7 @@ const apmScheduler = new ApmScheduler({
 const apmTask = backgroundTaskRegistry.register({
   id: 'apm.collection', name: 'Observability collection', type: 'scheduler', provider: 'mixed', intervalMs: POLL_INTERVAL_MS,
 });
-apmTask.setControls(createPeriodicTaskControls(apmScheduler, apmTask));
+apmTask.setControls(createPeriodicTaskControls(apmScheduler, apmTask, { runNow: () => apmScheduler.runScheduled() }));
 apmScheduler.start({ task: apmTask });
 // Automatic refresh of cached logs with an interval (Pro/Team plans, lib/logAutoRefresh.js).
 const logAutoRefreshModule = require('./lib/logAutoRefresh');
@@ -182,7 +182,7 @@ const logAutoRefresh = logAutoRefreshModule.getAutoRefresh({ providerActive });
 const logRefreshTask = backgroundTaskRegistry.register({
   id: 'logs.refresh', name: 'Automatic log refresh', type: 'scheduler', provider: 'mixed', intervalMs: logAutoRefreshModule.TICK_MS,
 });
-logRefreshTask.setControls(createPeriodicTaskControls(logAutoRefresh, logRefreshTask));
+logRefreshTask.setControls(createPeriodicTaskControls(logAutoRefresh, logRefreshTask, { runNow: () => logAutoRefresh.tick() }));
 logAutoRefresh.start({ task: logRefreshTask });
 // The cache follows the plan's budget at runtime (a downgrade trims it right away).
 const logCacheBudgetWatcher = require('./lib/logCacheBudget').createBudgetWatcher({
@@ -418,7 +418,7 @@ const teamEngine = require('./lib/sync/teamEngine').createTeamEngine({
 const teamSyncTask = backgroundTaskRegistry.register({
   id: 'team.sync', name: 'Team application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/teamEngine').PASS_EVERY_MS,
 });
-teamSyncTask.setControls(createPeriodicTaskControls(teamEngine, teamSyncTask));
+teamSyncTask.setControls(createPeriodicTaskControls(teamEngine, teamSyncTask, { runNow: () => teamEngine.pass({ force: true }) }));
 // KUA Applications kept in step between the computers of a KUA account (Pro/Team).
 const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
   account: require('./lib/account/account').getAccount,
@@ -429,7 +429,7 @@ const syncEngine = require('./lib/sync/syncEngine').createSyncEngine({
 const applicationSyncTask = backgroundTaskRegistry.register({
   id: 'apps.sync', name: 'Application sync', type: 'scheduler', provider: 'kua', intervalMs: require('./lib/sync/syncEngine').PASS_EVERY_MS,
 });
-applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask));
+applicationSyncTask.setControls(createPeriodicTaskControls(syncEngine, applicationSyncTask, { runNow: () => syncEngine.pass({ force: true }) }));
 app.use('/api/plugins', require('./routes/plugins').createPluginsRouter({ registry: pluginRegistry, auditLog, providers: () => activeProviders(pluginRegistry) }));
 app.use('/api/kua-apps', createKuaAppsRouter({
   database: architectureDatabase,
@@ -482,7 +482,7 @@ const advisorScheduler = (() => {
 const advisorTask = backgroundTaskRegistry.register({
   id: 'advisor.scan', name: 'Scheduled Advisor analysis', type: 'scheduler', provider: 'mixed', intervalMs: require('./lib/advisor/scheduler').TICK_MS,
 });
-advisorTask.setControls(createPeriodicTaskControls(advisorScheduler, advisorTask));
+advisorTask.setControls(createPeriodicTaskControls(advisorScheduler, advisorTask, { runNow: () => advisorScheduler.tick() }));
 // Advisor acceptances and posture history (mounted before the Kubernetes cache, which clears on POSTs).
 // Alert webhooks (Team): every new posture alert, grouped per analysis, to Slack or Teams.
 const advisorWebhooks = require('./lib/advisor/webhooks').getWebhookDispatcher();
