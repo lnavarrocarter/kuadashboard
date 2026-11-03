@@ -71,3 +71,16 @@ test('scan bindings publish per-scan capabilities and route controls to that sca
     server.close();
   }
 });
+test('GET /history lists finished runs with filters (#351)', async () => {
+  const { createTaskHistory } = require('../lib/taskHistory');
+  const history = createTaskHistory({ dataDir: ':memory:' });
+  history.record({ taskId: 'team.sync', name: 'Team sync', startedAt: Date.now() - 1000, outcome: 'failed', errorCode: 'auth_expired' });
+  history.record({ taskId: 'apps.sync', name: 'Application sync', startedAt: Date.now() - 1000, outcome: 'completed' });
+  const router = createBackgroundTasksRouter({ registry: createBackgroundTaskRegistry(), history });
+  const handler = router.stack.find(layer => layer.route?.path === '/history').route.stack[0].handle;
+  let body = null;
+  handler({ query: { outcome: 'failed' } }, { json: value => { body = value; }, status() { return this; } });
+  assert.deepEqual(body.runs.map(run => run.taskId), ['team.sync']);
+  assert.equal(body.summary24h.runs, 2);
+  history.close();
+});
