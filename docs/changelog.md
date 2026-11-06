@@ -9,6 +9,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ### Fixed
 
+- **The local API only answers to local host names (#361):** API and WebSocket requests with an unrecognized, malformed or duplicate `Host` header are refused with 403 before any route runs, so a DNS name that resolves to loopback can no longer reach the unauthenticated API (DNS rebinding). `localhost`, `127.0.0.1` and `[::1]` keep working on any port, and `KUA_HOSTNAME` allows one extra alias (it changes no DNS, bind address or OAuth callback). Proxy forwarding headers are not trusted.
+
 - **A new provider needs no APM table rebuild (#299):** the APM database (schema v28) no longer limits a resource's provider with a table CHECK; the provider catalog (`frontend/src/shared/providers.json`) is the only list, checked when a resource is saved, so a provider added there (Proxmox is the first) can hold KUApps resources without another migration. Existing resources, relationships and metrics are kept; a provider outside the catalog is still refused with `Unsupported provider`.
 
 ### Added

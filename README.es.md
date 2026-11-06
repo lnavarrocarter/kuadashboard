@@ -201,6 +201,7 @@ cd .. && npm test
 - Los valores de Secrets K8s se muestran como `[REDACTED]` en el YAML viewer.
 - El preload de Electron usa `contextBridge` — el renderer nunca accede directamente a Node.js.
 - El servidor escucha en `127.0.0.1` por defecto. Configura `KUA_HOST` solo si necesitas exponerlo en una red confiable: la API permite operar sobre los entornos configurados y no sustituye autenticación.
+- La API y los WebSocket aceptan solo `localhost`, `127.0.0.1`, `[::1]` o el alias exacto indicado en `KUA_HOSTNAME` (por ejemplo `kua.localhost`). Un `Host` desconocido, malformado o duplicado recibe HTTP 403. El alias no configura DNS, no cambia la dirección de escucha ni modifica callbacks OAuth. Si accedes deliberadamente con otro nombre o IP (por ejemplo con `KUA_HOST`), configúralo en `KUA_HOSTNAME`; no se confía en las cabeceras de proxy. Este control complementa la escucha local, pero no agrega autenticación.
 
 ---
 
