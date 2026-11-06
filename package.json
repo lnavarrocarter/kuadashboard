@@ -2,6 +2,7 @@
   "name": "kuadashboard",
   "version": "2.0.0",
   "description": "Simple Kubernetes Admin Dashboard - Lens-like web UI",
+  "license": "MIT",
   "author": {
     "name": "lnavarrocarter",
     "email": "lnavarrocarter@gmail.com"
