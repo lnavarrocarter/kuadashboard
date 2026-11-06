@@ -106,7 +106,7 @@ Consulta el [changelog](docs/changelog.md) para las entregas y el [roadmap](docs
 - Vercel: proyectos, despliegues y sus logs.
 - KUApps reúne recursos, relaciones, arquitectura y señales de observabilidad por aplicación.
 - Resúmenes de Kubernetes, AWS y GCP incluyen Advisor determinista; los logs admiten caché local cifrada, análisis y consultas.
-- El servidor MCP permite a clientes compatibles consultar datos y resúmenes de KUA en modo de solo lectura.
+- El servidor MCP consulta datos y resúmenes en modo de solo lectura por defecto. Aplicar un cambio de aplicación requiere activar las escrituras de agentes y confirmar su vista previa.
 
 ### 🖥️ Desktop App (Electron)
 
