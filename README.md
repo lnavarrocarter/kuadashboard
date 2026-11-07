@@ -47,7 +47,7 @@ Built with **Node.js, Express, Vue 3, Vite, and Pinia**. Available as a web app 
 
 ## Getting started
 
-Source installation requires Git, Node.js 22.12+ on the 22 LTS branch, and npm. Kubernetes requires `kubectl` with a configured kubeconfig; configure credentials only for the cloud services you use. AWS can use the AWS CLI or credentials in `~/.aws/`; for GCP application default credentials, use `gcloud auth application-default login`.
+Source installation requires Git, Node.js 22.12+ on the 22 LTS branch (`.nvmrc`), and npm. Kubernetes requires `kubectl` with a configured kubeconfig; configure credentials only for the cloud services you use. AWS can use the AWS CLI or credentials in `~/.aws/`; for GCP application default credentials, use `gcloud auth application-default login`.
 
 ```bash
 git clone https://github.com/lnavarrocarter/kuadashboard.git

@@ -137,7 +137,7 @@ VS Code, Codex y otros agentes: ver [Agentes IA](https://lnavarrocarter.github.i
 
 ### Prerrequisitos
 
-- Git y Node.js 22.12+ de la rama 22 LTS, con npm (para instalar desde código)
+- Git y Node.js 22.12+ de la rama 22 LTS (`.nvmrc`), con npm (para instalar desde código)
 - Para Kubernetes: `kubectl` configurado con kubeconfig válido (`~/.kube/config`)
 - Para AWS: `aws` CLI o credenciales en `~/.aws/`
 - Para GCP: `gcloud` CLI autenticado (`gcloud auth application-default login`)
