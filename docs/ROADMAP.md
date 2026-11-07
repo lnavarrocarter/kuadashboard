@@ -1,7 +1,7 @@
 # 🗺️ KuaDashboard — Roadmap del Producto
 
 > **Versión actual:** v2.0.0
-> **Última actualización:** 2026-10-01
+> **Última actualización:** 2026-11-06
 
 ---
 
@@ -30,11 +30,16 @@ El plan técnico completo está en [KUA Unified Management Plan](./architecture/
 
 - La reconciliación Architecture/APM tolera nodos AWS históricos sin `provider` y deriva cuenta/región desde ARN para mantener una identidad compartida sin duplicados.
 
-### Avance sin publicar — Logs, CloudFormation y Advisor
+### Estado al 2026-11-06
 
-- **CloudWatch Logs con inteligencia (Fase 18):** caché local cifrada, consultas con sintaxis de Logs Insights, categorías, firmas recurrentes, datos sensibles y recomendaciones con evidencia que alimentan la topología inteligente. Próximos pasos: #89 (Kubernetes), #90 (tasas históricas), #91 (sync programado), #92 (GCP y Vercel), #93 (diagnóstico asistido).
-- **CloudFormation:** stacks, drift, change sets con riesgo y operaciones con guardas y auditoría; es el primer slice del centro de control (#51).
-- **Advisor (Fase 19):** cada resumen (Kubernetes, AWS, GCP) recomienda buenas prácticas de seguridad, infraestructura, arquitectura y desarrollo; KUApps tiene la mirada de producto por aplicación. Reglas deterministas, sin IA ni llamadas facturadas. Próximos pasos: #94 (aceptar y silenciar, historial), #95 (más cobertura), #96 (producto v2: error budget y DORA).
+La última versión publicada es **v2.0.0**. Lo fusionado después de esa etiqueta está en desarrollo: no implica que el instalador publicado lo incluya. El [changelog](./changelog.md) distingue `Unreleased` de las versiones publicadas.
+
+- **Logs, CloudFormation y Advisor:** existen caché e inteligencia de logs, fuentes Kubernetes/GCP/Vercel, actualización programada y operaciones CloudFormation con guardas. Siguen pendientes el diagnóstico asistido (#93) y la caché automática por aplicación (#359).
+- **KUApps:** registro y evidencia compartidos, coordinador de revisión, tareas con historial y costo por ejecución están en `main`. Falta documentar la medición real de #325/#331.
+- **Editor y agentes:** extensión de VS Code, plugin de Claude Code y paquete de Claude Desktop en `main`; publicación en registros pendiente (#304). Consultas MCP de solo lectura por defecto, con cambios de aplicación opcionales y controlados.
+- **Proxmox:** plugin de inventario de solo lectura en `main`, pendiente de validación real en PVE 8 (#195) y de publicación. Productos, recetas y operaciones siguen en #345.
+- **Costos:** AWS Overview ya integra costos y previsión de Cost Explorer; no es una funcionalidad futura. El registro de uso de KUA es una estimación separada de la factura cloud.
+- **Siguiente entrega:** resolver #355, proteger los nombres de la API local (#361), validar Windows y revisar la validación de release. La release no está publicada.
 
 ---
 
@@ -71,8 +76,8 @@ Mejoras incrementales sobre la base actual, priorizando madurez y cobertura.
 | Feature | Prioridad | Esfuerzo |
 |---|---|---|
 | **Migración a TypeScript** en backend (routes/) | Media | 3 sprints |
-| **Test coverage** — subir de 241 tests a 500+ (backend + frontend) | Alta | Continuo |
-| **CI/CD** — GitHub Actions con lint, test, build en cada PR | Alta | 1 sprint |
+| **Tests** — más de 2.700 pruebas en CI; ampliar cobertura de integración y Windows | Alta | Continuo |
+| **CI/CD** — tests, docs y empaquetado en PR; extender la validación a Windows y releases | Alta | 1 sprint |
 | **Docker Compose** — entorno dev listo con docker | Baja | 1 sprint |
 
 ---
@@ -103,7 +108,7 @@ Features transformacionales que agregan capacidades no existentes hoy.
 ### 💰 FinOps y Costos
 | Feature | Descripción |
 |---|---|
-| **AWS Cost Explorer** | Gráficos de gasto por servicio, cuenta, tag |
+| **AWS Cost Explorer** | Costos y previsión ya disponibles en Overview; ampliar desglose y visualización |
 | **GCP Billing** | Reportes de costo desde BigQuery export |
 | **Kubecost/K8s cost** | Costo por namespace, deployment, pod |
 | **Budget alerts** | Notificaciones visuales cuando se excede presupuesto |
@@ -131,7 +136,7 @@ La visión ambiciosa del producto.
 
 ### Proveedores y Stack Completo
 - **Multi-cloud completo**: AWS, GCP, Azure, Oracle Cloud, DigitalOcean, Linode, Vercel, Cloudflare
-- **On-premise**: vCenter/ESXi, Proxmox, OpenStack
+- **On-premise**: ampliar Proxmox más allá del inventario de solo lectura (#345); evaluar vCenter/ESXi y OpenStack
 - **GitOps**: Integración directa con ArgoCD, FluxCD, GitLab CI
 - **Service Mesh**: Istio, Linkerd — visualización de malla
 

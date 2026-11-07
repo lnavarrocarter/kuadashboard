@@ -42,7 +42,7 @@ Built with **Node.js, Express, Vue 3, Vite, and Pinia**. Available as a web app 
 - **Vercel:** browse projects, deployments, and deployment logs.
 - **KUApps:** connect application resources, architecture, and observability signals.
 - **Insights:** deterministic Advisor checks, local log analysis, CloudWatch dashboards, and estimated KUA API costs.
-- **AI tools:** read-only MCP tools for compatible clients.
+- **AI tools:** MCP queries are read-only by default. Applying an application change requires enabling agent writes and confirming its preview.
 - **Desktop:** native Electron app with an integrated backend and automatic updates.
 
 ## Getting started
