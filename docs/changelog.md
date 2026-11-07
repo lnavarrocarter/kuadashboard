@@ -9,6 +9,7 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ### Fixed
 
+- **Automatic refresh of CloudWatch log groups works, and its downloads are counted (#355):** the Pro and Team automatic log refresh passed the AWS client a stand-in for `FilterLogEvents` that a real `CloudWatchLogsClient` rejects, so cached CloudWatch groups with an interval never got their newest events; it now sends the SDK command, and each call is recorded in "Spent by KUA" under `log-refresh` and in the cost of the run in the task history. Kubernetes, GCP and Vercel refreshes are unchanged. `FilterLogEvents` has no request charge; downloads count as data transfer out (USD 0.09/GB after 100 GB free per month), shown as a potential cost.
 - **A new provider needs no APM table rebuild (#299):** the APM database (schema v28) no longer limits a resource's provider with a table CHECK; the provider catalog (`frontend/src/shared/providers.json`) is the only list, checked when a resource is saved, so a provider added there (Proxmox is the first) can hold KUApps resources without another migration. Existing resources, relationships and metrics are kept; a provider outside the catalog is still refused with `Unsupported provider`.
 
 - **Node 22 LTS is the supported runtime:** `.nvmrc` pins Node 22 and `engines` requires 22.12 or later (the minimum that Vite and `better-sqlite3` need), matching the README; it was `>=20` before. Nothing changes in the app.
