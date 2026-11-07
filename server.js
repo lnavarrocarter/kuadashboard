@@ -64,6 +64,10 @@ loadEnvFileIfExists(path.join(__dirname, '.env'));
 loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
 
 const app    = express();
+const localHostGuard = require('./lib/localHostGuard').createLocalHostGuard();
+// Before body parsing and all API routes: the unauthenticated local API must
+// not be reachable through an arbitrary DNS name pointing to loopback (#133).
+app.use('/api', localHostGuard.middleware);
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();
@@ -212,6 +216,7 @@ const consoleSessions = createConsoleSessions({
 });
 
 server.on('upgrade', (request, socket, head) => {
+  if (!localHostGuard.admitUpgrade(request, socket)) return;
   const pathname = admitConsoleUpgrade(consoleSessions, request, socket);
   if (!pathname) return;
   if (!readOnlyMode.admitUpgrade(pathname, socket)) return;

@@ -85,6 +85,8 @@ The README describes available product capabilities. The roadmap lists planned w
 
 KUA stores credential profiles encrypted with AES-256-GCM. The local server binds to `127.0.0.1` by default. Setting `KUA_HOST` exposes its unauthenticated API, so only do this on a trusted network with appropriate access controls.
 
+The API and WebSocket endpoints accept only `localhost`, `127.0.0.1`, `[::1]`, or the exact alias set with `KUA_HOSTNAME` (for example `kua.localhost`). An unrecognized, malformed or duplicate `Host` receives HTTP 403. The alias does not configure DNS, change the bind address or rewrite OAuth callbacks. If you deliberately reach KUA through another name or IP (for example with `KUA_HOST`), set it in `KUA_HOSTNAME`; proxy forwarding headers are not trusted. This check complements local binding; it does not add authentication.
+
 ## License
 
 MIT. [Sponsor the project](https://github.com/sponsors/lnavarrocarter/).
