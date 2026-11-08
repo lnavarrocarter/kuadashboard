@@ -88,4 +88,21 @@ describe('ProxmoxView (#195)', () => {
     await flushPromises()
     expect(global.fetch.mock.calls.at(-1)[0]).toBe('/api/cloud/proxmox/inventory?refresh=1')
   })
+
+  it('shows 24 hour guest and node metrics and refreshes from the metrics endpoint', async () => {
+    const metrics = { retentionDays: 30, entities: [
+      { id: 'node/pve1', name: 'pve1', node: 'pve1', type: 'node', available: true, stale: true, reason: 'unreachable', points: [{ t: 1, cpuPercent: 20, memoryPercent: 40, diskPercent: 50, netIn: 1024, netOut: 2048 }] },
+    ] }
+    const calls = respond(url => url.includes('/metrics') ? [200, metrics] : [200, INVENTORY])
+    const wrapper = mount(ProxmoxView, { props: { profileId: 'p1', activeService: 'metrics' } })
+    await flushPromises()
+    expect(calls.some(call => call.url === '/api/cloud/proxmox/metrics?timeframe=day')).toBe(true)
+    expect(wrapper.get('[data-test="proxmox-metrics"]').text()).toContain('30')
+    expect(wrapper.get('[data-test="proxmox-metric-cpuPercent-node-pve1"] strong').text()).toBe('20.0 %')
+    expect(wrapper.get('[data-test="proxmox-metrics-stale"]').exists()).toBe(true)
+    await wrapper.get('[data-test="proxmox-metrics-refresh"]').trigger('click')
+    await flushPromises()
+    expect(calls.filter(call => call.url.includes('/metrics')).length).toBeGreaterThanOrEqual(2)
+    wrapper.unmount()
+  })
 })
