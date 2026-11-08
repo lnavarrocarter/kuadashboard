@@ -7290,6 +7290,7 @@ export default {
   'proxmox.metrics.retention': "Guest and node metrics from Proxmox RRD data. KUA keeps up to {days} days locally.",
   'proxmox.metrics.empty': "No node or guest metrics are available.",
   'proxmox.metrics.noData': "No data for this time range.",
+  'proxmox.metrics.notEvaluated': "Not evaluated: the API token cannot read this guest.",
   'proxmox.metrics.stale': "Showing saved local data; Proxmox is unavailable ({reason}).",
   'proxmox.metrics.cpuPercent': "CPU",
   'proxmox.metrics.memoryPercent': "Memory",
