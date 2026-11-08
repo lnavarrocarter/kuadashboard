@@ -169,7 +169,7 @@
           <article v-for="entity in telemetry?.entities || []" :key="entity.id" class="pve-metric-entity" :data-test="`proxmox-metric-entity-${entity.id.replaceAll('/', '-')}`">
             <header><strong>{{ entity.name }}</strong><span class="text-dim">{{ entity.type === 'node' ? t('proxmox.section.nodes') : entity.type.toUpperCase() }} · {{ entity.node }}</span></header>
             <small v-if="entity.stale" class="text-dim" data-test="proxmox-metrics-stale">{{ t('proxmox.metrics.stale', { reason: t(`proxmox.error.${entity.reason}`) }) }}</small>
-            <p v-if="!entity.available" class="pve-unavailable">{{ entity.reason === 'no_data' ? t('proxmox.metrics.noData') : t(`proxmox.error.${entity.reason}`) }}</p>
+            <p v-if="!entity.available" class="pve-unavailable">{{ entity.reason === 'no_data' ? t('proxmox.metrics.noData') : entity.reason === 'forbidden' ? t('proxmox.metrics.notEvaluated') : t(`proxmox.error.${entity.reason}`) }}</p>
             <div v-else class="pve-metric-grid">
               <div v-for="metric in METRIC_FIELDS" :key="metric" class="pve-metric-card" :data-test="`proxmox-metric-${metric}-${entity.id.replaceAll('/', '-')}`">
                 <span>{{ t(`proxmox.metrics.${metric}`) }}</span>
