@@ -16,6 +16,7 @@ const express = require('express');
 const { getStore } = require('../lib/credentialStore');
 const { createProxmoxClient, readServerCertificate } = require('../lib/proxmox/client');
 const { readProxmoxInventory } = require('../lib/proxmox/inventory');
+const { readProxmoxTelemetry } = require('../lib/proxmox/telemetry');
 
 const CACHE_MS = 30 * 1000;
 const STATUS_BY_KIND = { invalid_profile: 400, not_found: 404, invalid_token: 401, forbidden: 403, tls: 502, unreachable: 502, node_down: 502, timeout: 504, invalid_response: 502 };
@@ -40,6 +41,8 @@ function createProxmoxRouter({
   resolveProfile = resolveProxmoxProfile,
   createClient = createProxmoxClient,
   readInventory = readProxmoxInventory,
+  readTelemetry = readProxmoxTelemetry,
+  metricHistory = null,
   readCertificate = readServerCertificate,
   now = () => Date.now(),
 } = {}) {
@@ -74,6 +77,22 @@ function createProxmoxRouter({
 
   router.get('/fingerprint', async (req, res) => {
     try { res.json(await readCertificate(String(req.query.url || ''))); } catch (error) { fail(res, error); }
+  });
+
+  router.get('/metrics', async (req, res) => {
+    const profileId = req.get('X-Profile-Id') || '';
+    const timeframe = String(req.query.timeframe || 'day');
+    if (!['hour', 'day', 'week', 'month'].includes(timeframe)) return res.status(400).json({ error: 'Invalid RRD timeframe', code: 'invalid_profile' });
+    try {
+      const client = createClient(await resolveProfile(profileId));
+      let inventory = cache.get(profileId)?.inventory;
+      if (!inventory) {
+        inventory = await readInventory(client);
+        cache.set(profileId, { at: now(), inventory });
+      }
+      const history = metricHistory || require('../lib/metricHistory').getMetricHistory();
+      res.json(await readTelemetry(client, inventory, { history, profileId, timeframe, now }));
+    } catch (error) { fail(res, error); }
   });
 
   return router;
