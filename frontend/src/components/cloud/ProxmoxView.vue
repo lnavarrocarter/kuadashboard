@@ -154,13 +154,40 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Guest and node RRD telemetry (#336). -->
+        <div v-show="activeService === 'metrics'" class="tab-panel pve-metrics" data-test="proxmox-metrics">
+          <div class="pve-toolbar">
+            <p class="text-dim">{{ t('proxmox.metrics.retention', { days: telemetry?.retentionDays || 30 }) }}</p>
+            <button class="btn sm" type="button" :disabled="metricsLoading" data-test="proxmox-metrics-refresh" @click="loadMetrics">
+              <i data-lucide="refresh-cw"></i> {{ metricsLoading ? t('common.loading') : t('proxmox.refresh') }}
+            </button>
+          </div>
+          <p v-if="metricsError" class="alert-error" role="alert" data-test="proxmox-metrics-error">{{ metricsError }}</p>
+          <p v-else-if="metricsLoading && !telemetry" class="text-dim">{{ t('common.loading') }}</p>
+          <p v-else-if="!telemetry?.entities?.length" class="empty-row" data-test="proxmox-metrics-empty">{{ t('proxmox.metrics.empty') }}</p>
+          <article v-for="entity in telemetry?.entities || []" :key="entity.id" class="pve-metric-entity" :data-test="`proxmox-metric-entity-${entity.id.replaceAll('/', '-')}`">
+            <header><strong>{{ entity.name }}</strong><span class="text-dim">{{ entity.type === 'node' ? t('proxmox.section.nodes') : entity.type.toUpperCase() }} · {{ entity.node }}</span></header>
+            <small v-if="entity.stale" class="text-dim" data-test="proxmox-metrics-stale">{{ t('proxmox.metrics.stale', { reason: t(`proxmox.error.${entity.reason}`) }) }}</small>
+            <p v-if="!entity.available" class="pve-unavailable">{{ entity.reason === 'no_data' ? t('proxmox.metrics.noData') : t(`proxmox.error.${entity.reason}`) }}</p>
+            <div v-else class="pve-metric-grid">
+              <div v-for="metric in METRIC_FIELDS" :key="metric" class="pve-metric-card" :data-test="`proxmox-metric-${metric}-${entity.id.replaceAll('/', '-')}`">
+                <span>{{ t(`proxmox.metrics.${metric}`) }}</span>
+                <strong>{{ formatMetric(entity.points.at(-1)?.[metric], metric) }}</strong>
+                <svg viewBox="0 0 120 32" preserveAspectRatio="none" role="img" :aria-label="t(`proxmox.metrics.${metric}`)">
+                  <polyline :points="chartPoints(entity.points, metric)" fill="none" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+              </div>
+            </div>
+          </article>
+        </div>
       </template>
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useApi } from '../../composables/useApi'
 import { useI18n } from '../../composables/useI18n'
@@ -181,7 +208,12 @@ const loading = ref(false)
 const error = ref('')
 const errorCode = ref('unreachable')
 const errorFingerprint = ref('')
+const telemetry = ref(null)
+const metricsLoading = ref(false)
+const metricsError = ref('')
+const METRIC_FIELDS = ['cpuPercent', 'memoryPercent', 'diskPercent', 'netIn', 'netOut']
 let sequence = 0
+let metricTimer = null
 
 const SectionState = (sectionProps) => {
   const { section, name } = sectionProps
@@ -247,13 +279,65 @@ async function load(refresh = false) {
   }
 }
 
-watch(() => props.profileId, () => { inventory.value = null; load() })
-onMounted(() => load())
+async function loadMetrics() {
+  if (!props.profileId) return
+  metricsLoading.value = true
+  metricsError.value = ''
+  try {
+    telemetry.value = await apiFetch('/api/cloud/proxmox/metrics?timeframe=day', { headers: { 'X-Profile-Id': props.profileId } })
+  } catch (e) {
+    metricsError.value = e.message
+  } finally {
+    metricsLoading.value = false
+    nextTick(() => createIcons({ icons }))
+  }
+}
+
+function stopMetricPolling() {
+  if (metricTimer) clearInterval(metricTimer)
+  metricTimer = null
+}
+
+function syncMetricPolling() {
+  stopMetricPolling()
+  if (props.profileId && props.activeService === 'metrics') {
+    loadMetrics()
+    metricTimer = setInterval(loadMetrics, 60_000)
+  }
+}
+
+function chartPoints(points, metric) {
+  const values = (points || []).map(point => point[metric]).filter(Number.isFinite)
+  if (!values.length) return ''
+  const low = Math.min(...values)
+  const high = Math.max(...values)
+  const spread = high - low || 1
+  const source = (points || []).filter(point => Number.isFinite(point[metric]))
+  return source.map((point, index) => `${source.length === 1 ? 60 : (index / (source.length - 1)) * 120},${30 - ((point[metric] - low) / spread) * 28}`).join(' ')
+}
+
+function formatMetric(value, metric) {
+  if (!Number.isFinite(value)) return '—'
+  if (metric.endsWith('Percent')) return `${value.toFixed(1)} %`
+  return bytes(value) + '/s'
+}
+
+watch(() => props.profileId, () => { inventory.value = null; telemetry.value = null; load(); syncMetricPolling() })
+watch(() => props.activeService, syncMetricPolling)
+onMounted(() => { load(); syncMetricPolling() })
+onBeforeUnmount(stopMetricPolling)
 defineExpose({ load })
 </script>
 
 <style scoped>
 .proxmox-view { padding: 16px; display: grid; gap: 12px; align-content: start; overflow: auto; }
+.pve-metrics { display: grid; gap: 12px; }
+.pve-metric-entity { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: grid; gap: 10px; }
+.pve-metric-entity header { display: flex; gap: 8px; align-items: baseline; }
+.pve-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; }
+.pve-metric-card { min-width: 0; display: grid; gap: 5px; padding: 8px; border-radius: 6px; background: var(--surface-raised); }
+.pve-metric-card span { color: var(--text-dim); font-size: 12px; }
+.pve-metric-card svg { width: 100%; height: 32px; overflow: visible; color: var(--accent); }
 .pve-toolbar { display: flex; align-items: center; gap: 12px; }
 .pve-toolbar h2 { margin: 0; font-size: 16px; display: inline-flex; align-items: center; gap: 8px; margin-right: auto; }
 .pve-toolbar h2 small { font-weight: 400; color: var(--text-dim); font-size: 12px; }
