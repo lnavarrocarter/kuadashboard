@@ -1459,7 +1459,8 @@ function setCloudView(view)   { cloudView.value = view; kubeNavOpen.value = fals
 
 // Overview drill-down: open the resource table with the matching filter/chips
 // preset, keeping the user's sort for that table.
-function openKubeFromOverview({ resource, filter = '', quick = [], facets = [] }) {
+function openKubeFromOverview({ resource, filter = '', quick = [], facets = [], namespace }) {
+  if (namespace && namespace !== store.namespace) store.namespace = namespace
   saveTableView(resource, { ...loadTableView(resource), filter, quick, facets })
   kubeResourceFilter.value = ''
   setResource(resource)

@@ -15,6 +15,7 @@ const k8s        = require('@kubernetes/client-node');
 // client-node's spawnSync, which froze the whole server (lib/kubeExecCredentials.js).
 const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
 const yaml       = require('js-yaml');
+const { readEntrypoints } = require('./lib/kubeEntrypoints');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { readPodRelations, readServiceBackends } = require('./lib/kubeRelations');
 const { requireExpectedContext } = require('./lib/kubeContextGuard');
@@ -22,6 +23,7 @@ const { KubeResponseCache, kubeMutationScope } = require('./lib/kubeResponseCach
 const { activeProviders, providerAlternation, providerIds } = require('./lib/providers');
 const { buildOverview, lastRestartAt, parseCpu, parseMemory, podProblem } = require('./lib/kubeOverview');
 const { formatBytes, formatCpu, metricPayload, metricsApiUsage, nodeReference, podsMetricPayload, prometheusUsage, prometheusValue } = require('./lib/kubeMetrics');
+const { collectKubernetesSecuritySources } = require('./lib/advisor/kubernetesSources');
 const { adviseKubernetes } = require('./lib/advisor/kubernetes');
 const {
   isValidNamespace, rangeWindow, timeseriesQueries, nodeUsageQueries, nodeQueries, promRegexOf, promString,
@@ -676,6 +678,7 @@ app.post('/api/kubeconfig/path', (req, res) => {
 function clients() {
   return {
     core:       currentKc.makeApiClient(k8s.CoreV1Api),
+    rbac:       currentKc.makeApiClient(k8s.RbacAuthorizationV1Api),
     apps:       currentKc.makeApiClient(k8s.AppsV1Api),
     networking: currentKc.makeApiClient(k8s.NetworkingV1Api),
     batch:      currentKc.makeApiClient(k8s.BatchV1Api),
@@ -1210,6 +1213,15 @@ app.get('/api/namespaces/:name/yaml', async (req, res) => {
   } catch (err) { handleError(res, err); }
 });
 
+// Explicitly requested inventory: no probes, cloud calls or secret reads.
+app.get('/api/entrypoints', async (req, res) => {
+  try {
+    const context = currentContext;
+    const result = await readEntrypoints(clients(), String(req.query.namespace || 'all'));
+    res.json({ context, ...result });
+  } catch (err) { handleError(res, err); }
+});
+
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
 // Cluster health summary: pods of the selected namespace (or all), nodes and
@@ -1219,10 +1231,11 @@ app.get('/api/overview', async (req, res) => {
   try {
     const namespace = String(req.query.namespace || 'all');
     const all = namespace === 'all';
-    const { core, apps, custom, networking, policy, autoscaling } = clients();
+    const overviewClients = clients();
+    const { core, apps, custom, networking, policy, autoscaling } = overviewClients;
     const settle = promise => promise.then(result => ({ ok: true, value: listItems(result) }), error => ({ ok: false, error }));
     // NetworkPolicies, PDBs and HPAs only feed the Advisor.
-    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics, networkPolicies, pdbs, hpas] = await Promise.all([
+    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics, networkPolicies, pdbs, hpas, securitySources] = await Promise.all([
       settle(all ? core.listPodForAllNamespaces() : core.listNamespacedPod(namespace)),
       settle(core.listNode()),
       settle(all ? apps.listDeploymentForAllNamespaces() : apps.listNamespacedDeployment(namespace)),
@@ -1233,6 +1246,7 @@ app.get('/api/overview', async (req, res) => {
       settle(all ? networking.listNetworkPolicyForAllNamespaces() : networking.listNamespacedNetworkPolicy(namespace)),
       settle(all ? policy.listPodDisruptionBudgetForAllNamespaces() : policy.listNamespacedPodDisruptionBudget(namespace)),
       settle(all ? autoscaling.listHorizontalPodAutoscalerForAllNamespaces() : autoscaling.listNamespacedHorizontalPodAutoscaler(namespace)),
+      collectKubernetesSecuritySources(overviewClients, namespace),
     ]);
     let prometheus;
     try {
@@ -1264,7 +1278,7 @@ app.get('/api/overview', async (req, res) => {
     try {
       advisor = adviseKubernetes({
         namespace,
-        sources: { pods, nodes, deployments, statefulsets, daemonsets, networkPolicies, pdbs, hpas },
+        sources: { pods, nodes, deployments, statefulsets, daemonsets, networkPolicies, pdbs, hpas, ...securitySources },
         usage: overview.nodes?.usage || null,
       });
     } catch (err) {

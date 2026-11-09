@@ -68,6 +68,8 @@
 
       <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :default-collapsed="true" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
 
+      <KubeEntrypoints @navigate="emit('navigate', $event)" />
+
       <div class="kov-grid">
         <!-- Cluster usage -->
         <section class="kov-card">
@@ -216,6 +218,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, defineAsyncComponent } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { api } from '../composables/useApi'
+import KubeEntrypoints from './KubeEntrypoints.vue'
 import AdvisorPanel from './advisor/AdvisorPanel.vue'
 import { settings } from '../composables/useSettings'
 import { createRefreshGate } from '../composables/refreshGate'
