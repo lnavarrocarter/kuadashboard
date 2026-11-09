@@ -137,5 +137,26 @@ test('recipe plans are inert and invalid or oversized requests are rejected', as
       body: JSON.stringify({ source: 'x'.repeat(256 * 1024 + 1) }),
     });
     assert.equal(tooLarge.status, 400);
+
+test('metrics reads RRD data for the selected profile and rejects unsupported timeframes', async () => {
+  const calls = [];
+  const subject = await serve({
+    resolveProfile: async id => ({ url: 'https://pve:8006', tokenId: 'kua@pve!ro', tokenSecret: 'never-return-this', profileId: id }),
+    createClient: profile => ({ profile }),
+    readInventory: async () => inventoryOf(true),
+    metricHistory: { retentionDays: 30 },
+    readTelemetry: async (client, inventory, options) => {
+      calls.push({ profileId: client.profile.profileId, inventory, options });
+      return { timeframe: options.timeframe, retentionDays: options.history.retentionDays, entities: [] };
+    },
+  });
+  try {
+    const invalid = await subject.request('/metrics?timeframe=forever', { 'X-Profile-Id': 'p1' });
+    assert.equal(invalid.status, 400);
+    const result = await subject.request('/metrics?timeframe=day', { 'X-Profile-Id': 'p1' });
+    assert.deepEqual(result.body, { timeframe: 'day', retentionDays: 30, entities: [] });
+    assert.equal(calls[0].profileId, 'p1');
+    assert.equal(calls[0].options.timeframe, 'day');
+    assert.equal(JSON.stringify(result.body).includes('never-return-this'), false);
   } finally { await subject.close(); }
 });

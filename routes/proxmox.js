@@ -17,6 +17,7 @@ const { getStore } = require('../lib/credentialStore');
 const { createProxmoxClient, readServerCertificate } = require('../lib/proxmox/client');
 const { readProxmoxInventory } = require('../lib/proxmox/inventory');
 const { validateRecipeYaml, generateRecipePlan } = require('../lib/proxmox/recipes');
+const { readProxmoxTelemetry } = require('../lib/proxmox/telemetry');
 
 const CACHE_MS = 30 * 1000;
 const MAX_RECIPE_BYTES = 256 * 1024;
@@ -63,6 +64,8 @@ function createProxmoxRouter({
   resolveProfile = resolveProxmoxProfile,
   createClient = createProxmoxClient,
   readInventory = readProxmoxInventory,
+  readTelemetry = readProxmoxTelemetry,
+  metricHistory = null,
   readCertificate = readServerCertificate,
   now = () => Date.now(),
 } = {}) {
@@ -124,6 +127,20 @@ function createProxmoxRouter({
       if (error.code === 'INVALID_RECIPE') return res.status(400).json({ error: error.message, code: error.code, validation: error.validation });
       res.status(400).json({ error: error.message, code: 'invalid_recipe' });
     }
+  router.get('/metrics', async (req, res) => {
+    const profileId = req.get('X-Profile-Id') || '';
+    const timeframe = String(req.query.timeframe || 'day');
+    if (!['hour', 'day', 'week', 'month'].includes(timeframe)) return res.status(400).json({ error: 'Invalid RRD timeframe', code: 'invalid_profile' });
+    try {
+      const client = createClient(await resolveProfile(profileId));
+      let inventory = cache.get(profileId)?.inventory;
+      if (!inventory) {
+        inventory = await readInventory(client);
+        cache.set(profileId, { at: now(), inventory });
+      }
+      const history = metricHistory || require('../lib/metricHistory').getMetricHistory();
+      res.json(await readTelemetry(client, inventory, { history, profileId, timeframe, now }));
+    } catch (error) { fail(res, error); }
   });
 
   return router;
