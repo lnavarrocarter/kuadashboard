@@ -7,10 +7,12 @@ const { createProxmoxRouter, resolveProxmoxProfile } = require('./proxmox');
 
 async function serve(options) {
   const app = express();
+  app.use(express.json({ limit: '10mb' }));
   app.use('/api/cloud/proxmox', createProxmoxRouter(options));
   const server = await new Promise(resolve => { const instance = app.listen(0, () => resolve(instance)); });
-  const request = async (path, headers = {}) => {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/cloud/proxmox${path}`, { headers });
+  const request = async (path, options = {}) => {
+    const fetchOptions = options.headers ? options : { headers: options };
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/cloud/proxmox${path}`, fetchOptions);
     return { status: response.status, body: await response.json() };
   };
   return { request, close: () => new Promise(resolve => server.close(resolve)) };
@@ -72,6 +74,71 @@ test('nothing readable answers the reason; a bad profile is a 400; the certifica
   } finally { await subject.close(); }
 });
 
+const recipeYaml = `id: test-app
+name: Test app
+category: media
+machine:
+  kind: lxc
+  image: debian-12
+  cores: 2
+  memory: 1024
+  storage: local-lvm
+  unprivileged: true
+backup:
+  schedule: daily
+  keep: 7
+`;
+
+test('recipe validation returns diagnostics without requiring a Proxmox profile', async () => {
+  const subject = await serve({});
+  try {
+    const valid = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, context: { storages: ['local-lvm'] } }),
+    });
+    assert.equal(valid.status, 200);
+    assert.equal(valid.body.valid, true);
+    const invalid = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml.replace('category: media', 'category: unknown') }),
+    });
+    assert.equal(invalid.body.valid, false);
+    assert.deepEqual(invalid.body.errors.map(error => [error.code, error.line]), [['unknown_category', 3]]);
+  } finally { await subject.close(); }
+});
+
+test('recipe plans are inert and invalid or oversized requests are rejected', async () => {
+  const subject = await serve({});
+  try {
+    const planned = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, firstVmid: 240 }),
+    });
+    assert.equal(planned.status, 200);
+    assert.equal(planned.body.executable, false);
+    assert.equal(planned.body.requiresConfirmation, true);
+    assert.equal(planned.body.steps[0].argv[2], '240');
+
+    const invalid = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml.replace('category: media', 'category: unknown') }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.validation.errors[0].line, 3);
+
+    const badId = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, firstVmid: 99 }),
+    });
+    assert.equal(badId.status, 400);
+
+    const tooLarge = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: 'x'.repeat(256 * 1024 + 1) }),
+    });
+    assert.equal(tooLarge.status, 400);
+  } finally { await subject.close(); }
+});
 
 test('metrics reads RRD data for the selected profile and rejects unsupported timeframes', async () => {
   const calls = [];
