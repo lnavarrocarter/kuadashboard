@@ -7,10 +7,12 @@ const { createProxmoxRouter, resolveProxmoxProfile } = require('./proxmox');
 
 async function serve(options) {
   const app = express();
+  app.use(express.json({ limit: '10mb' }));
   app.use('/api/cloud/proxmox', createProxmoxRouter(options));
   const server = await new Promise(resolve => { const instance = app.listen(0, () => resolve(instance)); });
-  const request = async (path, headers = {}) => {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/cloud/proxmox${path}`, { headers });
+  const request = async (path, options = {}) => {
+    const fetchOptions = options.headers ? options : { headers: options };
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/cloud/proxmox${path}`, fetchOptions);
     return { status: response.status, body: await response.json() };
   };
   return { request, close: () => new Promise(resolve => server.close(resolve)) };
@@ -69,5 +71,94 @@ test('nothing readable answers the reason; a bad profile is a 400; the certifica
     assert.equal((await subject.request('/inventory', { 'X-Profile-Id': 'bad' })).status, 400);
     assert.deepEqual((await subject.request('/fingerprint?url=https%3A%2F%2Fpve%3A8006')).body, { fingerprint: 'AB:CD', subject: 'pve' });
     assert.equal((await subject.request('/fingerprint')).status, 400);
+  } finally { await subject.close(); }
+});
+
+const recipeYaml = `id: test-app
+name: Test app
+category: media
+machine:
+  kind: lxc
+  image: debian-12
+  cores: 2
+  memory: 1024
+  storage: local-lvm
+  unprivileged: true
+backup:
+  schedule: daily
+  keep: 7
+`;
+
+test('recipe validation returns diagnostics without requiring a Proxmox profile', async () => {
+  const subject = await serve({});
+  try {
+    const valid = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, context: { storages: ['local-lvm'] } }),
+    });
+    assert.equal(valid.status, 200);
+    assert.equal(valid.body.valid, true);
+    const invalid = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml.replace('category: media', 'category: unknown') }),
+    });
+    assert.equal(invalid.body.valid, false);
+    assert.deepEqual(invalid.body.errors.map(error => [error.code, error.line]), [['unknown_category', 3]]);
+  } finally { await subject.close(); }
+});
+
+test('recipe plans are inert and invalid or oversized requests are rejected', async () => {
+  const subject = await serve({});
+  try {
+    const planned = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, firstVmid: 240 }),
+    });
+    assert.equal(planned.status, 200);
+    assert.equal(planned.body.executable, false);
+    assert.equal(planned.body.requiresConfirmation, true);
+    assert.equal(planned.body.steps[0].argv[2], '240');
+
+    const invalid = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml.replace('category: media', 'category: unknown') }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.validation.errors[0].line, 3);
+
+    const badId = await subject.request('/recipes/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: recipeYaml, firstVmid: 99 }),
+    });
+    assert.equal(badId.status, 400);
+
+    const tooLarge = await subject.request('/recipes/validate', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source: 'x'.repeat(256 * 1024 + 1) }),
+    });
+    assert.equal(tooLarge.status, 400);
+  } finally { await subject.close(); }
+});
+
+test('metrics reads RRD data for the selected profile and rejects unsupported timeframes', async () => {
+  const calls = [];
+  const subject = await serve({
+    resolveProfile: async id => ({ url: 'https://pve:8006', tokenId: 'kua@pve!ro', tokenSecret: 'never-return-this', profileId: id }),
+    createClient: profile => ({ profile }),
+    readInventory: async () => inventoryOf(true),
+    metricHistory: { retentionDays: 30 },
+    readTelemetry: async (client, inventory, options) => {
+      calls.push({ profileId: client.profile.profileId, inventory, options });
+      return { timeframe: options.timeframe, retentionDays: options.history.retentionDays, entities: [] };
+    },
+  });
+  try {
+    const invalid = await subject.request('/metrics?timeframe=forever', { 'X-Profile-Id': 'p1' });
+    assert.equal(invalid.status, 400);
+    const result = await subject.request('/metrics?timeframe=day', { 'X-Profile-Id': 'p1' });
+    assert.deepEqual(result.body, { timeframe: 'day', retentionDays: 30, entities: [] });
+    assert.equal(calls[0].profileId, 'p1');
+    assert.equal(calls[0].options.timeframe, 'day');
+    assert.equal(JSON.stringify(result.body).includes('never-return-this'), false);
   } finally { await subject.close(); }
 });

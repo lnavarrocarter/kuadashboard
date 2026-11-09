@@ -16,9 +16,33 @@ const express = require('express');
 const { getStore } = require('../lib/credentialStore');
 const { createProxmoxClient, readServerCertificate } = require('../lib/proxmox/client');
 const { readProxmoxInventory } = require('../lib/proxmox/inventory');
+const { validateRecipeYaml, generateRecipePlan } = require('../lib/proxmox/recipes');
+const { readProxmoxTelemetry } = require('../lib/proxmox/telemetry');
 
 const CACHE_MS = 30 * 1000;
+const MAX_RECIPE_BYTES = 256 * 1024;
 const STATUS_BY_KIND = { invalid_profile: 400, not_found: 404, invalid_token: 401, forbidden: 403, tls: 502, unreachable: 502, node_down: 502, timeout: 504, invalid_response: 502 };
+
+function recipeSource(req, res) {
+  const source = req.body?.source;
+  if (typeof source !== 'string' || Buffer.byteLength(source, 'utf8') > MAX_RECIPE_BYTES) {
+    res.status(400).json({ error: 'source must be a YAML string no larger than 256 KiB', code: 'invalid_recipe' });
+    return null;
+  }
+  return source;
+}
+
+function recipeValidationContext(input = {}) {
+  const safeList = value => Array.isArray(value) && value.length <= 200 && value.every(item => typeof item === 'string' && item.length <= 128)
+    ? value
+    : null;
+  const storages = input.storages === undefined ? null : safeList(input.storages);
+  const images = input.images === undefined ? null : safeList(input.images);
+  if ((input.storages !== undefined && !storages) || (input.images !== undefined && !images)) {
+    throw Object.assign(new Error('storages and images must be lists of at most 200 short strings'), { kind: 'invalid_recipe' });
+  }
+  return { storages, images };
+}
 
 async function resolveProxmoxProfile(profileId, store = getStore()) {
   if (!profileId) throw Object.assign(new Error('X-Profile-Id header is required'), { kind: 'invalid_profile' });
@@ -40,6 +64,8 @@ function createProxmoxRouter({
   resolveProfile = resolveProxmoxProfile,
   createClient = createProxmoxClient,
   readInventory = readProxmoxInventory,
+  readTelemetry = readProxmoxTelemetry,
+  metricHistory = null,
   readCertificate = readServerCertificate,
   now = () => Date.now(),
 } = {}) {
@@ -76,7 +102,50 @@ function createProxmoxRouter({
     try { res.json(await readCertificate(String(req.query.url || ''))); } catch (error) { fail(res, error); }
   });
 
+  // Local recipe analysis only. These endpoints never contact Proxmox or execute plan steps.
+  router.post('/recipes/validate', (req, res) => {
+    const source = recipeSource(req, res);
+    if (source === null) return;
+    try {
+      res.json(validateRecipeYaml(source, recipeValidationContext(req.body?.context)));
+    } catch (error) {
+      res.status(400).json({ error: error.message, code: 'invalid_recipe' });
+    }
+  });
+
+  router.post('/recipes/plan', (req, res) => {
+    const source = recipeSource(req, res);
+    if (source === null) return;
+    const firstVmid = req.body?.firstVmid === undefined ? 9000 : req.body.firstVmid;
+    if (!Number.isInteger(firstVmid) || firstVmid < 100 || firstVmid > 999999) {
+      return res.status(400).json({ error: 'firstVmid must be an integer from 100 to 999999', code: 'invalid_recipe' });
+    }
+    try {
+      const context = recipeValidationContext(req.body?.context);
+      res.json(generateRecipePlan(source, { ...context, firstVmid, now }));
+    } catch (error) {
+      if (error.code === 'INVALID_RECIPE') return res.status(400).json({ error: error.message, code: error.code, validation: error.validation });
+      res.status(400).json({ error: error.message, code: 'invalid_recipe' });
+    }
+  });
+
+  router.get('/metrics', async (req, res) => {
+    const profileId = req.get('X-Profile-Id') || '';
+    const timeframe = String(req.query.timeframe || 'day');
+    if (!['hour', 'day', 'week', 'month'].includes(timeframe)) return res.status(400).json({ error: 'Invalid RRD timeframe', code: 'invalid_profile' });
+    try {
+      const client = createClient(await resolveProfile(profileId));
+      let inventory = cache.get(profileId)?.inventory;
+      if (!inventory) {
+        inventory = await readInventory(client);
+        cache.set(profileId, { at: now(), inventory });
+      }
+      const history = metricHistory || require('../lib/metricHistory').getMetricHistory();
+      res.json(await readTelemetry(client, inventory, { history, profileId, timeframe, now }));
+    } catch (error) { fail(res, error); }
+  });
+
   return router;
 }
 
-module.exports = { STATUS_BY_KIND, createProxmoxRouter, resolveProxmoxProfile };
+module.exports = { MAX_RECIPE_BYTES, STATUS_BY_KIND, createProxmoxRouter, recipeValidationContext, resolveProxmoxProfile };

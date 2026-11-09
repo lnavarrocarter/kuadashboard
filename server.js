@@ -190,6 +190,13 @@ const logRefreshTask = backgroundTaskRegistry.register({
 });
 logRefreshTask.setControls(createPeriodicTaskControls(logAutoRefresh, logRefreshTask, { runNow: () => logAutoRefresh.tick() }));
 logAutoRefresh.start({ task: logRefreshTask });
+// Proxmox guest and node RRD data is local and free; keep its history on a one-minute cadence (#336).
+const proxmoxTelemetry = require('./lib/proxmox/telemetryScheduler').createProxmoxTelemetryScheduler({ providerActive });
+const proxmoxTelemetryTask = backgroundTaskRegistry.register({
+  id: 'proxmox.telemetry', name: 'Proxmox telemetry collection', type: 'scheduler', provider: 'proxmox', intervalMs: 60 * 1000,
+});
+proxmoxTelemetryTask.setControls(createPeriodicTaskControls(proxmoxTelemetry, proxmoxTelemetryTask, { runNow: () => proxmoxTelemetry.tick() }));
+proxmoxTelemetry.start({ task: proxmoxTelemetryTask });
 // The cache follows the plan's budget at runtime (a downgrade trims it right away).
 const logCacheBudgetWatcher = require('./lib/logCacheBudget').createBudgetWatcher({
   store: () => require('./lib/logCacheBudget').getBudgetStore(),
