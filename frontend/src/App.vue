@@ -714,6 +714,7 @@ const PROXMOX_SIDEBAR = [
   { id: 'storage', labelKey: 'proxmox.section.storage' },
   { id: 'backups', labelKey: 'proxmox.section.backups' },
   { id: 'tasks', labelKey: 'proxmox.section.tasks' },
+  { id: 'metrics', labelKey: 'proxmox.section.metrics' },
 ]
 
 const GCP_SIDEBAR = {
