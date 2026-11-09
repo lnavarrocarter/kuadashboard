@@ -3,6 +3,15 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'entrypoints.awsProfile': "Perfil AWS: {name}",
+  'entrypoints.chooseAwsProfile': "Selecciona un perfil en la vista AWS para asociar balanceadores cloud.",
+  'entrypoints.matchAws': "Asociar balanceadores AWS",
+  'entrypoints.awsReadNote': "Lee los balanceadores del perfil y región AWS seleccionados bajo demanda. No cambia configuración ni consulta métricas facturables.",
+  'entrypoints.awsPartial': "El inventario AWS está incompleto; algunos balanceadores no pudieron evaluarse.",
+  'entrypoints.awsNoMatches': "Sin coincidencia DNS única en el inventario AWS recibido.",
+  'entrypoints.exactDnsMatch': "Coincidencia DNS exacta",
+  'entrypoints.awsAmbiguous': "Coinciden varias identidades AWS; no se eligió un enlace.",
+
   'entrypoints.title': "Entradas de red",
   'entrypoints.load': "Cargar entradas",
   'entrypoints.note': "Entradas declaradas de Ingress, LoadBalancer y NodePort. Sus direcciones pueden ser privadas; no se comprueba el acceso desde internet. Lectura bajo demanda del clúster seleccionado.",
