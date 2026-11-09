@@ -127,6 +127,8 @@ function createProxmoxRouter({
       if (error.code === 'INVALID_RECIPE') return res.status(400).json({ error: error.message, code: error.code, validation: error.validation });
       res.status(400).json({ error: error.message, code: 'invalid_recipe' });
     }
+  });
+
   router.get('/metrics', async (req, res) => {
     const profileId = req.get('X-Profile-Id') || '';
     const timeframe = String(req.query.timeframe || 'day');

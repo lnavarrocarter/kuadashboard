@@ -137,6 +137,8 @@ test('recipe plans are inert and invalid or oversized requests are rejected', as
       body: JSON.stringify({ source: 'x'.repeat(256 * 1024 + 1) }),
     });
     assert.equal(tooLarge.status, 400);
+  } finally { await subject.close(); }
+});
 
 test('metrics reads RRD data for the selected profile and rejects unsupported timeframes', async () => {
   const calls = [];
