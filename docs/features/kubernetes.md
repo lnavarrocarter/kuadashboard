@@ -168,3 +168,7 @@ Advanced node operations:
 - **Multi-namespace** — Filter by namespace or view "All namespaces"
 - **Import kubeconfig** — Add new clusters directly from pasted YAML, a desktop file picker or a registered kubeconfig path
 - **Delete context** — Remove unwanted contexts
+
+### Network entry points
+
+In Overview, choose **Load entry points** to read Ingress and LoadBalancer/NodePort Services for the selected context and namespace. The table shows assigned addresses, Ingress class, TLS configuration, hosts, paths, backends and service/node ports. Resource names open their resource table in the matching namespace. Reads are on demand; switch context or namespace and load again. A denied permission affects only its source. Private addresses and NodePorts do not prove internet exposure. This first slice of #207 does not resolve cloud load-balancer identity or include GCP/Vercel entry points.

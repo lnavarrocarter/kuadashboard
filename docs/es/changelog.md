@@ -7,6 +7,8 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 
 ## Unreleased
 
+- Kubernetes: Overview ahora lee bindings RBAC y metadatos de namespaces para las reglas existentes de cluster-admin y Pod Security (#95). Permite cargar entradas de red bajo demanda, con rutas/clase/TLS de Ingress y direcciones y puertos de LoadBalancer/NodePort; una dirección privada no se presenta como exposición pública comprobada (primera parte Kubernetes de #207).
+
 ### Corregido
 
 - **Un proveedor nuevo ya no reconstruye la tabla de APM (#299):** la base de APM (esquema v28) ya no limita el proveedor de un recurso con un CHECK de la tabla; el catálogo de proveedores (`frontend/src/shared/providers.json`) es la única lista y se valida al guardar un recurso, así que un proveedor agregado ahí (Proxmox es el primero) puede tener recursos de KUApps sin otra migración. Se conservan los recursos, relaciones y métricas existentes; un proveedor fuera del catálogo se sigue rechazando con `Unsupported provider`.

@@ -3,6 +3,21 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'entrypoints.title': "Network entry points",
+  'entrypoints.load': "Load entry points",
+  'entrypoints.note': "Declared Ingress, LoadBalancer and NodePort entries. Their addresses may be private; internet reachability is not tested. Read on demand from the selected cluster.",
+  'entrypoints.unavailable': "Could not read {resource}; other entries remain available.",
+  'entrypoints.empty': "No Ingress, LoadBalancer or NodePort entries in this scope.",
+  'entrypoints.resource': "Resource",
+  'entrypoints.addresses': "Addresses",
+  'entrypoints.routes': "Routes / ports",
+  'entrypoints.class': "Class: {name}",
+  'entrypoints.tlsConfigured': "TLS configured",
+  'entrypoints.noTls': "No TLS configuration",
+  'entrypoints.nodeAddress': "Node address + NodePort",
+  'entrypoints.pending': "No assigned address",
+  'entrypoints.contextChanged': "The active cluster changed. Refresh the entry points.",
+
   // ── Header / Nav ──────────────────────────────────────────────────────────
   'nav.allNamespaces':       'All namespaces',
   'nav.addConnection':       'Add connection',

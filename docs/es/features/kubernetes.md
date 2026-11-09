@@ -167,3 +167,7 @@ Operaciones avanzadas de nodos:
 - **Multi-namespace** — Selector global de namespace (incluyendo "Todos los namespaces")
 - **Import kubeconfig** — Agrega clusters desde YAML pegado, selector de archivo desktop o registro manual de una ruta kubeconfig
 - **Eliminar contexto** — Remueve contextos no deseados
+
+### Entradas de red
+
+En Resumen, pulsa **Cargar entradas** para leer Ingress y Services LoadBalancer/NodePort del contexto y namespace seleccionados. La tabla muestra direcciones asignadas, clase, configuración TLS, hosts, rutas, backends y puertos del servicio/nodo. Los nombres abren su tabla en el namespace correspondiente. La lectura es bajo demanda; al cambiar de contexto o namespace, vuelve a cargar. Una denegación de permisos afecta solo a su fuente. Las direcciones privadas y NodePort no prueban exposición a internet. Esta primera parte de #207 no resuelve la identidad del balanceador cloud ni incluye entradas de GCP/Vercel.

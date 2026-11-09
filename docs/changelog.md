@@ -7,6 +7,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ## Unreleased
 
+- Kubernetes: Overview now reads RBAC bindings and namespace metadata for the existing cluster-admin and Pod Security checks (#95). Network entry points can be loaded on demand, with Ingress routes/class/TLS and LoadBalancer/NodePort addresses and ports; private addresses are not described as proven public exposure (first Kubernetes slice of #207).
+
 ### Fixed
 
 - **The local API only answers to local host names (#361):** API and WebSocket requests with an unrecognized, malformed or duplicate `Host` header are refused with 403 before any route runs, so a DNS name that resolves to loopback can no longer reach the unauthenticated API (DNS rebinding). `localhost`, `127.0.0.1` and `[::1]` keep working on any port, and `KUA_HOSTNAME` allows one extra alias (it changes no DNS, bind address or OAuth callback). Proxy forwarding headers are not trusted.
