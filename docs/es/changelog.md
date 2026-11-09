@@ -7,6 +7,8 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 
 ## Unreleased
 
+- Las entradas Kubernetes ahora pueden resolver un ALB/NLB del perfil AWS seleccionado bajo demanda mediante coincidencia DNS exacta y única, y abrir su vista AWS con cuenta/región. El inventario incompleto, las coincidencias ambiguas y los errores de permisos se indican sin ocultar Kubernetes (#207).
+
 - Kubernetes: Overview ahora lee bindings RBAC y metadatos de namespaces para las reglas existentes de cluster-admin y Pod Security (#95). Permite cargar entradas de red bajo demanda, con rutas/clase/TLS de Ingress y direcciones y puertos de LoadBalancer/NodePort; una dirección privada no se presenta como exposición pública comprobada (primera parte Kubernetes de #207).
 
 ### Corregido

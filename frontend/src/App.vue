@@ -406,7 +406,7 @@
           <AuditLogView  v-else-if="cloudView === 'audit'" />
           <PluginsView   v-else-if="cloudView === 'plugins'" />
           <ConsoleWorkspaceView v-else-if="cloudView === 'console'" />
-          <KubeOverview ref="kubeOverviewRef" v-else-if="cloudView === 'kube-overview' && activeProvider === 'kubernetes'" @navigate="openKubeFromOverview" />
+          <KubeOverview ref="kubeOverviewRef" v-else-if="cloudView === 'kube-overview' && activeProvider === 'kubernetes'" :aws-profile-id="awsProfileId || ''" :aws-profile-label="profileNameById(awsProfileId) || ''" @navigate="openKubeFromOverview" @open-aws-resource="openArchitectureAwsResource" />
           <KubeLogsView v-else-if="cloudView === 'kube-logs' && activeProvider === 'kubernetes'" />
           <HelmView ref="helmViewRef" v-else-if="cloudView === 'helm' || cloudView === 'helm-repos'" :initial-tab="cloudView === 'helm-repos' ? 'repos' : 'releases'" />
           <template v-else-if="activeProvider === 'kubernetes'">

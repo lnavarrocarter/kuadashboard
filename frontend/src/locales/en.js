@@ -3,6 +3,15 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'entrypoints.awsProfile': "AWS profile: {name}",
+  'entrypoints.chooseAwsProfile': "Select an AWS profile in the AWS view to match cloud load balancers.",
+  'entrypoints.matchAws': "Match AWS load balancers",
+  'entrypoints.awsReadNote': "Reads the load balancers of the selected AWS profile and region on demand. No configuration changes or billed metrics queries.",
+  'entrypoints.awsPartial': "AWS inventory is incomplete; some load balancers could not be evaluated.",
+  'entrypoints.awsNoMatches': "No unique DNS match in the returned AWS inventory.",
+  'entrypoints.exactDnsMatch': "Exact DNS match",
+  'entrypoints.awsAmbiguous': "Multiple AWS identities match; no link was chosen.",
+
   'entrypoints.title': "Network entry points",
   'entrypoints.load': "Load entry points",
   'entrypoints.note': "Declared Ingress, LoadBalancer and NodePort entries. Their addresses may be private; internet reachability is not tested. Read on demand from the selected cluster.",

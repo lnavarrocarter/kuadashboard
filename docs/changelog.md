@@ -7,6 +7,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ## Unreleased
 
+- Kubernetes entry points can now resolve an ALB/NLB from the selected AWS profile on demand by a unique exact DNS match, then open its AWS resource view with account/region identity. Incomplete inventories, ambiguous matches and AWS permission failures remain explicit without hiding Kubernetes entries (#207).
+
 - Kubernetes: Overview now reads RBAC bindings and namespace metadata for the existing cluster-admin and Pod Security checks (#95). Network entry points can be loaded on demand, with Ingress routes/class/TLS and LoadBalancer/NodePort addresses and ports; private addresses are not described as proven public exposure (first Kubernetes slice of #207).
 
 ### Fixed

@@ -68,7 +68,7 @@
 
       <AdvisorPanel :report="overview.advisor || null" :loading="loading" storage-key="advisor.kubernetes" :default-collapsed="true" :brief-context="{ [t('agentBrief.field.context')]: store.currentContext }" @posture-changed="load()" />
 
-      <KubeEntrypoints @navigate="emit('navigate', $event)" />
+      <KubeEntrypoints :aws-profile-id="awsProfileId" :aws-profile-label="awsProfileLabel" @navigate="emit('navigate', $event)" @open-aws-resource="emit('open-aws-resource', $event)" />
 
       <div class="kov-grid">
         <!-- Cluster usage -->
@@ -227,7 +227,8 @@ import { useI18n } from '../composables/useI18n'
 // chart.js loads with the first chart, not with the app
 const CloudMetricChart = defineAsyncComponent(() => import('./cloud/CloudMetricChart.vue'))
 
-const emit = defineEmits(['navigate'])
+defineProps({ awsProfileId: { type: String, default: '' }, awsProfileLabel: { type: String, default: '' } })
+const emit = defineEmits(['navigate', 'open-aws-resource'])
 const store = useKubeStore()
 const { t } = useI18n()
 
