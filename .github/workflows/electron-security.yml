@@ -10,6 +10,9 @@ on:
       - .github/workflows/electron-security.yml
 permissions:
   contents: read
+concurrency:
+  group: electron-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   package:
     strategy:
@@ -27,7 +30,7 @@ jobs:
       - run: npm ci --prefix frontend
       - run: npm run icons:generate
       - name: Package the current platform
-        run: npm run electron:pack
+        run: npm run electron:build -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           ELECTRON_BUILDER_PUBLISH: never
