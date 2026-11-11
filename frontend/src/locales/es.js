@@ -3,6 +3,17 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'gcp.entrypoints.note': "Rutas y direcciones externas configuradas en este proyecto. No se comprueban la accesibilidad ni la autenticación.",
+  'gcp.entrypoints.cloudrun': "Cloud Run con ingress abierto",
+  'gcp.entrypoints.domains': "Dominios de Cloud Run",
+  'gcp.entrypoints.forwardingRules': "Reglas de reenvío externas",
+  'gcp.entrypoints.vms': "VMs con direcciones externas",
+  'gcp.entrypoints.destination': "Destino",
+  'gcp.entrypoints.partial': "Inventario parcial",
+  'gcp.entrypoints.unavailable': "Fuente no disponible",
+  'gcp.entrypoints.empty': "Sin entradas",
+  'gcp.entrypoints.unresolved': "No se pudo resolver el backend",
+
   'vercel.entrypoints.projectsPartial': "El inventario de proyectos es parcial.",
   'vercel.entrypoints.productionTarget': "Destino de producción",
   'vercel.entrypoints.customEnvironment': "Entorno personalizado",

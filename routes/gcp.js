@@ -41,6 +41,7 @@ const { listArtifactRepositories, listSchedulerJobs, listTaskQueues, listCloudRu
 const { summarizeOverview } = require('../lib/gcpOverview');
 const { timeSeriesParams, normalizeTimeSeries } = require('../lib/gcpMonitoring');
 const { listAllPages } = require('../lib/gcpPaging');
+const { readGcpEntrypoints } = require('../lib/gcpEntrypoints');
 const { mapFirewall, mapRoute, byPriority } = require('../lib/gcpNetwork');
 const { requireFeature } = require('../lib/plans');
 const { mapLogEntry, logMessage, loggingRequest } = require('../lib/gcpLogging');
@@ -726,6 +727,16 @@ router.get('/overview/history', (req, res) => {
       from: now - days * 24 * 60 * 60 * 1000, to: now + 1, limit: 500,
     }) || [];
     res.json({ provider: 'gcp', profileId, region: region || null, days, snapshots: rows });
+  } catch (err) { handleErr(res, err); }
+});
+
+router.get('/entrypoints', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const authCtx = await resolveGcpAuth(profileId);
+    if (!authCtx.projectId) return res.status(400).json({ error: 'GCP_PROJECT_ID is required' });
+    res.json(await readGcpEntrypoints({ fetchApi: gcpFetch, authCtx, listCloudRun: listCloudRunServices }));
   } catch (err) { handleErr(res, err); }
 });
 

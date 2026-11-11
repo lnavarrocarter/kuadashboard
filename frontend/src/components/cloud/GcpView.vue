@@ -98,6 +98,8 @@
             <i data-lucide="refresh-cw"></i> {{ gcpStore.overviewLoading ? t('common.loading') : t('action.refresh') }}
           </button>
         </div>
+        <GcpEntrypoints v-if="activeTab === 'overview'" :key="selectedProfileId" :profile-id="selectedProfileId" />
+
         <div v-if="gcpStore.overviewError" class="api-disabled-banner">{{ gcpStore.overviewError }}</div>
         <div v-if="gcpStore.overviewLoading && !gcpStore.overview" class="empty-row">{{ t('gcpv.loadingOverview') }}</div>
         <template v-else-if="gcpStore.overview">
@@ -2185,6 +2187,7 @@ import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
 import { useEnvStore } from '../../stores/useEnvStore'
 import { useGcpStore } from '../../stores/useGcpStore'
+import GcpEntrypoints from './GcpEntrypoints.vue'
 import AdvisorPanel from '../advisor/AdvisorPanel.vue'
 import { useI18n } from '../../composables/useI18n'
 import { useToast }    from '../../composables/useToast'
