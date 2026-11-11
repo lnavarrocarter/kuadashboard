@@ -22,6 +22,7 @@ async function run() {
   database.close();
   assert.equal(typeof require('ssh2').Client, 'function', 'SSH JavaScript fallback must load');
   assert.equal(typeof require('bunyan').createLogger, 'function', 'Logging fallback must load');
+  assert.equal(typeof require('@napi-rs/keyring').Entry, 'function', 'Native keyring binding must load');
   const yaml = require('js-yaml');
   const updateConfig = yaml.load(fs.readFileSync(path.join(process.resourcesPath, 'app-update.yml'), 'utf8'));
   assert.equal(updateConfig.provider, 'github');

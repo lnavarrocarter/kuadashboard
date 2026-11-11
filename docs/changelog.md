@@ -7,6 +7,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ## Unreleased
 
+- Dependency updates retain Express 5 API actions and SPA routing, resolve Lucide through its declared ESM entry, and preserve credential metadata and cache keys when the OS keychain fails. Linux credentials require persistent Secret Service storage; docs and releases consistently use Node 24.
+
 - Security: updated Electron to the supported 45 series, patched audited dependencies and rebuilt frontend assets. Added grouped Dependabot updates, CodeQL and a Windows/macOS/Linux package check for SQLite and the updater (#364).
 
 - Local API writes now validate browser origins and Fetch Metadata before body parsing. WebSocket upgrades use the same policy before consuming a console ticket; native MCP and VS Code clients remain supported (#363).
