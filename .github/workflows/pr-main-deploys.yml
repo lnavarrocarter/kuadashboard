@@ -21,9 +21,9 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -58,13 +58,13 @@ jobs:
         run: npm run build:mcpb
 
       - name: Upload the Claude Desktop extension
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kua-mcpb
           path: mcpb/dist/kua.mcpb
 
       - name: Upload the VS Code extension
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kua-vscode
           path: vscode/dist/kuadashboard.vsix
@@ -73,9 +73,9 @@ jobs:
     needs: tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -93,9 +93,9 @@ jobs:
     needs: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -185,7 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create GitHub issue for the failing deploy
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           # Set this secret to the GitHub Project V2 ID to auto-add the issue to that board.
           PROJECT_V2_ID: ${{ secrets.DEPLOYMENT_PROJECT_V2_ID }}
