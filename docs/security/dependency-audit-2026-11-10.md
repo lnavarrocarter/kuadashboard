@@ -8,6 +8,17 @@ The Kubernetes and Google runtime transport migration is proposed in [PR #403](h
 
 The PR upgrades `@kubernetes/client-node` to 2.0.2 and the Google Compute, Container, Resource Manager, and Auth clients to their current Node 22 lines. Kubernetes calls keep their existing positional-argument and `{ body, response }` behavior through an adapter. Google local-gcloud OAuth and service-account credentials are tested with the current auth constructors. Full backend validation: 1,331/1,331 tests pass on Node 22.23.4. The development/build findings remain tracked for compatible upstream updates and packaging-matrix review; they were not forced through unverified overrides.
 
+### Incremental tooling follow-up — 2026-11-11
+
+After the migration, a fresh root lockfile audit reports zero production
+vulnerabilities and six moderate findings in development/build dependencies.
+Pinning nodemon to 3.1.11 removes its minimatch finding. The remaining findings
+are the Electron Builder/minimatch chain. Npm's proposed automatic fix downgrades
+Electron Builder from 26.18.x to 24.13.3, a major-version change; keep the
+builder finding open until a compatible upstream fix passes the packaging
+matrix. The follow-up evidence is recorded in
+[`dependabot-review-2026-11-11.md`](./dependabot-review-2026-11-11.md).
+
 ## Scope and results
 
 Commands: `npm audit --package-lock-only --json` and `npm audit --package-lock-only --omit=dev --json`, separately in the root, `frontend/`, `vscode/` and `docs/`. The baseline is main before this dependency change.
@@ -62,7 +73,7 @@ The following table accounts for every affected package in the initial four-area
 | root | @electron/rebuild | high | development/build | no finding |
 | root | @electron/universal | moderate | development/build | moderate |
 | root | @grpc/grpc-js | high | runtime | no finding |
-| root | @kubernetes/client-node | critical | runtime | moderate |
+| root | @kubernetes/client-node | critical | runtime | no finding after transport migration |
 | root | @protobufjs/utf8 | moderate | runtime | no finding |
 | root | @tootallnate/once | low | runtime | no finding |
 | root | @xmldom/xmldom | high | development/build | no finding |
@@ -85,9 +96,9 @@ The following table accounts for every affected package in the initial four-area
 | root | extract-zip | high | development/build | no finding |
 | root | follow-redirects | high | development/build | no finding |
 | root | form-data | critical | runtime | no finding |
-| root | gaxios | moderate | runtime | moderate |
+| root | gaxios | moderate | runtime | no finding after SDK updates |
 | root | glob | moderate | development/build | no finding |
-| root | google-gax | moderate | runtime | moderate |
+| root | google-gax | moderate | runtime | no finding after SDK updates |
 | root | ip-address | high | development/build | no finding |
 | root | joi | high | development/build | no finding |
 | root | js-yaml | high | runtime | no finding |
@@ -96,19 +107,19 @@ The following table accounts for every affected package in the initial four-area
 | root | minimatch | moderate | development/build | moderate |
 | root | moment | moderate | runtime | no finding |
 | root | node-gyp | high | development/build | no finding |
-| root | nodemon | moderate | development/build | moderate |
+| root | nodemon | moderate | development/build | no finding after 3.1.11 pin |
 | root | protobufjs | high | runtime | no finding |
 | root | proxy-addr | critical | runtime | no finding |
 | root | qs | moderate | runtime | no finding |
-| root | request | critical | runtime | moderate |
-| root | retry-request | moderate | runtime | moderate |
+| root | request | critical | runtime | no finding; removed from runtime tree |
+| root | retry-request | moderate | runtime | no finding after SDK updates |
 | root | shell-quote | critical | development/build | no finding |
 | root | source-map-js | high | runtime | no finding |
 | root | tar | critical | runtime | no finding |
-| root | teeny-request | moderate | runtime | moderate |
+| root | teeny-request | moderate | runtime | no finding after SDK updates |
 | root | tmp | high | development/build | no finding |
-| root | tough-cookie | moderate | runtime | moderate |
-| root | uuid | moderate | runtime | moderate |
+| root | tough-cookie | moderate | runtime | no finding; removed from runtime tree |
+| root | uuid | moderate | runtime | no finding after SDK updates |
 | root | ws | high | runtime | no finding |
 | frontend | @vitest/mocker | moderate | development/build | no finding |
 | frontend | @vue/server-renderer | high | runtime | no finding |

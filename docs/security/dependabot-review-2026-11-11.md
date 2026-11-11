@@ -67,3 +67,16 @@ Remaining moderate findings continue in #392 and the
 The Vercel client secret remains an open release/security transition in #362.
 The draft replacement has its own validation and requires private broker
 configuration, a real connection, replacement release and subsequent rotation.
+
+## Follow-up on #392
+
+On 2026-11-11, the root lockfile audit was repeated after the Kubernetes/Google
+transport migration. `npm audit --package-lock-only --omit=dev --json` reports
+zero vulnerabilities. The full lockfile audit reports six moderate findings,
+all through the Electron Builder/minimatch build chain; there are no high or
+critical findings. The earlier nodemon/minimatch finding was removed by pinning
+nodemon to 3.1.11, the last version outside the affected range. Npm's audit-fix
+dry run confirms the remaining automatic fix would downgrade Electron Builder
+from 26.18.x to 24.13.3 across a major version, so it is not applied without
+cross-platform packaging validation. The builder finding remains tracked in
+#392 pending a compatible upstream release and the package matrix.

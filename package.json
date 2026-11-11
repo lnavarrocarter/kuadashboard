@@ -103,7 +103,7 @@
     "cross-env": "^7.0.3",
     "electron": "^45.3.0",
     "electron-builder": "^26.18.0",
-    "nodemon": "^3.0.1",
+    "nodemon": "3.1.11",
     "wait-on": "^9.5.1"
   },
   "build": {
