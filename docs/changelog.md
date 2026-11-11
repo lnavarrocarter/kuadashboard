@@ -7,7 +7,9 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ## Unreleased
 
-- Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported.
+- Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported. The replacement must be released before rotating the integration secret; after rotation older installers cannot create new connections, while existing provider-token profiles remain usable.
+
+- Security: updated Electron to the supported 45 series, patched audited dependencies and rebuilt frontend assets. Added grouped Dependabot updates, CodeQL and a Windows/macOS/Linux package check for SQLite and the updater (#364).
 
 - Local API writes now validate browser origins and Fetch Metadata before body parsing. WebSocket upgrades use the same policy before consuming a console ticket; native MCP and VS Code clients remain supported (#363).
 

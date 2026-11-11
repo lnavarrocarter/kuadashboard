@@ -7,7 +7,9 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 
 ## Unreleased
 
-- Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios.
+- Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios. El reemplazo debe publicarse antes de rotar el secreto; tras la rotación los instaladores antiguos no podrán crear conexiones nuevas, mientras los perfiles con tokens existentes seguirán utilizables.
+
+- Seguridad: Electron actualizado a la serie 45 soportada, dependencias corregidas y frontend regenerado. Se añaden actualizaciones agrupadas de Dependabot, CodeQL y comprobación del paquete en Windows/macOS/Linux con SQLite y actualizador (#364).
 
 - Las escrituras de la API local ahora validan el origen del navegador y Fetch Metadata antes de procesar el cuerpo. Los WebSocket aplican la misma política antes de consumir un ticket; se mantienen los clientes nativos MCP y VS Code (#363).
 
