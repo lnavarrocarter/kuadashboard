@@ -82,7 +82,7 @@
     "@google-cloud/compute": "^4.0.0",
     "@google-cloud/container": "^5.0.0",
     "@google-cloud/resource-manager": "^5.0.0",
-    "@google-cloud/run": "^1.0.0",
+    "@google-cloud/run": "^4.2.0",
     "@huggingface/transformers": "^4.3.0",
     "@kubernetes/client-node": "^0.22.3",
     "@napi-rs/keyring": "^1.2.0",
