@@ -7,9 +7,10 @@ async function run() {
   const assert = require('node:assert/strict');
   const fs = require('node:fs');
   const path = require('node:path');
-  const os = require('node:os');
   const http = require('node:http');
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-electron-smoke-'));
+  const temporary = process.env.KUA_PACKAGED_SMOKE_DATA;
+  assert.equal(typeof temporary, 'string', 'Launch the smoke test through its runner');
+  fs.mkdirSync(temporary, { recursive: true });
   app.setPath('userData', temporary);
   await app.whenReady();
   assert.equal(app.isPackaged, true, 'Smoke test must run in the actual package');
@@ -58,7 +59,6 @@ async function run() {
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
-    fs.rmSync(temporary, { recursive: true, force: true });
   }
   app.exit(0);
 }

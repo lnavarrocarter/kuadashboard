@@ -14,7 +14,7 @@ const executable = candidates.find(file => fs.existsSync(file));
 if (!executable) throw new Error('Packaged executable was not found');
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'kua-smoke-result-'));
 const resultFile = path.join(temporary, 'result.json');
-const env = { ...process.env, KUA_PACKAGED_SMOKE_RESULT: resultFile };
+const env = { ...process.env, KUA_PACKAGED_SMOKE_RESULT: resultFile, KUA_PACKAGED_SMOKE_DATA: path.join(temporary, 'user-data') };
 delete env.ELECTRON_RUN_AS_NODE;
 const args = ['--kua-smoke-test', ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu', '--ozone-platform=headless'] : [])];
 try {
@@ -27,4 +27,5 @@ try {
   const evidence = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
   if (!evidence.sqlite || evidence.updater !== 'metadata-check-passed') throw new Error('Missing packaged smoke evidence');
   console.log(JSON.stringify(evidence));
-} finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+// Electron can hold Chromium data files open until the process has exited.
+} finally { fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
