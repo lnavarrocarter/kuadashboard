@@ -1,6 +1,4 @@
 ---
-
-- Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios.
 title: "Changelog"
 description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, correcciones y notas de actualización para Kubernetes, AWS, GCP, Vercel, KUApps, el Advisor y agentes de IA."
 ---
@@ -8,6 +6,8 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 # Changelog
 
 ## Unreleased
+
+- Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios.
 
 - Las escrituras de la API local ahora validan el origen del navegador y Fetch Metadata antes de procesar el cuerpo. Los WebSocket aplican la misma política antes de consumir un ticket; se mantienen los clientes nativos MCP y VS Code (#363).
 

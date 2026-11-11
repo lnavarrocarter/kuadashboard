@@ -1,6 +1,4 @@
 ---
-
-- Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported.
 title: "Changelog"
 description: "What changed in each KUA release: new features, fixes and upgrade notes for Kubernetes, AWS, GCP, Vercel, KUApps, the Advisor and AI agents."
 ---
@@ -8,6 +6,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 # Changelog
 
 ## Unreleased
+
+- Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported.
 
 - Local API writes now validate browser origins and Fetch Metadata before body parsing. WebSocket upgrades use the same policy before consuming a console ticket; native MCP and VS Code clients remain supported (#363).
 
