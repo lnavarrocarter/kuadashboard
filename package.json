@@ -104,7 +104,7 @@
     "electron": "^45.3.0",
     "electron-builder": "^26.18.0",
     "nodemon": "^3.0.1",
-    "wait-on": "^8.0.0"
+    "wait-on": "^9.5.1"
   },
   "build": {
     "appId": "dev.kua.kuadashboard",
