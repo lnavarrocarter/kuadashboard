@@ -143,3 +143,8 @@ Open decision for the owner: if a one-click 1.17.x → rc test is wanted, a buil
 
 - [ ] Comment the result on #262 and check its acceptance criteria; tick #262 in epic #266 and close both only when the rc test and the "no 1.x references" criterion are done.
 - [ ] Add a new empty `## Unreleased` section to `docs/changelog.md`, `docs/es/changelog.md` and a matching `Unreleased` entry in `useChangelog.js`.
+
+
+### Electron compatibility (#364)
+
+Dependency or Electron changes run the **Electron security compatibility** matrix on Windows, macOS and Linux. Each job packages the current checkout and launches its actual executable with `--kua-smoke-test`, which checks SQLite native loading, the SSH/logging fallback and an updater metadata request against a local fixture. This does not download or install an update. All matrix jobs must pass before merging an upgrade. Release validation still verifies signatures, notarization, installation and a real update from the previous release. See [the dependency audit](./security/dependency-audit-2026-11-10.md) for the runtime/development triage and remaining moderate findings.

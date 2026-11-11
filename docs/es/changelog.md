@@ -7,6 +7,8 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 
 ## Unreleased
 
+- Seguridad: Electron actualizado a la serie 45 soportada, dependencias corregidas y frontend regenerado. Se añaden actualizaciones agrupadas de Dependabot, CodeQL y comprobación del paquete en Windows/macOS/Linux con SQLite y actualizador (#364).
+
 - Las escrituras de la API local ahora validan el origen del navegador y Fetch Metadata antes de procesar el cuerpo. Los WebSocket aplican la misma política antes de consumir un ticket; se mantienen los clientes nativos MCP y VS Code (#363).
 
 - Las entradas Kubernetes ahora pueden resolver un ALB/NLB del perfil AWS seleccionado bajo demanda mediante coincidencia DNS exacta y única, y abrir su vista AWS con cuenta/región. El inventario incompleto, las coincidencias ambiguas y los errores de permisos se indican sin ocultar Kubernetes (#207).

@@ -1,0 +1,35 @@
+name: Electron security compatibility
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - electron/**
+      - scripts/run-packaged-smoke.js
+      - .github/workflows/electron-security.yml
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix frontend
+      - run: npm run icons:generate
+      - name: Package the current platform
+        run: npm run electron:pack
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          ELECTRON_BUILDER_PUBLISH: never
+      - name: Verify packaged SQLite and updater
+        run: node scripts/run-packaged-smoke.js
