@@ -2,6 +2,12 @@
 
 Issue: [#364](https://github.com/lnavarrocarter/kuadashboard/issues/364). Results were collected from npm for the lockfiles in this change. Counts are affected packages, including transitive dependants, rather than distinct exploitable defects.
 
+## Remediation status — 2026-11-11 (PR #403)
+
+The Kubernetes and Google runtime transport migration is proposed in [PR #403](https://github.com/lnavarrocarter/kuadashboard/pull/403), which contributes to [issue #392](https://github.com/lnavarrocarter/kuadashboard/issues/392). The root production audit now reports **0 vulnerabilities**. The full root audit reports **7 moderate development/build findings** (Electron builder chain and nodemon/minimatch); there are no high or critical findings. `npm ls request tough-cookie uuid --all` returns no installed copies of those packages.
+
+The PR upgrades `@kubernetes/client-node` to 2.0.2 and the Google Compute, Container, Resource Manager, and Auth clients to their current Node 22 lines. Kubernetes calls keep their existing positional-argument and `{ body, response }` behavior through an adapter. Google local-gcloud OAuth and service-account credentials are tested with the current auth constructors. Full backend validation: 1,331/1,331 tests pass on Node 22.23.4. The development/build findings remain tracked for compatible upstream updates and packaging-matrix review; they were not forced through unverified overrides.
+
 ## Scope and results
 
 Commands: `npm audit --package-lock-only --json` and `npm audit --package-lock-only --omit=dev --json`, separately in the root, `frontend/`, `vscode/` and `docs/`. The baseline is main before this dependency change.

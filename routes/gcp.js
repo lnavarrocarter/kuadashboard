@@ -173,8 +173,11 @@ async function resolveGcpAuth(profileId) {
     const { GoogleAuth, OAuth2Client } = require('google-auth-library');
     const tokenClient = new OAuth2Client();
     tokenClient.setCredentials({ access_token: accessToken });
-    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
-    auth.cachedCredential = tokenClient;
+    const auth = new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      projectId: cfg.project || null,
+      authClient: tokenClient,
+    });
     return { auth, projectId: cfg.project || null, credentials: {}, account: cfg.account || null, accessToken };
   }
 
@@ -191,13 +194,23 @@ async function resolveGcpAuth(profileId) {
     throw Object.assign(new Error('GCP_SERVICE_ACCOUNT_JSON is not valid JSON'), { code: 400 });
   }
 
-  const { GoogleAuth } = require('google-auth-library');
-  const auth = new GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
-
   const projectId = keys['GCP_PROJECT_ID'] || credentials.project_id || null;
+  if (credentials.type !== 'service_account' || !credentials.client_email || !credentials.private_key) {
+    throw Object.assign(new Error('GCP_SERVICE_ACCOUNT_JSON must contain service account credentials'), { code: 400 });
+  }
+
+  const { GoogleAuth, JWT } = require('google-auth-library');
+  const scopes = ['https://www.googleapis.com/auth/cloud-platform'];
+  const authClient = new JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    keyId: credentials.private_key_id,
+    scopes,
+    subject: credentials.subject,
+    projectId,
+  });
+  const auth = new GoogleAuth({ scopes, projectId, authClient });
+
   return { auth, projectId, credentials, account: credentials.client_email || null };
 }
 
