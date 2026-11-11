@@ -6,6 +6,10 @@ const AWS_KIND_TYPES = {
   rds: ['rds', 'database'],
   ebs: ['ebs', 'ec2'],
   'elastic ip': ['ec2'],
+  'load balancer': ['loadbalancer'],
+  'application load balancer': ['loadbalancer'],
+  'network load balancer': ['loadbalancer'],
+  'target group': ['targetgroup'],
 }
 
 const SEVERITY_RANK = { high: 3, medium: 2, low: 1 }

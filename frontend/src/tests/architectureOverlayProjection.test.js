@@ -32,6 +32,21 @@ describe('architecture operational overlay projection', () => {
     expect(awsSecurityByNode({ ...report, locked: true }, nodes)).toEqual({})
   })
 
+  it('links load balancer findings to exact load balancers and target groups', () => {
+    const nodes = [
+      { id: 'alb', provider: 'aws', region: 'us-east-1', resourceType: 'loadbalancer', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/orders/abc', name: 'orders' },
+      { id: 'tg', provider: 'aws', region: 'us-east-1', resourceType: 'targetgroup', arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders/def', name: 'orders' },
+      { id: 'wrong-region', provider: 'aws', region: 'us-west-2', resourceType: 'loadbalancer', arn: 'arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/orders/abc', name: 'orders' },
+    ]
+    const report = { scope: { region: 'us-east-1' }, findings: [
+      { id: 'aws.lb_public', category: 'security', severity: 'high', resources: [{ kind: 'Application Load Balancer', name: nodes[0].arn }] },
+      { id: 'aws.tg_unhealthy', category: 'security', severity: 'medium', resources: [{ kind: 'Target Group', name: nodes[1].arn }] },
+    ] }
+
+    expect(Object.keys(awsSecurityByNode(report, nodes))).toEqual(['alb', 'tg'])
+    expect(awsSecurityByNode(report, nodes).alb).toMatchObject({ count: 1, high: 1 })
+  })
+
   it('links GCP findings only to exact project, resource type, and location', () => {
     const nodes = [
       { id: 'run', provider: 'gcp', projectId: 'prod', resourceType: 'gcp-cloud-run', name: 'orders', location: 'us-central1' },
