@@ -7,6 +7,8 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 
 ## Unreleased
 
+- Las dependencias actualizadas conservan las acciones de API y rutas SPA con Express 5, resuelven Lucide mediante su entrada ESM y preservan los metadatos y claves de caché si falla el llavero. Linux requiere Secret Service persistente; documentación y releases usan Node 24.
+
 - Seguridad: Electron actualizado a la serie 45 soportada, dependencias corregidas y frontend regenerado. Se añaden actualizaciones agrupadas de Dependabot, CodeQL y comprobación del paquete en Windows/macOS/Linux con SQLite y actualizador (#364).
 
 - Las escrituras de la API local ahora validan el origen del navegador y Fetch Metadata antes de procesar el cuerpo. Los WebSocket aplican la misma política antes de consumir un ticket; se mantienen los clientes nativos MCP y VS Code (#363).

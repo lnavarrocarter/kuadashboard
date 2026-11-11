@@ -270,7 +270,8 @@ router.get('/usage', (req, res) => {
 });
 
 // POST /usage/enable · POST /usage/disable { clear?: true } (clear deletes the history)
-router.post('/usage/:action(enable|disable)', (req, res) => {
+router.post('/usage/:action', (req, res, next) => {
+  if (!['enable', 'disable'].includes(req.params.action)) return next();
   try {
     const ledger = require('../lib/usage/ledger').getUsageLedger();
     res.json(ledger.setEnabled(req.params.action === 'enable', { clear: req.params.action === 'disable' && req.body?.clear === true }));
