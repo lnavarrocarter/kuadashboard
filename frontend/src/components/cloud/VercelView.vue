@@ -82,6 +82,36 @@
             @posture-changed="vercelStore.fetchOverview()"
           />
 
+          <details v-if="overview.rows.some(row => row.entryDomains)" class="vercel-ov-section" data-test="vercel-entrypoints">
+            <summary class="vercel-ov-section-title">{{ t('entrypoints.title') }}</summary>
+            <p v-if="overview.projects.partial" class="text-dim">{{ t('vercel.entrypoints.projectsPartial') }}</p>
+            <table class="cloud-table">
+              <thead><tr>
+                <th>{{ t('vercel.col.name') }}</th>
+                <th>{{ t('vercel.overview.domains') }}</th>
+                <th>{{ t('vercel.entrypoints.productionTarget') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="row in overview.rows" :key="row.id">
+                  <td>{{ row.name }}</td>
+                  <td>
+                    <ul v-if="row.entryDomains?.length">
+                      <li v-for="domain in row.entryDomains" :key="domain.name">
+                        {{ domain.name }}
+                        <span v-if="domain.redirect" class="text-dim"> → {{ domain.redirect }}</span>
+                        <span v-else-if="domain.branch || domain.environment" class="text-dim"> · {{ domain.branch || t('vercel.entrypoints.customEnvironment') }}</span>
+                        <span v-if="domain.verified === false" class="text-dim"> · {{ t('vercel.entrypoints.unverified') }}</span>
+                      </li>
+                    </ul>
+                    <span v-if="row.domainCoverage !== 'complete'" class="text-dim">{{ t('vercel.entrypoints.' + (row.domainCoverage === 'partial' ? 'domainsPartial' : 'domainsUnavailable')) }}</span>
+                    <span v-else-if="!row.entryDomains?.length" class="text-dim">—</span>
+                  </td>
+                  <td>{{ row.productionTarget?.url || row.productionTarget?.id || t('vercel.entrypoints.targetUnavailable') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+
           <section class="vercel-ov-section">
             <div class="vercel-ov-section-title">
               <span>{{ t('vercel.overview.projectsTitle') }}</span>

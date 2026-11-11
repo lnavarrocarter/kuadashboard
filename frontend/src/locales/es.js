@@ -3,6 +3,14 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'vercel.entrypoints.projectsPartial': "El inventario de proyectos es parcial.",
+  'vercel.entrypoints.productionTarget': "Destino de producción",
+  'vercel.entrypoints.customEnvironment': "Entorno personalizado",
+  'vercel.entrypoints.unverified': "Sin verificar",
+  'vercel.entrypoints.domainsPartial': "Hay más dominios para este proyecto.",
+  'vercel.entrypoints.domainsUnavailable': "Dominios no disponibles",
+  'vercel.entrypoints.targetUnavailable': "Destino de producción no disponible",
+
   'entrypoints.awsProfile': "Perfil AWS: {name}",
   'entrypoints.chooseAwsProfile': "Selecciona un perfil en la vista AWS para asociar balanceadores cloud.",
   'entrypoints.matchAws': "Asociar balanceadores AWS",
