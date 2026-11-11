@@ -1589,6 +1589,15 @@
         />
       </div>
 
+      <div v-show="activeTab === 'public-endpoints'" class="tab-panel">
+        <AwsPublicEndpointsTab
+          :active="activeTab === 'public-endpoints'"
+          :profile-id="selectedProfileId"
+          :account-id="awsStore.accountContext?.account || ''"
+          :region="awsStore.accountContext?.region || ''"
+        />
+      </div>
+
       <div v-show="activeTab === 'cloudfront'" class="tab-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
           <button class="btn sm" style="background:rgba(34,197,94,.18);border-color:#22c55e;color:#22c55e" @click="cfCreateModal.open = true; cfCreateModal.result = null; cfCreateModal.error = null">{{ t('awsv.createFromS3') }}</button>
@@ -3873,6 +3882,7 @@ import { createRefreshGate } from '../../composables/refreshGate'
 import AwsSqsTab from './messaging/AwsSqsTab.vue'
 import AwsEbsTab from './AwsEbsTab.vue'
 import AwsLoadBalancersTab from './networking/AwsLoadBalancersTab.vue'
+import AwsPublicEndpointsTab from './networking/AwsPublicEndpointsTab.vue'
 import AwsSnsTab from './messaging/AwsSnsTab.vue'
 import AwsSesTab from './messaging/AwsSesTab.vue'
 import StepFnDiagram       from '../StepFnDiagram.vue'
@@ -3962,6 +3972,7 @@ const TABS = [
   { id: 'lex',          label: 'Amazon Lex'     },
   { id: 'agentcorecfn', label: 'AgentCore CFN'  },
   { id: 'elb',          label: 'Load Balancers' },
+  { id: 'public-endpoints', label: 'Public Endpoints' },
   { id: 'cloudfront',   label: 'CloudFront'     },
   { id: 'route53',      label: 'Route 53'       },
   { id: 'cognito',      label: 'Cognito'        },
@@ -3978,7 +3989,7 @@ const accessModalOpen = ref(false)
 const addingLoadBalancerId = ref('')
 const { t } = useI18n()
 // Tabs that render their own header, loading and error states.
-const SELF_LOADING_TABS = new Set(['apm', 'overview', 'cwlogs', 'cloudformation'])
+const SELF_LOADING_TABS = new Set(['apm', 'overview', 'cwlogs', 'cloudformation', 'public-endpoints'])
 
 const selectedProfileName = computed(() => {
   const id = selectedProfileId.value
@@ -4366,6 +4377,7 @@ const fetchMap = {
   lex:          () => awsStore.fetchLexBots(),
   agentcorecfn: () => awsStore.fetchCloudformationStacks(true),
   elb:          () => awsStore.fetchLoadBalancers(),
+  'public-endpoints': () => {},
   cloudfront:   () => awsStore.fetchCloudfrontDists(),
   route53:      () => awsStore.fetchRoute53Zones(),
   cognito:      () => awsStore.fetchCognitoUserPools(),
@@ -4507,7 +4519,7 @@ watch(() => awsStore.activeProfileId, id => {
 // Profile, account and region stay visible on every service tab, so the
 // destination is known without going back to Overview. Global services say
 // that the selected region does not filter them.
-const GLOBAL_TABS = new Set(['s3', 'cloudfront', 'route53'])
+const GLOBAL_TABS = new Set(['s3', 'cloudfront', 'route53', 'public-endpoints'])
 const CONTEXT_HIDDEN_TABS = new Set(['overview', 'apm']) // Overview shows the full identity
 
 const contextAccount = computed(() => {
