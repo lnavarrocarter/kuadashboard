@@ -29,7 +29,7 @@
  *   GET  /account                           → account ID and region of the profile (STS, free; cached 1 h)
  *   GET  /eks                               → list EKS clusters
  *   GET  /elb                               → load balancers (ALB/NLB/GWLB/Classic) with listeners and target health
- *   GET  /public-endpoints                  → public Route53 → CloudFront/load balancer/backend chains
+ *   GET  /public-endpoints                  → public DNS, API Gateway, Lambda URL, EC2/EIP, S3 and backend chains
  *   GET  /elb/detail?arn=|name=             → listener rules, attributes and tags of one load balancer
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
