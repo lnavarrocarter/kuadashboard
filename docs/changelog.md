@@ -7,6 +7,8 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 
 ## Unreleased
 
+- Security: updated Electron to the supported 45 series, patched audited dependencies and rebuilt frontend assets. Added grouped Dependabot updates, CodeQL and a Windows/macOS/Linux package check for SQLite and the updater (#364).
+
 - Local API writes now validate browser origins and Fetch Metadata before body parsing. WebSocket upgrades use the same policy before consuming a console ticket; native MCP and VS Code clients remain supported (#363).
 
 - Kubernetes entry points can now resolve an ALB/NLB from the selected AWS profile on demand by a unique exact DNS match, then open its AWS resource view with account/region identity. Incomplete inventories, ambiguous matches and AWS permission failures remain explicit without hiding Kubernetes entries (#207).
