@@ -690,5 +690,31 @@
     "cloudformation:GetTemplate",
     "cloudformation:ListImports",
     "cloudformation:ListStackResources"
+  ],
+  "GET /public-endpoints": [
+    "apigateway:GET",
+    "cloudfront:ListDistributions",
+    "ec2:DescribeAddresses",
+    "ec2:DescribeInstances",
+    "ec2:DescribeSecurityGroups",
+    "ecs:DescribeServices",
+    "ecs:ListClusters",
+    "ecs:ListServices",
+    "elasticloadbalancing:DescribeInstanceHealth",
+    "elasticloadbalancing:DescribeListeners",
+    "elasticloadbalancing:DescribeLoadBalancers",
+    "elasticloadbalancing:DescribeRules",
+    "elasticloadbalancing:DescribeTags",
+    "elasticloadbalancing:DescribeTargetGroups",
+    "elasticloadbalancing:DescribeTargetHealth",
+    "lambda:GetFunctionUrlConfig",
+    "lambda:ListFunctions",
+    "route53:ListHostedZones",
+    "route53:ListResourceRecordSets",
+    "s3:GetBucketAcl",
+    "s3:GetBucketLocation",
+    "s3:GetBucketPolicyStatus",
+    "s3:GetBucketWebsite",
+    "s3:ListAllMyBuckets"
   ]
 }
