@@ -8,6 +8,7 @@ description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, corr
 ## Unreleased
 
 - Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios. El reemplazo debe publicarse antes de rotar el secreto; tras la rotación los instaladores antiguos no podrán crear conexiones nuevas, mientras los perfiles con tokens existentes seguirán utilizables.
+- Las dependencias actualizadas conservan las acciones de API y rutas SPA con Express 5, resuelven Lucide mediante su entrada ESM y preservan los metadatos y claves de caché si falla el llavero. Linux requiere Secret Service persistente; documentación y releases usan Node 24.
 
 - Seguridad: Electron actualizado a la serie 45 soportada, dependencias corregidas y frontend regenerado. Se añaden actualizaciones agrupadas de Dependabot, CodeQL y comprobación del paquete en Windows/macOS/Linux con SQLite y actualizador (#364).
 

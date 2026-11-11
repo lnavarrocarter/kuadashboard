@@ -1,6 +1,12 @@
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+const require = createRequire(import.meta.url)
+const lucideManifest = require.resolve('lucide/package.json')
+const lucideEntry = resolve(dirname(lucideManifest), require(lucideManifest).module)
 
 export default defineConfig({
   plugins: [vue(process.env.VITEST ? {
@@ -12,7 +18,10 @@ export default defineConfig({
   // 'lucide' resolves to the icons KUA draws (src/lib/lucideIcons.js). Tests keep
   // the real package, which several of them mock with vi.mock('lucide').
   resolve: {
-    alias: process.env.VITEST ? [] : [{ find: /^lucide$/, replacement: fileURLToPath(new URL('./src/lib/lucideIcons.js', import.meta.url)) }],
+    alias: [
+      { find: /^lucide-source$/, replacement: lucideEntry },
+      ...process.env.VITEST ? [] : [{ find: /^lucide$/, replacement: fileURLToPath(new URL('./src/lib/lucideIcons.js', import.meta.url)) }],
+    ],
   },
   // Development: the section views load on demand, so Vite would only discover
   // their dependencies (vue-flow, chart.js…) when one opens, re-bundle them and

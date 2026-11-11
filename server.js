@@ -66,6 +66,8 @@ loadEnvFileIfExists(path.join(__dirname, '.env'));
 loadEnvFileIfExists(path.join(__dirname, 'config', 'runtime.env'));
 
 const app    = express();
+// Preserve Express 4 query semantics while using Express 5's router.
+app.set('query parser', 'extended');
 const localHostGuard = require('./lib/localHostGuard').createLocalHostGuard();
 // Before body parsing and all API routes: the unauthenticated local API must
 // not be reachable through an arbitrary DNS name pointing to loopback (#133).
@@ -3554,7 +3556,7 @@ wssVercelLogs.on('connection', (ws, req) => {
 
 // For any GET that doesn't match an API route or static file, serve index.html
 // so the Vue SPA can handle client-side routing.
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

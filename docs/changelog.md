@@ -8,6 +8,7 @@ description: "What changed in each KUA release: new features, fixes and upgrade 
 ## Unreleased
 
 - Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported. The replacement must be released before rotating the integration secret; after rotation older installers cannot create new connections, while existing provider-token profiles remain usable.
+- Dependency updates retain Express 5 API actions and SPA routing, resolve Lucide through its declared ESM entry, and preserve credential metadata and cache keys when the OS keychain fails. Linux credentials require persistent Secret Service storage; docs and releases consistently use Node 24.
 
 - Security: updated Electron to the supported 45 series, patched audited dependencies and rebuilt frontend assets. Added grouped Dependabot updates, CodeQL and a Windows/macOS/Linux package check for SQLite and the updater (#364).
 
