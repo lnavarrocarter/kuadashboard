@@ -35,7 +35,9 @@ Vercel credentials can be configured in two ways:
 3. Authorize KuaDashboard — Vercel redirects to the HTTPS callback page (`https://lnavarrocarter.github.io/kuadashboard/vercel-callback`), which automatically hands the authorization code back to the app via the `kua://` deep-link
 4. The profile is saved automatically and selected as active
 
-> **Note:** OAuth requires `VERCEL_OAUTH_CLIENT_ID` and `VERCEL_OAUTH_CLIENT_SECRET` to be set in the app environment. These are bundled in the official release.
+> **Note:** Official builds exchange OAuth codes through the KUA control plane. The integration secret stays on that service; the desktop holds a temporary verifier and stores the resulting provider token in your local credential vault. Existing token profiles keep working. You can still configure your own integration with `VERCEL_OAUTH_CLIENT_ID` and `VERCEL_OAUTH_CLIENT_SECRET` in your local environment. Those values must never be packaged.
+
+Start **Connect with Vercel** from KUA. If you installed KUA through the Marketplace first, use that button to complete the connection with a fresh authorization. A callback without a pending local verifier cannot create a profile.
 
 ---
 

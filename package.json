@@ -196,7 +196,8 @@
         "owner": "lnavarrocarter",
         "repo": "kuadashboard"
       }
-    ]
+    ],
+    "beforePack": "electron/beforePack.js"
   },
   "engines": {
     "node": ">=22.12.0"

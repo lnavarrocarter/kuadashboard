@@ -1,4 +1,6 @@
 ---
+
+- Vercel connections use a hosted OAuth exchange with a desktop-held verifier; packaging rejects integration secrets. Existing tokens and user-owned OAuth clients remain supported.
 title: "Changelog"
 description: "What changed in each KUA release: new features, fixes and upgrade notes for Kubernetes, AWS, GCP, Vercel, KUApps, the Advisor and AI agents."
 ---

@@ -1,4 +1,6 @@
 ---
+
+- Las conexiones de Vercel usan un intercambio OAuth alojado con verificador local; el empaquetado rechaza secretos de integración. Se conservan los tokens y clientes OAuth propios.
 title: "Changelog"
 description: "Qué cambió en cada versión de KUA: funcionalidades nuevas, correcciones y notas de actualización para Kubernetes, AWS, GCP, Vercel, KUApps, el Advisor y agentes de IA."
 ---
