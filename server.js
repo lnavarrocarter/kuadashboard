@@ -8,9 +8,9 @@ const fs         = require('fs');
 const os         = require('os');
 const path       = require('path');
 const stream     = require('stream');
-const request    = require('request');
 const WebSocket  = require('ws');
 const k8s        = require('@kubernetes/client-node');
+const { requestKubeApi } = require('./lib/kubeApiRequest');
 // Exec credential plugins (aws eks get-token…) run asynchronously instead of
 // client-node's spawnSync, which froze the whole server (lib/kubeExecCredentials.js).
 const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
@@ -849,24 +849,7 @@ function serviceProxyCandidates(svc = {}) {
 }
 
 async function kubeApiGet(pathname) {
-  const cluster = currentKc.getCurrentCluster();
-  if (!cluster?.server) throw new Error('No active Kubernetes cluster server');
-  const opts = {
-    method: 'GET',
-    uri: `${cluster.server.replace(/\/$/, '')}${pathname}`,
-    json: false,
-    timeout: 10000,
-  };
-  await currentKc.applyToRequest(opts);
-  return new Promise((resolve, reject) => {
-    request(opts, (error, response, body) => {
-      if (error) return reject(error);
-      if (response.statusCode >= 200 && response.statusCode <= 299) return resolve(body);
-      const err = new Error(`HTTP ${response.statusCode}: ${String(body || '').slice(0, 220)}`);
-      err.statusCode = response.statusCode;
-      reject(err);
-    });
-  });
+  return requestKubeApi(currentKc, pathname);
 }
 
 // Service/proxy pair that last answered, per context, so each query does not
