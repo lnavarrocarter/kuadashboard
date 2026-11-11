@@ -70,6 +70,7 @@ const localHostGuard = require('./lib/localHostGuard').createLocalHostGuard();
 // Before body parsing and all API routes: the unauthenticated local API must
 // not be reachable through an arbitrary DNS name pointing to loopback (#133).
 app.use('/api', localHostGuard.middleware);
+app.use('/api', require('./lib/localRequestGuard').createLocalRequestGuard({ hostGuard: localHostGuard }).middleware);
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();

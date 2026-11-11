@@ -74,8 +74,9 @@ does not claim the whole application's renderer never handles credential input.
 Before constructing any WebSocket, clients validate the shared contract and
 POST a sanitized descriptor to `/api/console/sessions`. The backend validates
 authority and returns a public descriptor plus a one-use, 30-second ticket.
-Only a local, same-origin request can obtain one (the Vite console proxy preserves
-Host). Tickets are transport-bound, memory-only and capped at 256 pending entries.
+A loopback peer with an allowed local application origin can obtain one. Native
+clients can omit Origin; the shared admission policy also supports local development
+ports and the configured KUA_HOSTNAME alias. Tickets are transport-bound, memory-only and capped at 256 pending entries.
 They are ephemeral connection grants, not cloud credentials; avoid logging URLs.
 All five console WebSocket upgrade paths reject missing, expired or reused tickets
 before transport creation. Existing transport handlers consume the server-resolved
@@ -182,7 +183,7 @@ never overwritten by the socket's subsequent `close` event.
 
 - **Tab stuck on "reconnecting"/"validating"**: the ticket POST (`/api/console/sessions`)
   is failing — check the browser console for a 400 (missing/invalid context) or 403
-  (not same-origin/loopback).
+  (origin or loopback admission refused).
 - **"error" immediately after connecting**: for EC2 SSH, this is almost always a
   credential/host problem — the backend intentionally doesn't forward the underlying SSH
   error detail (see table above), so check the Env Manager profile and host/port.
