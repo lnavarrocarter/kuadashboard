@@ -29,6 +29,7 @@
  *   GET  /account                           → account ID and region of the profile (STS, free; cached 1 h)
  *   GET  /eks                               → list EKS clusters
  *   GET  /elb                               → load balancers (ALB/NLB/GWLB/Classic) with listeners and target health
+ *   GET  /public-endpoints                  → public Route53 → CloudFront/load balancer/backend chains
  *   GET  /elb/detail?arn=|name=             → listener rules, attributes and tags of one load balancer
  *   GET  /ecs                               → list ECS clusters + services
  *   POST /ecs/:cluster/:service/start       → scale ECS service to desiredCount 1
@@ -4384,6 +4385,16 @@ router.get('/elb', async (req, res) => {
       ? { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeListenersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand }
       : { ElasticLoadBalancingClient, DescribeLoadBalancersCommand: DescribeClassicLoadBalancersCommand, DescribeInstanceHealthCommand });
     res.json({ region: cfg.region || null, ...(await listLoadBalancers(cfg, { sdk })) });
+  } catch (err) { handleErr(res, err); }
+});
+
+// GET /public-endpoints → Route53 → CloudFront/load balancer/backend chains
+router.get('/public-endpoints', async (req, res) => {
+  const profileId = requireProfileId(req, res);
+  if (!profileId) return;
+  try {
+    const cfg = await resolveAwsConfig(profileId);
+    res.json(await require('../lib/awsPublicEndpoints').readAwsPublicEndpoints(cfg));
   } catch (err) { handleErr(res, err); }
 });
 
