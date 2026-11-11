@@ -3,6 +3,14 @@
  * KUA — Know Unified Administration
  */
 export default {
+  'vercel.entrypoints.projectsPartial': "Project inventory is partial.",
+  'vercel.entrypoints.productionTarget': "Production target",
+  'vercel.entrypoints.customEnvironment': "Custom environment",
+  'vercel.entrypoints.unverified': "Unverified",
+  'vercel.entrypoints.domainsPartial': "More domains exist for this project.",
+  'vercel.entrypoints.domainsUnavailable': "Domains unavailable",
+  'vercel.entrypoints.targetUnavailable': "Production target unavailable",
+
   'entrypoints.awsProfile': "AWS profile: {name}",
   'entrypoints.chooseAwsProfile': "Select an AWS profile in the AWS view to match cloud load balancers.",
   'entrypoints.matchAws': "Match AWS load balancers",

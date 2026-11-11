@@ -53,6 +53,30 @@ describe('Vercel overview: activity windows and inactive projects', () => {
     expect(view.find('[data-test="vercel-failed-inactive"]').text()).toContain('1 more failed')
   })
 
+  it('shows production targets, domain routing and partial coverage independently of deployment health', async () => {
+    const view = await mountOverview()
+    useVercelStore().overview = {
+      ...OVERVIEW,
+      projects: { ...OVERVIEW.projects, partial: true },
+      rows: [
+        row('a', 'shop', {
+          production: { state: 'ERROR', url: 'failed.vercel.app' },
+          productionTarget: { url: 'active.vercel.app' },
+          entryDomains: [{ name: 'shop.example.com' }, { name: 'staging.example.com', branch: 'staging', verified: false }],
+          domainCoverage: 'partial',
+        }),
+        row('b', 'legacy', { entryDomains: [], domainCoverage: 'unavailable' }),
+      ],
+    }
+    await flushPromises()
+    const entries = view.get('[data-test="vercel-entrypoints"]')
+    expect(entries.text()).toContain('active.vercel.app')
+    expect(entries.text()).not.toContain('failed.vercel.app')
+    expect(entries.text().replace(/\s+/g, ' ')).toContain('staging.example.com · staging · Unverified')
+    expect(entries.text()).toContain('Project inventory is partial.')
+    expect(entries.text()).toContain('Domains unavailable')
+  })
+
   it('tags inactive projects and can hide them', async () => {
     const view = await mountOverview()
     expect(view.findAll('[data-test="vercel-inactive"]')).toHaveLength(1)
