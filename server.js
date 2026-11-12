@@ -171,6 +171,7 @@ const auditLog          = require('./lib/auditLog');
 app.use('/api/observability/otlp', require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
   store: otlpGatewayStore,
   auditLog,
+  architectureDatabase,
 }));
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
