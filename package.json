@@ -77,6 +77,7 @@
     "@aws-sdk/client-sso": "^3.1164.0",
     "@aws-sdk/client-sso-oidc": "^3.1164.0",
     "@aws-sdk/client-sts": "^3.1164.0",
+    "@aws-sdk/client-wafv2": "^3.1166.0",
     "@aws-sdk/credential-providers": "^3.1164.0",
     "@aws-sdk/util-dynamodb": "^3.996.9",
     "@google-cloud/compute": "^7.10.0",

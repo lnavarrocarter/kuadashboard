@@ -707,6 +707,7 @@
     "elasticloadbalancing:DescribeTags",
     "elasticloadbalancing:DescribeTargetGroups",
     "elasticloadbalancing:DescribeTargetHealth",
+    "elasticloadbalancing:GetLoadBalancerWebACL",
     "lambda:GetFunctionUrlConfig",
     "lambda:ListFunctions",
     "route53:ListHostedZones",
@@ -715,6 +716,8 @@
     "s3:GetBucketLocation",
     "s3:GetBucketPolicyStatus",
     "s3:GetBucketWebsite",
-    "s3:ListAllMyBuckets"
+    "s3:ListAllMyBuckets",
+    "wafv2:GetWebACL",
+    "wafv2:GetWebACLForResource"
   ]
 }
