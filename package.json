@@ -199,7 +199,8 @@
         "repo": "kuadashboard"
       }
     ],
-    "beforeBuild": "electron/beforeBuild.js"
+    "beforeBuild": "electron/beforeBuild.js",
+    "beforePack": "electron/beforePack.js"
   },
   "engines": {
     "node": ">=22.12.0"

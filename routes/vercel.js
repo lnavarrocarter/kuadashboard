@@ -36,7 +36,7 @@
  *   GET  /overview                                      → account summary + Advisor (one scan, cached 15 min, ?refresh=1)
  *   GET  /advisor                                       → good-practice checks only (same scan and cache)
  *
- * OAuth endpoints (requires VERCEL_OAUTH_CLIENT_ID + VERCEL_OAUTH_CLIENT_SECRET in process.env):
+ * OAuth endpoints (hosted exchange by default; optional user-owned OAuth client):
  *   GET  /oauth/start                                  → redirect to Vercel authorization URL
  *   GET  /oauth/callback                               → exchange code for token, save to vault
  *
@@ -53,8 +53,6 @@ const { finalizeAdvisor, scopeKeys, getPostureStore } = require('../lib/advisor/
 
 const router = express.Router();
 const VERCEL_API   = 'https://api.vercel.com';
-const VERCEL_OAUTH = 'https://vercel.com/api/oauth';
-const DEFAULT_VERCEL_OAUTH_REDIRECT_URI = 'https://lnavarrocarter.github.io/kuadashboard/vercel-callback';
 const VERCEL_ENDPOINTS = Object.freeze({
   projects: '/v10/projects',
   project: projectId => `/v9/projects/${encodeURIComponent(projectId)}`,
@@ -69,8 +67,7 @@ function cronDefinitions(project) {
   return Array.isArray(project?.crons?.definitions) ? project.crons.definitions : [];
 }
 
-// In-memory PKCE / state store (per-process, short-lived)
-const oauthStates = new Map(); // state → { createdAt, profileName }
+const vercelOAuth = require('../lib/vercelOAuth').createVercelOAuth();
 const projectAdvisorCache = new Map();
 const PROJECT_ADVISOR_TTL_MS = 15 * 60 * 1000;
 
@@ -159,10 +156,6 @@ function withTeam(qs, teamId) {
   if (!teamId) return qs;
   const sep = qs.includes('?') ? '&' : '?';
   return `${qs}${sep}teamId=${encodeURIComponent(teamId)}`;
-}
-
-function getVercelRedirectUri() {
-  return process.env.VERCEL_OAUTH_REDIRECT_URI || DEFAULT_VERCEL_OAUTH_REDIRECT_URI;
 }
 
 // ─── GET /teams ───────────────────────────────────────────────────────────────
@@ -722,41 +715,11 @@ router.get('/advisor', async (req, res) => {
 // ─── OAuth: GET /oauth/start ──────────────────────────────────────────────────
 //
 // Redirects the browser to Vercel's OAuth authorization URL.
-// Requires VERCEL_OAUTH_CLIENT_ID in process.env.
-// The `profileName` query param is forwarded through the state so the callback
-// can create the profile with a meaningful name.
-//
-// Flow: frontend opens this URL via shell.openExternal() → Vercel authorizes
-//       → Vercel redirects to the HTTPS callback page
-//       → the callback page forwards to kua://vercel/callback?code=…&state=…
-//       → Electron intercepts the kua:// URL and POSTs to /oauth/callback
-
-router.get('/oauth/start', (req, res) => {
-  const clientId = process.env.VERCEL_OAUTH_CLIENT_ID;
-  if (!clientId) {
-    return res.status(501).json({ error: 'VERCEL_OAUTH_CLIENT_ID is not configured' });
-  }
-
-  // Generate a cryptographically random state to prevent CSRF
-  const state       = crypto.randomBytes(16).toString('hex');
-  const profileName = (req.query.profileName || 'Vercel').slice(0, 64);
-
-  oauthStates.set(state, { createdAt: Date.now(), profileName });
-
-  // Clean up states older than 10 minutes
-  const EXPIRE_MS = 10 * 60 * 1000;
-  for (const [k, v] of oauthStates.entries()) {
-    if (Date.now() - v.createdAt > EXPIRE_MS) oauthStates.delete(k);
-  }
-
-  const redirectUri = getVercelRedirectUri();
-  const params = new URLSearchParams({
-    client_id:    clientId,
-    redirect_uri: redirectUri,
-    state,
-  });
-
-  res.redirect(`${VERCEL_OAUTH}/authorize?${params.toString()}`);
+// The control plane exchanges the code; its secret never enters the desktop.
+// The HTTPS callback still forwards code/state through kua:// to Electron.
+router.get('/oauth/start', async (req, res) => {
+  try { res.redirect(await vercelOAuth.start(req.query.profileName || 'Vercel')); }
+  catch (error) { handleErr(res, error); }
 });
 
 // ─── OAuth: POST /oauth/callback ──────────────────────────────────────────────
@@ -769,58 +732,11 @@ router.get('/oauth/start', (req, res) => {
 // Response: { id: string, name: string }  (the newly created profile)
 
 router.post('/oauth/callback', async (req, res) => {
-  const clientId     = process.env.VERCEL_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.VERCEL_OAUTH_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    return res.status(501).json({ error: 'VERCEL_OAUTH_CLIENT_ID / VERCEL_OAUTH_CLIENT_SECRET are not configured' });
-  }
-
-  const { code, state, configurationId, teamId: marketplaceTeamId, next, source } = req.body || {};
-  if (!code || (!state && !configurationId)) {
-    return res.status(400).json({ error: 'code and either state or configurationId are required' });
-  }
-
-  // Determine flow: marketplace (configurationId) vs standard OAuth (state)
-  const isMarketplace = !!configurationId;
-  let profileName = 'Vercel';
-
-  if (!isMarketplace) {
-    // Standard OAuth: validate CSRF state
-    const stateData = oauthStates.get(state);
-    if (!stateData) {
-      return res.status(400).json({ error: 'Invalid or expired OAuth state' });
-    }
-    oauthStates.delete(state);
-    profileName = stateData.profileName || 'Vercel';
-  }
-
+  const { code, state, configurationId, teamId: marketplaceTeamId, next } = req.body || {};
   try {
-    // Exchange code for token
-    const tokenRes = await fetch(`${VERCEL_OAUTH}/access_token`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id:     clientId,
-        client_secret: clientSecret,
-        code,
-        redirect_uri:  getVercelRedirectUri(),
-      }).toString(),
-    });
-
-    if (!tokenRes.ok) {
-      const body = await tokenRes.json().catch(() => ({}));
-      const msg  = body?.error_description || body?.error || tokenRes.statusText;
-      return res.status(502).json({ error: `Token exchange failed: ${msg}` });
-    }
-
-    const tokenData = await tokenRes.json();
-    const token     = tokenData.access_token;
-    // Prefer teamId from token response; fall back to marketplace param
-    const teamId    = tokenData.team_id || marketplaceTeamId || null;
-
-    if (!token) {
-      return res.status(502).json({ error: 'No access_token in Vercel response' });
-    }
+    const { token, teamId: authorizedTeamId, profileName } = await vercelOAuth.exchange({ code, state, configurationId });
+    const teamId = authorizedTeamId || marketplaceTeamId || null;
+    const isMarketplace = !!configurationId;
 
     // Save to credential vault as a new profile
     const store = getStore();
