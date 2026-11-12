@@ -3,6 +3,7 @@
 const { redactText } = require('./lib/logRedaction');
 const express    = require('express');
 const http       = require('http');
+const https      = require('https');
 const net        = require('net');
 const fs         = require('fs');
 const os         = require('os');
@@ -168,11 +169,35 @@ require('./lib/logScanRunner').attachTaskRegistry(backgroundTaskRegistry);
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
-app.use('/api/observability/otlp', require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
+const otlpGatewayRouter = require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
   store: otlpGatewayStore,
   auditLog,
   architectureDatabase,
-}));
+});
+app.use('/api/observability/otlp', otlpGatewayRouter);
+// Remote agents may reach only the authenticated signal ingestion routes.
+// KUA's general API remains on its separately configured local HTTP listener.
+const otlpTlsCertFile = process.env.KUA_OTLP_TLS_CERT_FILE;
+const otlpTlsKeyFile = process.env.KUA_OTLP_TLS_KEY_FILE;
+if (Boolean(otlpTlsCertFile) !== Boolean(otlpTlsKeyFile)) {
+  throw new Error('KUA_OTLP_TLS_CERT_FILE and KUA_OTLP_TLS_KEY_FILE must be configured together');
+}
+let otlpTlsServer = null;
+if (otlpTlsCertFile && otlpTlsKeyFile) {
+  const otlpTlsApp = express();
+  otlpTlsApp.use('/api/observability/otlp', (req, res, next) => {
+    if (req.method !== 'POST' || !['/v1/metrics', '/v1/traces'].includes(req.path)) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    if (req.socket.encrypted !== true) return res.status(426).json({ error: 'TLS_REQUIRED' });
+    return next();
+  }, otlpGatewayRouter);
+  otlpTlsServer = https.createServer({
+    cert: fs.readFileSync(otlpTlsCertFile),
+    key: fs.readFileSync(otlpTlsKeyFile),
+    minVersion: 'TLSv1.2',
+  }, otlpTlsApp);
+}
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
 const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
@@ -3584,6 +3609,16 @@ server.listen(PORT, HOST, () => {
   // Starts after listening: scheduled runs call this KUA on the loopback address.
   advisorScheduler.start({ task: advisorTask });
 });
+if (otlpTlsServer) {
+  const otlpTlsPort = Number(process.env.KUA_OTLP_TLS_PORT || 7443);
+  const otlpTlsHost = process.env.KUA_OTLP_TLS_HOST || '127.0.0.1';
+  if (!Number.isInteger(otlpTlsPort) || otlpTlsPort < 1 || otlpTlsPort > 65535) {
+    throw new Error('KUA_OTLP_TLS_PORT must be an integer between 1 and 65535');
+  }
+  otlpTlsServer.listen(otlpTlsPort, otlpTlsHost, () => {
+    console.log(`[otlp] Remote ingestion listener → https://${otlpTlsHost}:${otlpTlsPort}/api/observability/otlp (metrics/traces only)`);
+  });
+}
 
 let unregisterInstance = () => {};
 process.on('exit', () => unregisterInstance());
@@ -3616,11 +3651,15 @@ function shutdown(signal) {
   forceExit.unref();
 
   server.close(() => {
-    clearTimeout(forceExit);
-    otlpGatewayStore.close();
-    closeApmDatabase();
-    closeArchitectureDatabase();
-    process.exit(0);
+    const finishShutdown = () => {
+      clearTimeout(forceExit);
+      otlpGatewayStore.close();
+      closeApmDatabase();
+      closeArchitectureDatabase();
+      process.exit(0);
+    };
+    if (otlpTlsServer?.listening) otlpTlsServer.close(finishShutdown);
+    else finishShutdown();
   });
 }
 
