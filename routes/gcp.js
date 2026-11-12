@@ -336,11 +336,26 @@ router.post('/gcloud-configs', async (req, res) => {
   }
 });
 
+// ─── POST /gcloud-configs/:name/unset-project ─────────────────────────────────
+// Remove a bad project association from the local gcloud configuration only.
+router.post('/gcloud-configs/:name/unset-project', async (req, res) => {
+  try {
+    await gcloudCli.unsetProject(req.params.name);
+    res.json({ success: true });
+  } catch (err) { handleErr(res, err); }
+});
+
 // ─── GET /projects ────────────────────────────────────────────────────────────
 
 router.get('/projects', async (req, res) => {
-  const profileId = requireProfileId(req, res);
-  if (!profileId) return;
+  // During profile setup, projects can be discovered directly from an already
+  // authenticated gcloud account before a named config exists.
+  const profileId = req.headers['x-profile-id'];
+  if (!profileId && req.query.account) {
+    try { return res.json(await gcloudCli.listProjects(null, String(req.query.account))); }
+    catch (err) { return handleErr(res, err); }
+  }
+  if (!profileId) return res.status(400).json({ error: 'X-Profile-Id header is required' });
   try {
     if (profileId.startsWith('local:')) {
       const projects = await gcloudCli.listProjects(profileId.slice(6));

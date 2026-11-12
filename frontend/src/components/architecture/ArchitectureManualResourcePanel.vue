@@ -16,6 +16,7 @@
       <label>{{ t('archManual.name') }}<input v-model.trim="draft.name" class="ctrl-input" required maxlength="120" placeholder="orders-api" /></label>
       <label>{{ t('archManual.resourceType') }}<input v-model.trim="draft.resourceType" class="ctrl-input" required maxlength="80" :placeholder="typePlaceholder" /></label>
       <label>{{ t('archManual.nativeId') }}<input v-model.trim="draft.nativeId" class="ctrl-input" required maxlength="500" :placeholder="identifierPlaceholder" /></label>
+      <label>{{ t('archManual.endpoint') }}<input v-model.trim="draft.endpoint" class="ctrl-input" maxlength="253" placeholder="orders-db.abc123.us-east-1.rds.amazonaws.com" autocomplete="off" /></label>
       <label>{{ scopeLabel }}<input v-model.trim="draft.scopeId" class="ctrl-input" maxlength="200" :placeholder="scopePlaceholder" /></label>
       <label>{{ locationLabel }}<input v-model.trim="draft.location" class="ctrl-input" maxlength="120" :placeholder="locationPlaceholder" /></label>
       <label v-if="draft.provider === 'kubernetes'">Namespace<input v-model.trim="draft.namespace" class="ctrl-input" maxlength="120" placeholder="default" /></label>
@@ -39,7 +40,7 @@ import { useI18n } from '../../composables/useI18n'
 const emit = defineEmits(['close', 'imported'])
 const store = useArchitectureStore()
 const { t } = useI18n()
-const draft = reactive({ provider: 'aws', name: '', resourceType: 'ec2', nativeId: '', scopeId: '', location: 'us-east-1', namespace: '', kind: '' })
+const draft = reactive({ provider: 'aws', name: '', resourceType: 'ec2', nativeId: '', endpoint: '', scopeId: '', location: 'us-east-1', namespace: '', kind: '' })
 
 const typePlaceholder = computed(() => ({ aws: 'ec2', kubernetes: 'deployment', gcp: 'gcp-cloud-run', vercel: 'vercel-project' })[draft.provider])
 const identifierPlaceholder = computed(() => t(`archManual.idPlaceholder.${draft.provider}`))
@@ -58,6 +59,7 @@ async function addResource() {
     kind: draft.kind || draft.resourceType,
     nativeId: draft.nativeId,
     discoveryKey: draft.nativeId,
+    ...(draft.endpoint ? { endpoint: draft.endpoint } : {}),
     manual: true,
     sourceId: null,
     evidence: [{ type: 'manual_resource', values: [draft.nativeId] }],

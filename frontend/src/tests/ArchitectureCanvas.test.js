@@ -198,6 +198,7 @@ describe('ArchitectureCanvas', () => {
     expect(architectureResourcePresentation('ingress')).toEqual({ icon: 'route', tone: 'kubernetes-network' })
     expect(architectureResourcePresentation('configmap')).toEqual({ icon: 'file-cog', tone: 'kubernetes-config' })
     expect(architectureResourcePresentation('gcp-cloud-run')).toEqual({ icon: 'cloud-cog', tone: 'compute' })
+    expect(architectureResourcePresentation('gcp-load-balancer')).toEqual({ icon: 'network', tone: 'network' })
   })
 
   it('shows API Gateway method details and navigates to the existing Lambda reference', async () => {

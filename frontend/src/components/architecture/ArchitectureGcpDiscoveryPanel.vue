@@ -103,7 +103,7 @@ const TYPE_LABELS = {
   'gcp-bucket': 'Cloud Storage', 'gcp-pubsub-topic': 'Pub/Sub topics', 'gcp-pubsub-subscription': 'Pub/Sub subscriptions',
   'gcp-cloud-run': 'Cloud Run', 'gcp-cloud-run-job': 'Cloud Run jobs', 'gcp-function': 'Cloud Functions', 'gcp-firestore': 'Firestore',
   'gcp-memorystore': 'Memorystore', 'gcp-workflow': 'Workflows', 'gcp-scheduler-job': 'Cloud Scheduler', 'gcp-tasks-queue': 'Cloud Tasks',
-  'gcp-bigquery-dataset': 'BigQuery',
+  'gcp-bigquery-dataset': 'BigQuery', 'gcp-load-balancer': 'External load balancers', 'gcp-backend-service': 'Load balancer backends',
 }
 
 const step = ref(0)
