@@ -1,6 +1,6 @@
 # OTLP agent and local observability gateway
 
-This is the first ingestion slice for the architecture-wide observability work. The versioned agent contract is **1**. It accepts OTLP/HTTP JSON metrics (`POST /api/observability/otlp/v1/metrics`) and traces (`POST /api/observability/otlp/v1/traces`) and implements OTLP success responses as JSON `{}`. Metrics currently accept gauge and sum points. Traces preserve parent span ids and span links. Browser/Node.js instrumentation, W3C propagation setup and automatic end-to-end coverage remain a later slice.
+The versioned agent contract is **1**. It accepts OTLP/HTTP JSON metrics (`POST /api/observability/otlp/v1/metrics`) and traces (`POST /api/observability/otlp/v1/traces`) and implements OTLP success responses as JSON `{}`. Metrics currently accept gauge and sum points. Traces preserve parent span ids and span links. Kua's own browser, Node.js and SQLite path now supports opt-in instrumentation and W3C context propagation; other services can export directly or through an OpenTelemetry Collector.
 
 ## Agent lifecycle
 
@@ -33,6 +33,91 @@ KUA binds to loopback by default. The standard KUA HTTP listener remains for loc
 
 Trace spans are read with `GET /traces/:traceId/architecture?projectId=<id>` and the matching `X-Profile-Id`. Exact resource ids are preferred for matching spans to graph nodes; a unique `service.name` match is the fallback. Ambiguous and missing matches remain explicit. For each observed parent/child span pair or same-trace span link, the projection may include a unique shortest path through confirmed Architecture edges. Those intermediate nodes and edges carry `observedSpan: false` and source references; this is configuration/inventory evidence, not proof that each component handled that request. Suggested/rejected edges are excluded. Missing or ambiguous paths remain partial/unknown. Span names are normalized to operation categories; SQL text, events, status messages and non-allowlisted attributes are not stored.
 
-Metric and span resources preserve their agent and service identity as observation evidence. The gateway does not yet automatically instrument browsers, Node.js services, databases or queues; the TLS listener provides the secure ingest path for agents, not instrumentation itself. Future UI views must distinguish observed spans from load balancer, DNS, proxy, queue, cache, database, and other inventory/configuration evidence. A load balancer without instrumentation is a topology hop with provenance, never a fabricated span. Missing or contradictory hops remain partial/unknown.
+Metric and span resources preserve their agent and service identity as observation evidence. The trace view distinguishes spans from load balancer, DNS, proxy, queue, cache, database, and other inventory/configuration evidence. A load balancer without instrumentation is a topology hop with provenance, never a fabricated span. Missing or contradictory hops remain partial/unknown.
+
+## Kua browser → API → database tracing
+
+Tracing is opt-in. Enroll an agent locally with `traces` capability, keep its bearer token in the backend environment (never in Vite variables or browser storage), then set:
+
+1. `POST http://127.0.0.1:<KUA-port>/api/observability/otlp/enrollment-token` and copy the one-use `token` from the response.
+2. `POST /api/observability/otlp/enroll` with `X-KUA-Enrollment-Token` and JSON `{"contractVersion":1,"name":"Kua Dashboard API","agentVersion":"2.1.0","capabilities":["traces"]}`. Store the returned agent `token` as a backend secret.
+3. Restart Kua with the environment below. This token authorizes the Kua Node process only; it is never returned by browser configuration.
+
+```sh
+KUA_OTEL_ENABLED=1
+KUA_OTEL_AGENT_TOKEN=<enrolled-agent-token>
+KUA_OTEL_ENDPOINT=http://127.0.0.1:7190/api/observability/otlp
+KUA_OTEL_SERVICE_NAME=checkout-api
+KUA_OTEL_SAMPLE_RATIO=0.1
+KUA_OTEL_BROWSER_ENABLED=1
+KUA_OTEL_BROWSER_SERVICE_NAME=checkout-web
+KUA_OTEL_BROWSER_SAMPLE_RATIO=0.1
+```
+
+The endpoint defaults to this Kua instance on loopback. Remote endpoints must use HTTPS. For a remote gateway, configure its TLS listener and point `KUA_OTEL_ENDPOINT` to `https://<private-gateway>:7443/api/observability/otlp`. Agent tokens belong in a permission-restricted backend environment file or secret store.
+
+The frontend reads only the non-secret browser tracing flag, service name and sampling ratio from `/browser/config`. It instruments document load, Fetch and XMLHttpRequest, and injects W3C `traceparent` only into `/api` calls. Batches go to the same-origin browser relay. The relay requires an `Origin` whose host matches the request host and `Sec-Fetch-Site: same-origin`, caps requests, sanitizes attributes and applies gateway retention/rate limits. It uses an internal identity; no agent token or enrollment endpoint reaches the browser. Collector export requests are excluded from frontend tracing to prevent recursion.
+
+Node starts its SDK before Express and other application modules load. A curated set of HTTP, Undici, PostgreSQL, MySQL, MongoDB, Redis, Kafka, AMQP and SQL Server instrumentations creates request and client spans and propagates W3C context on instrumented requests. Kua adds explicit `better-sqlite3` spans with operation/system attributes only; SQL text, parameter values, file paths and database credentials are never recorded. SDK export is batched to fit the gateway request cap. The OTLP receiver itself and the outbound exporter are excluded from tracing so ingestion does not recursively generate telemetry.
+
+Use `KUA_OTEL_SERVICE_NAME` and `KUA_OTEL_BROWSER_SERVICE_NAME` values that uniquely match the corresponding service nodes in the selected Architecture graph. Add the database host/IP in the Architecture resource's optional **Endpoint** field, or ensure discovery exposes a matching endpoint. For database client spans, Kua retains a validated `server.address` and optional `server.port` for matching against that inventory. The UI labels this as an observed client call; it does not claim a database-side span. Query text and parameter values are discarded. If the endpoint is missing, ambiguous or not present in the graph, the trace remains partial.
+
+## Other services, databases and queues
+
+For services that can export OTLP/HTTP JSON directly, enroll one agent per workload boundary with only the required signal capabilities. Configure the SDK with `http/json`, the `/api/observability/otlp` base endpoint, and `Authorization: Bearer <agent-token>`. Bind agents to the W3C Trace Context propagator so inbound and outbound HTTP calls retain the same trace. Instrument database clients and message producers/consumers in their process; async producers should propagate trace context in message headers or create span links. Do not add message bodies, SQL, credentials, request URLs or user identifiers as attributes.
+
+For languages or exporters that use OTLP Protobuf, run a local OpenTelemetry Collector beside the workload and re-export as JSON. Its receiver should bind only to loopback or the pod network. Keep the gateway bearer token in the collector's secret environment, and limit the export queue and retry window:
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+      http:
+        endpoint: 127.0.0.1:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+  batch:
+    send_batch_size: 64
+    timeout: 5s
+
+exporters:
+  otlp_http/kua:
+    endpoint: https://<private-gateway>:7443/api/observability/otlp
+    encoding: json
+    headers:
+      Authorization: "Bearer ${env:KUA_OTEL_AGENT_TOKEN}"
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      enabled: true
+      queue_size: 256
+      num_consumers: 1
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/kua]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/kua]
+```
+
+Workload SDKs send to the local Collector with `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` or its pod-local equivalent and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`. Limit/retain only the signals and attributes needed for the architecture. This gateway accepts traces and metrics; logs ingestion is not part of contract 1.
+
+Database client spans prove the application attempted a database operation and can identify a unique endpoint. They do not prove server-side query execution. A database-side span is shown only when that database engine or its managed tracing integration independently emits it. ELBs, DNS, caches, proxies and managed services that do not emit compatible spans remain explicitly marked as inventory evidence. Coverage is partial until every needed component has instrumentation and a unique Architecture identity. OpenTelemetry JavaScript browser instrumentation is experimental and should be rolled out with sampling and privacy controls.
 
 OTLP/HTTP JSON field casing and timestamp encoding follow the [OpenTelemetry OTLP specification](https://opentelemetry.io/docs/specs/otlp/). This first receiver supports a subset of metric data point types and span fields; it is not yet a complete OTLP implementation.
+
+OpenTelemetry references: [JavaScript Node.js setup](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/), [browser setup and its experimental status](https://opentelemetry.io/docs/languages/js/getting-started/browser/), [JS context propagation](https://opentelemetry.io/docs/languages/js/propagation/), and the official [Collector OTLP HTTP JSON exporter configuration](https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlphttpexporter/README.md).

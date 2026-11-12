@@ -28,6 +28,10 @@
               <time>{{ formatTime(span.startTime) }}</time>
             </div>
             <small>{{ spanStatus(span) }}</small>
+            <div v-if="span.databaseTarget?.clientCallObserved" class="database-target" data-test="database-target">
+              <i data-lucide="database"></i>
+              <span><strong>{{ span.databaseTarget.node?.name || span.databaseTarget.system }}</strong><small>{{ t('apm.traceDatabaseClientCall') }} · {{ t('apm.traceDatabaseServerNotObserved') }}</small></span>
+            </div>
           </div>
           <div v-for="segment in segmentsFrom(span.spanId)" :key="`${segment.fromSpanId}:${segment.toSpanId}`" class="trace-segment">
             <template v-if="segment.inventoryNodes?.length">
@@ -123,6 +127,8 @@ function gapLabel(reason) {
 .span-item { position: relative; padding: 3px 0 12px 15px; }
 .span-dot { position: absolute; left: -5px; top: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .span-content { display: flex; flex-direction: column; gap: 4px; }
+.database-target { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px dashed var(--border); border-radius: 6px; }
+.database-target > span { display: flex; flex-direction: column; gap: 3px; }
 .span-heading { flex-wrap: wrap; }
 .span-operation { font-family: monospace; font-size: 11px; }
 .span-heading time { margin-left: auto; }

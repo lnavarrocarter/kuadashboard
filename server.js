@@ -1,5 +1,6 @@
 'use strict';
 
+const otelRuntime = require('./lib/apm/otelBootstrap').startOtel();
 const { redactText } = require('./lib/logRedaction');
 const express    = require('express');
 const http       = require('http');
@@ -169,10 +170,18 @@ require('./lib/logScanRunner').attachTaskRegistry(backgroundTaskRegistry);
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
+const browserSampleRatio = Number(process.env.KUA_OTEL_BROWSER_SAMPLE_RATIO || 0.1);
+if (!Number.isFinite(browserSampleRatio) || browserSampleRatio < 0 || browserSampleRatio > 1) {
+  throw new Error('KUA_OTEL_BROWSER_SAMPLE_RATIO must be between 0 and 1');
+}
+const browserServiceName = String(process.env.KUA_OTEL_BROWSER_SERVICE_NAME || 'kuadashboard-frontend').slice(0, 120);
 const otlpGatewayRouter = require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
   store: otlpGatewayStore,
   auditLog,
   architectureDatabase,
+  browserEnabled: process.env.KUA_OTEL_BROWSER_ENABLED === '1',
+  browserSampleRatio,
+  browserServiceName,
 });
 app.use('/api/observability/otlp', otlpGatewayRouter);
 // Remote agents may reach only the authenticated signal ingestion routes.
@@ -3650,7 +3659,9 @@ function shutdown(signal) {
   }, 5000);
   forceExit.unref();
 
-  server.close(() => {
+  Promise.resolve(otelRuntime.shutdown()).catch(error => {
+    console.warn('[otel] Could not flush spans during shutdown:', error.message);
+  }).then(() => server.close(() => {
     const finishShutdown = () => {
       clearTimeout(forceExit);
       otlpGatewayStore.close();
@@ -3660,7 +3671,7 @@ function shutdown(signal) {
     };
     if (otlpTlsServer?.listening) otlpTlsServer.close(finishShutdown);
     else finishShutdown();
-  });
+  }));
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
