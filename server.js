@@ -76,6 +76,11 @@ app.use('/api', require('./lib/localRequestGuard').createLocalRequestGuard({ hos
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();
+const otlpGatewayStore = require('./lib/apm/otlpGateway').createOtlpGatewayStoreFromEnv();
+const otlpCleanupInterval = setInterval(() => {
+  try { otlpGatewayStore.cleanup(); } catch (error) { console.error('[otlp] Retention cleanup failed:', error.message); }
+}, 24 * 60 * 60 * 1000);
+otlpCleanupInterval.unref();
 // First-party plugins (#193): what this computer has turned on. GitHub CI/CD and Vercel (#194).
 const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
 const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
@@ -163,6 +168,10 @@ require('./lib/logScanRunner').attachTaskRegistry(backgroundTaskRegistry);
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
+app.use('/api/observability/otlp', require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
+  store: otlpGatewayStore,
+  auditLog,
+}));
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
 const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
@@ -3584,6 +3593,7 @@ function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(apmCleanupInterval);
+  clearInterval(otlpCleanupInterval);
   apmScheduler.stop();
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
   logCacheBudgetWatcher.stop();
@@ -3597,6 +3607,7 @@ function shutdown(signal) {
   console.log(`[server] ${signal} received, shutting down`);
 
   const forceExit = setTimeout(() => {
+    otlpGatewayStore.close();
     closeApmDatabase();
     closeArchitectureDatabase();
     process.exit(1);
@@ -3605,6 +3616,7 @@ function shutdown(signal) {
 
   server.close(() => {
     clearTimeout(forceExit);
+    otlpGatewayStore.close();
     closeApmDatabase();
     closeArchitectureDatabase();
     process.exit(0);
