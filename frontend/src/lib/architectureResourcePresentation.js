@@ -31,6 +31,8 @@ const RESOURCE_PRESENTATION = Object.freeze({
   pvc: { icon: 'hard-drive', tone: 'storage' },
   'gcp-cloud-run': { icon: 'cloud-cog', tone: 'compute' },
   'gcp-function': { icon: 'square-function', tone: 'compute' },
+  'gcp-load-balancer': { icon: 'network', tone: 'network' },
+  'gcp-backend-service': { icon: 'route', tone: 'network' },
   'vercel-project': { icon: 'triangle', tone: 'neutral' },
   'proxmox-node': { icon: 'server', tone: 'compute' },
   'proxmox-qemu': { icon: 'monitor', tone: 'compute' },
