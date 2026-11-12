@@ -32,6 +32,10 @@
               <i data-lucide="database"></i>
               <span><strong>{{ span.databaseTarget.node?.name || span.databaseTarget.system }}</strong><small>{{ t('apm.traceDatabaseClientCall') }} · {{ t('apm.traceDatabaseServerNotObserved') }}</small></span>
             </div>
+            <div v-else-if="span.peerTarget?.clientCallObserved" class="database-target" data-test="peer-target">
+              <i data-lucide="network"></i>
+              <span><strong>{{ span.peerTarget.node?.name || t('apm.tracePeerUnmatched') }}</strong><small>{{ t('apm.tracePeerClientCall') }}</small></span>
+            </div>
           </div>
           <div v-for="segment in segmentsFrom(span.spanId)" :key="`${segment.fromSpanId}:${segment.toSpanId}`" class="trace-segment">
             <template v-if="segment.inventoryNodes?.length">

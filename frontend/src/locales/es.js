@@ -1034,6 +1034,8 @@ export default {
   'apm.traceNotObserved':                   'evidencia de inventario · sin span',
   'apm.traceDatabaseClientCall':             'llamada del cliente a la base observada',
   'apm.traceDatabaseServerNotObserved':      'span del lado de la base no observado',
+  'apm.tracePeerClientCall':                 'llamada al endpoint observada',
+  'apm.tracePeerUnmatched':                  'endpoint sin correspondencia en Architecture',
   'apm.traceMappingAmbiguous':               'Varios nodos Architecture coinciden con este recurso.',
   'apm.traceMappingMissing':                 'No hay un nodo Architecture coincidente.',
   'apm.traceGap.parent_span_missing':        'Falta el span padre en esta traza.',
