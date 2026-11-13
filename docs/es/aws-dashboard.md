@@ -30,7 +30,7 @@ KUA es un **dashboard de AWS** gratuito y open source que lee tus cuentas con lo
 - **Primero el resumen:** lo que necesita atención en las últimas 24 horas, antes de cualquier tabla.
 - **Cada pestaña dice su perfil, cuenta y región,** y un dato no leído nunca se muestra como cero.
 - **Costos:** costos de AWS desde Cost Explorer por perfil, y cada lectura con costo (métricas de CloudWatch, Logs Insights) dice cuánto cuesta antes de ejecutarse.
-- **Advisor para AWS:** IAM, S3, SQS, SNS, DynamoDB, CloudFront y más, desde un escaneo en caché.
+- **Advisor para AWS:** IAM, S3, SQS, SNS, DynamoDB, CloudFront, cadenas de endpoints públicos (DNS colgante, bypass de CloudFront, WAF faltante, HTTP, TLS antiguo, salud de targets) y más, desde un escaneo en caché.
 - **Mínimo privilegio:** una guía de política IAM de solo lectura, y KUA trabaja con los permisos que le das.
 
 ## Tus credenciales quedan en tu computador
