@@ -77,6 +77,8 @@ export default {
   'publicEndpoints.why.weakTls': 'The configured listener policy includes legacy TLS versions or ciphers.',
   'publicEndpoints.finding.noHealthyTargets': 'Target group has no healthy targets',
   'publicEndpoints.why.noHealthyTargets': 'Requests routed to this target group cannot reach a healthy backend.',
+  'publicEndpoints.finding.danglingDns': 'DNS record points to a load balancer that no longer exists',
+  'publicEndpoints.why.danglingDns': 'The record targets an ELB name in a region whose load balancers were read completely, and no load balancer has that name. Remove or update the record.',
   'publicEndpoints.finding.unhealthyTargets': 'Target group has unhealthy targets',
   'publicEndpoints.why.unhealthyTargets': 'Some configured backends are failing their health checks.',
 
