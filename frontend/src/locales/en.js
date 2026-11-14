@@ -5016,6 +5016,8 @@ export default {
   'advisor.rule.vercel.production_deploy_failed.body': 'Production keeps serving the previous deployment, but the change that was meant to ship did not. Check the build logs, fix the build or roll back explicitly so the team knows what is live.',
   'advisor.rule.vercel.domain_unverified.title': '{count} domain(s) not verified',
   'advisor.rule.vercel.domain_unverified.body': 'An unverified domain does not serve the project and gets no certificate, and someone else may be able to claim it. Add the TXT or DNS records Vercel asks for, or remove the domain.',
+  'advisor.rule.vercel.domain_misconfigured.title': '{count} custom domain(s) have DNS records that do not point to Vercel',
+  'advisor.rule.vercel.domain_misconfigured.body': 'Vercel reports these domains as misconfigured: the domain is assigned to the project, but its DNS records point elsewhere, so visitors do not reach the deployment. Fix the A/CNAME records at the DNS provider or remove the domain from the project.',
   'advisor.rule.vercel.project_paused.title': '{count} project(s) paused',
   'advisor.rule.vercel.project_paused.body': 'A paused project serves nothing, usually because spend management stopped it. Resume it if it is still needed, or delete it so it does not hide in the inventory.',
   'advisor.rule.vercel.no_production.title': '{count} project(s) without a production deployment',
