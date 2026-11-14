@@ -1227,8 +1227,8 @@ app.get('/api/overview', async (req, res) => {
     const overviewClients = clients();
     const { core, apps, custom, networking, policy, autoscaling } = overviewClients;
     const settle = promise => promise.then(result => ({ ok: true, value: listItems(result) }), error => ({ ok: false, error }));
-    // NetworkPolicies, PDBs and HPAs only feed the Advisor.
-    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics, networkPolicies, pdbs, hpas, securitySources] = await Promise.all([
+    // NetworkPolicies, PDBs, HPAs, Ingresses and Services only feed the Advisor.
+    let [pods, nodes, deployments, statefulsets, daemonsets, events, nodeMetrics, networkPolicies, pdbs, hpas, ingresses, services, securitySources] = await Promise.all([
       settle(all ? core.listPodForAllNamespaces() : core.listNamespacedPod(namespace)),
       settle(core.listNode()),
       settle(all ? apps.listDeploymentForAllNamespaces() : apps.listNamespacedDeployment(namespace)),
@@ -1239,6 +1239,8 @@ app.get('/api/overview', async (req, res) => {
       settle(all ? networking.listNetworkPolicyForAllNamespaces() : networking.listNamespacedNetworkPolicy(namespace)),
       settle(all ? policy.listPodDisruptionBudgetForAllNamespaces() : policy.listNamespacedPodDisruptionBudget(namespace)),
       settle(all ? autoscaling.listHorizontalPodAutoscalerForAllNamespaces() : autoscaling.listNamespacedHorizontalPodAutoscaler(namespace)),
+      settle(all ? networking.listIngressForAllNamespaces() : networking.listNamespacedIngress(namespace)),
+      settle(all ? core.listServiceForAllNamespaces() : core.listNamespacedService(namespace)),
       collectKubernetesSecuritySources(overviewClients, namespace),
     ]);
     let prometheus;
@@ -1271,7 +1273,7 @@ app.get('/api/overview', async (req, res) => {
     try {
       advisor = adviseKubernetes({
         namespace,
-        sources: { pods, nodes, deployments, statefulsets, daemonsets, networkPolicies, pdbs, hpas, ...securitySources },
+        sources: { pods, nodes, deployments, statefulsets, daemonsets, networkPolicies, pdbs, hpas, ingresses, services, ...securitySources },
         usage: overview.nodes?.usage || null,
       });
     } catch (err) {
