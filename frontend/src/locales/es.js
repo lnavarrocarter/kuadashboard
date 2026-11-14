@@ -77,6 +77,8 @@ export default {
   'publicEndpoints.why.weakTls': 'La política del listener incluye versiones o cifrados TLS antiguos.',
   'publicEndpoints.finding.noHealthyTargets': 'El target group no tiene targets sanos',
   'publicEndpoints.why.noHealthyTargets': 'Las solicitudes dirigidas a este target group no llegan a un backend sano.',
+  'publicEndpoints.finding.danglingDns': 'El registro DNS apunta a un load balancer que ya no existe',
+  'publicEndpoints.why.danglingDns': 'El registro apunta a un nombre de ELB en una región cuyos load balancers se leyeron completos, y ningún load balancer tiene ese nombre. Elimina o actualiza el registro.',
   'publicEndpoints.finding.unhealthyTargets': 'El target group tiene targets no sanos',
   'publicEndpoints.why.unhealthyTargets': 'Algunos backends configurados no superan sus health checks.',
 
