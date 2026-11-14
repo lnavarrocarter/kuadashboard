@@ -611,8 +611,11 @@ async function gcpOverview(req, res) {
 
     // Every page is read (capped); a capped list is reported as partial.
     const restList = (url, key, opts) => listAllPages(gcpFetch, authCtx, url, key, opts);
+    // One Cloud Run listing feeds the collector and the Advisor's entry points.
+    const cloudRunList = listCloudRunServices({ auth, projectId });
+    cloudRunList.catch(() => {});
     const collectors = [
-      { id: 'cloudrun', label: 'Cloud Run', tab: 'cloudrun', load: () => listCloudRunServices({ auth, projectId }) },
+      { id: 'cloudrun', label: 'Cloud Run', tab: 'cloudrun', load: () => cloudRunList },
       { id: 'gke', label: 'GKE', tab: 'gke', load: async () => {
         const { ClusterManagerClient } = require('@google-cloud/container');
         const [data] = await new ClusterManagerClient({ auth }).listClusters({ parent: `projects/${projectId}/locations/-` });
@@ -641,7 +644,11 @@ async function gcpOverview(req, res) {
       { id: 'vpc', label: 'VPC Networks', tab: 'vpc', load: () => restList(`https://compute.googleapis.com/compute/v1/projects/${projectId}/global/networks`, 'items') },
       { id: 'kms', label: 'Cloud KMS', tab: 'kms', load: () => createKmsReader(gcpFetch, authCtx).keyRings() },
     ];
+    // Entry points only feed the Advisor; read in parallel with the collectors.
+    const entrypointsRead = readGcpEntrypoints({ fetchApi: gcpFetch, authCtx, listCloudRun: () => cloudRunList })
+      .then(value => value, () => null);
     const settled = await Promise.allSettled(collectors.map(collector => collector.load()));
+    const entrypoints = await entrypointsRead;
     // Collectors return an array or { items, partial } (paged REST lists).
     const rowsOf = value => Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
     const collectedRows = new Map(collectors.map((collector, index) => {
@@ -703,7 +710,7 @@ async function gcpOverview(req, res) {
       services,
       advisor: (() => {
         try {
-          return adviseGcp({ rows: collectedRows, unavailable: unavailable.map(service => service.id), projectId });
+          return adviseGcp({ rows: collectedRows, unavailable: unavailable.map(service => service.id), projectId, entrypoints });
         } catch (err) {
           return { error: err.message };
         }
