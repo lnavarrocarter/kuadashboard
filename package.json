@@ -99,7 +99,7 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "@electron/notarize": "^2.5.0",
+    "@electron/notarize": "^3.1.2",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "electron": "^45.3.0",
