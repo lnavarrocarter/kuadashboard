@@ -3870,7 +3870,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
-import jsYaml from 'js-yaml'
+import * as jsYaml from 'js-yaml'
 import { useEnvStore }  from '../../stores/useEnvStore'
 import { useAwsStore }  from '../../stores/useAwsStore'
 import { useApmStore } from '../../stores/useApmStore'

@@ -14,7 +14,7 @@ const { requestKubeApi } = require('./lib/kubeApiRequest');
 // Exec credential plugins (aws eks get-token…) run asynchronously instead of
 // client-node's spawnSync, which froze the whole server (lib/kubeExecCredentials.js).
 const kubeExecCredentials = require('./lib/kubeExecCredentials').getExecCredentials();
-const yaml       = require('js-yaml');
+const yaml       = require('./lib/yaml');
 const { readEntrypoints } = require('./lib/kubeEntrypoints');
 const { listServicesWithBackends } = require('./lib/kubeServices');
 const { readPodRelations, readServiceBackends } = require('./lib/kubeRelations');
