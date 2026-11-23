@@ -342,7 +342,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
-import yaml from 'js-yaml'
+import * as yaml from '../lib/yaml'
 import { api } from '../composables/useApi'
 import { useToast } from '../composables/useToast'
 import { useI18n } from '../composables/useI18n'

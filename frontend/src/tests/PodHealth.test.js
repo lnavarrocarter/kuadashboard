@@ -1,7 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import yaml from 'js-yaml'
+import * as yaml from 'js-yaml'
 import { podHealth } from '../lib/podHealth'
 import KubeResourceDetailPanel from '../components/KubeResourceDetailPanel.vue'
 import * as ApiModule from '../composables/useApi'

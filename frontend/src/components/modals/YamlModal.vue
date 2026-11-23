@@ -89,7 +89,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { createIcons, icons } from 'lucide'
-import yaml from 'js-yaml'
+import * as yaml from '../../lib/yaml'
 import BaseModal from '../BaseModal.vue'
 import KubeActionTarget from './KubeActionTarget.vue'
 import { kubeKindLabel } from '../../lib/kubeContext'

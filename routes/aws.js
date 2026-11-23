@@ -3238,7 +3238,7 @@ router.post('/eks/:name/add-kubeconfig', async (req, res) => {
 
     const fs   = require('fs');
     const path = require('path');
-    const yaml = require('js-yaml');
+    const yaml = require('../lib/yaml');
     const kubeDir  = path.join(require('os').homedir(), '.kube');
     const kubePath = path.join(kubeDir, 'config');
     if (!fs.existsSync(kubeDir)) fs.mkdirSync(kubeDir, { recursive: true });
