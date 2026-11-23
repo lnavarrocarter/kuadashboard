@@ -152,6 +152,7 @@
               <button :class="{ active: activeView === 'overview' }" @click="activeView = 'overview'"><i data-lucide="chart-no-axes-combined"></i> {{ t('apmv.metrics') }}</button>
               <button v-if="!props.hideLogs" :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
               <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
+              <button v-if="hasArchitectureTraceLink" :class="{ active: activeView === 'distributed-traces' }" @click="activeView = 'distributed-traces'">{{ t('apm.distributedTraces') }}</button>
             </div>
             <span v-if="!props.hideCollect" :class="['collection-state', runStatusClass]">{{ latestRunLabel }}</span>
             <button v-if="!props.hideCollect" class="btn sm" :disabled="store.collecting || !store.topology.resources.length" @click="confirmCollect = true">
@@ -164,6 +165,7 @@
             <button :class="{ active: activeView === 'logs' }" @click="activeView = 'logs'"><i data-lucide="scroll-text"></i> {{ t('apmv.logs') }}</button>
             <button :class="{ active: activeView === 'topology' }" @click="activeView = 'topology'">{{ t('apm.topology') }}</button>
             <button v-if="hasTraceResources" :class="{ active: activeView === 'traces' }" @click="activeView = 'traces'">{{ t('apm.traces') }}</button>
+            <button v-if="hasArchitectureTraceLink" :class="{ active: activeView === 'distributed-traces' }" @click="activeView = 'distributed-traces'">{{ t('apm.distributedTraces') }}</button>
             <button :class="{ active: activeView === 'resources' }" @click="openRegistryResources">{{ t('apm.resources') }}</button>
             <button :class="{ active: activeView === 'relationships' }" @click="activeView = 'relationships'">
               {{ t('apm.relationships') }}
@@ -316,6 +318,12 @@
             :result="store.processTrace"
             :loading="store.tracingProcess"
             @trace="traceProcess"
+          />
+
+          <ApmDistributedTrace
+            v-else-if="activeView === 'distributed-traces'"
+            :application="store.selectedApplication"
+            :profile-id="props.profileId"
           />
 
           <section v-if="activeView === 'relationships' || props.section === 'review'" class="relationship-review">
@@ -614,6 +622,7 @@ import { formatNumber, useI18n } from '../../../composables/useI18n'
 import ApmSetupModal from './ApmSetupModal.vue'
 import ApmTopologyGraph from './ApmTopologyGraph.vue'
 import ApmProcessTrace from './ApmProcessTrace.vue'
+import ApmDistributedTrace from './ApmDistributedTrace.vue'
 import ArchitectureResources from '../../architecture/ArchitectureResources.vue'
 import ApmApplicationLogs from './ApmApplicationLogs.vue'
 import ApmProviderMetrics from './ApmProviderMetrics.vue'
@@ -714,6 +723,7 @@ const hasKubernetesResources = computed(() => applicationResources.value.some(re
 // These are read from CloudWatch, which bills per request, so the confirmation must say so.
 const hasCloudWatchResources = computed(() => applicationResources.value.some(resource => ['ec2', 's3', 'elb'].includes(resource.type)))
 const hasTraceResources = computed(() => props.provider === 'aws' && applicationResources.value.some(resource => resource.type === 'stepfunctions'))
+const hasArchitectureTraceLink = computed(() => !!(store.selectedApplication?.architectureProjectIds?.length || store.selectedApplication?.architectureProjectId))
 const canAnalyzeCloudTopology = computed(() => props.provider === 'aws' && applicationResources.value.some(resource =>
   resource.provider === 'aws' && ['lambda', 'stepfunctions', 'sqs', 'eventbridge', 'ecs'].includes(resource.type)))
 const chartDefinitions = computed(() => metricSections.value.flatMap(section => section.charts))

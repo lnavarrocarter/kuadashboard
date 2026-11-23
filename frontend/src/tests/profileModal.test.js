@@ -43,6 +43,27 @@ describe('Vercel credential profile', () => {
   })
 })
 describe('GCP gcloud project linking', () => {
+  it('discovers projects for the selected authenticated account', async () => {
+    const requests = []
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      requests.push({ url, options })
+      if (url.endsWith('/gcloud-accounts')) return { json: async () => [{ account: 'user@example.com', status: 'ACTIVE' }] }
+      if (url.includes('/projects?account=')) return { ok: true, json: async () => [{ id: 'sample-project', name: 'Sample', state: 'ACTIVE' }] }
+      if (url.endsWith('/gcloud-configs')) return { json: async () => [] }
+      throw new Error(`Unexpected request: ${url}`)
+    }))
+    const wrapper = mount(ProfileModal, { attachTo: document.body, props: { show: true, defaultProvider: 'gcp' } })
+
+    document.querySelector('[data-test="gcloud-auth-mode"]').click()
+    await flushPromises()
+    await flushPromises()
+    expect(requests.some(request => request.url === '/api/cloud/gcp/projects?account=user%40example.com')).toBe(true)
+    expect(document.querySelector('[data-test="gcloud-project-select"]').textContent).toContain('Sample (sample-project)')
+
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  })
+
   it('adds a project by ID, selects its config and emits it as the active profile', async () => {
     const requests = []
     let configs = []

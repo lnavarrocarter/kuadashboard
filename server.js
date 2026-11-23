@@ -1,8 +1,10 @@
 'use strict';
 
+const otelRuntime = require('./lib/apm/otelBootstrap').startOtel();
 const { redactText } = require('./lib/logRedaction');
 const express    = require('express');
 const http       = require('http');
+const https      = require('https');
 const net        = require('net');
 const fs         = require('fs');
 const os         = require('os');
@@ -76,6 +78,11 @@ app.use('/api', require('./lib/localRequestGuard').createLocalRequestGuard({ hos
 const server = http.createServer(app);
 const apmDatabase = getApmDatabase();
 const architectureDatabase = getArchitectureDatabase();
+const otlpGatewayStore = require('./lib/apm/otlpGateway').createOtlpGatewayStoreFromEnv();
+const otlpCleanupInterval = setInterval(() => {
+  try { otlpGatewayStore.cleanup(); } catch (error) { console.error('[otlp] Retention cleanup failed:', error.message); }
+}, 24 * 60 * 60 * 1000);
+otlpCleanupInterval.unref();
 // First-party plugins (#193): what this computer has turned on. GitHub CI/CD and Vercel (#194).
 const githubCicd = require('./lib/kua/githubCicd').createGithubCicd({ dataDir: require('./lib/account/account').resolveDataDir(), apmDatabase });
 const pluginRegistry = require('./lib/plugins/pluginRegistry').createPluginRegistry({
@@ -163,6 +170,43 @@ require('./lib/logScanRunner').attachTaskRegistry(backgroundTaskRegistry);
 const localShellRoutes  = require('./routes/localShell');
 const auditLogRoutes    = require('./routes/auditLog');
 const auditLog          = require('./lib/auditLog');
+const browserSampleRatio = Number(process.env.KUA_OTEL_BROWSER_SAMPLE_RATIO || 0.1);
+if (!Number.isFinite(browserSampleRatio) || browserSampleRatio < 0 || browserSampleRatio > 1) {
+  throw new Error('KUA_OTEL_BROWSER_SAMPLE_RATIO must be between 0 and 1');
+}
+const browserServiceName = String(process.env.KUA_OTEL_BROWSER_SERVICE_NAME || 'kuadashboard-frontend').slice(0, 120);
+const otlpGatewayRouter = require('./lib/apm/otlpGateway').createOtlpGatewayRouter({
+  store: otlpGatewayStore,
+  auditLog,
+  architectureDatabase,
+  browserEnabled: process.env.KUA_OTEL_BROWSER_ENABLED === '1',
+  browserSampleRatio,
+  browserServiceName,
+});
+app.use('/api/observability/otlp', otlpGatewayRouter);
+// Remote agents may reach only the authenticated signal ingestion routes.
+// KUA's general API remains on its separately configured local HTTP listener.
+const otlpTlsCertFile = process.env.KUA_OTLP_TLS_CERT_FILE;
+const otlpTlsKeyFile = process.env.KUA_OTLP_TLS_KEY_FILE;
+if (Boolean(otlpTlsCertFile) !== Boolean(otlpTlsKeyFile)) {
+  throw new Error('KUA_OTLP_TLS_CERT_FILE and KUA_OTLP_TLS_KEY_FILE must be configured together');
+}
+let otlpTlsServer = null;
+if (otlpTlsCertFile && otlpTlsKeyFile) {
+  const otlpTlsApp = express();
+  otlpTlsApp.use('/api/observability/otlp', (req, res, next) => {
+    if (req.method !== 'POST' || !['/v1/metrics', '/v1/traces'].includes(req.path)) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    if (req.socket.encrypted !== true) return res.status(426).json({ error: 'TLS_REQUIRED' });
+    return next();
+  }, otlpGatewayRouter);
+  otlpTlsServer = https.createServer({
+    cert: fs.readFileSync(otlpTlsCertFile),
+    key: fs.readFileSync(otlpTlsKeyFile),
+    minVersion: 'TLSv1.2',
+  }, otlpTlsApp);
+}
 const { AwsLambdaCollector } = require('./lib/apm/awsCollector');
 const { KubeCollector } = require('./lib/apm/kubeCollector');
 const { AwsMetricCollector } = require('./lib/apm/awsMetricCollector');
@@ -3574,6 +3618,16 @@ server.listen(PORT, HOST, () => {
   // Starts after listening: scheduled runs call this KUA on the loopback address.
   advisorScheduler.start({ task: advisorTask });
 });
+if (otlpTlsServer) {
+  const otlpTlsPort = Number(process.env.KUA_OTLP_TLS_PORT || 7443);
+  const otlpTlsHost = process.env.KUA_OTLP_TLS_HOST || '127.0.0.1';
+  if (!Number.isInteger(otlpTlsPort) || otlpTlsPort < 1 || otlpTlsPort > 65535) {
+    throw new Error('KUA_OTLP_TLS_PORT must be an integer between 1 and 65535');
+  }
+  otlpTlsServer.listen(otlpTlsPort, otlpTlsHost, () => {
+    console.log(`[otlp] Remote ingestion listener → https://${otlpTlsHost}:${otlpTlsPort}/api/observability/otlp (metrics/traces only)`);
+  });
+}
 
 let unregisterInstance = () => {};
 process.on('exit', () => unregisterInstance());
@@ -3584,6 +3638,7 @@ function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(apmCleanupInterval);
+  clearInterval(otlpCleanupInterval);
   apmScheduler.stop();
   require('./lib/logAutoRefresh').getAutoRefresh().stop();
   logCacheBudgetWatcher.stop();
@@ -3597,18 +3652,26 @@ function shutdown(signal) {
   console.log(`[server] ${signal} received, shutting down`);
 
   const forceExit = setTimeout(() => {
+    otlpGatewayStore.close();
     closeApmDatabase();
     closeArchitectureDatabase();
     process.exit(1);
   }, 5000);
   forceExit.unref();
 
-  server.close(() => {
-    clearTimeout(forceExit);
-    closeApmDatabase();
-    closeArchitectureDatabase();
-    process.exit(0);
-  });
+  Promise.resolve(otelRuntime.shutdown()).catch(error => {
+    console.warn('[otel] Could not flush spans during shutdown:', error.message);
+  }).then(() => server.close(() => {
+    const finishShutdown = () => {
+      clearTimeout(forceExit);
+      otlpGatewayStore.close();
+      closeApmDatabase();
+      closeArchitectureDatabase();
+      process.exit(0);
+    };
+    if (otlpTlsServer?.listening) otlpTlsServer.close(finishShutdown);
+    else finishShutdown();
+  }));
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

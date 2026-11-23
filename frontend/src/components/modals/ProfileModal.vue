@@ -104,7 +104,7 @@
                   v-for="c in gcloudConfigs"
                   :key="c.name"
                   :class="['gcloud-config-row', { selected: gcpSelectedConfig === c.name }]"
-                  @click="gcpSelectedConfig = c.name; form.name = form.name || c.name"
+                  @click="gcpSelectedConfig = c.name; form.name = form.name || c.name; loadGcloudProjects(c.name)"
                 >
                   <div class="gcloud-config-name">
                     {{ c.name }}
@@ -114,6 +114,7 @@
                     {{ c.account || t('profm.noAccount') }}
                     {{ c.project ? ` · ${c.project}` : '' }}
                   </div>
+                  <button v-if="c.project" class="btn sm danger" type="button" data-test="unset-gcloud-project" :title="t('profm.unsetProjectHint')" @click.stop="unsetGcloudProject(c.name)">{{ t('profm.removeProject') }}</button>
                 </div>
               </div>
 
@@ -140,7 +141,7 @@
               <label class="field-label" style="margin:0">
                 {{ t('profm.googleAccount') }}
                 <div style="display:flex;gap:6px;align-items:center">
-                  <select v-model="gcpNewConfigAccount" class="ctrl-select" style="flex:1">
+                  <select v-model="gcpNewConfigAccount" class="ctrl-select" style="flex:1" @change="loadGcloudProjects('', gcpNewConfigAccount)">
                     <option value="">{{ t('profm.newAccount') }}</option>
                     <option v-for="a in gcloudAccounts" :key="a.account" :value="a.account">
                       {{ a.account }}{{ a.status === 'ACTIVE' ? ' ★' : '' }}
@@ -149,6 +150,18 @@
                   <button class="btn sm" :disabled="gcloudConfigsLoading" @click="loadGcloudAccounts" :title="t('profm.refreshAccounts')">↻</button>
                 </div>
               </label>
+
+              <label v-if="gcpProjectOptions.length" class="field-label" style="margin:0">
+                {{ t('profm.availableProjects') }}
+                <select v-model="gcpNewConfigProject" class="ctrl-select" data-test="gcloud-project-select">
+                  <option value="">{{ t('profm.chooseProject') }}</option>
+                  <option v-for="project in gcpProjectOptions" :key="project.id" :value="project.id">
+                    {{ project.name ? `${project.name} (${project.id})` : project.id }}{{ project.state ? ` · ${project.state}` : '' }}
+                  </option>
+                </select>
+              </label>
+              <span v-if="gcpProjectsLoading" class="text-dim" style="font-size:12px">{{ t('common.loading') }}</span>
+              <span v-else-if="gcpProjectsError" class="text-dim" style="font-size:12px">{{ gcpProjectsError }}</span>
 
               <!-- Action buttons: create config (existing account) OR gcloud auth login (new account) -->
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -177,7 +190,7 @@
               <div v-if="gcloudConfigs.length" style="margin-top:4px">
                 <label class="field-label">
                   {{ t('profm.useConfig') }}
-                  <select v-model="gcpSelectedConfig" class="ctrl-select">
+                  <select v-model="gcpSelectedConfig" class="ctrl-select" @change="loadGcloudProjects(gcpSelectedConfig)">
                     <option value="">{{ t('profm.select') }}</option>
                     <option v-for="c in gcloudConfigs" :key="c.name" :value="c.name">
                       {{ c.name }}{{ c.account ? ` (${c.account})` : '' }}{{ c.project ? ` · ${c.project}` : '' }}
@@ -472,6 +485,10 @@ const isEdit = computed(() => !!props.profile)
 const gcpAuthMode         = ref('sa')         // 'sa' | 'gcloud'
 const gcloudConfigs       = ref([])
 const gcloudAccounts      = ref([])
+const gcpProjectOptions   = ref([])
+const gcpProjectsLoading  = ref(false)
+const gcpProjectsError    = ref('')
+let gcpProjectRequestId = 0
 const gcloudConfigsLoading = ref(false)
 const gcpSelectedConfig   = ref('')
 const gcpNewConfigName    = ref('')
@@ -619,8 +636,55 @@ async function loadGcloudAccounts() {
   try {
     const res = await fetch('/api/cloud/gcp/gcloud-accounts')
     gcloudAccounts.value = await res.json()
+    const active = gcloudAccounts.value.find(account => account.status === 'ACTIVE')
+    if (active) {
+      gcpNewConfigAccount.value = active.account
+      await loadGcloudProjects('', active.account)
+    }
   } catch {
     gcloudAccounts.value = []
+  }
+}
+
+async function loadGcloudProjects(configName = '', account = '') {
+  const requestId = ++gcpProjectRequestId
+  if (!configName && !account) {
+    gcpProjectOptions.value = []
+    gcpProjectsError.value = ''
+    gcpProjectsLoading.value = false
+    return
+  }
+  gcpProjectsLoading.value = true
+  gcpProjectsError.value = ''
+  try {
+    const query = configName ? '' : `?account=${encodeURIComponent(account)}`
+    const headers = configName ? { 'X-Profile-Id': `local:${configName}` } : {}
+    const res = await fetch(`/api/cloud/gcp/projects${query}`, { headers })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || t('profm.projectListFailed'))
+    if (requestId === gcpProjectRequestId) gcpProjectOptions.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    if (requestId === gcpProjectRequestId) {
+      gcpProjectOptions.value = []
+      gcpProjectsError.value = e.message
+    }
+  } finally {
+    if (requestId === gcpProjectRequestId) gcpProjectsLoading.value = false
+  }
+}
+
+async function unsetGcloudProject(name) {
+  if (!window.confirm(t('profm.unsetProjectConfirm', { name }))) return
+  try {
+    const res = await fetch(`/api/cloud/gcp/gcloud-configs/${encodeURIComponent(name)}/unset-project`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || t('profm.removeProjectFailed'))
+    gcloudLoginMsg.value = t('profm.projectRemoved', { name })
+    gcloudLoginErr.value = false
+    await loadGcloudConfigs()
+  } catch (e) {
+    gcloudLoginMsg.value = e.message
+    gcloudLoginErr.value = true
   }
 }
 
@@ -646,6 +710,7 @@ async function createGcloudConfig() {
       : t('profm.configCreated', { name })
     await loadGcloudConfigs()
     gcpSelectedConfig.value = name
+    await loadGcloudProjects('', account)
   } catch (e) {
     gcloudLoginMsg.value = e.message
     gcloudLoginErr.value = true

@@ -20,8 +20,9 @@ describe('ArchitectureManualResourcePanel', () => {
     await inputs[0].setValue('orders-worker')
     await inputs[1].setValue('ec2')
     await inputs[2].setValue('i-0123456789abcdef0')
-    await inputs[3].setValue('123456789012')
-    await inputs[4].setValue('us-east-1')
+    await inputs[3].setValue('orders-db.example.com')
+    await inputs[4].setValue('123456789012')
+    await inputs[5].setValue('us-east-1')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
@@ -29,7 +30,7 @@ describe('ArchitectureManualResourcePanel', () => {
       type: 'node.upsert',
       value: expect.objectContaining({
         id: 'manual:aws:resource-id', provider: 'aws', resourceType: 'ec2', name: 'orders-worker',
-        nativeId: 'i-0123456789abcdef0', accountId: '123456789012', region: 'us-east-1', manual: true,
+        nativeId: 'i-0123456789abcdef0', endpoint: 'orders-db.example.com', accountId: '123456789012', region: 'us-east-1', manual: true,
       }),
     }, { reason: 'Add manual aws resource orders-worker' })
     expect(wrapper.emitted('imported')).toHaveLength(1)
