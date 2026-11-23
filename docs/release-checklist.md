@@ -86,7 +86,7 @@ Never reuse or move a tag that was published; cut `rc.N+1`.
 `.github/workflows/electron-build.yml` ("Build & Release Electron App"):
 
 - Trigger: `push` of any tag matching `v*`, or manual `workflow_dispatch` (input `draft`, default `true`; manual runs build `main` and publish a release named `dev-<timestamp>`, not a version tag, so use them only for dry runs).
-- `build` job: matrix Windows (`*.exe`), macOS (`*.dmg`), Linux (`*.AppImage`/`.deb`) with Node 24, `npm ci`, icons, `config/runtime.env` from secrets (`VERCEL_OAUTH_CLIENT_ID/SECRET`), then `npm run electron:build:<platform>` with `ELECTRON_BUILDER_PUBLISH=never`. macOS is signed/notarized only when `CSC_LINK` and the Apple secrets exist; otherwise it builds unsigned with a warning.
+- `build` job: matrix Windows (`*.exe`), macOS (`*.dmg`), Linux (`*.AppImage`/`.deb`) with Node 24, `npm ci`, icons, `config/runtime.env` containing public configuration only (the packaging hook rejects a nonempty Vercel OAuth secret), then `npm run electron:build:<platform>` with `ELECTRON_BUILDER_PUBLISH=never`. macOS is signed/notarized only when `CSC_LINK` and the Apple secrets exist; otherwise it builds unsigned with a warning.
 - `release` job: downloads the artifacts, writes `SHA256SUMS.txt`, attests provenance, and publishes a GitHub Release with `softprops/action-gh-release` (`generate_release_notes: true`). Assets: installers, `latest*.yml` update manifests, and for pre-releases `rc*.yml`.
 - Pre-release handling (this branch): the release is created with `prerelease: true` when the tag contains `-`, so `v2.0.0-rc.1` is flagged as pre-release and `v2.0.0` is not. Without that flag an rc would become the repository's "latest release" and every 1.17.x install would auto-update to it (see section 5).
 - Update manifest names: electron-builder names the manifest after the version's pre-release id, so `2.0.0-rc.1` produces `rc.yml` / `rc-mac.yml` / `rc-linux.yml` instead of `latest*.yml`. The workflow uploads both patterns.
@@ -148,3 +148,13 @@ Open decision for the owner: if a one-click 1.17.x → rc test is wanted, a buil
 ### Electron compatibility (#364)
 
 Dependency or Electron changes run the **Electron security compatibility** matrix on Windows, macOS and Linux. Each job packages the current checkout and launches its actual executable with `--kua-smoke-test`, which checks SQLite native loading, the SSH/logging fallback and an updater metadata request against a local fixture. This does not download or install an update. All matrix jobs must pass before merging an upgrade. Release validation still verifies signatures, notarization, installation and a real update from the previous release. See [the dependency audit](./security/dependency-audit-2026-11-10.md) for the runtime/development triage and remaining moderate findings.
+
+
+### Vercel OAuth security transition (#362)
+
+1. Deploy and verify the hosted exchange before distributing the desktop replacement. Server configuration and its runbook live in the private control-plane repository.
+2. Publish the replacement desktop packages and verify **Connect with Vercel**, existing token profiles and a user-owned integration. The HTTPS callback URI stays the same.
+3. Rotate the previously distributed integration secret after the replacement is available. Earlier installers contain that secret and cannot exchange new authorization codes after rotation. Their existing provider-token profiles remain usable until the provider revokes those tokens.
+4. Verify a fresh connection with the rotated server secret. Rotation is still pending until that provider-side operation and the release checks have evidence; merging this code alone does not close #362.
+
+The `beforePack` hook fails when `config/runtime.env` contains a nonempty `VERCEL_OAUTH_CLIENT_SECRET`. All official build workflows generate public configuration only.
